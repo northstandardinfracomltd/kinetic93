@@ -372,6 +372,10 @@ export default function SettingsModal({
   const [cegidApiKey, setCegidApiKey] = React.useState('');
   const [cegidApiSecret, setCegidApiSecret] = React.useState('');
 
+  const [lemonGroupWsActive, setLemonGroupWsActive] = React.useState(false);
+  const [lemonGroupWsApiKey, setLemonGroupWsApiKey] = React.useState('');
+  const [lemonGroupWsApiSecret, setLemonGroupWsApiSecret] = React.useState('');
+
   const [textelpActive, setTextelpActive] = React.useState(false);
   const [textelpEnvId, setTextelpEnvId] = React.useState('');
   const [textelpSecretId, setTextelpSecretId] = React.useState('');
@@ -628,6 +632,10 @@ export default function SettingsModal({
           if (data.cegidApiKey !== undefined) setCegidApiKey(data.cegidApiKey);
           if (data.cegidApiSecret !== undefined) setCegidApiSecret(data.cegidApiSecret);
 
+          if (data.lemonGroupWsActive !== undefined) setLemonGroupWsActive(data.lemonGroupWsActive);
+          if (data.lemonGroupWsApiKey !== undefined) setLemonGroupWsApiKey(data.lemonGroupWsApiKey);
+          if (data.lemonGroupWsApiSecret !== undefined) setLemonGroupWsApiSecret(data.lemonGroupWsApiSecret);
+
           if (data.textelpActive !== undefined) setTextelpActive(data.textelpActive);
           if (data.textelpEnvId !== undefined) setTextelpEnvId(data.textelpEnvId);
           if (data.textelpSecretId !== undefined) setTextelpSecretId(data.textelpSecretId);
@@ -697,6 +705,9 @@ export default function SettingsModal({
         cegidActive,
         cegidApiKey,
         cegidApiSecret,
+        lemonGroupWsActive,
+        lemonGroupWsApiKey,
+        lemonGroupWsApiSecret,
         textelpActive,
         textelpEnvId,
         textelpSecretId,
@@ -3656,6 +3667,75 @@ export default function SettingsModal({
                           value={cegidApiSecret}
                           onChange={(e) => {
                             setCegidApiSecret(e.target.value);
+                          }}
+                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
+                          placeholder={t("Entrez la Clé secrète d’API.")}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* LEMON GROUP WS */}
+              <div id="connector-block-lemon-group" style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Lemon Group WS</h5>
+                        <div className="select-none font-sans flex items-center mt-1">
+                          <span
+                            style={{
+                              backgroundColor: 'rgb(185, 28, 28)',
+                              boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                              color: '#ffffff',
+                              fontSize: '16px',
+                              borderRadius: '100px',
+                              padding: '2px 10px',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            }}
+                            className="font-bold select-none"
+                          >
+                            {t("Indisponible")}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="relative inline-flex items-center cursor-not-allowed select-none opacity-50" style={{ cursor: 'not-allowed' }}>
+                        <input
+                          type="checkbox"
+                          checked={lemonGroupWsActive}
+                          disabled
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-not-allowed peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'not-allowed' }}></div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {lemonGroupWsActive && (
+                    <div className="mt-4 space-y-3 animate-slideUp">
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Clé d’API.")}</label>
+                        <input
+                          type="text"
+                          value={lemonGroupWsApiKey}
+                          onChange={(e) => {
+                            setLemonGroupWsApiKey(e.target.value);
+                          }}
+                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
+                          placeholder={t("Entrez la Clé d’API.")}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Clé secrète d’API.")}</label>
+                        <input
+                          type="text"
+                          value={lemonGroupWsApiSecret}
+                          onChange={(e) => {
+                            setLemonGroupWsApiSecret(e.target.value);
                           }}
                           className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
                           placeholder={t("Entrez la Clé secrète d’API.")}
