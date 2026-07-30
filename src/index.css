@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Civilprom";
+  src: url("https://civilprom.s3.eu-north-1.amazonaws.com/Civilprom1.otf") format("opentype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "DefibeoMain";
+  src: url("https://civilprom.s3.eu-north-1.amazonaws.com/Civilprom1.otf") format("opentype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gochi";
+  src: url("https://civilprom.s3.eu-north-1.amazonaws.com/gochi.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: "Civilprom", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-gochi: "Gochi", cursive, sans-serif;
+}
+
+html, body {
+  font-family: var(--font-sans);
+}
+
+*::selection {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.top-nav-bar-gradient {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.btn-custom-cta {
+  background-color: #3556ec !important;
+  color: #fff !important;
+  box-shadow: inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f !important;
+  border-radius: 12px !important;
+  font-size: 18px !important;
+  padding: 13px 20px !important;
+  font-weight: bold !important;
+  transition: all 0.2s ease-in-out !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  cursor: pointer !important;
+  border: none !important;
+}
+
+.btn-custom-cta:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.btn-custom-cta:active {
+  transform: translateY(0);
+}
+
+/* Forcer l'affichage smartphone uniquement sur petit écran mobile (< 640px) */
+@media (max-width: 639px) {
+  .force-smartphone-layout .grid,
+  .force-smartphone-layout [class*="grid-cols-"] {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
+
+  .force-smartphone-layout [class*="col-span-"],
+  .force-smartphone-layout [class*="md:col-span-"],
+  .force-smartphone-layout [class*="lg:col-span-"] {
+    grid-column: span 1 / span 1 !important;
+  }
+
+  .force-smartphone-layout .md\:flex-row,
+  .force-smartphone-layout .flex-row {
+    flex-direction: column !important;
+  }
+
+  .force-smartphone-layout .md\:items-center,
+  .force-smartphone-layout .items-center {
+    align-items: stretch !important;
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+.shake-element {
+  animation: shake 0.4s ease-in-out !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+

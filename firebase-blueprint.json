@@ -1,0 +1,21 @@
+{
+  "entities": {
+    "app_data": {
+      "title": "AppData",
+      "description": "App data documents storing application state lists",
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "description": "List data or config object"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/appData/{documentId}": {
+      "schema": "app_data",
+      "description": "Collections storing synced lists for clients, defibrillateurs, support tickets, stocks, etc."
+    }
+  }
+}
