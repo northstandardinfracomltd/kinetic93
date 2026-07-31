@@ -10,7 +10,7 @@ const db = getFirestore(firebaseApp);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   // CORS support and preflight handling for CRM website form embedding
   app.use("/api/crm/embed-lead", (req, res, next) => {
