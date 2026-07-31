@@ -426,7 +426,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       if (!stored) return null;
       const parsed = JSON.parse(stored);
       if (parsed.blockedUntil && Date.now() < parsed.blockedUntil) {
-        let h = '1h';
+        let h = '10 minutes';
         if (parsed.count >= 10) h = '24h';
         else if (parsed.count >= 5) h = '10h';
         return { ...parsed, hoursText: h };
@@ -456,8 +456,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         blockDurationMs = 10 * 60 * 60 * 1000;
         hoursText = '10h';
       } else if (parsed.count >= 3) {
-        blockDurationMs = 1 * 60 * 60 * 1000;
-        hoursText = '1h';
+        blockDurationMs = 10 * 60 * 1000;
+        hoursText = '10 minutes';
       }
       
       if (blockDurationMs > 0) {
