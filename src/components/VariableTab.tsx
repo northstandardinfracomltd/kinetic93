@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Variable, VariableCategory, Defibrillateur, StockRecord, DistributedStockLocation, OtherEquipment, AchatFournisseur } from '../types';
-import { Plus, Search, Trash2, Edit2, X, Sliders, Box, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { Plus, Search, Trash2, Edit2, X, Sliders, Box, Image as ImageIcon, Sparkles, Check } from 'lucide-react';
 import { t } from '../utils/translate';
 
 // Custom Radio Component with exact design styling (representing white gap, rose border and pink dot)
@@ -83,6 +83,50 @@ const IMAGE_PRESETS = [
     name: 'Mallette Pro Orange',
     url: 'https://images.unsplash.com/photo-1581594693702-fbdc51b2763b?auto=format&fit=crop&w=120&h=120&q=80',
   },
+];
+
+// Database of keywords and thumbnail URLs for defibrillators & equipment
+const THUMBNAIL_SUGGESTIONS = [
+  { keyword: "Primedic DefiMonitor XD", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Primedic+DefiMonitor+XD.png" },
+  { keyword: "Primedic HeartSave AS", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Primedic+HeartSave+AS.png" },
+  { keyword: "Primedic HeartSave PAD", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Primedic+HeartSave+PAD.png" },
+  { keyword: "Progetti Rescue SAM Pro", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Progetti+Rescue+SAM+Pro.png" },
+  { keyword: "Progetti Rescue Sam", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Progetti+Rescue+Sam.png" },
+  { keyword: "Saver One AED", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Saver+One+AED.png" },
+  { keyword: "Schiller Fred Easy", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Schiller+Fred+Easy.png" },
+  { keyword: "Schiller Fred PA-1", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Schiller+Fred+PA-1.png" },
+  { keyword: "ZOLL AED 3", url: "https://civilprom.s3.eu-north-1.amazonaws.com/ZOLL+AED+3.png" },
+  { keyword: "ZOLL AED PLUS", url: "https://civilprom.s3.eu-north-1.amazonaws.com/ZOLL+AED+Plus.png" },
+  { keyword: "ZOLL AED Pro", url: "https://civilprom.s3.eu-north-1.amazonaws.com/ZOLL+AED+Pro.png" },
+  { keyword: "Bexen Medical Reanibex 100", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Bexen+Medical+Reanibex+100.png" },
+  { keyword: "Cardiac Science Powerheart G3", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Cardiac+Science+Powerheart+G3.png" },
+  { keyword: "Cardiac Science Powerheart G5", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Cardiac+Science+Powerheart+G5.png" },
+  { keyword: "CU Medical i-PAD CU-SP2", url: "https://civilprom.s3.eu-north-1.amazonaws.com/CU+Medical+i-PAD+CU-SP2.png" },
+  { keyword: "CU Medical i-PAD NF 1200", url: "https://civilprom.s3.eu-north-1.amazonaws.com/CU+Medical+i-PAD+NF1200.png" },
+  { keyword: "Defibtech Lifeline View", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Defibtech+Lifeline+View.png" },
+  { keyword: "Defibtech Lifeline", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Defibtech+Lifeline.png" },
+  { keyword: "Heartsine Samaritan PAD 350P", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Heartsine+Samaritan+PAD+350P.png" },
+  { keyword: "Heartsine Samaritan PAD 360P", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Heartsine+Samaritan+PAD+360P.png" },
+  { keyword: "Heartsine Samaritan PAD 500P", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Heartsine+Samaritan+PAD+500P.png" },
+  { keyword: "IPAD AED", url: "https://civilprom.s3.eu-north-1.amazonaws.com/IPAD+AED.png" },
+  { keyword: "Life Point AED", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Life+Point+AED.png" },
+  { keyword: "Lifeaz Clark", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Lifeaz+Clark.png" },
+  { keyword: "Mediana HeartOn AED", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Mediana+HeartOn+AED.png" },
+  { keyword: "Mindray BeneHeart C1", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Mindray+BeneHeart+C1.png" },
+  { keyword: "Mindray BeneHeart C2", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Mindray+BeneHeart+C2.png" },
+  { keyword: "Mindray BeneHeart D1", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Mindray+BeneHeart+D1.png" },
+  { keyword: "Nihon Kohden Cardiolife AED-3100", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Nihon+Kohden+Cardiolife+AED-3100.png" },
+  { keyword: "Philips HeartStart FR3", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Philips+HeartStart+FR3.png" },
+  { keyword: "Philips HeartStart FRx", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Philips+HeartStart+FRx.png" },
+  { keyword: "Philips HeartStart HS1", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Philips+HeartStart+HS1.png" },
+  { keyword: "Physio-Control Lifepak 15", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Physio-Control+Lifepak+15.png" },
+  { keyword: "Physio-Control Lifepak 1000", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Physio-Control+Lifepak+1000.png" },
+  { keyword: "Physio-Control Lifepak CR Plus", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Physio-Control+Lifepak+CR+Plus.png" },
+  { keyword: "Physio-Control Lifepak CR2", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Physio-Control+Lifepak+CR2.png" },
+  { keyword: "Colson CU SP1", url: "https://civilprom.s3.eu-north-1.amazonaws.com/Colson+CU+SP1.png" },
+  { keyword: "Defibtech DBP-1400", url: "https://civilprom.s3.eu-north-1.amazonaws.com/De%CC%81fibtech+DBP-1400+IP+54.png" },
+  { keyword: "Defibtech DDU-120", url: "https://civilprom.s3.eu-north-1.amazonaws.com/De%CC%81fibtech+DDU-120+IP+54.png" },
+  { keyword: "Defibtech Trainer AED", url: "https://civilprom.s3.eu-north-1.amazonaws.com/De%CC%81fibtech+Trainer+AED.png" },
 ];
 
 const CATEGORIES: VariableCategory[] = [
@@ -316,6 +360,30 @@ export default function VariableTab({
       return matchSearch && matchCategory;
     });
   }, [variables, search, filterCategory]);
+
+  // Suggestions de miniature selon l'intitulé tapé
+  const matchingSuggestions = useMemo(() => {
+    if (!nom || nom.trim().length < 2) return [];
+    const normalize = (s: string) =>
+      s
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const q = normalize(nom);
+    if (!q) return [];
+    const tokens = q.split(' ').filter(Boolean);
+
+    return THUMBNAIL_SUGGESTIONS.filter((item) => {
+      const itemNorm = normalize(item.keyword);
+      if (itemNorm.includes(q) || q.includes(itemNorm)) return true;
+      if (tokens.length > 0 && tokens.every((tok) => itemNorm.includes(tok))) return true;
+      return false;
+    }).slice(0, 5);
+  }, [nom]);
 
   const openAddModal = () => {
     setEditingVariable(null);
@@ -660,6 +728,66 @@ export default function VariableTab({
                     }}
                     required
                   />
+
+                  {/* Suggestions de miniature selon l'intitulé tapé */}
+                  {matchingSuggestions.length > 0 && (
+                    <div 
+                      className="mt-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5 animate-fadeIn"
+                      id="thumbnail-suggestions-container"
+                    >
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                        <Sparkles className="w-3.5 h-3.5 text-pink-500" />
+                        <span>Proposition de miniature pour cet intitulé ({matchingSuggestions.length}) :</span>
+                      </div>
+                      <div className="space-y-2">
+                        {matchingSuggestions.map((item, idx) => {
+                          const isUsed = imageUrl === item.url;
+                          return (
+                            <div 
+                              key={idx} 
+                              className="flex items-center justify-between gap-3 p-2.5 bg-white border border-slate-200 rounded-xl shadow-2xs hover:border-pink-300 transition-all"
+                            >
+                              <div className="flex items-center gap-3 overflow-hidden">
+                                <img 
+                                  src={item.url} 
+                                  alt={item.keyword} 
+                                  className="w-10 h-10 object-contain rounded-lg border border-slate-100 bg-white p-0.5 shrink-0" 
+                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                />
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-900 truncate">{item.keyword}</p>
+                                  <p className="text-[11px] text-slate-400 truncate max-w-[200px] sm:max-w-[340px]">{item.url}</p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setImageUrl(item.url);
+                                  if (!category) {
+                                    setCategory('Modèle Défibrillateur');
+                                  }
+                                }}
+                                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                  isUsed
+                                    ? 'bg-emerald-600 text-white border border-emerald-600'
+                                    : 'bg-black text-white hover:bg-pink-600 border border-black hover:border-pink-600'
+                                }`}
+                              >
+                                {isUsed ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5" />
+                                    Utilisé
+                                  </>
+                                ) : (
+                                  'Utiliser'
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Identifiant. (optionnel) */}
