@@ -345,6 +345,7 @@ export default function VariableTab({
   const [visibiliteNettoyage, setVisibiliteNettoyage] = useState<'Oui' | 'Non'>('Oui');
   const [visibilitePiecesJointes, setVisibilitePiecesJointes] = useState<'Oui' | 'Non'>('Oui');
   const [infosTechnicien, setInfosTechnicien] = useState('');
+  const [hideSuggestions, setHideSuggestions] = useState(false);
 
   // Filtering variables
   const filteredVariables = useMemo(() => {
@@ -428,6 +429,7 @@ export default function VariableTab({
     setVisibiliteNettoyage('Oui');
     setVisibilitePiecesJointes('Oui');
     setInfosTechnicien('');
+    setHideSuggestions(false);
     setError('');
     setIsModalOpen(true);
   };
@@ -436,6 +438,7 @@ export default function VariableTab({
     setEditingVariable(v);
     setCategory(v.category);
     setNom(v.nom);
+    setHideSuggestions(false);
     setMarque(v.marque || 'Standard');
     setDescription(v.description);
     setImageUrl(v.imageUrl || '');
@@ -725,66 +728,83 @@ export default function VariableTab({
                     onChange={(e) => {
                       const filtered = e.target.value.replace(/[^a-zA-Z0-9\s-àâäéèêëîïôöùûüçœæÀÂÄÉÈÊËÎÏÔÖÙÛÜÇŒÆ]/g, '');
                       setNom(filtered);
+                      setHideSuggestions(false);
                     }}
                     required
                   />
 
                   {/* Suggestions de miniature selon l'intitulé tapé */}
-                  {matchingSuggestions.length > 0 && (
+                  {category === 'Modèle Défibrillateur' && !hideSuggestions && matchingSuggestions.length > 0 && (
                     <div 
-                      className="mt-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5 animate-fadeIn"
+                      style={{ backgroundColor: '#fdeeff', border: '1px solid #ecd7ef', borderRadius: '13px' }}
+                      className="p-4 space-y-3 animate-fadeIn mt-2.5"
                       id="thumbnail-suggestions-container"
                     >
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                        <Sparkles className="w-3.5 h-3.5 text-pink-500" />
-                        <span>Proposition de miniature pour cet intitulé ({matchingSuggestions.length}) :</span>
+                      <div style={{ fontSize: '16px', color: '#4d1552' }} className="font-bold">
+                        Proposition de miniature pour cet intitulé ({matchingSuggestions.length}) :
                       </div>
-                      <div className="space-y-2">
-                        {matchingSuggestions.map((item, idx) => {
-                          const isUsed = imageUrl === item.url;
-                          return (
-                            <div 
-                              key={idx} 
-                              className="flex items-center justify-between gap-3 p-2.5 bg-white border border-slate-200 rounded-xl shadow-2xs hover:border-pink-300 transition-all"
-                            >
-                              <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="space-y-2.5">
+                        {matchingSuggestions.map((item, idx) => (
+                          <div 
+                            key={idx} 
+                            style={{ background: '#4c1451', border: 'none', borderRadius: '13px', boxShadow: 'none' }}
+                            className="flex items-center justify-between gap-3 p-3"
+                          >
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div 
+                                style={{ 
+                                  width: '73px', 
+                                  height: '73px', 
+                                  padding: '13px', 
+                                  borderRadius: '10px', 
+                                  border: 'none', 
+                                  backgroundColor: '#ffffff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0
+                                }}
+                              >
                                 <img 
                                   src={item.url} 
                                   alt={item.keyword} 
-                                  className="w-10 h-10 object-contain rounded-lg border border-slate-100 bg-white p-0.5 shrink-0" 
+                                  className="w-full h-full object-contain" 
                                   onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                                 />
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold text-slate-900 truncate">{item.keyword}</p>
-                                  <p className="text-[11px] text-slate-400 truncate max-w-[200px] sm:max-w-[340px]">{item.url}</p>
-                                </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setImageUrl(item.url);
-                                  if (!category) {
-                                    setCategory('Modèle Défibrillateur');
-                                  }
-                                }}
-                                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                                  isUsed
-                                    ? 'bg-emerald-600 text-white border border-emerald-600'
-                                    : 'bg-black text-white hover:bg-pink-600 border border-black hover:border-pink-600'
-                                }`}
-                              >
-                                {isUsed ? (
-                                  <>
-                                    <Check className="w-3.5 h-3.5" />
-                                    Utilisé
-                                  </>
-                                ) : (
-                                  'Utiliser'
-                                )}
-                              </button>
+                              <div className="min-w-0">
+                                <p 
+                                  style={{ color: '#fff', cursor: 'default', fontSize: '18px' }} 
+                                  className="font-bold truncate"
+                                >
+                                  {item.keyword}
+                                </p>
+                              </div>
                             </div>
-                          );
-                        })}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNom(item.keyword);
+                                setImageUrl(item.url);
+                                setCategory('Modèle Défibrillateur');
+                                setHideSuggestions(true);
+                              }}
+                              style={{
+                                paddingInline: 'calc(var(--spacing) * 3)',
+                                borderRadius: '13px',
+                                padding: '10px 20px',
+                                marginRight: '15px',
+                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                background: 'rgb(53, 86, 236)',
+                                color: '#fff',
+                                fontSize: '18px'
+                              }}
+                              className="shrink-0 font-bold transition-all cursor-pointer flex items-center gap-1.5 border-none hover:brightness-110"
+                            >
+                              Utiliser
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}

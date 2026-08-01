@@ -9,6 +9,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { fetchCollectionFromFirestore } from '../firebase';
+import { generateReportModerationComment } from '../utils/moderationComment';
 
 interface GmaoCorrectionFormProps {
   report?: any;
@@ -2012,6 +2013,9 @@ export default function GmaoCorrectionForm({
       emettreFactureBrouillon,
       serviceEmettreId
     };
+
+    // Auto-generate moderation comment for the "Gérer" side pane
+    savedReportPayload.commentaire = generateReportModerationComment(savedReportPayload, defibrillateurs);
 
     setIsSaving(true);
     setTimeout(() => {

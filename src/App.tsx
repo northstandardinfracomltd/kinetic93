@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getRegionsForCountry } from './utils/regions';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants } from './firebase';
+import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
 import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification } from './types';
@@ -8987,7 +8988,11 @@ export default function App() {
                               Commentaire
                             </label>
                             <textarea
-                              value={managingReport.commentaire || ''}
+                              value={
+                                managingReport.commentaire !== undefined && managingReport.commentaire !== null && managingReport.commentaire !== ''
+                                  ? managingReport.commentaire
+                                  : generateReportModerationComment(managingReport, defibrillateurs)
+                              }
                               onChange={(e) => {
                                 const val = e.target.value;
                                 const updatedReports = generatedReports.map(r => 
@@ -8996,7 +9001,7 @@ export default function App() {
                                 saveReports(updatedReports);
                               }}
                               placeholder="Entrez un commentaire."
-                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-50/50 resize-y min-h-[120px] focus:outline-none focus:ring-0 focus:border-slate-300"
+                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-50/50 resize-y min-h-[120px] focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
                             />
                           </div>
 
@@ -9029,6 +9034,57 @@ export default function App() {
                               />
                             </button>
                           </div>
+
+                          {/* Field: Situation. */}
+                          <div className="space-y-1.5 pt-2">
+                            <label className="block text-[16px] font-medium text-[#000]">
+                              Situation.
+                            </label>
+                            <select
+                              value={managingReport.missionStatus || (managingReport.isUpcoming ? 'Brouillon' : 'Effectué')}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updatedReports = generatedReports.map(r => 
+                                  r.id === managingReport.id ? { ...r, missionStatus: val } : r
+                                );
+                                saveReports(updatedReports);
+                              }}
+                              className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 cursor-pointer font-sans"
+                            >
+                              <option value="Effectué">Effectué</option>
+                              <option value="Rejet mission">Rejet mission</option>
+                              <option value="En cours">En cours</option>
+                              <option value="À faire">À faire</option>
+                              <option value="Attente">Attente</option>
+                              <option value="Attente Client">Attente Client</option>
+                              <option value="Accepté Client">Accepté Client</option>
+                              <option value="Refusé Client">Refusé Client</option>
+                              <option value="Brouillon">Brouillon</option>
+                            </select>
+                          </div>
+
+                          {/* Field: Raison de rejet (visible if situation is Rejet mission or intervention impossible) */}
+                          {(managingReport.missionStatus === 'Rejet mission' || managingReport.conforme === 'Intervention impossible' || managingReport.statutMaintenance === 'IMPOSSIBLE') && (
+                            <div className="space-y-1.5 pt-2">
+                              <label className="block text-[16px] font-medium text-[#000]">
+                                Raison de rejet de mission.
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={100}
+                                value={managingReport.rejectionReason || managingReport.reasonImpossible || managingReport.techCommentaireArrivee || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const updatedReports = generatedReports.map(r => 
+                                    r.id === managingReport.id ? { ...r, rejectionReason: val, reasonImpossible: val, techCommentaireArrivee: val } : r
+                                  );
+                                  saveReports(updatedReports);
+                                }}
+                                placeholder="Entrez la raison du rejet..."
+                                className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
+                              />
+                            </div>
+                          )}
 
                           {/* Enregistrer & Fermer Buttons */}
                           <div className="pt-2 space-y-3">

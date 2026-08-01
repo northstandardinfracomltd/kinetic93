@@ -7278,8 +7278,7 @@ export default function PublicPortal({
                                       </div>
 
                                       {/* Rejection reason input for uncompleted passages */}
-                                      {!isCompleted &&
-                                        attemptedEndTourIds.includes(t.id) && (
+                                      {!isCompleted && (
                                           <div
                                             className="mt-2.5 p-3 rounded-lg"
                                             style={{
