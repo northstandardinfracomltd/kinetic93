@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence } from '../types';
 
 interface PlanningTabProps {
@@ -515,33 +514,30 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 type="button"
                                 onClick={() => toggleMissionExpanded(missionKey)}
                                 style={{
-                                  backgroundColor: isExpanded ? "#3556ec" : "#000000",
-                                  color: "#ffffff",
-                                  borderRadius: "1000px",
-                                  padding: "5px 15px",
-                                  fontSize: "14px",
+                                  color: "#fff",
+                                  boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97 28 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                  background: "rgb(96 28 104)",
+                                  borderRadius: "13px",
+                                  marginLeft: "40px",
+                                  marginRight: "10px",
+                                  padding: "8px 18px",
+                                  fontSize: "16px",
                                   fontWeight: 700,
                                   border: "none",
                                   cursor: "pointer",
                                   display: "inline-flex",
                                   alignItems: "center",
-                                  gap: "6px",
-                                  boxShadow: "0 1px 2px rgba(0,0,0,0.1)"
+                                  gap: "6px"
                                 }}
-                                className="hover:opacity-90 active:scale-95 transition-all shrink-0 select-none ml-auto"
+                                className="shrink-0 select-none"
                               >
-                                <span>{isExpanded ? "Réduire" : "Dérouler"}</span>
-                                {isExpanded ? (
-                                  <ChevronUp className="w-4 h-4" />
-                                ) : (
-                                  <ChevronDown className="w-4 h-4" />
-                                )}
+                                {isExpanded ? "Réduire" : "Dérouler"}
                               </button>
                             </div>
 
                             {/* Details (Déroulés si actif) */}
                             {isExpanded && (
-                              <div className="space-y-1.5 text-[16px] text-slate-800 pt-2 border-t border-slate-200">
+                              <div className="space-y-1.5 text-[16px] text-slate-800 pt-2">
                                 <div>
                                   <span className="font-bold">Tournée : </span>
                                   <span>{tourTitle}</span>

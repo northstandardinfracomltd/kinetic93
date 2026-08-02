@@ -389,6 +389,40 @@ export async function runMonthlyVigilanceCampaign(
 }
 
 /**
+ * EMAIL SOUMETTRE AU CLIENT (PROPOSITION DE DATE ET CRÉNEAU)
+ */
+export async function triggerEmailSoumettreAuClient(
+  recipientEmails: string[],
+  companyName: string,
+  companyEmail: string,
+  customerMainEmail: string,
+  customerPassword: string
+): Promise<boolean> {
+  const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+  const savedOption = localStorage.getItem(`defib_${tenantId}_enable_auto_emails`);
+  if (savedOption === 'Non') {
+    console.log(`[Soumettre Client] Skipped because automatic emails are disabled.`);
+    return false;
+  }
+  
+  const to = Array.from(new Set(['defibeo@gmail.com', ...recipientEmails].filter(Boolean))).join(', ');
+  const subject = `${companyName} : (Attention requise) Proposition de date et créneau.`;
+  const body = `Bonjour,
+
+Une date et un créneau est proposé pour une intervention sur votre site. Accédez à votre portail client pour consulter les détails, et valider ou refuser le passage. Votre email de connexion est : ${customerMainEmail} et votre mot de passe est ${customerPassword} : accédez à defibeo.com puis cliquez sur Connexion, en tant que Client.
+
+Vous remerciant pour votre retour.
+L’équipe ${companyName}.`;
+
+  return sendScriptEmail({
+    to,
+    subject,
+    body,
+    replyTo: companyEmail || "defibeo@gmail.com"
+  });
+}
+
+/**
  * GOOGLE APPS SCRIPT CODE TO DEPLOY (for reference & ease of use):
  * 
  * ```javascript

@@ -32,7 +32,8 @@ import {
   triggerEmail5AvisageFSM,
   triggerEmail7CrmReply,
   triggerEmail8NouvelleTourneeTech,
-  triggerEmail6RapportIntervention
+  triggerEmail6RapportIntervention,
+  triggerEmailSoumettreAuClient
 } from './utils/emailService';
 import { getParisTimestamp } from './utils/dateUtils';
 
@@ -104,8 +105,6 @@ import {
   LogOut,
   Download,
   Eye,
-  ChevronDown,
-  ChevronUp,
   ShoppingBag,
   Bell
 } from 'lucide-react';
@@ -251,6 +250,13 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
   const [showEnvLoading, setShowEnvLoading] = useState<boolean>(false);
+  const [avisageConfirmTour, setAvisageConfirmTour] = useState<any | null>(null);
+  const [isOffline, setIsOffline] = useState<boolean>(() => {
+    if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
+      return !navigator.onLine;
+    }
+    return false;
+  });
   const [windowWidth, setWindowWidth] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth;
@@ -264,9 +270,16 @@ export default function App() {
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
     };
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
     window.addEventListener('resize', handleResize);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -1640,68 +1653,6 @@ export default function App() {
         }
       }
 
-      // Email 5: AVISAGE FSM DESTINÉ AUX CLIENTS
-      try {
-        const toursMissions = existingTour.missions || [];
-        let updatedClientsList = [...clients];
-        let hasUpdatedClient = false;
-
-        toursMissions.forEach((m: any) => {
-          const defibId = m.defibIdentifiant;
-          const defib = defibrillateurs.find(df => df.identifiant === defibId);
-          if (defib) {
-            const index = updatedClientsList.findIndex(c => c.id === defib.clientId);
-            if (index !== -1) {
-              const matchedClient = updatedClientsList[index];
-              const clientEmail = defib.emailSite || matchedClient.email || matchedClient.emailSite;
-              if (clientEmail && clientEmail.trim()) {
-                const pin = matchedClient.signaturePin || generateRandomPin();
-                const newPins = [...(matchedClient.signaturePins || [])];
-                if (!newPins.some(p => p.code.toUpperCase() === pin.toUpperCase())) {
-                  newPins.push({
-                    code: pin,
-                    createdAt: new Date().toISOString(),
-                    status: 'émis'
-                  });
-                }
-                updatedClientsList[index] = {
-                  ...matchedClient,
-                  signaturePin: pin,
-                  signaturePins: newPins
-                };
-                hasUpdatedClient = true;
-
-                const estDate = m.estimatedDate || startDate || '';
-                let estDateFormatted = estDate;
-                if (estDate && estDate.includes('-')) {
-                  const parts = estDate.split('-');
-                  if (parts.length === 3) {
-                    estDateFormatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                  }
-                }
-                const estSlot = m.estimatedSlot || '09:00';
-
-                triggerEmail5AvisageFSM(
-                  clientEmail.trim(),
-                  defibId,
-                  companyName,
-                  companyEmail,
-                  estDateFormatted || 'prochainement',
-                  pin,
-                  estSlot
-                ).catch(e => console.error("Error sending Email 5:", e));
-              }
-            }
-          }
-        });
-
-        if (hasUpdatedClient) {
-          saveClients(updatedClientsList);
-        }
-      } catch (err5) {
-        console.error("Error triggering Email 5 sequence:", err5);
-      }
-
       // Email 8: NOUVELLE TOURNÉE POUR LE TECHNICIEN
       try {
         const matchingTech = members.find(m => m.name.trim().toLowerCase() === (techName || '').trim().toLowerCase());
@@ -2122,6 +2073,134 @@ export default function App() {
     });
 
     saveFsmTours(updatedTours);
+  };
+
+  const handleExecuteAvisage = async (tour: any) => {
+    if (!tour) return;
+    const companyName = companyInfo.name || 'Défibeo Suite';
+    const companyEmail = companyInfo.email || '';
+    const toursMissions = tour.missions || [];
+    let updatedClientsList = [...clients];
+    let hasUpdatedClient = false;
+
+    toursMissions.forEach((m: any) => {
+      const defibId = m.defibIdentifiant;
+      const defib = defibrillateurs.find(df => df.identifiant === defibId);
+      if (defib) {
+        const index = updatedClientsList.findIndex(c => c.id === defib.clientId);
+        if (index !== -1) {
+          const matchedClient = updatedClientsList[index];
+          const clientEmail = defib.emailSite || matchedClient.email || matchedClient.emailSite;
+          if (clientEmail && clientEmail.trim()) {
+            const pin = matchedClient.signaturePin || generateRandomPin();
+            const newPins = [...(matchedClient.signaturePins || [])];
+            if (!newPins.some(p => p.code.toUpperCase() === pin.toUpperCase())) {
+              newPins.push({
+                code: pin,
+                createdAt: new Date().toISOString(),
+                status: 'émis'
+              });
+            }
+            updatedClientsList[index] = {
+              ...matchedClient,
+              signaturePin: pin,
+              signaturePins: newPins
+            };
+            hasUpdatedClient = true;
+
+            const estDate = m.estimatedDate || tour.startDate || '';
+            let estDateFormatted = estDate;
+            if (estDate && estDate.includes('-')) {
+              const parts = estDate.split('-');
+              if (parts.length === 3) {
+                estDateFormatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
+              }
+            }
+            const estSlot = m.estimatedSlot || '09:00';
+
+            triggerEmail5AvisageFSM(
+              clientEmail.trim(),
+              defibId,
+              companyName,
+              companyEmail,
+              estDateFormatted || 'prochainement',
+              pin,
+              estSlot
+            ).catch(e => console.error("Error sending Email 5:", e));
+          }
+        }
+      }
+    });
+
+    if (hasUpdatedClient) {
+      saveClients(updatedClientsList);
+    }
+
+    setAvisageConfirmTour(null);
+    alert("L'email d'avisage a été envoyé avec succès !");
+  };
+
+  const handleSoumettreAuClient = async (m: any, tour: any) => {
+    const defib = defibrillateurs.find(df => df.identifiant === m.defibIdentifiant);
+    const client = defib ? clients.find(c => c.id === defib.clientId) : clients.find(c => c.id === m.clientId);
+
+    const recipientEmails: string[] = [];
+
+    if (defib && defib.emailSite && defib.emailSite.trim()) {
+      recipientEmails.push(defib.emailSite.trim());
+    }
+
+    if (client) {
+      if (client.typeContact1 === 'Planification' && client.emailSite && client.emailSite.trim()) {
+        recipientEmails.push(client.emailSite.trim());
+      }
+      if (client.typeContact2 === 'Planification' && client.emailSite2 && client.emailSite2.trim()) {
+        recipientEmails.push(client.emailSite2.trim());
+      }
+      if (client.typeContact3 === 'Planification' && client.emailSite3 && client.emailSite3.trim()) {
+        recipientEmails.push(client.emailSite3.trim());
+      }
+      if (client.typeContact4 === 'Planification' && client.emailSite4 && client.emailSite4.trim()) {
+        recipientEmails.push(client.emailSite4.trim());
+      }
+      if (client.typeContact5 === 'Planification' && client.emailSite5 && client.emailSite5.trim()) {
+        recipientEmails.push(client.emailSite5.trim());
+      }
+      if (recipientEmails.length === 0) {
+        if (client.emailSite && client.emailSite.trim()) {
+          recipientEmails.push(client.emailSite.trim());
+        } else if (client.email && client.email.trim()) {
+          recipientEmails.push(client.email.trim());
+        }
+      }
+    }
+
+    const uniqueEmails = Array.from(new Set(recipientEmails.filter(Boolean)));
+
+    if (uniqueEmails.length === 0) {
+      alert("Aucune adresse email valide trouvée pour ce client ou cette mission.");
+      return;
+    }
+
+    const customerMainEmail = client?.email || client?.emailSite || uniqueEmails[0] || '';
+    const customerPassword = client?.accessKey || 'Non défini';
+    const companyName = companyInfo.name || 'Défibeo Suite';
+    const companyEmail = companyInfo.email || 'defibeo@gmail.com';
+
+    try {
+      await triggerEmailSoumettreAuClient(
+        uniqueEmails,
+        companyName,
+        companyEmail,
+        customerMainEmail,
+        customerPassword
+      );
+      updateFsmMission(tour.id, m.id, { status: 'Attente Client' });
+      alert("La proposition a été soumise au client par email avec succès.");
+    } catch (err) {
+      console.error("Erreur lors de la soumission au client:", err);
+      alert("Une erreur est survenue lors de l'envoi de l'email.");
+    }
   };
 
   const CODE39_MAP: { [key: string]: string } = {
@@ -5400,6 +5479,25 @@ export default function App() {
     );
   }
 
+  if (isOffline) {
+    return (
+      <div 
+        className="fixed inset-0 z-[99999] flex flex-col items-center justify-center text-center font-sans p-6" 
+        style={{ 
+          background: 'radial-gradient(#7e2e86, #36093a)',
+          color: '#ffffff'
+        }}
+        id="offline-warning-overlay"
+      >
+        <div className="flex flex-col items-center gap-4 max-w-lg">
+          <span className="text-white text-[18px] font-sans font-medium leading-relaxed">
+            Attention, la connexion à internet est manquante ou instable. Essayez à nouveau.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   if (windowWidth < 1000) {
     return (
       <div 
@@ -6367,27 +6465,24 @@ export default function App() {
                                             type="button"
                                             onClick={() => toggleFsmMissionExpanded(missionKey)}
                                             style={{
-                                              backgroundColor: isExpanded ? '#3556ec' : '#000000',
-                                              color: '#ffffff',
-                                              borderRadius: '1000px',
-                                              padding: '5px 15px',
-                                              fontSize: '14px',
+                                              color: '#fff',
+                                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97 28 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                              background: 'rgb(96 28 104)',
+                                              borderRadius: '13px',
+                                              marginLeft: '40px',
+                                              marginRight: '10px',
+                                              padding: '8px 18px',
+                                              fontSize: '16px',
                                               fontWeight: 700,
                                               border: 'none',
                                               cursor: 'pointer',
                                               display: 'inline-flex',
                                               alignItems: 'center',
-                                              gap: '6px',
-                                              boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                              gap: '6px'
                                             }}
-                                            className="hover:opacity-90 active:scale-95 transition-all shrink-0 select-none ml-auto"
+                                            className="shrink-0 select-none"
                                           >
-                                            <span>{isExpanded ? 'Réduire' : 'Dérouler'}</span>
-                                            {isExpanded ? (
-                                              <ChevronUp className="w-4 h-4" />
-                                            ) : (
-                                              <ChevronDown className="w-4 h-4" />
-                                            )}
+                                            {isExpanded ? 'Réduire' : 'Dérouler'}
                                           </button>
                                         </div>
 
@@ -6686,6 +6781,27 @@ export default function App() {
                                 className={`${(t.missions ? t.missions.length : 0) <= 1 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} md:w-auto flex-1 md:flex-initial`}
                               >
                                 Calculer
+                              </button>
+
+                              {/* Avisage button */}
+                              <button
+                                type="button"
+                                onClick={() => setAvisageConfirmTour(t)}
+                                style={{
+                                  ...rowActionButtonStyle,
+                                  padding: '12px 24px',
+                                  borderRadius: '13px',
+                                  fontSize: '18px',
+                                  fontWeight: '100',
+                                  height: '50px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: '100%'
+                                }}
+                                className="cursor-pointer md:w-auto flex-1 md:flex-initial"
+                              >
+                                Avisage
                               </button>
 
                               {/* Enregistrer button */}
@@ -7253,33 +7369,30 @@ export default function App() {
                                           type="button"
                                           onClick={() => toggleFsmMissionExpanded(missionKey)}
                                           style={{
-                                            backgroundColor: isExpanded ? '#3556ec' : '#000000',
-                                            color: '#ffffff',
-                                            borderRadius: '1000px',
-                                            padding: '5px 15px',
-                                            fontSize: '14px',
+                                            color: '#fff',
+                                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97 28 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                            background: 'rgb(96 28 104)',
+                                            borderRadius: '13px',
+                                            marginLeft: '40px',
+                                            marginRight: '10px',
+                                            padding: '8px 18px',
+                                            fontSize: '16px',
                                             fontWeight: 700,
                                             border: 'none',
                                             cursor: 'pointer',
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '6px',
-                                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                            gap: '6px'
                                           }}
-                                          className="hover:opacity-90 active:scale-95 transition-all shrink-0 select-none ml-auto"
+                                          className="shrink-0 select-none"
                                         >
-                                          <span>{isExpanded ? 'Réduire' : 'Dérouler'}</span>
-                                          {isExpanded ? (
-                                            <ChevronUp className="w-4 h-4" />
-                                          ) : (
-                                            <ChevronDown className="w-4 h-4" />
-                                          )}
+                                          {isExpanded ? 'Réduire' : 'Dérouler'}
                                         </button>
                                       </div>
 
                                       {/* Contenu déroulant (Montré uniquement si déroulé) */}
                                       {isExpanded && (
-                                        <div className="space-y-4 pt-2 border-t border-slate-200">
+                                        <div className="space-y-4 pt-2">
                                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 w-full bg-transparent">
                                         {/* Client. (toujours disabled) */}
                                         <div className="space-y-0.5 bg-transparent">
@@ -7999,8 +8112,8 @@ export default function App() {
                                     );
                                   })()}
 
-                                  {/* Bottom row: Situation & Supprimer side-by-side (50% / 50%) */}
-                                  <div className="pt-2 grid grid-cols-2 gap-3 w-full bg-transparent items-end">
+                                  {/* Bottom row: Situation, Soumettre au client & Supprimer (33% / 33% / 33%) */}
+                                  <div className="pt-2 grid grid-cols-1 md:grid-cols-3 gap-3 w-full bg-transparent items-end">
                                     {/* Situation. */}
                                     <div className="space-y-0.5 font-sans relative bg-transparent">
                                       <label className="block mb-1 fsm-label-style">Situation.</label>
@@ -8019,6 +8132,7 @@ export default function App() {
                                               (m.status || "Brouillon") === "Attente Client" ? "#f59e0b" : 
                                               (m.status || "Brouillon") === "Accepté Client" ? "#16a34a" : 
                                               (m.status || "Brouillon") === "Refusé Client" ? "#dc2626" : 
+                                              (m.status || "Brouillon") === "Rejet mission" ? "#dc2626" : 
                                               (m.status || "Brouillon") === "À faire" ? "#3b82f6" :  
                                               (m.status || "Brouillon") === "En cours" ? "#ef4444" :  
                                               (m.status || "Brouillon") === "Effectué" ? "#22c55e" :  
@@ -8048,11 +8162,32 @@ export default function App() {
                                           <option value="Attente Client">Attente Client</option>
                                           <option value="Accepté Client">Accepté Client</option>
                                           <option value="Refusé Client">Refusé Client</option>
+                                          <option value="Rejet mission">Rejet mission</option>
                                           <option value="À faire">À faire</option>
                                           <option value="Attente">Attente</option>
                                           <option value="Effectué">Effectué</option>
                                         </select>
                                       </div>
+                                    </div>
+
+                                    {/* Soumettre au client button */}
+                                    <div className="bg-transparent flex flex-col justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSoumettreAuClient(m, t)}
+                                        style={{
+                                          ...rowActionButtonStyle,
+                                          width: '100%',
+                                          display: 'flex',
+                                          justifyContent: 'center',
+                                          alignItems: 'center',
+                                          padding: '12px 16px',
+                                          fontSize: '16px'
+                                        }}
+                                        className="cursor-pointer"
+                                      >
+                                        Soumettre au client
+                                      </button>
                                     </div>
 
                                     {/* Supprimer button */}
@@ -8723,6 +8858,7 @@ export default function App() {
                                       sit === 'Attente Client' ? '#f59e0b' :
                                       sit === 'Accepté Client' ? '#16a34a' :
                                       sit === 'Refusé Client' ? '#dc2626' :
+                                      sit === 'Rejet mission' ? '#dc2626' :
                                       sit === 'À faire' ? '#3b82f6' :
                                       sit === 'En cours' ? '#ef4444' :
                                       sit === 'Effectué' ? '#22c55e' :
@@ -11065,6 +11201,35 @@ export default function App() {
         onConnectorsUpdated={loadApiConnectors}
         onUpdateLocationNames={setLocationNames}
       />
+
+      {/* Modal Avisage Tournée */}
+      {avisageConfirmTour && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4 text-center">
+            <h3 className="text-xl font-bold text-slate-900">Avisage client</h3>
+            <p className="text-base text-slate-700 leading-relaxed">
+              Envoyer un email informatif mentionnant la date et le créneau de passage prévu.
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setAvisageConfirmTour(null)}
+                className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-slate-100 cursor-pointer transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExecuteAvisage(avisageConfirmTour)}
+                style={rowActionButtonStyle}
+                className="px-6 py-2.5 rounded-xl bg-black text-white font-semibold hover:bg-slate-800 cursor-pointer transition-colors"
+              >
+                Envoyer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <StatsModal
         isOpen={isStatsOpen}
