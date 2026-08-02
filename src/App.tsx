@@ -6784,25 +6784,36 @@ export default function App() {
                               </button>
 
                               {/* Avisage button */}
-                              <button
-                                type="button"
-                                onClick={() => setAvisageConfirmTour(t)}
-                                style={{
-                                  ...rowActionButtonStyle,
-                                  padding: '12px 24px',
-                                  borderRadius: '13px',
-                                  fontSize: '18px',
-                                  fontWeight: '100',
-                                  height: '50px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  width: '100%'
-                                }}
-                                className="cursor-pointer md:w-auto flex-1 md:flex-initial"
-                              >
-                                Avisage
-                              </button>
+                              {(() => {
+                                const isAvisageEnabled = (t.missions || []).some((m: any) => {
+                                  const sit = m.status || 'Brouillon';
+                                  return sit === 'Accepté Client' || sit === 'À faire' || sit === 'Attente';
+                                });
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={!isAvisageEnabled}
+                                    onClick={() => setAvisageConfirmTour(t)}
+                                    style={{
+                                      ...rowActionButtonStyle,
+                                      padding: '12px 24px',
+                                      borderRadius: '13px',
+                                      fontSize: '18px',
+                                      fontWeight: '100',
+                                      height: '50px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      width: '100%',
+                                      opacity: isAvisageEnabled ? 1 : 0.4,
+                                      cursor: isAvisageEnabled ? 'pointer' : 'not-allowed'
+                                    }}
+                                    className={`${isAvisageEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} md:w-auto flex-1 md:flex-initial`}
+                                  >
+                                    Avisage
+                                  </button>
+                                );
+                              })()}
 
                               {/* Enregistrer button */}
                               <button
@@ -8171,24 +8182,38 @@ export default function App() {
                                     </div>
 
                                     {/* Soumettre au client button */}
-                                    <div className="bg-transparent flex flex-col justify-end">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSoumettreAuClient(m, t)}
-                                        style={{
-                                          ...rowActionButtonStyle,
-                                          width: '100%',
-                                          display: 'flex',
-                                          justifyContent: 'center',
-                                          alignItems: 'center',
-                                          padding: '12px 16px',
-                                          fontSize: '16px'
-                                        }}
-                                        className="cursor-pointer"
-                                      >
-                                        Soumettre au client
-                                      </button>
-                                    </div>
+                                    {(() => {
+                                      const currentSit = m.status || 'Brouillon';
+                                      const canSubmitToClient = ['Brouillon', 'Attente Client', 'Refusé Client'].includes(currentSit);
+                                      return (
+                                        <div className="bg-transparent flex flex-col justify-end">
+                                          <button
+                                            type="button"
+                                            disabled={!canSubmitToClient}
+                                            onClick={() => handleSoumettreAuClient(m, t)}
+                                            style={{
+                                              color: '#fff',
+                                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                              background: 'rgb(96, 28, 104)',
+                                              borderRadius: '13px',
+                                              border: 'none',
+                                              fontSize: '18px',
+                                              fontWeight: '500',
+                                              padding: '12px 16px',
+                                              width: '100%',
+                                              display: 'flex',
+                                              justifyContent: 'center',
+                                              alignItems: 'center',
+                                              opacity: canSubmitToClient ? 1 : 0.4,
+                                              cursor: canSubmitToClient ? 'pointer' : 'not-allowed'
+                                            }}
+                                            className={canSubmitToClient ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}
+                                          >
+                                            Soumettre au client
+                                          </button>
+                                        </div>
+                                      );
+                                    })()}
 
                                     {/* Supprimer button */}
                                     <div className="bg-transparent flex flex-col justify-end">
@@ -8196,13 +8221,18 @@ export default function App() {
                                         type="button"
                                         onClick={() => deleteFsmMission(t.id, m.id)}
                                         style={{
-                                          ...rowActionButtonStyle,
+                                          color: '#fff',
+                                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                          background: 'rgb(96, 28, 104)',
+                                          borderRadius: '13px',
+                                          border: 'none',
+                                          fontSize: '18px',
+                                          fontWeight: '500',
+                                          padding: '12px 16px',
                                           width: '100%',
                                           display: 'flex',
                                           justifyContent: 'center',
-                                          alignItems: 'center',
-                                          padding: '12px 16px',
-                                          fontSize: '18px'
+                                          alignItems: 'center'
                                         }}
                                         className="cursor-pointer"
                                       >
@@ -11221,7 +11251,6 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleExecuteAvisage(avisageConfirmTour)}
-                style={rowActionButtonStyle}
                 className="px-6 py-2.5 rounded-xl bg-black text-white font-semibold hover:bg-slate-800 cursor-pointer transition-colors"
               >
                 Envoyer
