@@ -7,6 +7,24 @@
     <link rel="icon" type="image/png" href="https://civilprom.s3.eu-north-1.amazonaws.com/favicon_bdb.png" />
     <title>Défibeo</title>
     <!-- Open Graph / SEO Banner -->
+    <!-- Auto-recovery and SW cleanup for Firebase Hosting updates -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+      window.addEventListener('error', function(e) {
+        if (e.message && (e.message.includes('module script') || e.message.includes('MIME type') || e.message.includes('Loading chunk'))) {
+          if (!sessionStorage.getItem('reloaded_for_chunk')) {
+            sessionStorage.setItem('reloaded_for_chunk', 'true');
+            window.location.reload();
+          }
+        }
+      }, true);
+    </script>
     <meta property="og:title" content="Défibeo" />
     <meta property="og:description" content="Logiciel de gestion et suivi des défibrillateurs, clients, et modèles avec export et édition en masse." />
     <meta property="og:image" content="https://civilprom.s3.eu-north-1.amazonaws.com/DEFIBEO+SEO.png" />

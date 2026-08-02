@@ -8991,7 +8991,7 @@ export default function App() {
                               value={
                                 managingReport.commentaire !== undefined && managingReport.commentaire !== null && managingReport.commentaire !== ''
                                   ? managingReport.commentaire
-                                  : generateReportModerationComment(managingReport, defibrillateurs)
+                                  : (!managingReport.isUpcoming ? generateReportModerationComment(managingReport, defibrillateurs) : '')
                               }
                               onChange={(e) => {
                                 const val = e.target.value;

@@ -33,7 +33,7 @@ export function generateReportModerationComment(
   report: any,
   defibrillateurs: any[] = []
 ): string {
-  if (!report) return 'Aucun.';
+  if (!report) return '';
 
   const bullets: string[] = [];
 
@@ -139,8 +139,8 @@ export function generateReportModerationComment(
   }
 
   if (bullets.length === 0) {
-    return 'Aucun.';
+    return '';
   }
 
-  return bullets.join('\n');
+  return `Problème(s) potentiel(s) ou signalement(s):\n${bullets.join('\n')}`;
 }

@@ -2014,8 +2014,10 @@ export default function GmaoCorrectionForm({
       serviceEmettreId
     };
 
-    // Auto-generate moderation comment for the "Gérer" side pane
-    savedReportPayload.commentaire = generateReportModerationComment(savedReportPayload, defibrillateurs);
+    // Auto-generate moderation comment for the "Gérer" side pane ONLY when report is no longer upcoming (Modération or Validés)
+    if (!savedReportPayload.isUpcoming) {
+      savedReportPayload.commentaire = generateReportModerationComment(savedReportPayload, defibrillateurs);
+    }
 
     setIsSaving(true);
     setTimeout(() => {
