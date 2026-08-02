@@ -157,11 +157,12 @@ export default function StocksTab({
 
   // Stock Movement States
   const [mouvements, setMouvements] = useState<StockMovement[]>([]);
-  const [newMvType, setNewMvType] = useState<'Réapprovisionnement fournisseur' | 'Distribution' | 'Rapatriement'>('Distribution');
+  const [newMvType, setNewMvType] = useState<'Réapprovisionnement fournisseur' | 'Distribution' | 'Rapatriement' | 'Expédition directe au client'>('Distribution');
   const [newMvVolume, setNewMvVolume] = useState<number>(1);
   const [newMvDate, setNewMvDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [newMvStatut, setNewMvStatut] = useState<'Préparation' | 'Expédié' | 'Terminé' | 'Annulé'>('Préparation');
   const [newMvBonCommande, setNewMvBonCommande] = useState<string>('');
+  const [newMvCustomBonCommande, setNewMvCustomBonCommande] = useState<string>('');
   const [newMvTrackingLink, setNewMvTrackingLink] = useState<string>('');
   const [newMvEmplacement, setNewMvEmplacement] = useState<string>('');
   const [showMvForm, setShowMvForm] = useState<boolean>(false);
@@ -428,18 +429,21 @@ export default function StocksTab({
       } else {
         setNewMvEmplacement('');
       }
+    } else if (newMvType === 'Expédition directe au client') {
+      // Managed via Commande field / custom BC
     } else {
       setNewMvEmplacement('');
     }
   }, [newMvType, availableLocationOptions, achatsFournisseurs]);
 
   const handleAddMovementInline = () => {
-    if (newMvVolume <= 0) {
+    const finalVol = newMvType === 'Expédition directe au client' ? 1 : newMvVolume;
+    if (finalVol <= 0) {
       alert("Le volume doit être supérieur à 0");
       return;
     }
-    if (newMvType === 'Distribution' && newMvVolume > Number(newQty)) {
-      alert(`Le volume (${newMvVolume}) ne peut pas être supérieur à la quantité disponible (${newQty}).`);
+    if (newMvType === 'Distribution' && finalVol > Number(newQty)) {
+      alert(`Le volume (${finalVol}) ne peut pas être supérieur à la quantité disponible (${newQty}).`);
       return;
     }
     if (!newMvDate) {
@@ -454,15 +458,42 @@ export default function StocksTab({
       alert("Veuillez sélectionner un emplacement.");
       return;
     }
+    if (newMvType === 'Expédition directe au client') {
+      if (!newMvBonCommande) {
+        alert("Veuillez sélectionner ou saisir une commande.");
+        return;
+      }
+      if (newMvBonCommande === 'custom' && !newMvCustomBonCommande.trim()) {
+        alert("Veuillez saisir le bon de commande.");
+        return;
+      }
+    }
+
+    const bcVal = newMvType === 'Expédition directe au client'
+      ? (newMvBonCommande === 'custom' ? newMvCustomBonCommande.trim() : newMvBonCommande)
+      : newMvBonCommande;
+
+    let locText = newMvEmplacement;
+    if (newMvType === 'Expédition directe au client') {
+      if (newMvBonCommande === 'custom') {
+        locText = newMvCustomBonCommande.trim();
+      } else {
+        const foundDoc = commercialDocs.find(d => (d.bonCommandeReference && d.bonCommandeReference === newMvBonCommande) || d.ref === newMvBonCommande || d.id === newMvBonCommande);
+        locText = foundDoc
+          ? `${foundDoc.bonCommandeEntete || foundDoc.bonCommandeReference || foundDoc.ref}${foundDoc.clientDenomination ? ` (${foundDoc.clientDenomination})` : ''}`
+          : newMvBonCommande;
+      }
+    }
+
     const newMv: StockMovement = {
       id: 'mv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
       type: newMvType,
-      volume: Number(newMvVolume),
+      volume: finalVol,
       date: newMvDate,
       statut: newMvStatut,
-      bonCommande: '',
+      bonCommande: bcVal,
       trackingLink: newMvTrackingLink,
-      emplacement: newMvEmplacement
+      emplacement: locText
     };
 
     // If movement is Distribution, ensure a record exists in distributedStocks
@@ -503,6 +534,7 @@ export default function StocksTab({
     setMouvements([...mouvements, newMv]);
     setNewMvVolume(1);
     setNewMvBonCommande('');
+    setNewMvCustomBonCommande('');
     setNewMvTrackingLink('');
     setNewMvEmplacement('');
     setShowMvForm(false);
@@ -1587,15 +1619,17 @@ export default function StocksTab({
                   required
                 >
                   <option value="" disabled>Sélectionnez une pièce ou service.</option>
-                  {variables.map(v => {
-                    const isAlreadyUsed = stocks.some(s => s.denominationPieceId === v.id && s.id !== editingStockId);
-                    if (isAlreadyUsed) return null;
-                    return (
-                      <option key={v.id} value={v.id}>
-                        {v.identifiant ? `[${v.identifiant}] ` : ''}{v.nom} ({v.category})
-                      </option>
-                    );
-                  })}
+                  {variables
+                    .filter(v => v.category !== 'Fournisseur' && v.category !== 'Modèle Raison Prestation' && v.category !== 'Modèle raison prestation' && v.category !== 'Drapeau GMAO')
+                    .map(v => {
+                      const isAlreadyUsed = stocks.some(s => s.denominationPieceId === v.id && s.id !== editingStockId);
+                      if (isAlreadyUsed) return null;
+                      return (
+                        <option key={v.id} value={v.id}>
+                          {v.identifiant ? `[${v.identifiant}] ` : ''}{v.nom} ({v.category})
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
 
@@ -1928,18 +1962,80 @@ export default function StocksTab({
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Type du mouvement *</label>
                         <select
                           value={newMvType}
-                          onChange={(e) => setNewMvType(e.target.value as any)}
+                          onChange={(e) => {
+                            const val = e.target.value as any;
+                            setNewMvType(val);
+                            if (val === 'Expédition directe au client') {
+                              setNewMvVolume(1);
+                              setNewMvEmplacement('');
+                              setNewMvBonCommande('');
+                              setNewMvCustomBonCommande('');
+                            }
+                          }}
                           className="w-full bg-white text-black p-2 rounded border border-slate-200"
                           style={{ minHeight: '36px' }}
                         >
                           <option value="Réapprovisionnement fournisseur">Réapprovisionnement fournisseur</option>
                           <option value="Distribution">Distribution</option>
+                          <option value="Rapatriement">Rapatriement</option>
+                          <option value="Expédition directe au client">Expédition directe au client</option>
                         </select>
                       </div>
 
                       {/* Lookup / conditional input depending on type */}
                       <div className="flex flex-col gap-1 bg-transparent">
-                        {newMvType === 'Distribution' ? (
+                        {newMvType === 'Expédition directe au client' ? (
+                          <>
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Commande. *</label>
+                            <select
+                              value={newMvBonCommande}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewMvBonCommande(val);
+                                if (val !== 'custom') {
+                                  setNewMvCustomBonCommande('');
+                                  const foundDoc = commercialDocs.find(d => (d.bonCommandeReference && d.bonCommandeReference === val) || d.ref === val || d.id === val);
+                                  if (foundDoc) {
+                                    setNewMvEmplacement(`${foundDoc.bonCommandeEntete || foundDoc.bonCommandeReference || foundDoc.ref}${foundDoc.clientDenomination ? ` (${foundDoc.clientDenomination})` : ''}`);
+                                  } else {
+                                    setNewMvEmplacement(val);
+                                  }
+                                } else {
+                                  setNewMvEmplacement(newMvCustomBonCommande);
+                                }
+                              }}
+                              className="w-full bg-white text-black p-2 rounded border border-slate-200"
+                              style={{ minHeight: '36px' }}
+                              required
+                            >
+                              <option value="">-- Choisir une commande --</option>
+                              <option value="custom">Autre (texte libre)</option>
+                              {commercialDocs.map(doc => {
+                                const displayLabel = `${doc.bonCommandeEntete || doc.bonCommandeReference || doc.ref}${doc.clientDenomination ? ` — ${doc.clientDenomination}` : ''}`;
+                                const val = doc.bonCommandeReference || doc.ref || doc.id;
+                                return (
+                                  <option key={doc.id} value={val}>
+                                    {displayLabel}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            {newMvBonCommande === 'custom' && (
+                              <input
+                                type="text"
+                                value={newMvCustomBonCommande}
+                                onChange={(e) => {
+                                  setNewMvCustomBonCommande(e.target.value);
+                                  setNewMvEmplacement(e.target.value);
+                                }}
+                                placeholder="Saisir le bon de commande..."
+                                className="w-full bg-white text-black p-2 rounded border border-slate-200 mt-1 font-sans text-xs"
+                                style={{ minHeight: '36px' }}
+                                required
+                              />
+                            )}
+                          </>
+                        ) : newMvType === 'Distribution' ? (
                           <>
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Envoyer à *</label>
                             <select
@@ -1979,7 +2075,7 @@ export default function StocksTab({
                           <>
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Provenance *</label>
                             {achatsFournisseurs.length === 0 ? (
-                              <div className="w-full bg-slate-100 text-slate-500 border border-slate-200 rounded p-2 text-[10px] font-sans italic" style={{ minHeight: '36px', display: 'flex', alignItems: 'center' }}>
+                              <div className="w-full bg-slate-100 text-slate-500 border border-slate-200 rounded p-2 text-[10px] font-sans italic" style={{ minHeight: '36px', display: 'flex', items: 'center' }}>
                                 Aucun achat fournisseur enregistré.
                               </div>
                             ) : (
@@ -2024,9 +2120,13 @@ export default function StocksTab({
                           type="number"
                           min="1"
                           max={newMvType === 'Distribution' ? Number(newQty) : undefined}
-                          value={newMvVolume}
+                          value={newMvType === 'Expédition directe au client' ? 1 : newMvVolume}
+                          disabled={newMvType === 'Expédition directe au client'}
+                          readOnly={newMvType === 'Expédition directe au client'}
                           onChange={(e) => setNewMvVolume(Number(e.target.value))}
-                          className="w-full bg-white p-2 border border-slate-200 rounded text-black font-semibold text-xs"
+                          className={`w-full p-2 border border-slate-200 rounded text-black font-semibold text-xs ${
+                            newMvType === 'Expédition directe au client' ? 'bg-slate-100 cursor-not-allowed opacity-80' : 'bg-white'
+                          }`}
                           style={{ minHeight: '36px' }}
                         />
                       </div>
@@ -2143,6 +2243,7 @@ export default function StocksTab({
                                 >
                                   {mv.type === 'Réapprovisionnement fournisseur' ? '↓' : 
                                    mv.type === 'Distribution' ? '→' : 
+                                   mv.type === 'Expédition directe au client' ? '↗' : 
                                    mv.type === 'Annulation' ? '↑' : '←'}
                                 </span>
                               </td>

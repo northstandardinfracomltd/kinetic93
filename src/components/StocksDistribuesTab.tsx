@@ -1368,6 +1368,7 @@ export default function StocksDistribuesTab({
                                 >
                                   {mv.type === 'Réapprovisionnement fournisseur' ? '↓' : 
                                    mv.type === 'Distribution' ? '→' : 
+                                   mv.type === 'Expédition directe au client' ? '↗' : 
                                    mv.type === 'Annulation' ? '↑' : '←'}
                                 </span>
                               </td>

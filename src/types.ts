@@ -322,7 +322,7 @@ export interface PointageLog {
 
 export interface StockMovement {
   id: string;
-  type: 'Réapprovisionnement fournisseur' | 'Distribution' | 'Rapatriement' | 'Annulation';
+  type: 'Réapprovisionnement fournisseur' | 'Distribution' | 'Rapatriement' | 'Expédition directe au client' | 'Annulation';
   volume: number;
   date: string;
   statut: 'Préparation' | 'Expédié' | 'Terminé' | 'Annulé';

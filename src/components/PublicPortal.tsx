@@ -8644,9 +8644,11 @@ export default function PublicPortal({
                                               ? "↓"
                                               : mv.type === "Distribution"
                                                 ? "→"
-                                                : mv.type === "Annulation"
-                                                  ? "↑"
-                                                  : "←"}
+                                                : mv.type === "Expédition directe au client"
+                                                  ? "↗"
+                                                  : mv.type === "Annulation"
+                                                    ? "↑"
+                                                    : "←"}
                                           </span>
                                         </td>
                                         {/* Type / Circulation */}
