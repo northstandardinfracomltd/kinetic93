@@ -262,10 +262,59 @@ export default function StocksDistribuesTab({
     return getPieceOutgoingStats(matchedStock.denominationPieceId);
   }, [getPieceOutgoingStats, selectedStockId, stocks]);
 
-  const handleExportInvTraca = (selectedLocationName: string) => {
-    if (!selectedLocationName) return;
+  const handleExportInvTraca = () => {
+    // 1. Gather all items to export across all locations (distributed stocks + central stock items)
+    const itemsToExport: Array<{
+      locationName: string;
+      stockId?: string;
+      denominationPieceId: string;
+      volumeDisponible: number;
+      volumeReserve: number;
+      volumeEntrant: number;
+    }> = distributedStocks.map(ds => ({
+      locationName: ds.locationName,
+      stockId: ds.stockId,
+      denominationPieceId: ds.denominationPieceId,
+      volumeDisponible: ds.volumeDisponible,
+      volumeReserve: ds.volumeReserve,
+      volumeEntrant: ds.volumeEntrant
+    }));
 
-    const itemsToExport = distributedStocks.filter(item => item.locationName === selectedLocationName);
+    // Include Central des stocks items from `stocks` that are not already in `distributedStocks` for 'Centrale des stocks'
+    stocks.forEach(s => {
+      const alreadyInDistributed = distributedStocks.some(ds => 
+        ds.locationName === 'Centrale des stocks' && (ds.stockId === s.id || ds.denominationPieceId === s.denominationPieceId)
+      );
+      if (!alreadyInDistributed) {
+        const hasQtyOrTrace = (Number(s.quantite) || 0) > 0 || (Number(s.quantiteReservee) || 0) > 0 || (s.traceabilities || []).length > 0;
+        if (hasQtyOrTrace) {
+          itemsToExport.push({
+            locationName: 'Centrale des stocks',
+            stockId: s.id,
+            denominationPieceId: s.denominationPieceId,
+            volumeDisponible: Number(s.quantite) || 0,
+            volumeReserve: Number(s.quantiteReservee) || 0,
+            volumeEntrant: 0
+          });
+        }
+      }
+    });
+
+    // Sort items by location order then by piece name
+    const locationPriority: Record<string, number> = {};
+    ALL_LOCATIONS.forEach((loc, idx) => {
+      locationPriority[loc] = idx;
+    });
+
+    itemsToExport.sort((a, b) => {
+      const prioA = locationPriority[a.locationName] ?? 99;
+      const prioB = locationPriority[b.locationName] ?? 99;
+      if (prioA !== prioB) return prioA - prioB;
+      
+      const nameA = variables.find(v => v.id === a.denominationPieceId)?.nom || '';
+      const nameB = variables.find(v => v.id === b.denominationPieceId)?.nom || '';
+      return nameA.localeCompare(nameB);
+    });
 
     const headers = [
       'Emplacement.',
@@ -278,7 +327,8 @@ export default function StocksDistribuesTab({
       'Sortant Sem. Pro.',
       'Sortant 7 à 30 jours.',
       'Mouvements.',
-      'Inventaire de traçabilité.'
+      'Inventaire de traçabilité.',
+      'Attribution des sorties.'
     ];
 
     let csvContent = '\ufeff'; // BOM for UTF-8 compatibility
@@ -289,9 +339,19 @@ export default function StocksDistribuesTab({
       const vObj = variables.find(v => v.id === item.denominationPieceId);
       const rowStats = getPieceOutgoingStats(item.denominationPieceId);
 
+      // Emplacement label with assigned technician name
+      const assignedTech = members.find(m => m.role === 'Technicien' && m.locationLink === item.locationName);
+      const customName = getLocationCustomName(item.locationName);
+      const locationLabel = assignedTech ? `${assignedTech.name} — ${customName}` : customName;
+
       // Movements formatting
-      const mvs = matchedStock?.mouvements || [];
-      const movementsText = mvs.map(mv => {
+      const mvs = (matchedStock?.mouvements || []).filter(mv => {
+        if (!mv.emplacement) return item.locationName === 'Centrale des stocks';
+        const loc = mv.emplacement.includes(' : ') ? mv.emplacement.split(' : ')[1] : mv.emplacement;
+        return loc === item.locationName || (loc === 'Centrale' && item.locationName === 'Centrale des stocks');
+      });
+      const mvsToUse = mvs.length > 0 ? mvs : (matchedStock?.mouvements || []);
+      const movementsText = mvsToUse.map(mv => {
         const circulation = mv.type || '';
         const raccordement = mv.emplacement || '';
         const volume = mv.volume !== undefined && mv.volume !== null ? mv.volume : '';
@@ -300,11 +360,33 @@ export default function StocksDistribuesTab({
         return `${circulation}, ${raccordement}, ${volume}, ${dateFormatted}, ${situation}`;
       }).join('\n');
 
-      // Traceability formatting
+      // Traceability formatting for this location
       const trs = (matchedStock?.traceabilities || []).filter(t => {
-        return t.situation === 'Disponible' || t.situation === 'Signalé manquant';
+        if (t.situation !== 'Disponible' && t.situation !== 'Signalé manquant') return false;
+        let currentLoc = 'Centrale des stocks';
+        if (t.emplacement) {
+          currentLoc = t.emplacement;
+        } else {
+          const matchedMv = (matchedStock?.mouvements || []).find(mv => mv.id === t.movementId);
+          if (matchedMv) {
+            if (matchedMv.type === 'Réapprovisionnement fournisseur') {
+              currentLoc = 'Centrale des stocks';
+            } else if (matchedMv.emplacement) {
+              if (matchedMv.emplacement.includes(' : ')) {
+                currentLoc = matchedMv.emplacement.split(' : ')[1];
+              } else {
+                currentLoc = matchedMv.emplacement;
+              }
+            }
+          }
+        }
+        const normLoc = (loc: string) => loc === 'Centrale' ? 'Centrale des stocks' : loc;
+        return normLoc(currentLoc) === normLoc(item.locationName);
       });
-      const traceText = trs.map(t => {
+      
+      const trsToUse = trs.length > 0 ? trs : (item.locationName === 'Centrale des stocks' ? (matchedStock?.traceabilities || []).filter(t => t.situation === 'Disponible' || t.situation === 'Signalé manquant') : []);
+
+      const traceText = trsToUse.map(t => {
         const lotOrSerial = t.lotOrSerial || '';
         const expirationFormatted = t.expirationDate ? new Date(t.expirationDate).toLocaleDateString('fr-FR') : '';
         const volume = t.volume !== undefined && t.volume !== null ? t.volume : '1';
@@ -312,8 +394,63 @@ export default function StocksDistribuesTab({
         return `${lotOrSerial}, ${expirationFormatted}, ${volume}, ${situation}`;
       }).join('\n');
 
+      // Attribution des sorties formatting:
+      // Format: « lot_number, client_company, ref_interv, bon_commande, date_estimee, reason(s)_list »
+      const attributionLines: string[] = [];
+      if (vObj) {
+        const pieceNameLower = vObj.nom.toLowerCase().trim();
+        const activeToursList = (fsmTours || []).filter(t => 
+          t.status === 'Brouillon' || t.status === 'À faire' || t.status === 'En cours'
+        );
+
+        activeToursList.forEach(tour => {
+          if (assignedTech && item.locationName !== 'Centrale des stocks') {
+            const tourTech = (tour.techName || tour.technicianName || tour.technicien || '').trim().toLowerCase();
+            const techName = (assignedTech.name || '').trim().toLowerCase();
+            if (tourTech && techName && tourTech !== techName) {
+              return;
+            }
+          }
+
+          const missions = tour.missions || tour.passages || [];
+          missions.forEach((m: any) => {
+            const parts = m.requiredParts || [];
+            const matchesPiece = parts.some((p: string) => p && p.toLowerCase().trim() === pieceNameLower);
+
+            if (matchesPiece) {
+              const lotNumber = m.lotNumber || m.lotOrSerial || m.lot || '';
+              const clientCompany = m.clientName || m.clientCompany || m.client || '';
+              const refInterv = m.refIntervention || m.refInterv || m.ref || m.id || '';
+              const bonCommande = m.bonCommandeId || m.bonCommande || m.bc || '';
+              
+              const rawDate = tour.startDate || tour.date || m.dateEstimee || m.date || '';
+              let dateFormatted = rawDate;
+              if (rawDate && typeof rawDate === 'string' && rawDate.includes('-') && rawDate.length === 10) {
+                dateFormatted = rawDate.split('-').reverse().join('/');
+              } else if (rawDate) {
+                try {
+                  const d = new Date(rawDate);
+                  if (!isNaN(d.getTime())) {
+                    dateFormatted = d.toLocaleDateString('fr-FR');
+                  }
+                } catch (e) {
+                  // Keep rawDate
+                }
+              }
+
+              const reasonsRaw = m.reasons || m.reason || m.motif || m.typePrestation || '';
+              const reasonsList = Array.isArray(reasonsRaw) ? reasonsRaw.join(' / ') : String(reasonsRaw);
+
+              attributionLines.push(`${lotNumber}, ${clientCompany}, ${refInterv}, ${bonCommande}, ${dateFormatted}, ${reasonsList}`);
+            }
+          });
+        });
+      }
+
+      const attributionText = attributionLines.join('\n');
+
       const row = [
-        selectedLocationName,
+        locationLabel,
         matchedStock?.ugs || '',
         vObj ? vObj.nom : '',
         item.volumeDisponible !== undefined && item.volumeDisponible !== null ? item.volumeDisponible : 0,
@@ -323,14 +460,15 @@ export default function StocksDistribuesTab({
         rowStats.week2.vol,
         rowStats.next30.vol,
         movementsText,
-        traceText
+        traceText,
+        attributionText
       ];
 
       csvContent += row.map(val => `"${String(val !== undefined && val !== null ? val : '').replace(/"/g, '""')}"`).join(';') + '\n';
     });
 
     const formattedDate = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
-    const fileName = `Export CSV ${selectedLocationName} au ${formattedDate}.csv`;
+    const fileName = `Export CSV Inventaire Traça au ${formattedDate}.csv`;
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -675,52 +813,20 @@ export default function StocksDistribuesTab({
                   {t("Attention requise")}
                 </button>
 
-                {/* Export inv. traça. button with dropdown lookup */}
-                <div className="relative bg-white flex items-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowExportDropdown(!showExportDropdown)}
-                    style={{
-                      ...customButtonStyle,
-                      backgroundColor: '#000000',
-                      color: '#ffffff',
-                      border: 'none',
-                    }}
-                    className="font-sans transition-all select-none"
-                  >
-                    {t("Export inv. traça.")}
-                  </button>
-                  {showExportDropdown && (
-                    <div 
-                      className="absolute left-0 sm:right-0 sm:left-auto top-full mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-lg p-3 z-50 flex flex-col gap-2 text-left"
-                      style={{ boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' }}
-                    >
-                      <label className="text-xs font-bold text-slate-500 uppercase font-sans">Emplacement</label>
-                      <select
-                        value={exportLocation}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setExportLocation(val);
-                          handleExportInvTraca(val);
-                          setExportLocation('');
-                          setShowExportDropdown(false);
-                        }}
-                        className="w-full bg-white text-black p-2 rounded border border-slate-200 text-xs font-sans"
-                        style={{ minHeight: '36px' }}
-                      >
-                        <option value="" disabled hidden>Choisir l'emplacement</option>
-                        {ALL_LOCATIONS.map(loc => {
-                          const assignedTech = members.find(m => m.role === 'Technicien' && m.locationLink === loc);
-                          const customName = getLocationCustomName(loc);
-                          const label = assignedTech ? `${assignedTech.name} — ${customName}` : customName;
-                          return (
-                            <option key={loc} value={loc}>{label}</option>
-                          );
-                        })}
-                      </select>
-                    </div>
-                  )}
-                </div>
+                {/* Export inv. traça. button */}
+                <button
+                  type="button"
+                  onClick={() => handleExportInvTraca()}
+                  style={{
+                    ...customButtonStyle,
+                    backgroundColor: '#000000',
+                    color: '#ffffff',
+                    border: 'none',
+                  }}
+                  className="font-sans transition-all select-none"
+                >
+                  {t("Export inv. traça.")}
+                </button>
 
                 <button
                   type="button"

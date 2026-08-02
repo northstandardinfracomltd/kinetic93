@@ -8231,7 +8231,7 @@ export default function App() {
                                             }}
                                             className={canSubmitToClient ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}
                                           >
-                                            Soumettre au client
+                                            Soumettre au client (email)
                                           </button>
                                         </div>
                                       );
@@ -11257,23 +11257,53 @@ export default function App() {
       {/* Modal Avisage Tournée */}
       {avisageConfirmTour && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4 text-center">
-            <h3 className="text-xl font-bold text-slate-900">Avisage client</h3>
-            <p className="text-base text-slate-700 leading-relaxed">
+          <div
+            className="bg-white p-6 w-full flex flex-col gap-4 text-left"
+            style={{
+              borderRadius: '13px',
+              boxShadow: 'none',
+              textAlign: 'left',
+              maxWidth: '265px',
+            }}
+          >
+            <p
+              className="leading-relaxed"
+              style={{
+                color: '#000',
+                fontSize: '16px',
+                cursor: 'default',
+              }}
+            >
               Envoyer un email informatif mentionnant la date et le créneau de passage prévu.
             </p>
-            <div className="flex items-center justify-center gap-3 pt-2">
+            <div className="flex items-center justify-between gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setAvisageConfirmTour(null)}
-                className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-slate-100 cursor-pointer transition-colors"
+                className="font-semibold cursor-pointer outline-none transition-none"
+                style={{
+                  padding: '9px 22px',
+                  color: '#fff',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  background: 'rgb(96, 28, 104)',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={() => handleExecuteAvisage(avisageConfirmTour)}
-                className="px-6 py-2.5 rounded-xl bg-black text-white font-semibold hover:bg-slate-800 cursor-pointer transition-colors"
+                className="font-semibold cursor-pointer outline-none transition-none"
+                style={{
+                  padding: '9px 22px',
+                  color: '#fff',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  background: 'rgb(96, 28, 104)',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
               >
                 Envoyer
               </button>

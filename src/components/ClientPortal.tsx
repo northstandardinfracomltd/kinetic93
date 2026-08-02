@@ -2501,38 +2501,21 @@ export default function ClientPortal({
       >
         <div className="max-w-7xl mx-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between font-sans">
           <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
-            <h1 className="text-lg font-black text-white animate-fadeIn" style={{ letterSpacing: 'normal' }}>
+            <h1 className="font-black animate-fadeIn" style={{ letterSpacing: '0px', color: '#631f6a', fontSize: '18px', cursor: 'default' }}>
               {companyInfo?.name || 'Défibeo Solutions'}
             </h1>
-            <div className="flex flex-wrap gap-2 items-center">
-              {companyInfo?.phone && (
-                <a
-                  href={`tel:${companyInfo.phone}`}
-                  className="px-5 py-2 text-base font-medium bg-white/10 hover:bg-white/20 select-all text-white border border-white/15 rounded-full flex items-center transition-all duration-200 outline-none hover:opacity-100"
-                >
-                  <span>{companyInfo.phone}</span>
-                </a>
-              )}
-              {companyInfo?.email && (
-                <a
-                  href={`mailto:${companyInfo.email}`}
-                  className="px-5 py-2 text-base font-medium bg-white/10 hover:bg-white/20 select-all text-white border border-white/15 rounded-full flex items-center transition-all duration-200 outline-none hover:opacity-100"
-                >
-                  <span>{companyInfo.email}</span>
-                </a>
-              )}
-            </div>
           </div>
 
           <div className="flex items-center">
             <button
               onClick={onLogout}
-              className="px-5 py-2.5 text-[18px] text-white rounded-xl select-none cursor-pointer border-0 shadow-sm outline-none transition-none brightness-100 hover:brightness-100 hover:opacity-100 hover:scale-100 hover:bg-[#3556ec] active:bg-[#3556ec]"
+              className="text-[18px] text-white rounded-xl select-none cursor-pointer border-0 shadow-sm outline-none transition-none brightness-100 hover:brightness-100 hover:opacity-100 hover:scale-100"
               style={{
                 boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
                 background: '#3556ec',
                 backgroundColor: '#3556ec',
                 fontWeight: 100,
+                padding: '9px 18px',
               }}
             >
               {t('Quitter')}
@@ -2560,14 +2543,22 @@ export default function ClientPortal({
         {/* Info Alert 1: Interventions à venir */}
         {hasUpcomingInterventions && (
           <div 
-            className="w-full p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs"
+            className="w-full p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
             style={{
-              backgroundColor: '#fff4fb',
-              border: '1px solid #fca5d7',
-              borderRadius: '14px',
+              backgroundColor: 'rgb(246 235 247)',
+              border: 'none',
+              borderRadius: '13px',
+              boxShadow: 'none',
             }}
           >
-            <div className="text-[16px] font-bold text-black font-sans leading-snug">
+            <div 
+              className="font-bold font-sans leading-snug"
+              style={{
+                color: '#631f6a',
+                fontSize: '18px',
+                cursor: 'default',
+              }}
+            >
               (Attention requise) Nous avons besoin de votre réponse concernant au moins une prestation à venir.
             </div>
             <button
@@ -2576,10 +2567,13 @@ export default function ClientPortal({
                 setActivePortalTab('reports');
                 setReportsFilter('upcoming');
               }}
-              className="px-5 py-2 text-white font-bold text-[16px] rounded-xl cursor-pointer select-none transition-all border-none outline-none shrink-0 self-end sm:self-auto"
+              className="text-white font-bold cursor-pointer select-none border-none outline-none shrink-0 self-end sm:self-auto transition-none"
               style={{
-                backgroundColor: '#fe4eba',
-                borderRadius: '12px',
+                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                background: 'rgb(96, 28, 104)',
+                borderRadius: '13px',
+                fontSize: '18px',
+                padding: '9px 18px',
               }}
             >
               Consulter
@@ -2590,14 +2584,22 @@ export default function ClientPortal({
         {/* Info Alert 2: Signature manquante */}
         {hasMissingSignature && (
           <div 
-            className="w-full p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs"
+            className="w-full p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
             style={{
-              backgroundColor: '#fff4fb',
-              border: '1px solid #fca5d7',
-              borderRadius: '14px',
+              backgroundColor: 'rgb(246 235 247)',
+              border: 'none',
+              borderRadius: '13px',
+              boxShadow: 'none',
             }}
           >
-            <div className="text-[16px] font-bold text-black font-sans leading-snug">
+            <div 
+              className="font-bold font-sans leading-snug"
+              style={{
+                color: '#631f6a',
+                fontSize: '18px',
+                cursor: 'default',
+              }}
+            >
               (Attention requise) Nous avons besoin de votre signature dans l’encart ‘Signature’ dans l’onglet de vos Informations.
             </div>
             <button
@@ -2608,10 +2610,13 @@ export default function ClientPortal({
                   document.getElementById('client-portal-signature-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }, 100);
               }}
-              className="px-5 py-2 text-white font-bold text-[16px] rounded-xl cursor-pointer select-none transition-all border-none outline-none shrink-0 self-end sm:self-auto"
+              className="text-white font-bold cursor-pointer select-none border-none outline-none shrink-0 self-end sm:self-auto transition-none"
               style={{
-                backgroundColor: '#fe4eba',
-                borderRadius: '12px',
+                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                background: 'rgb(96, 28, 104)',
+                borderRadius: '13px',
+                fontSize: '18px',
+                padding: '9px 18px',
               }}
             >
               Compléter
@@ -2621,63 +2626,128 @@ export default function ClientPortal({
 
         {/* Navigation Tabs (Stacks vertically on mobile, horizontally on sm screens) */}
         <div 
-          className="flex flex-col sm:flex-row gap-1.5 p-1.5 bg-slate-200/60"
-          style={{ borderRadius: '13px' }}
+          className="flex flex-col sm:flex-row gap-1.5 p-1.5"
+          style={{ borderRadius: '13px', background: '#f6ecf7', border: 'none', boxShadow: 'none' }}
         >
           <button
             onClick={() => setActivePortalTab('defibs')}
-            className={`w-full sm:flex-1 py-3 sm:py-2 text-center text-[18px] font-bold text-black transition-all border-0 cursor-pointer ${
+            className="w-full sm:flex-1 text-center font-bold border-0 cursor-pointer outline-none transition-none"
+            style={
               activePortalTab === 'defibs'
-                ? 'bg-white shadow-xs'
-                : 'bg-transparent hover:bg-white/45'
-            }`}
-            style={{ borderRadius: '12px' }}
+                ? {
+                    borderRadius: '13px',
+                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                    background: 'rgb(96, 28, 104)',
+                    color: '#fff',
+                    padding: '9px 10px',
+                    fontSize: '18px',
+                  }
+                : {
+                    borderRadius: '13px',
+                    background: 'transparent',
+                    color: '#000',
+                    padding: '9px 10px',
+                    fontSize: '18px',
+                  }
+            }
           >
             {t('Matériels')}
           </button>
           <button
             onClick={() => setActivePortalTab('autovigilance')}
-            className={`w-full sm:flex-1 py-3 sm:py-2 text-center text-[18px] font-bold text-black transition-all border-0 cursor-pointer ${
+            className="w-full sm:flex-1 text-center font-bold border-0 cursor-pointer outline-none transition-none"
+            style={
               activePortalTab === 'autovigilance'
-                ? 'bg-white shadow-xs'
-                : 'bg-transparent hover:bg-white/45'
-            }`}
-            style={{ borderRadius: '12px' }}
+                ? {
+                    borderRadius: '13px',
+                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                    background: 'rgb(96, 28, 104)',
+                    color: '#fff',
+                    padding: '9px 10px',
+                    fontSize: '18px',
+                  }
+                : {
+                    borderRadius: '13px',
+                    background: 'transparent',
+                    color: '#000',
+                    padding: '9px 10px',
+                    fontSize: '18px',
+                  }
+            }
           >
             {t('Pointages')}
           </button>
           {companyInfo?.enableDevisFactures !== 'Non' && (
             <button
               onClick={() => setActivePortalTab('bills')}
-              className={`w-full sm:flex-1 py-3 sm:py-2 text-center text-[18px] font-bold text-black transition-all border-0 cursor-pointer ${
+              className="w-full sm:flex-1 text-center font-bold border-0 cursor-pointer outline-none transition-none"
+              style={
                 activePortalTab === 'bills'
-                  ? 'bg-white shadow-xs'
-                  : 'bg-transparent hover:bg-white/45'
-              }`}
-              style={{ borderRadius: '12px' }}
+                  ? {
+                      borderRadius: '13px',
+                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                      background: 'rgb(96, 28, 104)',
+                      color: '#fff',
+                      padding: '9px 10px',
+                      fontSize: '18px',
+                    }
+                  : {
+                      borderRadius: '13px',
+                      background: 'transparent',
+                      color: '#000',
+                      padding: '9px 10px',
+                      fontSize: '18px',
+                    }
+              }
             >
               {t('Commandes')}
             </button>
           )}
           <button
             onClick={() => setActivePortalTab('reports')}
-            className={`w-full sm:flex-1 py-3 sm:py-2 text-center text-[18px] font-bold text-black transition-all border-0 cursor-pointer ${
+            className="w-full sm:flex-1 text-center font-bold border-0 cursor-pointer outline-none transition-none"
+            style={
               activePortalTab === 'reports'
-                ? 'bg-white shadow-xs'
-                : 'bg-transparent hover:bg-white/45'
-            }`}
-            style={{ borderRadius: '12px' }}
+                ? {
+                    borderRadius: '13px',
+                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                    background: 'rgb(96, 28, 104)',
+                    color: '#fff',
+                    padding: '9px 10px',
+                    fontSize: '18px',
+                  }
+                : {
+                    borderRadius: '13px',
+                    background: 'transparent',
+                    color: '#000',
+                    padding: '9px 10px',
+                    fontSize: '18px',
+                  }
+            }
           >
             {t('Interventions')}
           </button>
           <button
             onClick={() => setActivePortalTab('info')}
-            className={`w-full sm:flex-1 py-3 sm:py-2 text-center text-[18px] font-bold text-black transition-all border-0 cursor-pointer ${
+            className="w-full sm:flex-1 text-center font-bold border-0 cursor-pointer outline-none transition-none"
+            style={
               activePortalTab === 'info'
-                ? 'bg-white shadow-xs'
-                : 'bg-transparent hover:bg-white/45'
-            }`}
-            style={{ borderRadius: '12px' }}
+                ? {
+                    borderRadius: '13px',
+                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                    background: 'rgb(96, 28, 104)',
+                    color: '#fff',
+                    padding: '9px 10px',
+                    fontSize: '18px',
+                  }
+                : {
+                    borderRadius: '13px',
+                    background: 'transparent',
+                    color: '#000',
+                    padding: '9px 10px',
+                    fontSize: '18px',
+                  }
+            }
           >
             {t('Informations')}
           </button>
