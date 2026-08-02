@@ -379,6 +379,7 @@ export default function PublicPortal({
       );
       setInlineTechPin("");
       setActiveInlineLogin(null);
+      triggerPreloader();
     } else {
       setInlineTechError("Code PIN invalide.");
     }
@@ -418,6 +419,34 @@ export default function PublicPortal({
       return null;
     },
   );
+
+  // Webapp preloader animation state
+  const [showPreloader, setShowPreloader] = useState<boolean>(true);
+  const [isSlidingUp, setIsSlidingUp] = useState<boolean>(false);
+
+  const triggerPreloader = () => {
+    setShowPreloader(true);
+    setIsSlidingUp(false);
+  };
+
+  useEffect(() => {
+    if (showPreloader) {
+      setIsSlidingUp(false);
+      const timer5s = setTimeout(() => {
+        setIsSlidingUp(true);
+      }, 5000);
+
+      const timerEnd = setTimeout(() => {
+        setShowPreloader(false);
+        setIsSlidingUp(false);
+      }, 5800);
+
+      return () => {
+        clearTimeout(timer5s);
+        clearTimeout(timerEnd);
+      };
+    }
+  }, [showPreloader]);
 
   // Active tab inside Technician Webapp
   type WebappTab =
@@ -476,6 +505,73 @@ export default function PublicPortal({
       return false;
     }
   });
+  const [pauseReason, setPauseReason] = useState<string>(() => {
+    try {
+      return localStorage.getItem("defib_pause_reason") || "Nuit Hôtel";
+    } catch (e) {
+      return "Nuit Hôtel";
+    }
+  });
+
+  const updateTourPauseState = (enabled: boolean, reason: string) => {
+    setPauseEnabled(enabled);
+    setPauseReason(reason);
+    try {
+      localStorage.setItem("defib_pause_enabled", enabled ? "true" : "false");
+      localStorage.setItem("defib_pause_reason", reason);
+    } catch (e) {}
+
+    if (!selectedTourId) return;
+
+    const activeToursSource = (fsmTours && fsmTours.length > 0)
+      ? fsmTours
+      : (() => {
+          try {
+            const raw = localStorage.getItem("defib_fsm_tours");
+            return raw ? JSON.parse(raw) : [];
+          } catch {
+            return [];
+          }
+        })();
+
+    const updatedToursList = activeToursSource.map((t: any) => {
+      if (t.id === selectedTourId) {
+        return {
+          ...t,
+          isPaused: enabled,
+          pauseEnabled: enabled,
+          pauseReason: reason,
+        };
+      }
+      return t;
+    });
+
+    if (onUpdateFsmTours) {
+      onUpdateFsmTours(updatedToursList);
+    } else {
+      try {
+        const tid = localStorage.getItem("defib_tenant_id") || "demo";
+        localStorage.setItem(`defib_${tid}_fsm_tours`, JSON.stringify(updatedToursList));
+        localStorage.setItem("defib_fsm_tours", JSON.stringify(updatedToursList));
+      } catch (e) {}
+    }
+  };
+
+  useEffect(() => {
+    if (selectedTourId && fsmTours && fsmTours.length > 0) {
+      const tour = fsmTours.find((t: any) => t.id === selectedTourId);
+      if (tour) {
+        if (typeof tour.isPaused === "boolean") {
+          setPauseEnabled(tour.isPaused);
+        } else if (typeof tour.pauseEnabled === "boolean") {
+          setPauseEnabled(tour.pauseEnabled);
+        }
+        if (tour.pauseReason) {
+          setPauseReason(tour.pauseReason);
+        }
+      }
+    }
+  }, [selectedTourId, fsmTours]);
 
   const [windowWidth, setWindowWidth] = useState<number>(() =>
     typeof window !== "undefined" ? window.innerWidth : 1000
@@ -3601,6 +3697,7 @@ export default function PublicPortal({
           "defib_active_tech_session",
           JSON.stringify(matched),
         );
+        triggerPreloader();
 
         // Auto toast feedback
         setTimeout(() => {
@@ -4487,9 +4584,32 @@ export default function PublicPortal({
 
   return (
     <div
-      className="min-h-screen bg-slate-50 flex flex-col items-center p-0 text-slate-800 selection:bg-indigo-600/30 font-sans"
+      className="min-h-screen bg-slate-50 flex flex-col items-center p-0 text-slate-800 selection:bg-indigo-600/30 font-sans relative"
       id="public-portal-envelope"
     >
+      {/* 5-SECOND PRELOADER OVERLAY WITH SLIDE-UP ANIMATION */}
+      {showPreloader && (
+        <div
+          className={`fixed inset-0 z-[999999] flex items-center justify-center text-center font-sans transition-transform duration-800 ease-in-out ${
+            isSlidingUp ? "pointer-events-none" : "pointer-events-auto"
+          }`}
+          style={{
+            background: "linear-gradient(93deg, rgb(12 40 166), rgb(0 14 80))",
+            borderRadius: "0px 0px 13px 13px",
+            transform: isSlidingUp ? "translateY(-100%)" : "translateY(0%)",
+            boxShadow: isSlidingUp ? "0 10px 25px -5px rgba(0, 0, 0, 0.3)" : "none",
+            willChange: "transform",
+          }}
+          id="webapp-preloader-overlay"
+        >
+          <span
+            className="text-white font-bold select-none text-center px-4"
+            style={{ fontSize: "18px" }}
+          >
+            {companyInfo?.name || "Défibeo"}
+          </span>
+        </div>
+      )}
       {/* Main Responsive Portal Container (Standalone App Layout) */}
       <div
         className="w-full max-w-[1100px] min-h-screen bg-white relative flex flex-col md:shadow-xl transition-all duration-200"
@@ -6786,7 +6906,7 @@ export default function PublicPortal({
                               </span>
                               <button
                                 type="button"
-                                onClick={() => setPauseEnabled(!pauseEnabled)}
+                                onClick={() => updateTourPauseState(!pauseEnabled, pauseReason || "Nuit Hôtel")}
                                 className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
                                 style={{
                                   backgroundColor: pauseEnabled
@@ -6804,13 +6924,36 @@ export default function PublicPortal({
                                 />
                               </button>
                             </div>
-                            {pauseEnabled && getNextPassageZone() && (
-                              <div className="text-[18px] font-semibold text-[#fe4eba] font-sans pt-1">
-                                {t("Zone recommandée pour votre pause :")}{" "}
-                                <span className="font-bold">
-                                  {getNextPassageZone()}
-                                </span>
-                                .
+                            {pauseEnabled && (
+                              <div className="space-y-3 pt-1">
+                                {getNextPassageZone() && (
+                                  <div className="text-[18px] font-semibold text-[#fe4eba] font-sans">
+                                    {t("Zone recommandée pour votre pause :")}{" "}
+                                    <span className="font-bold">
+                                      {getNextPassageZone()}
+                                    </span>
+                                    .
+                                  </div>
+                                )}
+                                <div>
+                                  <select
+                                    value={pauseReason}
+                                    onChange={(e) => updateTourPauseState(true, e.target.value)}
+                                    className="w-full bg-white text-black font-semibold transition-all duration-150 focus:outline-none cursor-pointer"
+                                    style={{
+                                      border: "1px solid rgb(201, 190, 205)",
+                                      borderRadius: "14px",
+                                      padding: "10px 14px",
+                                      fontSize: "16px",
+                                    }}
+                                  >
+                                    <option value="Nuit Hôtel">Nuit Hôtel</option>
+                                    <option value="Week-End">Week-End</option>
+                                    <option value="Jour Férié">Jour Férié</option>
+                                    <option value="Incident">Incident</option>
+                                    <option value="Autre">Autre</option>
+                                  </select>
+                                </div>
                               </div>
                             )}
                           </div>

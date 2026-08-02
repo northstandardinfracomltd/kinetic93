@@ -1678,7 +1678,8 @@ export default function App() {
       id: newMissionId,
       clientName: 'Nouveau Site Client',
       defibIdentifiant: 'PAR-101',
-      reason: 'Maintenance',
+      reason: '',
+      reasons: [],
       requiredParts: [],
       status: 'Brouillon',
       priority: 'Normale',
@@ -7219,6 +7220,25 @@ export default function App() {
                                 <span>
                                   Compétences : {compsStr}
                                 </span>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Pause banner if tour is paused */}
+                          {(() => {
+                            const isPaused = t.isPaused || t.pauseEnabled || (typeof window !== "undefined" && localStorage.getItem("defib_pause_enabled") === "true" && localStorage.getItem("defib_selected_tour_id") === t.id);
+                            const reason = t.pauseReason || (typeof window !== "undefined" ? localStorage.getItem("defib_pause_reason") : null) || "Nuit Hôtel";
+                            if (!isPaused) return null;
+                            return (
+                              <div
+                                style={{
+                                  backgroundColor: "rgb(220, 38, 38)",
+                                  color: "#ffffff",
+                                  borderRadius: "14px",
+                                }}
+                                className="w-full text-white font-bold p-4 text-[18px] text-center select-none my-2 font-sans"
+                              >
+                                Technicien en pause : {reason}.
                               </div>
                             );
                           })()}

@@ -1,5 +1,25 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence } from '../types';
+import { saveCollectionToFirestore } from '../firebase';
+
+export interface SpontaneousEvent {
+  id: string;
+  techName: string;
+  date: string;
+  creneau: string;
+  intitule: string;
+  commentaire: string;
+  createdAt?: string;
+}
+
+const CRENEAU_OPTIONS = [
+  "8:00am", "8:30am", "9:00am", "9:30am",
+  "10:00am", "10:30am", "11:00am", "11:30am",
+  "12:00pm", "12:30pm", "13:00pm", "13:30pm",
+  "14:00pm", "14:30pm", "15:00pm", "15:30pm",
+  "16:00pm", "16:30pm", "17:00pm", "17:30pm",
+  "18:00pm", "18:30pm", "19:00pm"
+];
 
 interface PlanningTabProps {
   companyInfo?: CompanyInfo;
@@ -77,6 +97,109 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     initialTech !== undefined ? initialTech : (authenticatedUser?.name || 'Tous')
   );
   const [expandedMissions, setExpandedMissions] = useState<Record<string, boolean>>({});
+
+  // Mini Form Spontaneous Event states
+  const [isSpontaneousFormOpen, setIsSpontaneousFormOpen] = useState<boolean>(false);
+  const [formDate, setFormDate] = useState<string>('');
+  const [formCreneau, setFormCreneau] = useState<string>('');
+  const [formIntitule, setFormIntitule] = useState<string>('');
+  const [formCommentaire, setFormCommentaire] = useState<string>('');
+  const [formError, setFormError] = useState<string>('');
+
+  const [spontaneousEvents, setSpontaneousEvents] = useState<SpontaneousEvent[]>(() => {
+    try {
+      const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+      const saved = localStorage.getItem(`defib_${tid}_spontaneous_events`) || localStorage.getItem('defib_spontaneous_events');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    const loadEvents = () => {
+      try {
+        const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+        const saved = localStorage.getItem(`defib_${tid}_spontaneous_events`) || localStorage.getItem('defib_spontaneous_events');
+        if (saved) {
+          setSpontaneousEvents(JSON.parse(saved));
+        } else {
+          setSpontaneousEvents([]);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    window.addEventListener('storage', loadEvents);
+    window.addEventListener('defib_spontaneous_events_updated', loadEvents);
+    return () => {
+      window.removeEventListener('storage', loadEvents);
+      window.removeEventListener('defib_spontaneous_events_updated', loadEvents);
+    };
+  }, []);
+
+  const saveSpontaneousEvents = (updated: SpontaneousEvent[]) => {
+    setSpontaneousEvents(updated);
+    try {
+      const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+      localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(updated));
+      localStorage.setItem('defib_spontaneous_events', JSON.stringify(updated));
+      window.dispatchEvent(new Event('defib_spontaneous_events_updated'));
+      saveCollectionToFirestore('spontaneous_events', updated).catch(() => {});
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveSpontaneousEvent = () => {
+    setFormError('');
+    if (!formDate || !formCreneau || !formIntitule.trim() || !formCommentaire.trim()) {
+      setFormError('Tous les champs sont requis.');
+      return;
+    }
+
+    const techForEvent = (selectedTech && selectedTech !== 'Tous')
+      ? selectedTech
+      : (authenticatedUser?.name || 'Technicien');
+
+    const newEvt: SpontaneousEvent = {
+      id: `spont_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      techName: techForEvent,
+      date: formDate,
+      creneau: formCreneau,
+      intitule: formIntitule.trim(),
+      commentaire: formCommentaire.trim(),
+      createdAt: new Date().toISOString()
+    };
+
+    const updated = [...spontaneousEvents, newEvt];
+    saveSpontaneousEvents(updated);
+
+    // Auto switch calendar month/year if needed
+    if (formDate.includes('-')) {
+      const parts = formDate.split('-');
+      const yVal = parseInt(parts[0], 10);
+      const mVal = parseInt(parts[1], 10) - 1;
+      if (!isNaN(yVal) && !isNaN(mVal)) {
+        setSelectedYear(yVal);
+        setSelectedMonth(mVal);
+      }
+    }
+
+    // Reset & close form
+    setFormDate('');
+    setFormCreneau('');
+    setFormIntitule('');
+    setFormCommentaire('');
+    setIsSpontaneousFormOpen(false);
+  };
+
+  const handleDeleteSpontaneousEvent = (id: string) => {
+    const updated = spontaneousEvents.filter(e => e.id !== id);
+    saveSpontaneousEvents(updated);
+  };
 
   const toggleMissionExpanded = (key: string) => {
     setExpandedMissions(prev => ({
@@ -243,7 +366,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       </div>
 
       {/* Field Mois */}
-      <div className="px-0 select-none pb-2">
+      <div className="px-0 select-none pb-2 space-y-2">
         <select
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(Number(e.target.value))}
@@ -266,7 +389,234 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             </option>
           ))}
         </select>
+
+        {/* Bouton Ajouter événement spontané / Enregistrer */}
+        <button
+          type="button"
+          onClick={() => {
+            if (isSpontaneousFormOpen) {
+              handleSaveSpontaneousEvent();
+            } else {
+              setIsSpontaneousFormOpen(true);
+            }
+          }}
+          className="w-full text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none"
+          style={{
+            backgroundColor: "rgb(22, 93, 252)",
+            borderRadius: "14px",
+            padding: "14px 12px",
+            fontSize: "18px",
+            border: "none",
+            boxShadow: "none"
+          }}
+        >
+          {isSpontaneousFormOpen ? "Enregistrer" : "Ajouter événement spontané"}
+        </button>
+
+        {/* Mini Form Evénement spontané */}
+        {isSpontaneousFormOpen && (
+          <div
+            className="bg-white p-4 space-y-4 my-2 select-none"
+            style={{
+              border: "1px solid rgb(201, 190, 205)",
+              borderRadius: "14px",
+            }}
+          >
+            {formError && (
+              <div className="p-3 bg-red-50 text-red-600 rounded-lg text-[16px] font-semibold">
+                {formError}
+              </div>
+            )}
+
+            {/* Field 1: Date */}
+            <div className="space-y-1">
+              <label className="block font-bold text-[16px] text-black">
+                Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={formDate}
+                onChange={(e) => {
+                  setFormDate(e.target.value);
+                  if (formError) setFormError('');
+                }}
+                onClick={(e) => {
+                  try {
+                    (e.currentTarget as any).showPicker?.();
+                  } catch (_) {}
+                }}
+                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden cursor-pointer"
+                style={{
+                  border: "1px solid rgb(201, 190, 205)",
+                  borderRadius: "14px",
+                  padding: "12px 14px",
+                  fontSize: "16px",
+                  WebkitAppearance: "none",
+                  appearance: "none",
+                }}
+                required
+              />
+            </div>
+
+            {/* Field 2: Créneau */}
+            <div className="space-y-1">
+              <label className="block font-bold text-[16px] text-black">
+                Créneau <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formCreneau}
+                onChange={(e) => {
+                  setFormCreneau(e.target.value);
+                  if (formError) setFormError('');
+                }}
+                className="w-full bg-white text-black font-medium appearance-none transition-all duration-150 focus:outline-none cursor-pointer"
+                style={{
+                  border: "1px solid rgb(201, 190, 205)",
+                  borderRadius: "14px",
+                  padding: "12px 14px",
+                  fontSize: "16px",
+                }}
+                required
+              >
+                <option value="">-- Sélectionner un créneau --</option>
+                {CRENEAU_OPTIONS.map((slot) => (
+                  <option key={slot} value={slot}>
+                    {slot}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Field 3: Intitulé */}
+            <div className="space-y-1">
+              <label className="block font-bold text-[16px] text-black">
+                Intitulé <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formIntitule}
+                onChange={(e) => {
+                  setFormIntitule(e.target.value);
+                  if (formError) setFormError('');
+                }}
+                placeholder="Saisir l'intitulé"
+                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
+                style={{
+                  border: "1px solid rgb(201, 190, 205)",
+                  borderRadius: "14px",
+                  padding: "12px 14px",
+                  fontSize: "16px",
+                }}
+                required
+              />
+            </div>
+
+            {/* Field 4: Commentaire */}
+            <div className="space-y-1">
+              <label className="block font-bold text-[16px] text-black">
+                Commentaire <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={formCommentaire}
+                onChange={(e) => {
+                  setFormCommentaire(e.target.value);
+                  if (formError) setFormError('');
+                }}
+                placeholder="Saisir un commentaire"
+                rows={3}
+                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none resize-y"
+                style={{
+                  border: "1px solid rgb(201, 190, 205)",
+                  borderRadius: "14px",
+                  padding: "12px 14px",
+                  fontSize: "16px",
+                }}
+                required
+              />
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSpontaneousFormOpen(false);
+                  setFormError('');
+                }}
+                className="text-slate-500 hover:text-slate-800 font-semibold text-[16px] underline cursor-pointer"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Divs "Technicien en pause" */}
+      {selectedTech && selectedTech !== 'Tous' && selectedTech.trim() !== '' && (() => {
+        const toursSource = (fsmTours && fsmTours.length > 0)
+          ? fsmTours
+          : (() => {
+              try {
+                const tid = localStorage.getItem("defib_tenant_id") || "demo";
+                const saved = localStorage.getItem(`defib_${tid}_fsm_tours`) || localStorage.getItem("defib_fsm_tours");
+                return saved ? JSON.parse(saved) : [];
+              } catch {
+                return [];
+              }
+            })();
+
+        const pausedTours = toursSource.filter((t: any) => {
+          const nameMatch = (t.techName || '').trim().toLowerCase() === selectedTech.trim().toLowerCase();
+          return nameMatch && (t.isPaused || t.pauseEnabled);
+        });
+
+        let showFallback = false;
+        let fallbackReason = "Nuit Hôtel";
+        try {
+          const isLocalPaused = localStorage.getItem("defib_pause_enabled") === "true";
+          fallbackReason = localStorage.getItem("defib_pause_reason") || "Nuit Hôtel";
+          const activeUserRaw = localStorage.getItem("defib_active_tech_session");
+          if (isLocalPaused && activeUserRaw) {
+            const activeUser = JSON.parse(activeUserRaw);
+            if ((activeUser?.name || '').trim().toLowerCase() === selectedTech.trim().toLowerCase()) {
+              if (pausedTours.length === 0) {
+                showFallback = true;
+              }
+            }
+          }
+        } catch (_) {}
+
+        if (pausedTours.length === 0 && !showFallback) return null;
+
+        return (
+          <div className="space-y-3 mb-4">
+            {pausedTours.map((tour: any) => (
+              <div
+                key={`paused-tour-planning-${tour.id}`}
+                className="w-full text-white font-bold p-4 text-[18px] text-center select-none"
+                style={{
+                  backgroundColor: "rgb(220, 38, 38)",
+                  borderRadius: "14px",
+                }}
+              >
+                Technicien en pause : {tour.pauseReason || "Nuit Hôtel"}.
+              </div>
+            ))}
+            {showFallback && (
+              <div
+                key="paused-tour-planning-fallback"
+                className="w-full text-white font-bold p-4 text-[18px] text-center select-none"
+                style={{
+                  backgroundColor: "rgb(220, 38, 38)",
+                  borderRadius: "14px",
+                }}
+              >
+                Technicien en pause : {fallbackReason}.
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Days List grouped by week */}
       {selectedTech && selectedTech.trim() !== '' && (
@@ -407,6 +757,76 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         );
                       })}
 
+                      {/* Événements spontanés */}
+                      {(() => {
+                        const daySpontaneousEvents = spontaneousEvents.filter((evt) => {
+                          if (!evt.date || evt.date !== isoDate) return false;
+                          if (selectedTech === 'Tous') return true;
+                          return (evt.techName || '').trim().toLowerCase() === selectedTech.trim().toLowerCase();
+                        });
+
+                        return daySpontaneousEvents.map((evt) => (
+                          <div
+                            key={evt.id}
+                            className="bg-white p-4 space-y-3"
+                            style={{
+                              border: "1px solid rgb(201, 190, 205)",
+                              borderRadius: "14px",
+                            }}
+                          >
+                            {/* Gélules Date, Créneau, Badge + Bouton Supprimer */}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-2 flex-1">
+                                <span className="px-3.5 py-1.5 rounded-full bg-blue-600 text-white font-bold text-[16px]">
+                                  Événement spontané
+                                </span>
+                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
+                                  Date : {getFormattedDateFR(evt.date)}
+                                </span>
+                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
+                                  Créneau : {evt.creneau}
+                                </span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSpontaneousEvent(evt.id)}
+                                style={{
+                                  color: "#fff",
+                                  boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgba(220, 38, 38, 0.5) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                  background: "rgb(220, 38, 38)",
+                                  borderRadius: "13px",
+                                  padding: "8px 18px",
+                                  fontSize: "16px",
+                                  fontWeight: 700,
+                                  border: "none",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: "6px"
+                                }}
+                                className="w-full sm:w-auto mx-0 sm:ml-10 sm:mr-2.5 shrink-0 select-none"
+                              >
+                                Supprimer
+                              </button>
+                            </div>
+
+                            {/* Details */}
+                            <div className="space-y-1.5 text-[16px] text-slate-800 pt-1">
+                              <div>
+                                <span className="font-bold">Intitulé : </span>
+                                <span>{evt.intitule}</span>
+                              </div>
+                              <div>
+                                <span className="font-bold">Commentaire : </span>
+                                <span className="whitespace-pre-wrap">{evt.commentaire}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ));
+                      })()}
+
                       {/* Missions */}
                       {dayMissions.map(({ tour, mission }, mIdx) => {
                         // Find associated equipment & client
@@ -518,8 +938,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                   boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97 28 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                                   background: "rgb(96 28 104)",
                                   borderRadius: "13px",
-                                  marginLeft: "40px",
-                                  marginRight: "10px",
                                   padding: "8px 18px",
                                   fontSize: "16px",
                                   fontWeight: 700,
@@ -527,9 +945,10 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                   cursor: "pointer",
                                   display: "inline-flex",
                                   alignItems: "center",
+                                  justifyContent: "center",
                                   gap: "6px"
                                 }}
-                                className="shrink-0 select-none"
+                                className="w-full sm:w-auto mx-0 sm:ml-10 sm:mr-2.5 shrink-0 select-none"
                               >
                                 {isExpanded ? "Réduire" : "Dérouler"}
                               </button>

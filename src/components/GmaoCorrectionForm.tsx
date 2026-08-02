@@ -735,6 +735,24 @@ export default function GmaoCorrectionForm({
   const [hasClickedOnce, setHasClickedOnce] = useState(false);
   const [selectedErrorCode, setSelectedErrorCode] = useState('');
 
+  const isDefibrillator = useMemo(() => {
+    if (selectedDefibId && selectedDefibId.startsWith('OTHER:')) return false;
+    if (report?.defibId && String(report.defibId).startsWith('OTHER:')) return false;
+    if (report?.isOtherEquipment || report?.equipmentType === 'OTHER' || report?.type === 'OTHER' || report?.category || report?.categorie) return false;
+    if (snapshot && ((snapshot as any).categorie || (snapshot as any).category)) return false;
+    if (otherEquipments && otherEquipments.length > 0) {
+      const matchOther = otherEquipments.some(o => 
+        (selectedDefibId && (o.id === selectedDefibId || o.identifiant === selectedDefibId || `OTHER:${o.id}` === selectedDefibId)) ||
+        (report?.defibId && (o.id === report.defibId || o.identifiant === report.defibId)) ||
+        (report?.defibIdentifiant && (o.identifiant === report.defibIdentifiant || o.id === report.defibIdentifiant)) ||
+        (snapshot?.id && o.id === snapshot.id) ||
+        (snapshot?.identifiant && o.identifiant === snapshot.identifiant)
+      );
+      if (matchOther) return false;
+    }
+    return true;
+  }, [selectedDefibId, report, snapshot, otherEquipments]);
+
   // States for map position selection
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
   const [tempLat, setTempLat] = useState<number>(48.8566);
@@ -5206,49 +5224,53 @@ export default function GmaoCorrectionForm({
           </div>
         </div>
 
-        <div className="w-full">
-          <select
-            value={selectedErrorCode}
-            onChange={(e) => setSelectedErrorCode(e.target.value)}
-            className="w-full text-black bg-white focus:outline-none cursor-pointer"
-            style={{ 
-              fontSize: '18px', 
-              appearance: 'none', 
-              WebkitAppearance: 'none', 
-              MozAppearance: 'none',
-              border: '1px solid #dedede',
-              borderRadius: '13px',
-              padding: '8px 12px',
-              boxSizing: 'border-box',
-              display: 'block',
-              width: '100%',
-              textAlign: 'center',
-              textAlignLast: 'center'
-            }}
-          >
-            <option value="">{t("Sélectionnez un code erreur")}</option>
-            {ERROR_CODES_DB.map((item, idx) => (
-              <option key={idx} value={item.label}>{item.label}</option>
-            ))}
-          </select>
-        </div>
-
-        {selectedErrorCode && (
-          <div className="bg-white space-y-3 animate-fadeIn">
-            <p className="text-black font-medium leading-relaxed" style={{ fontSize: '18px' }}>
-              {ERROR_CODES_DB.find(e => e.label === selectedErrorCode)?.description}
-            </p>
-            <div className="pt-1">
-              <button
-                type="button"
-                onClick={() => setSelectedErrorCode('')}
-                style={{ fontSize: '18px' }}
-                className="w-full py-2.5 bg-black hover:bg-neutral-900 text-white font-bold rounded-xl transition-all cursor-pointer"
+        {isDefibrillator && (
+          <>
+            <div className="w-full">
+              <select
+                value={selectedErrorCode}
+                onChange={(e) => setSelectedErrorCode(e.target.value)}
+                className="w-full text-black bg-white focus:outline-none cursor-pointer"
+                style={{ 
+                  fontSize: '18px', 
+                  appearance: 'none', 
+                  WebkitAppearance: 'none', 
+                  MozAppearance: 'none',
+                  border: '1px solid #dedede',
+                  borderRadius: '13px',
+                  padding: '8px 12px',
+                  boxSizing: 'border-box',
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'center',
+                  textAlignLast: 'center'
+                }}
               >
-                Fermer
-              </button>
+                <option value="">{t("Sélectionnez un code erreur")}</option>
+                {ERROR_CODES_DB.map((item, idx) => (
+                  <option key={idx} value={item.label}>{item.label}</option>
+                ))}
+              </select>
             </div>
-          </div>
+
+            {selectedErrorCode && (
+              <div className="bg-white space-y-3 animate-fadeIn">
+                <p className="text-black font-medium leading-relaxed" style={{ fontSize: '18px' }}>
+                  {ERROR_CODES_DB.find(e => e.label === selectedErrorCode)?.description}
+                </p>
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedErrorCode('')}
+                    style={{ fontSize: '18px' }}
+                    className="w-full py-2.5 bg-black hover:bg-neutral-900 text-white font-bold rounded-xl transition-all cursor-pointer"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <div className="w-full">
