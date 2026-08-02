@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Client, Defibrillateur, CommercialDoc, CompanyInfo, Variable, OtherEquipment, PointageAutoVigilance } from '../types';
 import { formatDateToFR, computeProchaineMaintenance, formatDateToMonthYear } from '../utils';
 import { t } from '../utils/translate';
@@ -820,6 +820,31 @@ export default function ClientPortal({
   const clientOthers = authenticatedClient
     ? otherEquipments.filter((oth) => oth.clientId === authenticatedClient.id)
     : [];
+
+  const hasUpcomingInterventions = useMemo(() => {
+    if (!authenticatedClient) return false;
+    const clientDefibIds = new Set(clientDefibs.map(df => df.id));
+    const clientDefibIdents = new Set(clientDefibs.map(df => df.identifiant));
+    const clientOtherIds = new Set(clientOthers.map(o => o.id));
+    const clientOtherIdents = new Set(clientOthers.map(o => o.identifiant));
+
+    return (generatedReports || []).some(rep => {
+      const isUpcoming = rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture;
+      if (!isUpcoming) return false;
+
+      const snapClientId = rep.defibSnapshot?.clientId;
+      if (snapClientId && snapClientId === authenticatedClient.id) return true;
+      if (rep.defibId && (clientDefibIds.has(rep.defibId) || clientOtherIds.has(rep.defibId))) return true;
+      if (rep.defibIdentifiant && (clientDefibIdents.has(rep.defibIdentifiant) || clientOtherIdents.has(rep.defibIdentifiant))) return true;
+      return false;
+    });
+  }, [generatedReports, authenticatedClient, clientDefibs, clientOthers]);
+
+  const hasMissingSignature = Boolean(
+    authenticatedClient &&
+    !authenticatedClient.signatureClientContratImage &&
+    !portalSignatureClientContratImage
+  );
 
   // Pointages form states
   const [selectedEquipId, setSelectedEquipId] = useState('');
@@ -2519,6 +2544,81 @@ export default function ClientPortal({
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 space-y-6">
         
+        {/* Environment Logo (aligné à gauche, max 180px width) */}
+        {companyInfo?.logo && companyInfo.logo.trim() !== '' && (
+          <div className="flex justify-start">
+            <img
+              src={companyInfo.logo}
+              alt="Logo"
+              style={{ maxWidth: '180px', maxHeight: '80px', objectFit: 'contain' }}
+              className="block"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        )}
+
+        {/* Info Alert 1: Interventions à venir */}
+        {hasUpcomingInterventions && (
+          <div 
+            className="w-full p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs"
+            style={{
+              backgroundColor: '#fff4fb',
+              border: '1px solid #fca5d7',
+              borderRadius: '14px',
+            }}
+          >
+            <div className="text-[16px] font-bold text-black font-sans leading-snug">
+              (Attention requise) Nous avons besoin de votre réponse concernant au moins une prestation à venir.
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setActivePortalTab('reports');
+                setReportsFilter('upcoming');
+              }}
+              className="px-5 py-2 text-white font-bold text-[16px] rounded-xl cursor-pointer select-none transition-all border-none outline-none shrink-0 self-end sm:self-auto"
+              style={{
+                backgroundColor: '#fe4eba',
+                borderRadius: '12px',
+              }}
+            >
+              Consulter
+            </button>
+          </div>
+        )}
+
+        {/* Info Alert 2: Signature manquante */}
+        {hasMissingSignature && (
+          <div 
+            className="w-full p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs"
+            style={{
+              backgroundColor: '#fff4fb',
+              border: '1px solid #fca5d7',
+              borderRadius: '14px',
+            }}
+          >
+            <div className="text-[16px] font-bold text-black font-sans leading-snug">
+              (Attention requise) Nous avons besoin de votre signature dans l’encart ‘Signature’ dans l’onglet de vos Informations.
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setActivePortalTab('info');
+                setTimeout(() => {
+                  document.getElementById('client-portal-signature-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+              }}
+              className="px-5 py-2 text-white font-bold text-[16px] rounded-xl cursor-pointer select-none transition-all border-none outline-none shrink-0 self-end sm:self-auto"
+              style={{
+                backgroundColor: '#fe4eba',
+                borderRadius: '12px',
+              }}
+            >
+              Compléter
+            </button>
+          </div>
+        )}
+
         {/* Navigation Tabs (Stacks vertically on mobile, horizontally on sm screens) */}
         <div 
           className="flex flex-col sm:flex-row gap-1.5 p-1.5 bg-slate-200/60"
@@ -3698,7 +3798,7 @@ export default function ClientPortal({
                     </div>
 
                     {/* Signature du client */}
-                    <div className="space-y-1 flex flex-col">
+                    <div id="client-portal-signature-section" className="space-y-1 flex flex-col">
                       <label className="block text-[18px] font-bold text-black font-sans select-none">
                         {t("Signature.")}
                       </label>

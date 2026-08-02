@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence } from '../types';
-import { saveCollectionToFirestore } from '../firebase';
+import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
 
 export interface SpontaneousEvent {
   id: string;
@@ -98,6 +98,14 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   );
   const [expandedMissions, setExpandedMissions] = useState<Record<string, boolean>>({});
 
+  useEffect(() => {
+    if (initialTech !== undefined) {
+      setSelectedTech(initialTech);
+    } else if (authenticatedUser?.name && (selectedTech === 'Tous' || !selectedTech)) {
+      setSelectedTech(authenticatedUser.name);
+    }
+  }, [initialTech, authenticatedUser?.name]);
+
   // Mini Form Spontaneous Event states
   const [isSpontaneousFormOpen, setIsSpontaneousFormOpen] = useState<boolean>(false);
   const [formDate, setFormDate] = useState<string>('');
@@ -118,20 +126,25 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   });
 
   useEffect(() => {
-    const loadEvents = () => {
+    const loadEvents = async () => {
       try {
         const tid = localStorage.getItem('defib_tenant_id') || 'demo';
         const saved = localStorage.getItem(`defib_${tid}_spontaneous_events`) || localStorage.getItem('defib_spontaneous_events');
         if (saved) {
           setSpontaneousEvents(JSON.parse(saved));
-        } else {
-          setSpontaneousEvents([]);
+        }
+        const remote = await fetchCollectionFromFirestore<SpontaneousEvent[]>('spontaneous_events');
+        if (remote && Array.isArray(remote)) {
+          setSpontaneousEvents(remote);
+          localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(remote));
+          localStorage.setItem('defib_spontaneous_events', JSON.stringify(remote));
         }
       } catch (e) {
         console.error(e);
       }
     };
 
+    loadEvents();
     window.addEventListener('storage', loadEvents);
     window.addEventListener('defib_spontaneous_events_updated', loadEvents);
     return () => {
@@ -390,164 +403,177 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           ))}
         </select>
 
-        {/* Bouton Ajouter événement spontané / Enregistrer */}
-        <button
-          type="button"
-          onClick={() => {
-            if (isSpontaneousFormOpen) {
-              handleSaveSpontaneousEvent();
-            } else {
-              setIsSpontaneousFormOpen(true);
-            }
-          }}
-          className="w-full text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none"
-          style={{
-            backgroundColor: "rgb(22, 93, 252)",
-            borderRadius: "14px",
-            padding: "14px 12px",
-            fontSize: "18px",
-            border: "none",
-            boxShadow: "none"
-          }}
-        >
-          {isSpontaneousFormOpen ? "Enregistrer" : "Ajouter événement spontané"}
-        </button>
+        {/* Bouton Ajouter événement spontané / Enregistrer (Uniquement si un technicien est sélectionné) */}
+        {Boolean(selectedTech && selectedTech.trim() !== '' && selectedTech !== 'Tous' && selectedTech !== 'Sélectionner un technicien') && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                if (isSpontaneousFormOpen) {
+                  handleSaveSpontaneousEvent();
+                } else {
+                  setIsSpontaneousFormOpen(true);
+                }
+              }}
+              className="w-full text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none"
+              style={{
+                backgroundColor: "rgb(22, 93, 252)",
+                borderRadius: "14px",
+                padding: "14px 12px",
+                fontSize: "18px",
+                border: "none",
+                boxShadow: "none"
+              }}
+            >
+              {isSpontaneousFormOpen ? "Enregistrer" : "Ajouter événement spontané"}
+            </button>
 
-        {/* Mini Form Evénement spontané */}
-        {isSpontaneousFormOpen && (
-          <div
-            className="bg-white p-4 space-y-4 my-2 select-none"
-            style={{
-              border: "1px solid rgb(201, 190, 205)",
-              borderRadius: "14px",
-            }}
-          >
-            {formError && (
-              <div className="p-3 bg-red-50 text-red-600 rounded-lg text-[16px] font-semibold">
-                {formError}
+            {/* Mini Form Evénement spontané */}
+            {isSpontaneousFormOpen && (
+              <div
+                className="bg-white p-4 space-y-4 my-2 select-none"
+                style={{
+                  border: "1px solid rgb(201, 190, 205)",
+                  borderRadius: "14px",
+                }}
+              >
+                {formError && (
+                  <div className="p-3 bg-red-50 text-red-600 rounded-lg text-[16px] font-semibold">
+                    {formError}
+                  </div>
+                )}
+
+                {/* Field 1: Date */}
+                <div className="space-y-1">
+                  <label className="block font-bold text-[16px] text-black">
+                    Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formDate}
+                    onChange={(e) => {
+                      setFormDate(e.target.value);
+                      if (formError) setFormError('');
+                    }}
+                    onClick={(e) => {
+                      try {
+                        (e.currentTarget as any).showPicker?.();
+                      } catch (_) {}
+                    }}
+                    className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden cursor-pointer"
+                    style={{
+                      border: "1px solid rgb(201, 190, 205)",
+                      borderRadius: "14px",
+                      padding: "12px 14px",
+                      fontSize: "16px",
+                      WebkitAppearance: "none",
+                      appearance: "none",
+                    }}
+                    required
+                  />
+                </div>
+
+                {/* Field 2: Créneau */}
+                <div className="space-y-1">
+                  <label className="block font-bold text-[16px] text-black">
+                    Créneau <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formCreneau}
+                    onChange={(e) => {
+                      setFormCreneau(e.target.value);
+                      if (formError) setFormError('');
+                    }}
+                    className="w-full bg-white text-black font-medium appearance-none transition-all duration-150 focus:outline-none cursor-pointer"
+                    style={{
+                      border: "1px solid rgb(201, 190, 205)",
+                      borderRadius: "14px",
+                      padding: "12px 14px",
+                      fontSize: "16px",
+                    }}
+                    required
+                  >
+                    <option value="">-- Sélectionner un créneau --</option>
+                    {CRENEAU_OPTIONS.map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Field 3: Intitulé */}
+                <div className="space-y-1">
+                  <label className="block font-bold text-[16px] text-black">
+                    Intitulé <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formIntitule}
+                    onChange={(e) => {
+                      setFormIntitule(e.target.value);
+                      if (formError) setFormError('');
+                    }}
+                    placeholder="Saisir l'intitulé"
+                    className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
+                    style={{
+                      border: "1px solid rgb(201, 190, 205)",
+                      borderRadius: "14px",
+                      padding: "12px 14px",
+                      fontSize: "16px",
+                    }}
+                    required
+                  />
+                </div>
+
+                {/* Field 4: Commentaire */}
+                <div className="space-y-1">
+                  <label className="block font-bold text-[16px] text-black">
+                    Commentaire <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={formCommentaire}
+                    onChange={(e) => {
+                      setFormCommentaire(e.target.value);
+                      if (formError) setFormError('');
+                    }}
+                    placeholder="Saisir un commentaire"
+                    rows={3}
+                    className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none resize-y"
+                    style={{
+                      border: "1px solid rgb(201, 190, 205)",
+                      borderRadius: "14px",
+                      padding: "12px 14px",
+                      fontSize: "16px",
+                    }}
+                    required
+                  />
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSpontaneousFormOpen(false);
+                      setFormError('');
+                    }}
+                    style={{
+                      textDecoration: "none",
+                      color: "#fd4ebb",
+                      fontSize: "18px",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      border: "none",
+                      background: "transparent",
+                    }}
+                    className="font-bold select-none cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                </div>
               </div>
             )}
-
-            {/* Field 1: Date */}
-            <div className="space-y-1">
-              <label className="block font-bold text-[16px] text-black">
-                Date <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={formDate}
-                onChange={(e) => {
-                  setFormDate(e.target.value);
-                  if (formError) setFormError('');
-                }}
-                onClick={(e) => {
-                  try {
-                    (e.currentTarget as any).showPicker?.();
-                  } catch (_) {}
-                }}
-                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden cursor-pointer"
-                style={{
-                  border: "1px solid rgb(201, 190, 205)",
-                  borderRadius: "14px",
-                  padding: "12px 14px",
-                  fontSize: "16px",
-                  WebkitAppearance: "none",
-                  appearance: "none",
-                }}
-                required
-              />
-            </div>
-
-            {/* Field 2: Créneau */}
-            <div className="space-y-1">
-              <label className="block font-bold text-[16px] text-black">
-                Créneau <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formCreneau}
-                onChange={(e) => {
-                  setFormCreneau(e.target.value);
-                  if (formError) setFormError('');
-                }}
-                className="w-full bg-white text-black font-medium appearance-none transition-all duration-150 focus:outline-none cursor-pointer"
-                style={{
-                  border: "1px solid rgb(201, 190, 205)",
-                  borderRadius: "14px",
-                  padding: "12px 14px",
-                  fontSize: "16px",
-                }}
-                required
-              >
-                <option value="">-- Sélectionner un créneau --</option>
-                {CRENEAU_OPTIONS.map((slot) => (
-                  <option key={slot} value={slot}>
-                    {slot}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Field 3: Intitulé */}
-            <div className="space-y-1">
-              <label className="block font-bold text-[16px] text-black">
-                Intitulé <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formIntitule}
-                onChange={(e) => {
-                  setFormIntitule(e.target.value);
-                  if (formError) setFormError('');
-                }}
-                placeholder="Saisir l'intitulé"
-                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
-                style={{
-                  border: "1px solid rgb(201, 190, 205)",
-                  borderRadius: "14px",
-                  padding: "12px 14px",
-                  fontSize: "16px",
-                }}
-                required
-              />
-            </div>
-
-            {/* Field 4: Commentaire */}
-            <div className="space-y-1">
-              <label className="block font-bold text-[16px] text-black">
-                Commentaire <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={formCommentaire}
-                onChange={(e) => {
-                  setFormCommentaire(e.target.value);
-                  if (formError) setFormError('');
-                }}
-                placeholder="Saisir un commentaire"
-                rows={3}
-                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none resize-y"
-                style={{
-                  border: "1px solid rgb(201, 190, 205)",
-                  borderRadius: "14px",
-                  padding: "12px 14px",
-                  fontSize: "16px",
-                }}
-                required
-              />
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSpontaneousFormOpen(false);
-                  setFormError('');
-                }}
-                className="text-slate-500 hover:text-slate-800 font-semibold text-[16px] underline cursor-pointer"
-              >
-                Annuler
-              </button>
-            </div>
-          </div>
+          </>
         )}
       </div>
 
@@ -593,10 +619,15 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             {pausedTours.map((tour: any) => (
               <div
                 key={`paused-tour-planning-${tour.id}`}
-                className="w-full text-white font-bold p-4 text-[18px] text-center select-none"
+                className="w-full font-bold p-4 text-[16px] text-center select-none"
                 style={{
-                  backgroundColor: "rgb(220, 38, 38)",
-                  borderRadius: "14px",
+                  backgroundColor: "rgb(255, 232, 247)",
+                  borderRadius: "13px",
+                  color: "#fd4ebb",
+                  fontSize: "16px",
+                  cursor: "not-allowed",
+                  border: "none",
+                  boxShadow: "none",
                 }}
               >
                 Technicien en pause : {tour.pauseReason || "Nuit Hôtel"}.
@@ -605,10 +636,15 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             {showFallback && (
               <div
                 key="paused-tour-planning-fallback"
-                className="w-full text-white font-bold p-4 text-[18px] text-center select-none"
+                className="w-full font-bold p-4 text-[16px] text-center select-none"
                 style={{
-                  backgroundColor: "rgb(220, 38, 38)",
-                  borderRadius: "14px",
+                  backgroundColor: "rgb(255, 232, 247)",
+                  borderRadius: "13px",
+                  color: "#fd4ebb",
+                  fontSize: "16px",
+                  cursor: "not-allowed",
+                  border: "none",
+                  boxShadow: "none",
                 }}
               >
                 Technicien en pause : {fallbackReason}.
@@ -760,9 +796,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                       {/* Événements spontanés */}
                       {(() => {
                         const daySpontaneousEvents = spontaneousEvents.filter((evt) => {
-                          if (!evt.date || evt.date !== isoDate) return false;
-                          if (selectedTech === 'Tous') return true;
-                          return (evt.techName || '').trim().toLowerCase() === selectedTech.trim().toLowerCase();
+                          const evtIso = toIsoDateStr(evt.date);
+                          if (!evtIso || evtIso !== isoDate) return false;
+                          if (!selectedTech || selectedTech === 'Tous') return true;
+                          const evtTech = (evt.techName || '').trim().toLowerCase();
+                          const selTech = selectedTech.trim().toLowerCase();
+                          return evtTech === selTech || evtTech.includes(selTech) || selTech.includes(evtTech);
                         });
 
                         return daySpontaneousEvents.map((evt) => (
@@ -774,14 +813,11 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                               borderRadius: "14px",
                             }}
                           >
-                            {/* Gélules Date, Créneau, Badge + Bouton Supprimer */}
+                            {/* Gélules Créneau, Badge + Bouton Supprimer */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2 flex-1">
                                 <span className="px-3.5 py-1.5 rounded-full bg-blue-600 text-white font-bold text-[16px]">
                                   Événement spontané
-                                </span>
-                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
-                                  Date : {getFormattedDateFR(evt.date)}
                                 </span>
                                 <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
                                   Créneau : {evt.creneau}
@@ -904,8 +940,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           other?.identifiant ||
                           '';
 
-                        const rawDateStr = mission.estimatedDate || mission.date || (tour.startDate !== 'A trier' ? tour.startDate : '');
-                        const dateVal = getFormattedDateFR(rawDateStr);
                         const creneauVal = mission.estimatedSlot || mission.creneau || mission.estimatedTime || mission.time || '08:00';
                         const missionKey = `plan-${tour.id || 'tour'}-${mission.id || mIdx}`;
                         const isExpanded = !!expandedMissions[missionKey];
@@ -919,11 +953,11 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                               borderRadius: "14px",
                             }}
                           >
-                            {/* Gélules Date et Créneau & Bouton Dérouler / Réduire */}
+                            {/* Gélules Client et Créneau & Bouton Dérouler / Réduire */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2 flex-1">
                                 <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
-                                  Date : {dateVal}
+                                  Client : {clientName || 'NC'}
                                 </span>
                                 <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
                                   Créneau : {creneauVal}
@@ -960,10 +994,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 <div>
                                   <span className="font-bold">Tournée : </span>
                                   <span>{tourTitle}</span>
-                                </div>
-                                <div>
-                                  <span className="font-bold">Client : </span>
-                                  <span>{clientName}</span>
                                 </div>
                                 <div>
                                   <span className="font-bold">Site : </span>

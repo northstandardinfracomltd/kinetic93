@@ -7232,11 +7232,13 @@ export default function App() {
                             return (
                               <div
                                 style={{
-                                  backgroundColor: "rgb(220, 38, 38)",
-                                  color: "#ffffff",
-                                  borderRadius: "14px",
+                                  backgroundColor: "rgb(255, 232, 247)",
+                                  borderRadius: "13px",
+                                  color: "#fd4ebb",
+                                  fontSize: "16px",
+                                  cursor: "not-allowed",
                                 }}
-                                className="w-full text-white font-bold p-4 text-[18px] text-center select-none my-2 font-sans"
+                                className="w-full font-bold p-4 text-[16px] text-center select-none my-2 font-sans"
                               >
                                 Technicien en pause : {reason}.
                               </div>

@@ -4606,7 +4606,7 @@ export default function PublicPortal({
             className="text-white font-bold select-none text-center px-4"
             style={{ fontSize: "18px" }}
           >
-            {companyInfo?.name || "Défibeo"}
+            {companyInfo?.nomLogiciel || "Défibeo"}
           </span>
         </div>
       )}
@@ -6608,7 +6608,7 @@ export default function PublicPortal({
             )}
 
             {/* Top Bar Navigation and Tab Selector Wrapper with Linear Gradient */}
-            <div style={{ background: "linear-gradient(93deg, rgb(12 40 166), rgb(0 14 80))", padding: "2px 0px", borderRadius: "0px 0px 14px 14px" }}>
+            <div style={{ background: "linear-gradient(93deg, rgb(12 40 166), rgb(0 14 80))", padding: "8px 0px", borderRadius: "0px 0px 14px 14px" }}>
               {/* TAB SELECTOR: Horizontal capsule switch toggle layout with dynamic fades */}
               <nav
                 className="py-0 px-0 relative shrink-0"
@@ -6618,7 +6618,7 @@ export default function PublicPortal({
                 <div
                   ref={navRef}
                   onScroll={handleNavScroll}
-                  className="flex p-2.5 gap-3.5 shrink-0 overflow-x-auto no-scrollbar scroll-smooth min-w-full"
+                  className="flex py-3 px-2.5 gap-3.5 shrink-0 overflow-x-auto no-scrollbar scroll-smooth min-w-full"
                   style={{ background: "transparent" }}
                 >
                   <button
@@ -6891,7 +6891,7 @@ export default function PublicPortal({
                       </div>
 
                       {/* Toggle "Suspendre pour pause" */}
-                      {selectedTourId && isTourActive && hasTodoMissions && (
+                      {selectedTourId && isTourActive && (
                         <div className="px-1" id="pause-toggle-block">
                           <div
                             className="bg-white border px-4 py-4 space-y-3 flex flex-col justify-center"
