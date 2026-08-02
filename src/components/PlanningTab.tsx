@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence } from '../types';
 
 interface PlanningTabProps {
@@ -76,6 +77,14 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   const [selectedTech, setSelectedTech] = useState<string>(
     initialTech !== undefined ? initialTech : (authenticatedUser?.name || 'Tous')
   );
+  const [expandedMissions, setExpandedMissions] = useState<Record<string, boolean>>({});
+
+  const toggleMissionExpanded = (key: string) => {
+    setExpandedMissions(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   // List of technician members only
   const techniciansList = useMemo(() => {
@@ -479,6 +488,8 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         const rawDateStr = mission.estimatedDate || mission.date || (tour.startDate !== 'A trier' ? tour.startDate : '');
                         const dateVal = getFormattedDateFR(rawDateStr);
                         const creneauVal = mission.estimatedSlot || mission.creneau || mission.estimatedTime || mission.time || '08:00';
+                        const missionKey = `plan-${tour.id || 'tour'}-${mission.id || mIdx}`;
+                        const isExpanded = !!expandedMissions[missionKey];
 
                         return (
                           <div
@@ -489,43 +500,74 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                               borderRadius: "14px",
                             }}
                           >
-                            {/* Gélules Date et Créneau */}
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
-                                Date : {dateVal}
-                              </span>
-                              <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
-                                Créneau : {creneauVal}
-                              </span>
+                            {/* Gélules Date et Créneau & Bouton Dérouler / Réduire */}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-2 flex-1">
+                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
+                                  Date : {dateVal}
+                                </span>
+                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
+                                  Créneau : {creneauVal}
+                                </span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => toggleMissionExpanded(missionKey)}
+                                style={{
+                                  backgroundColor: isExpanded ? "#3556ec" : "#000000",
+                                  color: "#ffffff",
+                                  borderRadius: "1000px",
+                                  padding: "5px 15px",
+                                  fontSize: "14px",
+                                  fontWeight: 700,
+                                  border: "none",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  boxShadow: "0 1px 2px rgba(0,0,0,0.1)"
+                                }}
+                                className="hover:opacity-90 active:scale-95 transition-all shrink-0 select-none ml-auto"
+                              >
+                                <span>{isExpanded ? "Réduire" : "Dérouler"}</span>
+                                {isExpanded ? (
+                                  <ChevronUp className="w-4 h-4" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4" />
+                                )}
+                              </button>
                             </div>
 
-                            {/* Details */}
-                            <div className="space-y-1.5 text-[16px] text-slate-800">
-                              <div>
-                                <span className="font-bold">Tournée : </span>
-                                <span>{tourTitle}</span>
+                            {/* Details (Déroulés si actif) */}
+                            {isExpanded && (
+                              <div className="space-y-1.5 text-[16px] text-slate-800 pt-2 border-t border-slate-200">
+                                <div>
+                                  <span className="font-bold">Tournée : </span>
+                                  <span>{tourTitle}</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold">Client : </span>
+                                  <span>{clientName}</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold">Site : </span>
+                                  <span>{siteName}</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold">Localisation : </span>
+                                  <span>{locationStr}</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold">Type de matériel : </span>
+                                  <span>{equipType}</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold">Identifiant : </span>
+                                  <span>{identifiant}</span>
+                                </div>
                               </div>
-                              <div>
-                                <span className="font-bold">Client : </span>
-                                <span>{clientName}</span>
-                              </div>
-                              <div>
-                                <span className="font-bold">Site : </span>
-                                <span>{siteName}</span>
-                              </div>
-                              <div>
-                                <span className="font-bold">Localisation : </span>
-                                <span>{locationStr}</span>
-                              </div>
-                              <div>
-                                <span className="font-bold">Type de matériel : </span>
-                                <span>{equipType}</span>
-                              </div>
-                              <div>
-                                <span className="font-bold">Identifiant : </span>
-                                <span>{identifiant}</span>
-                              </div>
-                            </div>
+                            )}
                           </div>
                         );
                       })}

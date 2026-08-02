@@ -105,6 +105,7 @@ import {
   Download,
   Eye,
   ChevronDown,
+  ChevronUp,
   ShoppingBag,
   Bell
 } from 'lucide-react';
@@ -615,6 +616,14 @@ export default function App() {
   const [fsmPlanningSidePaneOpen, setFsmPlanningSidePaneOpen] = useState<boolean>(false);
   const [fsmTourDrafts, setFsmTourDrafts] = useState<Record<string, any>>({});
   const [savingTourIds, setSavingTourIds] = useState<Record<string, boolean>>({});
+  const [fsmExpandedMissions, setFsmExpandedMissions] = useState<Record<string, boolean>>({});
+
+  const toggleFsmMissionExpanded = (missionKey: string) => {
+    setFsmExpandedMissions(prev => ({
+      ...prev,
+      [missionKey]: !prev[missionKey]
+    }));
+  };
 
   useEffect(() => {
     const key = `defib_${tenantId}_stocks`;
@@ -6244,10 +6253,14 @@ export default function App() {
                               ) : (
                                 <div className="space-y-4 bg-white">
                                   {t.missions.map((m: any, idx: number) => {
+                                    const missionKey = `a-trier-${m.id || idx}`;
+                                    const isExpanded = !!fsmExpandedMissions[missionKey];
+
                                     return (
                                       <div key={m.id} className="rounded-xl p-4 shadow-3xs transition-shadow space-y-4 font-sans" style={{ border: '1px solid rgb(229, 229, 229)', backgroundColor: 'rgb(245, 245, 245)' }}>
-                                        {/* Row 1: Gélules */}
-                                        <div className="flex flex-wrap items-center gap-2 bg-transparent pb-0.5">
+                                        {/* Row 1: Gélules & Bouton Dérouler / Réduire */}
+                                        <div className="flex flex-wrap items-center justify-between gap-2 bg-transparent pb-0.5">
+                                          <div className="flex flex-wrap items-center gap-2 bg-transparent flex-1">
                                           <span
                                             style={{
                                               backgroundColor: 'rgb(77, 21, 83)',
@@ -6347,9 +6360,39 @@ export default function App() {
                                             }
                                             return null;
                                           })()}
+                                          </div>
+
+                                          {/* Bouton Dérouler / Réduire */}
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleFsmMissionExpanded(missionKey)}
+                                            style={{
+                                              backgroundColor: isExpanded ? '#3556ec' : '#000000',
+                                              color: '#ffffff',
+                                              borderRadius: '1000px',
+                                              padding: '5px 15px',
+                                              fontSize: '14px',
+                                              fontWeight: 700,
+                                              border: 'none',
+                                              cursor: 'pointer',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '6px',
+                                              boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                            }}
+                                            className="hover:opacity-90 active:scale-95 transition-all shrink-0 select-none ml-auto"
+                                          >
+                                            <span>{isExpanded ? 'Réduire' : 'Dérouler'}</span>
+                                            {isExpanded ? (
+                                              <ChevronUp className="w-4 h-4" />
+                                            ) : (
+                                              <ChevronDown className="w-4 h-4" />
+                                            )}
+                                          </button>
                                         </div>
 
-                                        {/* Row 2: Client & Site & Identifiant & Localisation */}
+                                        {/* Row 2: Client & Site & Identifiant & Localisation (Montré si déroulé) */}
+                                        {isExpanded && (
                                         <div className="grid grid-cols-1 md:grid-cols-6 gap-3 bg-transparent">
                                           <div className="space-y-0.5 bg-transparent">
                                             <label className="block mb-1 fsm-label-style">Client.</label>
@@ -6494,7 +6537,8 @@ export default function App() {
                                             </div>
                                           </div>
                                         </div>
-                                      </div>
+                                      )}
+                                    </div>
                                     );
                                   })}
                                 </div>
@@ -7071,10 +7115,14 @@ export default function App() {
                                   return d.toISOString().split('T')[0];
                                 })();
                                 const estimatedDateValue = m.estimatedDate || (t.calculated ? calculatedDate : '');
+                                const missionKey = `${t.id}-${m.id || idx}`;
+                                const isExpanded = !!fsmExpandedMissions[missionKey];
+
                                 return (
                                   <div key={m.id} className="rounded-xl p-4 shadow-3xs transition-shadow space-y-4 font-sans" style={{ border: '1px solid rgb(229, 229, 229)', backgroundColor: 'rgb(245, 245, 245)' }}>
-                                      {/* Ligne 1: Numéro de passage */}
-                                      <div className="flex flex-wrap items-center gap-2 bg-transparent pb-0.5">
+                                      {/* Ligne 1: Numéro de passage & Gélules & Bouton Dérouler / Réduire */}
+                                      <div className="flex flex-wrap items-center justify-between gap-2 bg-transparent pb-0.5">
+                                        <div className="flex flex-wrap items-center gap-2 bg-transparent flex-1">
                                         <div
                                           style={{
                                             backgroundColor: '#fa53d5',
@@ -7198,9 +7246,40 @@ export default function App() {
                                           }
                                           return null;
                                         })()}
+                                        </div>
+
+                                        {/* Bouton Dérouler / Réduire */}
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleFsmMissionExpanded(missionKey)}
+                                          style={{
+                                            backgroundColor: isExpanded ? '#3556ec' : '#000000',
+                                            color: '#ffffff',
+                                            borderRadius: '1000px',
+                                            padding: '5px 15px',
+                                            fontSize: '14px',
+                                            fontWeight: 700,
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                          }}
+                                          className="hover:opacity-90 active:scale-95 transition-all shrink-0 select-none ml-auto"
+                                        >
+                                          <span>{isExpanded ? 'Réduire' : 'Dérouler'}</span>
+                                          {isExpanded ? (
+                                            <ChevronUp className="w-4 h-4" />
+                                          ) : (
+                                            <ChevronDown className="w-4 h-4" />
+                                          )}
+                                        </button>
                                       </div>
 
-                                      {/* Ligne 2: Client., Site., Identifiant., Localisation., Raison., Bon de commande., Date estimée., Créneau estimé., Situation. */}
+                                      {/* Contenu déroulant (Montré uniquement si déroulé) */}
+                                      {isExpanded && (
+                                        <div className="space-y-4 pt-2 border-t border-slate-200">
                                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 w-full bg-transparent">
                                         {/* Client. (toujours disabled) */}
                                         <div className="space-y-0.5 bg-transparent">
@@ -7996,6 +8075,8 @@ export default function App() {
                                       </button>
                                     </div>
                                   </div>
+                                </div>
+                              )}
                                 </div>
                               );
                             })}
