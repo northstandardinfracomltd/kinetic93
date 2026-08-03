@@ -11124,6 +11124,7 @@ export default function App() {
           {activeTab === 'temps' && (
             <TempsTab
               pointages={pointages}
+              members={members}
               onUpdatePointages={(updated) => savePointages(updated)}
             />
           )}

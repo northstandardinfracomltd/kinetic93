@@ -1,178 +1,586 @@
 import React, { useState } from 'react';
-import { PointageLog } from '../types';
-import { Clock } from 'lucide-react';
+import { PointageLog, Member } from '../types';
+import { Download } from 'lucide-react';
 import { t } from '../utils/translate';
 
 interface TempsTabProps {
   pointages: PointageLog[];
-  onUpdatePointages: (updated: PointageLog[]) => void;
+  members?: Member[];
+  onUpdatePointages?: (updated: PointageLog[]) => void;
 }
 
-export default function TempsTab({
-  pointages,
-  onUpdatePointages,
-}: TempsTabProps) {
-  // Search States
+const FRENCH_MONTH_NAMES = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+];
+
+// Helper to calculate Easter Sunday for a given year using Anonymous Gregorian algorithm
+function getEasterDate(year: number): Date {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+// Helper to calculate all French Public Holidays for a given year
+function getFrenchHolidaysSet(year: number): Set<string> {
+  const holidays = new Set<string>();
+  const add = (m: number, d: number) => {
+    const mm = String(m).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    holidays.add(`${year}-${mm}-${dd}`);
+  };
+
+  // Fixed holidays
+  add(1, 1);   // Jour de l'An
+  add(5, 1);   // Fête du Travail
+  add(5, 8);   // Victoire 1945
+  add(7, 14);  // Fête Nationale
+  add(8, 15);  // Assomption
+  add(11, 1);  // Toussaint
+  add(11, 11); // Armistice 1918
+  add(12, 25); // Noël
+
+  // Moveable Easter holidays
+  const easter = getEasterDate(year);
+
+  // Easter Monday (+1 day)
+  const easterMonday = new Date(easter);
+  easterMonday.setDate(easter.getDate() + 1);
+  add(easterMonday.getMonth() + 1, easterMonday.getDate());
+
+  // Ascension (+39 days)
+  const ascension = new Date(easter);
+  ascension.setDate(easter.getDate() + 39);
+  add(ascension.getMonth() + 1, ascension.getDate());
+
+  // Whit Monday / Lundi de Pentecôte (+50 days)
+  const whitMonday = new Date(easter);
+  whitMonday.setDate(easter.getDate() + 50);
+  add(whitMonday.getMonth() + 1, whitMonday.getDate());
+
+  return holidays;
+}
+
+function parseToIso(dateStr?: string): string {
+  if (!dateStr) return '';
+  const str = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (str.includes('/')) {
+    const parts = str.split('/');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  }
+  if (str.includes('-')) {
+    const parts = str.split('-');
+    if (parts.length === 3 && parts[2].length === 4) {
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  }
+  return str;
+}
+
+function parseTimeToSeconds(tStr?: string): number {
+  if (!tStr) return 0;
+  const str = tStr.trim();
+  if (str.includes(':')) {
+    const parts = str.split(':').map((p) => parseInt(p, 10) || 0);
+    if (parts.length >= 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else if (parts.length === 2) {
+      return parts[0] * 3600 + parts[1] * 60;
+    }
+  }
+  if (str.toLowerCase().includes('h')) {
+    const parts = str.toLowerCase().split('h').map((p) => parseInt(p, 10) || 0);
+    return parts[0] * 3600 + (parts[1] || 0) * 60;
+  }
+  const val = parseInt(str, 10);
+  return isNaN(val) ? 0 : val * 60;
+}
+
+function secondsToHMMSS(totalSec: number): string {
+  if (totalSec <= 0) return '0:00:00';
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function formatDurationField(val?: string): string {
+  if (!val || val.trim() === '') return '';
+  const sec = parseTimeToSeconds(val);
+  if (sec <= 0) return '';
+  return secondsToHMMSS(sec);
+}
+
+function calculateAmplitudeSeconds(startTime?: string, endTime?: string): number {
+  if (!startTime || !endTime) return 0;
+  const startSec = parseTimeToSeconds(startTime);
+  const endSec = parseTimeToSeconds(endTime);
+  if (endSec > startSec) {
+    return endSec - startSec;
+  }
+  return 0;
+}
+
+// Generate the full CSV content for a technician for a given month
+function generateMonthlyCSV(
+  techName: string,
+  year: number,
+  monthIndex: number,
+  pointages: PointageLog[],
+  members: Member[] = []
+): string {
+  const monthLabel = `${FRENCH_MONTH_NAMES[monthIndex]} ${year}`;
+  const holidays = getFrenchHolidaysSet(year);
+  const member = members.find(
+    (m) => m.name === techName || m.name?.toLowerCase() === techName.toLowerCase()
+  );
+
+  const csvLines: string[][] = [];
+
+  // Line 1: Titre fixe
+  csvLines.push(['CTT Planning Horaires', '', '', '', '', '', '', '', '', '', '', '']);
+  // Line 2: Sous-titre variable
+  csvLines.push([`${techName} - ${monthLabel}`, '', '', '', '', '', '', '', '', '', '', '']);
+  // Line 3: Ligne vide d'espacement
+  csvLines.push(['', '', '', '', '', '', '', '', '', '', '', '']);
+  // Line 4: Labels du tableau
+  csvLines.push([
+    'Date',
+    'Début Journée',
+    'Fin Journée',
+    'Amplitude Journée',
+    'Temps Trajet Matin',
+    'Temps Trajet Soir',
+    'Temps Repas',
+    'Amplitude Journée',
+    'Temps Administratif/Autres',
+    'Amplitude Hebdomadaire ',
+    'Crédit Heures',
+    'Commentaires'
+  ]);
+
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+  interface DayInfo {
+    day: number;
+    dateObj: Date;
+    dateIso: string;
+    displayDate: string;
+    mondayIso: string;
+    type: 'absence' | 'holiday' | 'pointage' | 'nodata';
+    absenceReason?: string;
+    pointage?: PointageLog;
+    workedCTTSec: number;
+    adminSec: number;
+  }
+
+  const workingDays: DayInfo[] = [];
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateObj = new Date(year, monthIndex, day);
+    const dayOfWeek = dateObj.getDay(); // 0 = Sun, 6 = Sat
+    if (dayOfWeek === 0 || dayOfWeek === 6) continue; // Exclude Saturdays & Sundays
+
+    const mm = String(monthIndex + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    const dateIso = `${year}-${mm}-${dd}`;
+    const displayDate = `${day}/${monthIndex + 1}/${year}`;
+
+    // Compute Monday ISO for week grouping
+    const mon = new Date(dateObj);
+    const diffToMon = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    mon.setDate(mon.getDate() - diffToMon);
+    const monMM = String(mon.getMonth() + 1).padStart(2, '0');
+    const monDD = String(mon.getDate()).padStart(2, '0');
+    const mondayIso = `${mon.getFullYear()}-${monMM}-${monDD}`;
+
+    // 1) Absence check
+    let absenceReason: string | undefined;
+    if (member && member.absences) {
+      const matchAbs = member.absences.find((abs) => {
+        if (!abs.startDate) return false;
+        const absStart = parseToIso(abs.startDate);
+        const absEnd = abs.endDate ? parseToIso(abs.endDate) : absStart;
+        return absStart <= dateIso && dateIso <= absEnd;
+      });
+      if (matchAbs) {
+        absenceReason = matchAbs.commentaire || 'Absence';
+      }
+    }
+
+    if (absenceReason) {
+      workingDays.push({
+        day,
+        dateObj,
+        dateIso,
+        displayDate,
+        mondayIso,
+        type: 'absence',
+        absenceReason,
+        workedCTTSec: 0,
+        adminSec: 0,
+      });
+      continue;
+    }
+
+    // 2) French Holiday check
+    if (holidays.has(dateIso)) {
+      workingDays.push({
+        day,
+        dateObj,
+        dateIso,
+        displayDate,
+        mondayIso,
+        type: 'holiday',
+        workedCTTSec: 0,
+        adminSec: 0,
+      });
+      continue;
+    }
+
+    // 3) Pointage check
+    const pt = pointages.find((p) => {
+      if (p.techName !== techName) return false;
+      const pIso = parseToIso(p.startDate);
+      return pIso === dateIso;
+    });
+
+    if (pt) {
+      const amplitudeSec = calculateAmplitudeSeconds(pt.startTime, pt.endTime);
+      const repasSec = parseTimeToSeconds(pt.tempsRepas);
+      const tmSec = parseTimeToSeconds(pt.trajetMatin);
+      const tsSec = parseTimeToSeconds(pt.trajetSoir);
+      const workedCTTSec = Math.max(0, amplitudeSec - repasSec - tmSec - tsSec);
+      const adminSec = parseTimeToSeconds(pt.tempsAdmin);
+
+      workingDays.push({
+        day,
+        dateObj,
+        dateIso,
+        displayDate,
+        mondayIso,
+        type: 'pointage',
+        pointage: pt,
+        workedCTTSec,
+        adminSec,
+      });
+      continue;
+    }
+
+    // 4) No data
+    workingDays.push({
+      day,
+      dateObj,
+      dateIso,
+      displayDate,
+      mondayIso,
+      type: 'nodata',
+      workedCTTSec: 0,
+      adminSec: 0,
+    });
+  }
+
+  // Calculate Week Totals
+  const weekTotalsMap = new Map<string, number>();
+  const firstDayOfWeekMap = new Map<string, string>(); // mondayIso -> first dateIso in this month
+
+  workingDays.forEach((wd) => {
+    const currentTot = weekTotalsMap.get(wd.mondayIso) || 0;
+    weekTotalsMap.set(wd.mondayIso, currentTot + wd.workedCTTSec + wd.adminSec);
+
+    if (!firstDayOfWeekMap.has(wd.mondayIso)) {
+      firstDayOfWeekMap.set(wd.mondayIso, wd.dateIso);
+    }
+  });
+
+  // Build CSV Rows
+  workingDays.forEach((wd) => {
+    const isFirstDayInMonthForWeek = firstDayOfWeekMap.get(wd.mondayIso) === wd.dateIso;
+    const weekTotalSec = weekTotalsMap.get(wd.mondayIso) || 0;
+    const weeklyAmplitudeCol =
+      isFirstDayInMonthForWeek && weekTotalSec > 0 ? secondsToHMMSS(weekTotalSec) : '';
+
+    if (wd.type === 'absence') {
+      csvLines.push([
+        wd.displayDate,
+        `Période d'indisponibilité : ${wd.absenceReason}`,
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        weeklyAmplitudeCol,
+        '',
+        ''
+      ]);
+    } else if (wd.type === 'holiday') {
+      csvLines.push([
+        wd.displayDate,
+        'Jour Férié (France)',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        weeklyAmplitudeCol,
+        '',
+        ''
+      ]);
+    } else if (wd.type === 'nodata') {
+      csvLines.push([
+        wd.displayDate,
+        'Aucune donnée.',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        weeklyAmplitudeCol,
+        '',
+        ''
+      ]);
+    } else if (wd.type === 'pointage' && wd.pointage) {
+      const pt = wd.pointage;
+      const amplitudeSec = calculateAmplitudeSeconds(pt.startTime, pt.endTime);
+      const ampFormatted = amplitudeSec > 0 ? secondsToHMMSS(amplitudeSec) : '';
+      const tmFormatted = formatDurationField(pt.trajetMatin);
+      const tsFormatted = formatDurationField(pt.trajetSoir);
+      const repasFormatted = formatDurationField(pt.tempsRepas);
+      const workedCTTFormatted = wd.workedCTTSec > 0 ? secondsToHMMSS(wd.workedCTTSec) : '';
+      const adminFormatted = formatDurationField(pt.tempsAdmin);
+
+      csvLines.push([
+        wd.displayDate,
+        pt.startTime || '',
+        pt.endTime || '',
+        ampFormatted,
+        tmFormatted,
+        tsFormatted,
+        repasFormatted,
+        workedCTTFormatted,
+        adminFormatted,
+        weeklyAmplitudeCol,
+        '',
+        pt.comment || ''
+      ]);
+    }
+  });
+
+  // Bottom Footer
+  csvLines.push(['', '', '', '', '', '', '', '', '', '', '', '']);
+  csvLines.push([
+    '',
+    '',
+    '',
+    '',
+    '"Fait à _________, le ___/___/___                                  "',
+    '',
+    '',
+    '',
+    '',
+    'Heure(s) Supplémentaire(s)',
+    '',
+    ''
+  ]);
+  csvLines.push([
+    '',
+    '',
+    '',
+    '',
+    'Signature Employé : _____________',
+    '',
+    '',
+    '',
+    '',
+    '0:00:00',
+    '',
+    ''
+  ]);
+
+  return (
+    '\ufeff' +
+    csvLines
+      .map((row) =>
+        row
+          .map((cell) => {
+            if (cell.startsWith('"') && cell.endsWith('"')) return cell;
+            if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+              return `"${cell.replace(/"/g, '""')}"`;
+            }
+            return cell;
+          })
+          .join(',')
+      )
+      .join('\n')
+  );
+}
+
+export default function TempsTab({ pointages = [], members = [] }: TempsTabProps) {
   const [search, setSearch] = useState('');
   const [selectedTechFilter, setSelectedTechFilter] = useState<string>('Tous');
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  // Inline editing states encapsulated cleanly
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{
-    startDate: string;
-    startTime: string;
-    endDate: string;
-    endTime: string;
-  } | null>(null);
+  // Extract technician list
+  const techNamesFromMembers = (members || [])
+    .filter((m) => m.role === 'Technicien' || m.role?.toLowerCase().includes('tech'))
+    .map((m) => m.name)
+    .filter(Boolean);
 
-  const parseToYYYYMMDD = (dateStr: string): string => {
-    if (!dateStr) return '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-    const parts = dateStr.split(/[-/]/);
-    if (parts.length === 3) {
-      if (parts[0].length === 4) {
-        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+  const techNamesFromPointages = (pointages || []).map((p) => p.techName).filter(Boolean);
+
+  const allTechnicians = Array.from(
+    new Set([...techNamesFromMembers, ...techNamesFromPointages])
+  ).sort();
+
+  // If no technicians found specifically as Technicien role, fall back to all member names or pointage techNames
+  const technicians =
+    allTechnicians.length > 0
+      ? allTechnicians
+      : Array.from(
+          new Set([
+            ...(members || []).map((m) => m.name),
+            ...(pointages || []).map((p) => p.techName),
+          ])
+        )
+          .filter(Boolean)
+          .sort();
+
+  // Generate 12 recent months up to current month plus any additional months from pointages
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  const monthSet = new Set<string>();
+  const monthList: { year: number; monthIndex: number; monthLabel: string; achevementDate: string }[] = [];
+
+  const addMonth = (y: number, mIdx: number) => {
+    const key = `${y}-${mIdx}`;
+    if (monthSet.has(key)) return;
+    monthSet.add(key);
+
+    const monthLabel = `${FRENCH_MONTH_NAMES[mIdx]} ${y}`;
+    // Achèvement indicatif: 1st day of month + 1
+    const nextMonth = new Date(y, mIdx + 1, 1);
+    const d = String(nextMonth.getDate()).padStart(2, '0');
+    const m = String(nextMonth.getMonth() + 1).padStart(2, '0');
+    const achevementDate = `${d}/${m}/${nextMonth.getFullYear()}`;
+
+    monthList.push({ year: y, monthIndex: mIdx, monthLabel, achevementDate });
+  };
+
+  // Add last 12 months
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(currentYear, currentMonth - i, 1);
+    addMonth(d.getFullYear(), d.getMonth());
+  }
+
+  // Add months from pointages
+  (pointages || []).forEach((p) => {
+    const iso = parseToIso(p.startDate);
+    if (iso && iso.length >= 7) {
+      const parts = iso.split('-');
+      const y = parseInt(parts[0], 10);
+      const mIdx = parseInt(parts[1], 10) - 1;
+      if (!isNaN(y) && !isNaN(mIdx) && mIdx >= 0 && mIdx <= 11) {
+        addMonth(y, mIdx);
       }
-      const day = parts[0].padStart(2, '0');
-      const month = parts[1].padStart(2, '0');
-      const year = parts[2];
-      return `${year}-${month}-${day}`;
     }
-    return dateStr;
-  };
+  });
 
-  const formatToDisplayDate = (dateStr: string): string => {
-    if (!dateStr) return '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      const parts = dateStr.split('-');
-      return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    }
-    return dateStr;
-  };
+  // Build grid of rows: (Technician x Month)
+  interface MonthlyRow {
+    id: string;
+    techName: string;
+    year: number;
+    monthIndex: number;
+    monthLabel: string;
+    achevementDate: string;
+  }
 
-  const handleEditPointageValue = (
-    id: string,
-    startDate: string,
-    startTime: string,
-    endDate: string,
-    endTime: string
-  ) => {
-    const updated = pointages.map(p => {
-      if (p.id === id) {
-        let durationSeconds = p.durationSeconds;
-        let finalEndDate = endDate || p.endDate || startDate;
-        try {
-          if (startDate && startTime && finalEndDate && endTime) {
-            const startStr = `${startDate}T${startTime}:00`;
-            const endStr = `${finalEndDate}T${endTime}:00`;
-            const startMs = Date.parse(startStr);
-            const endMs = Date.parse(endStr);
-            if (!isNaN(startMs) && !isNaN(endMs)) {
-              durationSeconds = Math.max(0, Math.floor((endMs - startMs) / 1000));
-            }
-          }
-        } catch (err) {}
-        return {
-          ...p,
-          startDate: formatToDisplayDate(startDate),
-          startTime,
-          endDate: formatToDisplayDate(finalEndDate),
-          endTime,
-          durationSeconds,
-          isOngoing: false
-        };
-      }
-      return p;
+  const rows: MonthlyRow[] = [];
+
+  const techToUse = selectedTechFilter === 'Tous' ? technicians : [selectedTechFilter];
+
+  techToUse.forEach((tech) => {
+    monthList.forEach((ml) => {
+      rows.push({
+        id: `${tech}-${ml.year}-${ml.monthIndex}`,
+        techName: tech,
+        year: ml.year,
+        monthIndex: ml.monthIndex,
+        monthLabel: ml.monthLabel,
+        achevementDate: ml.achevementDate,
+      });
     });
-    onUpdatePointages(updated);
-  };
+  });
 
-  const handleDeletePointage = (id: string) => {
-    const updated = pointages.filter(p => p.id !== id);
-    onUpdatePointages(updated);
-    if (editingId === id) {
-      setEditingId(null);
-      setEditForm(null);
-    }
-  };
+  // Filter rows by search
+  const filteredRows = rows.filter((r) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      r.techName.toLowerCase().includes(q) ||
+      r.monthLabel.toLowerCase().includes(q) ||
+      r.achevementDate.toLowerCase().includes(q)
+    );
+  });
 
-  const handleExportTemps = (techName: string) => {
-    if (!techName || techName === 'Tous') return;
-
-    const itemsToExport = pointages.filter(p => p.techName === techName);
-
-    const headers = [
-      'Technicien.',
-      'Début.',
-      'Fin.',
-      'Durée totale.'
-    ];
-
-    let csvContent = '\ufeff'; // BOM for UTF-8 compatibility
-    csvContent += headers.map(h => `"${h}"`).join(';') + '\n';
-
-    itemsToExport.forEach(p => {
-      const debutDate = formatToDisplayDate(p.startDate);
-      const debutTime = p.startTime || '';
-      const debutFormatted = `${debutDate} ${debutTime}`.trim();
-
-      const finDate = p.isOngoing ? "En cours" : formatToDisplayDate(p.endDate || p.startDate);
-      const finTime = p.isOngoing ? "" : (p.endTime || '');
-      const finFormatted = p.isOngoing ? "En cours" : `${finDate} ${finTime}`.trim();
-
-      const dureeTotale = p.isOngoing
-        ? "Vacation active"
-        : `${Math.round((p.durationSeconds || 0) / 60)} min (${((p.durationSeconds || 0) / 3600).toFixed(2)} h)`;
-
-      const row = [
-        p.techName || '',
-        debutFormatted,
-        finFormatted,
-        dureeTotale
-      ];
-
-      csvContent += row.map(val => `"${String(val !== undefined && val !== null ? val : '').replace(/"/g, '""')}"`).join(';') + '\n';
-    });
-
-    const formattedDate = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
-    const fileName = `Export Temps ${techName} au ${formattedDate}.csv`;
+  const handleDownloadCSV = (techName: string, year: number, monthIndex: number) => {
+    const csvContent = generateMonthlyCSV(techName, year, monthIndex, pointages, members);
+    const monthLabel = `${FRENCH_MONTH_NAMES[monthIndex]}_${year}`;
+    const fileName = `CTT_${techName.replace(/\s+/g, '_')}_${monthLabel}.csv`;
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = fileName;
+    link.setAttribute('download', fileName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  // Harmonized styling constants
   const actionButtonStyle: React.CSSProperties = {
     backgroundColor: '#000',
     color: '#fff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
-    borderRadius: '0.75rem',
+    borderRadius: '13px',
     fontSize: '16px',
-    padding: '11px 22px',
-    fontWeight: '100',
-    transition: 'all 0s ease-in-out',
+    padding: '10px 20px',
+    fontWeight: 'bold',
+    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: '0.4rem',
     cursor: 'pointer',
     border: 'none',
-  };
-
-  const actionButton18Style: React.CSSProperties = {
-    ...actionButtonStyle,
-    fontSize: '18px',
-    padding: '9px 19px',
-    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+    transition: 'all 0.15s ease',
   };
 
   const thStyle: React.CSSProperties = {
@@ -182,17 +590,7 @@ export default function TempsTab({
     textTransform: 'none',
     color: '#000000',
     cursor: 'default',
-  };
-
-  const inputStyle: React.CSSProperties = {
-    border: '1px solid #dedede',
-    borderRadius: '8px',
-    padding: '6px 10px',
-    fontSize: '13px',
-    fontWeight: '100',
-    backgroundColor: '#ffffff',
-    color: '#000000',
-    outline: 'none',
+    fontSize: '16px',
   };
 
   const searchInputStyle: React.CSSProperties = {
@@ -204,52 +602,14 @@ export default function TempsTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
-    outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
+    outline: isSearchHovered || isSearchFocused ? '2.5px solid #fa53d5' : 'none',
+    outlineOffset: isSearchHovered || isSearchFocused ? '2px' : '0px',
     transition: 'all 0s',
   };
-
-  // List of unique technicians in pointages
-  const technicians = Array.from(new Set(pointages.map(p => p.techName))).filter(Boolean).sort();
-
-  // Searching logic
-  const filteredPointages = pointages.filter((p) => {
-    if (selectedTechFilter !== 'Tous' && p.techName !== selectedTechFilter) {
-      return false;
-    }
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      p.techName.toLowerCase().includes(q) ||
-      p.startDate.toLowerCase().includes(q) ||
-      (p.endDate && p.endDate.toLowerCase().includes(q))
-    );
-  });
 
   return (
     <div className="space-y-6 animate-fadeIn" id="temps-tab-container-harmonized">
       <style>{`
-        #temps-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-temps-input),
-        #temps-tab-container-harmonized select,
-        #temps-tab-container-harmonized textarea {
-          padding: 12px !important;
-          border: 1px solid #dedede !important;
-          border-radius: 13px !important;
-          font-size: 16px !important;
-          font-weight: 100 !important;
-          background: #ffffff !important;
-          color: #000000 !important;
-          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-          box-sizing: border-box !important;
-          outline: none !important;
-          transition: all 0s !important;
-        }
-        #temps-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-temps-input),
-        #temps-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-temps-input) {
-          outline: 2.5px solid #fa53d5 !important;
-          outline-offset: 2px !important;
-          transition: all 0s !important;
-        }
         #temps-tab-container-harmonized input#search-temps-input {
           font-size: 18px !important;
         }
@@ -258,39 +618,33 @@ export default function TempsTab({
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
           font-weight: 100 !important;
         }
-        /* Hide native calendar and clock picker icons */
-        #temps-tab-container-harmonized input[type="date"]::-webkit-calendar-picker-indicator,
-        #temps-tab-container-harmonized input[type="time"]::-webkit-calendar-picker-indicator {
-          display: none !important;
-          -webkit-appearance: none !important;
-        }
       `}</style>
-      
-      {/* Tab Header Dashboard with search input on the right */}
-      <div 
+
+      {/* Tab Header Dashboard */}
+      <div
         className="bg-white space-y-4"
-        style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+        style={{
+          border: '1px solid #dadada',
+          borderTop: 'none',
+          borderRadius: '0px 0px 18px 18px',
+          maxWidth: '98%',
+          margin: 'auto',
+          padding: '20px',
+          backgroundColor: '#ffffff',
+        }}
       >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight font-gochi bg-white" style={{ color: '#000000', cursor: 'default' }} id="temps-tab-title">{t("Temps")}</h2>
+            <h2
+              className="text-2xl font-bold tracking-tight font-gochi bg-white"
+              style={{ color: '#000000', cursor: 'default' }}
+              id="temps-tab-title"
+            >
+              {t("Temps")}
+            </h2>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
-            {selectedTechFilter !== 'Tous' && (
-              <button
-                type="button"
-                onClick={() => handleExportTemps(selectedTechFilter)}
-                style={{
-                  ...actionButton18Style,
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                }}
-                className="cursor-pointer font-sans bg-black text-white rounded whitespace-nowrap"
-              >
-                {t("Télécharger CSV")}
-              </button>
-            )}
-
             {/* Search Bar Input */}
             <div className="relative w-full sm:w-80 bg-white">
               <input
@@ -312,16 +666,9 @@ export default function TempsTab({
       </div>
 
       {/* Filters Pills Row */}
-      <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" id="temps-tech-pills">
-        {['Tous', ...technicians].map((filterOpt) => {
-          let count = 0;
-          if (filterOpt === 'Tous') {
-            count = pointages.length;
-          } else {
-            count = pointages.filter((p) => p.techName === filterOpt).length;
-          }
-
-          return (
+      {technicians.length > 0 && (
+        <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-2" id="temps-tech-pills">
+          {['Tous', ...technicians].map((filterOpt) => (
             <button
               key={filterOpt}
               type="button"
@@ -337,19 +684,22 @@ export default function TempsTab({
                 color: selectedTechFilter === filterOpt ? '#ffffff' : '#000000',
                 border: selectedTechFilter === filterOpt ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
                 boxShadow: 'none',
-                transition: 'all 0.15s ease'
+                transition: 'all 0.15s ease',
               }}
               className="transition-all"
             >
-              {t(filterOpt)} ({count})
+              {t(filterOpt)}
             </button>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {/* Pointage Records */}
-      <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
-        {filteredPointages.length === 0 ? (
+      {/* CTT Monthly Table */}
+      <div
+        className="bg-white overflow-hidden mt-6 rounded-none"
+        style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}
+      >
+        {filteredRows.length === 0 ? (
           <div className="p-16 text-center font-sans lg:py-24 max-w-2xl mx-auto" id="no-pointage-view">
             <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
               {t("Aucun résultat.")}
@@ -357,187 +707,92 @@ export default function TempsTab({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left font-sans border-collapse text-xs" id="temps-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+            <table
+              className="w-full text-left font-sans border-collapse text-sm"
+              id="temps-table"
+              style={{
+                borderTop: '1px solid rgb(218, 218, 218)',
+                borderBottom: '1px solid rgb(218, 218, 218)',
+              }}
+            >
               <thead>
-                <tr className="bg-transparent">
-                  <th className="px-4 py-3.5" style={thStyle}>{t("Technicien.")}</th>
-                  <th className="px-4 py-3.5" style={thStyle}>{t("Début.")}</th>
-                  <th className="px-4 py-3.5" style={thStyle}>{t("Fin.")}</th>
-                  <th className="px-4 py-3.5" style={thStyle}>{t("Durée totale.")}</th>
-                  <th className="px-4 py-3.5 text-right w-24" style={thStyle}>{t("Actions.")}</th>
+                <tr className="bg-transparent border-b border-slate-200">
+                  <th className="px-6 py-4" style={thStyle}>
+                    {t("Technicien.")}
+                  </th>
+                  <th className="px-6 py-4" style={thStyle}>
+                    {t("Mois.")}
+                  </th>
+                  <th className="px-6 py-4" style={thStyle}>
+                    {t("Achèvement indicatif.")}
+                  </th>
+                  <th className="px-6 py-4 text-right" style={thStyle}>
+                    {t("Actions.")}
+                  </th>
                 </tr>
               </thead>
-              <tbody className="text-slate-700 text-xs">
-                {filteredPointages.map((p) => {
-                  const isEditing = editingId === p.id;
-                  const formattedDur = p.isOngoing 
-                    ? t("Vacation active") 
-                    : `${Math.round((p.durationSeconds || 0) / 60)} min (${((p.durationSeconds || 0) / 3600).toFixed(2)} h)`;
+              <tbody className="text-slate-800 text-sm">
+                {filteredRows.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="group hover:bg-[#ffecf8] transition-all border-b border-slate-100"
+                  >
+                    {/* Technicien */}
+                    <td
+                      className="px-6 py-4 font-sans"
+                      style={{
+                        fontSize: '16px',
+                        color: '#000000',
+                        fontWeight: 'bold',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                    >
+                      {row.techName}
+                    </td>
 
-                  return (
-                    <tr key={p.id} className="group hover:bg-[#ffecf8] transition-all cursor-pointer">
-                      
-                      {/* Technicien */}
-                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                        <div className="font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{p.techName}</div>
-                      </td>
+                    {/* Mois */}
+                    <td
+                      className="px-6 py-4 font-sans"
+                      style={{
+                        fontSize: '16px',
+                        color: '#000000',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                    >
+                      {row.monthLabel}
+                    </td>
 
-                      {/* Début vacation */}
-                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                        {isEditing && editForm ? (
-                          <div className="flex flex-col gap-1.5 max-w-[170px] bg-transparent">
-                            <input
-                              type="date"
-                              value={editForm.startDate}
-                              onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
-                              style={inputStyle}
-                              className="w-full font-mono font-bold"
-                            />
-                            <input
-                              type="time"
-                              value={editForm.startTime}
-                              onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })}
-                              style={inputStyle}
-                              className="w-full font-mono font-bold"
-                            />
-                          </div>
-                        ) : (
-                          <div style={{ color: '#000000', whiteSpace: 'nowrap' }}>
-                            <span className="font-bold font-mono text-[16px]" style={{ color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{formatToDisplayDate(p.startDate)}</span>
-                            <span className="font-mono text-[16px]" style={{ color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', marginLeft: '6px' }}>{p.startTime}</span>
-                          </div>
-                        )}
-                      </td>
+                    {/* Achèvement indicatif */}
+                    <td
+                      className="px-6 py-4 font-sans"
+                      style={{
+                        fontSize: '16px',
+                        color: '#000000',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                    >
+                      {row.achevementDate}
+                    </td>
 
-                      {/* Fin vacation */}
-                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                        {isEditing && editForm ? (
-                          <div className="flex flex-col gap-1.5 max-w-[170px] bg-transparent">
-                            <input
-                              type="date"
-                              value={editForm.endDate}
-                              onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
-                              style={inputStyle}
-                              className="w-full font-mono font-bold"
-                            />
-                            <input
-                              type="time"
-                              value={editForm.endTime}
-                              onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })}
-                              style={inputStyle}
-                              className="w-full font-mono font-bold"
-                            />
-                          </div>
-                        ) : p.isOngoing ? (
-                          <span 
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              borderRadius: '1000px',
-                              backgroundColor: '#ffffff',
-                              border: '1px solid rgb(231, 231, 231)',
-                              color: '#000000',
-                              fontSize: '16px',
-                              fontWeight: 100,
-                              padding: '4px 12px',
-                              whiteSpace: 'nowrap',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                            }}
-                            className="animate-pulse"
-                          >
-                            {t("En cours")}
-                          </span>
-                        ) : (
-                          <div style={{ color: '#000000', whiteSpace: 'nowrap' }}>
-                            <span className="font-bold font-mono text-[16px]" style={{ color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{formatToDisplayDate(p.endDate || p.startDate)}</span>
-                            <span className="font-mono text-[16px]" style={{ color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', marginLeft: '6px' }}>{p.endTime || ''}</span>
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Durée totale */}
-                      <td className="px-4 py-5 font-mono" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                        {p.isOngoing ? (
-                          <span className="text-slate-500 italic" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{t("En cours...")}</span>
-                        ) : (
-                          <span className="font-bold text-black" style={{ color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{formattedDur}</span>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-4 py-5 text-right whitespace-nowrap bg-transparent" onClick={(e) => e.stopPropagation()}>
-                        {isEditing && editForm ? (
-                          <div className="inline-flex gap-2 bg-transparent">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleEditPointageValue(
-                                  p.id,
-                                  editForm.startDate,
-                                  editForm.startTime,
-                                  editForm.endDate,
-                                  editForm.endTime
-                                );
-                                setEditingId(null);
-                                setEditForm(null);
-                              }}
-                              style={actionButton18Style}
-                              className="cursor-pointer text-white font-sans bg-black rounded"
-                            >
-                              {t("Enregistrer")}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingId(null);
-                                setEditForm(null);
-                              }}
-                              style={actionButton18Style}
-                              className="cursor-pointer text-white font-sans bg-black rounded"
-                            >
-                              {t("Annuler")}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="inline-flex gap-2 bg-transparent">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingId(p.id);
-                                setEditForm({
-                                  startDate: parseToYYYYMMDD(p.startDate),
-                                  startTime: p.startTime,
-                                  endDate: parseToYYYYMMDD(p.endDate || p.startDate),
-                                  endTime: p.endTime || p.startTime
-                                });
-                              }}
-                              style={actionButton18Style}
-                              className="cursor-pointer font-sans bg-black rounded"
-                            >
-                              {t("Modifier")}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeletePointage(p.id)}
-                              style={actionButton18Style}
-                              className="cursor-pointer font-sans bg-black rounded"
-                            >
-                              {t("Supprimer")}
-                            </button>
-                          </div>
-                        )}
-                      </td>
-
-                    </tr>
-                  );
-                })}
+                    {/* Actions */}
+                    <td className="px-6 py-4 text-right whitespace-nowrap bg-transparent">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadCSV(row.techName, row.year, row.monthIndex)}
+                        style={actionButtonStyle}
+                        className="hover:opacity-90 active:scale-95 font-sans bg-black text-white rounded"
+                      >
+                        <Download className="w-4 h-4" />
+                        {t("Télécharger")}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
-
     </div>
   );
 }

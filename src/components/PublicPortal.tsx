@@ -3931,13 +3931,27 @@ export default function PublicPortal({
       alert("Pointage arrêté avec succès.");
     } else {
       // Starting new Pointage
+      const currentTechName = authenticatedUser?.name || "Technicien connecté";
+      const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+      const alreadyHasPointageToday = pointages.some((p) => {
+        if (p.techName !== currentTechName) return false;
+        const pIso = getIsoDate(p.startDate);
+        return pIso === todayIso;
+      });
+
+      if (alreadyHasPointageToday) {
+        alert(t("Un seul pointage par jour est autorisé."));
+        return;
+      }
+
       const currentHHMM =
         String(now.getHours()).padStart(2, "0") +
         ":" +
         String(now.getMinutes()).padStart(2, "0");
       const newLog: PointageLog = {
         id: "pt-" + Date.now(),
-        techName: authenticatedUser?.name || "Technicien connecté",
+        techName: currentTechName,
         startDate: now.toLocaleDateString("fr-FR"),
         startTime: currentHHMM,
         endTime: currentHHMM,
@@ -3956,9 +3970,19 @@ export default function PublicPortal({
 
   const timeToMins = (tStr?: string): number => {
     if (!tStr) return 0;
-    const parts = tStr.split(":").map(Number);
-    if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return 0;
-    return parts[0] * 60 + parts[1];
+    const str = tStr.trim();
+    if (str.includes(":")) {
+      const parts = str.split(":").map((p) => parseInt(p, 10));
+      if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        return parts[0] * 60 + parts[1];
+      }
+    }
+    if (str.toLowerCase().includes("h")) {
+      const parts = str.toLowerCase().split("h").map((p) => parseInt(p, 10) || 0);
+      return parts[0] * 60 + (parts[1] || 0);
+    }
+    const val = parseInt(str, 10);
+    return isNaN(val) ? 0 : val;
   };
 
   const minsToHHMM = (totalMins: number): string => {
@@ -3972,6 +3996,22 @@ export default function PublicPortal({
     id: string,
     updates: Partial<PointageLog>
   ) => {
+    if (updates.startDate) {
+      const targetP = pointages.find((p) => p.id === id);
+      if (targetP) {
+        const newIso = getIsoDate(updates.startDate);
+        const duplicate = pointages.some(
+          (p) =>
+            p.id !== id &&
+            p.techName === targetP.techName &&
+            getIsoDate(p.startDate) === newIso
+        );
+        if (duplicate) {
+          alert(t("Un seul pointage par jour est autorisé."));
+          return;
+        }
+      }
+    }
     const updated = pointages.map((p) => {
       if (p.id === id) {
         const merged = { ...p, ...updates };
@@ -9911,11 +9951,10 @@ export default function PublicPortal({
                             id={`pointage-card-${p.id}`}
                           >
                             {/* Card Header Badge / Gelule */}
-                            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                            <div className="flex items-center justify-between pb-1">
                               <div className="flex items-center gap-2">
                                 {p.isOngoing ? (
-                                  <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-amber-600 inline-block"></span>
+                                  <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
                                     {t("Pointage en cours")}
                                   </span>
                                 ) : (
@@ -9928,13 +9967,19 @@ export default function PublicPortal({
 
                             {/* Section Title : « Pointages » */}
                             <div className="space-y-3">
-                              <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1">
+                              <h4
+                                style={{ fontSize: "18px", color: "#000000" }}
+                                className="font-bold"
+                              >
                                 {t("Pointages")}
                               </h4>
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {/* Date Journée. */}
                                 <div className="space-y-1">
-                                  <label className="block text-xs font-bold text-slate-700">
+                                  <label
+                                    style={{ fontSize: "16px", color: "#000000" }}
+                                    className="block font-bold"
+                                  >
                                     {t("Date Journée.")}
                                   </label>
                                   <input
@@ -9951,7 +9996,10 @@ export default function PublicPortal({
 
                                 {/* Début Journée. */}
                                 <div className="space-y-1">
-                                  <label className="block text-xs font-bold text-slate-700">
+                                  <label
+                                    style={{ fontSize: "16px", color: "#000000" }}
+                                    className="block font-bold"
+                                  >
                                     {t("Début Journée.")}
                                   </label>
                                   <input
@@ -9968,7 +10016,10 @@ export default function PublicPortal({
 
                                 {/* Fin Journée. */}
                                 <div className="space-y-1">
-                                  <label className="block text-xs font-bold text-slate-700">
+                                  <label
+                                    style={{ fontSize: "16px", color: "#000000" }}
+                                    className="block font-bold"
+                                  >
                                     {t("Fin Journée.")}
                                   </label>
                                   <input
@@ -9985,7 +10036,10 @@ export default function PublicPortal({
 
                                 {/* Amplitude Journée. (Disabled) */}
                                 <div className="space-y-1">
-                                  <label className="block text-xs font-bold text-slate-700">
+                                  <label
+                                    style={{ fontSize: "16px", color: "#000000" }}
+                                    className="block font-bold"
+                                  >
                                     {t("Amplitude Journée.")}
                                   </label>
                                   <input
@@ -9999,7 +10053,10 @@ export default function PublicPortal({
 
                                 {/* Commentaire Journée. */}
                                 <div className="space-y-1 sm:col-span-2 lg:col-span-2">
-                                  <label className="block text-xs font-bold text-slate-700">
+                                  <label
+                                    style={{ fontSize: "16px", color: "#000000" }}
+                                    className="block font-bold"
+                                  >
                                     {t("Commentaire Journée.")}
                                   </label>
                                   <input
@@ -10020,18 +10077,25 @@ export default function PublicPortal({
 
                             {/* Section Title : « Trajet » */}
                             <div className="space-y-3 pt-1">
-                              <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1">
+                              <h4
+                                style={{ fontSize: "18px", color: "#000000" }}
+                                className="font-bold"
+                              >
                                 {t("Trajet")}
                               </h4>
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 {/* Temps Trajet Matin. */}
                                 <div className="space-y-1">
-                                  <label className="block text-xs font-bold text-slate-700">
+                                  <label
+                                    style={{ fontSize: "16px", color: "#000000" }}
+                                    className="block font-bold"
+                                  >
                                     {t("Temps Trajet Matin.")}
                                   </label>
                                   <input
-                                    type="time"
-                                    value={p.trajetMatin || "00:00"}
+                                    type="text"
+                                    placeholder="00:00"
+                                    value={p.trajetMatin ?? "00:00"}
                                     className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
@@ -10043,12 +10107,16 @@ export default function PublicPortal({
 
                                 {/* Temps Trajet Soir. */}
                                 <div className="space-y-1">
-                                  <label className="block text-xs font-bold text-slate-700">
+                                  <label
+                                    style={{ fontSize: "16px", color: "#000000" }}
+                                    className="block font-bold"
+                                  >
                                     {t("Temps Trajet Soir.")}
                                   </label>
                                   <input
-                                    type="time"
-                                    value={p.trajetSoir || "00:00"}
+                                    type="text"
+                                    placeholder="00:00"
+                                    value={p.trajetSoir ?? "00:00"}
                                     className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
@@ -10060,7 +10128,10 @@ export default function PublicPortal({
 
                                 {/* Temps Trajet Journée. (Disabled) */}
                                 <div className="space-y-1">
-                                  <label className="block text-xs font-bold text-slate-700">
+                                  <label
+                                    style={{ fontSize: "16px", color: "#000000" }}
+                                    className="block font-bold"
+                                  >
                                     {t("Temps Trajet Journée.")}
                                   </label>
                                   <input
@@ -10076,18 +10147,25 @@ export default function PublicPortal({
 
                             {/* Section Title : « Repas » */}
                             <div className="space-y-3 pt-1">
-                              <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1">
+                              <h4
+                                style={{ fontSize: "18px", color: "#000000" }}
+                                className="font-bold"
+                              >
                                 {t("Repas")}
                               </h4>
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {/* Temps de repas. */}
                                 <div className="space-y-1">
-                                  <label className="block text-xs font-bold text-slate-700">
+                                  <label
+                                    style={{ fontSize: "16px", color: "#000000" }}
+                                    className="block font-bold"
+                                  >
                                     {t("Temps de repas.")}
                                   </label>
                                   <input
-                                    type="time"
-                                    value={p.tempsRepas || "00:00"}
+                                    type="text"
+                                    placeholder="00:00"
+                                    value={p.tempsRepas ?? "00:00"}
                                     className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
@@ -10101,13 +10179,19 @@ export default function PublicPortal({
 
                             {/* Title : « CTT » */}
                             <div className="space-y-3 pt-1">
-                              <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1">
+                              <h4
+                                style={{ fontSize: "18px", color: "#000000" }}
+                                className="font-bold"
+                              >
                                 {t("CTT")}
                               </h4>
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {/* Amplitude Journée. (Disabled under CTT) */}
                                 <div className="space-y-1">
-                                  <label className="block text-xs font-bold text-slate-700">
+                                  <label
+                                    style={{ fontSize: "16px", color: "#000000" }}
+                                    className="block font-bold"
+                                  >
                                     {t("Amplitude Journée.")}
                                   </label>
                                   <input
@@ -10121,12 +10205,16 @@ export default function PublicPortal({
 
                                 {/* Temps Administratif/Autres. */}
                                 <div className="space-y-1">
-                                  <label className="block text-xs font-bold text-slate-700">
+                                  <label
+                                    style={{ fontSize: "16px", color: "#000000" }}
+                                    className="block font-bold"
+                                  >
                                     {t("Temps Administratif/Autres.")}
                                   </label>
                                   <input
-                                    type="time"
-                                    value={p.tempsAdmin || "00:00"}
+                                    type="text"
+                                    placeholder="00:00"
+                                    value={p.tempsAdmin ?? "00:00"}
                                     className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
@@ -10139,11 +10227,25 @@ export default function PublicPortal({
                             </div>
 
                             {/* Card Buttons: Supprimer & Enregistrer */}
-                            <div className="flex items-center gap-3 pt-3 border-t border-slate-100 w-full">
+                            <div className="flex items-center gap-3 pt-3 w-full">
                               <button
                                 type="button"
                                 disabled={p.isOngoing}
-                                onClick={() => handleDeletePointage(p.id)}
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      "Êtes-vous sûr de vouloir supprimer ce pointage ?"
+                                    )
+                                  ) {
+                                    if (
+                                      window.confirm(
+                                        "Confirmation définitive : Êtes-vous vraiment sûr de vouloir supprimer ce pointage ?"
+                                      )
+                                    ) {
+                                      handleDeletePointage(p.id);
+                                    }
+                                  }
+                                }}
                                 style={{
                                   backgroundColor: p.isOngoing ? "#9ca3af" : "#dc2626",
                                   color: "#ffffff",
