@@ -105,6 +105,7 @@ export default function SettingsModal({
 
   // Local states for form editing without auto-saving until save clicked ("pas d'auto-save")
   const [localCompany, setLocalCompany] = React.useState<CompanyInfo>(companyInfo);
+  const envIdDisplay = localCompany?.nomLogiciel || companyInfo?.nomLogiciel || shortEnvId || localStorage.getItem('defib_tenant_id') || 'ENV-DEFIBEO';
   const [localMembers, setLocalMembers] = React.useState<Member[]>(members);
   const [isSaving, setIsSaving] = React.useState(false);
   const [copiedEmbed, setCopiedEmbed] = React.useState(false);
@@ -3429,14 +3430,14 @@ export default function SettingsModal({
                           <div className="flex items-center gap-2">
                             <input
                               type="text"
-                              value={localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO'}
+                              value={envIdDisplay}
                               readOnly
                               disabled
                               className="w-full text-black font-mono text-xs bg-slate-100 p-2 rounded-lg border border-slate-300"
                             />
                             <button
                               type="button"
-                              onClick={() => copyToClipboard(localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO', 'envId')}
+                              onClick={() => copyToClipboard(envIdDisplay, 'envId')}
                               style={{ backgroundColor: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
                               className="whitespace-nowrap transition-opacity hover:opacity-80"
                             >
@@ -4300,7 +4301,7 @@ export default function SettingsModal({
                       {t("Les factures sont automatiquement envoyées par e-mail. Les taxes et frais sont inclus dans le montant de l'abonnement. Vous trouverez ci-dessous l'identifiant de votre environnement logiciel.")}
                     </span>
                     <div className="inline-flex items-center justify-center rounded-full bg-transparent text-white border border-white/30 px-3 py-1.5 text-sm font-semibold w-fit select-none" style={{ backgroundColor: 'transparent' }}>
-                      Défibeo {shortEnvId.toUpperCase()}
+                      Défibeo {envIdDisplay.toUpperCase()}
                     </div>
                   </div>
                 </div>
@@ -4742,7 +4743,7 @@ export default function SettingsModal({
                     <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>JSON REST</span>
                   </div>
                   <pre style={{ background: 'rgba(0,0,0,0.25)', borderRadius: '10px', padding: '15px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
-{`X-Defibeo-Tenant-ID: ${localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO'}
+{`X-Defibeo-Tenant-ID: ${envIdDisplay}
 X-Defibeo-API-Key: ${apiDefibeoApiKey || 'dfb_live_xxxxxxxx'}
 X-Defibeo-Secret-Key: ${apiDefibeoSecretKey || 'dfb_sec_xxxxxxxx'}
 Content-Type: application/json`}
@@ -4750,24 +4751,19 @@ Content-Type: application/json`}
                 </div>
 
                 {/* SEARCH & EXPLORER FOR SLUGS / FIELDS */}
-                <div style={{ border: '2px solid #28134a', borderRadius: '13px', backgroundColor: '#fcfbfe' }} className="p-4 space-y-4">
+                <div style={{ border: '1px solid #28134a', borderRadius: '13px', backgroundColor: '#ffffff' }} className="p-4 space-y-4">
                   <div>
-                    <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <h4 className="font-bold text-black text-[18px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                        🔍 Explorateur de champs API & Dictionnaire de Slugs
+                        Explorateur de champs API & Dictionnaire de Slugs
                       </h4>
-                      <span className="text-xs bg-[#28134a] text-white px-2.5 py-1 rounded-full font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <span className="text-[14px] bg-[#28134a] text-white px-3 py-1 rounded-full font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                         {apiFieldsDictionary.filter(f => {
-                          const matchesCat = apiFieldCategory === 'Tous' || f.entity === apiFieldCategory;
                           const query = apiFieldSearch.toLowerCase().trim();
-                          const matchesSearch = !query || f.slug.toLowerCase().includes(query) || f.label.toLowerCase().includes(query) || f.entity.toLowerCase().includes(query);
-                          return matchesCat && matchesSearch;
+                          return !query || f.slug.toLowerCase().includes(query) || f.label.toLowerCase().includes(query) || f.entity.toLowerCase().includes(query);
                         }).length} champs disponibles
                       </span>
                     </div>
-                    <p className="text-[14px] text-slate-600" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      Recherchez et cliquez sur n'importe quel slug pour le copier instantanément et l'utiliser dans vos requêtes de mise à jour (POST).
-                    </p>
                   </div>
 
                   {/* Search Bar */}
@@ -4776,15 +4772,21 @@ Content-Type: application/json`}
                       type="text"
                       value={apiFieldSearch}
                       onChange={(e) => setApiFieldSearch(e.target.value)}
-                      placeholder="Rechercher un slug (ex: peremption_a, derniere_maintenance, serie, lot_a...)"
-                      className="w-full bg-white text-black p-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#28134a]"
-                      style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                      placeholder="Recherche."
+                      className="w-full bg-white text-black p-3 text-[16px] placeholder:text-[16px] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#28134a]"
+                      style={{
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        fontSize: '16px',
+                        color: '#000000',
+                        borderRadius: '13px',
+                        border: '1px solid #cbd5e1'
+                      }}
                     />
                     {apiFieldSearch && (
                       <button
                         type="button"
                         onClick={() => setApiFieldSearch('')}
-                        className="absolute right-3 top-3 text-slate-400 hover:text-black font-bold text-sm"
+                        className="absolute right-3 top-3 text-slate-400 hover:text-black font-bold text-base"
                         style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                       >
                         ✕
@@ -4792,47 +4794,37 @@ Content-Type: application/json`}
                     )}
                   </div>
 
-                  {/* Category Pills */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {['Tous', 'Défibrillateur', 'Client', 'Autre Matériel', 'Stock', 'Commande', 'CRM'].map((cat) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setApiFieldCategory(cat)}
-                        style={{
-                          backgroundColor: apiFieldCategory === cat ? '#28134a' : '#eef0f6',
-                          color: apiFieldCategory === cat ? '#ffffff' : '#1e293b',
-                          borderRadius: '8px',
-                          padding: '4px 10px',
-                          fontSize: '13px',
-                          fontWeight: 'bold',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                        }}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-
                   {/* Field List Container */}
-                  <div className="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                  <div className="max-h-80 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                     {apiFieldsDictionary
                       .filter(f => {
-                        const matchesCat = apiFieldCategory === 'Tous' || f.entity === apiFieldCategory;
                         const query = apiFieldSearch.toLowerCase().trim();
-                        const matchesSearch = !query || f.slug.toLowerCase().includes(query) || f.label.toLowerCase().includes(query) || f.entity.toLowerCase().includes(query);
-                        return matchesCat && matchesSearch;
+                        return !query || f.slug.toLowerCase().includes(query) || f.label.toLowerCase().includes(query) || f.entity.toLowerCase().includes(query);
                       })
                       .map((field) => (
                         <div
                           key={`${field.entity}-${field.slug}`}
-                          className="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between flex-wrap gap-2 hover:border-[#28134a] transition-all"
-                          style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                          className="bg-white p-3 flex items-center justify-between flex-wrap gap-2 hover:border-[#28134a] transition-all"
+                          style={{
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            border: '1px solid #ededed',
+                            borderRadius: '13px'
+                          }}
                         >
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[11px] bg-purple-100 text-purple-900 px-2 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span
+                              style={{
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                fontSize: '16px',
+                                backgroundColor: '#eeffd4',
+                                letterSpacing: '0px',
+                                color: '#23571c',
+                                borderRadius: '13px',
+                                border: 'none',
+                                padding: '4px 10px',
+                                fontWeight: 'bold'
+                              }}
+                            >
                               {field.entity}
                             </span>
                             <code
@@ -4841,19 +4833,42 @@ Content-Type: application/json`}
                                 setCopiedSlug(field.slug);
                                 setTimeout(() => setCopiedSlug(null), 1500);
                               }}
-                              className="bg-slate-100 text-black px-2 py-0.5 rounded font-bold cursor-pointer hover:bg-slate-200 transition-colors border border-slate-300"
                               title="Cliquer pour copier le slug"
-                              style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                              style={{
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                fontSize: '16px',
+                                backgroundColor: '#d4ffef',
+                                letterSpacing: '0px',
+                                color: '#1c5754',
+                                borderRadius: '13px',
+                                border: 'none',
+                                padding: '4px 10px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                              }}
                             >
                               {field.slug}
                             </code>
-                            <span className="text-[13px] text-slate-700 font-medium" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                            <span
+                              style={{
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                fontSize: '16px',
+                                color: '#000000'
+                              }}
+                            >
                               — {field.label}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-slate-400 italic" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <div className="flex items-center gap-3">
+                            <span
+                              style={{
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                fontSize: '16px',
+                                fontStyle: 'normal',
+                                color: '#000000'
+                              }}
+                            >
                               type: {field.type}
                             </span>
                             <button
@@ -4864,18 +4879,18 @@ Content-Type: application/json`}
                                 setTimeout(() => setCopiedSlug(null), 1500);
                               }}
                               style={{
-                                backgroundColor: copiedSlug === field.slug ? '#7aa637' : '#28134a',
+                                backgroundColor: copiedSlug === field.slug ? '#7aa637' : '#000000',
                                 color: '#ffffff',
-                                fontSize: '12px',
+                                fontSize: '16px',
                                 fontWeight: 'bold',
                                 border: 'none',
-                                borderRadius: '6px',
-                                padding: '3px 8px',
+                                borderRadius: '13px',
+                                padding: '6px 14px',
                                 cursor: 'pointer',
                                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                               }}
                             >
-                              {copiedSlug === field.slug ? 'Copié !' : 'Copier slug'}
+                              {copiedSlug === field.slug ? 'Copié !' : 'Copier Slug'}
                             </button>
                           </div>
                         </div>
@@ -5269,7 +5284,7 @@ Content-Type: application/json`}
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
-  "environnement": "${localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO'}",
+  "environnement": "${envIdDisplay}",
   "version_api": "1.4.0",
   "devise": "EUR",
   "taux_tva_defaut": 20.0,

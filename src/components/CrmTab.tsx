@@ -360,7 +360,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
           <div>
             <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }} id="crm-tab-title">
-              Dossiers & Tickets.
+              Dossiers & Tickets
             </h2>
           </div>
 
