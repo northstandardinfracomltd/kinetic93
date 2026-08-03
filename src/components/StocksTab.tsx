@@ -1620,7 +1620,7 @@ export default function StocksTab({
                 >
                   <option value="" disabled>Sélectionnez une pièce ou service.</option>
                   {variables
-                    .filter(v => v.category !== 'Fournisseur' && v.category !== 'Modèle Raison Prestation' && v.category !== 'Modèle raison prestation' && v.category !== 'Drapeau GMAO')
+                    .filter(v => v.category !== 'Fournisseur' && v.category !== 'Modèle Raison Prestation' && v.category !== 'Drapeau GMAO')
                     .map(v => {
                       const isAlreadyUsed = stocks.some(s => s.denominationPieceId === v.id && s.id !== editingStockId);
                       if (isAlreadyUsed) return null;

@@ -3931,20 +3931,61 @@ export default function PublicPortal({
       alert("Pointage arrêté avec succès.");
     } else {
       // Starting new Pointage
+      const currentHHMM =
+        String(now.getHours()).padStart(2, "0") +
+        ":" +
+        String(now.getMinutes()).padStart(2, "0");
       const newLog: PointageLog = {
         id: "pt-" + Date.now(),
         techName: authenticatedUser?.name || "Technicien connecté",
         startDate: now.toLocaleDateString("fr-FR"),
-        startTime:
-          String(now.getHours()).padStart(2, "0") +
-          ":" +
-          String(now.getMinutes()).padStart(2, "0"),
+        startTime: currentHHMM,
+        endTime: currentHHMM,
         isOngoing: true,
+        trajetMatin: "00:00",
+        trajetSoir: "00:00",
+        tempsRepas: "00:00",
+        tempsAdmin: "00:00",
+        comment: "",
       };
 
       savePointages([newLog, ...pointages]);
       alert("Pointage démarré avec succès.");
     }
+  };
+
+  const timeToMins = (tStr?: string): number => {
+    if (!tStr) return 0;
+    const parts = tStr.split(":").map(Number);
+    if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return 0;
+    return parts[0] * 60 + parts[1];
+  };
+
+  const minsToHHMM = (totalMins: number): string => {
+    if (isNaN(totalMins) || totalMins <= 0) return "00:00";
+    const h = String(Math.floor(totalMins / 60)).padStart(2, "0");
+    const m = String(Math.floor(totalMins % 60)).padStart(2, "0");
+    return `${h}:${m}`;
+  };
+
+  const handleEditPointageField = (
+    id: string,
+    updates: Partial<PointageLog>
+  ) => {
+    const updated = pointages.map((p) => {
+      if (p.id === id) {
+        const merged = { ...p, ...updates };
+        if (merged.startTime && merged.endTime) {
+          const sMins = timeToMins(merged.startTime);
+          const eMins = timeToMins(merged.endTime);
+          const durationMin = Math.max(0, eMins - sMins);
+          merged.durationSeconds = durationMin * 60;
+        }
+        return merged;
+      }
+      return p;
+    });
+    savePointages(updated);
   };
 
   const handleEditPointage = (
@@ -3956,13 +3997,7 @@ export default function PublicPortal({
   ) => {
     const updated = pointages.map((p) => {
       if (p.id === id) {
-        // Calculate raw estimated parsed minutes
-        const sParts = newStart.split(":").map(Number);
-        const eParts = newEnd.split(":").map(Number);
-        const durationMin = Math.max(
-          1,
-          eParts[0] * 60 + eParts[1] - (sParts[0] * 60 + sParts[1]),
-        );
+        const durationMin = Math.max(0, timeToMins(newEnd) - timeToMins(newStart));
 
         return {
           ...p,
@@ -6604,6 +6639,13 @@ export default function PublicPortal({
                     )}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Alert banner if no ongoing pointage for connected technician session */}
+            {!pointages.some((p) => p.isOngoing && p.techName?.trim().toLowerCase() === (authenticatedUser?.name || "").trim().toLowerCase()) && (
+              <div className="bg-red-600 text-white text-center py-2 px-4 text-xs font-semibold select-none shadow-xs font-sans shrink-0">
+                {t("Vous n’avez pas de pointage en cours.")}
               </div>
             )}
 
@@ -9786,50 +9828,15 @@ export default function PublicPortal({
                         getLanguage() === "Español" ? "es-ES" : "fr-FR"
                       )}
                     </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        color: "rgb(49, 85, 255)",
-                        fontFamily: "var(--font-sans), sans-serif",
-                      }}
-                      className="font-bold"
-                    >
-                      {(() => {
-                        const activeLang = getLanguage();
-                        const locale = activeLang === "English" ? "en-US" : 
-                                       activeLang === "Deutsch" ? "de-DE" : 
-                                       activeLang === "Português" ? "pt-PT" : 
-                                       activeLang === "Español" ? "es-ES" : "fr-FR";
-                        return currentTime.toLocaleDateString(locale, {
-                          weekday: "long",
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        });
-                      })()}
-                    </div>
                   </div>
 
-                  {/* Period control and tracker */}
+                  {/* Period control button */}
                   {(() => {
                     const activePointage = pointages.find(
                       (p) =>
                         p.isOngoing && p.techName === authenticatedUser?.name,
                     );
                     const isTracking = !!activePointage;
-
-                    // Compute current tracker stopwatch formats
-                    const formatStopwatch = (totalSec: number) => {
-                      const h = String(Math.floor(totalSec / 3600)).padStart(
-                        2,
-                        "0",
-                      );
-                      const m = String(
-                        Math.floor((totalSec % 3600) / 60),
-                      ).padStart(2, "0");
-                      const s = String(totalSec % 60).padStart(2, "0");
-                      return `${h}:${m}:${s}`;
-                    };
 
                     return (
                       <div className="space-y-4">
@@ -9853,290 +9860,330 @@ export default function PublicPortal({
                           className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
                         >
                           {isTracking ? (
-                            <span>Terminer le pointage</span>
+                            <span>{t("Terminer le pointage")}</span>
                           ) : (
-                            <span>Démarrer la période</span>
+                            <span>{t("Démarrer la période")}</span>
                           )}
                         </button>
-
-                        {isTracking && (
-                          <div
-                            style={{
-                              backgroundColor: "rgb(238, 241, 255)",
-                              color: "rgb(49, 85, 255)",
-                            }}
-                            className="p-5 rounded-2xl text-center space-y-2"
-                          >
-                            <span
-                              style={{
-                                fontSize: "18px",
-                                color: "rgb(49, 85, 255)",
-                                fontFamily: "var(--font-sans), sans-serif",
-                              }}
-                              className="font-normal block"
-                            >
-                              Calcul du temps de travail.
-                            </span>
-                            <div
-                              style={{
-                                fontSize: "18px",
-                                color: "rgb(49, 85, 255)",
-                                fontFamily: "var(--font-sans), sans-serif",
-                              }}
-                              className="font-bold"
-                            >
-                              {formatStopwatch(ongoingSeconds)}
-                            </div>
-                            <p
-                              style={{
-                                fontSize: "18px",
-                                color: "rgb(49, 85, 255)",
-                                fontFamily: "var(--font-sans), sans-serif",
-                              }}
-                              className="font-bold"
-                            >
-                              Débuté à {activePointage?.startTime}
-                            </p>
-                          </div>
-                        )}
                       </div>
                     );
                   })()}
 
-                  {/* Pointages registered historical log list */}
-                  <div className="space-y-3">
-                    <div className="space-y-4">
-                      {pointages
-                        .filter(
-                          (p) =>
-                            p.techName === authenticatedUser?.name &&
-                            !p.isOngoing,
-                        )
-                        .map((p) => {
-                          return (
-                            <div
-                              key={p.id}
-                              className="p-3.5 sm:p-5 rounded-[14px] space-y-4 bg-white"
-                              style={{
-                                border: "1px solid rgb(201, 190, 205)",
-                                boxShadow: "none",
-                              }}
-                              id={`pointage-card-${p.id}`}
-                            >
-                              <div className="flex items-center justify-center pb-1">
-                                <span
-                                  style={{
-                                    color: "#ffffff",
-                                    backgroundColor: "#5d1f74",
-                                    padding: "10px 20px",
-                                    borderRadius: "9999px",
-                                    fontWeight: "bold",
-                                    fontSize: "16px",
-                                    display: "inline-block",
-                                    width: "auto",
-                                    textAlign: "center",
-                                  }}
-                                >
-                                  Pointage de{" "}
-                                  {Math.round((p.durationSeconds || 0) / 60)} min
-                                  ({((p.durationSeconds || 0) / 3600).toFixed(2)}{" "}
-                                  h)
-                                </span>
-                              </div>
+                  {/* Pointages registered log list */}
+                  <div className="space-y-4">
+                    {pointages
+                      .filter((p) => p.techName === authenticatedUser?.name)
+                      .map((p) => {
+                        const liveHHMM =
+                          String(currentTime.getHours()).padStart(2, "0") +
+                          ":" +
+                          String(currentTime.getMinutes()).padStart(2, "0");
+                        const startTime = p.startTime || "00:00";
+                        const endTime = p.isOngoing
+                          ? p.endTime || liveHHMM
+                          : p.endTime || "00:00";
 
-                              {/* Editable fields for past Pointages */}
-                              <div className="space-y-4">
-                                <div className="space-y-1.5 flex flex-col items-center">
-                                  <label
-                                    style={{
-                                      fontSize: "16px",
-                                      color: "#000000",
-                                    }}
-                                    className="block font-bold select-none text-center"
-                                  >
-                                    Date.
+                        const sMins = timeToMins(startTime);
+                        const eMins = timeToMins(endTime);
+                        const ampMins = Math.max(0, eMins - sMins);
+                        const ampFormatted = minsToHHMM(ampMins);
+
+                        const trajetMatinMins = timeToMins(p.trajetMatin);
+                        const trajetSoirMins = timeToMins(p.trajetSoir);
+                        const trajetJourneeMins = trajetMatinMins + trajetSoirMins;
+                        const trajetJourneeFormatted = minsToHHMM(trajetJourneeMins);
+
+                        const repasMins = timeToMins(p.tempsRepas);
+
+                        const cttAmpMins = Math.max(
+                          0,
+                          ampMins - repasMins - trajetJourneeMins,
+                        );
+                        const cttAmpFormatted = minsToHHMM(cttAmpMins);
+
+                        return (
+                          <div
+                            key={p.id}
+                            className="p-4 sm:p-5 rounded-[16px] space-y-5 bg-white shadow-xs"
+                            style={{
+                              border: "1px solid rgb(201, 190, 205)",
+                            }}
+                            id={`pointage-card-${p.id}`}
+                          >
+                            {/* Card Header Badge / Gelule */}
+                            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                              <div className="flex items-center gap-2">
+                                {p.isOngoing ? (
+                                  <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-amber-600 inline-block"></span>
+                                    {t("Pointage en cours")}
+                                  </span>
+                                ) : (
+                                  <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                    {t("Pointage terminé")}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Section Title : « Pointages » */}
+                            <div className="space-y-3">
+                              <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1">
+                                {t("Pointages")}
+                              </h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {/* Date Journée. */}
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    {t("Date Journée.")}
                                   </label>
                                   <input
                                     type="date"
                                     value={getIsoDate(p.startDate)}
-                                    style={{
-                                      fontSize: "16px",
-                                      padding: "10px 12px",
-                                      borderRadius: "13px",
-                                      border: "1px solid rgb(201, 190, 205)",
-                                      outline: "none",
-                                      boxSizing: "border-box",
-                                      width: "100%",
-                                      maxWidth: "160px",
-                                      display: "block",
-                                      textAlign: "center",
-                                    }}
-                                    className="w-full bg-white text-slate-800 text-center font-sans focus:border-indigo-500"
+                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
                                     onChange={(e) =>
-                                      handleEditPointage(
-                                        p.id,
-                                        p.startTime,
-                                        p.endTime || "12:00",
-                                        p.comment,
-                                        getFrenchDate(e.target.value),
-                                      )
+                                      handleEditPointageField(p.id, {
+                                        startDate: getFrenchDate(e.target.value),
+                                      })
                                     }
                                   />
                                 </div>
- 
-                                <div className="grid grid-cols-2 gap-3 max-w-[320px] mx-auto w-full">
-                                  <div className="space-y-1.5 flex flex-col items-center w-full">
-                                    <label
-                                      style={{ fontSize: "16px", color: "#000000" }}
-                                      className="block font-bold select-none text-center"
-                                    >
-                                      Début.
-                                    </label>
-                                    <input
-                                      type="time"
-                                      value={p.startTime}
-                                      style={{
-                                        fontSize: "16px",
-                                        padding: "10px 12px",
-                                        borderRadius: "13px",
-                                        border: "1px solid rgb(201, 190, 205)",
-                                        outline: "none",
-                                        boxSizing: "border-box",
-                                        width: "100%",
-                                        maxWidth: "100px",
-                                        display: "block",
-                                        textAlign: "center",
-                                      }}
-                                      className="w-full bg-white text-slate-800 text-center font-sans focus:border-indigo-500"
-                                      onChange={(e) =>
-                                        handleEditPointage(
-                                          p.id,
-                                          e.target.value,
-                                          p.endTime || "12:00",
-                                          p.comment,
-                                          p.startDate,
-                                        )
-                                      }
-                                    />
-                                  </div>
-                                  <div className="space-y-1.5 flex flex-col items-center w-full">
-                                    <label
-                                      style={{ fontSize: "16px", color: "#000000" }}
-                                      className="block font-bold select-none text-center"
-                                    >
-                                      Clôture.
-                                    </label>
-                                    <input
-                                      type="time"
-                                      value={p.endTime || ""}
-                                      style={{
-                                        fontSize: "16px",
-                                        padding: "10px 12px",
-                                        borderRadius: "13px",
-                                        border: "1px solid rgb(201, 190, 205)",
-                                        outline: "none",
-                                        boxSizing: "border-box",
-                                        width: "100%",
-                                        maxWidth: "100px",
-                                        display: "block",
-                                        textAlign: "center",
-                                      }}
-                                      className="w-full bg-white text-slate-800 text-center font-sans focus:border-indigo-500"
-                                      onChange={(e) =>
-                                        handleEditPointage(
-                                          p.id,
-                                          p.startTime,
-                                          e.target.value,
-                                          p.comment,
-                                          p.startDate,
-                                        )
-                                      }
-                                    />
-                                  </div>
+
+                                {/* Début Journée. */}
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    {t("Début Journée.")}
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={p.startTime}
+                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    onChange={(e) =>
+                                      handleEditPointageField(p.id, {
+                                        startTime: e.target.value,
+                                      })
+                                    }
+                                  />
                                 </div>
 
-                                <div className="space-y-1.5 min-w-0">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold select-none"
-                                  >
-                                    Commentaire pour la période.
+                                {/* Fin Journée. */}
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    {t("Fin Journée.")}
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={endTime}
+                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    onChange={(e) =>
+                                      handleEditPointageField(p.id, {
+                                        endTime: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+
+                                {/* Amplitude Journée. (Disabled) */}
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    {t("Amplitude Journée.")}
                                   </label>
                                   <input
                                     type="text"
-                                    maxLength={50}
-                                    placeholder="Entrez un commentaire."
+                                    disabled
+                                    readOnly
+                                    value={ampFormatted}
+                                    className="w-full bg-slate-100 text-slate-600 border border-slate-200 rounded-lg p-2 text-sm font-semibold cursor-not-allowed outline-none"
+                                  />
+                                </div>
+
+                                {/* Commentaire Journée. */}
+                                <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    {t("Commentaire Journée.")}
+                                  </label>
+                                  <input
+                                    type="text"
+                                    maxLength={100}
+                                    placeholder={t("Entrez un commentaire.")}
                                     value={p.comment || ""}
-                                    style={{
-                                      fontSize: "16px",
-                                      padding: "10px 12px",
-                                      borderRadius: "13px",
-                                      border: "1px solid rgb(201, 190, 205)",
-                                      outline: "none",
-                                      boxSizing: "border-box",
-                                      width: "100%",
-                                      maxWidth: "100%",
-                                      minWidth: "0px",
-                                      display: "block",
-                                    }}
-                                    className="w-full max-w-full min-w-0 bg-white focus:border-indigo-500"
+                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
                                     onChange={(e) =>
-                                      handleEditPointage(
-                                        p.id,
-                                        p.startTime,
-                                        p.endTime || "12:00",
-                                        e.target.value,
-                                        p.startDate,
-                                      )
+                                      handleEditPointageField(p.id, {
+                                        comment: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Section Title : « Trajet » */}
+                            <div className="space-y-3 pt-1">
+                              <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1">
+                                {t("Trajet")}
+                              </h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {/* Temps Trajet Matin. */}
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    {t("Temps Trajet Matin.")}
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={p.trajetMatin || "00:00"}
+                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    onChange={(e) =>
+                                      handleEditPointageField(p.id, {
+                                        trajetMatin: e.target.value,
+                                      })
                                     }
                                   />
                                 </div>
 
-                              <div className="flex items-center gap-3 pt-1 w-full">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeletePointage(p.id)}
-                                  style={{
-                                    backgroundColor: "#dc2626",
-                                    color: "#ffffff",
-                                    fontSize: "18px",
-                                    fontWeight: "bold",
-                                    borderRadius: "12px",
-                                    padding: "12px 18px",
-                                    border: "none",
-                                    cursor: "pointer",
-                                    flex: 1,
-                                  }}
-                                  className="hover:opacity-90 transition-all font-bold"
-                                >
-                                  Supprimer
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    alert("Pointage enregistré avec succès.")
-                                  }
-                                  style={{
-                                    backgroundColor: "#000000",
-                                    color: "#ffffff",
-                                    fontSize: "18px",
-                                    fontWeight: "bold",
-                                    borderRadius: "12px",
-                                    padding: "12px 18px",
-                                    border: "none",
-                                    cursor: "pointer",
-                                    flex: 1,
-                                  }}
-                                  className="hover:opacity-90 transition-all font-bold"
-                                >
-                                  Enregistrer
-                                </button>
+                                {/* Temps Trajet Soir. */}
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    {t("Temps Trajet Soir.")}
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={p.trajetSoir || "00:00"}
+                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    onChange={(e) =>
+                                      handleEditPointageField(p.id, {
+                                        trajetSoir: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+
+                                {/* Temps Trajet Journée. (Disabled) */}
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    {t("Temps Trajet Journée.")}
+                                  </label>
+                                  <input
+                                    type="text"
+                                    disabled
+                                    readOnly
+                                    value={trajetJourneeFormatted}
+                                    className="w-full bg-slate-100 text-slate-600 border border-slate-200 rounded-lg p-2 text-sm font-semibold cursor-not-allowed outline-none"
+                                  />
+                                </div>
                               </div>
+                            </div>
+
+                            {/* Section Title : « Repas » */}
+                            <div className="space-y-3 pt-1">
+                              <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1">
+                                {t("Repas")}
+                              </h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {/* Temps de repas. */}
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    {t("Temps de repas.")}
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={p.tempsRepas || "00:00"}
+                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    onChange={(e) =>
+                                      handleEditPointageField(p.id, {
+                                        tempsRepas: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Title : « CTT » */}
+                            <div className="space-y-3 pt-1">
+                              <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1">
+                                {t("CTT")}
+                              </h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {/* Amplitude Journée. (Disabled under CTT) */}
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    {t("Amplitude Journée.")}
+                                  </label>
+                                  <input
+                                    type="text"
+                                    disabled
+                                    readOnly
+                                    value={cttAmpFormatted}
+                                    className="w-full bg-slate-100 text-slate-600 border border-slate-200 rounded-lg p-2 text-sm font-semibold cursor-not-allowed outline-none"
+                                  />
+                                </div>
+
+                                {/* Temps Administratif/Autres. */}
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    {t("Temps Administratif/Autres.")}
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={p.tempsAdmin || "00:00"}
+                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    onChange={(e) =>
+                                      handleEditPointageField(p.id, {
+                                        tempsAdmin: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Card Buttons: Supprimer & Enregistrer */}
+                            <div className="flex items-center gap-3 pt-3 border-t border-slate-100 w-full">
+                              <button
+                                type="button"
+                                disabled={p.isOngoing}
+                                onClick={() => handleDeletePointage(p.id)}
+                                style={{
+                                  backgroundColor: p.isOngoing ? "#9ca3af" : "#dc2626",
+                                  color: "#ffffff",
+                                  fontSize: "16px",
+                                  fontWeight: "bold",
+                                  borderRadius: "12px",
+                                  padding: "12px 18px",
+                                  border: "none",
+                                  cursor: p.isOngoing ? "not-allowed" : "pointer",
+                                  opacity: p.isOngoing ? 0.5 : 1,
+                                  flex: 1,
+                                }}
+                                className="transition-all font-bold"
+                              >
+                                Supprimer
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  alert("Pointage enregistré avec succès.")
+                                }
+                                style={{
+                                  backgroundColor: "#000000",
+                                  color: "#ffffff",
+                                  fontSize: "16px",
+                                  fontWeight: "bold",
+                                  borderRadius: "12px",
+                                  padding: "12px 18px",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  flex: 1,
+                                }}
+                                className="hover:opacity-90 transition-all font-bold"
+                              >
+                                Enregistrer
+                              </button>
                             </div>
                           </div>
                         );
                       })}
-                    </div>
                   </div>
                 </div>
               )}

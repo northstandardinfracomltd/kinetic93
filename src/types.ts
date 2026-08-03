@@ -318,6 +318,10 @@ export interface PointageLog {
   durationSeconds?: number;
   isOngoing: boolean;
   comment?: string;
+  trajetMatin?: string;
+  trajetSoir?: string;
+  tempsRepas?: string;
+  tempsAdmin?: string;
 }
 
 export interface StockMovement {
