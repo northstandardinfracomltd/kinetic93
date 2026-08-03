@@ -3271,9 +3271,9 @@ export default function DefibTab({
                         <input
                           type="text"
                           value={payeurId}
-                          onChange={(e) => setPayeurId(e.target.value)}
+                          disabled
                           placeholder="Payeur ID"
-                          className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-white text-slate-800 font-sans"
+                          className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-slate-100 text-slate-500 cursor-not-allowed font-sans"
                         />
                       </div>
                       <div className="space-y-1">
@@ -3281,9 +3281,9 @@ export default function DefibTab({
                         <input
                           type="text"
                           value={clientIdField}
-                          onChange={(e) => setClientIdField(e.target.value)}
+                          disabled
                           placeholder="Client ID"
-                          className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-white text-slate-800 font-sans"
+                          className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-slate-100 text-slate-500 cursor-not-allowed font-sans"
                         />
                       </div>
                     </div>

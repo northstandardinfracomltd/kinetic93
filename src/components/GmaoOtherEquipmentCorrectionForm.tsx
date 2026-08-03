@@ -953,22 +953,22 @@ export default function GmaoOtherEquipmentCorrectionForm({
               </div>
               <div className="space-y-1 flex-1">
                 <label className="block text-[11px] font-bold text-slate-500">Titre du contrat.</label>
-                <input type="text" value={nomContrat} onChange={(e) => setNomContrat(e.target.value)} placeholder="" disabled={contrat === 'Non'} />
+                <input type="text" value={nomContrat} placeholder="Automatique à la sélection" disabled className="bg-slate-100 text-slate-500 cursor-not-allowed" />
               </div>
               <div className="space-y-1 flex-1">
                 <label className="block text-[11px] font-bold text-slate-500">Référence du contrat.</label>
-                <input type="text" value={referenceContrat} onChange={(e) => setReferenceContrat(e.target.value)} placeholder="" disabled={contrat === 'Non'} />
+                <input type="text" value={referenceContrat} placeholder="Automatique à la sélection" disabled className="bg-slate-100 text-slate-500 cursor-not-allowed" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="block text-[11px] font-bold text-slate-500">Début du contrat.</label>
-                <input type="date" value={debutContrat} onChange={(e) => setDebutContrat(e.target.value)} disabled={contrat === 'Non'} />
+                <input type="date" value={debutContrat} disabled className="bg-slate-100 text-slate-500 cursor-not-allowed" />
               </div>
               <div className="space-y-1">
                 <label className="block text-[11px] font-bold text-slate-500">Expiration du contrat.</label>
-                <input type="date" value={finContrat} onChange={(e) => setFinContrat(e.target.value)} disabled={contrat === 'Non'} />
+                <input type="date" value={finContrat} disabled className="bg-slate-100 text-slate-500 cursor-not-allowed" />
               </div>
             </div>
           </div>

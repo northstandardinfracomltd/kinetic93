@@ -1708,9 +1708,9 @@ export default function AutresMaterielsTab({
                   <input
                     type="text"
                     value={nomContrat}
-                    onChange={(e) => setNomContrat(e.target.value)}
-                    placeholder="Titre du contrat"
-                    disabled={contrat === 'Non'}
+                    placeholder="Automatique à la sélection"
+                    disabled
+                    className="bg-slate-100 text-slate-500 cursor-not-allowed"
                   />
                 </div>
 
@@ -1722,6 +1722,7 @@ export default function AutresMaterielsTab({
                       type="text"
                       value={contrat}
                       disabled
+                      className="bg-slate-100 text-slate-500 cursor-not-allowed"
                     />
                   </div>
 
@@ -1731,8 +1732,9 @@ export default function AutresMaterielsTab({
                     <input
                       type="text"
                       value={payeurId}
-                      onChange={(e) => setPayeurId(e.target.value)}
+                      disabled
                       placeholder="Payeur ID"
+                      className="bg-slate-100 text-slate-500 cursor-not-allowed"
                     />
                   </div>
 
@@ -1742,8 +1744,9 @@ export default function AutresMaterielsTab({
                     <input
                       type="text"
                       value={clientIdField}
-                      onChange={(e) => setClientIdField(e.target.value)}
+                      disabled
                       placeholder="Client ID"
+                      className="bg-slate-100 text-slate-500 cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -1755,9 +1758,9 @@ export default function AutresMaterielsTab({
                     <input
                       type="text"
                       value={referenceContrat}
-                      onChange={(e) => setReferenceContrat(e.target.value)}
-                      placeholder=""
-                      disabled={contrat === 'Non'}
+                      placeholder="Automatique à la sélection"
+                      disabled
+                      className="bg-slate-100 text-slate-500 cursor-not-allowed"
                     />
                   </div>
 
@@ -1767,8 +1770,8 @@ export default function AutresMaterielsTab({
                     <input
                       type="date"
                       value={debutContrat}
-                      onChange={(e) => setDebutContrat(e.target.value)}
-                      disabled={contrat === 'Non'}
+                      disabled
+                      className="bg-slate-100 text-slate-500 cursor-not-allowed"
                     />
                   </div>
 
@@ -1778,8 +1781,8 @@ export default function AutresMaterielsTab({
                     <input
                       type="date"
                       value={finContrat}
-                      onChange={(e) => setFinContrat(e.target.value)}
-                      disabled={contrat === 'Non'}
+                      disabled
+                      className="bg-slate-100 text-slate-500 cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -2312,7 +2315,7 @@ export default function AutresMaterielsTab({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
                         <div className="space-y-1">
                           <label>Modèle de filtre.</label>
                           <select 
@@ -2324,15 +2327,6 @@ export default function AutresMaterielsTab({
                               <option key={v.id} value={v.nom}>{v.nom}</option>
                             ))}
                           </select>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label>Dernière intervention.</label>
-                          <input 
-                            type="date" 
-                            value={specifiques.derniereIntervention || ''} 
-                            onChange={(e) => handleSpecifiqueChange('derniereIntervention', e.target.value)} 
-                          />
                         </div>
                       </div>
 

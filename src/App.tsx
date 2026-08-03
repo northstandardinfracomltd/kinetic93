@@ -922,7 +922,7 @@ export default function App() {
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [isDocFormOpen, setIsDocFormOpen] = useState(false);
 
-  const [docType, setDocType] = useState<'Devis' | 'Facture' | 'Proforma'>('Devis');
+  const [docType, setDocType] = useState<'Devis' | 'Facture' | 'Proforma' | 'Bon de commande' | 'Bon de livraison'>('Devis');
   const [docRef, setDocRef] = useState('');
   const [docClientId, setDocClientId] = useState('');
   const [docDateStr, setDocDateStr] = useState('');
@@ -944,7 +944,7 @@ export default function App() {
   const [customDocPiecePrice, setCustomDocPiecePrice] = useState(0);
   const [customDocPieceQty, setCustomDocPieceQty] = useState(1);
   const [docSearchQuery, setDocSearchQuery] = useState('');
-  const [docTypeFilter, setDocTypeFilter] = useState<'Tous' | 'Devis' | 'Facture' | 'Bon de commande'>('Tous');
+  const [docTypeFilter, setDocTypeFilter] = useState<'Tous' | 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison'>('Tous');
   const [pennylaneActive, setPennylaneActive] = useState(false);
   const [pennylaneAlertMessage, setPennylaneAlertMessage] = useState<string | null>(null);
   const [pennylaneAlertStyle, setPennylaneAlertStyle] = useState<'success' | 'error'>('error');
@@ -4011,7 +4011,7 @@ export default function App() {
 
   useEffect(() => {
     if (!editingDocId && isDocFormOpen) {
-      const prefix = docType === 'Devis' ? 'DEV' : docType === 'Facture' ? 'FACT' : 'PRO';
+      const prefix = docType === 'Devis' ? 'DEV' : docType === 'Facture' ? 'FACT' : docType === 'Bon de commande' ? 'BDC' : docType === 'Bon de livraison' ? 'BDL' : 'PRO';
       const year = '2026';
       const pattern = new RegExp(`^${prefix}-${year}-(\\d+)$`);
       let maxNum = 0;
@@ -4148,7 +4148,7 @@ export default function App() {
           <!-- TITRE DU DOCUMENT / INFOS CLIENT -->
           <div class="grid grid-cols-2 gap-6" style="margin-top: 20px;">
             <div>
-              <h1 class="doc-title">${doc.type === 'Devis' ? 'DEVIS' : 'FACTURE'}</h1>
+              <h1 class="doc-title">${(doc.type || 'DEVIS').toUpperCase()}</h1>
               <p style="margin: 4px 0 0 0;">Référence : ${doc.ref}</p>
               <p style="margin: 4px 0 0 0;">Remarque : ${doc.commentaire || ''}</p>
               <p style="margin: 4px 0 0 0;">Référence du contrat : ${clientObj?.referenceContrat || '-'}</p>
@@ -9544,7 +9544,7 @@ export default function App() {
             const filtDocs = commercialDocs.filter((doc) => {
               const matchType =
                 docTypeFilter === 'Tous' ||
-                (docTypeFilter === 'Bon de commande' ? !!doc.hasBonCommande : doc.type === docTypeFilter);
+                (docTypeFilter === 'Bon de commande' ? (doc.type === 'Bon de commande' || !!doc.hasBonCommande) : doc.type === docTypeFilter);
               const query = docSearchQuery.trim().toLowerCase();
               const matchSearch =
                 !query ||
@@ -9742,12 +9742,12 @@ export default function App() {
 
                     {/* Filters Pills Row */}
                     <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" id="devis-type-pills">
-                      {(['Tous', 'Devis', 'Facture', 'Bon de commande'] as const).map((filterOpt) => {
+                      {(['Tous', 'Devis', 'Facture', 'Bon de commande', 'Bon de livraison'] as const).map((filterOpt) => {
                         let count = 0;
                         if (filterOpt === 'Tous') {
                           count = commercialDocs.length;
                         } else if (filterOpt === 'Bon de commande') {
-                          count = commercialDocs.filter(d => d.hasBonCommande).length;
+                          count = commercialDocs.filter(d => d.type === 'Bon de commande' || d.hasBonCommande).length;
                         } else {
                           count = commercialDocs.filter(d => d.type === filterOpt).length;
                         }
@@ -10040,12 +10040,14 @@ export default function App() {
                           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">Type.</label>
                           <select
                             value={docType}
-                            onChange={(e) => setDocType(e.target.value as 'Devis' | 'Facture' | 'Proforma')}
+                            onChange={(e) => setDocType(e.target.value as 'Devis' | 'Facture' | 'Proforma' | 'Bon de commande' | 'Bon de livraison')}
                             className="focus:outline-none"
                             required
                           >
                             <option value="Devis">Devis</option>
                             <option value="Facture">Facture</option>
+                            <option value="Bon de commande">Bon de commande</option>
+                            <option value="Bon de livraison">Bon de livraison</option>
                           </select>
                         </div>
 

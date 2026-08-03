@@ -1088,7 +1088,7 @@ export default function ClientPortal({
           <!-- TITRE DU DOCUMENT / INFOS CLIENT -->
           <div class="grid grid-cols-2 gap-6" style="margin-top: 20px;">
             <div>
-              <h1 class="doc-title">${doc.type === 'Devis' ? 'DEVIS' : 'FACTURE'}</h1>
+              <h1 class="doc-title">${(doc.type || 'DEVIS').toUpperCase()}</h1>
               <p style="margin: 4px 0 0 0;">Référence : ${doc.ref}</p>
               <p style="margin: 4px 0 0 0;">Remarque : ${doc.commentaire || ''}</p>
               <p style="margin: 4px 0 0 0;">Référence du contrat : ${clientObj?.referenceContrat || '-'}</p>

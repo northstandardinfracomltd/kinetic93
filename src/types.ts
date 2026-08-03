@@ -406,7 +406,7 @@ export interface CommercialDocItem {
 export interface CommercialDoc {
   id: string;
   ref: string;
-  type: 'Devis' | 'Facture' | 'Proforma';
+  type: 'Devis' | 'Facture' | 'Proforma' | 'Bon de commande' | 'Bon de livraison';
   clientId: string;
   clientDenomination: string;
   items: CommercialDocItem[];
