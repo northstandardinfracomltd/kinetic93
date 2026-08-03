@@ -3348,7 +3348,7 @@ export default function SettingsModal({
                             <button
                               type="button"
                               onClick={() => copyToClipboard(localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO', 'envId')}
-                              style={{ backgroundColor: '#000000', color: '#ffffff', fontSize: '16px', fontWeight: 'bold', border: 'none', borderRadius: '8px', padding: '6px 14px', cursor: 'pointer' }}
+                              style={{ backgroundColor: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
                               className="whitespace-nowrap transition-opacity hover:opacity-80"
                             >
                               {apiDefibeoCopied === 'envId' ? 'Copié !' : 'Copier'}
@@ -3370,7 +3370,7 @@ export default function SettingsModal({
                             <button
                               type="button"
                               onClick={() => copyToClipboard('https://api.defibeo.fr/v1', 'endpoint')}
-                              style={{ backgroundColor: '#000000', color: '#ffffff', fontSize: '16px', fontWeight: 'bold', border: 'none', borderRadius: '8px', padding: '6px 14px', cursor: 'pointer' }}
+                              style={{ backgroundColor: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
                               className="whitespace-nowrap transition-opacity hover:opacity-80"
                             >
                               {apiDefibeoCopied === 'endpoint' ? 'Copié !' : 'Copier'}
@@ -3392,7 +3392,7 @@ export default function SettingsModal({
                             <button
                               type="button"
                               onClick={() => copyToClipboard(apiDefibeoApiKey, 'apiKey')}
-                              style={{ backgroundColor: '#000000', color: '#ffffff', fontSize: '16px', fontWeight: 'bold', border: 'none', borderRadius: '8px', padding: '6px 14px', cursor: 'pointer' }}
+                              style={{ backgroundColor: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
                               className="whitespace-nowrap transition-opacity hover:opacity-80"
                             >
                               {apiDefibeoCopied === 'apiKey' ? 'Copié !' : 'Copier'}
@@ -3414,7 +3414,7 @@ export default function SettingsModal({
                             <button
                               type="button"
                               onClick={() => copyToClipboard(apiDefibeoSecretKey, 'secretKey')}
-                              style={{ backgroundColor: '#000000', color: '#ffffff', fontSize: '16px', fontWeight: 'bold', border: 'none', borderRadius: '8px', padding: '6px 14px', cursor: 'pointer' }}
+                              style={{ backgroundColor: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
                               className="whitespace-nowrap transition-opacity hover:opacity-80"
                             >
                               {apiDefibeoCopied === 'secretKey' ? 'Copié !' : 'Copier'}
@@ -4635,19 +4635,19 @@ export default function SettingsModal({
 
       {/* SIDE PANE DRAWER FOR API DEFIBEO DOCUMENTATION */}
       {isApiDocOpen && (
-        <div className="fixed inset-0 z-[9999] overflow-hidden font-sans">
+        <div className="fixed inset-0 z-[9999] overflow-hidden" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
           <div 
             className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity cursor-pointer animate-fadeIn"
             onClick={() => setIsApiDocOpen(false)}
           />
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-3xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto border-l border-slate-200 animate-slideLeft relative">
+            <div className="w-screen max-w-3xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto border-l border-slate-200 animate-slideLeft relative" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
               
               {/* Drawer Content */}
-              <div className="flex-1 py-2 space-y-6 text-[16px] text-black">
+              <div className="flex-1 py-2 space-y-6 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                 
                 {/* Auth Banner */}
-                <div style={{ background: '#28134a', borderRadius: '13px', padding: '20px' }} className="text-white space-y-3">
+                <div style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }} className="text-white space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-[16px] text-white">En-têtes HTTP requis (headers)</span>
                     <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>JSON REST</span>
@@ -4661,22 +4661,18 @@ Content-Type: application/json`}
                 </div>
 
                 {/* API Reference Endpoints */}
-                <div className="space-y-6">
-                  <h4 className="font-bold text-black pb-2 border-b border-slate-200" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                    Spécifications référence des 13 endpoints API
-                  </h4>
+                <div className="space-y-6" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
 
                   {/* 1. Client - GET */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
                         <span className="font-bold text-black text-[16px]">/v1/clients/:client_id</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Récupérer un client par Client ID</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Récupère les informations complètes d'un client spécifique selon son champ <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono">client_id</code>.</p>
+                      <p className="text-black">Récupère les informations complètes d'un client spécifique selon la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:client_id</code> (ex: <code className="text-purple-700 font-mono">CLI-0042</code>).</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2">Structure JSON complète retournée</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
@@ -4697,16 +4693,15 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 2. Client - POST Update */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
                         <span className="font-bold text-black text-[16px]">/v1/clients/:client_id</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Mettre à jour un client dans Defibeo</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Met à jour les informations d'un client dans Defibeo selon son <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono">client_id</code>.</p>
+                      <p className="text-black">Met à jour le jeu de données d'un client ciblé. La variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:client_id</code> (ex: <code className="text-purple-700 font-mono">CLI-0042</code>) désigne précisément le client à éditer dans la base de données.</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2">Corps de la requête (JSON payload)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
@@ -4726,16 +4721,15 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 3. Défibrillateur - GET */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
                         <span className="font-bold text-black text-[16px]">/v1/defibrillateurs/:identifiant</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Récupérer un défibrillateur par Identifiant</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Récupère la totalité des champs d'un défibrillateur selon son identifiant unique.</p>
+                      <p className="text-black">Récupère la totalité des champs d'un défibrillateur spécifique selon son identifiant unique placé en URL : <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:identifiant</code> (ex: <code className="text-purple-700 font-mono">DAE-88192</code> ou <code className="text-purple-700 font-mono">AABBCC</code>).</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2">Champs retournés (JSON complet)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
@@ -4787,16 +4781,15 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 4. Défibrillateur - POST Update */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
                         <span className="font-bold text-black text-[16px]">/v1/defibrillateurs/:identifiant</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Mettre à jour un défibrillateur dans Defibeo</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Met à jour les attributs d'un défibrillateur selon son champ identifiant.</p>
+                      <p className="text-black">Édite et met à jour le jeu de données d'un défibrillateur spécifique. La variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:identifiant</code> (ex: <code className="text-purple-700 font-mono">AABBCC</code> ou <code className="text-purple-700 font-mono">DAE-88192</code>) désigne le matériel exact à cibler et modifier.</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2">Corps de la requête (JSON payload)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
@@ -4813,16 +4806,15 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 5. Autre Matériel - GET */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
                         <span className="font-bold text-black text-[16px]">/v1/materiels/:identifiant</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Récupérer un autre matériel (Purificateur...)</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Récupère les informations d'un autre matériel spécifique selon son identifiant.</p>
+                      <p className="text-black">Récupère les informations d'un matériel spécifique (Purificateur d'air, etc.) selon la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:identifiant</code> (ex: <code className="text-purple-700 font-mono">MAT-00109</code>).</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2">Champs retournés (JSON complet)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
@@ -4852,16 +4844,15 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 6. Autre Matériel - POST Update */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
                         <span className="font-bold text-black text-[16px]">/v1/materiels/:identifiant</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Mettre à jour un autre matériel</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Met à jour les informations d'un matériel dans Defibeo selon son champ identifiant.</p>
+                      <p className="text-black">Édite et met à jour les informations d'un matériel spécifique. La variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:identifiant</code> (ex: <code className="text-purple-700 font-mono">MAT-00109</code>) cible précisément l'équipement à modifier.</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2">Corps de la requête (JSON payload)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
@@ -4876,13 +4867,12 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 7. Commande (Devis ou Facture) - POST Create */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
                         <span className="font-bold text-black text-[16px]">/v1/commandes</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Créer une commande (devis ou facture)</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
                       <p className="text-black">Crée une nouvelle commande dans Defibeo avec ses articles et sous-tables de pièces.</p>
@@ -4916,13 +4906,12 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 8. FSM Tournée & Missions - POST Create */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
                         <span className="font-bold text-black text-[16px]">/v1/tournees</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Créer une tournée & insérer des missions</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
                       <p className="text-black">Crée une nouvelle tournée FSM et insère des missions associées aux identifiants de défibrillateurs ou autres matériels.</p>
@@ -4956,16 +4945,15 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 9. Rapport PDF - GET */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
                         <span className="font-bold text-black text-[16px]">/v1/rapports/:identifiant</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Obtenir les informations d'un rapport PDF</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Récupère les informations et l'URL de téléchargement d'un rapport d'intervention PDF selon son identifiant.</p>
+                      <p className="text-black">Récupère les informations et l'URL de téléchargement d'un rapport d'intervention PDF selon la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:identifiant</code> (ex: <code className="text-purple-700 font-mono">RAP-2026-0412</code>).</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2">Exemple de réponse (200 OK)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
@@ -4983,16 +4971,15 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 10. Stock par UGS - GET */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
                         <span className="font-bold text-black text-[16px]">/v1/stocks/:ugs</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Obtenir les informations d'un stock par UGS</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Récupère les informations d'un stock de la centrale des stocks selon son code UGS.</p>
+                      <p className="text-black">Récupère les informations d'un stock selon le code produit en URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:ugs</code> (ex: <code className="text-purple-700 font-mono">ELE-ZOLL-01</code>).</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2">Exemple de réponse (200 OK)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
@@ -5009,16 +4996,15 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 11. Stock par UGS - POST Update */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
                         <span className="font-bold text-black text-[16px]">/v1/stocks/:ugs</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Mettre à jour le stock dans Defibeo par UGS</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Met à jour les informations de stock de la centrale selon l'UGS.</p>
+                      <p className="text-black">Met à jour la quantité d'un article de stock en ciblant sa référence unique <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:ugs</code> (ex: <code className="text-purple-700 font-mono">ELE-ZOLL-01</code>).</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2">Corps de la requête (JSON payload)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
@@ -5032,13 +5018,12 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 12. Variables Defibeo - GET */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
                         <span className="font-bold text-black text-[16px]">/v1/variables</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Récupérer la liste des variables Defibeo</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
                       <p className="text-black">Récupère la liste des variables globales système et paramétrages de Defibeo.</p>
@@ -5059,13 +5044,12 @@ Content-Type: application/json`}
                   </div>
 
                   {/* 13. CRM Ticket - POST Create */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3 font-mono">
                         <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
                         <span className="font-bold text-black text-[16px]">/v1/crm/tickets</span>
                       </div>
-                      <span className="text-[16px] font-bold text-black">Créer un nouveau ticket / dossier dans CRM Defibeo</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black">
                       <p className="text-black">Crée un nouveau ticket/dossier de suivi dans le CRM de Defibeo.</p>
@@ -5089,7 +5073,7 @@ Content-Type: application/json`}
                 </div>
 
                 {/* Floating Close Button */}
-                <div className="sticky bottom-4 z-20 flex justify-center pt-2">
+                <div className="sticky bottom-4 z-20 flex justify-center pt-2 w-full">
                   <button
                     type="button"
                     onClick={() => setIsApiDocOpen(false)}
@@ -5097,15 +5081,16 @@ Content-Type: application/json`}
                       backgroundColor: '#000000',
                       color: '#ffffff',
                       borderRadius: '13px',
-                      padding: '12px 32px',
+                      padding: '14px 20px',
                       fontSize: '18px',
                       fontWeight: 'bold',
                       border: 'none',
                       cursor: 'pointer',
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      width: '100%',
                       boxShadow: '0 4px 14px rgba(0, 0, 0, 0.3)'
                     }}
-                    className="hover:bg-zinc-800 transition-all hover:scale-105"
+                    className="w-full hover:bg-zinc-800 transition-all"
                   >
                     Fermer
                   </button>
