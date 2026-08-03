@@ -347,6 +347,29 @@ export default function SettingsModal({
   const [newMemberAdminSubRole, setNewMemberAdminSubRole] = React.useState<'Administrateur' | 'Administration' | 'Planification' | 'Logistique' | 'Comptabilité' | 'Contrôleur' | 'Administrateur & Contrôleur'>('Administrateur');
 
   // LOCAL STATES FOR CONNECTORS
+  const [apiDefibeoActive, setApiDefibeoActive] = React.useState(false);
+  const [apiDefibeoApiKey, setApiDefibeoApiKey] = React.useState('');
+  const [apiDefibeoSecretKey, setApiDefibeoSecretKey] = React.useState('');
+  const [apiDefibeoCopied, setApiDefibeoCopied] = React.useState<string | null>(null);
+  const [isApiDocOpen, setIsApiDocOpen] = React.useState(false);
+
+  const generateApiDefibeoKeys = () => {
+    const rand1 = Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
+    const rand2 = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    setApiDefibeoApiKey(`dfb_live_${rand1}`);
+    setApiDefibeoSecretKey(`dfb_sec_${rand2}`);
+  };
+
+  const copyToClipboard = (text: string, fieldName: string) => {
+    try {
+      navigator.clipboard.writeText(text);
+      setApiDefibeoCopied(fieldName);
+      setTimeout(() => setApiDefibeoCopied(null), 2000);
+    } catch (e) {
+      console.error('Copy failed', e);
+    }
+  };
+
   const [sageActive, setSageActive] = React.useState(false);
   const [sageClientId, setSageClientId] = React.useState('');
   const [sageAccessToken, setSageAccessToken] = React.useState('');
@@ -608,6 +631,10 @@ export default function SettingsModal({
       const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
       fetchCollectionFromFirestore<any>('api_connectors', activeTenant).then(data => {
         if (data) {
+          if (data.apiDefibeoActive !== undefined) setApiDefibeoActive(data.apiDefibeoActive);
+          if (data.apiDefibeoApiKey !== undefined) setApiDefibeoApiKey(data.apiDefibeoApiKey);
+          if (data.apiDefibeoSecretKey !== undefined) setApiDefibeoSecretKey(data.apiDefibeoSecretKey);
+
           if (data.sageActive !== undefined) setSageActive(data.sageActive);
           if (data.sageClientId !== undefined) setSageClientId(data.sageClientId);
           if (data.sageAccessToken !== undefined) setSageAccessToken(data.sageAccessToken);
@@ -686,6 +713,9 @@ export default function SettingsModal({
 
     try {
       const payload = {
+        apiDefibeoActive,
+        apiDefibeoApiKey,
+        apiDefibeoSecretKey,
         sageActive,
         sageClientId,
         sageAccessToken,
@@ -3257,17 +3287,17 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* SAGE 100 */}
-              <div style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between">
+              {/* API DEFIBEO */}
+              <div style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between md:col-span-2">
                 <div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div>
-                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Sage 100</h5>
+                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>API Defibeo</h5>
                         <div className="select-none font-sans flex items-center mt-1">
                           <span
                             style={{
-                              backgroundColor: 'rgb(185, 28, 28)',
+                              backgroundColor: apiDefibeoActive ? '#fe4eba' : 'rgb(57, 169, 143)',
                               boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
                               color: '#ffffff',
                               fontSize: '16px',
@@ -3277,144 +3307,149 @@ export default function SettingsModal({
                             }}
                             className="font-bold select-none"
                           >
-                            {t("Contacter Defibeo")}
+                            {apiDefibeoActive ? t("Activé") : t("Disponible")}
                           </span>
                         </div>
                       </div>
                     </div>
-                    {/* Toggle switch */}
                     <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center cursor-not-allowed select-none opacity-50" style={{ cursor: 'not-allowed' }}>
+                      <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
                         <input
                           type="checkbox"
-                          checked={sageActive}
-                          disabled
+                          checked={apiDefibeoActive}
+                          onChange={(e) => {
+                            const isChecked = e.target.checked;
+                            setApiDefibeoActive(isChecked);
+                            if (isChecked && (!apiDefibeoApiKey || !apiDefibeoSecretKey)) {
+                              generateApiDefibeoKeys();
+                            }
+                          }}
                           className="sr-only peer"
                         />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-not-allowed peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'not-allowed' }}></div>
+                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'pointer' }}></div>
                       </label>
                     </div>
                   </div>
 
-                  {sageActive && (
-                    <div className="mt-4 space-y-3 animate-slideUp">
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("ID Client.")}</label>
-                        <input
-                          type="text"
-                          value={sageClientId}
-                          onChange={(e) => {
-                            setSageClientId(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez l'ID Client.")}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Sage 100 ID token d’accès")}.</label>
-                        <input
-                          type="text"
-                          value={sageAccessToken}
-                          onChange={(e) => {
-                            setSageAccessToken(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez le Sage 100 ID token d’accès") + "."}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Sage 100 ID token secret")}.</label>
-                        <input
-                          type="text"
-                          value={sageSecretToken}
-                          onChange={(e) => {
-                            setSageSecretToken(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez le Sage 100 ID token secret") + "."}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+                  {apiDefibeoActive && (
+                    <div className="mt-4 space-y-4 animate-slideUp">
+                      <p className="text-xs text-slate-600 font-sans">
+                        Ces identifiants permettent à une application tierce d'accéder en lecture et synchronisation aux données de la base de cet environnement uniquement.
+                      </p>
 
-              {/* SAGE 100 4197 */}
-              <div style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Sage 100 4197</h5>
-                        <div className="select-none font-sans flex items-center mt-1">
-                          <span
-                            style={{
-                              backgroundColor: 'rgb(185, 28, 28)',
-                              boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
-                              color: '#ffffff',
-                              fontSize: '16px',
-                              borderRadius: '100px',
-                              padding: '2px 10px',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            }}
-                            className="font-bold select-none"
-                          >
-                            {t("Contacter Defibeo")}
-                          </span>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* Environment ID */}
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase">ID Environnement</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO'}
+                              readOnly
+                              disabled
+                              className="w-full text-black font-mono text-xs bg-slate-100 p-2 rounded-lg border border-slate-300"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO', 'envId')}
+                              className="px-2.5 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-black transition-colors whitespace-nowrap"
+                            >
+                              {apiDefibeoCopied === 'envId' ? 'Copié !' : 'Copier'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Base URL */}
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase">URL Endpoint de base</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value="https://api.defibeo.fr/v1"
+                              readOnly
+                              disabled
+                              className="w-full text-black font-mono text-xs bg-slate-100 p-2 rounded-lg border border-slate-300"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard('https://api.defibeo.fr/v1', 'endpoint')}
+                              className="px-2.5 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-black transition-colors whitespace-nowrap"
+                            >
+                              {apiDefibeoCopied === 'endpoint' ? 'Copié !' : 'Copier'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* API Key */}
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase">Clé d'accès (API Key)</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={apiDefibeoApiKey}
+                              onChange={(e) => setApiDefibeoApiKey(e.target.value)}
+                              className="w-full text-black font-mono text-xs bg-white p-2 rounded-lg border border-slate-300"
+                              placeholder="dfb_live_..."
+                            />
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(apiDefibeoApiKey, 'apiKey')}
+                              className="px-2.5 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-black transition-colors whitespace-nowrap"
+                            >
+                              {apiDefibeoCopied === 'apiKey' ? 'Copié !' : 'Copier'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Secret Key */}
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase">Clé secrète (Secret Token)</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={apiDefibeoSecretKey}
+                              onChange={(e) => setApiDefibeoSecretKey(e.target.value)}
+                              className="w-full text-black font-mono text-xs bg-white p-2 rounded-lg border border-slate-300"
+                              placeholder="dfb_sec_..."
+                            />
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(apiDefibeoSecretKey, 'secretKey')}
+                              className="px-2.5 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-black transition-colors whitespace-nowrap"
+                            >
+                              {apiDefibeoCopied === 'secretKey' ? 'Copié !' : 'Copier'}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    {/* Toggle switch */}
-                    <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center cursor-not-allowed select-none opacity-50" style={{ cursor: 'not-allowed' }}>
-                        <input
-                          type="checkbox"
-                          checked={sage4197Active}
-                          disabled
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-not-allowed peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'not-allowed' }}></div>
-                      </label>
-                    </div>
-                  </div>
 
-                  {sage4197Active && (
-                    <div className="mt-4 space-y-3 animate-slideUp">
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("ID Client.")}</label>
-                        <input
-                          type="text"
-                          value={sage4197ClientId}
-                          onChange={(e) => {
-                            setSage4197ClientId(e.target.value);
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={generateApiDefibeoKeys}
+                          className="text-xs text-blue-600 underline hover:text-blue-800 font-bold"
+                        >
+                          Régénérer de nouvelles clés
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsApiDocOpen(true)}
+                          style={{
+                            backgroundColor: '#000000',
+                            color: '#ffffff',
+                            borderRadius: '13px',
+                            padding: '9px 18px',
+                            fontSize: '15px',
+                            fontWeight: 'bold',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                           }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez l'ID Client.")}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Sage 100 4197 ID token d’accès")}.</label>
-                        <input
-                          type="text"
-                          value={sage4197AccessToken}
-                          onChange={(e) => {
-                            setSage4197AccessToken(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez le Sage 100 4197 ID token d’accès") + "."}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Sage 100 4197 ID token secret")}.</label>
-                        <input
-                          type="text"
-                          value={sage4197SecretToken}
-                          onChange={(e) => {
-                            setSage4197SecretToken(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez le Sage 100 4197 ID token secret") + "."}
-                        />
+                          className="hover:bg-zinc-800 transition-colors"
+                        >
+                          Documentation
+                        </button>
                       </div>
                     </div>
                   )}
@@ -4580,6 +4615,450 @@ export default function SettingsModal({
         </div>
 
       </div>
+
+      {/* SIDE PANE DRAWER FOR API DEFIBEO DOCUMENTATION */}
+      {isApiDocOpen && (
+        <div className="fixed inset-0 z-[9999] overflow-hidden font-sans">
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity cursor-pointer animate-fadeIn"
+            onClick={() => setIsApiDocOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-3xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto border-l border-slate-200 animate-slideLeft">
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+                <div>
+                  <h3 className="text-xl font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                    Documentation API Defibeo
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Spécifications API REST v1 (JSON / HTTP) pour l'environnement : <span className="font-mono text-black font-bold">{localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO'}</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsApiDocOpen(false)}
+                  className="p-2 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors"
+                  title="Fermer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Drawer Content */}
+              <div className="flex-1 py-6 space-y-6 text-sm text-slate-700">
+                
+                {/* Auth Banner */}
+                <div className="bg-slate-900 text-slate-100 p-4 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs uppercase tracking-wider text-slate-400">En-têtes HTTP Requis (Headers)</span>
+                    <span className="text-xs bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded border border-emerald-500/30">Standard JSON REST</span>
+                  </div>
+                  <pre className="text-xs font-mono bg-slate-950 p-3 rounded-lg overflow-x-auto text-emerald-400 border border-slate-800">
+{`X-Defibeo-Tenant-ID: ${localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO'}
+X-Defibeo-API-Key: ${apiDefibeoApiKey || 'dfb_live_xxxxxxxx'}
+X-Defibeo-Secret-Key: ${apiDefibeoSecretKey || 'dfb_sec_xxxxxxxx'}
+Content-Type: application/json`}
+                  </pre>
+                </div>
+
+                {/* API Reference Endpoints */}
+                <div className="space-y-6">
+                  <h4 className="font-bold text-black text-lg pb-2 border-b border-slate-200" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                    Référence des Endpoints (13 Actions)
+                  </h4>
+
+                  {/* 1. Client - GET */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
+                        <span className="font-bold text-slate-900">/v1/clients/:client_id</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Obtenir un client</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Récupère toutes les informations d'un client spécifique selon son <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">client_id</code>.</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "client_id": "CLI-0042",
+  "denomination": "Clinique Saint-Jean",
+  "siret": "12345678900012",
+  "adresse": "12 Avenue de Paris",
+  "code_postal": "75008",
+  "ville": "Paris",
+  "contact_nom": "Jean Dupont",
+  "email": "j.dupont@clinique-stjean.fr",
+  "telephone": "0142680000"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Client - POST Update */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
+                        <span className="font-bold text-slate-900">/v1/clients/:client_id</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Mettre à jour un client</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Met à jour les informations d'un client spécifique selon son <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">client_id</code>.</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "denomination": "Clinique Saint-Jean de Paris",
+  "adresse": "14 Avenue de Paris",
+  "telephone": "0142680001",
+  "contact_nom": "Jean-Marc Dupont"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Défibrillateur - GET */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
+                        <span className="font-bold text-slate-900">/v1/defibrillateurs/:id</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Obtenir un défibrillateur (DAE)</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Récupère les informations détaillées d'un défibrillateur spécifique selon son identifiant.</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "id": "DAE-88192",
+  "marque": "ZOLL",
+  "modele": "AED Plus",
+  "numero_serie": "SN-9981240",
+  "emplacement": "Hall d'accueil - RDC",
+  "client_id": "CLI-0042",
+  "date_peremption_electrodes": "2027-05-15",
+  "date_peremption_batterie": "2028-11-20",
+  "statut": "Opérationnel"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4. Défibrillateur - POST Update */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
+                        <span className="font-bold text-slate-900">/v1/defibrillateurs/:id</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Mettre à jour un défibrillateur</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Met à jour les attributs d'un défibrillateur (dates de péremption, emplacement, statut, etc.).</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "emplacement": "Bâtiment B - 1er étage",
+  "date_peremption_electrodes": "2029-06-30",
+  "statut": "Maintenance requise"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5. Autre Matériel - GET */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
+                        <span className="font-bold text-slate-900">/v1/materiels/:id</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Obtenir un autre matériel</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Récupère les informations d'un autre matériel spécifique (extincteur, trousse secours, registre, etc.).</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "id": "MAT-00109",
+  "type_materiel": "Extincteur CO2 5kg",
+  "numero_serie": "EXT-CO2-7711",
+  "emplacement": "Atelier Nord",
+  "client_id": "CLI-0042",
+  "prochaine_inspection": "2027-01-10",
+  "etat": "Conforme"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 6. Autre Matériel - POST Update */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
+                        <span className="font-bold text-slate-900">/v1/materiels/:id</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Mettre à jour un autre matériel</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Met à jour les données d'un matériel dans Defibeo selon son identifiant.</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "emplacement": "Entrepôt Ligne 3",
+  "prochaine_inspection": "2028-02-01",
+  "etat": "Recharge effectuée"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 7. Créer une Commande (Devis ou Facture) */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
+                        <span className="font-bold text-slate-900">/v1/commandes</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Créer une commande (Devis ou Facture)</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Crée une nouvelle commande dans Defibeo avec le type spécifié (<code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">Devis</code> ou <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">Facture</code>) et ses lignes de prestations.</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "type": "Devis",
+  "client_id": "CLI-0042",
+  "date": "2026-08-03",
+  "echeance": "2026-09-03",
+  "articles": [
+    {
+      "ugs": "ELE-ZOLL-01",
+      "designation": "Paire d'électrodes adulte ZOLL AED Plus",
+      "quantite": 2,
+      "prix_unitaire_ht": 85.00,
+      "tva_pourcent": 20.0
+    }
+  ],
+  "remise_pourcent": 5.0,
+  "commentaires": "Maintenance annuelle incluse"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 8. Créer une Tournée avec Missions */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
+                        <span className="font-bold text-slate-900">/v1/tournees</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Créer une tournée & insérer missions</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Créer une nouvelle tournée et affecter des missions associées aux identifiants de DAE ou autres matériels.</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "titre": "Tournée Contrôle Annuel IDF West",
+  "technicien": "Thomas Martin",
+  "date_prevue": "2026-08-10",
+  "materiel_ids": [
+    "DAE-88192",
+    "DAE-88193",
+    "MAT-00109"
+  ],
+  "note": "Prendre clés auprès du gardien à l'arrivée"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 9. Rapport PDF - GET */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
+                        <span className="font-bold text-slate-900">/v1/rapports/:id</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Obtenir un rapport PDF</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Récupère les métadonnées et le lien de téléchargement sécurisé du rapport PDF d'intervention.</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "id": "RAP-2026-0412",
+  "type": "Contrôle Périodique DAE",
+  "date_intervention": "2026-08-01",
+  "technicien": "Thomas Martin",
+  "client_id": "CLI-0042",
+  "statut_conformation": "Conforme",
+  "pdf_download_url": "https://api.defibeo.fr/v1/rapports/RAP-2026-0412/pdf"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 10. Stock par UGS - GET */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
+                        <span className="font-bold text-slate-900">/v1/stocks/:ugs</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Obtenir un stock par UGS</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Récupère l'état d'un stock de la centrale des stocks selon son code UGS (SKU).</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "ugs": "ELE-ZOLL-01",
+  "designation": "Électrodes Adulte CPR-D Padz ZOLL",
+  "quantite_disponible": 142,
+  "quantite_reservee": 12,
+  "seuil_alerte": 20,
+  "emplacement_entrepot": "Aisle B - Etagere 4"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 11. Stock par UGS - POST Update */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
+                        <span className="font-bold text-slate-900">/v1/stocks/:ugs</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Mettre à jour un stock par UGS</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Ajuste les quantités et seuils d'un article en centrale des stocks selon l'UGS.</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "quantite_disponible": 180,
+  "seuil_alerte": 25,
+  "mouvement_raison": "Réception bon de livraison BL-9901"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 12. Variables Defibeo - GET */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
+                        <span className="font-bold text-slate-900">/v1/variables</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Liste des variables Defibeo</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Récupère la liste globale des variables et configurations système de Defibeo.</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "environnement": "${localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO'}",
+  "version_api": "1.4.0",
+  "devise": "EUR",
+  "taux_tva_defaut": 20.0,
+  "duree_validite_devis_jours": 30,
+  "marques_dae_supportees": ["ZOLL", "HEARTSINE", "PHYSIO-CONTROL", "SCHILLER", "MINDRAY"],
+  "categories_crm": ["Technique", "Commercial", "Réclamation", "Sans Catégorie"]
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 13. CRM Ticket - POST Create */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
+                        <span className="font-bold text-slate-900">/v1/crm/tickets</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">Créer un ticket / dossier CRM</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs">
+                      <p className="text-slate-600">Crée un nouveau ticket/dossier de support dans le module CRM de Defibeo.</p>
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
+{`{
+  "categorie": "Technique",
+  "situation": "Nouveau",
+  "criticite": "Urgent",
+  "objet": "Avertissement bip sonore DAE2000",
+  "client_id": "CLI-0042",
+  "collaborateur": "Pierre Durand",
+  "description": "Le client signale un bip toutes les 30 secondes au niveau du boîtier principal."
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Drawer Footer */}
+              <div className="pt-4 border-t border-slate-200 sticky bottom-0 bg-white z-10">
+                <button
+                  type="button"
+                  onClick={() => setIsApiDocOpen(false)}
+                  style={{
+                    backgroundColor: '#000000',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    padding: '12px',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    width: '100%',
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                  }}
+                  className="hover:bg-zinc-800 transition-colors"
+                >
+                  Fermer la documentation
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
