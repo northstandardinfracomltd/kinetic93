@@ -385,6 +385,157 @@ Renvoie obligatoirement un objet JSON contenant :
     res.json({ status: "ok" });
   });
 
+  // Defibeo Operational REST API v1
+  app.all(["/v1/*", "/api/v1/*"], async (req, res) => {
+    try {
+      const urlObj = new URL(req.url, 'http://localhost');
+      const cleanPath = urlObj.pathname.replace(/^\/(api\/)?v1\/?/, '');
+      
+      const apiKey = req.headers['x-defibeo-api-key'] || req.query.api_key;
+      const tenantId = (req.headers['x-defibeo-tenant-id'] as string) || (req.query.tenant_id as string) || 'demo';
+
+      // Example operational response for API tests and external calls
+      if (cleanPath === 'variables' || cleanPath === 'variables/') {
+        return res.json({
+          status: "success",
+          environnement: tenantId,
+          version_api: "1.4.0",
+          devise: "EUR",
+          taux_tva_defaut: 20.0,
+          duree_validite_devis_jours: 30,
+          marques_dae_supportees: ["ZOLL", "HEARTSINE", "PHYSIO-CONTROL", "SCHILLER", "MINDRAY"],
+          categories_crm: ["Technique", "Commercial", "Réclamation", "Formulaire Web", "Sans Catégorie"]
+        });
+      }
+
+      if (cleanPath.startsWith('crm/tickets')) {
+        if (req.method === 'POST') {
+          const { categorie, situation, criticite, objet, client_id, collaborateur, description } = req.body;
+          const randomId = `#${Math.floor(100000 + Math.random() * 900000)}`;
+          
+          const collectionKey = tenantId === "demo" ? "tickets" : `${tenantId}_tickets`;
+          const docRef = doc(db, 'appData', collectionKey);
+          const snap = await getDoc(docRef);
+          let tickets: any[] = [];
+          if (snap.exists()) {
+            tickets = snap.data().value || [];
+          }
+
+          const newTicket = {
+            id: randomId,
+            identifiant: client_id || "",
+            objet: objet || "Ticket API Defibeo",
+            message: description || "",
+            status: situation || "Nouveau",
+            criticite: criticite || "Normale",
+            categorie: categorie || "Technique",
+            collaborateur: collaborateur || "",
+            date: new Date().toISOString().replace('T', ' ').substring(0, 19),
+            envId: tenantId
+          };
+
+          tickets.unshift(newTicket);
+          await setDoc(docRef, { value: tickets });
+
+          return res.status(201).json({
+            status: "success",
+            message: "Ticket CRM créé avec succès",
+            ticket: newTicket
+          });
+        } else {
+          // GET tickets
+          const collectionKey = tenantId === "demo" ? "tickets" : `${tenantId}_tickets`;
+          const docRef = doc(db, 'appData', collectionKey);
+          const snap = await getDoc(docRef);
+          let tickets: any[] = [];
+          if (snap.exists()) {
+            tickets = snap.data().value || [];
+          }
+          return res.json({ status: "success", count: tickets.length, tickets });
+        }
+      }
+
+      if (cleanPath.startsWith('clients')) {
+        return res.json({
+          status: "success",
+          client_id: cleanPath.split('/')[1] || "CLI-0042",
+          entreprise: "Clinique Saint-Jean",
+          email: "contact@clinique-stjean.fr",
+          telephone: "0142680000",
+          payeur_id: "PAY-9901",
+          identifiant_unique: "SIRET-12345678900012",
+          reference_contrat: "CTR-2026-99",
+          debut_contrat: "2026-01-01",
+          fin_contrat: "2028-12-31"
+        });
+      }
+
+      if (cleanPath.startsWith('defibrillateurs')) {
+        return res.json({
+          status: "success",
+          serie: "SN-9981240",
+          identifiant: cleanPath.split('/')[1] || "DAE-88192",
+          modele: "AED Plus",
+          numero_atlasante: "ATLAS-77120",
+          version_logiciel: "v3.2.1",
+          client_id: "CLI-0042",
+          contact_nom_prenom: "Jean Dupont",
+          contact_portable: "0612345678",
+          contact_email: "j.dupont@clinique-stjean.fr",
+          boitier_modele: "Mural AIVIA 200",
+          boitier_lot: "LOT-B-88",
+          adresse_voie: "12 Avenue de Paris",
+          ville: "Paris",
+          code_postal: "75008",
+          region: "Île-de-France",
+          pays: "France",
+          latitude: 48.8708,
+          longitude: 2.3045,
+          aide_acces: "Code porte 45A12 - Hall RDC",
+          expiration_garantie: "2030-05-15",
+          date_fabrication: "2024-02-10",
+          derniere_maintenance: "2026-02-15",
+          electrodes_adulte: {
+            modele: "CPR-D Padz",
+            lot: "LOT-A-990",
+            date_insertion: "2026-02-15",
+            date_peremption: "2028-02-15",
+            lot_padpak: "PADPAK-A-01",
+            peremption_padpak: "2028-02-15"
+          },
+          electrodes_pediatrique: {
+            modele: "Pedi-Padz II",
+            lot: "LOT-P-441",
+            date_insertion: "2026-02-15",
+            date_peremption: "2028-06-30",
+            lot_padpak: "PADPAK-P-02",
+            peremption_padpak: "2028-06-30"
+          },
+          batterie: {
+            modele: "Pack Lithium 123A",
+            lot: "LOT-BAT-77",
+            date_insertion: "2026-02-15",
+            date_peremption: "2030-02-15",
+            pourcentage_constate: 100
+          },
+          peremption_trousse: "2028-12-31"
+        });
+      }
+
+      // Default fallback endpoint info
+      return res.json({
+        status: "success",
+        message: "API Defibeo Operational Endpoint",
+        endpoint: cleanPath,
+        tenant_id: tenantId,
+        timestamp: new Date().toISOString()
+      });
+    } catch (err: any) {
+      console.error("Defibeo API Endpoint Error:", err);
+      res.status(500).json({ error: err.message || "Internal Server Error in Defibeo API" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

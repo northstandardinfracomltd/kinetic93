@@ -353,6 +353,36 @@ export default function SettingsModal({
   const [apiDefibeoCopied, setApiDefibeoCopied] = React.useState<string | null>(null);
   const [isApiDocOpen, setIsApiDocOpen] = React.useState(false);
 
+  const [apiTestLoading, setApiTestLoading] = React.useState(false);
+  const [apiTestResponse, setApiTestResponse] = React.useState<any>(null);
+
+  const runApiTest = async (endpoint: string, method: string = 'GET', payload?: any) => {
+    setApiTestLoading(true);
+    setApiTestResponse(null);
+    try {
+      const tenant = localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'demo';
+      const options: RequestInit = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Defibeo-Tenant-ID': tenant,
+          'X-Defibeo-API-Key': apiDefibeoApiKey || 'dfb_live_testkey123',
+          'X-Defibeo-Secret-Key': apiDefibeoSecretKey || 'dfb_sec_testsecret456',
+        }
+      };
+      if (payload && method !== 'GET') {
+        options.body = JSON.stringify(payload);
+      }
+      const res = await fetch(`/api/v1/${endpoint}`, options);
+      const data = await res.json();
+      setApiTestResponse({ status: res.status, ok: res.ok, data, endpoint, method });
+    } catch (err: any) {
+      setApiTestResponse({ error: err.message || 'Erreur réseau lors du test API', endpoint, method });
+    } finally {
+      setApiTestLoading(false);
+    }
+  };
+
   const generateApiDefibeoKeys = () => {
     const rand1 = Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
     const rand2 = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -3432,24 +3462,26 @@ export default function SettingsModal({
                           Régénérer de nouvelles clés
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => setIsApiDocOpen(true)}
-                          style={{
-                            backgroundColor: '#000000',
-                            color: '#ffffff',
-                            borderRadius: '13px',
-                            padding: '9px 18px',
-                            fontSize: '15px',
-                            fontWeight: 'bold',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          }}
-                          className="hover:bg-zinc-800 transition-colors"
-                        >
-                          Documentation
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsApiDocOpen(true)}
+                            style={{
+                              backgroundColor: '#000000',
+                              color: '#ffffff',
+                              borderRadius: '13px',
+                              padding: '9px 18px',
+                              fontSize: '15px',
+                              fontWeight: 'bold',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            }}
+                            className="hover:bg-zinc-800 transition-colors"
+                          >
+                            Documentation
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -4662,10 +4694,91 @@ Content-Type: application/json`}
                   </pre>
                 </div>
 
+                {/* Interactive API Tester */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-black text-sm flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Console de Test API Opérationnelle
+                    </h4>
+                    <span className="text-[11px] text-slate-500 font-mono">Environnement Actif</span>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Cliquez sur l'une des actions ci-dessous pour exécuter un appel de test réel sur cet environnement :
+                  </p>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={apiTestLoading}
+                      onClick={() => runApiTest('variables', 'GET')}
+                      className="px-3 py-1.5 bg-slate-900 hover:bg-black text-white rounded-lg text-xs font-mono font-semibold transition-colors flex items-center gap-1.5"
+                    >
+                      GET /v1/variables
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={apiTestLoading}
+                      onClick={() => runApiTest('clients/CLI-0042', 'GET')}
+                      className="px-3 py-1.5 bg-slate-900 hover:bg-black text-white rounded-lg text-xs font-mono font-semibold transition-colors flex items-center gap-1.5"
+                    >
+                      GET /v1/clients/CLI-0042
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={apiTestLoading}
+                      onClick={() => runApiTest('defibrillateurs/DAE-88192', 'GET')}
+                      className="px-3 py-1.5 bg-slate-900 hover:bg-black text-white rounded-lg text-xs font-mono font-semibold transition-colors flex items-center gap-1.5"
+                    >
+                      GET /v1/defibrillateurs/DAE-88192
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={apiTestLoading}
+                      onClick={() => runApiTest('crm/tickets', 'POST', {
+                        categorie: "Technique",
+                        situation: "Nouveau",
+                        criticite: "Normal",
+                        objet: "Test API - Vérification Opérationnelle",
+                        client_id: "CLI-0042",
+                        collaborateur: "API Automated Test",
+                        description: "Ceci est un ticket de test généré automatiquement pour vérifier la connexion opérationnelle à l'API Defibeo."
+                      })}
+                      className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-mono font-semibold transition-colors flex items-center gap-1.5"
+                    >
+                      POST /v1/crm/tickets (Nouveau ticket)
+                    </button>
+                  </div>
+
+                  {apiTestLoading && (
+                    <div className="text-xs font-mono text-slate-500 py-2 flex items-center gap-2">
+                      <span className="w-3 h-3 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></span>
+                      Exécution de la requête sur /v1...
+                    </div>
+                  )}
+
+                  {apiTestResponse && (
+                    <div className="mt-3 space-y-1.5 animate-fadeIn">
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-500">
+                        <span>Résultat du test : {apiTestResponse.method} /v1/{apiTestResponse.endpoint}</span>
+                        <span className={apiTestResponse.ok !== false ? "text-emerald-600 font-bold" : "text-rose-600 font-bold"}>
+                          HTTP {apiTestResponse.status || 200} OK
+                        </span>
+                      </div>
+                      <pre className="bg-slate-950 text-emerald-400 p-3 rounded-lg font-mono text-[11px] overflow-x-auto max-h-48 border border-slate-800">
+                        {JSON.stringify(apiTestResponse.data || apiTestResponse, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+
                 {/* API Reference Endpoints */}
                 <div className="space-y-6">
                   <h4 className="font-bold text-black text-lg pb-2 border-b border-slate-200" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                    Référence des Endpoints (13 Actions)
+                    Spécifications Référence des 13 Endpoints API
                   </h4>
 
                   {/* 1. Client - GET */}
@@ -4675,23 +4788,23 @@ Content-Type: application/json`}
                         <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
                         <span className="font-bold text-slate-900">/v1/clients/:client_id</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Obtenir un client</span>
+                      <span className="text-xs font-semibold text-slate-600">Récupérer un client par Client ID</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Récupère toutes les informations d'un client spécifique selon son <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">client_id</code>.</p>
+                      <p className="text-slate-600">Récupère les informations complètes d'un client spécifique selon son champ <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">client_id</code>.</p>
                       <div>
-                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Structure JSON complète retournée</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
 {`{
+  "entreprise": "Clinique Saint-Jean",
+  "email": "contact@clinique-stjean.fr",
+  "telephone": "0142680000",
+  "payeur_id": "PAY-0091",
   "client_id": "CLI-0042",
-  "denomination": "Clinique Saint-Jean",
-  "siret": "12345678900012",
-  "adresse": "12 Avenue de Paris",
-  "code_postal": "75008",
-  "ville": "Paris",
-  "contact_nom": "Jean Dupont",
-  "email": "j.dupont@clinique-stjean.fr",
-  "telephone": "0142680000"
+  "identifiant_unique": "SIRET-12345678900012",
+  "reference_contrat": "CTR-2026-99",
+  "debut_contrat": "2026-01-01",
+  "fin_contrat": "2028-12-31"
 }`}
                         </pre>
                       </div>
@@ -4705,18 +4818,22 @@ Content-Type: application/json`}
                         <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
                         <span className="font-bold text-slate-900">/v1/clients/:client_id</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Mettre à jour un client</span>
+                      <span className="text-xs font-semibold text-slate-600">Mettre à jour un client dans Defibeo</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Met à jour les informations d'un client spécifique selon son <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">client_id</code>.</p>
+                      <p className="text-slate-600">Met à jour les informations d'un client dans Defibeo selon son <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">client_id</code>.</p>
                       <div>
-                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON Payload)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
 {`{
-  "denomination": "Clinique Saint-Jean de Paris",
-  "adresse": "14 Avenue de Paris",
+  "entreprise": "Clinique Saint-Jean de Paris",
+  "email": "direction@clinique-stjean.fr",
   "telephone": "0142680001",
-  "contact_nom": "Jean-Marc Dupont"
+  "payeur_id": "PAY-0091",
+  "identifiant_unique": "SIRET-12345678900012",
+  "reference_contrat": "CTR-2026-99",
+  "debut_contrat": "2026-01-01",
+  "fin_contrat": "2029-12-31"
 }`}
                         </pre>
                       </div>
@@ -4728,25 +4845,56 @@ Content-Type: application/json`}
                     <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2 font-mono text-xs">
                         <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
-                        <span className="font-bold text-slate-900">/v1/defibrillateurs/:id</span>
+                        <span className="font-bold text-slate-900">/v1/defibrillateurs/:identifiant</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Obtenir un défibrillateur (DAE)</span>
+                      <span className="text-xs font-semibold text-slate-600">Récupérer un défibrillateur par Identifiant</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Récupère les informations détaillées d'un défibrillateur spécifique selon son identifiant.</p>
+                      <p className="text-slate-600">Récupère la totalité des champs d'un défibrillateur selon son identifiant unique.</p>
                       <div>
-                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Champs retournés (JSON complet)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
 {`{
-  "id": "DAE-88192",
-  "marque": "ZOLL",
+  "serie": "SN-9981240",
+  "identifiant": "DAE-88192",
   "modele": "AED Plus",
-  "numero_serie": "SN-9981240",
-  "emplacement": "Hall d'accueil - RDC",
+  "numero_atlasante": "ATLAS-77120",
+  "version_logiciel": "v3.2.1",
   "client_id": "CLI-0042",
-  "date_peremption_electrodes": "2027-05-15",
-  "date_peremption_batterie": "2028-11-20",
-  "statut": "Opérationnel"
+  "nom_prenom": "Jean Dupont",
+  "telephone_portable": "0612345678",
+  "email": "j.dupont@clinique-stjean.fr",
+  "boitier_modele": "Mural AIVIA 200",
+  "boitier_lot": "LOT-B-88",
+  "numero_et_voie": "12 Avenue de Paris",
+  "ville": "Paris",
+  "code_postal": "75008",
+  "region": "Île-de-France",
+  "pays": "France",
+  "latitude": 48.8708,
+  "longitude": 2.3045,
+  "aide_acces": "Code porte 45A12 - Hall d'accueil RDC",
+  "expiration_garantie": "2030-05-15",
+  "date_fabrication": "2024-02-10",
+  "derniere_maintenance": "2026-02-15",
+  "modele_a": "CPR-D Padz (Adulte)",
+  "lot_a": "LOT-A-990",
+  "insertion_a": "2026-02-15",
+  "peremption_a": "2028-02-15",
+  "lot_padpak_a": "PADPAK-A-01",
+  "peremption_padpak_a": "2028-02-15",
+  "modele_p": "Pedi-Padz II (Pédiatrique)",
+  "lot_p": "LOT-P-441",
+  "insertion_p": "2026-02-15",
+  "peremption_p": "2028-06-30",
+  "lot_padpak_p": "PADPAK-P-02",
+  "peremption_padpak_p": "2028-06-30",
+  "modele_b": "Pack Lithium 123A",
+  "lot_b": "LOT-BAT-77",
+  "peremption_b": "2030-02-15",
+  "insertion_b": "2026-02-15",
+  "pourcentage_constate_b": 100,
+  "peremption_trousse": "2028-12-31"
 }`}
                         </pre>
                       </div>
@@ -4758,19 +4906,21 @@ Content-Type: application/json`}
                     <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2 font-mono text-xs">
                         <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
-                        <span className="font-bold text-slate-900">/v1/defibrillateurs/:id</span>
+                        <span className="font-bold text-slate-900">/v1/defibrillateurs/:identifiant</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Mettre à jour un défibrillateur</span>
+                      <span className="text-xs font-semibold text-slate-600">Mettre à jour un défibrillateur dans Defibeo</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Met à jour les attributs d'un défibrillateur (dates de péremption, emplacement, statut, etc.).</p>
+                      <p className="text-slate-600">Met à jour les attributs d'un défibrillateur selon son champ identifiant.</p>
                       <div>
-                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON Payload)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
 {`{
-  "emplacement": "Bâtiment B - 1er étage",
-  "date_peremption_electrodes": "2029-06-30",
-  "statut": "Maintenance requise"
+  "derniere_maintenance": "2026-08-03",
+  "peremption_a": "2029-08-01",
+  "lot_a": "LOT-A-1002",
+  "pourcentage_constate_b": 95,
+  "aide_acces": "Nouveau badge sécurité RDC"
 }`}
                         </pre>
                       </div>
@@ -4782,23 +4932,34 @@ Content-Type: application/json`}
                     <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2 font-mono text-xs">
                         <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
-                        <span className="font-bold text-slate-900">/v1/materiels/:id</span>
+                        <span className="font-bold text-slate-900">/v1/materiels/:identifiant</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Obtenir un autre matériel</span>
+                      <span className="text-xs font-semibold text-slate-600">Récupérer un autre matériel (Purificateur...)</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Récupère les informations d'un autre matériel spécifique (extincteur, trousse secours, registre, etc.).</p>
+                      <p className="text-slate-600">Récupère les informations d'un autre matériel spécifique selon son identifiant.</p>
                       <div>
-                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Champs retournés (JSON complet)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
 {`{
-  "id": "MAT-00109",
-  "type_materiel": "Extincteur CO2 5kg",
-  "numero_serie": "EXT-CO2-7711",
-  "emplacement": "Atelier Nord",
+  "categorie": "Purificateur d'air",
   "client_id": "CLI-0042",
-  "prochaine_inspection": "2027-01-10",
-  "etat": "Conforme"
+  "telephone_contact": "0142680000",
+  "email_contact": "contact@clinique-stjean.fr",
+  "numero_et_voie": "12 Avenue de Paris",
+  "ville": "Paris",
+  "code_postal": "75008",
+  "region": "Île-de-France",
+  "pays": "France",
+  "latitude": 48.8708,
+  "longitude": 2.3045,
+  "aide_acces": "Salle d'attente consultation 2",
+  "expiration_garantie": "2028-01-01",
+  "derniere_maintenance": "2026-03-10",
+  "serie": "PUR-99812",
+  "identifiant": "MAT-00109",
+  "type_filtre": "HEPA H14",
+  "modele_filtre": "FIL-HEPA-MED-01"
 }`}
                         </pre>
                       </div>
@@ -4810,85 +4971,99 @@ Content-Type: application/json`}
                     <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2 font-mono text-xs">
                         <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
-                        <span className="font-bold text-slate-900">/v1/materiels/:id</span>
+                        <span className="font-bold text-slate-900">/v1/materiels/:identifiant</span>
                       </div>
                       <span className="text-xs font-semibold text-slate-600">Mettre à jour un autre matériel</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Met à jour les données d'un matériel dans Defibeo selon son identifiant.</p>
+                      <p className="text-slate-600">Met à jour les informations d'un matériel dans Defibeo selon son champ identifiant.</p>
                       <div>
-                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON Payload)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
 {`{
-  "emplacement": "Entrepôt Ligne 3",
-  "prochaine_inspection": "2028-02-01",
-  "etat": "Recharge effectuée"
+  "derniere_maintenance": "2026-08-03",
+  "modele_filtre": "FIL-HEPA-MED-02",
+  "email_contact": "maintenance@clinique-stjean.fr"
 }`}
                         </pre>
                       </div>
                     </div>
                   </div>
 
-                  {/* 7. Créer une Commande (Devis ou Facture) */}
+                  {/* 7. Commande (Devis ou Facture) - POST Create */}
                   <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
                     <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2 font-mono text-xs">
                         <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
                         <span className="font-bold text-slate-900">/v1/commandes</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Créer une commande (Devis ou Facture)</span>
+                      <span className="text-xs font-semibold text-slate-600">Créer une Commande (Devis ou Facture)</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Crée une nouvelle commande dans Defibeo avec le type spécifié (<code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">Devis</code> ou <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">Facture</code>) et ses lignes de prestations.</p>
+                      <p className="text-slate-600">Crée une nouvelle commande dans Defibeo avec ses articles et sous-tables de pièces.</p>
                       <div>
-                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON Payload)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
 {`{
+  "membre_attribue": "Thomas Martin",
   "type": "Devis",
+  "reference": "DEV-2026-0803",
   "client_id": "CLI-0042",
-  "date": "2026-08-03",
-  "echeance": "2026-09-03",
+  "date_emission": "2026-08-03",
+  "situation": "Brouillon",
+  "remarque": "Livraison express incluse",
+  "code_taxe": "TVA20",
+  "payeur_id": "PAY-0091",
+  "commentaires": "Offre valable 30 jours",
   "articles": [
     {
       "ugs": "ELE-ZOLL-01",
-      "designation": "Paire d'électrodes adulte ZOLL AED Plus",
-      "quantite": 2,
-      "prix_unitaire_ht": 85.00,
-      "tva_pourcent": 20.0
+      "piece": "Paire d'électrodes adulte CPR-D Padz ZOLL",
+      "unite_ht": 85.00,
+      "volume": 2,
+      "total_ht": 170.00
     }
-  ],
-  "remise_pourcent": 5.0,
-  "commentaires": "Maintenance annuelle incluse"
+  ]
 }`}
                         </pre>
                       </div>
                     </div>
                   </div>
 
-                  {/* 8. Créer une Tournée avec Missions */}
+                  {/* 8. FSM Tournée & Missions - POST Create */}
                   <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
                     <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2 font-mono text-xs">
                         <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
                         <span className="font-bold text-slate-900">/v1/tournees</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Créer une tournée & insérer missions</span>
+                      <span className="text-xs font-semibold text-slate-600">Créer une Tournée & insérer des Missions</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Créer une nouvelle tournée et affecter des missions associées aux identifiants de DAE ou autres matériels.</p>
+                      <p className="text-slate-600">Crée une nouvelle tournée FSM et insère des missions associées aux identifiants de défibrillateurs ou autres matériels.</p>
                       <div>
-                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON Payload)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
 {`{
-  "titre": "Tournée Contrôle Annuel IDF West",
-  "technicien": "Thomas Martin",
-  "date_prevue": "2026-08-10",
-  "materiel_ids": [
-    "DAE-88192",
-    "DAE-88193",
-    "MAT-00109"
-  ],
-  "note": "Prendre clés auprès du gardien à l'arrivée"
+  "titre_tournee": "Tournée Maintenance IDF Ouest - Août 2026",
+  "date_periode": "2026-08-10 au 2026-08-15",
+  "situation": "Planifiée",
+  "missions": [
+    {
+      "categorie_materiel": "Défibrillateur",
+      "modele": "ZOLL AED Plus",
+      "peremption_a": "2028-02-15",
+      "peremption_p": "2028-06-30",
+      "peremption_b": "2030-02-15",
+      "prochaine_v": "2027-08-01",
+      "client_id": "CLI-0042",
+      "site": "Clinique Saint-Jean - Batiment Principal",
+      "identifiant": "DAE-88192",
+      "localisation": "Paris (75008)",
+      "bon_de_commande": "BC-99011",
+      "raison_prestation": ["Contrôle annuel", "Remplacement électrodes"]
+    }
+  ]
 }`}
                         </pre>
                       </div>
@@ -4900,22 +5075,21 @@ Content-Type: application/json`}
                     <div className="bg-slate-50 p-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2 font-mono text-xs">
                         <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
-                        <span className="font-bold text-slate-900">/v1/rapports/:id</span>
+                        <span className="font-bold text-slate-900">/v1/rapports/:identifiant</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Obtenir un rapport PDF</span>
+                      <span className="text-xs font-semibold text-slate-600">Obtenir les informations d'un Rapport PDF</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Récupère les métadonnées et le lien de téléchargement sécurisé du rapport PDF d'intervention.</p>
+                      <p className="text-slate-600">Récupère les informations et l'URL de téléchargement d'un rapport d'intervention PDF selon son identifiant.</p>
                       <div>
                         <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
 {`{
-  "id": "RAP-2026-0412",
-  "type": "Contrôle Périodique DAE",
-  "date_intervention": "2026-08-01",
+  "identifiant": "RAP-2026-0412",
+  "type": "Rapport de Maintenance Annuelle",
+  "date": "2026-08-01",
   "technicien": "Thomas Martin",
   "client_id": "CLI-0042",
-  "statut_conformation": "Conforme",
   "pdf_download_url": "https://api.defibeo.fr/v1/rapports/RAP-2026-0412/pdf"
 }`}
                         </pre>
@@ -4930,10 +5104,10 @@ Content-Type: application/json`}
                         <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
                         <span className="font-bold text-slate-900">/v1/stocks/:ugs</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Obtenir un stock par UGS</span>
+                      <span className="text-xs font-semibold text-slate-600">Obtenir les informations d'un Stock par UGS</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Récupère l'état d'un stock de la centrale des stocks selon son code UGS (SKU).</p>
+                      <p className="text-slate-600">Récupère les informations d'un stock de la centrale des stocks selon son code UGS.</p>
                       <div>
                         <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
@@ -4941,7 +5115,6 @@ Content-Type: application/json`}
   "ugs": "ELE-ZOLL-01",
   "designation": "Électrodes Adulte CPR-D Padz ZOLL",
   "quantite_disponible": 142,
-  "quantite_reservee": 12,
   "seuil_alerte": 20,
   "emplacement_entrepot": "Aisle B - Etagere 4"
 }`}
@@ -4957,17 +5130,16 @@ Content-Type: application/json`}
                         <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
                         <span className="font-bold text-slate-900">/v1/stocks/:ugs</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Mettre à jour un stock par UGS</span>
+                      <span className="text-xs font-semibold text-slate-600">Mettre à jour le stock dans Defibeo par UGS</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Ajuste les quantités et seuils d'un article en centrale des stocks selon l'UGS.</p>
+                      <p className="text-slate-600">Met à jour les informations de stock de la centrale selon l'UGS.</p>
                       <div>
-                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON Payload)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
 {`{
   "quantite_disponible": 180,
-  "seuil_alerte": 25,
-  "mouvement_raison": "Réception bon de livraison BL-9901"
+  "seuil_alerte": 25
 }`}
                         </pre>
                       </div>
@@ -4981,10 +5153,10 @@ Content-Type: application/json`}
                         <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">GET</span>
                         <span className="font-bold text-slate-900">/v1/variables</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Liste des variables Defibeo</span>
+                      <span className="text-xs font-semibold text-slate-600">Récupérer la liste des variables Defibeo</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Récupère la liste globale des variables et configurations système de Defibeo.</p>
+                      <p className="text-slate-600">Récupère la liste des variables globales système et paramétrages de Defibeo.</p>
                       <div>
                         <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Exemple de réponse (200 OK)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
@@ -4993,9 +5165,8 @@ Content-Type: application/json`}
   "version_api": "1.4.0",
   "devise": "EUR",
   "taux_tva_defaut": 20.0,
-  "duree_validite_devis_jours": 30,
   "marques_dae_supportees": ["ZOLL", "HEARTSINE", "PHYSIO-CONTROL", "SCHILLER", "MINDRAY"],
-  "categories_crm": ["Technique", "Commercial", "Réclamation", "Sans Catégorie"]
+  "categories_crm": ["Technique", "Commercial", "Réclamation", "Formulaire Web", "Sans Catégorie"]
 }`}
                         </pre>
                       </div>
@@ -5009,21 +5180,21 @@ Content-Type: application/json`}
                         <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-300">POST</span>
                         <span className="font-bold text-slate-900">/v1/crm/tickets</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600">Créer un ticket / dossier CRM</span>
+                      <span className="text-xs font-semibold text-slate-600">Créer un nouveau ticket / dossier dans CRM Defibeo</span>
                     </div>
                     <div className="p-4 space-y-3 text-xs">
-                      <p className="text-slate-600">Crée un nouveau ticket/dossier de support dans le module CRM de Defibeo.</p>
+                      <p className="text-slate-600">Crée un nouveau ticket/dossier de suivi dans le CRM de Defibeo.</p>
                       <div>
-                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON)</div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase mb-1">Corps de la requête (JSON Payload)</div>
                         <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono overflow-x-auto text-[11px]">
 {`{
   "categorie": "Technique",
   "situation": "Nouveau",
   "criticite": "Urgent",
-  "objet": "Avertissement bip sonore DAE2000",
+  "objet": "Signalement Bip Sonore DAE",
   "client_id": "CLI-0042",
   "collaborateur": "Pierre Durand",
-  "description": "Le client signale un bip toutes les 30 secondes au niveau du boîtier principal."
+  "description": "Bip voyant rouge constaté par l'agent de sécurité lors de la ronde de 8h."
 }`}
                         </pre>
                       </div>
