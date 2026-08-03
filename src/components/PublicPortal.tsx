@@ -6684,13 +6684,20 @@ export default function PublicPortal({
 
             {/* Alert banner if no ongoing pointage for connected technician session */}
             {!pointages.some((p) => p.isOngoing && p.techName?.trim().toLowerCase() === (authenticatedUser?.name || "").trim().toLowerCase()) && (
-              <div className="bg-red-600 text-white text-center py-2 px-4 text-xs font-semibold select-none shadow-xs font-sans shrink-0">
+              <div
+                className="text-white text-center font-semibold select-none shadow-xs font-sans shrink-0"
+                style={{
+                  background: "#3556ec",
+                  fontSize: "14px",
+                  padding: "12px 0px",
+                }}
+              >
                 {t("Vous n’avez pas de pointage en cours.")}
               </div>
             )}
 
             {/* Top Bar Navigation and Tab Selector Wrapper with Linear Gradient */}
-            <div style={{ background: "linear-gradient(93deg, rgb(12 40 166), rgb(0 14 80))", padding: "3px 0px", borderRadius: "0px 0px 14px 14px" }}>
+            <div style={{ background: "linear-gradient(93deg, rgb(12 40 166), rgb(0 14 80))", padding: "6px 0px", borderRadius: "0px 0px 13px 13px" }}>
               {/* TAB SELECTOR: Horizontal capsule switch toggle layout with dynamic fades */}
               <nav
                 className="py-0 px-0 relative shrink-0"
@@ -9840,27 +9847,34 @@ export default function PublicPortal({
 
                   {/* Digital Clock Section */}
                   <div
-                    style={{ backgroundColor: "rgb(238, 241, 255)", color: "rgb(49, 85, 255)" }}
+                    style={{ backgroundColor: "#000f55", color: "#fff" }}
                     className="p-5 rounded-2xl text-center space-y-2"
                   >
                     <span
                       style={{
                         fontSize: "18px",
-                        color: "rgb(49, 85, 255)",
+                        color: "#fff",
                         fontFamily: "var(--font-sans), sans-serif",
                       }}
                       className="font-normal block"
                     >
-                      Date et heure.
+                      {t("Date et heure.")}
                     </span>
                     <div
                       style={{
                         fontSize: "18px",
-                        color: "rgb(49, 85, 255)",
+                        color: "#fff",
                         fontFamily: "var(--font-sans), sans-serif",
                       }}
                       className="font-bold"
                     >
+                      {currentTime.toLocaleDateString(
+                        getLanguage() === "English" ? "en-US" : 
+                        getLanguage() === "Deutsch" ? "de-DE" : 
+                        getLanguage() === "Português" ? "pt-PT" : 
+                        getLanguage() === "Español" ? "es-ES" : "fr-FR"
+                      )}{" "}
+                      -{" "}
                       {currentTime.toLocaleTimeString(
                         getLanguage() === "English" ? "en-US" : 
                         getLanguage() === "Deutsch" ? "de-DE" : 
@@ -9953,15 +9967,19 @@ export default function PublicPortal({
                             {/* Card Header Badge / Gelule */}
                             <div className="flex items-center justify-between pb-1">
                               <div className="flex items-center gap-2">
-                                {p.isOngoing ? (
-                                  <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                                    {t("Pointage en cours")}
-                                  </span>
-                                ) : (
-                                  <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                                    {t("Pointage terminé")}
-                                  </span>
-                                )}
+                                <span
+                                  style={{
+                                    color: "#fff",
+                                    background: "#0f172a",
+                                    border: "none",
+                                    fontSize: "18px",
+                                    padding: "8px 16px",
+                                    borderRadius: "9999px",
+                                  }}
+                                  className="font-bold inline-block"
+                                >
+                                  {p.isOngoing ? t("Pointage en cours") : t("Pointage terminé")}
+                                </span>
                               </div>
                             </div>
 
@@ -9985,7 +10003,15 @@ export default function PublicPortal({
                                   <input
                                     type="date"
                                     value={getIsoDate(p.startDate)}
-                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    style={{
+                                      color: "#000",
+                                      fontSize: "16px",
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "10px 12px",
+                                      backgroundColor: "#ffffff",
+                                    }}
+                                    className="w-full outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
                                         startDate: getFrenchDate(e.target.value),
@@ -10005,7 +10031,15 @@ export default function PublicPortal({
                                   <input
                                     type="time"
                                     value={p.startTime}
-                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    style={{
+                                      color: "#000",
+                                      fontSize: "16px",
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "10px 12px",
+                                      backgroundColor: "#ffffff",
+                                    }}
+                                    className="w-full outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
                                         startTime: e.target.value,
@@ -10025,7 +10059,15 @@ export default function PublicPortal({
                                   <input
                                     type="time"
                                     value={endTime}
-                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    style={{
+                                      color: "#000",
+                                      fontSize: "16px",
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "10px 12px",
+                                      backgroundColor: "#ffffff",
+                                    }}
+                                    className="w-full outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
                                         endTime: e.target.value,
@@ -10047,7 +10089,15 @@ export default function PublicPortal({
                                     disabled
                                     readOnly
                                     value={ampFormatted}
-                                    className="w-full bg-slate-100 text-slate-600 border border-slate-200 rounded-lg p-2 text-sm font-semibold cursor-not-allowed outline-none"
+                                    style={{
+                                      color: "#000",
+                                      fontSize: "16px",
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "10px 12px",
+                                      backgroundColor: "#e2d9e6",
+                                    }}
+                                    className="w-full cursor-not-allowed outline-none"
                                   />
                                 </div>
 
@@ -10064,7 +10114,15 @@ export default function PublicPortal({
                                     maxLength={100}
                                     placeholder={t("Entrez un commentaire.")}
                                     value={p.comment || ""}
-                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    style={{
+                                      color: "#000",
+                                      fontSize: "16px",
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "10px 12px",
+                                      backgroundColor: "#ffffff",
+                                    }}
+                                    className="w-full outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
                                         comment: e.target.value,
@@ -10096,7 +10154,15 @@ export default function PublicPortal({
                                     type="text"
                                     placeholder="00:00"
                                     value={p.trajetMatin ?? "00:00"}
-                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    style={{
+                                      color: "#000",
+                                      fontSize: "16px",
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "10px 12px",
+                                      backgroundColor: "#ffffff",
+                                    }}
+                                    className="w-full outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
                                         trajetMatin: e.target.value,
@@ -10117,7 +10183,15 @@ export default function PublicPortal({
                                     type="text"
                                     placeholder="00:00"
                                     value={p.trajetSoir ?? "00:00"}
-                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    style={{
+                                      color: "#000",
+                                      fontSize: "16px",
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "10px 12px",
+                                      backgroundColor: "#ffffff",
+                                    }}
+                                    className="w-full outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
                                         trajetSoir: e.target.value,
@@ -10139,7 +10213,15 @@ export default function PublicPortal({
                                     disabled
                                     readOnly
                                     value={trajetJourneeFormatted}
-                                    className="w-full bg-slate-100 text-slate-600 border border-slate-200 rounded-lg p-2 text-sm font-semibold cursor-not-allowed outline-none"
+                                    style={{
+                                      color: "#000",
+                                      fontSize: "16px",
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "10px 12px",
+                                      backgroundColor: "#e2d9e6",
+                                    }}
+                                    className="w-full cursor-not-allowed outline-none"
                                   />
                                 </div>
                               </div>
@@ -10166,7 +10248,15 @@ export default function PublicPortal({
                                     type="text"
                                     placeholder="00:00"
                                     value={p.tempsRepas ?? "00:00"}
-                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    style={{
+                                      color: "#000",
+                                      fontSize: "16px",
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "10px 12px",
+                                      backgroundColor: "#ffffff",
+                                    }}
+                                    className="w-full outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
                                         tempsRepas: e.target.value,
@@ -10199,7 +10289,15 @@ export default function PublicPortal({
                                     disabled
                                     readOnly
                                     value={cttAmpFormatted}
-                                    className="w-full bg-slate-100 text-slate-600 border border-slate-200 rounded-lg p-2 text-sm font-semibold cursor-not-allowed outline-none"
+                                    style={{
+                                      color: "#000",
+                                      fontSize: "16px",
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "10px 12px",
+                                      backgroundColor: "#e2d9e6",
+                                    }}
+                                    className="w-full cursor-not-allowed outline-none"
                                   />
                                 </div>
 
@@ -10215,7 +10313,15 @@ export default function PublicPortal({
                                     type="text"
                                     placeholder="00:00"
                                     value={p.tempsAdmin ?? "00:00"}
-                                    className="w-full bg-white text-slate-800 border border-slate-300 rounded-lg p-2 text-sm focus:border-indigo-500 outline-none"
+                                    style={{
+                                      color: "#000",
+                                      fontSize: "16px",
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "10px 12px",
+                                      backgroundColor: "#ffffff",
+                                    }}
+                                    className="w-full outline-none"
                                     onChange={(e) =>
                                       handleEditPointageField(p.id, {
                                         tempsAdmin: e.target.value,
