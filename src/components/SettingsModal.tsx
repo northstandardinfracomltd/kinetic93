@@ -105,7 +105,7 @@ export default function SettingsModal({
 
   // Local states for form editing without auto-saving until save clicked ("pas d'auto-save")
   const [localCompany, setLocalCompany] = React.useState<CompanyInfo>(companyInfo);
-  const envIdDisplay = localCompany?.nomLogiciel || companyInfo?.nomLogiciel || shortEnvId || localStorage.getItem('defib_tenant_id') || 'ENV-DEFIBEO';
+  const envIdDisplay = shortEnvId || (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || 'D18';
   const [localMembers, setLocalMembers] = React.useState<Member[]>(members);
   const [isSaving, setIsSaving] = React.useState(false);
   const [copiedEmbed, setCopiedEmbed] = React.useState(false);
@@ -3343,7 +3343,7 @@ export default function SettingsModal({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div>
-                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Centre de données Deroesch (Anglet 64)</h5>
+                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Hébergement Datacenter DEROESCH (Anglet, France)</h5>
                         <div className="select-none font-sans flex items-center mt-1">
                           <span
                             style={{
@@ -4751,18 +4751,12 @@ Content-Type: application/json`}
                 </div>
 
                 {/* SEARCH & EXPLORER FOR SLUGS / FIELDS */}
-                <div style={{ border: '1px solid #28134a', borderRadius: '13px', backgroundColor: '#ffffff' }} className="p-4 space-y-4">
+                <div className="space-y-4">
                   <div>
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <h4 className="font-bold text-black text-[18px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                        Explorateur de champs API & Dictionnaire de Slugs
+                        Explorateur des champs API:
                       </h4>
-                      <span className="text-[14px] bg-[#28134a] text-white px-3 py-1 rounded-full font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                        {apiFieldsDictionary.filter(f => {
-                          const query = apiFieldSearch.toLowerCase().trim();
-                          return !query || f.slug.toLowerCase().includes(query) || f.label.toLowerCase().includes(query) || f.entity.toLowerCase().includes(query);
-                        }).length} champs disponibles
-                      </span>
                     </div>
                   </div>
 
@@ -4773,7 +4767,7 @@ Content-Type: application/json`}
                       value={apiFieldSearch}
                       onChange={(e) => setApiFieldSearch(e.target.value)}
                       placeholder="Recherche."
-                      className="w-full bg-white text-black p-3 text-[16px] placeholder:text-[16px] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#28134a]"
+                      className="w-full bg-white text-black p-3 text-[16px] placeholder:text-[16px] placeholder:text-slate-400 focus:outline-none focus:ring-0 outline-none"
                       style={{
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         fontSize: '16px',
@@ -4782,16 +4776,6 @@ Content-Type: application/json`}
                         border: '1px solid #cbd5e1'
                       }}
                     />
-                    {apiFieldSearch && (
-                      <button
-                        type="button"
-                        onClick={() => setApiFieldSearch('')}
-                        className="absolute right-3 top-3 text-slate-400 hover:text-black font-bold text-base"
-                        style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                      >
-                        ✕
-                      </button>
-                    )}
                   </div>
 
                   {/* Field List Container */}

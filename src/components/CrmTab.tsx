@@ -47,8 +47,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   const generateNextReference = (): string => {
-    const envRaw = companyInfo.nomLogiciel || 'ENVID';
-    const envCode = envRaw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'ENVID';
+    const envCode = (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || 'D18';
     const now = new Date();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const yy = String(now.getFullYear()).slice(-2);
