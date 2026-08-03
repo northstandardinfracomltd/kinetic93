@@ -224,14 +224,25 @@ export interface Defibrillateur {
 }
 
 export interface SupportTicket {
-  id: string; // e.g. #123456
-  identifiant: string;
-  objet: 'Défibrillateur utilisé' | 'Défibrillateur endommagé' | 'Défibrillateur hors service' | 'Autre' | 'Formulaire intégré';
-  message: string;
-  email: string;
-  phone: string;
-  date: string;
-  status: 'Nouveau' | 'En cours' | 'Résolu';
+  id: string; // e.g. 00001-DEFIB-0826 or #123456
+  reference?: string;
+  identifiant?: string;
+  categorie?: 'Technique' | 'Commercial' | 'Réclamation' | 'Sans Catégorie' | string;
+  situation?: 'Nouveau' | 'En cours' | 'Terminé' | string;
+  criticite?: 'Urgent' | 'Semaine prochaine' | 'Ce mois' | 'Mois prochain' | 'Non renseigné' | string;
+  dateOuverture?: string;
+  dateDerniereActualisation?: string;
+  objet: string;
+  collaborateur?: string;
+  client?: string;
+  isCustomClient?: boolean;
+  customClientName?: string;
+  description?: string;
+  message?: string;
+  email?: string;
+  phone?: string;
+  date?: string;
+  status?: 'Nouveau' | 'En cours' | 'Résolu' | 'Terminé' | string;
   reponse?: string;
 }
 
