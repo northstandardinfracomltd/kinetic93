@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { SupportTicket, Member, Client, CompanyInfo } from '../types';
-import HelpBubble from './HelpBubble';
-import { X } from 'lucide-react';
 
 interface CrmTabProps {
   tickets: SupportTicket[];
@@ -49,8 +47,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   const generateNextReference = (): string => {
-    const envRaw = companyInfo.nomLogiciel || companyInfo.name || 'DEFIB';
-    const envCode = envRaw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'DEFIB';
+    const envRaw = companyInfo.nomLogiciel || 'ENVID';
+    const envCode = envRaw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'ENVID';
     const now = new Date();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const yy = String(now.getFullYear()).slice(-2);
@@ -112,13 +110,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
     // Handle Client selection vs Autre
     const currentClientVal = ticket.client || ticket.email || '';
-    const foundClient = clients.find(c => (c.nomSociete || c.nomClient || (c as any).name || '') === currentClientVal);
+    const foundClient = clients.find(c => (c.denomination || (c as any).name || '') === currentClientVal);
     if (foundClient) {
       setFormClientSelect(currentClientVal);
       setFormCustomClientName('');
-    } else {
+    } else if (currentClientVal) {
       setFormClientSelect('Autre');
       setFormCustomClientName(ticket.customClientName || currentClientVal);
+    } else {
+      setFormClientSelect('Autre');
+      setFormCustomClientName('');
     }
 
     setFormDescription(ticket.description || ticket.message || '');
@@ -202,6 +203,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     onSaveTickets(updated);
   };
 
+  const handleDeleteTicket = (ticketId: string) => {
+    const updated = tickets.filter((t) => t.id !== ticketId);
+    onSaveTickets(updated);
+  };
+
   // Filtered tickets list
   const filteredTickets = tickets.filter((t) => {
     const sit = t.situation || (t.status === 'Résolu' ? 'Terminé' : t.status) || 'Nouveau';
@@ -230,7 +236,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     color: '#ffffff',
     borderRadius: '13px',
     fontSize: '18px',
-    padding: '10px 20px',
+    padding: '9px 19px',
     fontWeight: 'normal',
     display: 'inline-flex',
     alignItems: 'center',
@@ -248,6 +254,49 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     color: '#000000',
     cursor: 'default',
     fontSize: '15px',
+  };
+
+  const geluleStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '1000px',
+    backgroundColor: '#ffffff',
+    border: '1px solid rgb(231, 231, 231)',
+    color: '#000000',
+    fontSize: '16px',
+    fontWeight: 100,
+    padding: '6px 18px',
+    whiteSpace: 'nowrap',
+    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+    cursor: 'default',
+  };
+
+  const cellTextStyle: React.CSSProperties = {
+    color: '#000000',
+    fontSize: '16px',
+    fontWeight: 400,
+    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+    cursor: 'default',
+  };
+
+  const rowActionButtonStyle: React.CSSProperties = {
+    backgroundColor: '#000000',
+    color: '#ffffff',
+    borderRadius: '13px',
+    fontSize: '18px',
+    fontWeight: 'normal',
+    padding: '8px 18px',
+    border: 'none',
+    cursor: 'pointer',
+    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+  };
+
+  const selectStyle: React.CSSProperties = {
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    backgroundImage: 'none',
   };
 
   return (
@@ -269,6 +318,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           transition: all 0s !important;
           width: 100% !important;
         }
+        #crm-tab-container select {
+          appearance: none !important;
+          -webkit-appearance: none !important;
+          -moz-appearance: none !important;
+          background-image: none !important;
+        }
         #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-crm-input),
         #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-crm-input),
         #crm-tab-container select:hover:not(:disabled),
@@ -284,11 +339,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         #crm-tab-container select:disabled {
           background-color: #e2d9e6 !important;
           color: #000000 !important;
-          cursor: not-allowed !allowed !important;
+          cursor: not-allowed !important;
           opacity: 0.9 !important;
         }
         #crm-tab-container label {
-          font-size: 16px !important;
+          font-size: 18px !important;
           color: #000000 !important;
           font-weight: 600 !important;
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
@@ -304,33 +359,32 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight font-sans" style={{ color: '#000000', cursor: 'default' }} id="crm-tab-title">
+            <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }} id="crm-tab-title">
               Dossiers & Tickets.
             </h2>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Search Input */}
-            <div className="relative w-full sm:w-80">
-              <input
-                type="text"
-                id="search-crm-input"
-                value={ticketSearch}
-                onChange={(e) => setTicketSearch(e.target.value)}
-                placeholder="Recherche."
-                style={{
-                  border: '1px solid #dedede',
-                  borderRadius: '13px',
-                  padding: '9px 19px',
-                  fontSize: '18px',
-                  fontWeight: '100',
-                  color: '#000000',
-                  backgroundColor: '#ffffff',
-                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                  outline: 'none',
-                }}
-              />
-            </div>
+            <input
+              type="text"
+              id="search-crm-input"
+              value={ticketSearch}
+              onChange={(e) => setTicketSearch(e.target.value)}
+              placeholder="Recherche."
+              style={{
+                border: '1px solid #dedede',
+                borderRadius: '13px',
+                padding: '9px 19px',
+                fontSize: '18px',
+                fontWeight: '100',
+                color: '#000000',
+                backgroundColor: '#ffffff',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                outline: 'none',
+                width: '260px',
+              }}
+            />
 
             {/* Nouveau Dossier/Ticket Button */}
             <button
@@ -346,13 +400,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         </div>
       </div>
 
-      <HelpBubble 
-        cacheKey="help_dismissed_crm" 
-        text="Gérez vos dossiers et tickets d'assistance. Suivez la criticité, l'attribution à vos collaborateurs et le statut en temps réel." 
-      />
-
       {/* Status Filter Pills */}
-      <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-2" id="crm-status-pills">
+      <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start mt-6 mb-4" id="crm-status-pills">
         {(['Tous', 'Nouveau', 'En cours', 'Terminé'] as const).map((filterOpt) => {
           const isSelected = ticketStatusFilter === filterOpt;
           return (
@@ -388,7 +437,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         <div className="overflow-x-auto">
           {filteredTickets.length === 0 ? (
             <div className="p-16 text-center font-sans lg:py-24" id="no-crm-view">
-              <p style={{ color: '#000000', fontSize: '18px', fontWeight: 400 }}>
+              <p style={{ color: '#000000', fontSize: '18px', fontWeight: 400, cursor: 'default' }}>
                 Aucun résultat.
               </p>
             </div>
@@ -425,93 +474,53 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <tr key={t.id} className="hover:bg-slate-50 transition-colors">
                       {/* Référence. (in gelule) */}
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span
-                          style={{
-                            color: '#ffffff',
-                            background: '#0f172a',
-                            borderRadius: '9999px',
-                            padding: '6px 14px',
-                            fontSize: '14px',
-                            fontWeight: 'bold',
-                            display: 'inline-block',
-                          }}
-                        >
+                        <span style={geluleStyle}>
                           {refVal}
                         </span>
                       </td>
 
                       {/* Criticité. (in gelule) */}
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span
-                          style={{
-                            color: '#ffffff',
-                            background: critVal === 'Urgent' ? '#dc2626' : '#0f172a',
-                            borderRadius: '9999px',
-                            padding: '6px 14px',
-                            fontSize: '14px',
-                            fontWeight: 'bold',
-                            display: 'inline-block',
-                          }}
-                        >
+                        <span style={geluleStyle}>
                           {critVal}
                         </span>
                       </td>
 
                       {/* Catégorie. */}
-                      <td className="px-4 py-4 whitespace-nowrap text-slate-800 text-[15px]">
+                      <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
                         {catVal}
                       </td>
 
                       {/* Situation. (in gelule) */}
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span
-                          style={{
-                            color: '#ffffff',
-                            background: sitVal === 'Terminé' ? '#16a34a' : sitVal === 'En cours' ? '#d97706' : '#2563eb',
-                            borderRadius: '9999px',
-                            padding: '6px 14px',
-                            fontSize: '14px',
-                            fontWeight: 'bold',
-                            display: 'inline-block',
-                          }}
-                        >
+                        <span style={geluleStyle}>
                           {sitVal}
                         </span>
                       </td>
 
                       {/* Ouverture. */}
-                      <td className="px-4 py-4 whitespace-nowrap text-slate-700 text-[15px]">
+                      <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
                         {ouvVal}
                       </td>
 
                       {/* Der.Actual. */}
-                      <td className="px-4 py-4 whitespace-nowrap text-slate-700 text-[15px]">
+                      <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
                         {derVal}
                       </td>
 
                       {/* Objet. (max 40 chars) */}
-                      <td className="px-4 py-4 text-slate-900 font-medium text-[15px] whitespace-nowrap max-w-[220px] truncate" title={rawObjet}>
+                      <td className="px-4 py-4 whitespace-nowrap max-w-[220px] truncate" style={cellTextStyle} title={rawObjet}>
                         {truncatedObjet}
                       </td>
 
                       {/* Collaborateur. */}
-                      <td className="px-4 py-4 whitespace-nowrap text-slate-800 text-[15px]">
+                      <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
                         {colVal}
                       </td>
 
                       {/* Client. (in gelule) */}
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span
-                          style={{
-                            color: '#ffffff',
-                            background: '#0f172a',
-                            borderRadius: '9999px',
-                            padding: '6px 14px',
-                            fontSize: '14px',
-                            fontWeight: 'bold',
-                            display: 'inline-block',
-                          }}
-                        >
+                        <span style={geluleStyle}>
                           {cliVal}
                         </span>
                       </td>
@@ -522,16 +531,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           <button
                             type="button"
                             onClick={() => openEditTicketPane(t)}
-                            style={{
-                              backgroundColor: '#000000',
-                              color: '#ffffff',
-                              borderRadius: '10px',
-                              padding: '8px 16px',
-                              fontSize: '15px',
-                              fontWeight: 'normal',
-                              border: 'none',
-                              cursor: 'pointer',
-                            }}
+                            style={rowActionButtonStyle}
                             className="hover:bg-zinc-800 transition-colors"
                           >
                             Gérer
@@ -540,21 +540,20 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             <button
                               type="button"
                               onClick={() => handleQuickTerminate(t.id)}
-                              style={{
-                                backgroundColor: '#16a34a',
-                                color: '#ffffff',
-                                borderRadius: '10px',
-                                padding: '8px 16px',
-                                fontSize: '15px',
-                                fontWeight: 'normal',
-                                border: 'none',
-                                cursor: 'pointer',
-                              }}
-                              className="hover:bg-emerald-700 transition-colors"
+                              style={rowActionButtonStyle}
+                              className="hover:bg-zinc-800 transition-colors"
                             >
                               Terminer
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTicket(t.id)}
+                            style={rowActionButtonStyle}
+                            className="hover:bg-zinc-800 transition-colors"
+                          >
+                            Supprimer
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -571,7 +570,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         <div className="fixed inset-0 z-50 overflow-hidden">
           {/* Overlay backdrop */}
           <div 
-            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity cursor-pointer"
             onClick={() => setIsPaneOpen(false)}
           />
 
@@ -579,22 +578,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
             <div className="w-screen max-w-md sm:max-w-xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto">
               
-              {/* Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-6">
-                <h3 className="text-xl font-bold text-black font-sans">
-                  {editingTicketId ? 'Gérer le Dossier / Ticket' : 'Nouveau Dossier / Ticket'}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsPaneOpen(false)}
-                  className="p-2 text-slate-500 hover:text-black hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
               {/* Form */}
-              <form onSubmit={handleSaveForm} className="space-y-4 flex-1">
+              <form onSubmit={handleSaveForm} className="space-y-5 flex-1 pt-2">
                 
                 {/* 1. Référence */}
                 <div>
@@ -613,6 +598,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <select
                     value={formCategorie}
                     onChange={(e: any) => setFormCategorie(e.target.value)}
+                    style={selectStyle}
                   >
                     <option value="Technique">Technique</option>
                     <option value="Commercial">Commercial</option>
@@ -627,6 +613,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <select
                     value={formSituation}
                     onChange={(e: any) => setFormSituation(e.target.value)}
+                    style={selectStyle}
                   >
                     <option value="Nouveau">Nouveau</option>
                     <option value="En cours">En cours</option>
@@ -640,6 +627,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <select
                     value={formCriticite}
                     onChange={(e: any) => setFormCriticite(e.target.value)}
+                    style={selectStyle}
                   >
                     <option value="Urgent">Urgent</option>
                     <option value="Semaine prochaine">Semaine prochaine</option>
@@ -693,6 +681,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <select
                     value={formCollaborateur}
                     onChange={(e) => setFormCollaborateur(e.target.value)}
+                    style={selectStyle}
                   >
                     <option value="Non attribué">Non attribué</option>
                     {members.map((m) => (
@@ -709,10 +698,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <select
                     value={formClientSelect}
                     onChange={(e) => setFormClientSelect(e.target.value)}
+                    style={selectStyle}
                   >
                     <option value="Autre">Autre</option>
                     {clients.map((c) => {
-                      const cName = c.nomSociete || c.nomClient || (c as any).name || 'Client';
+                      const cName = c.denomination || (c as any).name || c.id || 'Client';
                       return (
                         <option key={c.id || cName} value={cName}>
                           {cName}

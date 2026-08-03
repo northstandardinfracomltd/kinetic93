@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { PointageLog, Member } from '../types';
-import { Download } from 'lucide-react';
 import { t } from '../utils/translate';
 
 interface TempsTabProps {
@@ -439,6 +438,25 @@ function generateMonthlyCSV(
   );
 }
 
+function hasPointageInMonth(
+  techName: string,
+  year: number,
+  monthIndex: number,
+  pointages: PointageLog[]
+): boolean {
+  if (!pointages || pointages.length === 0) return false;
+  return pointages.some((p) => {
+    if (!p.techName) return false;
+    if (p.techName !== techName && p.techName.toLowerCase() !== techName.toLowerCase()) return false;
+    const iso = parseToIso(p.startDate);
+    if (!iso || iso.length < 7) return false;
+    const parts = iso.split('-');
+    const y = parseInt(parts[0], 10);
+    const mIdx = parseInt(parts[1], 10) - 1;
+    return y === year && mIdx === monthIndex;
+  });
+}
+
 export default function TempsTab({ pointages = [], members = [] }: TempsTabProps) {
   const [search, setSearch] = useState('');
   const [selectedTechFilter, setSelectedTechFilter] = useState<string>('Tous');
@@ -528,14 +546,16 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
 
   techToUse.forEach((tech) => {
     monthList.forEach((ml) => {
-      rows.push({
-        id: `${tech}-${ml.year}-${ml.monthIndex}`,
-        techName: tech,
-        year: ml.year,
-        monthIndex: ml.monthIndex,
-        monthLabel: ml.monthLabel,
-        achevementDate: ml.achevementDate,
-      });
+      if (hasPointageInMonth(tech, ml.year, ml.monthIndex, pointages)) {
+        rows.push({
+          id: `${tech}-${ml.year}-${ml.monthIndex}`,
+          techName: tech,
+          year: ml.year,
+          monthIndex: ml.monthIndex,
+          monthLabel: ml.monthLabel,
+          achevementDate: ml.achevementDate,
+        });
+      }
     });
   });
 
@@ -570,14 +590,13 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
     backgroundColor: '#000',
     color: '#fff',
     borderRadius: '13px',
-    fontSize: '16px',
+    fontSize: '18px',
     padding: '10px 20px',
     fontWeight: 'bold',
     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '0.4rem',
     cursor: 'pointer',
     border: 'none',
     transition: 'all 0.15s ease',
@@ -667,7 +686,7 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
 
       {/* Filters Pills Row */}
       {technicians.length > 0 && (
-        <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-2" id="temps-tech-pills">
+        <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start mt-6 mb-4" id="temps-tech-pills">
           {['Tous', ...technicians].map((filterOpt) => (
             <button
               key={filterOpt}
@@ -782,7 +801,6 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
                         style={actionButtonStyle}
                         className="hover:opacity-90 active:scale-95 font-sans bg-black text-white rounded"
                       >
-                        <Download className="w-4 h-4" />
                         {t("Télécharger")}
                       </button>
                     </td>
