@@ -352,6 +352,95 @@ export default function SettingsModal({
   const [apiDefibeoSecretKey, setApiDefibeoSecretKey] = React.useState('');
   const [apiDefibeoCopied, setApiDefibeoCopied] = React.useState<string | null>(null);
   const [isApiDocOpen, setIsApiDocOpen] = React.useState(false);
+  const [apiFieldSearch, setApiFieldSearch] = React.useState('');
+  const [apiFieldCategory, setApiFieldCategory] = React.useState<string>('Tous');
+  const [copiedSlug, setCopiedSlug] = React.useState<string | null>(null);
+
+  const apiFieldsDictionary = [
+    // Défibrillateurs
+    { entity: 'Défibrillateur', slug: 'identifiant', type: 'string', label: 'ID matériel unique / DAE', example: 'DAE-88192' },
+    { entity: 'Défibrillateur', slug: 'serie', type: 'string', label: 'Numéro de série constructeur (N° Série)', example: 'SN-9981240' },
+    { entity: 'Défibrillateur', slug: 'marque', type: 'string', label: 'Marque constructeur DAE', example: 'ZOLL' },
+    { entity: 'Défibrillateur', slug: 'modele', type: 'string', label: 'Modèle de défibrillateur', example: 'AED Plus' },
+    { entity: 'Défibrillateur', slug: 'statut', type: 'string', label: 'Statut de conformité', example: 'Conforme' },
+    { entity: 'Défibrillateur', slug: 'statut_voyant', type: 'string', label: 'État du voyant lumineux', example: 'Vert OK' },
+    { entity: 'Défibrillateur', slug: 'derniere_maintenance', type: 'date (AAAA-MM-JJ)', label: 'Date de la dernière maintenance / contrôle', example: '2026-08-03' },
+    { entity: 'Défibrillateur', slug: 'prochaine_v', type: 'date (AAAA-MM-JJ)', label: 'Date de la prochaine visite planifiée', example: '2027-08-01' },
+    { entity: 'Défibrillateur', slug: 'peremption_a', type: 'date (AAAA-MM-JJ)', label: 'Péremption Électrodes Adulte principales', example: '2028-02-15' },
+    { entity: 'Défibrillateur', slug: 'peremption_electrodes', type: 'date (AAAA-MM-JJ)', label: 'Péremption Électrodes (alias)', example: '2028-02-15' },
+    { entity: 'Défibrillateur', slug: 'lot_a', type: 'string', label: 'Numéro de lot Électrodes Adulte principales', example: 'LOT-A-990' },
+    { entity: 'Défibrillateur', slug: 'insertion_a', type: 'date (AAAA-MM-JJ)', label: 'Date installation Électrodes Adulte', example: '2026-02-15' },
+    { entity: 'Défibrillateur', slug: 'modele_a', type: 'string', label: 'Modèle Électrodes Adulte', example: 'CPR-D Padz' },
+    { entity: 'Défibrillateur', slug: 'peremption_p', type: 'date (AAAA-MM-JJ)', label: 'Péremption Électrodes Pédiatriques', example: '2028-06-30' },
+    { entity: 'Défibrillateur', slug: 'lot_p', type: 'string', label: 'Numéro de lot Électrodes Pédiatriques', example: 'LOT-P-441' },
+    { entity: 'Défibrillateur', slug: 'insertion_p', type: 'date (AAAA-MM-JJ)', label: 'Date installation Électrodes Pédiatriques', example: '2026-02-15' },
+    { entity: 'Défibrillateur', slug: 'modele_p', type: 'string', label: 'Modèle Électrodes Pédiatriques', example: 'Pedi-Padz II' },
+    { entity: 'Défibrillateur', slug: 'peremption_b', type: 'date (AAAA-MM-JJ)', label: 'Péremption Batterie / Piles', example: '2030-02-15' },
+    { entity: 'Défibrillateur', slug: 'peremption_batterie', type: 'date (AAAA-MM-JJ)', label: 'Péremption Batterie (alias)', example: '2030-02-15' },
+    { entity: 'Défibrillateur', slug: 'lot_b', type: 'string', label: 'Numéro de lot Batterie', example: 'LOT-BAT-77' },
+    { entity: 'Défibrillateur', slug: 'insertion_b', type: 'date (AAAA-MM-JJ)', label: 'Date installation Batterie', example: '2026-02-15' },
+    { entity: 'Défibrillateur', slug: 'modele_b', type: 'string', label: 'Modèle de Batterie', example: 'Pack Lithium 123A' },
+    { entity: 'Défibrillateur', slug: 'pourcentage_constate_b', type: 'number (0-100)', label: 'Charge batterie constatée (%)', example: '100' },
+    { entity: 'Défibrillateur', slug: 'lot_padpak_a', type: 'string', label: 'Lot Pad-Pak Adulte (HeartSine)', example: 'PADPAK-A-01' },
+    { entity: 'Défibrillateur', slug: 'peremption_padpak_a', type: 'date (AAAA-MM-JJ)', label: 'Péremption Pad-Pak Adulte', example: '2028-02-15' },
+    { entity: 'Défibrillateur', slug: 'lot_padpak_p', type: 'string', label: 'Lot Pad-Pak Pédiatrique (HeartSine)', example: 'PADPAK-P-02' },
+    { entity: 'Défibrillateur', slug: 'peremption_padpak_p', type: 'date (AAAA-MM-JJ)', label: 'Péremption Pad-Pak Pédiatrique', example: '2028-06-30' },
+    { entity: 'Défibrillateur', slug: 'peremption_trousse', type: 'date (AAAA-MM-JJ)', label: 'Péremption trousse de secours / rasoir', example: '2028-12-31' },
+    { entity: 'Défibrillateur', slug: 'etat_housse', type: 'string', label: 'État de la housse de protection', example: 'Conforme' },
+    { entity: 'Défibrillateur', slug: 'boitier_modele', type: 'string', label: 'Modèle boîtier / armoire mural', example: 'AIVIA 200' },
+    { entity: 'Défibrillateur', slug: 'boitier_lot', type: 'string', label: 'Numéro de lot armoire mural', example: 'LOT-B-88' },
+    { entity: 'Défibrillateur', slug: 'numero_et_voie', type: 'string', label: 'Numéro et voie (adresse)', example: '12 Avenue de Paris' },
+    { entity: 'Défibrillateur', slug: 'ville', type: 'string', label: 'Ville de géolocalisation', example: 'Paris' },
+    { entity: 'Défibrillateur', slug: 'code_postal', type: 'string', label: 'Code postal', example: '75008' },
+    { entity: 'Défibrillateur', slug: 'region', type: 'string', label: 'Région / Département', example: 'Île-de-France' },
+    { entity: 'Défibrillateur', slug: 'pays', type: 'string', label: 'Pays', example: 'France' },
+    { entity: 'Défibrillateur', slug: 'latitude', type: 'number', label: 'Latitude GPS', example: '48.8708' },
+    { entity: 'Défibrillateur', slug: 'longitude', type: 'number', label: 'Longitude GPS', example: '2.3045' },
+    { entity: 'Défibrillateur', slug: 'aide_acces', type: 'string', label: 'Aide et consignes d\'accès', example: 'Code porte 45A12 - Hall RDC' },
+    { entity: 'Défibrillateur', slug: 'expiration_garantie', type: 'date (AAAA-MM-JJ)', label: 'Expiration garantie constructeur', example: '2030-05-15' },
+    { entity: 'Défibrillateur', slug: 'date_fabrication', type: 'date (AAAA-MM-JJ)', label: 'Date de fabrication constructeur', example: '2024-02-10' },
+    { entity: 'Défibrillateur', slug: 'version_logiciel', type: 'string', label: 'Version firmware interne', example: 'v3.2.1' },
+    { entity: 'Défibrillateur', slug: 'numero_atlasante', type: 'string', label: 'Référence ARS / ARLA / Atlasanté', example: 'ATLAS-77120' },
+
+    // Client
+    { entity: 'Client', slug: 'client_id', type: 'string', label: 'Identifiant unique client', example: 'CLI-0042' },
+    { entity: 'Client', slug: 'entreprise', type: 'string', label: 'Raison sociale / Nom entreprise', example: 'Clinique Saint-Jean' },
+    { entity: 'Client', slug: 'email', type: 'string', label: 'Adresse e-mail de contact', example: 'contact@clinique-stjean.fr' },
+    { entity: 'Client', slug: 'telephone', type: 'string', label: 'Numéro de téléphone', example: '0142680000' },
+    { entity: 'Client', slug: 'payeur_id', type: 'string', label: 'Identifiant structure payeuse', example: 'PAY-0091' },
+    { entity: 'Client', slug: 'identifiant_unique', type: 'string', label: 'SIRET / RNA / Identifiant légal', example: 'SIRET-12345678900012' },
+    { entity: 'Client', slug: 'reference_contrat', type: 'string', label: 'Référence du contrat client', example: 'CTR-2026-99' },
+    { entity: 'Client', slug: 'debut_contrat', type: 'date (AAAA-MM-JJ)', label: 'Date début de contrat', example: '2026-01-01' },
+    { entity: 'Client', slug: 'fin_contrat', type: 'date (AAAA-MM-JJ)', label: 'Date fin de contrat', example: '2028-12-31' },
+
+    // Autre Matériel
+    { entity: 'Autre Matériel', slug: 'identifiant', type: 'string', label: 'ID matériel unique', example: 'MAT-00109' },
+    { entity: 'Autre Matériel', slug: 'categorie', type: 'string', label: 'Catégorie d\'équipement', example: 'Purificateur d\'air' },
+    { entity: 'Autre Matériel', slug: 'serie', type: 'string', label: 'Numéro de série', example: 'PUR-99812' },
+    { entity: 'Autre Matériel', slug: 'type_filtre', type: 'string', label: 'Type de filtre installé', example: 'HEPA H14' },
+    { entity: 'Autre Matériel', slug: 'modele_filtre', type: 'string', label: 'Référence modèle de filtre', example: 'FIL-HEPA-MED-01' },
+    { entity: 'Autre Matériel', slug: 'derniere_maintenance', type: 'date (AAAA-MM-JJ)', label: 'Date dernière maintenance', example: '2026-03-10' },
+
+    // Stock
+    { entity: 'Stock', slug: 'ugs', type: 'string', label: 'Code UGS / Référence produit', example: 'ELE-ZOLL-01' },
+    { entity: 'Stock', slug: 'designation', type: 'string', label: 'Désignation de l\'article', example: 'Électrodes Adulte CPR-D Padz ZOLL' },
+    { entity: 'Stock', slug: 'quantite_disponible', type: 'number', label: 'Quantité physique disponible en stock', example: '142' },
+    { entity: 'Stock', slug: 'seuil_alerte', type: 'number', label: 'Seuil minimal d\'alerte réapprovisionnement', example: '20' },
+    { entity: 'Stock', slug: 'emplacement_entrepot', type: 'string', label: 'Emplacement en entrepôt', example: 'Aisle B - Etagere 4' },
+
+    // Commande
+    { entity: 'Commande', slug: 'reference', type: 'string', label: 'Référence devis / commande', example: 'DEV-2026-0803' },
+    { entity: 'Commande', slug: 'type', type: 'string', label: 'Type ("Devis" ou "Facture")', example: 'Devis' },
+    { entity: 'Commande', slug: 'situation', type: 'string', label: 'État ("Brouillon", "Envoyé", "Validé", "Payé")', example: 'Brouillon' },
+    { entity: 'Commande', slug: 'date_emission', type: 'date (AAAA-MM-JJ)', label: 'Date d\'émission', example: '2026-08-03' },
+    { entity: 'Commande', slug: 'code_taxe', type: 'string', label: 'Taux de taxe applicable', example: 'TVA20' },
+
+    // CRM
+    { entity: 'CRM', slug: 'categorie', type: 'string', label: 'Catégorie de ticket CRM', example: 'Technique' },
+    { entity: 'CRM', slug: 'criticite', type: 'string', label: 'Niveau de criticité', example: 'Urgent' },
+    { entity: 'CRM', slug: 'objet', type: 'string', label: 'Objet / Sujet du dossier', example: 'Signalement Bip DAE' },
+    { entity: 'CRM', slug: 'description', type: 'string', label: 'Description détaillée', example: 'Constat voyant rouge à 8h' }
+  ];
 
   const generateApiDefibeoKeys = () => {
     const rand1 = Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
@@ -4650,14 +4739,148 @@ export default function SettingsModal({
                 <div style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }} className="text-white space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-[16px] text-white">En-têtes HTTP requis (headers)</span>
-                    <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>JSON REST</span>
+                    <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>JSON REST</span>
                   </div>
-                  <pre style={{ background: 'rgba(0,0,0,0.25)', borderRadius: '10px', padding: '15px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                  <pre style={{ background: 'rgba(0,0,0,0.25)', borderRadius: '10px', padding: '15px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`X-Defibeo-Tenant-ID: ${localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO'}
 X-Defibeo-API-Key: ${apiDefibeoApiKey || 'dfb_live_xxxxxxxx'}
 X-Defibeo-Secret-Key: ${apiDefibeoSecretKey || 'dfb_sec_xxxxxxxx'}
 Content-Type: application/json`}
                   </pre>
+                </div>
+
+                {/* SEARCH & EXPLORER FOR SLUGS / FIELDS */}
+                <div style={{ border: '2px solid #28134a', borderRadius: '13px', backgroundColor: '#fcfbfe' }} className="p-4 space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+                      <h4 className="font-bold text-black text-[18px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        🔍 Explorateur de champs API & Dictionnaire de Slugs
+                      </h4>
+                      <span className="text-xs bg-[#28134a] text-white px-2.5 py-1 rounded-full font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        {apiFieldsDictionary.filter(f => {
+                          const matchesCat = apiFieldCategory === 'Tous' || f.entity === apiFieldCategory;
+                          const query = apiFieldSearch.toLowerCase().trim();
+                          const matchesSearch = !query || f.slug.toLowerCase().includes(query) || f.label.toLowerCase().includes(query) || f.entity.toLowerCase().includes(query);
+                          return matchesCat && matchesSearch;
+                        }).length} champs disponibles
+                      </span>
+                    </div>
+                    <p className="text-[14px] text-slate-600" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      Recherchez et cliquez sur n'importe quel slug pour le copier instantanément et l'utiliser dans vos requêtes de mise à jour (POST).
+                    </p>
+                  </div>
+
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={apiFieldSearch}
+                      onChange={(e) => setApiFieldSearch(e.target.value)}
+                      placeholder="Rechercher un slug (ex: peremption_a, derniere_maintenance, serie, lot_a...)"
+                      className="w-full bg-white text-black p-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#28134a]"
+                      style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                    />
+                    {apiFieldSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setApiFieldSearch('')}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-black font-bold text-sm"
+                        style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Category Pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {['Tous', 'Défibrillateur', 'Client', 'Autre Matériel', 'Stock', 'Commande', 'CRM'].map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setApiFieldCategory(cat)}
+                        style={{
+                          backgroundColor: apiFieldCategory === cat ? '#28134a' : '#eef0f6',
+                          color: apiFieldCategory === cat ? '#ffffff' : '#1e293b',
+                          borderRadius: '8px',
+                          padding: '4px 10px',
+                          fontSize: '13px',
+                          fontWeight: 'bold',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                        }}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Field List Container */}
+                  <div className="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {apiFieldsDictionary
+                      .filter(f => {
+                        const matchesCat = apiFieldCategory === 'Tous' || f.entity === apiFieldCategory;
+                        const query = apiFieldSearch.toLowerCase().trim();
+                        const matchesSearch = !query || f.slug.toLowerCase().includes(query) || f.label.toLowerCase().includes(query) || f.entity.toLowerCase().includes(query);
+                        return matchesCat && matchesSearch;
+                      })
+                      .map((field) => (
+                        <div
+                          key={`${field.entity}-${field.slug}`}
+                          className="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between flex-wrap gap-2 hover:border-[#28134a] transition-all"
+                          style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] bg-purple-100 text-purple-900 px-2 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                              {field.entity}
+                            </span>
+                            <code
+                              onClick={() => {
+                                copyToClipboard(field.slug, field.slug);
+                                setCopiedSlug(field.slug);
+                                setTimeout(() => setCopiedSlug(null), 1500);
+                              }}
+                              className="bg-slate-100 text-black px-2 py-0.5 rounded font-bold cursor-pointer hover:bg-slate-200 transition-colors border border-slate-300"
+                              title="Cliquer pour copier le slug"
+                              style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                            >
+                              {field.slug}
+                            </code>
+                            <span className="text-[13px] text-slate-700 font-medium" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                              — {field.label}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-slate-400 italic" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                              type: {field.type}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                copyToClipboard(field.slug, field.slug);
+                                setCopiedSlug(field.slug);
+                                setTimeout(() => setCopiedSlug(null), 1500);
+                              }}
+                              style={{
+                                backgroundColor: copiedSlug === field.slug ? '#7aa637' : '#28134a',
+                                color: '#ffffff',
+                                fontSize: '12px',
+                                fontWeight: 'bold',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '3px 8px',
+                                cursor: 'pointer',
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                              }}
+                            >
+                              {copiedSlug === field.slug ? 'Copié !' : 'Copier slug'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
                 </div>
 
                 {/* API Reference Endpoints */}
@@ -4666,16 +4889,16 @@ Content-Type: application/json`}
                   {/* 1. Client - GET */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
-                        <span className="font-bold text-black text-[16px]">/v1/clients/:client_id</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/clients/:client_id</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Récupère les informations complètes d'un client spécifique selon la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:client_id</code> (ex: <code className="text-purple-700 font-mono">CLI-0042</code>).</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère les informations complètes d'un client spécifique selon la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:client_id</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>CLI-0042</code>).</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Structure JSON complète retournée</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Structure JSON complète retournée</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "entreprise": "Clinique Saint-Jean",
   "email": "contact@clinique-stjean.fr",
@@ -4695,16 +4918,16 @@ Content-Type: application/json`}
                   {/* 2. Client - POST Update */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
-                        <span className="font-bold text-black text-[16px]">/v1/clients/:client_id</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/clients/:client_id</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Met à jour le jeu de données d'un client ciblé. La variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:client_id</code> (ex: <code className="text-purple-700 font-mono">CLI-0042</code>) désigne précisément le client à éditer dans la base de données.</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Met à jour le jeu de données d'un client ciblé. La variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:client_id</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>CLI-0042</code>) désigne précisément le client à éditer dans la base de données.</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "entreprise": "Clinique Saint-Jean de Paris",
   "email": "direction@clinique-stjean.fr",
@@ -4723,20 +4946,23 @@ Content-Type: application/json`}
                   {/* 3. Défibrillateur - GET */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
-                        <span className="font-bold text-black text-[16px]">/v1/defibrillateurs/:identifiant</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/defibrillateurs/:identifiant</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Récupère la totalité des champs d'un défibrillateur spécifique selon son identifiant unique placé en URL : <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:identifiant</code> (ex: <code className="text-purple-700 font-mono">DAE-88192</code> ou <code className="text-purple-700 font-mono">AABBCC</code>).</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère la totalité des champs d'un défibrillateur spécifique selon son identifiant unique placé en URL : <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:identifiant</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>DAE-88192</code> ou <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>AABBCC</code>).</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Champs retournés (JSON complet)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Champs retournés (JSON complet)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "serie": "SN-9981240",
   "identifiant": "DAE-88192",
+  "marque": "ZOLL",
   "modele": "AED Plus",
+  "statut": "Conforme",
+  "statut_voyant": "Vert OK",
   "numero_atlasante": "ATLAS-77120",
   "version_logiciel": "v3.2.1",
   "client_id": "CLI-0042",
@@ -4756,6 +4982,7 @@ Content-Type: application/json`}
   "expiration_garantie": "2030-05-15",
   "date_fabrication": "2024-02-10",
   "derniere_maintenance": "2026-02-15",
+  "prochaine_v": "2027-08-01",
   "modele_a": "CPR-D Padz (Adulte)",
   "lot_a": "LOT-A-990",
   "insertion_a": "2026-02-15",
@@ -4773,7 +5000,8 @@ Content-Type: application/json`}
   "peremption_b": "2030-02-15",
   "insertion_b": "2026-02-15",
   "pourcentage_constate_b": 100,
-  "peremption_trousse": "2028-12-31"
+  "peremption_trousse": "2028-12-31",
+  "etat_housse": "Conforme"
 }`}
                         </pre>
                       </div>
@@ -4783,21 +5011,30 @@ Content-Type: application/json`}
                   {/* 4. Défibrillateur - POST Update */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
-                        <span className="font-bold text-black text-[16px]">/v1/defibrillateurs/:identifiant</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/defibrillateurs/:identifiant</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Édite et met à jour le jeu de données d'un défibrillateur spécifique. La variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:identifiant</code> (ex: <code className="text-purple-700 font-mono">AABBCC</code> ou <code className="text-purple-700 font-mono">DAE-88192</code>) désigne le matériel exact à cibler et modifier.</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Édite et met à jour le jeu de données d'un défibrillateur spécifique. La variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:identifiant</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>AABBCC</code> ou <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>DAE-88192</code>) désigne le matériel exact à cibler et modifier.</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload exhaustif)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "derniere_maintenance": "2026-08-03",
+  "prochaine_v": "2027-08-01",
   "peremption_a": "2029-08-01",
   "lot_a": "LOT-A-1002",
+  "modele_a": "CPR-D Padz (Adulte)",
+  "peremption_p": "2029-11-15",
+  "lot_p": "LOT-P-882",
+  "peremption_b": "2031-05-20",
+  "lot_b": "LOT-BAT-99",
   "pourcentage_constate_b": 95,
+  "statut": "Conforme",
+  "statut_voyant": "Vert OK",
+  "etat_housse": "Conforme",
   "aide_acces": "Nouveau badge sécurité RDC"
 }`}
                         </pre>
@@ -4808,16 +5045,16 @@ Content-Type: application/json`}
                   {/* 5. Autre Matériel - GET */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
-                        <span className="font-bold text-black text-[16px]">/v1/materiels/:identifiant</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/materiels/:identifiant</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Récupère les informations d'un matériel spécifique (Purificateur d'air, etc.) selon la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:identifiant</code> (ex: <code className="text-purple-700 font-mono">MAT-00109</code>).</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère les informations d'un matériel spécifique (Purificateur d'air, Extincteur, etc.) selon la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:identifiant</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>MAT-00109</code>).</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Champs retournés (JSON complet)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Champs retournés (JSON complet)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "categorie": "Purificateur d'air",
   "client_id": "CLI-0042",
@@ -4846,18 +5083,19 @@ Content-Type: application/json`}
                   {/* 6. Autre Matériel - POST Update */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
-                        <span className="font-bold text-black text-[16px]">/v1/materiels/:identifiant</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/materiels/:identifiant</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Édite et met à jour les informations d'un matériel spécifique. La variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:identifiant</code> (ex: <code className="text-purple-700 font-mono">MAT-00109</code>) cible précisément l'équipement à modifier.</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Édite et met à jour les informations d'un matériel spécifique. La variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:identifiant</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>MAT-00109</code>) cible précisément l'équipement à modifier.</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "derniere_maintenance": "2026-08-03",
+  "type_filtre": "HEPA H14 Ultra",
   "modele_filtre": "FIL-HEPA-MED-02",
   "email_contact": "maintenance@clinique-stjean.fr"
 }`}
@@ -4869,16 +5107,16 @@ Content-Type: application/json`}
                   {/* 7. Commande (Devis ou Facture) - POST Create */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
-                        <span className="font-bold text-black text-[16px]">/v1/commandes</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/commandes</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Crée une nouvelle commande dans Defibeo avec ses articles et sous-tables de pièces.</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée une nouvelle commande dans Defibeo avec ses articles et sous-tables de pièces.</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "membre_attribue": "Thomas Martin",
   "type": "Devis",
@@ -4908,16 +5146,16 @@ Content-Type: application/json`}
                   {/* 8. FSM Tournée & Missions - POST Create */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
-                        <span className="font-bold text-black text-[16px]">/v1/tournees</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/tournees</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Crée une nouvelle tournée FSM et insère des missions associées aux identifiants de défibrillateurs ou autres matériels.</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée une nouvelle tournée FSM et insère des missions associées aux identifiants de défibrillateurs ou autres matériels.</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "titre_tournee": "Tournée Maintenance IDF Ouest - Août 2026",
   "date_periode": "2026-08-10 au 2026-08-15",
@@ -4947,16 +5185,16 @@ Content-Type: application/json`}
                   {/* 9. Rapport PDF - GET */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
-                        <span className="font-bold text-black text-[16px]">/v1/rapports/:identifiant</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/rapports/:identifiant</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Récupère les informations et l'URL de téléchargement d'un rapport d'intervention PDF selon la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:identifiant</code> (ex: <code className="text-purple-700 font-mono">RAP-2026-0412</code>).</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère les informations et l'URL de téléchargement d'un rapport d'intervention PDF selon la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:identifiant</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>RAP-2026-0412</code>).</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Exemple de réponse (200 OK)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "identifiant": "RAP-2026-0412",
   "type": "Rapport de Maintenance Annuelle",
@@ -4973,16 +5211,16 @@ Content-Type: application/json`}
                   {/* 10. Stock par UGS - GET */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
-                        <span className="font-bold text-black text-[16px]">/v1/stocks/:ugs</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/stocks/:ugs</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Récupère les informations d'un stock selon le code produit en URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:ugs</code> (ex: <code className="text-purple-700 font-mono">ELE-ZOLL-01</code>).</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère les informations d'un stock selon le code produit en URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:ugs</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>ELE-ZOLL-01</code>).</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Exemple de réponse (200 OK)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "ugs": "ELE-ZOLL-01",
   "designation": "Électrodes Adulte CPR-D Padz ZOLL",
@@ -4998,16 +5236,16 @@ Content-Type: application/json`}
                   {/* 11. Stock par UGS - POST Update */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
-                        <span className="font-bold text-black text-[16px]">/v1/stocks/:ugs</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/stocks/:ugs</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Met à jour la quantité d'un article de stock en ciblant sa référence unique <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-mono font-bold">:ugs</code> (ex: <code className="text-purple-700 font-mono">ELE-ZOLL-01</code>).</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Met à jour la quantité d'un article de stock en ciblant sa référence unique <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:ugs</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>ELE-ZOLL-01</code>).</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "quantite_disponible": 180,
   "seuil_alerte": 25
@@ -5020,16 +5258,16 @@ Content-Type: application/json`}
                   {/* 12. Variables Defibeo - GET */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>GET</span>
-                        <span className="font-bold text-black text-[16px]">/v1/variables</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/variables</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Récupère la liste des variables globales système et paramétrages de Defibeo.</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère la liste des variables globales système et paramétrages de Defibeo.</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Exemple de réponse (200 OK)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "environnement": "${localStorage.getItem('defib_tenant_id') || companyInfo?.nomLogiciel || 'ENV-DEFIBEO'}",
   "version_api": "1.4.0",
@@ -5046,16 +5284,16 @@ Content-Type: application/json`}
                   {/* 13. CRM Ticket - POST Create */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3 font-mono">
-                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold' }}>POST</span>
-                        <span className="font-bold text-black text-[16px]">/v1/crm/tickets</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/crm/tickets</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black">
-                      <p className="text-black">Crée un nouveau ticket/dossier de suivi dans le CRM de Defibeo.</p>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée un nouveau ticket/dossier de suivi dans le CRM de Defibeo.</p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2">Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "categorie": "Technique",
   "situation": "Nouveau",
