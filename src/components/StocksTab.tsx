@@ -1423,23 +1423,60 @@ export default function StocksTab({
                               >
                                 Modifier
                               </button>
-                              <button
-                                type="button"
-                                disabled={st.quantite > 0}
-                                onClick={() => {
-                                  if (st.quantite > 0) return;
-                                  saveStocks(stocks.filter(s => s.id !== st.id));
-                                }}
-                                style={{
-                                  ...rowActionButtonStyle,
-                                  opacity: st.quantite > 0 ? 0.35 : 1,
-                                  cursor: st.quantite > 0 ? 'not-allowed' : 'pointer'
-                                }}
-                                className="font-sans"
-                                title={st.quantite > 0 ? "Impossible de supprimer un stock dont la quantité disponible n'est pas à 0" : "Supprimer"}
-                              >
-                                Supprimer
-                              </button>
+                              {(() => {
+                                const distEntries = (distributedStocks || []).filter(ds => 
+                                  ds.stockId === st.id || 
+                                  ds.denominationPieceId === st.denominationPieceId || 
+                                  (ds.ugs && st.ugs && ds.ugs === st.ugs)
+                                );
+                                const totalDistQty = distEntries.reduce((acc, ds) => acc + (ds.volumeDisponible || 0) + (ds.volumeReserve || 0) + (ds.volumeEntrant || 0), 0);
+                                const hasTraceabilities = (st.traceabilities || []).length > 0;
+
+                                const isDeleteDisabled = (st.quantite || 0) > 0 || 
+                                                         (st.quantiteReservee || 0) > 0 || 
+                                                         distEntries.length > 0 || 
+                                                         totalDistQty > 0 || 
+                                                         hasTraceabilities;
+
+                                let deleteTitle = "Supprimer";
+                                if (isDeleteDisabled) {
+                                  if (distEntries.length > 0 || totalDistQty > 0) {
+                                    deleteTitle = "Impossible de supprimer : du stock distribué existe pour cet équipement";
+                                  } else if (hasTraceabilities) {
+                                    deleteTitle = "Impossible de supprimer : des éléments de traçabilité sont présents";
+                                  } else {
+                                    deleteTitle = "Impossible de supprimer : le stock en centrale n'est pas nul";
+                                  }
+                                }
+
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={isDeleteDisabled}
+                                    onClick={() => {
+                                      if (isDeleteDisabled) return;
+                                      saveStocks(stocks.filter(s => s.id !== st.id));
+                                      if (saveDistributedStocks && distEntries.length > 0) {
+                                        const remainingDistributed = (distributedStocks || []).filter(ds => 
+                                          ds.stockId !== st.id && 
+                                          ds.denominationPieceId !== st.denominationPieceId && 
+                                          (!ds.ugs || !st.ugs || ds.ugs !== st.ugs)
+                                        );
+                                        saveDistributedStocks(remainingDistributed);
+                                      }
+                                    }}
+                                    style={{
+                                      ...rowActionButtonStyle,
+                                      opacity: isDeleteDisabled ? 0.35 : 1,
+                                      cursor: isDeleteDisabled ? 'not-allowed' : 'pointer'
+                                    }}
+                                    className="font-sans"
+                                    title={deleteTitle}
+                                  >
+                                    Supprimer
+                                  </button>
+                                );
+                              })()}
                             </div>
                           </td>
                         </tr>

@@ -509,21 +509,22 @@ export default function StocksDistribuesTab({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStockId) return;
-
-    const matchedStock = stocks.find(s => s.id === selectedStockId);
-    if (!matchedStock) return;
 
     if (editingId) {
       const originalItem = distributedStocks.find(it => it.id === editingId);
-      const oldLocationName = originalItem?.locationName;
+      if (!originalItem) return;
+
+      const matchedStock = stocks.find(s => s.id === selectedStockId || s.id === originalItem.stockId || s.denominationPieceId === originalItem.denominationPieceId);
+      const denomId = matchedStock?.denominationPieceId || originalItem.denominationPieceId || '';
+      const stId = matchedStock?.id || originalItem.stockId || selectedStockId || '';
+      const oldLocationName = originalItem.locationName;
 
       const updated = distributedStocks.map(it => {
         if (it.id === editingId) {
           return {
             ...it,
-            denominationPieceId: matchedStock.denominationPieceId,
-            stockId: matchedStock.id,
+            denominationPieceId: denomId,
+            stockId: stId,
             locationName,
             volumeDisponible: Number(volumeDisponible) || 0,
             volumeReserve: Number(volumeReserve) || 0,
@@ -535,7 +536,7 @@ export default function StocksDistribuesTab({
       saveDistributedStocks(updated);
 
       // propagate the storage location change to all traceabilities matching this stock's old location name
-      if (saveStocks && oldLocationName && oldLocationName !== locationName) {
+      if (matchedStock && saveStocks && oldLocationName && oldLocationName !== locationName) {
         const movementsList = matchedStock.mouvements || [];
         const updatedStocks = stocks.map(st => {
           if (st.id === matchedStock.id) {
@@ -577,6 +578,11 @@ export default function StocksDistribuesTab({
         saveStocks(updatedStocks);
       }
     } else {
+      if (!selectedStockId) return;
+
+      const matchedStock = stocks.find(s => s.id === selectedStockId);
+      if (!matchedStock) return;
+
       const newItem: DistributedStockLocation = {
         id: 'ds_' + Date.now(),
         denominationPieceId: matchedStock.denominationPieceId,
@@ -1147,6 +1153,15 @@ export default function StocksDistribuesTab({
                   required
                 >
                   <option value="" disabled hidden>Sélectionnez un item de la centrale des stocks</option>
+                  {selectedStockId && !stocks.some(st => st.id === selectedStockId) && (
+                    <option value={selectedStockId}>
+                      {(() => {
+                        const orig = distributedStocks.find(it => it.id === editingId);
+                        const vObj = orig ? variables.find(v => v.id === orig.denominationPieceId) : null;
+                        return vObj ? `${vObj.nom} (${vObj.category || ''})` : 'Équipement associé';
+                      })()}
+                    </option>
+                  )}
                   {stocks.map(st => {
                     const vObj = variables.find(v => v.id === st.denominationPieceId);
                     const pieceName = vObj ? vObj.nom : 'Dénomination inconnue';
