@@ -70,6 +70,7 @@ import { auth } from "../firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions } from "../utils/fsmOptimizer";
 import { PlanningTab } from "./PlanningTab";
+import FeedbackDrawer from "./FeedbackDrawer";
 
 // Helper functions for French date <-> ISO date picker compatibility
 const getIsoDate = (dateStr: string) => {
@@ -846,6 +847,15 @@ export default function PublicPortal({
   const [showNewDistribStockForm, setShowNewDistribStockForm] = useState<boolean>(false);
   const [newDistribStockId, setNewDistribStockId] = useState<string>("");
   const [newDistribVolumeDisponible, setNewDistribVolumeDisponible] = useState<number>(1);
+  const [newDistribTraceabilityEnabled, setNewDistribTraceabilityEnabled] = useState<boolean>(false);
+  const [showNewDistribTraceForm, setShowNewDistribTraceForm] = useState<boolean>(false);
+  const [pendingNewDistribTraceabilities, setPendingNewDistribTraceabilities] = useState<StockTraceability[]>([]);
+  const [newDistribLotOrSerial, setNewDistribLotOrSerial] = useState<string>("");
+  const [newDistribExpirationDate, setNewDistribExpirationDate] = useState<string>("");
+  const [newDistribMovementId, setNewDistribMovementId] = useState<string>("Autre (Aucun mouvement)");
+  const [newDistribSituation, setNewDistribSituation] = useState<
+    "Disponible" | "Utilisé" | "Indisponible" | "Signalé manquant" | "Prêté"
+  >("Disponible");
 
   // New Webapp Traceability Form states
   const [showNewWebappTraceForm, setShowNewWebappTraceForm] = useState<boolean>(false);
@@ -3451,6 +3461,25 @@ export default function PublicPortal({
       }
     }
   }, [activeTab, techSignature]);
+
+  // Auto-scroll to first mission with status "À faire" when arriving on Interventions tab (if tour open)
+  useEffect(() => {
+    if (activeTab === "interventions" && selectedTourId) {
+      const currentTour = tours.find((t) => t.id === selectedTourId);
+      if (currentTour && currentTour.status !== "Terminé" && currentTour.passages) {
+        const firstTodo = currentTour.passages.find((p: any) => p.status === "À faire");
+        if (firstTodo) {
+          const timer = setTimeout(() => {
+            const el = document.getElementById(`passage-card-${firstTodo.num}`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          }, 250);
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [activeTab, selectedTourId, tours]);
 
   // Auto-geocode connected technician's start address
   useEffect(() => {
@@ -6779,29 +6808,6 @@ export default function PublicPortal({
                     <span>Planning</span>
                   </button>
 
-                  <button
-                    onClick={() => setActiveTab("stocks")}
-                    style={
-                      activeTab === "stocks"
-                        ? {
-                            background: "rgb(53, 86, 236)",
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                            borderRadius: "12px",
-                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                          }
-                        : {
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                          }
-                    }
-                    className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <span>Stocks</span>
-                  </button>
-
                   {!companyInfo?.hiddenTabs?.includes("Temps (Webapp)") && (
                     <button
                       onClick={() => setActiveTab("temps")}
@@ -6826,6 +6832,29 @@ export default function PublicPortal({
                       <span>Temps</span>
                     </button>
                   )}
+
+                  <button
+                    onClick={() => setActiveTab("stocks")}
+                    style={
+                      activeTab === "stocks"
+                        ? {
+                            background: "rgb(53, 86, 236)",
+                            color: "#ffffff",
+                            fontSize: "18px",
+                            fontWeight: "bold",
+                            borderRadius: "12px",
+                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          }
+                        : {
+                            color: "#ffffff",
+                            fontSize: "18px",
+                            fontWeight: "bold",
+                          }
+                    }
+                    className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <span>Stocks</span>
+                  </button>
 
                   {!companyInfo?.hiddenTabs?.includes("Frais (Webapp)") && (
                     <button
@@ -8167,6 +8196,18 @@ export default function PublicPortal({
                         boxSizing: "border-box",
                       }}
                     >
+                      {/* Info Message */}
+                      <div
+                        className="p-3.5 rounded-[13px] text-[15px] font-sans font-medium mb-2"
+                        style={{
+                          backgroundColor: "rgb(246, 236, 247)",
+                          color: "rgb(99, 31, 106)",
+                          border: "1px solid #d2a3d7",
+                        }}
+                      >
+                        Pour être sélectionnée, une pièce doit exister (être référencée) dans la centrale des stocks, et ne pas déjà être existante dans l’emplacement du technicien.
+                      </div>
+
                       {/* 1. Équipement de la centrale des stocks */}
                       <div className="flex flex-col gap-1">
                         <label className="font-bold font-sans" style={{ color: "#000000", fontSize: "16px" }}>
@@ -8279,11 +8320,285 @@ export default function PublicPortal({
                         />
                       </div>
 
+                      {/* 4. Activer la traçabilité des pièces */}
+                      <div
+                        className="flex items-center justify-between p-3 border rounded-xl bg-slate-50"
+                        style={{ borderColor: "#D5D5D5", borderRadius: "13px" }}
+                      >
+                        <span className="font-bold text-black font-sans text-[16px]">
+                          Activer la traçabilité des pièces
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setNewDistribTraceabilityEnabled(!newDistribTraceabilityEnabled)}
+                          className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                          style={{
+                            backgroundColor: newDistribTraceabilityEnabled ? "#fe4eba" : "#cbd5e1",
+                          }}
+                        >
+                          <span
+                            className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
+                            style={{
+                              transform: newDistribTraceabilityEnabled ? "translateX(20px)" : "translateX(0px)",
+                            }}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Sub-section Inventaire de traçabilité pour nouveau stock */}
+                      {newDistribTraceabilityEnabled && (
+                        <div className="border p-4 rounded-xl space-y-3 bg-slate-50/50" style={{ borderColor: "#D5D5D5", borderRadius: "14px" }}>
+                          <div className="flex items-center justify-between select-none">
+                            <span
+                              className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
+                              style={{
+                                color: "#fff",
+                                backgroundColor: "#5f1f66",
+                                fontSize: "16px",
+                              }}
+                            >
+                              Inventaire de traçabilité
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowNewDistribTraceForm(!showNewDistribTraceForm)}
+                              style={{
+                                backgroundColor: "rgb(53, 86, 236)",
+                                color: "#ffffff",
+                                borderRadius: "11px",
+                                fontSize: "16px",
+                                fontWeight: "bold",
+                                padding: "8px 14px",
+                                border: "none",
+                              }}
+                              className="font-sans active:scale-[0.98] transition-all"
+                            >
+                              + Nouveau
+                            </button>
+                          </div>
+
+                          {/* Traceability Sub-form for mobile vertical layout */}
+                          {showNewDistribTraceForm && (
+                            <div className="bg-white p-4 border rounded-xl space-y-3 text-left font-sans animate-fadeIn" style={{ borderColor: "#cbd5e1" }}>
+                              {/* 1. Mouvement */}
+                              <div className="flex flex-col gap-1">
+                                <label className="font-bold font-sans text-black text-[15px]">
+                                  Sélection du mouvement *
+                                </label>
+                                <select
+                                  value={newDistribMovementId}
+                                  onChange={(e) => setNewDistribMovementId(e.target.value)}
+                                  style={{
+                                    color: "#000000",
+                                    fontSize: "16px",
+                                    borderColor: "#cbd5e1",
+                                    borderWidth: "1px",
+                                    borderRadius: "10px",
+                                    padding: "8px 10px",
+                                    backgroundColor: "#ffffff",
+                                    width: "100%",
+                                    textAlign: "center",
+                                    textAlignLast: "center",
+                                  }}
+                                  className="font-sans font-medium"
+                                >
+                                  <option value="Autre (Aucun mouvement)">Autre (Aucun mouvement)</option>
+                                  {newDistribStockId &&
+                                    (stocks.find((s) => s.id === newDistribStockId)?.mouvements || [])
+                                      .filter((mv) => mv.type !== "Annulation")
+                                      .map((mv) => (
+                                        <option key={mv.id} value={mv.id}>
+                                          {mv.date} - {mv.type} (Vol: {mv.volume})
+                                        </option>
+                                      ))}
+                                </select>
+                              </div>
+
+                              {/* 2. Lot ou Série */}
+                              <div className="flex flex-col gap-1">
+                                <label className="font-bold font-sans text-black text-[15px]">
+                                  Numéro de lot ou série *
+                                </label>
+                                <input
+                                  type="text"
+                                  value={newDistribLotOrSerial}
+                                  onChange={(e) => setNewDistribLotOrSerial(e.target.value)}
+                                  placeholder="Numéro de lot ou série"
+                                  style={{
+                                    color: "#000000",
+                                    fontSize: "16px",
+                                    borderColor: "#cbd5e1",
+                                    borderWidth: "1px",
+                                    borderRadius: "10px",
+                                    padding: "8px 10px",
+                                    width: "100%",
+                                    textAlign: "center",
+                                  }}
+                                  className="font-sans font-semibold"
+                                />
+                              </div>
+
+                              {/* 3. Expiration */}
+                              <div className="flex flex-col gap-1">
+                                <label className="font-bold font-sans text-black text-[15px]">
+                                  Date de péremption
+                                </label>
+                                <input
+                                  type="date"
+                                  value={newDistribExpirationDate}
+                                  onChange={(e) => setNewDistribExpirationDate(e.target.value)}
+                                  style={{
+                                    color: "#000000",
+                                    fontSize: "16px",
+                                    borderColor: "#cbd5e1",
+                                    borderWidth: "1px",
+                                    borderRadius: "10px",
+                                    padding: "8px 10px",
+                                    width: "100%",
+                                    textAlign: "center",
+                                  }}
+                                  className="font-sans font-medium"
+                                />
+                              </div>
+
+                              {/* 4. Volume */}
+                              <div className="flex flex-col gap-1">
+                                <label className="font-bold font-sans text-black text-[15px]">
+                                  Volume *
+                                </label>
+                                <input
+                                  type="number"
+                                  value={1}
+                                  disabled
+                                  readOnly
+                                  style={{
+                                    color: "#000000",
+                                    fontSize: "16px",
+                                    borderColor: "#cbd5e1",
+                                    borderWidth: "1px",
+                                    borderRadius: "10px",
+                                    padding: "8px 10px",
+                                    backgroundColor: "#f1f5f9",
+                                    width: "100%",
+                                    textAlign: "center",
+                                  }}
+                                  className="font-sans font-semibold cursor-not-allowed"
+                                />
+                              </div>
+
+                              {/* 5. Situation */}
+                              <div className="flex flex-col gap-1">
+                                <label className="font-bold font-sans text-black text-[15px]">
+                                  Situation *
+                                </label>
+                                <select
+                                  value={newDistribSituation}
+                                  onChange={(e) => setNewDistribSituation(e.target.value as any)}
+                                  style={{
+                                    color: "#000000",
+                                    fontSize: "16px",
+                                    borderColor: "#cbd5e1",
+                                    borderWidth: "1px",
+                                    borderRadius: "10px",
+                                    padding: "8px 10px",
+                                    backgroundColor: "#ffffff",
+                                    width: "100%",
+                                    textAlign: "center",
+                                    textAlignLast: "center",
+                                  }}
+                                  className="font-sans font-medium"
+                                >
+                                  <option value="Disponible">Disponible</option>
+                                  <option value="Utilisé">Utilisé</option>
+                                  <option value="Indisponible">Indisponible</option>
+                                  <option value="Signalé manquant">Signalé manquant</option>
+                                  <option value="Prêté">Prêté</option>
+                                </select>
+                              </div>
+
+                              <div className="flex items-center gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowNewDistribTraceForm(false)}
+                                  className="flex-1 bg-black text-white font-bold py-2 rounded-lg text-[15px]"
+                                >
+                                  Annuler
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!newDistribLotOrSerial.trim()) {
+                                      alert("Le numéro de lot ou série est requis.");
+                                      return;
+                                    }
+                                    const cleanLot = newDistribLotOrSerial.trim().toLowerCase();
+                                    const isDuplicate = pendingNewDistribTraceabilities.some(
+                                      (t) => t.lotOrSerial && t.lotOrSerial.trim().toLowerCase() === cleanLot
+                                    ) || stocks.some((st) => (st.traceabilities || []).some((t) => t.lotOrSerial && t.lotOrSerial.trim().toLowerCase() === cleanLot));
+                                    if (isDuplicate) {
+                                      alert("Ce numéro de lot ou de série existe déjà dans l'inventaire de traçabilité.");
+                                      return;
+                                    }
+                                    const newTraceItem: StockTraceability = {
+                                      id: "tr_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+                                      movementId: newDistribMovementId || "Autre (Aucun mouvement)",
+                                      lotOrSerial: newDistribLotOrSerial.trim(),
+                                      expirationDate: newDistribExpirationDate || undefined,
+                                      volume: 1,
+                                      situation: newDistribSituation,
+                                      emplacement: techLocationLink || "Centrale des stocks",
+                                    };
+                                    setPendingNewDistribTraceabilities([...pendingNewDistribTraceabilities, newTraceItem]);
+                                    setNewDistribLotOrSerial("");
+                                    setNewDistribExpirationDate("");
+                                    setNewDistribMovementId("Autre (Aucun mouvement)");
+                                    setNewDistribSituation("Disponible");
+                                    setShowNewDistribTraceForm(false);
+                                  }}
+                                  className="flex-1 bg-[#3556ec] text-white font-bold py-2 rounded-lg text-[15px]"
+                                >
+                                  Ajouter
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* List of pending traceabilities added */}
+                          {pendingNewDistribTraceabilities.length > 0 && (
+                            <div className="space-y-2 pt-2">
+                              <span className="text-xs font-bold text-slate-600 font-sans block">
+                                Pièces à ajouter ({pendingNewDistribTraceabilities.length}) :
+                              </span>
+                              {pendingNewDistribTraceabilities.map((t, i) => (
+                                <div key={t.id} className="flex items-center justify-between p-2.5 bg-white border rounded-lg text-xs font-sans" style={{ borderColor: "#cbd5e1" }}>
+                                  <div>
+                                    <span className="font-bold text-black">{t.lotOrSerial}</span>
+                                    {t.expirationDate && <span className="text-slate-500 ml-2">(Périm. {t.expirationDate})</span>}
+                                    <span className="ml-2 text-purple-700 font-semibold">[{t.situation}]</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPendingNewDistribTraceabilities(pendingNewDistribTraceabilities.filter((_, idx) => idx !== i))}
+                                    className="text-red-500 font-bold hover:underline"
+                                  >
+                                    Supprimer
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Buttons: Annuler / Enregistrer (50% / 50%) */}
                       <div className="flex items-center gap-3 pt-2 w-full">
                         <button
                           type="button"
-                          onClick={() => setShowNewDistribStockForm(false)}
+                          onClick={() => {
+                            setShowNewDistribStockForm(false);
+                            setPendingNewDistribTraceabilities([]);
+                            setNewDistribTraceabilityEnabled(false);
+                          }}
                           style={{
                             backgroundColor: "#000000",
                             color: "#ffffff",
@@ -8346,6 +8661,21 @@ export default function PublicPortal({
                               onUpdateDistributedStocks(updatedDs);
                             }
 
+                            // Update stock traceability if enabled
+                            if (newDistribTraceabilityEnabled && stocks && onUpdateStocks) {
+                              const updatedStocks = stocks.map((st) => {
+                                if (st.id === selectedStock.id) {
+                                  return {
+                                    ...st,
+                                    traceabilityEnabled: true,
+                                    traceabilities: [...(st.traceabilities || []), ...pendingNewDistribTraceabilities],
+                                  };
+                                }
+                                return st;
+                              });
+                              onUpdateStocks(updatedStocks);
+                            }
+
                             if (onAddLogisticsNotification) {
                               const name_technician = authenticatedUser?.name || "Un technicien";
                               const location_name = techLocationLink || "Emplacement";
@@ -8364,6 +8694,8 @@ export default function PublicPortal({
                             setShowNewDistribStockForm(false);
                             setNewDistribStockId("");
                             setNewDistribVolumeDisponible(1);
+                            setPendingNewDistribTraceabilities([]);
+                            setNewDistribTraceabilityEnabled(false);
                           }}
                           style={{
                             backgroundColor: "rgb(53, 86, 236)",
@@ -8392,7 +8724,7 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(238, 241, 255)",
+                            backgroundColor: "rgb(246, 236, 247)",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -8405,7 +8737,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(49, 85, 255)" }}
+                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
                           >
                             {selectedTechStock.volumeDisponible}
                           </div>
@@ -8413,7 +8745,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(49, 85, 255)",
+                              color: "rgb(99, 31, 106)",
                             }}
                           >
                             Disponible et avec vous
@@ -8423,7 +8755,7 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(238, 241, 255)",
+                            backgroundColor: "rgb(246, 236, 247)",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -8436,7 +8768,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(49, 85, 255)" }}
+                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
                           >
                             {selectedTechStock.volumeReserve}
                           </div>
@@ -8444,7 +8776,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(49, 85, 255)",
+                              color: "rgb(99, 31, 106)",
                             }}
                           >
                             Réservé et avec vous
@@ -8454,7 +8786,7 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(238, 241, 255)",
+                            backgroundColor: "rgb(246, 236, 247)",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -8467,7 +8799,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(49, 85, 255)" }}
+                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
                           >
                             {selectedTechStock.volumeEntrant}
                           </div>
@@ -8475,7 +8807,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(49, 85, 255)",
+                              color: "rgb(99, 31, 106)",
                             }}
                           >
                             Entrant via la centrale
@@ -8486,7 +8818,7 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(238, 241, 255)",
+                            backgroundColor: "rgb(246, 236, 247)",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -8499,7 +8831,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(49, 85, 255)" }}
+                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
                           >
                             {outgoingStats.week1.vol}
                           </div>
@@ -8507,7 +8839,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(49, 85, 255)",
+                              color: "rgb(99, 31, 106)",
                             }}
                           >
                             Sortant cette semaine
@@ -8517,7 +8849,7 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(238, 241, 255)",
+                            backgroundColor: "rgb(246, 236, 247)",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -8530,7 +8862,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(49, 85, 255)" }}
+                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
                           >
                             {outgoingStats.week2.vol}
                           </div>
@@ -8538,7 +8870,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(49, 85, 255)",
+                              color: "rgb(99, 31, 106)",
                             }}
                           >
                             Sortant semaine prochaine
@@ -8548,7 +8880,7 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(238, 241, 255)",
+                            backgroundColor: "rgb(246, 236, 247)",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -8561,7 +8893,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(49, 85, 255)" }}
+                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
                           >
                             {outgoingStats.next30.vol}
                           </div>
@@ -8569,7 +8901,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(49, 85, 255)",
+                              color: "rgb(99, 31, 106)",
                             }}
                           >
                             Sortant 7 à 30 jours
@@ -8845,6 +9177,46 @@ export default function PublicPortal({
                           </table>
                         </div>
                       </div>
+
+                      {/* Toggle: Activer la traçabilité des pièces */}
+                      {matchedStockRecord && (
+                        <div
+                          className="flex items-center justify-between p-4 bg-white border mt-4"
+                          style={{
+                            borderColor: "rgb(201, 190, 205)",
+                            borderRadius: "14px",
+                          }}
+                        >
+                          <span className="font-bold text-black font-sans text-[16px]">
+                            Activer la traçabilité des pièces
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!matchedStockRecord || !stocks || !onUpdateStocks) return;
+                              const newEnabled = !matchedStockRecord.traceabilityEnabled;
+                              const updated = stocks.map((st) => {
+                                if (st.id === matchedStockRecord.id) {
+                                  return { ...st, traceabilityEnabled: newEnabled };
+                                }
+                                return st;
+                              });
+                              onUpdateStocks(updated);
+                            }}
+                            className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                            style={{
+                              backgroundColor: matchedStockRecord.traceabilityEnabled ? "#fe4eba" : "#cbd5e1",
+                            }}
+                          >
+                            <span
+                              className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
+                              style={{
+                                transform: matchedStockRecord.traceabilityEnabled ? "translateX(20px)" : "translateX(0px)",
+                              }}
+                            />
+                          </button>
+                        </div>
+                      )}
 
                       {/* Section Inventaire de traçabilité */}
                       {matchedStockRecord?.traceabilityEnabled && (
@@ -10907,6 +11279,7 @@ export default function PublicPortal({
                     style={{
                       backgroundColor: "#FD4EBB",
                       width: "98%",
+                      maxWidth: "310px",
                       margin: "35px auto 50px",
                       paddingTop: "90px",
                       paddingBottom: "85px",
@@ -12790,6 +13163,7 @@ export default function PublicPortal({
             </div>
           </div>
         )}
+        <FeedbackDrawer companyName={companyInfo?.name} />
       </div>
     </div>
   );

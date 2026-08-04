@@ -724,7 +724,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                       className="bg-white p-4 sm:p-5 space-y-4"
                       style={
                         isToday
-                          ? { border: "3px solid rgb(22, 93, 252)", borderRadius: "14px" }
+                          ? { border: "3px solid #FD4EBB", borderRadius: "14px" }
                           : { border: "1px solid rgb(201, 190, 205)", borderRadius: "14px" }
                       }
                     >

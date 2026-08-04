@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Client, Defibrillateur, CommercialDoc, CompanyInfo, Variable, OtherEquipment, PointageAutoVigilance } from '../types';
 import { formatDateToFR, computeProchaineMaintenance, formatDateToMonthYear } from '../utils';
 import { t } from '../utils/translate';
+import FeedbackDrawer from './FeedbackDrawer';
 
 interface ClientPortalProps {
   clients: Client[];
@@ -211,7 +212,10 @@ export default function ClientPortal({
     return false;
   });
 
-  const authenticatedClient = initialClient;
+  const authenticatedClient = useMemo(() => {
+    if (!initialClient) return null;
+    return clients.find(c => c.id === initialClient.id) || initialClient;
+  }, [clients, initialClient]);
 
   // Contact editing states
   const [isEditingContacts, setIsEditingContacts] = useState(false);
@@ -408,13 +412,15 @@ export default function ClientPortal({
       dateSignatureContrat: portalDateSignatureContrat,
       signeParContrat: portalSigneParContrat.trim(),
       signatureClientContratImage: portalSignatureClientContratImage,
+      clientSignatureImage: portalSignatureClientContratImage,
     };
 
     onUpdateClient(updated);
     setContractSaveSuccess(true);
     setTimeout(() => {
       setContractSaveSuccess(false);
-    }, 3000);
+      window.location.reload();
+    }, 500);
   };
 
   const handleDownloadContractPDF = () => {
@@ -693,16 +699,28 @@ export default function ClientPortal({
 
   const handleSaveSignature = () => {
     if (!authenticatedClient) return;
+    const canvas = clientCanvasRef.current;
+    const sigImg = canvas ? canvas.toDataURL() : clientSignature;
+    if (!sigImg || sigImg.trim() === '') {
+      alert("Veuillez dessiner votre signature avant d'enregistrer.");
+      return;
+    }
+
     if (onUpdateClient) {
       const updated: Client = {
         ...authenticatedClient,
-        clientSignatureImage: clientSignature || undefined,
+        clientSignatureImage: sigImg,
+        signatureClientContratImage: sigImg,
+        dateSignatureContrat: authenticatedClient.dateSignatureContrat || new Date().toISOString().split('T')[0],
       };
       onUpdateClient(updated);
+      setClientSignature(sigImg);
+      setPortalSignatureClientContratImage(sigImg);
       setSaveSuccess(true);
       setTimeout(() => {
         setSaveSuccess(false);
-      }, 3000);
+        window.location.reload();
+      }, 500);
     }
   };
 
@@ -849,7 +867,9 @@ export default function ClientPortal({
   const hasMissingSignature = Boolean(
     authenticatedClient &&
     !authenticatedClient.signatureClientContratImage &&
-    !portalSignatureClientContratImage
+    !authenticatedClient.clientSignatureImage &&
+    !portalSignatureClientContratImage &&
+    !clientSignature
   );
 
   // Pointages form states
@@ -3956,6 +3976,63 @@ export default function ClientPortal({
                     </div>
                   </div>
 
+                  {/* Display additional contracts if any */}
+                  {authenticatedClient.autresContrats && authenticatedClient.autresContrats.length > 0 && (
+                    <div className="pt-4 border-t border-slate-200 mt-4 space-y-3">
+                      <h4 className="text-[18px] font-bold text-black font-sans">
+                        {t("Autres contrats souscrits")} ({authenticatedClient.autresContrats.length})
+                      </h4>
+                      <div className="space-y-3">
+                        {authenticatedClient.autresContrats.map((c, idx) => (
+                          <div key={c.id || idx} className="bg-[#fdeaff] p-4 rounded-xl space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-bold text-[#772a7e] text-[16px]">
+                                {c.intitule || `${t("Contrat")} ${idx + 1}`}
+                              </span>
+                              {c.reference && (
+                                <span className="text-xs font-mono bg-white/80 px-2 py-0.5 rounded text-[#772a7e] font-bold">
+                                  Ref: {c.reference}
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm text-slate-700 font-sans">
+                              {c.numeroMarche && (
+                                <div>
+                                  <span className="text-xs text-slate-500 font-bold uppercase block">{t("N° de marché")}</span>
+                                  <span className="font-semibold text-[#772a7e]">{c.numeroMarche}</span>
+                                </div>
+                              )}
+                              {c.debut && (
+                                <div>
+                                  <span className="text-xs text-slate-500 font-bold uppercase block">{t("Début")}</span>
+                                  <span className="font-semibold text-[#772a7e]">{formatDateToFR(c.debut) || c.debut}</span>
+                                </div>
+                              )}
+                              {c.expiration && (
+                                <div>
+                                  <span className="text-xs text-slate-500 font-bold uppercase block">{t("Expiration")}</span>
+                                  <span className="font-semibold text-[#772a7e]">{formatDateToFR(c.expiration) || c.expiration}</span>
+                                </div>
+                              )}
+                            </div>
+                            {c.fichierUrl && (
+                              <div className="pt-1">
+                                <a
+                                  href={c.fichierUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs font-bold text-[#772a7e] hover:underline inline-flex items-center gap-1"
+                                >
+                                  🔗 {t("Consulter le document source / fichier")}
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               )}
 
@@ -4265,6 +4342,7 @@ export default function ClientPortal({
 
         </div>
       </main>
+      <FeedbackDrawer companyName={companyInfo?.name} />
     </div>
   );
 }

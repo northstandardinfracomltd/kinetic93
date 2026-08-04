@@ -6,6 +6,16 @@ export interface SignaturePin {
   reportTitle?: string;
 }
 
+export interface ClientContract {
+  id: string;
+  intitule: string;
+  reference: string;
+  debut: string;
+  expiration: string;
+  fichierUrl?: string;
+  numeroMarche?: string;
+}
+
 export interface Client {
   id: string;
   denomination: string;
@@ -53,6 +63,7 @@ export interface Client {
   payeurId?: string;
   clientIdField?: string;
   valeurContrat?: string;
+  autresContrats?: ClientContract[];
 }
 
 export type VariableCategory = 'Modèle Défibrillateur' | 'Modèle Coffret' | 'Modèle Électrode' | 'Modèle Batterie' | 'Modèle Contrat' | 'Modèle Service' | 'Fournisseur' | 'Modèle Raison Prestation' | 'Drapeau GMAO' | 'Drapeau post-intervention' | 'Type Filtre Purificateur' | 'Modèle Filtre Purificateur';

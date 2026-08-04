@@ -64,6 +64,7 @@ import { geocodeAddress, sortMissionsByProximity, scheduleMissions } from './uti
 import SatisfactionFormPage from './components/SatisfactionFormPage';
 import NotificationsTab from './components/NotificationsTab';
 import { PlanningTab } from './components/PlanningTab';
+import FeedbackDrawer from './components/FeedbackDrawer';
 
 import {
   Heart,
@@ -5341,7 +5342,12 @@ export default function App() {
         onUpdateGeneratedReports={saveReports}
         fsmTours={fsmTours}
         onUpdateFsmTours={saveFsmTours}
-        onUpdateClient={(updated) => saveClients(clients.map(c => c.id === updated.id ? updated : c))}
+        onUpdateClient={(updated) => {
+          saveClients(clients.map(c => c.id === updated.id ? updated : c));
+          if (activePortalClient && activePortalClient.id === updated.id) {
+            setActivePortalClient(updated);
+          }
+        }}
         stocks={stocks}
         pointagesAutoVigilance={pointagesAutoVigilance}
         onAddPointageAutoVigilance={(newPt) => setPointagesAutoVigilance(prev => [newPt, ...prev])}
@@ -5379,7 +5385,12 @@ export default function App() {
         onUpdateGeneratedReports={saveReports}
         fsmTours={fsmTours}
         onUpdateFsmTours={saveFsmTours}
-        onUpdateClient={(updated) => saveClients(clients.map(c => c.id === updated.id ? updated : c))}
+        onUpdateClient={(updated) => {
+          saveClients(clients.map(c => c.id === updated.id ? updated : c));
+          if (activePortalClient && activePortalClient.id === updated.id) {
+            setActivePortalClient(updated);
+          }
+        }}
         stocks={stocks}
         pointagesAutoVigilance={pointagesAutoVigilance}
         onAddPointageAutoVigilance={(newPt) => setPointagesAutoVigilance(prev => [newPt, ...prev])}
@@ -10783,6 +10794,7 @@ export default function App() {
         fsmTours={fsmTours}
       />
 
+      <FeedbackDrawer companyName={companyInfo?.name} />
     </div>
   );
 }

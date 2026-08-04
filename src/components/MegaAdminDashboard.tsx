@@ -6,6 +6,7 @@ import {
   seedTenantDemoData
 } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import FeedbackDrawer from './FeedbackDrawer';
 import { 
   ShieldAlert, 
   Power, 
@@ -743,6 +744,7 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
           </div>
         </div>
       )}
+      <FeedbackDrawer />
     </div>
   );
 }

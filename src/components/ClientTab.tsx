@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Client, Defibrillateur, Variable, CompanyInfo } from '../types';
+import { Client, ClientContract, Defibrillateur, Variable, CompanyInfo } from '../types';
 import { Plus, Search, Trash2, Edit2, X, Briefcase, Mail, Phone, FileText, Calendar, ShieldCheck, Download } from 'lucide-react';
 import { checkIfEmailExistsAnywhere } from '../firebase';
 import { generateRandomPin, formatDateToFR } from '../utils';
@@ -209,6 +209,29 @@ export default function ClientTab({
   const [debutContrat, setDebutContrat] = useState('');
   const [finContrat, setFinContrat] = useState('');
   const [numeroMarche, setNumeroMarche] = useState('');
+  const [autresContrats, setAutresContrats] = useState<ClientContract[]>([]);
+
+  const handleAddAutresContrat = () => {
+    if (autresContrats.length >= 3) return;
+    const newContract: ClientContract = {
+      id: 'contract_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+      intitule: '',
+      reference: '',
+      debut: '',
+      expiration: '',
+      fichierUrl: '',
+      numeroMarche: '',
+    };
+    setAutresContrats([...autresContrats, newContract]);
+  };
+
+  const handleRemoveAutresContrat = (id: string) => {
+    setAutresContrats(autresContrats.filter(c => c.id !== id));
+  };
+
+  const handleUpdateAutresContrat = (id: string, field: keyof ClientContract, value: string) => {
+    setAutresContrats(autresContrats.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
 
   const contractModels = useMemo(() => {
     return variables.filter((v) => v.category === 'Modèle Contrat');
@@ -666,6 +689,7 @@ export default function ClientTab({
     setDebutContrat('');
     setFinContrat('');
     setNumeroMarche('');
+    setAutresContrats([]);
     setContractFile(null);
     setError('');
 
@@ -720,6 +744,7 @@ export default function ClientTab({
     setDebutContrat(client.debutContrat || '');
     setFinContrat(client.finContrat || '');
     setNumeroMarche(client.numeroMarche || '');
+    setAutresContrats(client.autresContrats ? JSON.parse(JSON.stringify(client.autresContrats)) : []);
     setContractFile(null);
     setError('');
 
@@ -848,6 +873,7 @@ export default function ClientTab({
       dateSignatureContrat: dateSignatureContrat,
       signeParContrat: signeParContrat,
       signatureClientContratImage: signatureClientContratImage,
+      autresContrats: autresContrats,
     };
 
     if (editingClient) {
@@ -1906,6 +1932,135 @@ export default function ClientTab({
                     >
                       Télécharger le contrat PDF
                     </button>
+                  </div>
+
+                  {/* Section 3 Autres Contrats (Jusqu'à 3 contrats supplémentaires) */}
+                  <div className="pt-6 space-y-4 border-t border-slate-200 mt-6" id="section-autres-contrats">
+                    {autresContrats.length > 0 && (
+                      <div className="space-y-4">
+                        {autresContrats.map((ctr, idx) => (
+                          <div 
+                            key={ctr.id || idx} 
+                            className="bg-slate-50/70 p-4 space-y-3 relative"
+                            style={{
+                              border: '1px solid #dedede',
+                              borderRadius: '13px',
+                            }}
+                          >
+                            <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200">
+                              <span className="font-bold text-black font-sans text-[16px]">
+                                Autre contrat {idx + 1}.
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAutresContrat(ctr.id)}
+                                className="text-red-600 hover:text-red-800 font-bold text-sm flex items-center gap-1 cursor-pointer bg-transparent border-0 outline-none transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Supprimer
+                              </button>
+                            </div>
+
+                            {/* Fields Grid 1 */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                              <div className="space-y-1">
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase">
+                                  Intitulé du contrat.
+                                </label>
+                                <input
+                                  type="text"
+                                  value={ctr.intitule}
+                                  onChange={(e) => handleUpdateAutresContrat(ctr.id, 'intitule', e.target.value)}
+                                  placeholder="Entrez un intitulé."
+                                  className="font-sans"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase">
+                                  Référence du contrat.
+                                </label>
+                                <input
+                                  type="text"
+                                  value={ctr.reference}
+                                  onChange={(e) => handleUpdateAutresContrat(ctr.id, 'reference', e.target.value)}
+                                  placeholder="Entrez une référence."
+                                  className="font-mono"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase">
+                                  Numéro de marché.
+                                </label>
+                                <input
+                                  type="text"
+                                  value={ctr.numeroMarche || ''}
+                                  onChange={(e) => handleUpdateAutresContrat(ctr.id, 'numeroMarche', e.target.value)}
+                                  placeholder="N° de marché"
+                                  className="font-mono"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Fields Grid 2 */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                              <div className="space-y-1">
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase">
+                                  Début.
+                                </label>
+                                <input
+                                  type="date"
+                                  value={ctr.debut}
+                                  onChange={(e) => handleUpdateAutresContrat(ctr.id, 'debut', e.target.value)}
+                                  placeholder="dd/mm/yyyy"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase">
+                                  Expiration.
+                                </label>
+                                <input
+                                  type="date"
+                                  value={ctr.expiration}
+                                  onChange={(e) => handleUpdateAutresContrat(ctr.id, 'expiration', e.target.value)}
+                                  placeholder="dd/mm/yyyy"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase">
+                                  Fichier (URL source).
+                                </label>
+                                <input
+                                  type="text"
+                                  value={ctr.fichierUrl || ''}
+                                  onChange={(e) => handleUpdateAutresContrat(ctr.id, 'fichierUrl', e.target.value)}
+                                  placeholder="https://..."
+                                  className="font-sans"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {autresContrats.length < 3 && (
+                      <button
+                        type="button"
+                        onClick={handleAddAutresContrat}
+                        className="w-full py-3 text-white font-bold transition-all font-sans border-0 cursor-pointer hover:bg-slate-800 mt-2"
+                        style={{
+                          backgroundColor: '#000000',
+                          borderRadius: '13px',
+                          fontSize: '18px'
+                        }}
+                      >
+                        + Ajouter un autre contrat
+                      </button>
+                    )}
                   </div>
 
                 </div>
