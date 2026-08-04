@@ -11,7 +11,6 @@ import {
 } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { triggerEmail1Inscription, triggerEmail4Signalement } from '../utils/emailService';
-import FeedbackDrawer from './FeedbackDrawer';
 
 interface LoginProps {
   onLoginSuccess: (email: string, name: string, tenantId: string, role?: string) => void;
@@ -1740,7 +1739,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </div>
         </div>
       )}
-      <FeedbackDrawer />
     </div>
   );
 }

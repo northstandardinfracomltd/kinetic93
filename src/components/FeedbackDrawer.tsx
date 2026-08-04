@@ -84,12 +84,12 @@ ${description}`;
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-0 right-0 z-[9999] bg-[#3556ec] hover:bg-blue-700 text-white font-semibold text-xs py-1.5 px-3 transition-all flex items-center justify-center cursor-pointer select-none shadow-md"
+        className="fixed bottom-0 right-0 z-[9999] text-white font-semibold transition-all flex items-center justify-center cursor-pointer select-none shadow-md hover:opacity-90 font-sans"
         style={{
-          borderTopLeftRadius: '13px',
-          borderTopRightRadius: '0px',
-          borderBottomLeftRadius: '0px',
-          borderBottomRightRadius: '0px',
+          borderRadius: '13px 0px 0px',
+          background: '#6c2972',
+          fontSize: '13px',
+          padding: '7px 9px 4px 12px',
         }}
         id="feedback-problem-btn"
       >
@@ -108,24 +108,43 @@ ${description}`;
           {/* Drawer content - No header as requested */}
           <div className="relative w-full max-w-sm sm:max-w-md bg-white h-full shadow-2xl flex flex-col p-6 overflow-y-auto z-10 animate-fadeIn">
             <form onSubmit={handleSubmit} className="space-y-4 my-auto">
-              {/* Entreprise */}
+              {/* Entreprise. */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-slate-700">Entreprise</label>
+                <label className="font-bold font-sans" style={{ fontSize: '18px', color: '#000000' }}>
+                  Entreprise.
+                </label>
                 <input
                   type="text"
                   value={companyName || 'Défibeo'}
                   disabled
-                  className="w-full p-2.5 bg-slate-100 border border-slate-300 rounded-lg text-sm text-slate-600 cursor-not-allowed font-medium"
+                  style={{
+                    fontSize: '16px',
+                    color: '#000000',
+                    borderRadius: '13px',
+                    borderColor: '#cbd5e1',
+                  }}
+                  className="w-full p-2.5 bg-slate-100 border text-black cursor-not-allowed font-medium placeholder:text-black"
                 />
               </div>
 
-              {/* Compartiment */}
+              {/* Compartiment. */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-slate-700">Compartiment</label>
+                <label className="font-bold font-sans" style={{ fontSize: '18px', color: '#000000' }}>
+                  Compartiment.
+                </label>
                 <select
                   value={compartiment}
                   onChange={(e) => setCompartiment(e.target.value)}
-                  className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  style={{
+                    fontSize: '16px',
+                    color: '#000000',
+                    borderRadius: '13px',
+                    borderColor: '#cbd5e1',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'none',
+                  }}
+                  className="w-full p-2.5 bg-white border text-black focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium appearance-none placeholder:text-black"
                 >
                   {COMPARTIMENTS.map((comp) => (
                     <option key={comp} value={comp}>
@@ -135,54 +154,86 @@ ${description}`;
                 </select>
               </div>
 
-              {/* Nom & Prénom */}
+              {/* Nom & Prénom. */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-slate-700">Nom & Prénom</label>
+                <label className="font-bold font-sans" style={{ fontSize: '18px', color: '#000000' }}>
+                  Nom & Prénom.
+                </label>
                 <input
                   type="text"
                   required
                   value={nomPrenom}
                   onChange={(e) => setNomPrenom(e.target.value)}
                   placeholder="Nom & Prénom"
-                  className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  style={{
+                    fontSize: '16px',
+                    color: '#000000',
+                    borderRadius: '13px',
+                    borderColor: '#cbd5e1',
+                  }}
+                  className="w-full p-2.5 bg-white border text-black focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-black"
                 />
               </div>
 
-              {/* Email */}
+              {/* Email. */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-slate-700">Email</label>
+                <label className="font-bold font-sans" style={{ fontSize: '18px', color: '#000000' }}>
+                  Email.
+                </label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="votre.email@exemple.com"
-                  className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  style={{
+                    fontSize: '16px',
+                    color: '#000000',
+                    borderRadius: '13px',
+                    borderColor: '#cbd5e1',
+                  }}
+                  className="w-full p-2.5 bg-white border text-black focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-black"
                 />
               </div>
 
-              {/* Téléphone portable */}
+              {/* Téléphone portable. */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-slate-700">Téléphone portable</label>
+                <label className="font-bold font-sans" style={{ fontSize: '18px', color: '#000000' }}>
+                  Téléphone portable.
+                </label>
                 <input
                   type="tel"
                   value={telephone}
                   onChange={(e) => setTelephone(e.target.value)}
                   placeholder="Téléphone portable"
-                  className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  style={{
+                    fontSize: '16px',
+                    color: '#000000',
+                    borderRadius: '13px',
+                    borderColor: '#cbd5e1',
+                  }}
+                  className="w-full p-2.5 bg-white border text-black focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-black"
                 />
               </div>
 
-              {/* Description */}
+              {/* Description. */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-slate-700">Description</label>
+                <label className="font-bold font-sans" style={{ fontSize: '18px', color: '#000000' }}>
+                  Description.
+                </label>
                 <textarea
                   required
                   rows={4}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Description du problème ou feedback..."
-                  className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-medium"
+                  style={{
+                    fontSize: '16px',
+                    color: '#000000',
+                    borderRadius: '13px',
+                    borderColor: '#cbd5e1',
+                  }}
+                  className="w-full p-2.5 bg-white border text-black focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-medium placeholder:text-black"
                 />
               </div>
 
@@ -198,14 +249,22 @@ ${description}`;
                 <button
                   type="submit"
                   disabled={isSending}
-                  className="w-full py-3 bg-[#3556ec] hover:bg-blue-700 text-white font-bold text-sm rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                  style={{
+                    fontSize: '18px',
+                    borderRadius: '13px',
+                  }}
+                  className="w-full py-3 bg-[#3556ec] hover:bg-blue-700 text-white font-bold transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {isSending ? 'Envoi en cours...' : 'Envoyer'}
                 </button>
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="w-full py-3 bg-black hover:bg-slate-900 text-white font-bold text-sm rounded-lg transition-colors cursor-pointer"
+                  style={{
+                    fontSize: '18px',
+                    borderRadius: '13px',
+                  }}
+                  className="w-full py-3 bg-black hover:bg-slate-900 text-white font-bold transition-colors cursor-pointer"
                 >
                   Fermer
                 </button>
