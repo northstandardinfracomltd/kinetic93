@@ -4,7 +4,6 @@ import { findTenantAndDefibGlobally, fetchRawCollectionFromFirestore, db } from 
 import { doc, setDoc } from 'firebase/firestore';
 import { t } from '../utils/translate';
 import { getParisTimestamp } from '../utils/dateUtils';
-import FeedbackDrawer from './FeedbackDrawer';
 
 interface CriteriaConfig {
   key: 'qualite' | 'ponctualite' | 'politesse' | 'clartePdf' | 'explications' | 'sensibilisation';
@@ -416,7 +415,6 @@ export default function SatisfactionFormPage() {
 
         </div>
       </div>
-      <FeedbackDrawer />
     </div>
   );
 }

@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Client, Defibrillateur, CommercialDoc, CompanyInfo, Variable, OtherEquipment, PointageAutoVigilance } from '../types';
 import { formatDateToFR, computeProchaineMaintenance, formatDateToMonthYear } from '../utils';
 import { t } from '../utils/translate';
-import FeedbackDrawer from './FeedbackDrawer';
 
 interface ClientPortalProps {
   clients: Client[];
@@ -867,9 +866,7 @@ export default function ClientPortal({
   const hasMissingSignature = Boolean(
     authenticatedClient &&
     !authenticatedClient.signatureClientContratImage &&
-    !authenticatedClient.clientSignatureImage &&
-    !portalSignatureClientContratImage &&
-    !clientSignature
+    !authenticatedClient.clientSignatureImage
   );
 
   // Pointages form states
@@ -1478,7 +1475,7 @@ export default function ClientPortal({
       const docTitle = report.title ? report.title : `Rapport d’intervention - ${snapshot.categorie || ''}`;
 
       const renderHeader = (title: string) => {
-        const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 80px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
+        const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
         const showHeaderLogo = pdfLogo ? `<img src="${pdfLogo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
         const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${pdfPageHeaderText}</div>` : '';
         const showEmail = compEmail ? `<div>${compEmail}</div>` : '';
@@ -1759,43 +1756,37 @@ export default function ClientPortal({
 
                       <!-- Signature Technicien -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                         ${report.techSignature ? `
+                          <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                           <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
                             <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
                           </div>
-                        ` : `
-                          <div style="font-size: 15px; color: #a1a1a1; font-style: italic;">
-                            Non signée
-                          </div>
-                        `}
+                        ` : ''}
                       </div>
 
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                        ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                          <div style="font-size: 11px; margin-bottom: 2px;">
-                            <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
-                            <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
-                          </div>
-                        ` : ''}
-                        ${clientFound && clientFound.clientSignatureImage ? `
-                          <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
-                            <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                            <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
-                          </div>
-                        ` : `
+                        ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
+                          <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
                           ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                            <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
-                              Signé électroniquement par PIN (${report.clientPinCode})
+                            <div style="font-size: 11px; margin-bottom: 2px;">
+                              <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
+                              <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
+                            </div>
+                          ` : ''}
+                          ${clientFound && clientFound.clientSignatureImage ? `
+                            <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
+                              <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
                             </div>
                           ` : `
-                            <div style="font-size: 13px; color: #a1a1a1; font-style: italic; margin-top: 4px;">
-                              Non signée
-                            </div>
+                            ${(report.clientPinCode && report.clientPinCode.trim()) ? `
+                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
+                                Signé électroniquement par PIN (${report.clientPinCode})
+                              </div>
+                            ` : ''}
                           `}
-                        `}
+                        ` : ''}
                       </div>
                     </div>
                   </div>
@@ -1931,7 +1922,7 @@ export default function ClientPortal({
       const docTitle = report.title ? report.title : 'Rapport d’intervention GMAO';
 
       const renderHeader = (title: string) => {
-        const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 80px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
+        const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
         const showHeaderLogo = pdfLogo ? `<img src="${pdfLogo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
         const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${pdfPageHeaderText}</div>` : '';
         const showEmail = compEmail ? `<div>${compEmail}</div>` : '';
@@ -2393,43 +2384,37 @@ export default function ClientPortal({
 
                       <!-- Signature Technicien -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                         ${report.techSignature ? `
+                          <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                           <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
                             <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
                           </div>
-                        ` : `
-                          <div style="font-size: 16px; color: #000000; font-style: italic;">
-                            Non signée
-                          </div>
-                        `}
+                        ` : ''}
                       </div>
 
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                        ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                          <div style="font-size: 11px; margin-bottom: 2px; font-family: 'Civilprom', sans-serif !important;">
-                            <span class="pdf-label" style="font-size:11px; color:rgb(138, 138, 138); font-family: 'Civilprom', sans-serif !important;">Code validation :</span> 
-                            <span class="pdf-bold" style="font-size:11px; font-family: 'Civilprom', sans-serif !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
-                          </div>
-                        ` : ''}
-                        ${clientFound && clientFound.clientSignatureImage ? `
-                          <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
-                            <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                            <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
-                          </div>
-                        ` : `
+                        ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
+                          <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
                           ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                            <div style="font-size: 11px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
-                              Signé électroniquement par PIN (${report.clientPinCode})
+                            <div style="font-size: 11px; margin-bottom: 2px; font-family: 'Civilprom', sans-serif !important;">
+                              <span class="pdf-label" style="font-size:11px; color:rgb(138, 138, 138); font-family: 'Civilprom', sans-serif !important;">Code validation :</span> 
+                              <span class="pdf-bold" style="font-size:11px; font-family: 'Civilprom', sans-serif !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
+                            </div>
+                          ` : ''}
+                          ${clientFound && clientFound.clientSignatureImage ? `
+                            <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
+                              <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
                             </div>
                           ` : `
-                            <div style="font-size: 13px; color: #a1a1a1; font-style: italic; margin-top: 4px;">
-                              Non signée
-                            </div>
+                            ${(report.clientPinCode && report.clientPinCode.trim()) ? `
+                              <div style="font-size: 11px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
+                                Signé électroniquement par PIN (${report.clientPinCode})
+                              </div>
+                            ` : ''}
                           `}
-                        `}
+                        ` : ''}
                       </div>
                     </div>
                   </div>
@@ -3898,12 +3883,39 @@ export default function ClientPortal({
                       </label>
                       <div className="flex flex-col items-center justify-center p-2 bg-transparent">
                         {authenticatedClient?.signatureClientContratImage ? (
-                          <div className="bg-white border border-slate-200 rounded-lg p-1 w-[320px] h-[120px] flex items-center justify-center">
-                            <img 
-                              src={authenticatedClient.signatureClientContratImage} 
-                              alt="Signature client sous contrat" 
-                              className="max-h-full max-w-full object-contain"
-                            />
+                          <div className="flex flex-col items-center gap-2">
+                            <div className="bg-white border border-slate-200 rounded-lg p-1 w-[320px] h-[120px] flex items-center justify-center">
+                              <img 
+                                src={authenticatedClient.signatureClientContratImage} 
+                                alt="Signature client sous contrat" 
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            </div>
+                            <div className="flex justify-between items-center w-full px-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPortalSignatureClientContratImage('');
+                                  if (onUpdateClient && authenticatedClient) {
+                                    onUpdateClient({
+                                      ...authenticatedClient,
+                                      signatureClientContratImage: '',
+                                      dateSignatureContrat: '',
+                                      signeParContrat: '',
+                                    });
+                                  }
+                                }}
+                                className="px-6 py-3 text-white transition-all cursor-pointer outline-none border-none font-bold"
+                                style={{
+                                  backgroundColor: '#000000',
+                                  borderRadius: '13px',
+                                  fontSize: '18px',
+                                  boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff1f',
+                                }}
+                              >
+                                {t("Effacer")}
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <>
@@ -4342,7 +4354,6 @@ export default function ClientPortal({
 
         </div>
       </main>
-      <FeedbackDrawer companyName={companyInfo?.name} />
     </div>
   );
 }

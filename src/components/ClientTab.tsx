@@ -1935,28 +1935,34 @@ export default function ClientTab({
                   </div>
 
                   {/* Section 3 Autres Contrats (Jusqu'à 3 contrats supplémentaires) */}
-                  <div className="pt-6 space-y-4 border-t border-slate-200 mt-6" id="section-autres-contrats">
+                  <div className="space-y-4 mt-6" id="section-autres-contrats">
                     {autresContrats.length > 0 && (
                       <div className="space-y-4">
                         {autresContrats.map((ctr, idx) => (
                           <div 
                             key={ctr.id || idx} 
-                            className="bg-slate-50/70 p-4 space-y-3 relative"
+                            className="bg-white p-4 space-y-3 relative"
                             style={{
                               border: '1px solid #dedede',
                               borderRadius: '13px',
                             }}
                           >
-                            <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200">
+                            <div className="flex items-center justify-between gap-2">
                               <span className="font-bold text-black font-sans text-[16px]">
                                 Autre contrat {idx + 1}.
                               </span>
                               <button
                                 type="button"
                                 onClick={() => handleRemoveAutresContrat(ctr.id)}
-                                className="text-red-600 hover:text-red-800 font-bold text-sm flex items-center gap-1 cursor-pointer bg-transparent border-0 outline-none transition-colors"
+                                style={{
+                                  backgroundColor: '#000000',
+                                  borderRadius: '13px',
+                                  fontSize: '18px',
+                                  color: '#ffffff',
+                                  padding: '6px 16px',
+                                }}
+                                className="font-bold cursor-pointer border-0 outline-none hover:bg-slate-800 transition-colors"
                               >
-                                <Trash2 className="w-4 h-4" />
                                 Supprimer
                               </button>
                             </div>
@@ -2058,7 +2064,7 @@ export default function ClientTab({
                           fontSize: '18px'
                         }}
                       >
-                        + Ajouter un autre contrat
+                        Ajouter un autre contrat
                       </button>
                     )}
                   </div>

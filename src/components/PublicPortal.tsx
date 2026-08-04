@@ -70,7 +70,6 @@ import { auth } from "../firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions } from "../utils/fsmOptimizer";
 import { PlanningTab } from "./PlanningTab";
-import FeedbackDrawer from "./FeedbackDrawer";
 
 // Helper functions for French date <-> ISO date picker compatibility
 const getIsoDate = (dateStr: string) => {
@@ -2072,7 +2071,7 @@ export default function PublicPortal({
       const docTitle = report.title ? report.title : `Rapport d’intervention - ${snapshot.categorie || ''}`;
 
       const renderHeader = (title: string) => {
-        const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 80px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
+        const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
         const showHeaderLogo = pdfLogo ? `<img src="${pdfLogo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
         const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${pdfPageHeaderText}</div>` : '';
         const showEmail = compEmail ? `<div>${compEmail}</div>` : '';
@@ -2357,43 +2356,37 @@ export default function PublicPortal({
 
                       <!-- Signature Technicien -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                         ${report.techSignature ? `
+                          <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                           <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
                             <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
                           </div>
-                        ` : `
-                          <div style="font-size: 15px; color: #a1a1a1; font-style: italic;">
-                            Non signée
-                          </div>
-                        `}
+                        ` : ''}
                       </div>
 
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                        ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                          <div style="font-size: 11px; margin-bottom: 2px;">
-                            <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
-                            <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
-                          </div>
-                        ` : ''}
-                        ${clientFound && clientFound.clientSignatureImage ? `
-                          <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
-                            <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                            <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
-                          </div>
-                        ` : `
+                        ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
+                          <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
                           ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                            <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
-                              Signé électroniquement par PIN (${report.clientPinCode})
+                            <div style="font-size: 11px; margin-bottom: 2px;">
+                              <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
+                              <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
+                            </div>
+                          ` : ''}
+                          ${clientFound && clientFound.clientSignatureImage ? `
+                            <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
+                              <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
                             </div>
                           ` : `
-                            <div style="font-size: 13px; color: #a1a1a1; font-style: italic; margin-top: 4px;">
-                              Non signée
-                            </div>
+                            ${(report.clientPinCode && report.clientPinCode.trim()) ? `
+                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
+                                Signé électroniquement par PIN (${report.clientPinCode})
+                              </div>
+                            ` : ''}
                           `}
-                        `}
+                        ` : ''}
                       </div>
                     </div>
                   </div>
@@ -2446,7 +2439,7 @@ export default function PublicPortal({
     const totalPages = hasLastPage ? 6 : 5;
 
     const renderHeader = (title: string) => {
-      const showHeaderImg = companyInfo.pdfHeaderImg ? `<img src="${companyInfo.pdfHeaderImg}" style="max-height: 80px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
+      const showHeaderImg = companyInfo.pdfHeaderImg ? `<img src="${companyInfo.pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
       const showHeaderLogo = companyInfo.logo ? `<img src="${companyInfo.logo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
       const showHeaderInfoText = companyInfo.pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${companyInfo.pdfPageHeaderText}</div>` : '';
       const showEmail = companyInfo.email ? `<div>${companyInfo.email}</div>` : '';
@@ -3024,43 +3017,37 @@ export default function PublicPortal({
 
                       <!-- Signature Technicien -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                         ${report.techSignature ? `
+                          <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                           <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
                             <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
                           </div>
-                        ` : `
-                          <div style="font-size: 16px; color: #000000; font-style: italic;">
-                            Non signée
-                          </div>
-                        `}
+                        ` : ''}
                       </div>
 
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                        ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                          <div style="font-size: 11px; margin-bottom: 2px; font-family: 'Civilprom', sans-serif !important;">
-                            <span class="pdf-label" style="font-size:11px; color:rgb(138, 138, 138); font-family: 'Civilprom', sans-serif !important;">Code validation :</span> 
-                            <span class="pdf-bold" style="font-size:11px; font-family: 'Civilprom', sans-serif !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
-                          </div>
-                        ` : ''}
-                        ${clientFound && clientFound.clientSignatureImage ? `
-                          <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
-                            <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                            <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
-                          </div>
-                        ` : `
+                        ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
+                          <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
                           ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                            <div style="font-size: 11px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
-                              Signé électroniquement par PIN (${report.clientPinCode})
+                            <div style="font-size: 11px; margin-bottom: 2px; font-family: 'Civilprom', sans-serif !important;">
+                              <span class="pdf-label" style="font-size:11px; color:rgb(138, 138, 138); font-family: 'Civilprom', sans-serif !important;">Code validation :</span> 
+                              <span class="pdf-bold" style="font-size:11px; font-family: 'Civilprom', sans-serif !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
+                            </div>
+                          ` : ''}
+                          ${clientFound && clientFound.clientSignatureImage ? `
+                            <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
+                              <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
                             </div>
                           ` : `
-                            <div style="font-size: 13px; color: #a1a1a1; font-style: italic; margin-top: 4px;">
-                              Non signée
-                            </div>
+                            ${(report.clientPinCode && report.clientPinCode.trim()) ? `
+                              <div style="font-size: 11px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
+                                Signé électroniquement par PIN (${report.clientPinCode})
+                              </div>
+                            ` : ''}
                           `}
-                        `}
+                        ` : ''}
                       </div>
                     </div>
                   </div>
@@ -8330,8 +8317,15 @@ export default function PublicPortal({
                         </span>
                         <button
                           type="button"
-                          onClick={() => setNewDistribTraceabilityEnabled(!newDistribTraceabilityEnabled)}
-                          className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                          onClick={() => {
+                            if (!newDistribTraceabilityEnabled) {
+                              setNewDistribTraceabilityEnabled(true);
+                            }
+                          }}
+                          disabled={newDistribTraceabilityEnabled}
+                          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                            newDistribTraceabilityEnabled ? "cursor-not-allowed" : "cursor-pointer"
+                          }`}
                           style={{
                             backgroundColor: newDistribTraceabilityEnabled ? "#fe4eba" : "#cbd5e1",
                           }}
@@ -9194,16 +9188,19 @@ export default function PublicPortal({
                             type="button"
                             onClick={() => {
                               if (!matchedStockRecord || !stocks || !onUpdateStocks) return;
-                              const newEnabled = !matchedStockRecord.traceabilityEnabled;
+                              if (matchedStockRecord.traceabilityEnabled) return;
                               const updated = stocks.map((st) => {
                                 if (st.id === matchedStockRecord.id) {
-                                  return { ...st, traceabilityEnabled: newEnabled };
+                                  return { ...st, traceabilityEnabled: true };
                                 }
                                 return st;
                               });
                               onUpdateStocks(updated);
                             }}
-                            className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                            disabled={!!matchedStockRecord.traceabilityEnabled}
+                            className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                              matchedStockRecord.traceabilityEnabled ? "cursor-not-allowed" : "cursor-pointer"
+                            }`}
                             style={{
                               backgroundColor: matchedStockRecord.traceabilityEnabled ? "#fe4eba" : "#cbd5e1",
                             }}
@@ -11280,9 +11277,9 @@ export default function PublicPortal({
                       backgroundColor: "#FD4EBB",
                       width: "98%",
                       maxWidth: "310px",
-                      margin: "35px auto 50px",
-                      paddingTop: "90px",
-                      paddingBottom: "85px",
+                      margin: "20px auto 30px",
+                      paddingTop: "45px",
+                      paddingBottom: "40px",
                       borderRadius: "16px",
                       position: "relative",
                       overflow: "hidden",
@@ -13163,7 +13160,6 @@ export default function PublicPortal({
             </div>
           </div>
         )}
-        <FeedbackDrawer companyName={companyInfo?.name} />
       </div>
     </div>
   );

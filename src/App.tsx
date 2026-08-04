@@ -2384,7 +2384,7 @@ export default function App() {
     const bonCommandeEntete = bcDoc?.bonCommandeEntete || (bonCommandeId === 'custom' ? matchedMission?.customBonCommande : '') || '';
 
     const renderHeader = () => {
-      const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 80px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
+      const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
       const showHeaderLogo = pdfLogo ? `<img src="${pdfLogo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
       const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${pdfPageHeaderText}</div>` : '';
       const showEmail = compEmail ? `<div>${compEmail}</div>` : '';
@@ -2689,8 +2689,8 @@ export default function App() {
 
                       <!-- Signature Technicien -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                         ${report.techSignature ? `
+                          <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                           <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
                             <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
                           </div>
@@ -2699,11 +2699,19 @@ export default function App() {
 
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                        ${clientFound && clientFound.clientSignatureImage ? `
-                          <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; margin-top: 4px;">
-                            <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                          </div>
+                        ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
+                          <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
+                          ${(report.clientPinCode && report.clientPinCode.trim()) ? `
+                            <div style="font-size: 11px; margin-bottom: 2px;">
+                              <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
+                              <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
+                            </div>
+                          ` : ''}
+                          ${clientFound && clientFound.clientSignatureImage ? `
+                            <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; margin-top: 4px;">
+                              <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                            </div>
+                          ` : ''}
                         ` : ''}
                       </div>
                     </div>
@@ -3278,8 +3286,8 @@ export default function App() {
 
                     <!-- Signature Technicien -->
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                      <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                       ${report.techSignature ? `
+                        <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                         <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
                           <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
                         </div>
@@ -3288,11 +3296,19 @@ export default function App() {
 
                     <!-- Signature Client -->
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                      <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                      ${clientFound && clientFound.clientSignatureImage ? `
-                        <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; margin-top: 4px;">
-                          <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                        </div>
+                      ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
+                        <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
+                        ${(report.clientPinCode && report.clientPinCode.trim()) ? `
+                          <div style="font-size: 11px; margin-bottom: 2px;">
+                            <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
+                            <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
+                          </div>
+                        ` : ''}
+                        ${clientFound && clientFound.clientSignatureImage ? `
+                          <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; margin-top: 4px;">
+                            <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                          </div>
+                        ` : ''}
                       ` : ''}
                     </div>
                   </div>
@@ -5955,11 +5971,74 @@ export default function App() {
 
               const query = fsmSearchQuery.toLowerCase().trim();
               if (!query) return true;
+
+              // 1. Tour level fields
               const titleMatch = (tour.title || '').toLowerCase().includes(query);
               const techMatch = (tour.techName || '').toLowerCase().includes(query);
               const plannerMatch = (tour.plannerName || tour.planner || '').toLowerCase().includes(query);
               const regionMatch = (tour.region || '').toLowerCase().includes(query);
-              return titleMatch || techMatch || plannerMatch || regionMatch;
+              const idMatch = (tour.id || '').toLowerCase().includes(query);
+              const statusMatch = (tour.status || '').toLowerCase().includes(query);
+              const dateMatch = (tour.startDate || '').toLowerCase().includes(query);
+              const vehiculeMatch = (tour.vehicule || '').toLowerCase().includes(query);
+
+              if (titleMatch || techMatch || plannerMatch || regionMatch || idMatch || statusMatch || dateMatch || vehiculeMatch) {
+                return true;
+              }
+
+              // 2. Mission level fields across all missions in this tour
+              const missions = tour.missions || [];
+              const missionMatch = missions.some((m: any) => {
+                if (!m) return false;
+
+                // Mission direct fields
+                if ((m.clientName || '').toLowerCase().includes(query)) return true;
+                if ((m.defibIdentifiant || m.identifiant || '').toLowerCase().includes(query)) return true;
+                if ((m.defibSerialNumber || m.serialNumber || m.defibSn || m.sn || m.defibNumeroSerie || m.numeroSerie || '').toLowerCase().includes(query)) return true;
+                if ((m.reason || m.motif || '').toLowerCase().includes(query)) return true;
+                if ((m.interventionReference || m.ref || '').toLowerCase().includes(query)) return true;
+                if ((m.status || '').toLowerCase().includes(query)) return true;
+                if ((m.priority || '').toLowerCase().includes(query)) return true;
+                if ((m.equipmentType || m.categorie || '').toLowerCase().includes(query)) return true;
+                if ((m.clientAddress || m.address || '').toLowerCase().includes(query)) return true;
+                if (Array.isArray(m.requiredParts) && m.requiredParts.some((p: string) => (p || '').toLowerCase().includes(query))) return true;
+
+                // Lookup linked defibrillateur
+                const matchedDefib = defibrillateurs?.find((d: any) => d.identifiant === m.defibIdentifiant || d.id === m.defibId);
+                if (matchedDefib) {
+                  if ((matchedDefib.numeroSerie || '').toLowerCase().includes(query)) return true;
+                  if ((matchedDefib.identifiant || '').toLowerCase().includes(query)) return true;
+                  if ((matchedDefib.nomSite || '').toLowerCase().includes(query)) return true;
+                  if ((matchedDefib.ville || '').toLowerCase().includes(query)) return true;
+                  if ((matchedDefib.codePostal || matchedDefib.cp || '').toLowerCase().includes(query)) return true;
+
+                  const clientObj = clients?.find((c: any) => c.id === matchedDefib.clientId);
+                  if (clientObj) {
+                    if ((clientObj.denomination || '').toLowerCase().includes(query)) return true;
+                    if ((clientObj.codeClient || '').toLowerCase().includes(query)) return true;
+                  }
+                }
+
+                // Lookup linked other equipment
+                const matchedOther = !matchedDefib ? otherEquipments?.find((o: any) => o.identifiant === m.defibIdentifiant || o.id === m.defibId) : null;
+                if (matchedOther) {
+                  if ((matchedOther.numeroSerie || '').toLowerCase().includes(query)) return true;
+                  if ((matchedOther.identifiant || '').toLowerCase().includes(query)) return true;
+                  if ((matchedOther.nomPrenomSite || '').toLowerCase().includes(query)) return true;
+                  if ((matchedOther.ville || '').toLowerCase().includes(query)) return true;
+                  if ((matchedOther.codePostal || matchedOther.cp || '').toLowerCase().includes(query)) return true;
+
+                  const clientObj = clients?.find((c: any) => c.id === matchedOther.clientId);
+                  if (clientObj) {
+                    if ((clientObj.denomination || '').toLowerCase().includes(query)) return true;
+                    if ((clientObj.codeClient || '').toLowerCase().includes(query)) return true;
+                  }
+                }
+
+                return false;
+              });
+
+              return missionMatch;
             });
 
             return (
