@@ -246,10 +246,35 @@ export default function App() {
     return false;
   });
 
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => localStorage.getItem('defib_admin_logged_in') === 'true');
   const [loggedUser, setLoggedUser] = useState<{ email: string; name: string } | null>(() => {
-    const saved = localStorage.getItem('defib_admin_logged_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('defib_admin_logged_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && parsed.email) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error('Error reading defib_admin_logged_user:', e);
+    }
+    return null;
+  });
+
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    try {
+      const loggedInFlag = localStorage.getItem('defib_admin_logged_in') === 'true';
+      const savedUser = localStorage.getItem('defib_admin_logged_user');
+      if (loggedInFlag && savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && typeof parsed === 'object' && parsed.email) {
+          return true;
+        }
+      }
+    } catch (e) {
+      console.error('Error reading login status:', e);
+    }
+    return false;
   });
   const [showEnvLoading, setShowEnvLoading] = useState<boolean>(false);
   const [avisageConfirmTour, setAvisageConfirmTour] = useState<any | null>(null);
