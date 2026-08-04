@@ -231,7 +231,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const countTermine = tickets.filter(t => (t.situation || t.status) === 'Terminé' || t.status === 'Résolu').length;
 
   const customButtonStyle: React.CSSProperties = {
-    backgroundColor: '#3556ec',
+    backgroundColor: 'rgb(53, 86, 236)',
     color: '#ffffff',
     borderRadius: '13px',
     fontSize: '18px',
@@ -242,6 +242,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     justifyContent: 'center',
     cursor: 'pointer',
     border: 'none',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
     transition: 'background-color 0.15s ease',
   };
 
@@ -415,9 +416,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 fontWeight: 600,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: isSelected ? '#3556ec' : '#ffffff',
+                backgroundColor: isSelected ? '#000000' : '#ffffff',
                 color: isSelected ? '#ffffff' : '#000000',
-                border: isSelected ? '1px solid #3556ec' : '1px solid rgb(218, 218, 218)',
+                border: isSelected ? '1px solid #000000' : '1px solid rgb(218, 218, 218)',
                 transition: 'all 0.15s ease'
               }}
             >

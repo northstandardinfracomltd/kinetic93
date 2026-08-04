@@ -298,6 +298,7 @@ export interface CompanyInfo {
   website: string;
   email: string;
   phone: string;
+  envShortId?: string;
   nomLogiciel?: string;
   conditionsLegalesLink?: string;
   mentionsLegalesFactures?: string;

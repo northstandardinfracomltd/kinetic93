@@ -270,7 +270,9 @@ export default function ClientPortal({
   }, [authenticatedClient]);
 
   // Contact form state variables
-  const [contactSelectedEquipId, setContactSelectedEquipId] = useState('autre');
+  const [contactCategorie, setContactCategorie] = useState('Technique');
+  const [contactCriticite, setContactCriticite] = useState('Non renseigné');
+  const [contactObjet, setContactObjet] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactMessage, setContactMessage] = useState('');
   const [contactSuccessMsg, setContactSuccessMsg] = useState('');
@@ -832,6 +834,10 @@ export default function ClientPortal({
       const isUpcoming = rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture;
       if (!isUpcoming) return false;
 
+      // If client already authorized or refused this upcoming intervention, no action required
+      const currentSituation = (rep.missionStatus || rep.status || '').trim();
+      if (currentSituation === 'Accepté Client' || currentSituation === 'Refusé Client') return false;
+
       const snapClientId = rep.defibSnapshot?.clientId;
       if (snapClientId && snapClientId === authenticatedClient.id) return true;
       if (rep.defibId && (clientDefibIds.has(rep.defibId) || clientOtherIds.has(rep.defibId))) return true;
@@ -924,6 +930,10 @@ export default function ClientPortal({
     setContactSuccessMsg('');
     setContactErrorMsg('');
 
+    if (!contactObjet.trim()) {
+      setContactErrorMsg(t("Veuillez saisir l'objet de votre demande."));
+      return;
+    }
     if (!contactEmail.trim()) {
       setContactErrorMsg(t("Veuillez saisir votre adresse e-mail."));
       return;
@@ -933,36 +943,37 @@ export default function ClientPortal({
       return;
     }
 
-    let targetId = 'Autre';
-    let targetLabel = 'Autre';
-    if (contactSelectedEquipId !== 'autre') {
-      const found = assignedEquipment.find(eq => eq.id === contactSelectedEquipId);
-      if (found) {
-        targetId = found.identifiant || found.id;
-        targetLabel = found.nom;
-      }
-    }
-
     if (onAddTicket) {
-      const isDefib = assignedEquipment.find(eq => eq.id === contactSelectedEquipId)?.type === 'defib';
-      const ticketObjet = isDefib ? 'Défibrillateur endommagé' : 'Autre';
+      const now = new Date();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const yy = String(now.getFullYear()).slice(-2);
+      const envShort = (companyInfo?.envShortId || companyInfo?.name || 'DEFIB').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6) || 'DEFIB';
+      const randomSeq = String(Math.floor(100000 + Math.random() * 900000));
+      const referenceVal = `${randomSeq}-${envShort}-${mm}${yy}`;
 
       const ticketId = onAddTicket({
-        identifiant: targetId,
-        objet: ticketObjet,
-        message: `${contactMessage}\n\n[Client: ${authenticatedClient?.denomination || 'Client'}]\n[Matériel: ${targetLabel}]`,
+        reference: referenceVal,
+        categorie: contactCategorie,
+        criticite: contactCriticite,
+        objet: contactObjet.trim(),
+        situation: 'Nouveau',
+        collaborateur: 'Non attribué',
+        client: authenticatedClient?.denomination || '',
         email: contactEmail.trim(),
         phone: authenticatedClient?.phone || '',
+        description: `${contactMessage.trim()}\n\nComplément d'information :\nEmail: ${contactEmail.trim()}`,
+        message: `${contactMessage.trim()}\n\nComplément d'information :\nEmail: ${contactEmail.trim()}`,
       });
 
       if (onAddNotification) {
         onAddNotification(
           'Défibrillateurs',
-          `${t("Nouveau ticket")} ${ticketId} - ${authenticatedClient?.denomination || 'Client'} (${targetId})`
+          `${t("Nouveau ticket")} ${referenceVal} - ${authenticatedClient?.denomination || 'Client'}`
         );
       }
 
-      setContactSuccessMsg(`${t("Votre demande a bien été envoyée à l'exploitant. Ticket")} ${ticketId}`);
+      setContactSuccessMsg(`${t("Votre demande a bien été envoyée à l'exploitant. Référence ticket :")} ${referenceVal}`);
+      setContactObjet('');
       setContactMessage('');
     } else {
       setContactErrorMsg(t("Le service de support n'est pas disponible pour le moment."));
@@ -2495,50 +2506,41 @@ export default function ClientPortal({
 
   return (
     <div className="min-h-screen bg-white text-slate-800 flex flex-col font-sans select-none">
-      {/* Top sticky navigation bar with requested maintainer title */}
-      <header 
-        className="sticky top-0 z-50 px-4 py-5 shrink-0 border-b border-purple-950/20 shadow-md bg-gradient-to-r from-[#7e2e86] to-[#36093a]"
-      >
-        <div className="max-w-7xl mx-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between font-sans">
-          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
-            <h1 className="font-black animate-fadeIn" style={{ letterSpacing: '0px', color: '#631f6a', fontSize: '18px', cursor: 'default' }}>
-              {companyInfo?.name || 'Défibeo Solutions'}
-            </h1>
-          </div>
-
-          <div className="flex items-center">
-            <button
-              onClick={onLogout}
-              className="text-[18px] text-white rounded-xl select-none cursor-pointer border-0 shadow-sm outline-none transition-none brightness-100 hover:brightness-100 hover:opacity-100 hover:scale-100"
-              style={{
-                boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
-                background: '#3556ec',
-                backgroundColor: '#3556ec',
-                fontWeight: 100,
-                padding: '9px 18px',
-              }}
-            >
-              {t('Quitter')}
-            </button>
-          </div>
-        </div>
-      </header>
-
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 space-y-6">
         
-        {/* Environment Logo (aligné à gauche, max 180px width) */}
-        {companyInfo?.logo && companyInfo.logo.trim() !== '' && (
-          <div className="flex justify-start">
-            <img
-              src={companyInfo.logo}
-              alt="Logo"
-              style={{ maxWidth: '180px', maxHeight: '80px', objectFit: 'contain' }}
-              className="block"
-              referrerPolicy="no-referrer"
-            />
+        {/* Environment Logo (aligné à gauche, max 180px width) & Quitter button (aligné à droite) */}
+        <div className="flex items-center justify-between">
+          <div>
+            {companyInfo?.logo && companyInfo.logo.trim() !== '' ? (
+              <img
+                src={companyInfo.logo}
+                alt="Logo"
+                style={{ maxWidth: '180px', maxHeight: '80px', objectFit: 'contain' }}
+                className="block"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <h1 className="font-black animate-fadeIn" style={{ letterSpacing: '0px', color: '#631f6a', fontSize: '18px', cursor: 'default' }}>
+                {companyInfo?.name || 'Défibeo Solutions'}
+              </h1>
+            )}
           </div>
-        )}
+
+          <button
+            onClick={onLogout}
+            className="text-[18px] text-white rounded-xl select-none cursor-pointer border-0 shadow-sm outline-none transition-none brightness-100 hover:brightness-100 hover:opacity-100 hover:scale-100"
+            style={{
+              boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
+              background: '#3556ec',
+              backgroundColor: '#3556ec',
+              fontWeight: 100,
+              padding: '9px 18px',
+            }}
+          >
+            {t('Quitter')}
+          </button>
+        </div>
 
         {/* Info Alert 1: Interventions à venir */}
         {hasUpcomingInterventions && (
@@ -2645,7 +2647,7 @@ export default function ClientPortal({
                 : {
                     borderRadius: '13px',
                     background: 'transparent',
-                    color: '#000',
+                    color: 'rgb(99, 31, 106)',
                     padding: '9px 10px',
                     fontSize: '18px',
                   }
@@ -2669,7 +2671,7 @@ export default function ClientPortal({
                 : {
                     borderRadius: '13px',
                     background: 'transparent',
-                    color: '#000',
+                    color: 'rgb(99, 31, 106)',
                     padding: '9px 10px',
                     fontSize: '18px',
                   }
@@ -2694,7 +2696,7 @@ export default function ClientPortal({
                   : {
                       borderRadius: '13px',
                       background: 'transparent',
-                      color: '#000',
+                      color: 'rgb(99, 31, 106)',
                       padding: '9px 10px',
                       fontSize: '18px',
                     }
@@ -2719,7 +2721,7 @@ export default function ClientPortal({
                 : {
                     borderRadius: '13px',
                     background: 'transparent',
-                    color: '#000',
+                    color: 'rgb(99, 31, 106)',
                     padding: '9px 10px',
                     fontSize: '18px',
                   }
@@ -2743,7 +2745,7 @@ export default function ClientPortal({
                 : {
                     borderRadius: '13px',
                     background: 'transparent',
-                    color: '#000',
+                    color: 'rgb(99, 31, 106)',
                     padding: '9px 10px',
                     fontSize: '18px',
                   }
@@ -3415,45 +3417,45 @@ export default function ClientPortal({
                   maxWidth: '100%',
                 }}
               >
-                <div className="font-bold text-[18px] text-[#7e2e86]">
+                <div className="font-bold text-[16px] text-black">
                   {t("Réservé uniquement aux contrôles des défibrillateurs. Le pointage d’auto-vigilance n’est pas destiné aux autres types de matériels.")}
                 </div>
-                <div className="font-bold text-[18px] text-black">
+                <div className="font-bold text-[16px] text-black">
                   {t("Quatre vérifications simples pour votre pointage :")}
                 </div>
                 <ul className="space-y-2 list-none pl-0 m-0">
-                  <li className="flex items-start gap-2">
-                    <span className="text-slate-400 select-none">—</span>
-                    <span>
+                  <li className="flex items-start gap-2 text-[16px] text-black">
+                    <span className="text-black text-[16px] select-none">—</span>
+                    <span className="text-[16px] text-black">
                       <strong className="font-semibold">{t("Témoin lumineux :")}</strong> {t("Vert, prêt à l'emploi. Rouge, intervention nécessaire.")}
                     </span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-slate-400 select-none">—</span>
-                    <span>
+                  <li className="flex items-start gap-2 text-[16px] text-black">
+                    <span className="text-black text-[16px] select-none">—</span>
+                    <span className="text-[16px] text-black">
                       <strong className="font-semibold">{t("Électrodes :")}</strong> {t("Contrôlez la date de péremption, car un gel asséché perd en efficacité.")}
                     </span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-slate-400 select-none">—</span>
-                    <span>
+                  <li className="flex items-start gap-2 text-[16px] text-black">
+                    <span className="text-black text-[16px] select-none">—</span>
+                    <span className="text-[16px] text-black">
                       <strong className="font-semibold">{t("Batterie :")}</strong> {t("Contrôlez sa validité pour garantir puissance du choc.")}
                     </span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-slate-400 select-none">—</span>
-                    <span>
+                  <li className="flex items-start gap-2 text-[16px] text-black">
+                    <span className="text-black text-[16px] select-none">—</span>
+                    <span className="text-[16px] text-black">
                       <strong className="font-semibold">{t("Signalétique :")}</strong> {t("Les panneaux doivent êtres visibles, vérifiez les.")}
                     </span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-slate-400 select-none">—</span>
-                    <span>
+                  <li className="flex items-start gap-2 text-[16px] text-black">
+                    <span className="text-black text-[16px] select-none">—</span>
+                    <span className="text-[16px] text-black">
                       <strong className="font-semibold">{t("Boîtier/Armoire :")}</strong> {t("Vérifiez le bon état.")}
                     </span>
                   </li>
                 </ul>
-                <div className="mt-1 font-semibold text-[#7e2e86]">
+                <div className="mt-1 font-semibold text-black text-[16px]">
                   {t("En cas de doute, anticipez et contactez-nous.")}
                 </div>
               </div>
@@ -3552,8 +3554,10 @@ export default function ClientPortal({
                       <div className="w-full">
                         <button
                           type="submit"
-                          className="w-full text-white bg-[#3556ec] hover:bg-[#2b48cd] transition-all cursor-pointer outline-none border-none shrink-0 font-bold shadow-md"
+                          className="w-full text-white transition-all cursor-pointer outline-none border-none shrink-0 font-bold"
                           style={{
+                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                            background: 'rgb(53, 86, 236)',
                             borderRadius: '11px',
                             fontSize: '18px',
                             height: '48px',
@@ -4146,29 +4150,60 @@ export default function ClientPortal({
                 </div>
 
                 <form onSubmit={handleContactSubmit} className="space-y-4">
-                  {/* Equipment select */}
+                  {/* Catégorie select */}
                   <div className="space-y-1">
                     <label className="block text-[18px] font-bold text-black font-sans select-none">
-                      {t("Matériel concerné.")}
+                      {t("Catégorie *")}
                     </label>
                     <select
-                      value={contactSelectedEquipId}
-                      onChange={(e) => setContactSelectedEquipId(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white focus:outline-none font-sans appearance-none"
+                      value={contactCategorie}
+                      onChange={(e) => setContactCategorie(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white focus:outline-none font-sans cursor-pointer"
                     >
-                      <option value="autre">{t("Autre demande / Problème général")}</option>
-                      {assignedEquipment.map((eq) => (
-                        <option key={eq.id} value={eq.id}>
-                          {eq.nom}
-                        </option>
-                      ))}
+                      <option value="Technique">{t("Technique")}</option>
+                      <option value="Commercial">{t("Commercial")}</option>
+                      <option value="Réclamation">{t("Réclamation")}</option>
+                      <option value="Autre">{t("Autre")}</option>
                     </select>
+                  </div>
+
+                  {/* Criticité select */}
+                  <div className="space-y-1">
+                    <label className="block text-[18px] font-bold text-black font-sans select-none">
+                      {t("Criticité *")}
+                    </label>
+                    <select
+                      value={contactCriticite}
+                      onChange={(e) => setContactCriticite(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white focus:outline-none font-sans cursor-pointer"
+                    >
+                      <option value="Non renseigné">{t("Non renseigné")}</option>
+                      <option value="Urgent">{t("Urgent")}</option>
+                      <option value="Semaine prochaine">{t("Semaine prochaine")}</option>
+                      <option value="Ce mois">{t("Ce mois")}</option>
+                      <option value="Mois prochain">{t("Mois prochain")}</option>
+                    </select>
+                  </div>
+
+                  {/* Objet field */}
+                  <div className="space-y-1">
+                    <label className="block text-[18px] font-bold text-black font-sans select-none">
+                      {t("Objet *")}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={contactObjet}
+                      onChange={(e) => setContactObjet(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white focus:outline-none font-sans"
+                      placeholder={t("Saisissez l'objet de votre demande...")}
+                    />
                   </div>
 
                   {/* Email field */}
                   <div className="space-y-1">
                     <label className="block text-[18px] font-bold text-black font-sans select-none">
-                      {t("Votre adresse e-mail.")}
+                      {t("Votre adresse e-mail *")}
                     </label>
                     <input
                       type="email"
@@ -4183,7 +4218,7 @@ export default function ClientPortal({
                   {/* Message field */}
                   <div className="space-y-1">
                     <label className="block text-[18px] font-bold text-black font-sans select-none">
-                      {t("Votre message.")}
+                      {t("Votre message *")}
                     </label>
                     <textarea
                       required
