@@ -132,3 +132,24 @@ html, body {
   color: #ffffff;
   animation: textWaveFade 2.2s infinite linear;
 }
+
+@keyframes pinkCardWave {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-card-pink-wave {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: pinkCardWave 2.8s infinite linear;
+}
+

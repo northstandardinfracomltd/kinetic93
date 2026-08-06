@@ -10373,8 +10373,13 @@ export default function App() {
                                 const clientDisplay = clientName.length > 20 ? clientName.substring(0, 20) + '(...)' : clientName;
                                 const rowActionButton18Style: React.CSSProperties = {
                                   ...rowActionButtonStyle,
+                                  backgroundColor: '#000000',
+                                  color: '#ffffff',
                                   fontSize: '18px',
                                   padding: '9px 19px',
+                                  borderRadius: '13px',
+                                  boxShadow: 'none',
+                                  border: 'none',
                                 };
 
                                 return (
