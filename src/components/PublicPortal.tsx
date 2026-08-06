@@ -3165,6 +3165,14 @@ export default function PublicPortal({
   };
 
   // TIME WORK tracking state variables
+  const [expandedPointageIds, setExpandedPointageIds] = useState<Record<string, boolean>>({});
+  const togglePointageExpanded = (id: string) => {
+    setExpandedPointageIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
   const [pointages, setPointages] = useState<PointageLog[]>(() => {
     const envId = localStorage.getItem("defib_tenant_id") || "demo";
     const saved = localStorage.getItem(`defib_${envId}_pointages_history`);
@@ -10506,10 +10514,12 @@ export default function PublicPortal({
                         );
                         const cttAmpFormatted = minsToHHMM(cttAmpMins);
 
+                        const isExpanded = !!expandedPointageIds[p.id];
+
                         return (
                           <div
                             key={p.id}
-                            className="p-4 sm:p-5 rounded-[16px] space-y-5 bg-white shadow-xs"
+                            className="p-4 sm:p-5 rounded-[16px] space-y-4 bg-white shadow-xs"
                             style={{
                               border: "1px solid rgb(201, 190, 205)",
                             }}
@@ -10534,412 +10544,439 @@ export default function PublicPortal({
                               </div>
                             </div>
 
-                            {/* Section Title : « Pointages » */}
-                            <div className="space-y-3">
-                              <h4
-                                style={{ fontSize: "18px", color: "#000000" }}
-                                className="font-bold"
-                              >
-                                {t("Pointages")}
-                              </h4>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {/* Date Journée. */}
-                                <div className="space-y-1">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold"
-                                  >
-                                    {t("Date Journée.")}
-                                  </label>
-                                  <input
-                                    type="date"
-                                    value={getIsoDate(p.startDate)}
-                                    style={{
-                                      color: "#000",
-                                      fontSize: "16px",
-                                      border: "1px solid #c9bfcd",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                    }}
-                                    className="w-full outline-none"
-                                    onChange={(e) =>
-                                      handleEditPointageField(p.id, {
-                                        startDate: getFrenchDate(e.target.value),
-                                      })
-                                    }
-                                  />
-                                </div>
-
-                                {/* Début Journée. */}
-                                <div className="space-y-1">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold"
-                                  >
-                                    {t("Début Journée.")}
-                                  </label>
-                                  <input
-                                    type="time"
-                                    value={p.startTime}
-                                    style={{
-                                      color: "#000",
-                                      fontSize: "16px",
-                                      border: "1px solid #c9bfcd",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                    }}
-                                    className="w-full outline-none"
-                                    onChange={(e) =>
-                                      handleEditPointageField(p.id, {
-                                        startTime: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-
-                                {/* Fin Journée. */}
-                                <div className="space-y-1">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold"
-                                  >
-                                    {t("Fin Journée.")}
-                                  </label>
-                                  <input
-                                    type="time"
-                                    value={endTime}
-                                    style={{
-                                      color: "#000",
-                                      fontSize: "16px",
-                                      border: "1px solid #c9bfcd",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                    }}
-                                    className="w-full outline-none"
-                                    onChange={(e) =>
-                                      handleEditPointageField(p.id, {
-                                        endTime: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-
-                                {/* Amplitude Journée. (Disabled) */}
-                                <div className="space-y-1">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold"
-                                  >
-                                    {t("Amplitude Journée.")}
-                                  </label>
-                                  <input
-                                    type="text"
-                                    disabled
-                                    readOnly
-                                    value={ampFormatted}
-                                    style={{
-                                      color: "#000",
-                                      fontSize: "16px",
-                                      border: "1px solid #c9bfcd",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#e2d9e6",
-                                    }}
-                                    className="w-full cursor-not-allowed outline-none"
-                                  />
-                                </div>
-
-                                {/* Commentaire Journée. */}
-                                <div className="space-y-1 sm:col-span-2 lg:col-span-2">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold"
-                                  >
-                                    {t("Commentaire Journée.")}
-                                  </label>
-                                  <input
-                                    type="text"
-                                    maxLength={100}
-                                    placeholder={t("Entrez un commentaire.")}
-                                    value={p.comment || ""}
-                                    style={{
-                                      color: "#000",
-                                      fontSize: "16px",
-                                      border: "1px solid #c9bfcd",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                    }}
-                                    className="w-full outline-none"
-                                    onChange={(e) =>
-                                      handleEditPointageField(p.id, {
-                                        comment: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Section Title : « Trajet » */}
-                            <div className="space-y-3 pt-1">
-                              <h4
-                                style={{ fontSize: "18px", color: "#000000" }}
-                                className="font-bold"
-                              >
-                                {t("Trajet")}
-                              </h4>
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                {/* Temps Trajet Matin. */}
-                                <div className="space-y-1">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold"
-                                  >
-                                    {t("Temps Trajet Matin.")}
-                                  </label>
-                                  <input
-                                    type="text"
-                                    placeholder="00:00"
-                                    value={p.trajetMatin ?? "00:00"}
-                                    style={{
-                                      color: "#000",
-                                      fontSize: "16px",
-                                      border: "1px solid #c9bfcd",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                    }}
-                                    className="w-full outline-none"
-                                    onChange={(e) =>
-                                      handleEditPointageField(p.id, {
-                                        trajetMatin: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-
-                                {/* Temps Trajet Soir. */}
-                                <div className="space-y-1">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold"
-                                  >
-                                    {t("Temps Trajet Soir.")}
-                                  </label>
-                                  <input
-                                    type="text"
-                                    placeholder="00:00"
-                                    value={p.trajetSoir ?? "00:00"}
-                                    style={{
-                                      color: "#000",
-                                      fontSize: "16px",
-                                      border: "1px solid #c9bfcd",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                    }}
-                                    className="w-full outline-none"
-                                    onChange={(e) =>
-                                      handleEditPointageField(p.id, {
-                                        trajetSoir: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-
-                                {/* Temps Trajet Journée. (Disabled) */}
-                                <div className="space-y-1">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold"
-                                  >
-                                    {t("Temps Trajet Journée.")}
-                                  </label>
-                                  <input
-                                    type="text"
-                                    disabled
-                                    readOnly
-                                    value={trajetJourneeFormatted}
-                                    style={{
-                                      color: "#000",
-                                      fontSize: "16px",
-                                      border: "1px solid #c9bfcd",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#e2d9e6",
-                                    }}
-                                    className="w-full cursor-not-allowed outline-none"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Section Title : « Repas » */}
-                            <div className="space-y-3 pt-1">
-                              <h4
-                                style={{ fontSize: "18px", color: "#000000" }}
-                                className="font-bold"
-                              >
-                                {t("Repas")}
-                              </h4>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {/* Temps de repas. */}
-                                <div className="space-y-1">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold"
-                                  >
-                                    {t("Temps de repas.")}
-                                  </label>
-                                  <input
-                                    type="text"
-                                    placeholder="00:00"
-                                    value={p.tempsRepas ?? "00:00"}
-                                    style={{
-                                      color: "#000",
-                                      fontSize: "16px",
-                                      border: "1px solid #c9bfcd",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                    }}
-                                    className="w-full outline-none"
-                                    onChange={(e) =>
-                                      handleEditPointageField(p.id, {
-                                        tempsRepas: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Title : « CTT » */}
-                            <div className="space-y-3 pt-1">
-                              <h4
-                                style={{ fontSize: "18px", color: "#000000" }}
-                                className="font-bold"
-                              >
-                                {t("CTT")}
-                              </h4>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {/* Amplitude Journée. (Disabled under CTT) */}
-                                <div className="space-y-1">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold"
-                                  >
-                                    {t("Amplitude Journée.")}
-                                  </label>
-                                  <input
-                                    type="text"
-                                    disabled
-                                    readOnly
-                                    value={cttAmpFormatted}
-                                    style={{
-                                      color: "#000",
-                                      fontSize: "16px",
-                                      border: "1px solid #c9bfcd",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#e2d9e6",
-                                    }}
-                                    className="w-full cursor-not-allowed outline-none"
-                                  />
-                                </div>
-
-                                {/* Temps Administratif/Autres. */}
-                                <div className="space-y-1">
-                                  <label
-                                    style={{ fontSize: "16px", color: "#000000" }}
-                                    className="block font-bold"
-                                  >
-                                    {t("Temps Administratif/Autres.")}
-                                  </label>
-                                  <input
-                                    type="text"
-                                    placeholder="00:00"
-                                    value={p.tempsAdmin ?? "00:00"}
-                                    style={{
-                                      color: "#000",
-                                      fontSize: "16px",
-                                      border: "1px solid #c9bfcd",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                    }}
-                                    className="w-full outline-none"
-                                    onChange={(e) =>
-                                      handleEditPointageField(p.id, {
-                                        tempsAdmin: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Card Buttons: Supprimer & Enregistrer */}
-                            <div className="flex items-center gap-3 pt-3 w-full">
-                              <button
-                                type="button"
-                                disabled={p.isOngoing}
-                                onClick={() => {
-                                  if (
-                                    window.confirm(
-                                      "Êtes-vous sûr de vouloir supprimer ce pointage ?"
-                                    )
-                                  ) {
-                                    if (
-                                      window.confirm(
-                                        "Confirmation définitive : Êtes-vous vraiment sûr de vouloir supprimer ce pointage ?"
-                                      )
-                                    ) {
-                                      handleDeletePointage(p.id);
-                                    }
+                            {/* Main Fields Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {/* Date Journée. (Always visible) */}
+                              <div className="space-y-1">
+                                <label
+                                  style={{ fontSize: "16px", color: "#000000" }}
+                                  className="block font-bold"
+                                >
+                                  {t("Date Journée.")}
+                                </label>
+                                <input
+                                  type="date"
+                                  value={getIsoDate(p.startDate)}
+                                  style={{
+                                    color: "#000",
+                                    fontSize: "16px",
+                                    border: "1px solid #c9bfcd",
+                                    borderRadius: "13px",
+                                    padding: "10px 12px",
+                                    backgroundColor: "#ffffff",
+                                  }}
+                                  className="w-full outline-none"
+                                  onChange={(e) =>
+                                    handleEditPointageField(p.id, {
+                                      startDate: getFrenchDate(e.target.value),
+                                    })
                                   }
-                                }}
-                                style={{
-                                  backgroundColor: p.isOngoing ? "#9ca3af" : "#dc2626",
-                                  color: "#ffffff",
-                                  fontSize: "16px",
-                                  fontWeight: "bold",
-                                  borderRadius: "12px",
-                                  padding: "12px 18px",
-                                  border: "none",
-                                  cursor: p.isOngoing ? "not-allowed" : "pointer",
-                                  opacity: p.isOngoing ? 0.5 : 1,
-                                  flex: 1,
-                                }}
-                                className="transition-all font-bold"
-                              >
-                                Supprimer
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  alert("Pointage enregistré avec succès.")
-                                }
-                                style={{
-                                  backgroundColor: "#000000",
-                                  color: "#ffffff",
-                                  fontSize: "16px",
-                                  fontWeight: "bold",
-                                  borderRadius: "12px",
-                                  padding: "12px 18px",
-                                  border: "none",
-                                  cursor: "pointer",
-                                  flex: 1,
-                                }}
-                                className="hover:opacity-90 transition-all font-bold"
-                              >
-                                Enregistrer
-                              </button>
+                                />
+                              </div>
+
+                              {isExpanded && (
+                                <>
+                                  {/* Début Journée. */}
+                                  <div className="space-y-1">
+                                    <label
+                                      style={{ fontSize: "16px", color: "#000000" }}
+                                      className="block font-bold"
+                                    >
+                                      {t("Début Journée.")}
+                                    </label>
+                                    <input
+                                      type="time"
+                                      value={p.startTime}
+                                      style={{
+                                        color: "#000",
+                                        fontSize: "16px",
+                                        border: "1px solid #c9bfcd",
+                                        borderRadius: "13px",
+                                        padding: "10px 12px",
+                                        backgroundColor: "#ffffff",
+                                      }}
+                                      className="w-full outline-none"
+                                      onChange={(e) =>
+                                        handleEditPointageField(p.id, {
+                                          startTime: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+
+                                  {/* Fin Journée. */}
+                                  <div className="space-y-1">
+                                    <label
+                                      style={{ fontSize: "16px", color: "#000000" }}
+                                      className="block font-bold"
+                                    >
+                                      {t("Fin Journée.")}
+                                    </label>
+                                    <input
+                                      type="time"
+                                      value={endTime}
+                                      style={{
+                                        color: "#000",
+                                        fontSize: "16px",
+                                        border: "1px solid #c9bfcd",
+                                        borderRadius: "13px",
+                                        padding: "10px 12px",
+                                        backgroundColor: "#ffffff",
+                                      }}
+                                      className="w-full outline-none"
+                                      onChange={(e) =>
+                                        handleEditPointageField(p.id, {
+                                          endTime: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+
+                                  {/* Amplitude Journée. (Disabled) */}
+                                  <div className="space-y-1">
+                                    <label
+                                      style={{ fontSize: "16px", color: "#000000" }}
+                                      className="block font-bold"
+                                    >
+                                      {t("Amplitude Journée.")}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      disabled
+                                      readOnly
+                                      value={ampFormatted}
+                                      style={{
+                                        color: "#000",
+                                        fontSize: "16px",
+                                        border: "1px solid #c9bfcd",
+                                        borderRadius: "13px",
+                                        padding: "10px 12px",
+                                        backgroundColor: "#e2d9e6",
+                                      }}
+                                      className="w-full cursor-not-allowed outline-none"
+                                    />
+                                  </div>
+
+                                  {/* Commentaire Journée. */}
+                                  <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+                                    <label
+                                      style={{ fontSize: "16px", color: "#000000" }}
+                                      className="block font-bold"
+                                    >
+                                      {t("Commentaire Journée.")}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      maxLength={100}
+                                      placeholder={t("Entrez un commentaire.")}
+                                      value={p.comment || ""}
+                                      style={{
+                                        color: "#000",
+                                        fontSize: "16px",
+                                        border: "1px solid #c9bfcd",
+                                        borderRadius: "13px",
+                                        padding: "10px 12px",
+                                        backgroundColor: "#ffffff",
+                                      }}
+                                      className="w-full outline-none"
+                                      onChange={(e) =>
+                                        handleEditPointageField(p.id, {
+                                          comment: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                </>
+                              )}
                             </div>
+
+                            {/* Full-width Toggle Button: Dérouler / Réduire */}
+                            <button
+                              type="button"
+                              onClick={() => togglePointageExpanded(p.id)}
+                              style={{
+                                color: "#fff",
+                                boxShadow:
+                                  "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97 28 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                background: "rgb(96 28 104)",
+                                borderRadius: "13px",
+                                padding: "10px 18px",
+                                fontSize: "16px",
+                                fontWeight: 700,
+                                border: "none",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "6px",
+                                width: "100%",
+                              }}
+                              className="w-full shrink-0 select-none transition-all active:scale-[0.99]"
+                            >
+                              {isExpanded ? t("Réduire") : t("Dérouler")}
+                            </button>
+
+                            {/* Expanded Details */}
+                            {isExpanded && (
+                              <div className="space-y-4 pt-1 border-t border-slate-100">
+                                {/* Section Title : « Trajet » */}
+                                <div className="space-y-3 pt-1">
+                                  <h4
+                                    style={{ fontSize: "18px", color: "#000000" }}
+                                    className="font-bold"
+                                  >
+                                    {t("Trajet")}
+                                  </h4>
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    {/* Temps Trajet Matin. */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Temps Trajet Matin.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        placeholder="00:00"
+                                        value={p.trajetMatin ?? "00:00"}
+                                        style={{
+                                          color: "#000",
+                                          fontSize: "16px",
+                                          border: "1px solid #c9bfcd",
+                                          borderRadius: "13px",
+                                          padding: "10px 12px",
+                                          backgroundColor: "#ffffff",
+                                        }}
+                                        className="w-full outline-none"
+                                        onChange={(e) =>
+                                          handleEditPointageField(p.id, {
+                                            trajetMatin: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+
+                                    {/* Temps Trajet Soir. */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Temps Trajet Soir.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        placeholder="00:00"
+                                        value={p.trajetSoir ?? "00:00"}
+                                        style={{
+                                          color: "#000",
+                                          fontSize: "16px",
+                                          border: "1px solid #c9bfcd",
+                                          borderRadius: "13px",
+                                          padding: "10px 12px",
+                                          backgroundColor: "#ffffff",
+                                        }}
+                                        className="w-full outline-none"
+                                        onChange={(e) =>
+                                          handleEditPointageField(p.id, {
+                                            trajetSoir: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+
+                                    {/* Temps Trajet Journée. (Disabled) */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Temps Trajet Journée.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        disabled
+                                        readOnly
+                                        value={trajetJourneeFormatted}
+                                        style={{
+                                          color: "#000",
+                                          fontSize: "16px",
+                                          border: "1px solid #c9bfcd",
+                                          borderRadius: "13px",
+                                          padding: "10px 12px",
+                                          backgroundColor: "#e2d9e6",
+                                        }}
+                                        className="w-full cursor-not-allowed outline-none"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Section Title : « Repas » */}
+                                <div className="space-y-3 pt-1">
+                                  <h4
+                                    style={{ fontSize: "18px", color: "#000000" }}
+                                    className="font-bold"
+                                  >
+                                    {t("Repas")}
+                                  </h4>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {/* Temps de repas. */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Temps de repas.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        placeholder="00:00"
+                                        value={p.tempsRepas ?? "00:00"}
+                                        style={{
+                                          color: "#000",
+                                          fontSize: "16px",
+                                          border: "1px solid #c9bfcd",
+                                          borderRadius: "13px",
+                                          padding: "10px 12px",
+                                          backgroundColor: "#ffffff",
+                                        }}
+                                        className="w-full outline-none"
+                                        onChange={(e) =>
+                                          handleEditPointageField(p.id, {
+                                            tempsRepas: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Title : « CTT » */}
+                                <div className="space-y-3 pt-1">
+                                  <h4
+                                    style={{ fontSize: "18px", color: "#000000" }}
+                                    className="font-bold"
+                                  >
+                                    {t("CTT")}
+                                  </h4>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {/* Amplitude Journée. (Disabled under CTT) */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Amplitude Journée.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        disabled
+                                        readOnly
+                                        value={cttAmpFormatted}
+                                        style={{
+                                          color: "#000",
+                                          fontSize: "16px",
+                                          border: "1px solid #c9bfcd",
+                                          borderRadius: "13px",
+                                          padding: "10px 12px",
+                                          backgroundColor: "#e2d9e6",
+                                        }}
+                                        className="w-full cursor-not-allowed outline-none"
+                                      />
+                                    </div>
+
+                                    {/* Temps Administratif/Autres. */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Temps Administratif/Autres.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        placeholder="00:00"
+                                        value={p.tempsAdmin ?? "00:00"}
+                                        style={{
+                                          color: "#000",
+                                          fontSize: "16px",
+                                          border: "1px solid #c9bfcd",
+                                          borderRadius: "13px",
+                                          padding: "10px 12px",
+                                          backgroundColor: "#ffffff",
+                                        }}
+                                        className="w-full outline-none"
+                                        onChange={(e) =>
+                                          handleEditPointageField(p.id, {
+                                            tempsAdmin: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Card Buttons: Supprimer & Enregistrer */}
+                                <div className="flex items-center gap-3 pt-3 w-full">
+                                  <button
+                                    type="button"
+                                    disabled={p.isOngoing}
+                                    onClick={() => {
+                                      if (
+                                        window.confirm(
+                                          "Êtes-vous sûr de vouloir supprimer ce pointage ?"
+                                        )
+                                      ) {
+                                        if (
+                                          window.confirm(
+                                            "Confirmation définitive : Êtes-vous vraiment sûr de vouloir supprimer ce pointage ?"
+                                          )
+                                        ) {
+                                          handleDeletePointage(p.id);
+                                        }
+                                      }
+                                    }}
+                                    style={{
+                                      backgroundColor: p.isOngoing ? "#9ca3af" : "#dc2626",
+                                      color: "#ffffff",
+                                      fontSize: "16px",
+                                      fontWeight: "bold",
+                                      borderRadius: "12px",
+                                      padding: "12px 18px",
+                                      border: "none",
+                                      cursor: p.isOngoing ? "not-allowed" : "pointer",
+                                      opacity: p.isOngoing ? 0.5 : 1,
+                                      flex: 1,
+                                    }}
+                                    className="transition-all font-bold"
+                                  >
+                                    Supprimer
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      alert("Pointage enregistré avec succès.")
+                                    }
+                                    style={{
+                                      backgroundColor: "#000000",
+                                      color: "#ffffff",
+                                      fontSize: "16px",
+                                      fontWeight: "bold",
+                                      borderRadius: "12px",
+                                      padding: "12px 18px",
+                                      border: "none",
+                                      cursor: "pointer",
+                                      flex: 1,
+                                    }}
+                                    className="hover:opacity-90 transition-all font-bold"
+                                  >
+                                    Enregistrer
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}

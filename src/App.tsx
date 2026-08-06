@@ -10123,7 +10123,7 @@ export default function App() {
               <div className="space-y-6 animate-fadeIn" id="devis-tab-container-harmonized">
                 <style>{`
                   #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-devis-input),
-                  #devis-tab-container-harmonized select,
+                  #devis-tab-container-harmonized select:not(.transformer-select),
                   #devis-tab-container-harmonized textarea {
                     padding: 12px !important;
                     border: 1px solid #dedede !important;
@@ -10137,10 +10137,33 @@ export default function App() {
                     outline: none !important;
                     transition: all 0s !important;
                   }
+                  #devis-tab-container-harmonized select.transformer-select {
+                    background: #000000 !important;
+                    color: #ffffff !important;
+                    font-size: 18px !important;
+                    box-shadow: none !important;
+                    border: none !important;
+                    border-radius: 13px !important;
+                    padding: 9px 19px !important;
+                    cursor: pointer !important;
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    -moz-appearance: none !important;
+                    text-align: center !important;
+                    text-align-last: center !important;
+                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                  }
+                  #devis-tab-container-harmonized select.transformer-select option {
+                    background: #ffffff !important;
+                    color: #000000 !important;
+                  }
                   #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-devis-input),
                   #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-devis-input),
-                  #devis-tab-container-harmonized select:hover:not(:disabled),
-                  #devis-tab-container-harmonized select:focus:not(:disabled),
+                  #devis-tab-container-harmonized select:not(.transformer-select):hover:not(:disabled),
+                  #devis-tab-container-harmonized select:not(.transformer-select):focus:not(:disabled),
                   #devis-tab-container-harmonized textarea:hover:not(:disabled),
                   #devis-tab-container-harmonized textarea:focus:not(:disabled),
                   #devis-tab-container-harmonized #search-devis-input:hover,
@@ -10468,16 +10491,21 @@ export default function App() {
                                              }
                                            }}
                                            style={{
-                                             ...rowActionButton18Style,
+                                             backgroundColor: '#000000',
+                                             color: '#ffffff',
+                                             fontSize: '18px',
+                                             padding: '9px 19px',
+                                             borderRadius: '13px',
+                                             boxShadow: 'none',
+                                             border: 'none',
                                              appearance: 'none',
                                              WebkitAppearance: 'none',
                                              MozAppearance: 'none',
                                              outline: 'none',
-                                             border: 'none',
                                              textAlign: 'center',
                                              textAlignLast: 'center',
                                            }}
-                                           className="cursor-pointer font-sans"
+                                           className="transformer-select cursor-pointer font-sans"
                                          >
                                            <option value="" disabled hidden style={{ backgroundColor: '#000000', color: '#ffffff' }}>
                                              {t("Transformer")}
