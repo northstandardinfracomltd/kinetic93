@@ -348,7 +348,7 @@ export default function StagiairesTab({
       ) : (
         /* Form Overlay */
         <div
-          className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto min-h-screen py-4"
+          className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto min-h-screen pt-0 pb-4"
           id="stagiaire-form-overlay"
           onClick={triggerFormShakeAndScroll}
         >
@@ -360,7 +360,8 @@ export default function StagiairesTab({
               borderTop: 'none',
               borderRadius: '0px 0px 18px 18px',
               maxWidth: '98%',
-              margin: 'auto',
+              margin: '0 auto',
+              marginTop: '0px',
               padding: '20px',
             }}
             id="stagiaire-form-header-box"

@@ -571,6 +571,8 @@ export interface FormationRecord {
   formateurId: string;
   statut: 'Brouillon' | 'Terminé';
   commentaire: string;
+  reasons?: string[];
+  reason?: string;
   clientId: string;
   adresse: string;
   ville: string;

@@ -66,7 +66,7 @@ export function sortMissionsByProximity(
 ): any[] {
   if (missions.length === 0) return [];
 
-  const hasForced = missions.some(m => m.isForced || (m.isManualDate && m.isManualSlot));
+  const hasForced = missions.some(m => m.isForced || (m.isManualDate && m.isManualSlot) || m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId);
 
   if (!hasForced) {
     return sortSingleSegment(missions, startCoord, equipmentCoords, preference);
@@ -78,7 +78,7 @@ export function sortMissionsByProximity(
 
   for (let i = 0; i < missions.length; i++) {
     const m = missions[i];
-    const isForced = !!(m.isForced || (m.isManualDate && m.isManualSlot));
+    const isForced = !!(m.isForced || (m.isManualDate && m.isManualSlot) || m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId);
 
     if (isForced) {
       if (currentSegment.length > 0) {
@@ -388,7 +388,7 @@ export function scheduleMissions(
 
   // Find all forced mission indices
   const forcedIndices = missions
-    .map((m, idx) => ((m.isForced || (m.isManualDate && m.isManualSlot)) ? idx : -1))
+    .map((m, idx) => ((m.isForced || (m.isManualDate && m.isManualSlot) || m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) ? idx : -1))
     .filter(idx => idx !== -1);
 
   const result: any[] = new Array(missions.length);
@@ -396,7 +396,7 @@ export function scheduleMissions(
   let i = 0;
   while (i < missions.length) {
     const m = missions[i];
-    const isForced = !!(m.isForced || (m.isManualDate && m.isManualSlot));
+    const isForced = !!(m.isForced || (m.isManualDate && m.isManualSlot) || m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId);
 
     if (isForced) {
       // 1. FORCED MISSION: Keep exact user-specified date and slot

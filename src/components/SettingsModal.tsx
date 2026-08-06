@@ -881,9 +881,32 @@ export default function SettingsModal({
 
   const handleToggleTabVisibility = (tabLabel: string) => {
     const currentHidden = localCompany.hiddenTabs || [];
-    const newHidden = currentHidden.includes(tabLabel)
-      ? currentHidden.filter(t => t !== tabLabel)
-      : [...currentHidden, tabLabel];
+    let newHidden: string[] = [];
+
+    const isCurrentlyHidden = currentHidden.includes(tabLabel);
+
+    if (tabLabel === 'Formations' || tabLabel === 'Stagiaires') {
+      if (!isCurrentlyHidden) {
+        // Hide Formations or Stagiaires -> hide Formations, Stagiaires, and Émargements
+        const toAdd = ['Formations', 'Stagiaires', 'Émargements'];
+        newHidden = Array.from(new Set([...currentHidden, ...toAdd]));
+      } else {
+        // Unhide Formations or Stagiaires -> unhide Formations, Stagiaires, and Émargements
+        newHidden = currentHidden.filter(t => !['Formations', 'Stagiaires', 'Émargements'].includes(t));
+      }
+    } else if (tabLabel === 'Émargements') {
+      if (!isCurrentlyHidden) {
+        // Hide Émargements -> hide Émargements only
+        newHidden = Array.from(new Set([...currentHidden, 'Émargements']));
+      } else {
+        // Unhide Émargements -> unhide Émargements, Formations, and Stagiaires
+        newHidden = currentHidden.filter(t => !['Formations', 'Stagiaires', 'Émargements'].includes(t));
+      }
+    } else {
+      newHidden = isCurrentlyHidden
+        ? currentHidden.filter(t => t !== tabLabel)
+        : [...currentHidden, tabLabel];
+    }
 
     const updatedCompany = {
       ...localCompany,
@@ -2146,7 +2169,10 @@ export default function SettingsModal({
                 "Relevé Concurrentiel",
                 "Relevé Concurrentiel (Webapp)",
                 "Frais (Webapp)",
-                "Importer Exporter"
+                "Importer Exporter",
+                "Formations",
+                "Stagiaires",
+                "Émargements"
               ].map((pillLabel) => {
                 const isHidden = localCompany?.hiddenTabs?.includes(pillLabel);
                 return (

@@ -5712,12 +5712,24 @@ export default function App() {
                 "import-export": "Importer Exporter",
                 satisfaction: "Satisfaction",
                 notifications: "Notifications",
-                veilles: "Relevé Concurrentiel"
+                veilles: "Relevé Concurrentiel",
+                formations: "Formations",
+                stagiaires: "Stagiaires",
+                emargements: "Émargements"
               };
               const label = tabToLabelMap[tab.id];
               const isHiddenByNewName = label ? companyInfo.hiddenTabs.includes(label) : false;
               const isHiddenByOldName = (tab.id === 'fsm' && companyInfo.hiddenTabs.includes("FSM (Tournées)")) ||
                                         (tab.id === 'gmao' && companyInfo.hiddenTabs.includes("GMAO (Rapports)"));
+
+              const isFormationHidden = companyInfo.hiddenTabs.includes("Formations");
+              const isStagiairesHidden = companyInfo.hiddenTabs.includes("Stagiaires");
+              const isEmargementsHidden = companyInfo.hiddenTabs.includes("Émargements");
+
+              if (tab.id === 'formations' && (isFormationHidden || isStagiairesHidden)) return false;
+              if (tab.id === 'stagiaires' && (isFormationHidden || isStagiairesHidden)) return false;
+              if (tab.id === 'emargements' && (isFormationHidden || isStagiairesHidden || isEmargementsHidden)) return false;
+
               return !isHiddenByNewName && !isHiddenByOldName;
             });
 
@@ -6558,10 +6570,13 @@ export default function App() {
                                               cursor: 'default'
                                             }}
                                           >
-                                            {m.equipmentType || 'Défibrillateur'}
+                                            {(m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) ? 'Formation' : (m.equipmentType || 'Défibrillateur')}
                                           </span>
 
                                           {(() => {
+                                            const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
+                                            if (isFormationMission) return null;
+
                                             const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
                                             const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
                                             
@@ -7488,16 +7503,19 @@ export default function App() {
                                             cursor: 'default'
                                           }}
                                         >
-                                          {m.equipmentType || (() => {
+                                          {(m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) ? 'Formation' : (m.equipmentType || (() => {
                                             const isDefib = defibrillateurs.some((d: any) => d.identifiant === m.defibIdentifiant);
                                             if (isDefib) return 'Défibrillateur';
                                             const other = otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant);
                                             if (other) return other.categorie;
                                             return m.reason?.toLowerCase().includes('autre') ? 'Autre matériel' : 'Défibrillateur';
-                                          })()}
+                                          })())}
                                         </span>
 
                                         {(() => {
+                                          const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
+                                          if (isFormationMission) return null;
+
                                           const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
                                           const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
                                           
@@ -7610,7 +7628,9 @@ export default function App() {
                                       </div>
 
                                       {/* Contenu déroulant (Montré uniquement si déroulé) */}
-                                      {isExpanded && (
+                                      {isExpanded && (() => {
+                                        const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
+                                        return (
                                         <div className="space-y-4 pt-2">
                                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 w-full bg-transparent">
                                         {/* Client. (toujours disabled) */}
@@ -7619,6 +7639,11 @@ export default function App() {
                                           <input
                                             type="text"
                                             value={(() => {
+                                              if (isFormationMission) {
+                                                const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                const clientObj = clients?.find(c => c.id === (fmt?.clientId || m.clientId));
+                                                return clientObj ? clientObj.denomination : (m.clientName || "");
+                                              }
                                               const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
                                               const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
                                               const clientObj = clients?.find(c => c.id === (matchedDefib?.clientId || other?.clientId));
@@ -7630,36 +7655,40 @@ export default function App() {
                                           />
                                         </div>
 
-                                        {/* Site. (toujours disabled) */}
-                                        <div className="space-y-0.5 bg-transparent">
-                                          <label className="block mb-1 fsm-label-style">Site.</label>
-                                          <input
-                                            type="text"
-                                            value={(() => {
-                                              const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
-                                              const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
-                                              const val = matchedDefib 
-                                                ? (matchedDefib.nomSite || "") 
-                                                : (other ? (other.nomPrenomSite || "") : "");
-                                              return val === "Représentant Standard" || val === "Représentant standard" ? "" : val;
-                                            })()}
-                                            disabled={true}
-                                            className="w-full font-sans cursor-not-allowed"
-                                            placeholder="Nom du Site"
-                                          />
-                                        </div>
+                                        {/* Site. (toujours disabled) - EXCLUDE FOR FORMATION */}
+                                        {!isFormationMission && (
+                                          <div className="space-y-0.5 bg-transparent">
+                                            <label className="block mb-1 fsm-label-style">Site.</label>
+                                            <input
+                                              type="text"
+                                              value={(() => {
+                                                const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                const val = matchedDefib 
+                                                  ? (matchedDefib.nomSite || "") 
+                                                  : (other ? (other.nomPrenomSite || "") : "");
+                                                return val === "Représentant Standard" || val === "Représentant standard" ? "" : val;
+                                              })()}
+                                              disabled={true}
+                                              className="w-full font-sans cursor-not-allowed"
+                                              placeholder="Nom du Site"
+                                            />
+                                          </div>
+                                        )}
 
-                                        {/* Identifiant. (toujours disabled) */}
-                                        <div className="space-y-0.5 bg-transparent">
-                                          <label className="block mb-1 fsm-label-style">Identifiant.</label>
-                                          <input
-                                            type="text"
-                                            value={m.defibIdentifiant || ""}
-                                            disabled={true}
-                                            className="w-full font-mono cursor-not-allowed"
-                                            placeholder="ID Défib"
-                                          />
-                                        </div>
+                                        {/* Identifiant. (toujours disabled) - EXCLUDE FOR FORMATION */}
+                                        {!isFormationMission && (
+                                          <div className="space-y-0.5 bg-transparent">
+                                            <label className="block mb-1 fsm-label-style">Identifiant.</label>
+                                            <input
+                                              type="text"
+                                              value={m.defibIdentifiant || ""}
+                                              disabled={true}
+                                              className="w-full font-mono cursor-not-allowed"
+                                              placeholder="ID Défib"
+                                            />
+                                          </div>
+                                        )}
 
                                         {/* Localisation. */}
                                         <div className="space-y-0.5 bg-transparent">
@@ -7667,6 +7696,14 @@ export default function App() {
                                           <input
                                             type="text"
                                             value={(() => {
+                                              if (isFormationMission) {
+                                                if (m.location) return m.location;
+                                                const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                if (fmt) {
+                                                  return [fmt.adresse, fmt.codePostal, fmt.ville].filter(Boolean).join(', ');
+                                                }
+                                                return m.address || '';
+                                              }
                                               const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
                                               const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
                                               const ville = matchedDefib ? matchedDefib.ville : (other ? other.ville : '');
@@ -7679,24 +7716,26 @@ export default function App() {
                                           />
                                         </div>
 
-                                        {/* Référence intervention. */}
-                                        <div className="space-y-0.5 bg-transparent">
-                                          <label className="block mb-1 fsm-label-style">Référence intervention.</label>
-                                          <input
-                                            type="text"
-                                            value={(() => {
-                                              if (m.interventionReference) return m.interventionReference;
-                                              const matchedReport = generatedReports.find((r: any) => 
-                                                (r.missionId && r.missionId === m.id) || 
-                                                (r.defibIdentifiant && r.defibIdentifiant === m.defibIdentifiant)
-                                              );
-                                              return matchedReport?.interventionReference || "";
-                                            })()}
-                                            disabled={true}
-                                            className="w-full font-sans cursor-not-allowed"
-                                            placeholder="Non renseignée"
-                                          />
-                                        </div>
+                                        {/* Référence intervention. - EXCLUDE FOR FORMATION */}
+                                        {!isFormationMission && (
+                                          <div className="space-y-0.5 bg-transparent">
+                                            <label className="block mb-1 fsm-label-style">Référence intervention.</label>
+                                            <input
+                                              type="text"
+                                              value={(() => {
+                                                if (m.interventionReference) return m.interventionReference;
+                                                const matchedReport = generatedReports.find((r: any) => 
+                                                  (r.missionId && r.missionId === m.id) || 
+                                                  (r.defibIdentifiant && r.defibIdentifiant === m.defibIdentifiant)
+                                                );
+                                                return matchedReport?.interventionReference || "";
+                                              })()}
+                                              disabled={true}
+                                              className="w-full font-sans cursor-not-allowed"
+                                              placeholder="Non renseignée"
+                                            />
+                                          </div>
+                                        )}
 
                                         {/* Bon de commande. */}
                                         <div className="space-y-0.5 bg-transparent">
@@ -8081,6 +8120,7 @@ export default function App() {
 
                                   {/* Lookup field for required components with stock items selector */}
                                   {(() => {
+                                    if (m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) return null;
                                     const currentMissionDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
 
                                     // Selected technician on tour t
@@ -8449,7 +8489,7 @@ export default function App() {
                                     </div>
                                   </div>
                                 </div>
-                              )}
+                              ); })()}
                                 </div>
                               );
                             })}
@@ -10825,6 +10865,8 @@ export default function App() {
               members={members}
               clients={clients}
               setActiveTab={setActiveTab}
+              fsmTours={fsmTours}
+              onUpdateFsmTours={saveFsmTours}
             />
           )}
 

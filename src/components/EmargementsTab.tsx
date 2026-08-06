@@ -600,8 +600,9 @@ export default function EmargementsTab({
 
   const purpleButtonStyle: React.CSSProperties = {
     ...rowActionButton18Style,
-    backgroundColor: '#9333ea',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #9333ea 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    background: 'rgb(96, 28, 104)',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    borderRadius: '13px',
   };
 
   const triggerFormShakeAndScroll = () => {
@@ -806,7 +807,7 @@ export default function EmargementsTab({
       ) : (
         /* Form Overlay */
         <div
-          className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto min-h-screen py-4"
+          className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto min-h-screen pt-0 pb-4"
           id="emargement-form-overlay"
           onClick={triggerFormShakeAndScroll}
         >
@@ -818,7 +819,8 @@ export default function EmargementsTab({
               borderTop: 'none',
               borderRadius: '0px 0px 18px 18px',
               maxWidth: '98%',
-              margin: 'auto',
+              margin: '0 auto',
+              marginTop: '0px',
               padding: '20px',
             }}
             id="emargement-form-header-box"
@@ -992,7 +994,7 @@ export default function EmargementsTab({
                     onClick={handleAddStagiaireItem}
                     disabled={!editingId || stagiairesItems.length >= 50}
                     style={{
-                      ...blueButtonStyle,
+                      ...purpleButtonStyle,
                       width: '100%',
                       opacity: !editingId ? 0.5 : 1,
                       cursor: !editingId ? 'not-allowed' : 'pointer',
@@ -1092,7 +1094,7 @@ export default function EmargementsTab({
 
                             {/* Conditionnel si Oui à Présent */}
                             {stItem.present === 'Oui' && (
-                              <div className="space-y-4 pt-4 border-t border-slate-200">
+                              <div className="space-y-4 pt-2">
                                 {/* Signature */}
                                 <div className="space-y-1">
                                   <label className="block mb-1">Signature.</label>

@@ -9,6 +9,8 @@ interface FormationsTabProps {
   members: Member[];
   clients: Client[];
   setActiveTab?: (tab: any) => void;
+  fsmTours?: any[];
+  onUpdateFsmTours?: (updated: any[]) => void;
 }
 
 export default function FormationsTab({
@@ -18,9 +20,16 @@ export default function FormationsTab({
   members,
   clients,
   setActiveTab,
+  fsmTours,
+  onUpdateFsmTours,
 }: FormationsTabProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Selection & Tour actions state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isTourDropdownOpen, setIsTourDropdownOpen] = useState(false);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
 
   // Form states
   const [intitule, setIntitule] = useState('');
@@ -28,6 +37,7 @@ export default function FormationsTab({
   const [formateurId, setFormateurId] = useState('');
   const [statut, setStatut] = useState<'Brouillon' | 'Terminé'>('Brouillon');
   const [commentaire, setCommentaire] = useState('');
+  const [reasons, setReasons] = useState<string[]>([]);
 
   const [clientId, setClientId] = useState('');
   const [adresse, setAdresse] = useState('');
@@ -50,6 +60,7 @@ export default function FormationsTab({
     setFormateurId('');
     setStatut('Brouillon');
     setCommentaire('');
+    setReasons([]);
     setClientId('');
     setAdresse('');
     setVille('');
@@ -66,6 +77,10 @@ export default function FormationsTab({
     setFormateurId(f.formateurId || '');
     setStatut(f.statut || 'Brouillon');
     setCommentaire(f.commentaire || '');
+    const currentReasons = Array.isArray(f.reasons)
+      ? f.reasons
+      : (f.reason ? f.reason.split(', ').map((s) => s.trim()).filter(Boolean) : []);
+    setReasons(currentReasons);
     setClientId(f.clientId || '');
     setAdresse(f.adresse || '');
     setVille(f.ville || '');
@@ -119,6 +134,8 @@ export default function FormationsTab({
             formateurId,
             statut,
             commentaire,
+            reasons,
+            reason: reasons.join(', '),
             clientId,
             adresse,
             ville,
@@ -138,6 +155,8 @@ export default function FormationsTab({
         formateurId,
         statut,
         commentaire,
+        reasons,
+        reason: reasons.join(', '),
         clientId,
         adresse,
         ville,
@@ -152,6 +171,126 @@ export default function FormationsTab({
 
     saveFormations(updatedList);
     setIsFormOpen(false);
+  };
+
+  const isAnySelectedInTour = selectedIds.some((fId) =>
+    (fsmTours || []).some((t: any) =>
+      (t.missions || []).some((m: any) =>
+        m.formationId === fId ||
+        m.id?.includes(fId) ||
+        (m.equipmentType === 'Formation' && (m.defibIdentifiant === fId || m.formationId === fId))
+      )
+    )
+  );
+
+  const formatTimeToSlot = (dateHeureStr: string) => {
+    if (!dateHeureStr || !dateHeureStr.includes('T')) return '14:00pm';
+    const timePart = dateHeureStr.split('T')[1].substring(0, 5);
+    const [hStr, mStr] = timePart.split(':');
+    const h = parseInt(hStr, 10);
+    if (isNaN(h)) return '14:00pm';
+    const m = mStr || '00';
+    const suffix = h >= 12 ? 'pm' : 'am';
+    return `${h}:${m}${suffix}`;
+  };
+
+  const createMissionFromFormation = (fId: string, index: number) => {
+    const f = formations.find((item) => item.id === fId);
+    const client = clients.find((c) => c.id === f?.clientId);
+    const clientName = client ? client.denomination : (f?.clientId || 'Nom du Client');
+    const rawDate = f?.dateHeure ? f.dateHeure.split('T')[0] : new Date().toISOString().split('T')[0];
+    const rawSlot = f?.dateHeure ? formatTimeToSlot(f.dateHeure) : '14:00pm';
+    const rawTime = f?.dateHeure && f.dateHeure.includes('T') ? f.dateHeure.split('T')[1].substring(0, 5) : '14:00';
+    const reasonText = f?.reasons && f.reasons.length > 0 ? f.reasons.join(', ') : (f?.intitule || 'Formation');
+    const reasonsArray = f?.reasons && f.reasons.length > 0 ? f.reasons : (f?.intitule ? [f.intitule] : ['Formation']);
+    const addressText = [f?.adresse, f?.codePostal, f?.ville].filter(Boolean).join(', ');
+
+    return {
+      id: 'fsm-m-auto-fmt-' + Date.now() + '-' + index,
+      formationId: f?.id || fId,
+      defibIdentifiant: f?.intitule || f?.id || 'Formation',
+      equipmentType: 'Formation',
+      clientName,
+      clientId: f?.clientId || '',
+      reason: reasonText,
+      reasons: reasonsArray,
+      requiredParts: [],
+      status: 'Brouillon',
+      priority: 'Normale',
+      time: rawTime,
+      estimatedDate: rawDate,
+      estimatedSlot: rawSlot,
+      isForced: true,
+      isManualDate: true,
+      isManualSlot: true,
+      address: addressText,
+      location: addressText,
+    };
+  };
+
+  const executeNouvelleTournee = () => {
+    if (!onUpdateFsmTours) return;
+    const missions = selectedIds.map((id, index) => createMissionFromFormation(id, index));
+    const defaultTech = members.find((m: any) => m.role === 'Maintenance Terrain' || m.role?.toLowerCase().includes('tech'))?.name || members[0]?.name || '';
+    const newTour = {
+      id: 'fsm-tour-auto-' + Date.now(),
+      title: 'Nouvelle tournée sans titre',
+      techName: defaultTech,
+      startDate: missions[0]?.estimatedDate || new Date().toISOString().split('T')[0],
+      status: 'Brouillon',
+      missions,
+    };
+    onUpdateFsmTours([...(fsmTours || []), newTour]);
+    setSelectedIds([]);
+    setIsTourDropdownOpen(false);
+    setSelectedDraftId(null);
+    if (setActiveTab) setActiveTab('fsm');
+  };
+
+  const executeAddToTrier = () => {
+    if (!onUpdateFsmTours) return;
+    const missionsToAdd = selectedIds.map((id, index) => createMissionFromFormation(id, index));
+    let existingTrierTour = (fsmTours || []).find((t: any) => t.id === 'a-trier');
+    let updated: any[];
+    if (existingTrierTour) {
+      updated = (fsmTours || []).map((t: any) => {
+        if (t.id === 'a-trier') {
+          return { ...t, missions: [...t.missions, ...missionsToAdd] };
+        }
+        return t;
+      });
+    } else {
+      const newTrierTour = {
+        id: 'a-trier',
+        title: 'Missions à trier',
+        techName: '',
+        startDate: 'A trier',
+        status: 'Brouillon',
+        missions: missionsToAdd,
+      };
+      updated = [...(fsmTours || []), newTrierTour];
+    }
+    onUpdateFsmTours(updated);
+    setSelectedIds([]);
+    setIsTourDropdownOpen(false);
+    setSelectedDraftId(null);
+    if (setActiveTab) setActiveTab('fsm');
+  };
+
+  const executeAddTournee = (tourId: string) => {
+    if (!onUpdateFsmTours) return;
+    const missionsToAdd = selectedIds.map((id, index) => createMissionFromFormation(id, index));
+    const updated = (fsmTours || []).map((t: any) => {
+      if (t.id === tourId) {
+        return { ...t, missions: [...t.missions, ...missionsToAdd] };
+      }
+      return t;
+    });
+    onUpdateFsmTours(updated);
+    setSelectedIds([]);
+    setIsTourDropdownOpen(false);
+    setSelectedDraftId(null);
+    if (setActiveTab) setActiveTab('fsm');
   };
 
   const filteredFormations = formations.filter((f) => {
@@ -275,6 +414,116 @@ export default function FormationsTab({
                   />
                 </div>
 
+                {selectedIds.length > 0 && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      disabled={isAnySelectedInTour}
+                      onClick={() => {
+                        if (!isAnySelectedInTour) {
+                          setIsTourDropdownOpen(!isTourDropdownOpen);
+                        }
+                      }}
+                      title={isAnySelectedInTour ? "Action impossible : l'une des formations sélectionnées fait déjà partie d'une tournée." : "Associer à une tournée"}
+                      style={{
+                        ...rowActionButton18Style,
+                        opacity: isAnySelectedInTour ? 0.6 : 1,
+                        cursor: isAnySelectedInTour ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <span>Tournée</span>
+                    </button>
+                    {isTourDropdownOpen && !isAnySelectedInTour && (
+                      <div 
+                        className="absolute right-0 mt-1 w-72 bg-white rounded-lg z-50 py-2.5 font-sans animate-fadeIn"
+                        style={{ 
+                          fontSize: '18px',
+                          border: '1px solid rgb(218 218 218)',
+                          boxShadow: 'none'
+                        }}
+                      >
+                        <div className="px-3 pb-2 bg-transparent flex flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={() => executeNouvelleTournee()}
+                            style={{
+                              ...rowActionButton18Style,
+                              width: '100%',
+                            }}
+                            className="w-full text-center transition-colors cursor-pointer"
+                          >
+                            Nouvelle Tournée
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => executeAddToTrier()}
+                            style={{
+                              ...rowActionButton18Style,
+                              width: '100%',
+                              backgroundColor: '#000000',
+                              borderColor: '#000000',
+                              color: '#ffffff'
+                            }}
+                            className="w-full text-center transition-colors cursor-pointer hover:opacity-90"
+                          >
+                            À trier
+                          </button>
+                        </div>
+
+                        {selectedDraftId && (
+                          <div className="px-3 pb-2 bg-transparent">
+                            <button
+                              type="button"
+                              onClick={() => executeAddTournee(selectedDraftId)}
+                              style={{
+                                ...rowActionButton18Style,
+                                width: '100%',
+                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                background: 'rgb(53, 86, 236)'
+                              }}
+                              className="w-full text-center transition-colors cursor-pointer"
+                            >
+                              Confirmer l'action
+                            </button>
+                          </div>
+                        )}
+                        
+                        {(() => {
+                          const drafts = (fsmTours || []).filter(t => (t.status || 'Brouillon') === 'Brouillon' && t.id !== 'a-trier');
+                          if (drafts.length === 0) {
+                            return (
+                              <div className="px-4 py-2 text-black font-sans text-center" style={{ fontSize: '15px' }}>
+                                Aucune tournée en brouillon
+                              </div>
+                            );
+                          }
+                          return drafts.map(t => {
+                            const isSelected = selectedDraftId === t.id;
+                            const tourTitle = t.title || 'Nouvelle Tournée';
+                            const displayTitle = tourTitle.length > 25 ? tourTitle.substring(0, 25) + '(...)' : tourTitle;
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => setSelectedDraftId(isSelected ? null : t.id)}
+                                className="w-full text-left px-4 py-2 font-semibold truncate cursor-pointer border-0 bg-transparent hover:bg-transparent"
+                                style={{ 
+                                  fontSize: '16px',
+                                  color: isSelected ? 'rgb(254, 78, 186)' : '#000000',
+                                  textDecoration: isSelected ? 'underline' : 'none'
+                                }}
+                              >
+                                {displayTitle}
+                              </button>
+                            );
+                          });
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <button onClick={startNewFormation} style={blueButtonStyle}>
                   Nouveau
                 </button>
@@ -292,6 +541,23 @@ export default function FormationsTab({
               >
                 <thead>
                   <tr className="bg-transparent">
+                    <th className="px-3 py-3.5 text-center w-12" style={thStyle}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedIds.length === filteredFormations.length) {
+                            setSelectedIds([]);
+                          } else {
+                            setSelectedIds(filteredFormations.map(f => f.id));
+                          }
+                        }}
+                        className="w-5 h-5 rounded-full border border-slate-300 flex items-center justify-center transition-all bg-white hover:border-[#fe4eba] mx-auto cursor-pointer"
+                      >
+                        {selectedIds.length > 0 && (
+                          <div className={`w-3 h-3 rounded-full ${selectedIds.length === filteredFormations.length ? 'bg-[#fe4eba]' : 'bg-[#fe4eba]/50'}`} />
+                        )}
+                      </button>
+                    </th>
                     <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Formation.</th>
                     <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Date & Heure.</th>
                     <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Formateur.</th>
@@ -304,7 +570,7 @@ export default function FormationsTab({
                 <tbody className="text-slate-700 text-xs">
                   {filteredFormations.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-16 text-center font-sans lg:py-24" style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
+                      <td colSpan={8} className="p-16 text-center font-sans lg:py-24" style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
                         Aucun résultat.
                       </td>
                     </tr>
@@ -319,6 +585,7 @@ export default function FormationsTab({
                       const clientName = clientObj ? clientObj.denomination : f.clientId || '-';
                       const loc = [f.ville, f.codePostal].filter(Boolean).join(', ') || '-';
                       const formattedDate = f.dateHeure ? f.dateHeure.replace('T', ' ') : '-';
+                      const isRowSelected = selectedIds.includes(f.id);
 
                       return (
                         <tr
@@ -326,6 +593,24 @@ export default function FormationsTab({
                           onClick={() => startEditFormation(f)}
                           className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
                         >
+                          <td className="px-3 py-5 text-center w-12" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isRowSelected) {
+                                  setSelectedIds(selectedIds.filter(id => id !== f.id));
+                                } else {
+                                  setSelectedIds([...selectedIds, f.id]);
+                                }
+                              }}
+                              className="w-5 h-5 rounded-full border border-slate-300 flex items-center justify-center transition-all bg-white hover:border-[#fe4eba] mx-auto cursor-pointer"
+                            >
+                              {isRowSelected && (
+                                <div className="w-3 h-3 rounded-full bg-[#fe4eba]" />
+                              )}
+                            </button>
+                          </td>
                           <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             <span
                               style={{
@@ -417,7 +702,7 @@ export default function FormationsTab({
       ) : (
         /* Form Overlay */
         <div
-          className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto min-h-screen py-4"
+          className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto min-h-screen pt-0 pb-4"
           id="formation-form-overlay"
           onClick={triggerFormShakeAndScroll}
         >
@@ -429,7 +714,8 @@ export default function FormationsTab({
               borderTop: 'none',
               borderRadius: '0px 0px 18px 18px',
               maxWidth: '98%',
-              margin: 'auto',
+              margin: '0 auto',
+              marginTop: '0px',
               padding: '20px',
             }}
             id="formation-form-header-box"
@@ -657,6 +943,64 @@ export default function FormationsTab({
                       className="w-full"
                       placeholder="Notes et commentaires..."
                     />
+                  </div>
+
+                  {/* Raison/Prestation. (Stand-alone multi-selection with capsules on the right) */}
+                  <div className="pt-2 space-y-1.5 relative font-sans w-full bg-transparent">
+                    <label className="block mb-1" style={{ fontSize: "16px", color: "#000000", fontWeight: 500 }}>
+                      Raison/Prestation.
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full items-center bg-transparent">
+                      {/* Dropdown Select on the left */}
+                      <div className="md:col-span-1 w-full bg-transparent">
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val) {
+                              if (!reasons.includes(val)) {
+                                setReasons([...reasons, val]);
+                              }
+                              e.target.value = "";
+                            }
+                          }}
+                          className="w-full"
+                        >
+                          <option value="">-- Sélectionner une raison / prestation --</option>
+                          {variables
+                            .filter((v) => v.category === 'Modèle Raison Prestation')
+                            .map((v) => {
+                              const isSelected = reasons.includes(v.nom);
+                              return (
+                                <option key={v.id} value={v.nom} disabled={isSelected}>
+                                  {v.nom} {isSelected ? '(Déjà ajoutée)' : ''}
+                                </option>
+                              );
+                            })}
+                        </select>
+                      </div>
+
+                      {/* Selected Reasons Capsules listed on the right */}
+                      <div className="md:col-span-3 w-full bg-transparent">
+                        <div className="flex flex-wrap gap-1.5 min-h-[42px] items-center bg-transparent">
+                          {reasons.length > 0 ? (
+                            reasons.map((reasonStr) => (
+                              <span
+                                key={reasonStr}
+                                onClick={() => setReasons(reasons.filter((r) => r !== reasonStr))}
+                                style={{
+                                  fontFamily: 'DefibeoMain, Civilprom, sans-serif',
+                                }}
+                                className="cursor-pointer inline-flex items-center rounded-full bg-white border border-slate-200 text-slate-800 text-[15px] px-3.5 py-1.5 font-medium hover:bg-[#8e1010] hover:border-[#8e1010] hover:text-white transition-all duration-150 select-none"
+                                title="Cliquez pour supprimer"
+                              >
+                                {reasonStr}
+                              </span>
+                            ))
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

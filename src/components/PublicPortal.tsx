@@ -7203,7 +7203,7 @@ export default function PublicPortal({
                                               display: "inline-block",
                                             }}
                                           >
-                                            {p.identifiant}
+                                            {(p.equipmentType === 'Formation' || p.equipmentType?.toLowerCase().includes('formation') || !!p.formationId) ? "Formation" : p.identifiant}
                                           </span>
                                         </div>
 
