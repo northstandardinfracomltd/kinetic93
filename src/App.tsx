@@ -283,6 +283,7 @@ export default function App() {
     return false;
   });
   const [showEnvLoading, setShowEnvLoading] = useState<boolean>(false);
+  const [minEnvLoading, setMinEnvLoading] = useState<boolean>(true);
   const [avisageConfirmTour, setAvisageConfirmTour] = useState<any | null>(null);
   const [isOffline, setIsOffline] = useState<boolean>(() => {
     if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
@@ -3573,6 +3574,10 @@ export default function App() {
 
   // Load from Firebase on startup, fallback to LocalStorage/Seed Defaults
   useEffect(() => {
+    let minTimer: any = null;
+    const loadStartMs = Date.now();
+    setMinEnvLoading(true);
+
     async function loadFirebaseAndSeed() {
       setIsFirebaseLoaded(false);
       setLoadedTenantIdState('');
@@ -3734,6 +3739,12 @@ export default function App() {
         loadedTenantIdRef.current = tenantId;
         setLoadedTenantIdState(tenantId);
         setIsFirebaseLoaded(true);
+
+        const elapsedMs = Date.now() - loadStartMs;
+        const remainingMs = Math.max(0, 5000 - elapsedMs);
+        minTimer = setTimeout(() => {
+          setMinEnvLoading(false);
+        }, remainingMs);
       } catch (localErr) {
         console.warn("Failed to load instant offline fallback data:", localErr);
       }
@@ -3849,6 +3860,9 @@ export default function App() {
       }
     }
     loadFirebaseAndSeed();
+    return () => {
+      if (minTimer) clearTimeout(minTimer);
+    };
   }, [tenantId]);
 
   // Real-time tab/webapp focus sync to instantly apply changes without refresh/delay
@@ -5715,7 +5729,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 font-sans" id="app-root-container">
-      {(showEnvLoading || !isFirebaseLoaded) && (
+      {(showEnvLoading || !isFirebaseLoaded || minEnvLoading) && (
         <div 
           className="fixed inset-0 z-[99999] flex flex-col items-center justify-center text-center font-sans gap-4" 
           style={{ 
@@ -5725,7 +5739,12 @@ export default function App() {
           }}
           id="env-loading-overlay"
         >
-          <span className="text-white text-[18px] font-sans text-center">Chargement de votre environnement...</span>
+          <span
+            className="animate-text-wave text-[18px] font-sans text-center tracking-normal font-medium"
+            style={{ color: "#ffffff", letterSpacing: "0px" }}
+          >
+            Chargement de votre environnement...
+          </span>
         </div>
       )}
       {/* LEFT SIDE BAR PANE */}
