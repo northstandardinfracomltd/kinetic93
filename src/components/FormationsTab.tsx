@@ -256,7 +256,7 @@ export default function FormationsTab({
     return {
       id: 'fsm-m-auto-fmt-' + Date.now() + '-' + index,
       formationId: f?.id || fId,
-      defibIdentifiant: f?.intitule || f?.id || 'Formation',
+      defibIdentifiant: f?.id || fId || 'Formation',
       equipmentType: 'Formation',
       clientName,
       clientId: f?.clientId || '',

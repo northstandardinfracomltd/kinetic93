@@ -5103,47 +5103,197 @@ Content-Type: application/json`}
                     </div>
                   </div>
 
-                  {/* 10. Stock par UGS - GET */}
+                  {/* 10. Centrale des Stocks - GET /v1/stocks/centrale/:ugs */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3">
                         <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET</span>
-                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/stocks/:ugs</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/stocks/centrale/:ugs</span>
                       </div>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">Centrale des stocks</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère les informations d'un stock selon le code produit en URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:ugs</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>ELE-ZOLL-01</code>).</p>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        Récupère la fiche complète d'un article en <strong>Centrale des Stocks</strong> (entrepôt principal) selon son code produit <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:ugs</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>ELE-ZOLL-01</code>). Retourne les propriétés financières et prévisionnelles ainsi que l'<strong>inventaire détaillé des éléments de traçabilité unitaires (lots/séries)</strong>.
+                      </p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK)</div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK - Formulaire Centrale + Traçabilité)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
+  "type_stock": "Centrale des stocks",
+  "piece_ou_service_id": "VAR-0012",
+  "nom_piece": "Paire d'électrodes adulte CPR-D Padz ZOLL",
   "ugs": "ELE-ZOLL-01",
-  "designation": "Électrodes Adulte CPR-D Padz ZOLL",
   "quantite_disponible": 142,
-  "seuil_alerte": 20,
-  "emplacement_entrepot": "Aisle B - Etagere 4"
+  "quantite_reservee": 12,
+  "livraison_date": "2026-08-15",
+  "reapprovisionnement_date": "2026-08-20",
+  "valeur_achat_ht": 85.00,
+  "marge_pct": 25.0,
+  "prix_vente_ht": 113.33,
+  "emplacement_stockage": "Aisle B - Etagere 4",
+  "besoin_projete_2_mois": 30,
+  "besoin_projete_2_a_6_mois": 80,
+  "total_a_commander": 20,
+  "commentaire": "Stock sous contrat de réapprovisionnement automatique.",
+  "tracabilite_activee": true,
+  "inventaire_tracabilite": [
+    {
+      "id": "TRAC-881901",
+      "lot_ou_serie": "LOT-2026-A990",
+      "date_peremption": "2028-02-15",
+      "volume": 1,
+      "situation": "Disponible",
+      "emplacement": "Bac A-12",
+      "bon_de_commande": "BC-2026-004",
+      "client_reserve": "Clinique Saint-Jean",
+      "date_estimee": "2026-08-10",
+      "observation": "Vérifié conforme lors de la réception"
+    },
+    {
+      "id": "TRAC-881902",
+      "lot_ou_serie": "LOT-2026-A991",
+      "date_peremption": "2028-02-15",
+      "volume": 1,
+      "situation": "Utilisé",
+      "emplacement": "Poste client",
+      "bon_de_commande": "BC-2026-004",
+      "client_reserve": "Hôpital Pasteur",
+      "date_estimee": "2026-08-01",
+      "observation": "Installé lors de la tournée du 1er août"
+    }
+  ],
+  "historique_mouvements": [
+    {
+      "id": "MVT-001",
+      "type": "Réapprovisionnement fournisseur",
+      "volume": 50,
+      "date": "2026-07-15",
+      "statut": "Terminé",
+      "bon_de_commande": "BC-SUP-110",
+      "tracking_link": "https://dhl.com/track/12345"
+    }
+  ]
 }`}
                         </pre>
                       </div>
                     </div>
                   </div>
 
-                  {/* 11. Stock par UGS - POST Update */}
+                  {/* 11. Centrale des Stocks - POST /v1/stocks/centrale/:ugs */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3">
                         <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
-                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/stocks/:ugs</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/stocks/centrale/:ugs</span>
                       </div>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">Centrale des stocks</span>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Met à jour la quantité d'un article de stock en ciblant sa référence unique <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:ugs</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>ELE-ZOLL-01</code>).</p>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        Met à jour ou crée un article en <strong>Centrale des Stocks</strong>, en ciblant le code produit <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:ugs</code>. Permet d'ajuster les quantités globales ainsi que la liste d'inventaire de traçabilité (lots/séries).
+                      </p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
-  "quantite_disponible": 180,
-  "seuil_alerte": 25
+  "quantite_disponible": 150,
+  "quantite_reservee": 10,
+  "livraison_date": "2026-08-20",
+  "reapprovisionnement_date": "2026-08-25",
+  "valeur_achat_ht": 85.00,
+  "marge_pct": 25.0,
+  "prix_vente_ht": 113.33,
+  "emplacement_stockage": "Aisle B - Etagere 4",
+  "besoin_projete_2_mois": 30,
+  "besoin_projete_2_a_6_mois": 80,
+  "total_a_commander": 0,
+  "commentaire": "Ajustement de stock suite à inventaire physique",
+  "tracabilite_activee": true,
+  "inventaire_tracabilite": [
+    {
+      "lot_ou_serie": "LOT-2026-A992",
+      "date_peremption": "2028-05-31",
+      "situation": "Disponible",
+      "emplacement": "Bac A-13",
+      "bon_de_commande": "BC-2026-010",
+      "client_reserve": "",
+      "observation": "Ajouté via API"
+    }
+  ]
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 11b. Stocks Distribués - GET /v1/stocks/distribues */}
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/stocks/distribues</span>
+                      </div>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">Stocks distribués</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        Récupère l'inventaire des <strong>Stocks Distribués</strong> par emplacement secondaire ou véhicule technicien/collaborateur (ex: Véhicule A, Entrepôt B).
+                      </p>
+                      <div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK - Formulaire Stocks distribués)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
+{`{
+  "type_stock": "Stocks distribués",
+  "stocks_distribues": [
+    {
+      "id": "DIST-001",
+      "piece_ou_service_id": "VAR-0012",
+      "ugs": "ELE-ZOLL-01",
+      "nom_emplacement_ou_vehicule": "Véhicule A - Thomas Martin",
+      "volume_disponible": 8,
+      "volume_reserve": 2,
+      "volume_entrant": 5
+    },
+    {
+      "id": "DIST-002",
+      "piece_ou_service_id": "VAR-0012",
+      "ugs": "ELE-ZOLL-01",
+      "nom_emplacement_ou_vehicule": "Entrepôt B - Lyon",
+      "volume_disponible": 25,
+      "volume_reserve": 0,
+      "volume_entrant": 0
+    }
+  ]
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 11c. Stocks Distribués - POST /v1/stocks/distribues */}
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/stocks/distribues</span>
+                      </div>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">Stocks distribués</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        Met à jour le stock attribué à un emplacement distribué ou véhicule technicien.
+                      </p>
+                      <div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
+{`{
+  "piece_ou_service_id": "VAR-0012",
+  "ugs": "ELE-ZOLL-01",
+  "nom_emplacement_ou_vehicule": "Véhicule A - Thomas Martin",
+  "volume_disponible": 10,
+  "volume_reserve": 1,
+  "volume_entrant": 0
 }`}
                         </pre>
                       </div>

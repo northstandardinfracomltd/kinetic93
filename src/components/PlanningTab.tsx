@@ -929,16 +929,39 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           return '';
                         })();
 
-                        const equipType =
-                          mission.equipmentType ||
-                          (defib ? 'Défibrillateur' : (other ? other.categorie : 'Défibrillateur'));
+                        const isFormationMission =
+                          mission.equipmentType === 'Formation' ||
+                          mission.equipmentType?.toLowerCase()?.includes('formation') ||
+                          !!mission.formationId ||
+                          mission.reason?.toLowerCase()?.includes('formation') ||
+                          mission.defibIdentifiant === 'Formation';
 
-                        const identifiant =
-                          mission.defibIdentifiant ||
-                          mission.identifiant ||
-                          defib?.identifiant ||
-                          other?.identifiant ||
-                          '';
+                        const typeVal = isFormationMission
+                          ? 'Formation'
+                          : (mission.equipmentType || (defib ? 'Défibrillateur' : (other ? other.categorie : 'Défibrillateur')));
+
+                        const identifiant = (() => {
+                          if (isFormationMission) {
+                            if (mission.formationId) return mission.formationId;
+                            if (mission.interventionReference) return mission.interventionReference;
+                            if (
+                              mission.defibIdentifiant &&
+                              mission.defibIdentifiant !== 'Formation' &&
+                              mission.defibIdentifiant !== mission.reason &&
+                              !mission.defibIdentifiant.toLowerCase().includes('formation')
+                            ) {
+                              return mission.defibIdentifiant;
+                            }
+                            return mission.id || 'FMT-001';
+                          }
+                          return (
+                            mission.defibIdentifiant ||
+                            mission.identifiant ||
+                            defib?.identifiant ||
+                            other?.identifiant ||
+                            ''
+                          );
+                        })();
 
                         const creneauVal = mission.estimatedSlot || mission.creneau || mission.estimatedTime || mission.time || '08:00';
                         const missionKey = `plan-${tour.id || 'tour'}-${mission.id || mIdx}`;
@@ -953,7 +976,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                               borderRadius: "14px",
                             }}
                           >
-                            {/* Gélules Client et Créneau & Bouton Dérouler / Réduire */}
+                            {/* Gélules Client, Créneau et Type & Bouton Dérouler / Réduire */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2 flex-1">
                                 <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
@@ -961,6 +984,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 </span>
                                 <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
                                   Créneau : {creneauVal}
+                                </span>
+                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
+                                  Type : {typeVal}
                                 </span>
                               </div>
 
@@ -1002,10 +1028,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 <div>
                                   <span className="font-bold">Localisation : </span>
                                   <span>{locationStr}</span>
-                                </div>
-                                <div>
-                                  <span className="font-bold">Type de matériel : </span>
-                                  <span>{equipType}</span>
                                 </div>
                                 <div>
                                   <span className="font-bold">Identifiant : </span>

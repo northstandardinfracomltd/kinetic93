@@ -55,7 +55,10 @@ import {
   VeilleRecord,
   StockTraceability,
   LogisticsNotification,
+  EmargementRecord,
+  StagiaireRecord,
 } from "../types";
+import EmargementsTab from "./EmargementsTab";
 import { REGIONS_FRANCAISES } from "../utils";
 import { getRegionsForCountry } from "../utils/regions";
 import { getLanguage, t } from "../utils/translate";
@@ -220,6 +223,9 @@ interface PublicPortalProps {
   otherEquipments?: any[];
   onUpdateOtherEquipments?: (updated: any[]) => void;
   formations?: any[];
+  emargements?: EmargementRecord[];
+  onUpdateEmargements?: (updated: EmargementRecord[]) => void;
+  stagiaires?: StagiaireRecord[];
   generatedReports?: GeneratedReport[];
   onUpdateGeneratedReports?: (updated: GeneratedReport[]) => void;
   pointages?: PointageLog[];
@@ -282,6 +288,9 @@ export default function PublicPortal({
   otherEquipments = [],
   onUpdateOtherEquipments,
   formations = [],
+  emargements = [],
+  onUpdateEmargements,
+  stagiaires = [],
   generatedReports: propGeneratedReports,
   onUpdateGeneratedReports,
   pointages: propPointages,
@@ -326,6 +335,8 @@ export default function PublicPortal({
 
   // Report Form full-width overlay state
   const [isReportOverlayOpen, setIsReportOverlayOpen] = useState(false);
+  const [emargementModalRecordId, setEmargementModalRecordId] = useState<string | null>(null);
+  const [isEmargementOverlayOpen, setIsEmargementOverlayOpen] = useState(false);
 
   // Accordion collapse/expand states for the 9 sections of the report form
   const [openSection1, setOpenSection1] = useState(true);
@@ -425,30 +436,40 @@ export default function PublicPortal({
   // Webapp preloader animation state
   const [showPreloader, setShowPreloader] = useState<boolean>(true);
   const [isSlidingUp, setIsSlidingUp] = useState<boolean>(false);
+  const preloaderTouchStartY = useRef<number | null>(null);
 
   const triggerPreloader = () => {
     setShowPreloader(true);
     setIsSlidingUp(false);
   };
 
-  useEffect(() => {
-    if (showPreloader) {
+  const dismissPreloader = () => {
+    if (isSlidingUp) return;
+    setIsSlidingUp(true);
+    setTimeout(() => {
+      setShowPreloader(false);
       setIsSlidingUp(false);
-      const timer5s = setTimeout(() => {
-        setIsSlidingUp(true);
-      }, 5000);
+    }, 600);
+  };
 
-      const timerEnd = setTimeout(() => {
-        setShowPreloader(false);
-        setIsSlidingUp(false);
-      }, 5800);
+  const handlePreloaderTouchStart = (e: React.TouchEvent) => {
+    preloaderTouchStartY.current = e.touches[0].clientY;
+  };
 
-      return () => {
-        clearTimeout(timer5s);
-        clearTimeout(timerEnd);
-      };
+  const handlePreloaderTouchMove = (e: React.TouchEvent) => {
+    if (preloaderTouchStartY.current === null) return;
+    const currentY = e.touches[0].clientY;
+    const diffY = preloaderTouchStartY.current - currentY;
+    if (diffY > 30) {
+      dismissPreloader();
     }
-  }, [showPreloader]);
+  };
+
+  const handlePreloaderWheel = (e: React.WheelEvent) => {
+    if (e.deltaY > 5) {
+      dismissPreloader();
+    }
+  };
 
   // Active tab inside Technician Webapp
   type WebappTab =
@@ -4728,10 +4749,10 @@ export default function PublicPortal({
       className="min-h-screen bg-slate-50 flex flex-col items-center p-0 text-slate-800 selection:bg-indigo-600/30 font-sans relative"
       id="public-portal-envelope"
     >
-      {/* 5-SECOND PRELOADER OVERLAY WITH SLIDE-UP ANIMATION */}
+      {/* PRELOADER OVERLAY WITH MANUAL SWIPE-UP TO HIDE */}
       {showPreloader && (
         <div
-          className={`fixed inset-0 z-[999999] flex items-center justify-center text-center font-sans transition-transform duration-800 ease-in-out ${
+          className={`fixed inset-0 z-[999999] flex flex-col items-center justify-between py-12 text-center font-sans transition-transform duration-700 ease-in-out cursor-pointer select-none ${
             isSlidingUp ? "pointer-events-none" : "pointer-events-auto"
           }`}
           style={{
@@ -4740,15 +4761,47 @@ export default function PublicPortal({
             transform: isSlidingUp ? "translateY(-100%)" : "translateY(0%)",
             boxShadow: isSlidingUp ? "0 10px 25px -5px rgba(0, 0, 0, 0.3)" : "none",
             willChange: "transform",
+            touchAction: "none",
           }}
           id="webapp-preloader-overlay"
+          onClick={dismissPreloader}
+          onTouchStart={handlePreloaderTouchStart}
+          onTouchMove={handlePreloaderTouchMove}
+          onWheel={handlePreloaderWheel}
         >
+          {/* Top spacer */}
+          <div className="h-8" />
+
+          {/* Centered App Name */}
           <span
-            className="text-white font-bold select-none text-center px-4"
-            style={{ fontSize: "18px" }}
+            className="text-white font-bold text-center px-4"
+            style={{ fontSize: "22px" }}
           >
             {companyInfo?.nomLogiciel || "Défibeo"}
           </span>
+
+          {/* Bottom Swipe text & indicator */}
+          <div className="flex flex-col items-center justify-center gap-2 px-4">
+            <svg
+              className="w-6 h-6 text-white/80 animate-bounce"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M5 15l7-7 7 7"
+              />
+            </svg>
+            <span
+              className="text-white/90 font-medium tracking-wide"
+              style={{ fontSize: "14px" }}
+            >
+              Glissez vers le haut pour ouvrir.
+            </span>
+          </div>
         </div>
       )}
       {/* Main Responsive Portal Container (Standalone App Layout) */}
@@ -6748,6 +6801,46 @@ export default function PublicPortal({
               </div>
             )}
 
+            {/* OVERLAY FOR EMARGEMENT FORM */}
+            {isEmargementOverlayOpen && (
+              <div
+                className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn"
+                id="emargement-form-overlay-modal"
+                onClick={() => setIsEmargementOverlayOpen(false)}
+              >
+                <div
+                  className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 text-black relative space-y-4"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 font-sans">
+                      <span className="w-3 h-3 rounded-full bg-[#fe4eba]" />
+                      Émargement Formation
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => setIsEmargementOverlayOpen(false)}
+                      className="text-gray-500 hover:text-black p-1 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
+
+                  <EmargementsTab
+                    emargements={emargements || []}
+                    saveEmargements={onUpdateEmargements || (() => {})}
+                    formations={formations || []}
+                    stagiaires={stagiaires || []}
+                    members={members || []}
+                    companyInfo={companyInfo}
+                    initialEditingId={emargementModalRecordId}
+                    hideList={true}
+                    onCloseModal={() => setIsEmargementOverlayOpen(false)}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Alert banner if no ongoing pointage for connected technician session */}
             {!pointages.some((p) => p.isOngoing && p.techName?.trim().toLowerCase() === (authenticatedUser?.name || "").trim().toLowerCase()) && (
               <div
@@ -7160,6 +7253,14 @@ export default function PublicPortal({
                                   const isCompleted = p.status === "Effectué";
                                   const isFormationMission = p.equipmentType === 'Formation' || p.equipmentType?.toLowerCase().includes('formation') || !!p.formationId;
                                   const matchedFmt = isFormationMission ? formations?.find((f: any) => f.id === p.formationId || f.id === p.identifiant) : null;
+                                  const targetFormationId = p.formationId || matchedFmt?.id || p.identifiant;
+                                  const matchedEmargement = isFormationMission
+                                    ? (emargements || []).find(
+                                        (em: any) =>
+                                          em.formationId === targetFormationId ||
+                                          (matchedFmt && em.formationId === matchedFmt.id),
+                                      )
+                                    : null;
                                   const matchedOther = otherEquipments?.find(
                                     (o: any) =>
                                       o.identifiant === p.identifiant ||
@@ -11366,8 +11467,9 @@ export default function PublicPortal({
                       width: "98%",
                       maxWidth: "310px",
                       margin: "20px auto 30px",
-                      paddingTop: "45px",
-                      paddingBottom: "40px",
+                      paddingTop: "90px",
+                      paddingBottom: "80px",
+                      minHeight: "240px",
                       borderRadius: "16px",
                       position: "relative",
                       overflow: "hidden",

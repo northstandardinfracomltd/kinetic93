@@ -8,6 +8,9 @@ interface EmargementsTabProps {
   stagiaires: StagiaireRecord[];
   members: Member[];
   companyInfo?: CompanyInfo;
+  initialEditingId?: string | null;
+  hideList?: boolean;
+  onCloseModal?: () => void;
 }
 
 interface SignaturePadProps {
@@ -132,14 +135,30 @@ export default function EmargementsTab({
   stagiaires,
   members,
   companyInfo,
+  initialEditingId,
+  hideList,
+  onCloseModal,
 }: EmargementsTabProps) {
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(!!hideList || !!initialEditingId);
+  const [editingId, setEditingId] = useState<string | null>(initialEditingId || null);
 
   // Form states
   const [formationId, setFormationId] = useState('');
   const [statut, setStatut] = useState<'Brouillon' | 'Terminé'>('Brouillon');
   const [stagiairesItems, setStagiairesItems] = useState<EmargementStagiaireItem[]>([]);
+
+  useEffect(() => {
+    if (initialEditingId) {
+      const match = emargements.find((e) => e.id === initialEditingId);
+      if (match) {
+        setFormationId(match.formationId || '');
+        setStatut(match.statut || 'Brouillon');
+        setStagiairesItems(match.stagiaires ? JSON.parse(JSON.stringify(match.stagiaires)) : []);
+        setEditingId(match.id);
+        setIsFormOpen(true);
+      }
+    }
+  }, [initialEditingId, emargements]);
 
   // Search
   const [search, setSearch] = useState('');
@@ -538,6 +557,14 @@ export default function EmargementsTab({
       return;
     }
 
+    const existingForFormation = emargements.find(
+      (em) => em.formationId === formationId && em.id !== editingId
+    );
+    if (existingForFormation) {
+      alert('Un émargement existe déjà pour cette formation.');
+      return;
+    }
+
     const now = new Date().toISOString();
     let updatedList: EmargementRecord[];
 
@@ -568,6 +595,7 @@ export default function EmargementsTab({
 
     saveEmargements(updatedList);
     setIsFormOpen(false);
+    if (onCloseModal) onCloseModal();
   };
 
   const filteredEmargements = emargements.filter((item) => {
@@ -575,6 +603,13 @@ export default function EmargementsTab({
     const q = search.toLowerCase();
     const label = getFormationDisplayLabel(item.formationId).toLowerCase();
     return label.includes(q) || item.statut?.toLowerCase().includes(q);
+  });
+
+  const availableFormations = formations.filter((f) => {
+    const existingEmargement = emargements.find((em) => em.formationId === f.id);
+    if (!existingEmargement) return true;
+    if (editingId && existingEmargement.id === editingId) return true;
+    return false;
   });
 
   const rowActionButton18Style: React.CSSProperties = {
@@ -835,7 +870,10 @@ export default function EmargementsTab({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setIsFormOpen(false)}
+                onClick={() => {
+                  setIsFormOpen(false);
+                  if (onCloseModal) onCloseModal();
+                }}
                 style={rowActionButton18Style}
                 className="transition-colors cursor-pointer"
               >
@@ -941,7 +979,7 @@ export default function EmargementsTab({
                         required
                       >
                         <option value="">-- Sélectionner une formation --</option>
-                        {formations.map((f) => (
+                        {availableFormations.map((f) => (
                           <option key={f.id} value={f.id}>
                             {getFormationDisplayLabel(f.id)}
                           </option>

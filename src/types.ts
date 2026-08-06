@@ -437,6 +437,7 @@ export interface CommercialDoc {
   dateStr: string;
   commentaire?: string; // This corresponds to "Remarque." (formerly "Objet ou commentaire.")
   commentaires?: string; // New textarea "Commentaires."
+  urlSource?: string; // Autre document (Url Source).
   assignedMemberName?: string;
   hasBonCommande?: boolean;
   bonCommandeReference?: string;

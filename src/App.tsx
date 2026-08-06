@@ -971,6 +971,8 @@ export default function App() {
   const [docCodeTaxe, setDocCodeTaxe] = useState('');
   const [docPayeurId, setDocPayeurId] = useState('');
   const [docClientIdField, setDocClientIdField] = useState('');
+  const [docUrlSource, setDocUrlSource] = useState('');
+  const [openTransformDocId, setOpenTransformDocId] = useState<string | null>(null);
 
   const [selectedDocPieceId, setSelectedDocPieceId] = useState('');
   const [customDocPiecePrice, setCustomDocPiecePrice] = useState(0);
@@ -4581,9 +4583,15 @@ export default function App() {
     window.open(url, '_blank');
   };
 
-  const handleTransformDoc = (doc: CommercialDoc) => {
-    const targetType = doc.type === 'Devis' ? 'Facture' : 'Devis';
-    const prefix = targetType === 'Devis' ? 'DEV' : targetType === 'Facture' ? 'FACT' : 'PRO';
+  const handleTransformDoc = (doc: CommercialDoc, targetType: 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison') => {
+    const prefixMap: Record<string, string> = {
+      'Devis': 'DEV',
+      'Facture': 'FACT',
+      'Bon de commande': 'BC',
+      'Bon de livraison': 'BL',
+      'Proforma': 'PRO'
+    };
+    const prefix = prefixMap[targetType] || 'DOC';
     const year = '2026';
     const pattern = new RegExp(`^${prefix}-${year}-(\\d+)$`);
     let maxNum = 0;
@@ -4608,10 +4616,11 @@ export default function App() {
       type: targetType,
       status: 'Brouillon',
       dateStr: new Date().toISOString().substring(0, 10),
+      urlSource: doc.urlSource || '',
     };
 
     saveCommercialDocs([newDoc, ...commercialDocs]);
-    alert(`${doc.type === 'Devis' ? 'Le devis' : 'La facture'} ${doc.ref} a été transformé(e) avec succès en ${targetType === 'Devis' ? 'devis' : 'facture'} (réf: ${generatedRef}, situation: Brouillon).`);
+    alert(`${doc.type} ${doc.ref} a été transformé(e) avec succès en ${targetType} (réf: ${generatedRef}, situation: Brouillon).`);
   };
 
   const startEditDoc = (doc: CommercialDoc) => {
@@ -4624,6 +4633,7 @@ export default function App() {
     setDocItems(doc.items);
     setDocCommentaire(doc.commentaire || '');
     setDocCommentaires(doc.commentaires || '');
+    setDocUrlSource(doc.urlSource || '');
     setDocAssignedMemberName(doc.assignedMemberName || '');
     setDocHasBonCommande(!!doc.hasBonCommande);
     setDocBonCommandeReference(doc.bonCommandeReference || '');
@@ -4645,6 +4655,7 @@ export default function App() {
     setDocItems([]);
     setDocCommentaire('');
     setDocCommentaires('');
+    setDocUrlSource('');
     setDocAssignedMemberName('');
     setDocHasBonCommande(false);
     setDocBonCommandeReference('');
@@ -5052,6 +5063,7 @@ export default function App() {
         dateStr: docDateStr,
         commentaire: docCommentaire,
         commentaires: docCommentaires,
+        urlSource: docUrlSource,
         assignedMemberName: docAssignedMemberName || undefined,
         hasBonCommande: docHasBonCommande,
         bonCommandeReference: docHasBonCommande ? finalBcRef : undefined,
@@ -5076,6 +5088,7 @@ export default function App() {
         dateStr: docDateStr,
         commentaire: docCommentaire,
         commentaires: docCommentaires,
+        urlSource: docUrlSource,
         assignedMemberName: docAssignedMemberName || undefined,
         hasBonCommande: docHasBonCommande,
         bonCommandeReference: docHasBonCommande ? finalBcRef : undefined,
@@ -5479,6 +5492,9 @@ export default function App() {
         logisticsNotifications={logisticsNotifications}
         saveLogisticsNotifications={saveLogisticsNotifications}
         onAddLogisticsNotification={addLogisticsNotification}
+        emargements={emargements}
+        onUpdateEmargements={saveEmargements}
+        stagiaires={stagiaires}
         onClose={handleLogout}
         onOpenClientPortal={(client) => {
           setActivePortalClient(client);
@@ -5597,6 +5613,9 @@ export default function App() {
         logisticsNotifications={logisticsNotifications}
         saveLogisticsNotifications={saveLogisticsNotifications}
         onAddLogisticsNotification={addLogisticsNotification}
+        emargements={emargements}
+        onUpdateEmargements={saveEmargements}
+        stagiaires={stagiaires}
         onClose={() => {
           const role = localStorage.getItem('defib_logged_user_role');
           if (role === 'technicien' || role === 'client') {
@@ -6760,153 +6779,337 @@ export default function App() {
                                           </button>
                                         </div>
 
-                                        {/* Row 2: Client & Site & Identifiant & Localisation (Montré si déroulé) */}
-                                        {isExpanded && (
-                                        <div className="grid grid-cols-1 md:grid-cols-6 gap-3 bg-transparent">
-                                          <div className="space-y-0.5 bg-transparent">
-                                            <label className="block mb-1 fsm-label-style">Client.</label>
-                                            <input
-                                              type="text"
-                                              value={(() => {
-                                                const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
-                                                const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
-                                                const clientObj = clients?.find(c => c.id === (matchedDefib?.clientId || other?.clientId));
-                                                return clientObj ? clientObj.denomination : (m.clientName || "");
-                                              })()}
-                                              disabled={true}
-                                              className="w-full font-sans cursor-not-allowed"
-                                              placeholder="Nom du Client"
-                                            />
-                                          </div>
+                                        {/* Row 2: Client & Site & Identifiant & Localisation & Ref Int & Date Estimée & Créneau Estimé & Transférer (Montré si déroulé) */}
+                                        {isExpanded && (() => {
+                                          const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
+                                          const isMissionForced = !!(m.isForced || (m.isManualDate && m.isManualSlot));
+                                          const toggleForced = () => {
+                                            const nextVal = !isMissionForced;
+                                            updateFsmMission(t.id, m.id, {
+                                              isForced: nextVal,
+                                              isManualDate: nextVal,
+                                              isManualSlot: nextVal
+                                            });
+                                          };
+                                          const estimatedDateValue = m.estimatedDate || '';
 
-                                          <div className="space-y-0.5 bg-transparent">
-                                            <label className="block mb-1 fsm-label-style">Site.</label>
-                                            <input
-                                              type="text"
-                                              value={(() => {
-                                                const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
-                                                const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
-                                                const val = matchedDefib 
-                                                  ? (matchedDefib.nomSite || "") 
-                                                  : (other ? (other.nomPrenomSite || "") : "");
-                                                return val === "Représentant Standard" || val === "Représentant standard" ? "" : val;
-                                              })()}
-                                              disabled={true}
-                                              className="w-full font-sans cursor-not-allowed"
-                                              placeholder="Nom du Site"
-                                            />
-                                          </div>
+                                          return (
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-transparent">
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Client.</label>
+                                              <input
+                                                type="text"
+                                                value={(() => {
+                                                  if (isFormationMission) {
+                                                    const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                    const clientObj = clients?.find(c => c.id === (fmt?.clientId || m.clientId));
+                                                    return clientObj ? clientObj.denomination : (m.clientName || "");
+                                                  }
+                                                  const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                  const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                  const clientObj = clients?.find(c => c.id === (matchedDefib?.clientId || other?.clientId));
+                                                  return clientObj ? clientObj.denomination : (m.clientName || "");
+                                                })()}
+                                                disabled={true}
+                                                className="w-full font-sans cursor-not-allowed"
+                                                placeholder="Nom du Client"
+                                              />
+                                            </div>
 
-                                          <div className="space-y-0.5 bg-transparent">
-                                            <label className="block mb-1 fsm-label-style">Identifiant.</label>
-                                            <input
-                                              type="text"
-                                              value={m.defibIdentifiant || ""}
-                                              disabled={true}
-                                              className="w-full font-mono cursor-not-allowed"
-                                              placeholder="ID Matériel"
-                                            />
-                                          </div>
+                                            {!isFormationMission && (
+                                              <div className="space-y-0.5 bg-transparent">
+                                                <label className="block mb-1 fsm-label-style">Site.</label>
+                                                <input
+                                                  type="text"
+                                                  value={(() => {
+                                                    const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                    const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                    const val = matchedDefib 
+                                                      ? (matchedDefib.nomSite || "") 
+                                                      : (other ? (other.nomPrenomSite || "") : "");
+                                                    return val === "Représentant Standard" || val === "Représentant standard" ? "" : val;
+                                                  })()}
+                                                  disabled={true}
+                                                  className="w-full font-sans cursor-not-allowed"
+                                                  placeholder="Nom du Site"
+                                                />
+                                              </div>
+                                            )}
 
-                                          <div className="space-y-0.5 bg-transparent">
-                                            <label className="block mb-1 fsm-label-style">Localisation.</label>
-                                            <input
-                                              type="text"
-                                              value={(() => {
-                                                const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
-                                                const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
-                                                const ville = matchedDefib ? matchedDefib.ville : (other ? other.ville : '');
-                                                const cp = matchedDefib ? (matchedDefib.codePostal || matchedDefib.cp || '') : (other ? (other.codePostal || other.cp || '') : '');
-                                                return (ville && cp) ? `${ville}, ${cp}` : (ville || cp || '');
-                                              })()}
-                                              disabled={true}
-                                              className="w-full font-sans cursor-not-allowed"
-                                              placeholder="Ville, CP"
-                                            />
-                                          </div>
+                                            {!isFormationMission && (
+                                              <div className="space-y-0.5 bg-transparent">
+                                                <label className="block mb-1 fsm-label-style">Identifiant.</label>
+                                                <input
+                                                  type="text"
+                                                  value={m.defibIdentifiant || ""}
+                                                  disabled={true}
+                                                  className="w-full font-mono cursor-not-allowed"
+                                                  placeholder="ID Matériel"
+                                                />
+                                              </div>
+                                            )}
 
-                                          {/* Transférer section */}
-                                          <div className="space-y-0.5 bg-transparent md:col-span-2">
-                                            <label className="block mb-1 fsm-label-style" style={{ fontSize: '18px' }}>Transférer.</label>
-                                            <div className="flex gap-2">
-                                              <select
-                                                id={`transfer-select-${m.id}`}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Localisation.</label>
+                                              <input
+                                                type="text"
+                                                value={(() => {
+                                                  if (isFormationMission) {
+                                                    if (m.location) return m.location;
+                                                    const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                    if (fmt) {
+                                                      return [fmt.adresse, fmt.codePostal, fmt.ville].filter(Boolean).join(', ');
+                                                    }
+                                                    return m.address || '';
+                                                  }
+                                                  const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                  const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                  const ville = matchedDefib ? matchedDefib.ville : (other ? other.ville : '');
+                                                  const cp = matchedDefib ? (matchedDefib.codePostal || matchedDefib.cp || '') : (other ? (other.codePostal || other.cp || '') : '');
+                                                  return (ville && cp) ? `${ville}, ${cp}` : (ville || cp || '');
+                                                })()}
+                                                disabled={true}
+                                                className="w-full font-sans cursor-not-allowed"
+                                                placeholder="Ville, CP"
+                                              />
+                                            </div>
+
+                                            {/* Référence intervention. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Référence intervention.</label>
+                                              <input
+                                                type="text"
+                                                value={(() => {
+                                                  if (m.interventionReference) return m.interventionReference;
+                                                  const matchedReport = generatedReports.find((r: any) => 
+                                                    (r.missionId && r.missionId === m.id) || 
+                                                    (r.defibIdentifiant && r.defibIdentifiant === m.defibIdentifiant)
+                                                  );
+                                                  return matchedReport?.interventionReference || "";
+                                                })()}
+                                                disabled={true}
+                                                className="w-full font-sans cursor-not-allowed"
+                                                placeholder="Non renseignée"
+                                              />
+                                            </div>
+
+                                            {/* Date estimée. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <div className="flex items-center justify-between mb-1">
+                                                <label className="block fsm-label-style mb-0">Date estimée.</label>
+                                                <button
+                                                  type="button"
+                                                  onClick={toggleForced}
+                                                  className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
+                                                  title="Forcer la date et le créneau"
+                                                >
+                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#fe4eba' : '#64748b' }}>
+                                                    Forcer
+                                                  </span>
+                                                  <div
+                                                    style={{
+                                                      width: '34px',
+                                                      height: '18px',
+                                                      borderRadius: '9999px',
+                                                      backgroundColor: isMissionForced ? '#fe4eba' : '#cbd5e1',
+                                                      position: 'relative',
+                                                      transition: 'background-color 0.2s ease',
+                                                      padding: '2px'
+                                                    }}
+                                                  >
+                                                    <div
+                                                      style={{
+                                                        width: '14px',
+                                                        height: '14px',
+                                                        borderRadius: '50%',
+                                                        backgroundColor: '#ffffff',
+                                                        position: 'absolute',
+                                                        top: '2px',
+                                                        left: isMissionForced ? '18px' : '2px',
+                                                        transition: 'left 0.2s ease',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                                                      }}
+                                                    />
+                                                  </div>
+                                                </button>
+                                              </div>
+                                              <input
+                                                type="date"
+                                                value={estimatedDateValue}
+                                                onChange={(e) => updateFsmMission(t.id, m.id, { estimatedDate: e.target.value })}
+                                                className="w-full font-sans cursor-pointer focus:outline-none"
                                                 style={{
                                                   border: '1px solid #dedede',
                                                   borderRadius: '13px',
                                                   padding: '12px',
                                                   fontSize: '16px',
                                                   fontWeight: '100',
-                                                  backgroundColor: '#ffffff',
                                                   color: '#000000',
-                                                  flex: 1
+                                                  backgroundColor: '#ffffff'
                                                 }}
-                                                className="font-sans cursor-pointer focus:outline-none"
-                                              >
-                                                <option value="">Sélection tournée brouillon.</option>
-                                                {fsmTours
-                                                  .filter(tour => tour.id !== 'a-trier' && (tour.status || 'Brouillon') === 'Brouillon')
-                                                  .map(tour => (
-                                                    <option key={tour.id} value={tour.id}>
-                                                      {tour.title} ({tour.startDate || 'Sans date'})
-                                                    </option>
-                                                  ))
-                                                }
-                                              </select>
+                                              />
+                                            </div>
 
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  const selectEl = document.getElementById(`transfer-select-${m.id}`) as HTMLSelectElement;
-                                                  const targetId = selectEl?.value;
-                                                  if (!targetId) {
-                                                    alert("Veuillez sélectionner une tournée en Brouillon.");
-                                                    return;
-                                                  }
-                                                  
-                                                  const targetTour = fsmTours.find(tour => tour.id === targetId);
-                                                  if (targetTour && (targetTour.status || 'Brouillon') !== 'Brouillon') {
-                                                    alert("Erreur : vous ne pouvez transférer des missions qu'à une tournée en situation Brouillon.");
-                                                    return;
-                                                  }
-                                                  
-                                                  // Perform transfer!
-                                                  const updated = fsmTours.map(tour => {
-                                                    if (tour.id === 'a-trier') {
-                                                      return {
-                                                        ...tour,
-                                                        missions: tour.missions.filter((miss: any) => miss.id !== m.id)
-                                                      };
-                                                    }
-                                                    if (tour.id === targetId) {
-                                                      return {
-                                                        ...tour,
-                                                        missions: [...tour.missions, m]
-                                                      };
-                                                    }
-                                                    return tour;
-                                                  });
-                                                  saveFsmTours(updated);
-                                                  alert("Mission transférée avec succès !");
-                                                }}
+                                            {/* Créneau estimé. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <div className="flex items-center justify-between mb-1">
+                                                <label className="block fsm-label-style mb-0">Créneau estimé.</label>
+                                                <button
+                                                  type="button"
+                                                  onClick={toggleForced}
+                                                  className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
+                                                  title="Forcer la date et le créneau"
+                                                >
+                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#fe4eba' : '#64748b' }}>
+                                                    Forcer
+                                                  </span>
+                                                  <div
+                                                    style={{
+                                                      width: '34px',
+                                                      height: '18px',
+                                                      borderRadius: '9999px',
+                                                      backgroundColor: isMissionForced ? '#fe4eba' : '#cbd5e1',
+                                                      position: 'relative',
+                                                      transition: 'background-color 0.2s ease',
+                                                      padding: '2px'
+                                                    }}
+                                                  >
+                                                    <div
+                                                      style={{
+                                                        width: '14px',
+                                                        height: '14px',
+                                                        borderRadius: '50%',
+                                                        backgroundColor: '#ffffff',
+                                                        position: 'absolute',
+                                                        top: '2px',
+                                                        left: isMissionForced ? '18px' : '2px',
+                                                        transition: 'left 0.2s ease',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                                                      }}
+                                                    />
+                                                  </div>
+                                                </button>
+                                              </div>
+                                              <select
+                                                value={m.estimatedSlot || ''}
+                                                onChange={(e) => updateFsmMission(t.id, m.id, { estimatedSlot: e.target.value })}
+                                                className="w-full font-sans focus:outline-none cursor-pointer"
                                                 style={{
-                                                  backgroundColor: '#000000',
-                                                  color: '#ffffff',
-                                                  padding: '12px 18px',
+                                                  border: '1px solid #dedede',
                                                   borderRadius: '13px',
-                                                  fontSize: '18px',
-                                                  fontWeight: 'bold',
-                                                  cursor: 'pointer',
-                                                  border: 'none',
+                                                  padding: '12px',
+                                                  fontSize: '16px',
+                                                  fontWeight: '100',
+                                                  color: '#000000',
+                                                  backgroundColor: '#ffffff'
                                                 }}
-                                                className="hover:opacity-90 transition-opacity whitespace-nowrap"
                                               >
-                                                Transférer
-                                              </button>
+                                                <option value="">-- Non défini --</option>
+                                                <option value="8:00am">8:00am</option>
+                                                <option value="8:30am">8:30am</option>
+                                                <option value="9:00am">9:00am</option>
+                                                <option value="9:30am">9:30am</option>
+                                                <option value="10:00am">10:00am</option>
+                                                <option value="10:30am">10:30am</option>
+                                                <option value="11:00am">11:00am</option>
+                                                <option value="11:30am">11:30am</option>
+                                                <option value="12:00pm">12:00pm</option>
+                                                <option value="12:30pm">12:30pm</option>
+                                                <option value="13:00pm">13:00pm</option>
+                                                <option value="13:30pm">13:30pm</option>
+                                                <option value="14:00pm">14:00pm</option>
+                                                <option value="14:30pm">14:30pm</option>
+                                                <option value="15:00pm">15:00pm</option>
+                                                <option value="15:30pm">15:30pm</option>
+                                                <option value="16:00pm">16:00pm</option>
+                                                <option value="16:30pm">16:30pm</option>
+                                                <option value="17:00pm">17:00pm</option>
+                                              </select>
+                                            </div>
+
+                                            {/* Transférer section */}
+                                            <div className="space-y-0.5 bg-transparent sm:col-span-2 md:col-span-2">
+                                              <label className="block mb-1 fsm-label-style" style={{ fontSize: '18px' }}>Transférer.</label>
+                                              <div className="flex gap-2">
+                                                <select
+                                                  id={`transfer-select-${m.id}`}
+                                                  style={{
+                                                    border: '1px solid #dedede',
+                                                    borderRadius: '13px',
+                                                    padding: '12px',
+                                                    fontSize: '16px',
+                                                    fontWeight: '100',
+                                                    backgroundColor: '#ffffff',
+                                                    color: '#000000',
+                                                    flex: 1
+                                                  }}
+                                                  className="font-sans cursor-pointer focus:outline-none"
+                                                >
+                                                  <option value="">Sélection tournée brouillon.</option>
+                                                  {fsmTours
+                                                    .filter(tour => tour.id !== 'a-trier' && (tour.status || 'Brouillon') === 'Brouillon')
+                                                    .map(tour => (
+                                                      <option key={tour.id} value={tour.id}>
+                                                        {tour.title} ({tour.startDate || 'Sans date'})
+                                                      </option>
+                                                    ))
+                                                  }
+                                                </select>
+
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    const selectEl = document.getElementById(`transfer-select-${m.id}`) as HTMLSelectElement;
+                                                    const targetId = selectEl?.value;
+                                                    if (!targetId) {
+                                                      alert("Veuillez sélectionner une tournée en Brouillon.");
+                                                      return;
+                                                    }
+                                                    
+                                                    const targetTour = fsmTours.find(tour => tour.id === targetId);
+                                                    if (targetTour && (targetTour.status || 'Brouillon') !== 'Brouillon') {
+                                                      alert("Erreur : vous ne pouvez transférer des missions qu'à une tournée en situation Brouillon.");
+                                                      return;
+                                                    }
+                                                    
+                                                    // Perform transfer!
+                                                    const updated = fsmTours.map(tour => {
+                                                      if (tour.id === 'a-trier') {
+                                                        return {
+                                                          ...tour,
+                                                          missions: tour.missions.filter((miss: any) => miss.id !== m.id)
+                                                        };
+                                                      }
+                                                      if (tour.id === targetId) {
+                                                        return {
+                                                          ...tour,
+                                                          missions: [...tour.missions, m]
+                                                        };
+                                                      }
+                                                      return tour;
+                                                    });
+                                                    saveFsmTours(updated);
+                                                    alert("Mission transférée avec succès !");
+                                                  }}
+                                                  style={{
+                                                    backgroundColor: '#000000',
+                                                    color: '#ffffff',
+                                                    padding: '12px 18px',
+                                                    borderRadius: '13px',
+                                                    fontSize: '18px',
+                                                    fontWeight: 'bold',
+                                                    cursor: 'pointer',
+                                                    border: 'none',
+                                                  }}
+                                                  className="hover:opacity-90 transition-opacity whitespace-nowrap"
+                                                >
+                                                  Transférer
+                                                </button>
+                                              </div>
                                             </div>
                                           </div>
-                                        </div>
-                                      )}
+                                          );
+                                        })()}
                                     </div>
                                     );
                                   })}
@@ -10225,7 +10428,7 @@ export default function App() {
 
                                     {/* Actions */}
                                     <td className="px-4 py-5 text-right whitespace-nowrap bg-transparent" onClick={(e) => e.stopPropagation()}>
-                                      <div className="inline-flex gap-2 bg-transparent">
+                                      <div className="inline-flex items-center gap-2 bg-transparent">
                                         <button
                                           type="button"
                                           onClick={() => handleDownloadDoc(doc)}
@@ -10234,28 +10437,52 @@ export default function App() {
                                         >
                                           {t("Télécharger")}
                                         </button>
-                                        <button
-                                          type="button"
-                                          disabled={!doc.hasBonCommande}
-                                          onClick={() => handleDownloadBonCommande(doc)}
-                                          style={{
-                                            ...rowActionButton18Style,
-                                            opacity: doc.hasBonCommande ? 1 : 0.35,
-                                            cursor: doc.hasBonCommande ? 'pointer' : 'not-allowed',
-                                          }}
-                                          className="font-sans"
-                                          title={doc.hasBonCommande ? t("Bon de commande: ") + doc.bonCommandeReference : t("Aucun bon de commande pour cette pièce")}
-                                        >
-                                          {t("Bon de commande")}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleTransformDoc(doc)}
-                                          style={rowActionButton18Style}
-                                          className="cursor-pointer font-sans"
-                                        >
-                                          {t("Transformer")}
-                                        </button>
+                                        <div className="relative inline-block text-left">
+                                          <button
+                                            type="button"
+                                            onClick={() => setOpenTransformDocId(openTransformDocId === doc.id ? null : doc.id)}
+                                            style={rowActionButton18Style}
+                                            className="cursor-pointer font-sans inline-flex items-center gap-1"
+                                          >
+                                            <span>{t("Transformer")}</span>
+                                            <svg className="w-3.5 h-3.5 fill-current opacity-70" viewBox="0 0 20 20">
+                                              <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                                            </svg>
+                                          </button>
+
+                                          {openTransformDocId === doc.id && (
+                                            <>
+                                              <div 
+                                                className="fixed inset-0 z-40 bg-transparent" 
+                                                onClick={() => setOpenTransformDocId(null)}
+                                              />
+                                              <div 
+                                                className="absolute right-0 mt-1 w-48 rounded-xl bg-white shadow-xl border border-slate-200 z-50 py-1.5 animate-fadeIn font-sans text-left"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <div className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                                                  Générer :
+                                                </div>
+                                                {(['Devis', 'Facture', 'Bon de commande', 'Bon de livraison'] as const)
+                                                  .filter(tType => tType !== doc.type)
+                                                  .map(tType => (
+                                                    <button
+                                                      key={tType}
+                                                      type="button"
+                                                      onClick={() => {
+                                                        setOpenTransformDocId(null);
+                                                        handleTransformDoc(doc, tType);
+                                                      }}
+                                                      className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-[#ffecf8] hover:text-[#fa53d5] transition-colors cursor-pointer"
+                                                    >
+                                                      {tType}
+                                                    </button>
+                                                  ))
+                                                }
+                                              </div>
+                                            </>
+                                          )}
+                                        </div>
                                         <button
                                           type="button"
                                           onClick={() => startEditDoc(doc)}
@@ -10556,8 +10783,10 @@ export default function App() {
                               className="focus:outline-none w-full"
                             >
                               <option value="">{t("Sélection d'une pièce ou service.")}</option>
-                              {variables.map(v => {
-                                const matchedStock = stocks.find(s => s.denominationPieceId === v.id);
+                              {variables
+                                .filter(v => v.category !== 'Drapeau GMAO' && v.category !== 'Fournisseur' && v.category !== 'Modèle Raison Prestation')
+                                .map(v => {
+                                  const matchedStock = stocks.find(s => s.denominationPieceId === v.id);
                                 const ugs = matchedStock?.ugs || '';
                                 const ugsStr = ugs ? ` [UGS: ${ugs}]` : '';
                                 const marqueStr = v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : '';
@@ -10694,6 +10923,18 @@ export default function App() {
                             onChange={(e) => setDocCommentaires(e.target.value)}
                             placeholder={t("Entrez les commentaires...")}
                             className="focus:outline-none w-full p-3 border border-slate-200 rounded-xl min-h-[100px]"
+                          />
+                        </div>
+
+                        {/* Autre document (Url Source). */}
+                        <div className="flex flex-col gap-1 bg-white mt-4 col-span-1 md:col-span-3">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Autre document (Url Source).")}</label>
+                          <input
+                            type="url"
+                            value={docUrlSource}
+                            onChange={(e) => setDocUrlSource(e.target.value)}
+                            placeholder={t("Entrez l'URL source du document...")}
+                            className="focus:outline-none w-full"
                           />
                         </div>
 
