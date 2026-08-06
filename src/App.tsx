@@ -10842,6 +10842,7 @@ export default function App() {
               formations={formations}
               stagiaires={stagiaires}
               members={members}
+              companyInfo={companyInfo}
             />
           )}
 

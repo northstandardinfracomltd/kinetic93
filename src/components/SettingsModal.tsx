@@ -440,7 +440,21 @@ export default function SettingsModal({
     { entity: 'CRM', slug: 'categorie', type: 'string', label: 'Catégorie de ticket CRM', example: 'Technique' },
     { entity: 'CRM', slug: 'criticite', type: 'string', label: 'Niveau de criticité', example: 'Urgent' },
     { entity: 'CRM', slug: 'objet', type: 'string', label: 'Objet / Sujet du dossier', example: 'Signalement Bip DAE' },
-    { entity: 'CRM', slug: 'description', type: 'string', label: 'Description détaillée', example: 'Constat voyant rouge à 8h' }
+    { entity: 'CRM', slug: 'description', type: 'string', label: 'Description détaillée', example: 'Constat voyant rouge à 8h' },
+
+    // Formation
+    { entity: 'Formation', slug: 'formation_id', type: 'string', label: 'Identifiant unique de la formation', example: 'FOR-2026-001' },
+    { entity: 'Formation', slug: 'intitule', type: 'string', label: 'Intitulé / Nom de la formation', example: 'Formation Secourisme & Utilisation DAE' },
+    { entity: 'Formation', slug: 'date_heure', type: 'date (AAAA-MM-JJTHH:MM)', label: 'Date et heure de début de la formation', example: '2026-08-15T09:00' },
+    { entity: 'Formation', slug: 'formateur_id', type: 'string', label: 'Identifiant unique du formateur', example: 'MEM-002' },
+    { entity: 'Formation', slug: 'statut', type: 'string', label: 'Statut ("Brouillon" ou "Terminé")', example: 'Terminé' },
+    { entity: 'Formation', slug: 'client_id', type: 'string', label: 'Identifiant du client rattaché', example: 'CLI-0042' },
+    { entity: 'Formation', slug: 'adresse', type: 'string', label: 'Adresse du lieu de formation', example: '12 Avenue de Paris' },
+    { entity: 'Formation', slug: 'ville', type: 'string', label: 'Ville de formation', example: 'Paris' },
+    { entity: 'Formation', slug: 'code_postal', type: 'string', label: 'Code postal du lieu', example: '75008' },
+    { entity: 'Formation', slug: 'region', type: 'string', label: 'Région / Département', example: 'Île-de-France' },
+    { entity: 'Formation', slug: 'pays', type: 'string', label: 'Pays du lieu', example: 'France' },
+    { entity: 'Formation', slug: 'commentaire', type: 'string', label: 'Commentaires et remarques', example: 'Session matinée - 10 participants' }
   ];
 
   const generateApiDefibeoKeys = () => {
@@ -5157,6 +5171,93 @@ Content-Type: application/json`}
   "client_id": "CLI-0042",
   "collaborateur": "Pierre Durand",
   "description": "Bip voyant rouge constaté par l'agent de sécurité lors de la ronde de 8h."
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 14. Formations - GET */}
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/formations/:formation_id</span>
+                      </div>
+                    </div>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère les informations complètes d'une session de formation spécifique selon la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:formation_id</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>FOR-2026-001</code>).</p>
+                      <div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Structure JSON complète retournée</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
+{`{
+  "formation_id": "FOR-2026-001",
+  "intitule": "Formation Secourisme & Utilisation DAE",
+  "date_heure": "2026-08-15T09:00",
+  "formateur_id": "MEM-002",
+  "statut": "Terminé",
+  "client_id": "CLI-0042",
+  "adresse": "12 Avenue de Paris",
+  "ville": "Paris",
+  "code_postal": "75008",
+  "region": "Île-de-France",
+  "pays": "France",
+  "commentaire": "Session SST et gestes de premiers secours."
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 15. Formations - POST Create */}
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/formations</span>
+                      </div>
+                    </div>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée une nouvelle session de formation dans la base de données Defibeo.</p>
+                      <div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
+{`{
+  "intitule": "Formation Manipulation DAE & Gestes d'Urgence",
+  "date_heure": "2026-09-01T14:00",
+  "formateur_id": "MEM-002",
+  "statut": "Brouillon",
+  "client_id": "CLI-0042",
+  "adresse": "25 Rue de la Paix",
+  "ville": "Lyon",
+  "code_postal": "69002",
+  "region": "Auvergne-Rhône-Alpes",
+  "pays": "France",
+  "commentaire": "Session groupe 2 - Salle de réunion B"
+}`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 16. Formations - POST Update */}
+                  <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-3">
+                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/formations/:formation_id</span>
+                      </div>
+                    </div>
+                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Met à jour et modifie les informations d'une session de formation existante ciblée par son identifiant unique <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:formation_id</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>FOR-2026-001</code>).</p>
+                      <div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
+                        <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
+{`{
+  "intitule": "Formation Secourisme & Utilisation DAE - Session Avancée",
+  "statut": "Terminé",
+  "commentaire": "Session clôturée. Émargements et certificats générés.",
+  "formateur_id": "MEM-002"
 }`}
                         </pre>
                       </div>

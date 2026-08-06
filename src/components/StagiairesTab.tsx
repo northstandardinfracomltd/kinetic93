@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StagiaireRecord } from '../types';
+import { getRegionsForCountry } from '../utils/regions';
 
 interface StagiairesTabProps {
   stagiaires: StagiaireRecord[];
@@ -61,7 +62,8 @@ export default function StagiairesTab({
     setIsFormOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (window.confirm('Voulez-vous vraiment supprimer ce stagiaire ?')) {
       const updated = stagiaires.filter((item) => item.id !== id);
       saveStagiaires(updated);
@@ -134,15 +136,14 @@ export default function StagiairesTab({
     );
   });
 
-  const blackButtonStyle: React.CSSProperties = {
+  const rowActionButton18Style: React.CSSProperties = {
     backgroundColor: '#000000',
     color: '#ffffff',
     boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
-    borderRadius: '13px',
+    borderRadius: '10px',
     fontSize: '18px',
     padding: '9px 19px',
     fontWeight: '100',
-    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -151,30 +152,23 @@ export default function StagiairesTab({
   };
 
   const blueButtonStyle: React.CSSProperties = {
-    ...blackButtonStyle,
+    ...rowActionButton18Style,
     backgroundColor: 'rgb(53, 86, 236)',
     boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
   };
 
   const searchInputStyle: React.CSSProperties = {
-    padding: '12px 16px',
-    borderRadius: '13px',
-    backgroundColor: '#ffffff',
     border: '1px solid #dedede',
+    borderRadius: '13px',
+    padding: '9px 19px',
+    fontSize: '18px',
+    fontWeight: '100',
     color: '#000000',
-    fontSize: '16px',
-    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-    outline: isSearchFocused ? '2.5px solid #fa53d5' : isSearchHovered ? '2.5px solid #fa53d5' : 'none',
-    outlineOffset: '2px',
+    backgroundColor: '#ffffff',
+    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
-  };
-
-  const cellStyle: React.CSSProperties = {
-    fontSize: '16px',
-    color: '#000000',
-    whiteSpace: 'nowrap',
-    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-    cursor: 'default',
   };
 
   const thStyle: React.CSSProperties = {
@@ -184,51 +178,17 @@ export default function StagiairesTab({
     textTransform: 'none',
     color: '#000000',
     cursor: 'default',
-    fontSize: '16px',
     whiteSpace: 'nowrap',
+    position: 'sticky',
+    top: 0,
+    backgroundColor: '#ffffff',
   };
 
   return (
-    <div id="stagiaires-tab-container" className="space-y-6 animate-fadeIn">
-      <style>{`
-        #stagiaires-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-stagiaires-input),
-        #stagiaires-tab-container select,
-        #stagiaires-tab-container textarea {
-          padding: 12px !important;
-          border: 1px solid #dedede !important;
-          border-radius: 13px !important;
-          font-size: 16px !important;
-          font-weight: 100 !important;
-          background: #ffffff !important;
-          color: #000000 !important;
-          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-          box-sizing: border-box !important;
-          outline: none !important;
-          transition: all 0s !important;
-        }
-        #stagiaires-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-stagiaires-input),
-        #stagiaires-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-stagiaires-input),
-        #stagiaires-tab-container select:hover:not(:disabled),
-        #stagiaires-tab-container select:focus:not(:disabled),
-        #stagiaires-tab-container #search-stagiaires-input:hover,
-        #stagiaires-tab-container #search-stagiaires-input:focus {
-          outline: 2.5px solid #fa53d5 !important;
-          outline-offset: 2px !important;
-          transition: all 0s !important;
-        }
-        #stagiaires-tab-container label {
-          letter-spacing: normal !important;
-          text-transform: none !important;
-          font-size: 16px !important;
-          color: #000000 !important;
-          font-weight: 600 !important;
-          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-        }
-      `}</style>
-
+    <div id="stagiaires-tab-container" className="space-y-6">
       {!isFormOpen ? (
         <>
-          {/* Header Section */}
+          {/* Top Header Block */}
           <div
             className="bg-white space-y-4"
             style={{
@@ -241,30 +201,29 @@ export default function StagiairesTab({
               backgroundColor: '#ffffff',
             }}
           >
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
               <div>
-                <h2
-                  className="text-2xl font-bold tracking-tight bg-white"
-                  style={{ color: '#000000', cursor: 'default', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                >
+                <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }}>
                   Stagiaires
                 </h2>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 bg-white">
-                <input
-                  type="text"
-                  id="search-stagiaires-input"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Rechercher."
-                  className="w-48 sm:w-64 outline-none"
-                  style={searchInputStyle}
-                  onMouseEnter={() => setIsSearchHovered(true)}
-                  onMouseLeave={() => setIsSearchHovered(false)}
-                  onFocus={() => setIsSearchFocused(true)}
-                  onBlur={() => setIsSearchFocused(false)}
-                />
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative w-full sm:w-64">
+                  <input
+                    type="text"
+                    id="search-stagiaires-input"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Recherche."
+                    className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
+                    style={searchInputStyle}
+                    onMouseEnter={() => setIsSearchHovered(true)}
+                    onMouseLeave={() => setIsSearchHovered(false)}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setIsSearchFocused(false)}
+                  />
+                </div>
 
                 <button onClick={startNewStagiaire} style={blueButtonStyle}>
                   Nouveau
@@ -273,70 +232,96 @@ export default function StagiairesTab({
             </div>
           </div>
 
-          {/* Table Section */}
-          <div
-            className="bg-white shadow-xs overflow-hidden"
-            style={{
-              border: '1px solid #dadada',
-              borderRadius: '18px',
-              maxWidth: '98%',
-              margin: 'auto',
-            }}
-          >
+          {/* Main Records Table Sheet - Full Width */}
+          <div className="bg-white overflow-hidden rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table
+                className="w-full text-left font-sans border-collapse text-xs"
+                id="records-table"
+                style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}
+              >
                 <thead>
-                  <tr style={{ borderBottom: '1px solid #dedede', backgroundColor: '#f9fafb' }}>
-                    <th className="px-6 py-4" style={thStyle}>Nom & Prénom.</th>
-                    <th className="px-6 py-4" style={thStyle}>Naissance.</th>
-                    <th className="px-6 py-4" style={thStyle}>Sexe.</th>
-                    <th className="px-6 py-4" style={thStyle}>Localisation.</th>
-                    <th className="px-6 py-4 text-right" style={thStyle}>Action.</th>
+                  <tr className="bg-transparent">
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Nom & Prénom.</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Naissance.</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Sexe.</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Localisation.</th>
+                    <th className="px-4 py-3.5 text-right whitespace-nowrap" style={thStyle}>Actions.</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="text-slate-700 text-xs">
                   {filteredStagiaires.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500" style={cellStyle}>
-                        Aucun stagiaire enregistré.
+                      <td colSpan={5} className="p-16 text-center font-sans lg:py-24" style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
+                        Aucun résultat.
                       </td>
                     </tr>
                   ) : (
                     filteredStagiaires.map((s) => {
                       const loc = [s.ville, s.codePostal].filter(Boolean).join(', ') || '-';
                       return (
-                        <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-6 py-4" style={cellStyle}>
+                        <tr
+                          key={s.id}
+                          onClick={() => startEditStagiaire(s)}
+                          className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
+                        >
+                          <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             <span
                               style={{
-                                borderRadius: '13px',
-                                backgroundColor: '#e0e7ff',
-                                color: '#3730a3',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                border: '1px solid rgb(231, 231, 231)',
+                                borderRadius: '1000px',
                                 padding: '4px 12px',
+                                backgroundColor: '#ffffff',
+                                color: '#000000',
                                 fontSize: '16px',
-                                fontWeight: 500,
-                                display: 'inline-block',
+                                fontWeight: 100,
                               }}
                             >
                               {s.nomPrenom || '-'}
                             </span>
                           </td>
-                          <td className="px-6 py-4" style={cellStyle}>{s.dateNaissance || '-'}</td>
-                          <td className="px-6 py-4" style={cellStyle}>{s.sexe || '-'}</td>
-                          <td className="px-6 py-4" style={cellStyle}>{loc}</td>
-                          <td className="px-6 py-4 text-right space-x-2">
-                            <button
-                              onClick={() => startEditStagiaire(s)}
-                              style={{ ...blackButtonStyle, padding: '6px 14px', fontSize: '16px' }}
+                          <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                            {s.dateNaissance || '-'}
+                          </td>
+                          <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                border: '1px solid rgb(231, 231, 231)',
+                                borderRadius: '1000px',
+                                padding: '4px 12px',
+                                backgroundColor: '#ffffff',
+                                color: '#000000',
+                                fontSize: '16px',
+                                fontWeight: 100,
+                              }}
                             >
-                              Modifier
-                            </button>
-                            <button
-                              onClick={() => handleDelete(s.id)}
-                              style={{ ...blackButtonStyle, backgroundColor: '#dc2626', padding: '6px 14px', fontSize: '16px' }}
-                            >
-                              Supprimer
-                            </button>
+                              {s.sexe || '-'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                            {loc}
+                          </td>
+                          <td className="px-4 py-5 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => startEditStagiaire(s)}
+                                style={rowActionButton18Style}
+                              >
+                                Modifier
+                              </button>
+                              <button
+                                onClick={(e) => handleDelete(s.id, e)}
+                                style={{ ...rowActionButton18Style, backgroundColor: '#991b1b' }}
+                              >
+                                Supprimer
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -348,208 +333,346 @@ export default function StagiairesTab({
           </div>
         </>
       ) : (
-        /* Form View */
-        <div
-          className="bg-white p-6 space-y-6"
-          style={{
-            border: '1px solid #dadada',
-            borderRadius: '18px',
-            maxWidth: '98%',
-            margin: 'auto',
-          }}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between border-b pb-4">
-            <h2
-              className="text-2xl font-bold"
-              style={{ color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-            >
-              {editingId ? 'Modification Stagiaire' : 'Nouveau Stagiaire'}
-            </h2>
+        /* Form Overlay */
+        <div className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto" id="stagiaire-form-overlay">
+          {/* Detached Form Header Box */}
+          <div
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
+            style={{
+              border: '1px solid #dadada',
+              borderTop: 'none',
+              borderRadius: '0px 0px 18px 18px',
+              maxWidth: '98%',
+              margin: 'auto',
+              padding: '20px',
+            }}
+            id="stagiaire-form-header-box"
+          >
+            <div>
+              <h3 className="text-2xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
+                {editingId ? 'Modification Stagiaire' : 'Nouveau Stagiaire'}
+              </h3>
+            </div>
+
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                style={blackButtonStyle}
+                style={rowActionButton18Style}
+                className="transition-colors cursor-pointer"
               >
-                Fermer
+                <span>Fermer</span>
               </button>
+
               <button
-                type="button"
-                onClick={handleSave}
+                type="submit"
+                form="stagiaire-core-form"
                 style={blueButtonStyle}
+                className="transition-all"
               >
                 Enregistrer
               </button>
             </div>
           </div>
 
-          <form onSubmit={handleSave} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Nom & Prénom */}
-              <div>
-                <label htmlFor="stag-nomprenom" className="block mb-1">Nom & Prénom.</label>
-                <input
-                  type="text"
-                  id="stag-nomprenom"
-                  value={nomPrenom}
-                  onChange={(e) => setNomPrenom(e.target.value)}
-                  className="w-full"
-                  required
-                  placeholder="ex: Jean Dupont"
-                />
-              </div>
+          <div className="w-full animate-fadeIn mt-6" style={{ marginTop: '24px' }}>
+            <style>{`
+              #stagiaire-core-form input:not([type="radio"]):not([type="checkbox"]),
+              #stagiaire-core-form select,
+              #stagiaire-core-form textarea {
+                padding: 12px !important;
+                border: 1px solid #dedede !important;
+                border-radius: 13px !important;
+                font-size: 16px !important;
+                font-weight: 100 !important;
+                background: #ffffff !important;
+                color: #000000 !important;
+                font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                box-sizing: border-box !important;
+                outline: none !important;
+                transition: all 0s !important;
+              }
+              #stagiaire-core-form input:not([type="radio"]):not([type="checkbox"]):hover,
+              #stagiaire-core-form input:not([type="radio"]):not([type="checkbox"]):focus,
+              #stagiaire-core-form select:hover,
+              #stagiaire-core-form select:focus,
+              #stagiaire-core-form textarea:hover,
+              #stagiaire-core-form textarea:focus {
+                outline: 2.5px solid #fa53d5 !important;
+                outline-offset: 2px !important;
+                transition: all 0s !important;
+              }
+              #stagiaire-core-form select {
+                appearance: none !important;
+                -webkit-appearance: none !important;
+                -moz-appearance: none !important;
+                background-image: none !important;
+              }
+              #stagiaire-core-form select option {
+                color: #000000 !important;
+                background: #ffffff !important;
+                font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+              }
+              #stagiaire-core-form input[type="date"]::-webkit-calendar-picker-indicator {
+                display: none !important;
+                -webkit-appearance: none !important;
+                background: none !important;
+                width: 0 !important;
+                height: 0 !important;
+              }
+              #stagiaire-core-form label {
+                letter-spacing: normal !important;
+                text-transform: none !important;
+                font-size: 16px !important;
+                color: #000000 !important;
+                font-weight: 600 !important;
+              }
+              #stagiaire-core-form input[type="radio"] {
+                appearance: none !important;
+                -webkit-appearance: none !important;
+                width: 18px !important;
+                height: 18px !important;
+                border: 2px solid #cbd5e1 !important;
+                border-radius: 50% !important;
+                background-color: #ffffff !important;
+                outline: none !important;
+                cursor: pointer !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                transition: all 0.2s ease !important;
+                margin-right: 6px !important;
+              }
+              #stagiaire-core-form input[type="radio"]:hover,
+              #stagiaire-core-form input[type="radio"]:checked {
+                border-color: oklch(0.44 0.16 324.65) !important;
+                background-color: oklch(0.44 0.16 324.65) !important;
+              }
+              #stagiaire-core-form input[type="radio"]:checked::after {
+                content: "" !important;
+                width: 8px !important;
+                height: 8px !important;
+                background-color: #ffffff !important;
+                border-radius: 50% !important;
+                display: block !important;
+              }
+            `}</style>
 
-              {/* Date de naissance */}
-              <div>
-                <label htmlFor="stag-naissance" className="block mb-1">Date de naissance.</label>
-                <input
-                  type="date"
-                  id="stag-naissance"
-                  value={dateNaissance}
-                  onChange={(e) => setDateNaissance(e.target.value)}
-                  className="w-full"
-                />
-              </div>
+            <form onSubmit={handleSave} className="space-y-6" id="stagiaire-core-form">
+              <div className="space-y-0" style={{ maxWidth: '98%', margin: 'auto' }}>
+                {/* Section 1 - Informations Personnelles */}
+                <div
+                  className="bg-white p-5 relative space-y-4"
+                  style={{
+                    border: '1px solid rgb(218, 218, 218)',
+                    borderRadius: '18px 18px 0px 0px',
+                  }}
+                >
+                  <div className="mb-2 bg-transparent">
+                    <span
+                      className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                      style={{
+                        backgroundColor: 'oklch(0.44 0.16 324.65)',
+                        borderRadius: '1000px',
+                        cursor: 'default',
+                        fontWeight: 100,
+                        textTransform: 'none',
+                      }}
+                    >
+                      1 — Informations personnelles
+                    </span>
+                  </div>
 
-              {/* Email */}
-              <div>
-                <label htmlFor="stag-email" className="block mb-1">Email.</label>
-                <input
-                  type="email"
-                  id="stag-email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full"
-                  placeholder="ex: jean.dupont@example.com"
-                />
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Nom & Prénom */}
+                    <div className="space-y-1">
+                      <label htmlFor="stag-nomprenom" className="block mb-1">Nom & Prénom.</label>
+                      <input
+                        type="text"
+                        id="stag-nomprenom"
+                        value={nomPrenom}
+                        onChange={(e) => setNomPrenom(e.target.value)}
+                        className="w-full"
+                        required
+                        placeholder="ex: Jean Dupont"
+                      />
+                    </div>
 
-              {/* Téléphone */}
-              <div>
-                <label htmlFor="stag-telephone" className="block mb-1">Téléphone.</label>
-                <input
-                  type="tel"
-                  id="stag-telephone"
-                  value={telephone}
-                  onChange={(e) => setTelephone(e.target.value)}
-                  className="w-full"
-                  placeholder="ex: 06 12 34 56 78"
-                />
-              </div>
-            </div>
+                    {/* Date de naissance */}
+                    <div className="space-y-1">
+                      <label htmlFor="stag-naissance" className="block mb-1">Date de naissance.</label>
+                      <input
+                        type="date"
+                        id="stag-naissance"
+                        value={dateNaissance}
+                        onChange={(e) => setDateNaissance(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
 
-            {/* Sexe (Radio) */}
-            <div>
-              <label className="block mb-2">Sexe.</label>
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer font-normal text-black" style={{ fontWeight: 400 }}>
-                  <input
-                    type="radio"
-                    name="stag-sexe"
-                    value="Homme"
-                    checked={sexe === 'Homme'}
-                    onChange={() => setSexe('Homme')}
-                    className="w-5 h-5 accent-blue-600 cursor-pointer"
-                  />
-                  Homme
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer font-normal text-black" style={{ fontWeight: 400 }}>
-                  <input
-                    type="radio"
-                    name="stag-sexe"
-                    value="Femme"
-                    checked={sexe === 'Femme'}
-                    onChange={() => setSexe('Femme')}
-                    className="w-5 h-5 accent-blue-600 cursor-pointer"
-                  />
-                  Femme
-                </label>
-              </div>
-            </div>
+                    {/* Email */}
+                    <div className="space-y-1">
+                      <label htmlFor="stag-email" className="block mb-1">Email.</label>
+                      <input
+                        type="email"
+                        id="stag-email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full"
+                        placeholder="ex: jean.dupont@example.com"
+                      />
+                    </div>
 
-            {/* Adresse & Localisation */}
-            <div className="space-y-4 border-t pt-4">
-              <div>
-                <label htmlFor="stag-adresse" className="block mb-1">Numéro et voie.</label>
-                <input
-                  type="text"
-                  id="stag-adresse"
-                  value={adresse}
-                  onChange={(e) => setAdresse(e.target.value)}
-                  className="w-full"
-                  placeholder="ex: 15 Rue des Fleurs"
-                />
-              </div>
+                    {/* Téléphone */}
+                    <div className="space-y-1">
+                      <label htmlFor="stag-telephone" className="block mb-1">Téléphone.</label>
+                      <input
+                        type="tel"
+                        id="stag-telephone"
+                        value={telephone}
+                        onChange={(e) => setTelephone(e.target.value)}
+                        className="w-full"
+                        placeholder="ex: 06 12 34 56 78"
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {/* Ville */}
-                <div>
-                  <label htmlFor="stag-ville" className="block mb-1">Ville.</label>
-                  <input
-                    type="text"
-                    id="stag-ville"
-                    value={ville}
-                    onChange={(e) => setVille(e.target.value)}
-                    className="w-full"
-                  />
+                  {/* Sexe (Radio) */}
+                  <div className="space-y-1 pt-2">
+                    <label className="block mb-2">Sexe.</label>
+                    <div className="flex items-center gap-6">
+                      <label className="flex items-center gap-2 cursor-pointer text-black font-normal" style={{ fontWeight: 400 }}>
+                        <input
+                          type="radio"
+                          name="stag-sexe"
+                          value="Homme"
+                          checked={sexe === 'Homme'}
+                          onChange={() => setSexe('Homme')}
+                        />
+                        Homme
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-black font-normal" style={{ fontWeight: 400 }}>
+                        <input
+                          type="radio"
+                          name="stag-sexe"
+                          value="Femme"
+                          checked={sexe === 'Femme'}
+                          onChange={() => setSexe('Femme')}
+                        />
+                        Femme
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Code postal */}
-                <div>
-                  <label htmlFor="stag-cp" className="block mb-1">Code postal.</label>
-                  <input
-                    type="text"
-                    id="stag-cp"
-                    value={codePostal}
-                    onChange={(e) => setCodePostal(e.target.value)}
-                    className="w-full"
-                  />
-                </div>
+                {/* Section 2 - Localisation */}
+                <div
+                  className="bg-white p-5 relative space-y-4"
+                  style={{
+                    border: '1px solid rgb(218, 218, 218)',
+                    borderTop: 'none',
+                    borderRadius: '0px 0px 18px 18px',
+                  }}
+                >
+                  <div className="mb-2 bg-transparent">
+                    <span
+                      className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                      style={{
+                        backgroundColor: 'oklch(0.44 0.16 324.65)',
+                        borderRadius: '1000px',
+                        cursor: 'default',
+                        fontWeight: 100,
+                        textTransform: 'none',
+                      }}
+                    >
+                      2 — Adresse et localisation
+                    </span>
+                  </div>
 
-                {/* Région */}
-                <div>
-                  <label htmlFor="stag-region" className="block mb-1">Région.</label>
-                  <input
-                    type="text"
-                    id="stag-region"
-                    value={region}
-                    onChange={(e) => setRegion(e.target.value)}
-                    className="w-full"
-                  />
-                </div>
+                  <div className="space-y-1">
+                    <label htmlFor="stag-adresse" className="block mb-1">Numéro et voie.</label>
+                    <input
+                      type="text"
+                      id="stag-adresse"
+                      value={adresse}
+                      onChange={(e) => setAdresse(e.target.value)}
+                      className="w-full"
+                      placeholder="ex: 15 Rue des Fleurs"
+                    />
+                  </div>
 
-                {/* Pays */}
-                <div>
-                  <label htmlFor="stag-pays" className="block mb-1">Pays.</label>
-                  <input
-                    type="text"
-                    id="stag-pays"
-                    value={pays}
-                    onChange={(e) => setPays(e.target.value)}
-                    className="w-full"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    {/* Ville */}
+                    <div className="space-y-1">
+                      <label htmlFor="stag-ville" className="block mb-1">Ville.</label>
+                      <input
+                        type="text"
+                        id="stag-ville"
+                        value={ville}
+                        onChange={(e) => setVille(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+
+                    {/* Code postal */}
+                    <div className="space-y-1">
+                      <label htmlFor="stag-cp" className="block mb-1">Code postal.</label>
+                      <input
+                        type="text"
+                        id="stag-cp"
+                        value={codePostal}
+                        onChange={(e) => setCodePostal(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+
+                    {/* Région Dropdown */}
+                    <div className="space-y-1">
+                      <label htmlFor="stag-region" className="block mb-1">Région.</label>
+                      <select
+                        id="stag-region"
+                        value={region}
+                        onChange={(e) => setRegion(e.target.value)}
+                        className="w-full"
+                      >
+                        <option value="">Choisir une région.</option>
+                        {getRegionsForCountry(pays).map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Pays Dropdown */}
+                    <div className="space-y-1">
+                      <label htmlFor="stag-pays" className="block mb-1">Pays.</label>
+                      <select
+                        id="stag-pays"
+                        value={pays}
+                        onChange={(e) => setPays(e.target.value)}
+                        className="w-full"
+                      >
+                        <option value="France">France</option>
+                        <option value="Espagne">Espagne</option>
+                        <option value="Portugal">Portugal</option>
+                        <option value="Suisse">Suisse</option>
+                        <option value="Luxembourg">Luxembourg</option>
+                        <option value="Belgique">Belgique</option>
+                        <option value="Allemagne">Allemagne</option>
+                        <option value="Pays-Bas">Pays-Bas</option>
+                        <option value="Royaume-Uni">Royaume-Uni</option>
+                        <option value="Irlande">Irlande</option>
+                        <option value="Suède">Suède</option>
+                        <option value="Pologne">Pologne</option>
+                        <option value="Italie">Italie</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="flex items-center justify-end gap-3 border-t pt-4">
-              <button
-                type="button"
-                onClick={() => setIsFormOpen(false)}
-                style={blackButtonStyle}
-              >
-                Fermer
-              </button>
-              <button
-                type="submit"
-                style={blueButtonStyle}
-              >
-                Enregistrer
-              </button>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       )}
     </div>
