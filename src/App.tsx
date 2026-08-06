@@ -4,7 +4,7 @@ import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
-import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification } from './types';
+import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord } from './types';
 import {
   INITIAL_CLIENTS,
   INITIAL_VARIABLES,
@@ -58,6 +58,9 @@ import TempsTab from './components/TempsTab';
 import LocalisationsTab from './components/LocalisationsTab';
 import SatisfactionTab from './components/SatisfactionTab';
 import VeillesTab from './components/VeillesTab';
+import FormationsTab from './components/FormationsTab';
+import StagiairesTab from './components/StagiairesTab';
+import EmargementsTab from './components/EmargementsTab';
 import GmaoCorrectionForm from './components/GmaoCorrectionForm';
 import ImportExportTab from './components/ImportExportTab';
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions } from './utils/fsmOptimizer';
@@ -130,6 +133,9 @@ export type AppTab =
   | 'localisations'
   | 'satisfaction'
   | 'statistiques'
+  | 'formations'
+  | 'stagiaires'
+  | 'emargements'
   | 'notifications'
   | 'parametres'
   | 'import-export';
@@ -1076,6 +1082,33 @@ export default function App() {
     localStorage.setItem(`defib_${tenantId}_achats_fournisseurs`, JSON.stringify(updated));
     if (isFirebaseLoaded && tenantId) {
       saveCollectionToFirestore('achats_fournisseurs', updated);
+    }
+  };
+
+  const [formations, setFormations] = useState<FormationRecord[]>([]);
+  const saveFormations = (updated: FormationRecord[]) => {
+    setFormations(updated);
+    localStorage.setItem(`defib_${tenantId}_formations`, JSON.stringify(updated));
+    if (isFirebaseLoaded && tenantId) {
+      saveCollectionToFirestore('formations', updated);
+    }
+  };
+
+  const [stagiaires, setStagiaires] = useState<StagiaireRecord[]>([]);
+  const saveStagiaires = (updated: StagiaireRecord[]) => {
+    setStagiaires(updated);
+    localStorage.setItem(`defib_${tenantId}_stagiaires`, JSON.stringify(updated));
+    if (isFirebaseLoaded && tenantId) {
+      saveCollectionToFirestore('stagiaires', updated);
+    }
+  };
+
+  const [emargements, setEmargements] = useState<EmargementRecord[]>([]);
+  const saveEmargements = (updated: EmargementRecord[]) => {
+    setEmargements(updated);
+    localStorage.setItem(`defib_${tenantId}_emargements`, JSON.stringify(updated));
+    if (isFirebaseLoaded && tenantId) {
+      saveCollectionToFirestore('emargements', updated);
     }
   };
 
@@ -3571,6 +3604,18 @@ export default function App() {
         const baseVeilles = savedVeilles ? JSON.parse(savedVeilles) : (tenantId === 'demo' ? INITIAL_VEILLES : []);
         setVeilles(baseVeilles);
 
+        const savedFormations = localStorage.getItem(`defib_${tenantId}_formations`);
+        const baseFormations = savedFormations ? JSON.parse(savedFormations) : [];
+        setFormations(baseFormations);
+
+        const savedStagiaires = localStorage.getItem(`defib_${tenantId}_stagiaires`);
+        const baseStagiaires = savedStagiaires ? JSON.parse(savedStagiaires) : [];
+        setStagiaires(baseStagiaires);
+
+        const savedEmargements = localStorage.getItem(`defib_${tenantId}_emargements`);
+        const baseEmargements = savedEmargements ? JSON.parse(savedEmargements) : [];
+        setEmargements(baseEmargements);
+
         let cleanedNotifications: AppNotification[] = [];
         const savedNotifications = localStorage.getItem(`defib_${tenantId}_notifications`);
         if (savedNotifications) {
@@ -3608,7 +3653,10 @@ export default function App() {
           fsmTours: JSON.stringify(baseTours),
           memos: JSON.stringify(baseMemos),
           otherEquipments: JSON.stringify(baseOtherEquip),
-          achats_fournisseurs: JSON.stringify(baseAchats)
+          achats_fournisseurs: JSON.stringify(baseAchats),
+          formations: JSON.stringify(baseFormations),
+          stagiaires: JSON.stringify(baseStagiaires),
+          emargements: JSON.stringify(baseEmargements)
         };
 
         loadedTenantIdRef.current = tenantId;
@@ -3712,6 +3760,9 @@ export default function App() {
         syncBackground<PointageAutoVigilance[]>('pointagesAutoVigilance', 'pointages_auto_vigilance', setPointagesAutoVigilance);
         syncBackground<AchatFournisseur[]>('achats_fournisseurs', 'achats_fournisseurs', setAchatsFournisseurs);
         syncBackground<LogisticsNotification[]>('logistics_notifications', 'logistics_notifications', setLogisticsNotifications);
+        syncBackground<FormationRecord[]>('formations', 'formations', setFormations);
+        syncBackground<StagiaireRecord[]>('stagiaires', 'stagiaires', setStagiaires);
+        syncBackground<EmargementRecord[]>('emargements', 'emargements', setEmargements);
 
         syncBackground<AppNotification[]>('notifications', 'notifications', (notifs) => {
           const cleaned = notifs.filter(n => !isNotificationOlderThan3Months(n.timestamp));
@@ -5638,6 +5689,9 @@ export default function App() {
               { id: 'veilles', label: t('Relevé Concurrentiel'), icon: ClipboardList },
               { id: 'import-export', label: t('Importer Exporter'), icon: Download },
               { id: 'statistiques', label: t('Statistiques'), icon: TrendingUp },
+              { id: 'formations', label: t('Formations'), icon: Layers },
+              { id: 'stagiaires', label: t('Stagiaires'), icon: User },
+              { id: 'emargements', label: t('Émargements'), icon: ClipboardList },
             ];
 
             const filteredTabs = rawTabs.filter(tab => {
@@ -5671,6 +5725,7 @@ export default function App() {
             const stockGroupIds = ['stocks', 'stocks-distribues', 'achats-fournisseurs'];
             const crmGroupIds = ['crm', 'ged', 'satisfaction'];
             const newGroupIds = ['temps', 'localisations', 'tickets', 'veilles'];
+            const formationGroupIds = ['formations', 'stagiaires', 'emargements'];
 
             const renderButton = (tab: { id: string; label: string }) => (
               <button
@@ -5763,6 +5818,21 @@ export default function App() {
                     style={{ border: '1px solid #ffffff1a' }}
                   >
                     {newGroup.map(gt => renderButton(gt))}
+                  </div>
+                );
+              } else if (formationGroupIds.includes(tab.id)) {
+                const formationGroup: typeof rawTabs = [];
+                while (i < filteredTabs.length && formationGroupIds.includes(filteredTabs[i].id)) {
+                  formationGroup.push(filteredTabs[i]);
+                  i++;
+                }
+                elements.push(
+                  <div
+                    key="formation-group-container"
+                    className="p-2 space-y-2 rounded-2xl"
+                    style={{ border: '1px solid #ffffff1a' }}
+                  >
+                    {formationGroup.map(gt => renderButton(gt))}
                   </div>
                 );
               } else {
@@ -10744,6 +10814,34 @@ export default function App() {
               pointages={pointages}
               customerReviews={customerReviews}
               fsmTours={fsmTours}
+            />
+          )}
+
+          {activeTab === 'formations' && (
+            <FormationsTab
+              formations={formations}
+              saveFormations={saveFormations}
+              variables={variables}
+              members={members}
+              clients={clients}
+              setActiveTab={setActiveTab}
+            />
+          )}
+
+          {activeTab === 'stagiaires' && (
+            <StagiairesTab
+              stagiaires={stagiaires}
+              saveStagiaires={saveStagiaires}
+            />
+          )}
+
+          {activeTab === 'emargements' && (
+            <EmargementsTab
+              emargements={emargements}
+              saveEmargements={saveEmargements}
+              formations={formations}
+              stagiaires={stagiaires}
+              members={members}
             />
           )}
 

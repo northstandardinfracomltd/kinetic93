@@ -469,6 +469,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Drapeau post-intervention": "Post-intervention Flag",
     "Type Filtre Purificateur": "Purifier Filter Type",
     "Modèle Filtre Purificateur": "Purifier Filter Model",
+    "Formation": "Training",
     "Fournisseur": "Supplier",
     "Titre de la variable": "Variable Title",
     "Identifiant. (optionnel)": "Identifier. (optional)",

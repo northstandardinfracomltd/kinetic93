@@ -66,7 +66,7 @@ export interface Client {
   autresContrats?: ClientContract[];
 }
 
-export type VariableCategory = 'Modèle Défibrillateur' | 'Modèle Coffret' | 'Modèle Électrode' | 'Modèle Batterie' | 'Modèle Contrat' | 'Modèle Service' | 'Fournisseur' | 'Modèle Raison Prestation' | 'Drapeau GMAO' | 'Drapeau post-intervention' | 'Type Filtre Purificateur' | 'Modèle Filtre Purificateur';
+export type VariableCategory = 'Modèle Défibrillateur' | 'Modèle Coffret' | 'Modèle Électrode' | 'Modèle Batterie' | 'Modèle Contrat' | 'Modèle Service' | 'Fournisseur' | 'Modèle Raison Prestation' | 'Drapeau GMAO' | 'Drapeau post-intervention' | 'Type Filtre Purificateur' | 'Modèle Filtre Purificateur' | 'Formation';
 
 export interface Variable {
   id: string;
@@ -552,6 +552,57 @@ export interface LogisticsNotification {
   description: string;
   ugs: string;
   commentaire?: string;
+}
+
+export interface FormationRecord {
+  id: string;
+  intitule: string;
+  dateHeure: string;
+  formateurId: string;
+  statut: 'Brouillon' | 'Terminé';
+  commentaire: string;
+  clientId: string;
+  adresse: string;
+  ville: string;
+  codePostal: string;
+  region: string;
+  pays: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface StagiaireRecord {
+  id: string;
+  nomPrenom: string;
+  dateNaissance: string;
+  email: string;
+  telephone: string;
+  sexe: 'Homme' | 'Femme';
+  adresse: string;
+  ville: string;
+  codePostal: string;
+  region: string;
+  pays: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EmargementStagiaireItem {
+  id: string;
+  stagiaireId: string;
+  present: 'Oui' | 'Non';
+  signature?: string;
+  horodatage?: string;
+  validation?: 'Oui' | 'Non';
+}
+
+export interface EmargementRecord {
+  id: string;
+  formationId: string;
+  statut: 'Brouillon' | 'Terminé';
+  stagiaires: EmargementStagiaireItem[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 
