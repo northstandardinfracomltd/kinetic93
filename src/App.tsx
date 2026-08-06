@@ -4596,13 +4596,12 @@ export default function App() {
     window.open(url, '_blank');
   };
 
-  const handleTransformDoc = (doc: CommercialDoc, targetType: 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison' | 'Proforma') => {
+  const handleTransformDoc = (doc: CommercialDoc, targetType: 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison') => {
     const prefixMap: Record<string, string> = {
       'Devis': 'DEV',
       'Facture': 'FACT',
       'Bon de commande': 'BC',
-      'Bon de livraison': 'BL',
-      'Proforma': 'PRO'
+      'Bon de livraison': 'BL'
     };
     const prefix = prefixMap[targetType] || 'DOC';
     const year = '2026';
@@ -10458,21 +10457,30 @@ export default function App() {
                                          <select
                                            value=""
                                            onChange={(e) => {
-                                             const selectedType = e.target.value as 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison' | 'Proforma';
+                                             const selectedType = e.target.value as 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison';
                                              if (selectedType) {
                                                handleTransformDoc(doc, selectedType);
                                              }
                                            }}
-                                           style={rowActionButton18Style}
-                                           className="cursor-pointer font-sans bg-white text-black border rounded"
+                                           style={{
+                                             ...rowActionButton18Style,
+                                             appearance: 'none',
+                                             WebkitAppearance: 'none',
+                                             MozAppearance: 'none',
+                                             outline: 'none',
+                                             border: 'none',
+                                             textAlign: 'center',
+                                             textAlignLast: 'center',
+                                           }}
+                                           className="cursor-pointer font-sans"
                                          >
-                                           <option value="" disabled hidden>
+                                           <option value="" disabled hidden style={{ backgroundColor: '#000000', color: '#ffffff' }}>
                                              {t("Transformer")}
                                            </option>
-                                           {(['Devis', 'Facture', 'Bon de commande', 'Bon de livraison', 'Proforma'] as const)
+                                           {(['Devis', 'Facture', 'Bon de commande', 'Bon de livraison'] as const)
                                              .filter(tType => tType !== doc.type)
                                              .map(tType => (
-                                               <option key={tType} value={tType}>
+                                               <option key={tType} value={tType} style={{ backgroundColor: '#ffffff', color: '#000000' }}>
                                                  {tType}
                                                </option>
                                              ))
