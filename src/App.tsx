@@ -973,7 +973,6 @@ export default function App() {
   const [docPayeurId, setDocPayeurId] = useState('');
   const [docClientIdField, setDocClientIdField] = useState('');
   const [docUrlSource, setDocUrlSource] = useState('');
-  const [openTransformDocId, setOpenTransformDocId] = useState<string | null>(null);
 
   const [selectedDocPieceId, setSelectedDocPieceId] = useState('');
   const [customDocPiecePrice, setCustomDocPiecePrice] = useState(0);
@@ -4597,7 +4596,7 @@ export default function App() {
     window.open(url, '_blank');
   };
 
-  const handleTransformDoc = (doc: CommercialDoc, targetType: 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison') => {
+  const handleTransformDoc = (doc: CommercialDoc, targetType: 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison' | 'Proforma') => {
     const prefixMap: Record<string, string> = {
       'Devis': 'DEV',
       'Facture': 'FACT',
@@ -10456,52 +10455,29 @@ export default function App() {
                                         >
                                           {t("Télécharger")}
                                         </button>
-                                        <div className="relative inline-block text-left">
-                                          <button
-                                            type="button"
-                                            onClick={() => setOpenTransformDocId(openTransformDocId === doc.id ? null : doc.id)}
-                                            style={rowActionButton18Style}
-                                            className="cursor-pointer font-sans inline-flex items-center gap-1"
-                                          >
-                                            <span>{t("Transformer")}</span>
-                                            <svg className="w-3.5 h-3.5 fill-current opacity-70" viewBox="0 0 20 20">
-                                              <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                                            </svg>
-                                          </button>
-
-                                          {openTransformDocId === doc.id && (
-                                            <>
-                                              <div 
-                                                className="fixed inset-0 z-40 bg-transparent" 
-                                                onClick={() => setOpenTransformDocId(null)}
-                                              />
-                                              <div 
-                                                className="absolute right-0 mt-1 w-48 rounded-xl bg-white shadow-xl border border-slate-200 z-50 py-1.5 animate-fadeIn font-sans text-left"
-                                                onClick={(e) => e.stopPropagation()}
-                                              >
-                                                <div className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                                                  Générer :
-                                                </div>
-                                                {(['Devis', 'Facture', 'Bon de commande', 'Bon de livraison'] as const)
-                                                  .filter(tType => tType !== doc.type)
-                                                  .map(tType => (
-                                                    <button
-                                                      key={tType}
-                                                      type="button"
-                                                      onClick={() => {
-                                                        setOpenTransformDocId(null);
-                                                        handleTransformDoc(doc, tType);
-                                                      }}
-                                                      className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-[#ffecf8] hover:text-[#fa53d5] transition-colors cursor-pointer"
-                                                    >
-                                                      {tType}
-                                                    </button>
-                                                  ))
-                                                }
-                                              </div>
-                                            </>
-                                          )}
-                                        </div>
+                                         <select
+                                           value=""
+                                           onChange={(e) => {
+                                             const selectedType = e.target.value as 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison' | 'Proforma';
+                                             if (selectedType) {
+                                               handleTransformDoc(doc, selectedType);
+                                             }
+                                           }}
+                                           style={rowActionButton18Style}
+                                           className="cursor-pointer font-sans bg-white text-black border rounded"
+                                         >
+                                           <option value="" disabled hidden>
+                                             {t("Transformer")}
+                                           </option>
+                                           {(['Devis', 'Facture', 'Bon de commande', 'Bon de livraison', 'Proforma'] as const)
+                                             .filter(tType => tType !== doc.type)
+                                             .map(tType => (
+                                               <option key={tType} value={tType}>
+                                                 {tType}
+                                               </option>
+                                             ))
+                                           }
+                                         </select>
                                         <button
                                           type="button"
                                           onClick={() => startEditDoc(doc)}
