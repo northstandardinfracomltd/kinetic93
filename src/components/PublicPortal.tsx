@@ -4780,24 +4780,11 @@ export default function PublicPortal({
             {companyInfo?.nomLogiciel || "Défibeo"}
           </span>
 
-          {/* Bottom Swipe text & indicator */}
+          {/* Bottom Swipe text */}
           <div className="flex flex-col items-center justify-center gap-2 px-4">
-            <svg
-              className="w-6 h-6 text-white/80 animate-bounce"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M5 15l7-7 7 7"
-              />
-            </svg>
             <span
-              className="text-white/90 font-medium tracking-wide"
-              style={{ fontSize: "14px" }}
+              className="font-medium tracking-normal animate-text-wave"
+              style={{ fontSize: "14px", color: "#ffffff", letterSpacing: "0px" }}
             >
               Glissez vers le haut pour ouvrir.
             </span>
@@ -6804,28 +6791,10 @@ export default function PublicPortal({
             {/* OVERLAY FOR EMARGEMENT FORM */}
             {isEmargementOverlayOpen && (
               <div
-                className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn"
+                className="fixed inset-0 bg-white z-50 w-full h-full overflow-y-auto animate-fadeIn"
                 id="emargement-form-overlay-modal"
-                onClick={() => setIsEmargementOverlayOpen(false)}
               >
-                <div
-                  className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 text-black relative space-y-4"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 font-sans">
-                      <span className="w-3 h-3 rounded-full bg-[#fe4eba]" />
-                      Émargement Formation
-                    </h2>
-                    <button
-                      type="button"
-                      onClick={() => setIsEmargementOverlayOpen(false)}
-                      className="text-gray-500 hover:text-black p-1 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                    >
-                      <X className="w-6 h-6" />
-                    </button>
-                  </div>
-
+                <div className="w-full h-full p-4 sm:p-6 text-black bg-white">
                   <EmargementsTab
                     emargements={emargements || []}
                     saveEmargements={onUpdateEmargements || (() => {})}
@@ -7694,7 +7663,7 @@ export default function PublicPortal({
                                             backgroundColor: isFormationMission
                                               ? (isCompleted || !matchedEmargement
                                                 ? "#e2e8f0"
-                                                : "rgb(254, 78, 186)")
+                                                : "rgb(96, 28, 104)")
                                               : (isCompleted
                                                 ? "#e2e8f0"
                                                 : "rgb(53, 86, 236)"),
@@ -7713,7 +7682,7 @@ export default function PublicPortal({
                                             boxShadow: isFormationMission
                                               ? (isCompleted || !matchedEmargement
                                                 ? "none"
-                                                : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(254, 78, 186) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset")
+                                                : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset")
                                               : (isCompleted
                                                 ? "none"
                                                 : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset"),

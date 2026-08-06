@@ -194,12 +194,28 @@ export default function EmargementsTab({
   <meta charset="utf-8" />
   <title>Certificat de Formation - ${stagiaireName}</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    @font-face {
+      font-family: "Civilprom";
+      src: url("https://civilprom.s3.eu-north-1.amazonaws.com/Civilprom1.otf") format("opentype");
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "DefibeoMain";
+      src: url("https://civilprom.s3.eu-north-1.amazonaws.com/Civilprom1.otf") format("opentype");
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
     @page {
       size: A4 landscape;
       margin: 0;
     }
     * {
       box-sizing: border-box;
+      font-family: "Civilprom", "DefibeoMain", sans-serif !important;
     }
     html, body {
       margin: 0;
@@ -207,7 +223,7 @@ export default function EmargementsTab({
       width: 100vw;
       height: 100vh;
       background-color: #ffffff;
-      font-family: "DefibeoMain", "Civilprom", system-ui, -apple-system, sans-serif;
+      font-family: "Civilprom", "DefibeoMain", sans-serif !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -220,15 +236,14 @@ export default function EmargementsTab({
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
-      font-family: "DefibeoMain", "Civilprom", system-ui, -apple-system, sans-serif;
+      font-family: "Civilprom", "DefibeoMain", sans-serif !important;
     }
     .corniche-border {
       flex: 1;
       width: 100%;
       height: 100%;
-      border: 10px solid #65216D;
-      outline: 3px solid #FD4EBB;
-      outline-offset: -12px;
+      border: 3px solid #FD4EBB;
+      border-radius: 12px;
       padding: 24px 36px;
       display: flex;
       flex-direction: column;
@@ -252,21 +267,14 @@ export default function EmargementsTab({
       font-weight: 800;
       color: #65216D;
       letter-spacing: 0.5px;
-      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
-    }
-    .company-sub {
-      font-size: 12px;
-      color: #000000;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
+      font-family: "Civilprom", "DefibeoMain", sans-serif !important;
     }
     .cert-heading {
       text-align: center;
       margin: 6px 0;
     }
     .cert-title {
-      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
+      font-family: "Civilprom", "DefibeoMain", sans-serif !important;
       font-size: 32px;
       font-weight: 700;
       color: #65216D;
@@ -278,7 +286,7 @@ export default function EmargementsTab({
       font-size: 14px;
       color: #000000;
       margin-top: 4px;
-      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
+      font-family: "Civilprom", "DefibeoMain", sans-serif !important;
     }
     .cert-body {
       text-align: center;
@@ -287,10 +295,10 @@ export default function EmargementsTab({
     .cert-intro {
       font-size: 15px;
       color: #000000;
-      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
+      font-family: "Civilprom", "DefibeoMain", sans-serif !important;
     }
     .stagiaire-name {
-      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
+      font-family: "Civilprom", "DefibeoMain", sans-serif !important;
       font-size: 28px;
       font-weight: 700;
       color: #0362FF;
@@ -298,34 +306,27 @@ export default function EmargementsTab({
       padding: 4px 24px;
       margin: 8px 0;
     }
-    .formation-banner {
-      background: #ffffff;
-      border: 2px solid #0362FF;
-      border-radius: 13px;
-      padding: 12px 20px;
-      margin: 8px auto;
-      max-width: 92%;
-      text-align: center;
-    }
     .formation-title {
-      font-size: 20px;
+      font-family: "Civilprom", "DefibeoMain", sans-serif !important;
+      font-size: 28px;
       font-weight: 700;
-      color: #65216D;
-      margin: 0;
-      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
+      color: #0362FF;
+      display: inline-block;
+      padding: 4px 24px;
+      margin: 8px 0;
     }
     .info-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px 28px;
       background: #ffffff;
-      border: 2px solid #65216D;
+      border: 1.5px solid #e2e8f0;
       border-radius: 13px;
       padding: 12px 20px;
       font-size: 14px;
       color: #000000;
       margin: 6px 0;
-      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
+      font-family: "Civilprom", "DefibeoMain", sans-serif !important;
     }
     .info-item {
       display: flex;
@@ -334,7 +335,7 @@ export default function EmargementsTab({
     }
     .info-label {
       font-weight: 700;
-      color: #65216D;
+      color: #000000;
       min-width: 160px;
     }
     .signatures-container {
@@ -345,7 +346,7 @@ export default function EmargementsTab({
     }
     .signature-card {
       flex: 1;
-      border: 2px solid #65216D;
+      border: 1.5px solid #e2e8f0;
       border-radius: 13px;
       padding: 10px 14px;
       background: #ffffff;
@@ -353,14 +354,14 @@ export default function EmargementsTab({
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
+      font-family: "Civilprom", "DefibeoMain", sans-serif !important;
     }
     .sig-title {
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 700;
       color: #65216D;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      text-transform: none;
+      letter-spacing: 0px;
     }
     .sig-body {
       flex: 1;
@@ -396,10 +397,6 @@ export default function EmargementsTab({
         <div>
           ${logoUrl ? `<img src="${logoUrl}" class="logo-img" alt="Logo" />` : `<div class="company-title">${companyName}</div>`}
         </div>
-        <div style="text-align: right;">
-          <div class="company-title" style="font-size: 16px;">${companyName}</div>
-          <div class="company-sub">Organisme de Formation</div>
-        </div>
       </div>
 
       <!-- TITLE -->
@@ -412,11 +409,7 @@ export default function EmargementsTab({
       <div class="cert-body">
         <div class="cert-intro">Ce certificat est attribué à :</div>
         <div class="stagiaire-name">${stagiaireName}</div>
-        <div class="cert-intro">pour avoir suivi et validé avec succès la formation :</div>
-      </div>
-
-      <!-- FORMATION TITLE -->
-      <div class="formation-banner">
+        <div class="cert-intro" style="margin-top: 6px;">pour avoir suivi et validé avec succès la formation :</div>
         <div class="formation-title">${formationTitle}</div>
       </div>
 
@@ -531,7 +524,7 @@ export default function EmargementsTab({
       validation: 'Non',
     };
 
-    setStagiairesItems([...stagiairesItems, newItem]);
+    setStagiairesItems([newItem, ...stagiairesItems]);
   };
 
   const handleRemoveStagiaireItem = (id: string) => {
