@@ -7637,9 +7637,15 @@ export default function PublicPortal({
 
                                         <button
                                           type="button"
-                                          disabled={isCompleted || isFormationMission}
+                                          disabled={isFormationMission ? (isCompleted || !matchedEmargement) : isCompleted}
                                           onClick={() => {
-                                            if (isFormationMission) return;
+                                            if (isFormationMission) {
+                                              if (matchedEmargement) {
+                                                setEmargementModalRecordId(matchedEmargement.id);
+                                                setIsEmargementOverlayOpen(true);
+                                              }
+                                              return;
+                                            }
                                             const matchedOther =
                                               otherEquipments?.find(
                                                 (o) =>
@@ -7685,32 +7691,50 @@ export default function PublicPortal({
                                             }
                                           }}
                                           style={{
-                                            backgroundColor: (isCompleted || isFormationMission)
-                                              ? "#e2e8f0"
-                                              : "rgb(53, 86, 236)",
-                                            color: (isCompleted || isFormationMission)
-                                              ? "#94a3b8"
-                                              : "#fff",
+                                            backgroundColor: isFormationMission
+                                              ? (isCompleted || !matchedEmargement
+                                                ? "#e2e8f0"
+                                                : "rgb(254, 78, 186)")
+                                              : (isCompleted
+                                                ? "#e2e8f0"
+                                                : "rgb(53, 86, 236)"),
+                                            color: isFormationMission
+                                              ? (isCompleted || !matchedEmargement
+                                                ? "#94a3b8"
+                                                : "#fff")
+                                              : (isCompleted
+                                                ? "#94a3b8"
+                                                : "#fff"),
                                             fontSize: "18px",
                                             fontWeight: "bold",
                                             borderRadius: "12px",
                                             padding: "11px 20px",
                                             border: "none",
-                                            boxShadow: (isCompleted || isFormationMission)
-                                              ? "none"
-                                              : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                                            cursor: (isCompleted || isFormationMission)
-                                              ? "not-allowed"
-                                              : "pointer",
+                                            boxShadow: isFormationMission
+                                              ? (isCompleted || !matchedEmargement
+                                                ? "none"
+                                                : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(254, 78, 186) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset")
+                                              : (isCompleted
+                                                ? "none"
+                                                : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset"),
+                                            cursor: isFormationMission
+                                              ? (isCompleted || !matchedEmargement
+                                                ? "not-allowed"
+                                                : "pointer")
+                                              : (isCompleted
+                                                ? "not-allowed"
+                                                : "pointer"),
                                             flex: 1,
                                           }}
                                           className={
-                                            (isCompleted || isFormationMission)
+                                            (isFormationMission
+                                              ? (isCompleted || !matchedEmargement)
+                                              : isCompleted)
                                               ? "opacity-60 transition-all font-bold"
                                               : "hover:opacity-90 active:scale-[0.99] transition-all font-bold"
                                           }
                                         >
-                                          Rapport
+                                          {isFormationMission ? "Émargement" : "Rapport"}
                                         </button>
                                       </div>
 
