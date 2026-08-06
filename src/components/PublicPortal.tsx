@@ -219,6 +219,7 @@ interface PublicPortalProps {
   onUpdateFsmTours?: (updated: any[]) => void;
   otherEquipments?: any[];
   onUpdateOtherEquipments?: (updated: any[]) => void;
+  formations?: any[];
   generatedReports?: GeneratedReport[];
   onUpdateGeneratedReports?: (updated: GeneratedReport[]) => void;
   pointages?: PointageLog[];
@@ -280,6 +281,7 @@ export default function PublicPortal({
   onUpdateFsmTours,
   otherEquipments = [],
   onUpdateOtherEquipments,
+  formations = [],
   generatedReports: propGeneratedReports,
   onUpdateGeneratedReports,
   pointages: propPointages,
@@ -1354,8 +1356,27 @@ export default function PublicPortal({
                       address = addrParts.join(", ");
                     }
                   } else {
-                    if (m.clientName && m.clientName !== "Représentant Standard" && m.clientName !== "Représentant standard") {
-                      address = m.clientName;
+                    const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                    if (fmt) {
+                      const fmtAddrParts = [fmt.adresse, fmt.codePostal, fmt.ville].filter(Boolean);
+                      if (fmtAddrParts.length > 0) {
+                        address = fmtAddrParts.join(", ");
+                      }
+                    }
+                    if (!address && m.address && m.address !== "Non renseigné" && m.address !== m.clientName) {
+                      address = m.address;
+                    }
+                    if (!address && m.location && m.location !== "Non renseigné") {
+                      address = m.location;
+                    }
+                    if (!address && (m.clientId || fmt?.clientId)) {
+                      const clientObj = clients?.find((c: any) => c.id === (m.clientId || fmt?.clientId));
+                      if (clientObj) {
+                        const clientAddrParts = [clientObj.adresse, clientObj.codePostal, clientObj.ville].filter(Boolean);
+                        if (clientAddrParts.length > 0) {
+                          address = clientAddrParts.join(", ");
+                        }
+                      }
                     }
                   }
                   const calculatedDate = (() => {
@@ -1384,6 +1405,11 @@ export default function PublicPortal({
                     rejectionReason: m.rejectionReason || "",
                     rejectedAt: m.rejectedAt || "",
                     interventionReference: m.interventionReference || "",
+                    clientId: m.clientId,
+                    clientName: m.clientName,
+                    formationId: m.formationId,
+                    bonCommandeId: m.bonCommandeId,
+                    customBonCommande: m.customBonCommande,
                   };
                 }),
               };
@@ -1730,8 +1756,27 @@ export default function PublicPortal({
                   address = addrParts.join(", ");
                 }
               } else {
-                if (m.clientName && m.clientName !== "Représentant Standard" && m.clientName !== "Représentant standard") {
-                  address = m.clientName;
+                const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                if (fmt) {
+                  const fmtAddrParts = [fmt.adresse, fmt.codePostal, fmt.ville].filter(Boolean);
+                  if (fmtAddrParts.length > 0) {
+                    address = fmtAddrParts.join(", ");
+                  }
+                }
+                if (!address && m.address && m.address !== "Non renseigné" && m.address !== m.clientName) {
+                  address = m.address;
+                }
+                if (!address && m.location && m.location !== "Non renseigné") {
+                  address = m.location;
+                }
+                if (!address && (m.clientId || fmt?.clientId)) {
+                  const clientObj = clients?.find((c: any) => c.id === (m.clientId || fmt?.clientId));
+                  if (clientObj) {
+                    const clientAddrParts = [clientObj.adresse, clientObj.codePostal, clientObj.ville].filter(Boolean);
+                    if (clientAddrParts.length > 0) {
+                      address = clientAddrParts.join(", ");
+                    }
+                  }
                 }
               }
               const calculatedDate = (() => {
@@ -1760,6 +1805,11 @@ export default function PublicPortal({
                 rejectionReason: m.rejectionReason || "",
                 rejectedAt: m.rejectedAt || "",
                 interventionReference: m.interventionReference || "",
+                clientId: m.clientId,
+                clientName: m.clientName,
+                formationId: m.formationId,
+                bonCommandeId: m.bonCommandeId,
+                customBonCommande: m.customBonCommande,
               };
             }),
           };
@@ -7108,6 +7158,8 @@ export default function PublicPortal({
                               >
                                 {t.passages.filter((p: any) => p.status !== "Attente").map((p) => {
                                   const isCompleted = p.status === "Effectué";
+                                  const isFormationMission = p.equipmentType === 'Formation' || p.equipmentType?.toLowerCase().includes('formation') || !!p.formationId;
+                                  const matchedFmt = isFormationMission ? formations?.find((f: any) => f.id === p.formationId || f.id === p.identifiant) : null;
                                   const matchedOther = otherEquipments?.find(
                                     (o: any) =>
                                       o.identifiant === p.identifiant ||
@@ -7203,7 +7255,7 @@ export default function PublicPortal({
                                               display: "inline-block",
                                             }}
                                           >
-                                            {(p.equipmentType === 'Formation' || p.equipmentType?.toLowerCase().includes('formation') || !!p.formationId) ? "Formation" : p.identifiant}
+                                            {isFormationMission ? "Formation" : p.identifiant}
                                           </span>
                                         </div>
 
@@ -7218,18 +7270,20 @@ export default function PublicPortal({
                                           }}
                                         >
                                           {/* Site */}
-                                          <p style={{ color: "#000000" }}>
-                                            Site :{" "}
-                                            <span
-                                              className="font-semibold"
-                                              style={{ color: "#000000" }}
-                                            >
-                                              {(() => {
-                                                const siteVal = matchedDefib ? (matchedDefib.nomSite || "") : (matchedOther ? (matchedOther.nomPrenomSite || "") : "");
-                                                return siteVal === "Représentant Standard" || siteVal === "Représentant standard" || siteVal === "Non renseigné" ? "" : siteVal;
-                                              })()}
-                                            </span>
-                                          </p>
+                                          {!isFormationMission && (
+                                            <p style={{ color: "#000000" }}>
+                                              Site :{" "}
+                                              <span
+                                                className="font-semibold"
+                                                style={{ color: "#000000" }}
+                                              >
+                                                {(() => {
+                                                  const siteVal = matchedDefib ? (matchedDefib.nomSite || "") : (matchedOther ? (matchedOther.nomPrenomSite || "") : "");
+                                                  return siteVal === "Représentant Standard" || siteVal === "Représentant standard" || siteVal === "Non renseigné" ? "" : siteVal;
+                                                })()}
+                                              </span>
+                                            </p>
+                                          )}
 
                                           {/* Client */}
                                           <p style={{ color: "#000000" }}>
@@ -7239,41 +7293,68 @@ export default function PublicPortal({
                                               style={{ color: "#000000" }}
                                             >
                                               {(() => {
-                                                const clientObj = clients?.find(c => c.id === (matchedDefib?.clientId || matchedOther?.clientId));
+                                                const clientObj = clients?.find(c => 
+                                                  c.id === p.clientId || 
+                                                  c.id === matchedDefib?.clientId || 
+                                                  c.id === matchedOther?.clientId ||
+                                                  (matchedFmt && c.id === matchedFmt.clientId)
+                                                );
                                                 const clientVal = clientObj ? clientObj.denomination : (p.clientName || "");
                                                 return clientVal === "Représentant Standard" || clientVal === "Représentant standard" || clientVal === "Non renseigné" ? "" : clientVal;
                                               })()}
                                             </span>
                                           </p>
 
-                                          <p style={{ color: "#000000" }}>
-                                            Matériel :{" "}
-                                            <span
-                                              className="font-semibold"
-                                              style={{ color: "#000000" }}
-                                            >
-                                              {p.equipmentType ||
-                                                "Défibrillateur"}
-                                            </span>
-                                          </p>
-                                          <p style={{ color: "#000000" }}>
-                                            Modèle :{" "}
-                                            <span
-                                              className="font-semibold"
-                                              style={{ color: "#000000" }}
-                                            >
-                                              {p.model}
-                                            </span>
-                                          </p>
+                                          {/* Matériel */}
+                                          {!isFormationMission && (
+                                            <p style={{ color: "#000000" }}>
+                                              Matériel :{" "}
+                                              <span
+                                                className="font-semibold"
+                                                style={{ color: "#000000" }}
+                                              >
+                                                {p.equipmentType ||
+                                                  "Défibrillateur"}
+                                              </span>
+                                            </p>
+                                          )}
+
+                                          {/* Modèle */}
+                                          {!isFormationMission && (
+                                            <p style={{ color: "#000000" }}>
+                                              Modèle :{" "}
+                                              <span
+                                                className="font-semibold"
+                                                style={{ color: "#000000" }}
+                                              >
+                                                {p.model}
+                                              </span>
+                                            </p>
+                                          )}
+
+                                          {/* Localisation */}
                                           <p style={{ color: "#000000" }}>
                                             Localisation :{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "#000000" }}
                                             >
-                                              {p.address && p.address !== "Non renseigné" ? p.address : ""}
+                                              {(() => {
+                                                if (p.address && p.address !== "Non renseigné" && p.address !== p.clientName) return p.address;
+                                                if (matchedFmt) {
+                                                  const addrParts = [matchedFmt.adresse, matchedFmt.codePostal, matchedFmt.ville].filter(Boolean);
+                                                  if (addrParts.length > 0) return addrParts.join(", ");
+                                                }
+                                                const clientObj = clients?.find(c => c.id === (p.clientId || matchedFmt?.clientId));
+                                                if (clientObj) {
+                                                  const cParts = [clientObj.adresse, clientObj.codePostal, clientObj.ville].filter(Boolean);
+                                                  if (cParts.length > 0) return cParts.join(", ");
+                                                }
+                                                return "";
+                                              })()}
                                             </span>
                                           </p>
+
                                           <p style={{ color: "#000000" }}>
                                             Téléphone :{" "}
                                             {equipmentPhone && equipmentPhone !== "Non renseigné" ? (
@@ -7332,28 +7413,30 @@ export default function PublicPortal({
                                           </p>
 
                                           {/* Coordonnées GPS */}
-                                          <p style={{ color: "#000000" }}>
-                                            Coordonnées GPS :{" "}
-                                            {(() => {
-                                              const lat = matchedDefib?.latitude || matchedOther?.latitude || "";
-                                              const lng = matchedDefib?.longitude || matchedOther?.longitude || "";
-                                              if (lat && lng) {
-                                                const gpsStr = `${lat}, ${lng}`;
-                                                const isCopied = copiedGps === gpsStr;
-                                                return (
-                                                  <span
-                                                    onClick={() => handleCopyGps(gpsStr)}
-                                                    className="font-semibold underline cursor-pointer hover:opacity-80 transition-all"
-                                                    style={{ color: "#fe4eba" }}
-                                                    title="Cliquez pour copier"
-                                                  >
-                                                    {gpsStr}
-                                                  </span>
-                                                );
-                                              }
-                                              return "";
-                                            })()}
-                                          </p>
+                                          {!isFormationMission && (
+                                            <p style={{ color: "#000000" }}>
+                                              Coordonnées GPS :{" "}
+                                              {(() => {
+                                                const lat = matchedDefib?.latitude || matchedOther?.latitude || "";
+                                                const lng = matchedDefib?.longitude || matchedOther?.longitude || "";
+                                                if (lat && lng) {
+                                                  const gpsStr = `${lat}, ${lng}`;
+                                                  const isCopied = copiedGps === gpsStr;
+                                                  return (
+                                                    <span
+                                                      onClick={() => handleCopyGps(gpsStr)}
+                                                      className="font-semibold underline cursor-pointer hover:opacity-80 transition-all"
+                                                      style={{ color: "#fe4eba" }}
+                                                      title="Cliquez pour copier"
+                                                    >
+                                                      {gpsStr}
+                                                    </span>
+                                                  );
+                                                }
+                                                return "";
+                                              })()}
+                                            </p>
+                                          )}
 
                                           {p.estimatedDate && (
                                             <p style={{ color: "#000000" }}>
@@ -7390,26 +7473,30 @@ export default function PublicPortal({
                                               {p.estimatedSlot && p.estimatedSlot !== "Non renseigné" && p.estimatedSlot !== "--" ? p.estimatedSlot : ""}
                                             </span>
                                           </p>
-                                          <p style={{ color: "#000000" }}>
-                                            Pièce(s) requise(s) :{" "}
-                                            <span
-                                              className="font-semibold"
-                                              style={{ color: "#000000" }}
-                                            >
-                                              {(() => {
-                                                if (!p.requiredParts || p.requiredParts.length === 0) return "";
-                                                const cleanParts = p.requiredParts.filter(
-                                                  (part: any) =>
-                                                    part &&
-                                                    part.trim() !== "Aucune pièce" &&
-                                                    part.trim() !== "Aucune pièce requise" &&
-                                                    part.trim() !== "Aucune" &&
-                                                    part.trim() !== ""
-                                                );
-                                                return cleanParts.join(", ");
-                                              })()}
-                                            </span>
-                                          </p>
+                                          
+                                          {/* Pièce(s) requise(s) */}
+                                          {!isFormationMission && (
+                                            <p style={{ color: "#000000" }}>
+                                              Pièce(s) requise(s) :{" "}
+                                              <span
+                                                className="font-semibold"
+                                                style={{ color: "#000000" }}
+                                              >
+                                                {(() => {
+                                                  if (!p.requiredParts || p.requiredParts.length === 0) return "";
+                                                  const cleanParts = p.requiredParts.filter(
+                                                    (part: any) =>
+                                                      part &&
+                                                      part.trim() !== "Aucune pièce" &&
+                                                      part.trim() !== "Aucune pièce requise" &&
+                                                      part.trim() !== "Aucune" &&
+                                                      part.trim() !== ""
+                                                  );
+                                                  return cleanParts.join(", ");
+                                                })()}
+                                              </span>
+                                            </p>
+                                          )}
                                         </div>
                                       </div>
 
@@ -7449,8 +7536,9 @@ export default function PublicPortal({
 
                                         <button
                                           type="button"
-                                          disabled={isCompleted}
+                                          disabled={isCompleted || isFormationMission}
                                           onClick={() => {
+                                            if (isFormationMission) return;
                                             const matchedOther =
                                               otherEquipments?.find(
                                                 (o) =>
@@ -7496,10 +7584,10 @@ export default function PublicPortal({
                                             }
                                           }}
                                           style={{
-                                            backgroundColor: isCompleted
+                                            backgroundColor: (isCompleted || isFormationMission)
                                               ? "#e2e8f0"
                                               : "rgb(53, 86, 236)",
-                                            color: isCompleted
+                                            color: (isCompleted || isFormationMission)
                                               ? "#94a3b8"
                                               : "#fff",
                                             fontSize: "18px",
@@ -7507,16 +7595,16 @@ export default function PublicPortal({
                                             borderRadius: "12px",
                                             padding: "11px 20px",
                                             border: "none",
-                                            boxShadow: isCompleted
+                                            boxShadow: (isCompleted || isFormationMission)
                                               ? "none"
                                               : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                                            cursor: isCompleted
+                                            cursor: (isCompleted || isFormationMission)
                                               ? "not-allowed"
                                               : "pointer",
                                             flex: 1,
                                           }}
                                           className={
-                                            isCompleted
+                                            (isCompleted || isFormationMission)
                                               ? "opacity-60 transition-all font-bold"
                                               : "hover:opacity-90 active:scale-[0.99] transition-all font-bold"
                                           }

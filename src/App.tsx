@@ -1437,11 +1437,40 @@ export default function App() {
       });
     });
 
+    const isFormationMission = (m: any) => {
+      if (!m) return false;
+      return (
+        m.equipmentType === 'Formation' ||
+        m.equipmentType?.toLowerCase()?.includes('formation') ||
+        !!m.formationId ||
+        m.reason?.toLowerCase()?.includes('formation') ||
+        m.defibIdentifiant === 'Formation'
+      );
+    };
+
     // 3. Synchronize generatedReports array
     let reportsChanged = false;
     
-    // Filter out orphaned pending upcoming reports whose mission no longer exists in any tour
+    // Filter out Formation mission reports and orphaned pending upcoming reports
     let updatedReports = generatedReports.filter((rep) => {
+      const matchedMissionObj = 
+        (rep.missionId && activeMissionsMap.get(rep.missionId)?.mission) ||
+        (rep.interventionReference && activeMissionsMap.get(rep.interventionReference)?.mission);
+
+      const isFormation = 
+        rep.equipmentType === 'Formation' ||
+        rep.equipmentType?.toLowerCase()?.includes('formation') ||
+        rep.defibSnapshot?.categorie === 'Formation' ||
+        rep.defibSnapshot?.categorie?.toLowerCase()?.includes('formation') ||
+        !!rep.formationId ||
+        rep.defibIdentifiant === 'Formation' ||
+        (matchedMissionObj && isFormationMission(matchedMissionObj));
+
+      if (isFormation) {
+        reportsChanged = true;
+        return false; // Do NOT create or keep record/report in RAPPORT PDF for Formation missions
+      }
+
       const isUpcoming = rep.isUpcoming || rep.status === 'À venir';
       if (isUpcoming) {
         const existsInTours = 
@@ -1455,9 +1484,11 @@ export default function App() {
       return true;
     });
 
-    // Ensure each active mission has an associated report (either real or pending)
+    // Ensure each active NON-FORMATION mission has an associated report (either real or pending)
     verifiedTours.forEach((tour) => {
       (tour.missions || []).forEach((m: any) => {
+        if (isFormationMission(m)) return; // DO NOT create report line for Formation missions
+
         const existingReportIndex = updatedReports.findIndex(r => 
           (m.id && r.missionId === m.id) || 
           (m.interventionReference && r.interventionReference === m.interventionReference)
@@ -1810,6 +1841,45 @@ export default function App() {
       }
       return t;
     });
+    saveFsmTours(updatedTours);
+  };
+
+  const moveFsmMissionToATrier = (tourId: string, missionId: string) => {
+    const sourceTour = fsmTours.find(t => t.id === tourId);
+    if (!sourceTour) return;
+    const missionToMove = sourceTour.missions?.find((m: any) => m.id === missionId);
+    if (!missionToMove) return;
+
+    let aTrierExists = false;
+    let updatedTours = fsmTours.map(tour => {
+      if (tour.id === 'a-trier') {
+        aTrierExists = true;
+        const exists = (tour.missions || []).some((m: any) => m.id === missionId);
+        return {
+          ...tour,
+          missions: exists ? tour.missions : [...(tour.missions || []), missionToMove]
+        };
+      }
+      if (tour.id === tourId) {
+        return {
+          ...tour,
+          missions: (tour.missions || []).filter((m: any) => m.id !== missionId),
+          calculated: false
+        };
+      }
+      return tour;
+    });
+
+    if (!aTrierExists) {
+      updatedTours.push({
+        id: 'a-trier',
+        title: 'Missions à trier',
+        startDate: 'A trier',
+        status: 'Brouillon',
+        missions: [missionToMove]
+      });
+    }
+
     saveFsmTours(updatedTours);
   };
 
@@ -5393,6 +5463,7 @@ export default function App() {
         onUpdateFsmTours={saveFsmTours}
         otherEquipments={otherEquipments}
         onUpdateOtherEquipments={saveOtherEquipments}
+        formations={formations}
         generatedReports={generatedReports}
         onUpdateGeneratedReports={saveReports}
         pointages={pointages}
@@ -5510,6 +5581,7 @@ export default function App() {
         onUpdateFsmTours={saveFsmTours}
         otherEquipments={otherEquipments}
         onUpdateOtherEquipments={saveOtherEquipments}
+        formations={formations}
         generatedReports={generatedReports}
         onUpdateGeneratedReports={saveReports}
         pointages={pointages}
@@ -7716,26 +7788,24 @@ export default function App() {
                                           />
                                         </div>
 
-                                        {/* Référence intervention. - EXCLUDE FOR FORMATION */}
-                                        {!isFormationMission && (
-                                          <div className="space-y-0.5 bg-transparent">
-                                            <label className="block mb-1 fsm-label-style">Référence intervention.</label>
-                                            <input
-                                              type="text"
-                                              value={(() => {
-                                                if (m.interventionReference) return m.interventionReference;
-                                                const matchedReport = generatedReports.find((r: any) => 
-                                                  (r.missionId && r.missionId === m.id) || 
-                                                  (r.defibIdentifiant && r.defibIdentifiant === m.defibIdentifiant)
-                                                );
-                                                return matchedReport?.interventionReference || "";
-                                              })()}
-                                              disabled={true}
-                                              className="w-full font-sans cursor-not-allowed"
-                                              placeholder="Non renseignée"
-                                            />
-                                          </div>
-                                        )}
+                                        {/* Référence intervention. */}
+                                        <div className="space-y-0.5 bg-transparent">
+                                          <label className="block mb-1 fsm-label-style">Référence intervention.</label>
+                                          <input
+                                            type="text"
+                                            value={(() => {
+                                              if (m.interventionReference) return m.interventionReference;
+                                              const matchedReport = generatedReports.find((r: any) => 
+                                                (r.missionId && r.missionId === m.id) || 
+                                                (r.defibIdentifiant && r.defibIdentifiant === m.defibIdentifiant)
+                                              );
+                                              return matchedReport?.interventionReference || "";
+                                            })()}
+                                            disabled={true}
+                                            className="w-full font-sans cursor-not-allowed"
+                                            placeholder="Non renseignée"
+                                          />
+                                        </div>
 
                                         {/* Bon de commande. */}
                                         <div className="space-y-0.5 bg-transparent">
@@ -8371,8 +8441,8 @@ export default function App() {
                                     );
                                   })()}
 
-                                  {/* Bottom row: Situation, Soumettre au client & Supprimer (33% / 33% / 33%) */}
-                                  <div className="pt-2 grid grid-cols-1 md:grid-cols-3 gap-3 w-full bg-transparent items-end">
+                                  {/* Bottom row: Situation, Soumettre au client, Supprimer & Mettre à trier (25% / 25% / 25% / 25%) */}
+                                  <div className="pt-2 grid grid-cols-1 md:grid-cols-4 gap-3 w-full bg-transparent items-end">
                                     {/* Situation. */}
                                     <div className="space-y-0.5 font-sans relative bg-transparent">
                                       <label className="block mb-1 fsm-label-style">Situation.</label>
@@ -8487,6 +8557,47 @@ export default function App() {
                                         Supprimer
                                       </button>
                                     </div>
+
+                                    {/* Mettre à trier button */}
+                                    {(() => {
+                                      const isTourDisabled = ['à faire', 'effectué', 'effectuée'].includes((tourStatus || '').toLowerCase().trim());
+                                      const isMissionDisabled = ['accepté client', 'effectué', 'effectuée'].includes((m.status || '').toLowerCase().trim());
+                                      const isMettreATrierDisabled = isTourDisabled || isMissionDisabled;
+
+                                      return (
+                                        <div className="bg-transparent flex flex-col justify-end">
+                                          <button
+                                            type="button"
+                                            disabled={isMettreATrierDisabled}
+                                            onClick={() => moveFsmMissionToATrier(t.id, m.id)}
+                                            style={{
+                                              color: '#fff',
+                                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(185, 28, 28) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                              background: 'rgb(220, 38, 38)',
+                                              borderRadius: '13px',
+                                              border: 'none',
+                                              fontSize: '18px',
+                                              fontWeight: '500',
+                                              padding: '12px 16px',
+                                              width: '100%',
+                                              display: 'flex',
+                                              justifyContent: 'center',
+                                              alignItems: 'center',
+                                              opacity: isMettreATrierDisabled ? 0.4 : 1,
+                                              cursor: isMettreATrierDisabled ? 'not-allowed' : 'pointer'
+                                            }}
+                                            className={isMettreATrierDisabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}
+                                            title={
+                                              isMettreATrierDisabled
+                                                ? "Impossible de mettre à trier si la tournée est 'À faire' / 'Effectué' ou si la mission est 'Accepté client' / 'Effectué'"
+                                                : ""
+                                            }
+                                          >
+                                            Mettre à trier
+                                          </button>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               ); })()}
@@ -8569,6 +8680,15 @@ export default function App() {
             })();
 
             const filteredReports = generatedReports.filter((rep) => {
+              const isFormation = 
+                rep.equipmentType === 'Formation' ||
+                rep.equipmentType?.toLowerCase()?.includes('formation') ||
+                rep.defibSnapshot?.categorie === 'Formation' ||
+                rep.defibSnapshot?.categorie?.toLowerCase()?.includes('formation') ||
+                !!rep.formationId ||
+                rep.defibIdentifiant === 'Formation';
+              if (isFormation) return false;
+
               const isUpcoming = rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture;
               if (gmaoFilter === 'upcoming') {
                 if (!isUpcoming) return false;

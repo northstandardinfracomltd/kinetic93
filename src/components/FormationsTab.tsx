@@ -13,6 +13,32 @@ interface FormationsTabProps {
   onUpdateFsmTours?: (updated: any[]) => void;
 }
 
+const CRENEAU_OPTIONS = [
+  '8:00am',
+  '8:30am',
+  '9:00am',
+  '9:30am',
+  '10:00am',
+  '10:30am',
+  '11:00am',
+  '11:30am',
+  '12:00pm',
+  '12:30pm',
+  '13:00pm',
+  '13:30pm',
+  '14:00pm',
+  '14:30pm',
+  '15:00pm',
+  '15:30pm',
+  '16:00pm',
+  '16:30pm',
+  '17:00pm',
+  '17:30pm',
+  '18:00pm',
+  '18:30pm',
+  '19:00pm'
+];
+
 export default function FormationsTab({
   formations,
   saveFormations,
@@ -33,6 +59,8 @@ export default function FormationsTab({
 
   // Form states
   const [intitule, setIntitule] = useState('');
+  const [date, setDate] = useState('');
+  const [creneau, setCreneau] = useState('14:00pm');
   const [dateHeure, setDateHeure] = useState('');
   const [formateurId, setFormateurId] = useState('');
   const [statut, setStatut] = useState<'Brouillon' | 'Terminé'>('Brouillon');
@@ -56,7 +84,9 @@ export default function FormationsTab({
 
   const startNewFormation = () => {
     setIntitule('');
-    setDateHeure(new Date().toISOString().slice(0, 16));
+    setDate(new Date().toISOString().split('T')[0]);
+    setCreneau('14:00pm');
+    setDateHeure('');
     setFormateurId('');
     setStatut('Brouillon');
     setCommentaire('');
@@ -73,6 +103,10 @@ export default function FormationsTab({
 
   const startEditFormation = (f: FormationRecord) => {
     setIntitule(f.intitule || '');
+    const pDate = f.date || (f.dateHeure ? f.dateHeure.split('T')[0].split(' ')[0] : new Date().toISOString().split('T')[0]);
+    const pSlot = f.creneau || (f.dateHeure ? formatTimeToSlot(f.dateHeure) : '14:00pm');
+    setDate(pDate);
+    setCreneau(pSlot);
     setDateHeure(f.dateHeure || '');
     setFormateurId(f.formateurId || '');
     setStatut(f.statut || 'Brouillon');
@@ -121,6 +155,7 @@ export default function FormationsTab({
       return;
     }
 
+    const computedDateHeure = date && creneau ? `${date} ${creneau}` : (date || dateHeure);
     const now = new Date().toISOString();
     let updatedList: FormationRecord[];
 
@@ -130,7 +165,9 @@ export default function FormationsTab({
           return {
             ...f,
             intitule,
-            dateHeure,
+            date,
+            creneau,
+            dateHeure: computedDateHeure,
             formateurId,
             statut,
             commentaire,
@@ -151,7 +188,9 @@ export default function FormationsTab({
       const newRecord: FormationRecord = {
         id: `form_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         intitule,
-        dateHeure,
+        date,
+        creneau,
+        dateHeure: computedDateHeure,
         formateurId,
         statut,
         commentaire,
@@ -198,9 +237,18 @@ export default function FormationsTab({
     const f = formations.find((item) => item.id === fId);
     const client = clients.find((c) => c.id === f?.clientId);
     const clientName = client ? client.denomination : (f?.clientId || 'Nom du Client');
-    const rawDate = f?.dateHeure ? f.dateHeure.split('T')[0] : new Date().toISOString().split('T')[0];
-    const rawSlot = f?.dateHeure ? formatTimeToSlot(f.dateHeure) : '14:00pm';
-    const rawTime = f?.dateHeure && f.dateHeure.includes('T') ? f.dateHeure.split('T')[1].substring(0, 5) : '14:00';
+    const rawDate = f?.date || (f?.dateHeure ? f.dateHeure.split('T')[0].split(' ')[0] : new Date().toISOString().split('T')[0]);
+    const rawSlot = f?.creneau || (f?.dateHeure ? formatTimeToSlot(f.dateHeure) : '14:00pm');
+    let rawTime = '14:00';
+    if (rawSlot) {
+      const cleanSlot = rawSlot.replace('am', '').replace('pm', '').trim();
+      const parts = cleanSlot.split(':');
+      if (parts.length === 2) {
+        const hh = parts[0].padStart(2, '0');
+        const mm = parts[1].padStart(2, '0');
+        rawTime = `${hh}:${mm}`;
+      }
+    }
     const reasonText = f?.reasons && f.reasons.length > 0 ? f.reasons.join(', ') : (f?.intitule || 'Formation');
     const reasonsArray = f?.reasons && f.reasons.length > 0 ? f.reasons : (f?.intitule ? [f.intitule] : ['Formation']);
     const addressText = [f?.adresse, f?.codePostal, f?.ville].filter(Boolean).join(', ');
@@ -541,25 +589,33 @@ export default function FormationsTab({
               >
                 <thead>
                   <tr className="bg-transparent">
-                    <th className="px-3 py-3.5 text-center w-12" style={thStyle}>
+                    <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default', position: 'sticky', top: 0, backgroundColor: '#ffffff', zIndex: 10, borderBottom: '1px solid rgb(218, 218, 218)' }}>
                       <button
                         type="button"
                         onClick={() => {
-                          if (selectedIds.length === filteredFormations.length) {
+                          if (selectedIds.length === filteredFormations.length && filteredFormations.length > 0) {
                             setSelectedIds([]);
                           } else {
                             setSelectedIds(filteredFormations.map(f => f.id));
                           }
                         }}
-                        className="w-5 h-5 rounded-full border border-slate-300 flex items-center justify-center transition-all bg-white hover:border-[#fe4eba] mx-auto cursor-pointer"
+                        id="select-all-radio-checkbox"
+                        className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                          selectedIds.length === filteredFormations.length && filteredFormations.length > 0
+                            ? 'border-[#fe4eba] bg-transparent'
+                            : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                        }`}
+                        style={{ borderWidth: '2.5px' }}
+                        role="checkbox"
+                        aria-checked={selectedIds.length === filteredFormations.length && filteredFormations.length > 0}
                       >
-                        {selectedIds.length > 0 && (
-                          <div className={`w-3 h-3 rounded-full ${selectedIds.length === filteredFormations.length ? 'bg-[#fe4eba]' : 'bg-[#fe4eba]/50'}`} />
+                        {selectedIds.length === filteredFormations.length && filteredFormations.length > 0 && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </button>
                     </th>
                     <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Formation.</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Date & Heure.</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Date & Créneau.</th>
                     <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Formateur.</th>
                     <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Statut.</th>
                     <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Client.</th>
@@ -584,16 +640,20 @@ export default function FormationsTab({
                       const clientObj = clients.find((c) => c.id === f.clientId);
                       const clientName = clientObj ? clientObj.denomination : f.clientId || '-';
                       const loc = [f.ville, f.codePostal].filter(Boolean).join(', ') || '-';
-                      const formattedDate = f.dateHeure ? f.dateHeure.replace('T', ' ') : '-';
+                      const formattedDate = f.date && f.creneau 
+                        ? `${f.date} ${f.creneau}` 
+                        : (f.dateHeure ? f.dateHeure.replace('T', ' ') : '-');
                       const isRowSelected = selectedIds.includes(f.id);
 
                       return (
                         <tr
                           key={f.id}
                           onClick={() => startEditFormation(f)}
-                          className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
+                          className={`group hover:bg-[#ffecf8] transition-all cursor-pointer ${
+                            isRowSelected ? 'bg-[#ffecf8]/60' : ''
+                          }`}
                         >
-                          <td className="px-3 py-5 text-center w-12" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
                               onClick={(e) => {
@@ -604,10 +664,18 @@ export default function FormationsTab({
                                   setSelectedIds([...selectedIds, f.id]);
                                 }
                               }}
-                              className="w-5 h-5 rounded-full border border-slate-300 flex items-center justify-center transition-all bg-white hover:border-[#fe4eba] mx-auto cursor-pointer"
+                              id={`radio-checkbox-row-${f.id}`}
+                              className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                                isRowSelected
+                                  ? 'border-[#fe4eba] bg-transparent'
+                                  : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                              }`}
+                              style={{ borderWidth: '2.5px' }}
+                              role="checkbox"
+                              aria-checked={isRowSelected}
                             >
                               {isRowSelected && (
-                                <div className="w-3 h-3 rounded-full bg-[#fe4eba]" />
+                                <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                               )}
                             </button>
                           </td>
@@ -864,17 +932,35 @@ export default function FormationsTab({
                       </select>
                     </div>
 
-                    {/* Date & Heure */}
+                    {/* Date */}
                     <div className="space-y-1">
-                      <label htmlFor="form-dateheure" className="block mb-1">Date & Heure.</label>
+                      <label htmlFor="form-date" className="block mb-1">Date.</label>
                       <input
-                        type="datetime-local"
-                        id="form-dateheure"
-                        value={dateHeure}
-                        onChange={(e) => setDateHeure(e.target.value)}
+                        type="date"
+                        id="form-date"
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
                         className="w-full"
                         required
                       />
+                    </div>
+
+                    {/* Créneau */}
+                    <div className="space-y-1">
+                      <label htmlFor="form-creneau" className="block mb-1">Créneau.</label>
+                      <select
+                        id="form-creneau"
+                        value={creneau}
+                        onChange={(e) => setCreneau(e.target.value)}
+                        className="w-full"
+                      >
+                        <option value="">-- Non défini --</option>
+                        {CRENEAU_OPTIONS.map((slot) => (
+                          <option key={slot} value={slot}>
+                            {slot}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Formateur */}

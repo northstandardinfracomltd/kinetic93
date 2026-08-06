@@ -568,6 +568,8 @@ export interface FormationRecord {
   id: string;
   intitule: string;
   dateHeure: string;
+  date?: string;
+  creneau?: string;
   formateurId: string;
   statut: 'Brouillon' | 'Terminé';
   commentaire: string;
