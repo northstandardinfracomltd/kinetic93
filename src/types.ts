@@ -1,3 +1,5 @@
+export type AppTab = string;
+
 export interface SignaturePin {
   code: string;
   createdAt: string;
@@ -26,6 +28,11 @@ export interface Client {
   signaturePin?: string; // Single signature PIN code valid for all interventions
   signaturePins?: SignaturePin[]; // Array of signature pin codes for validation
   clientSignatureImage?: string; // Signature drawing saved by the client in their portal
+  adresse?: string;
+  ville?: string;
+  codePostal?: string;
+  region?: string;
+  pays?: string;
   
   // Site Information & Contract details for autopopulation
   nomPrenomSite: string;
@@ -277,7 +284,10 @@ export interface MemberAbsence {
 }
 
 export interface Member {
+  id?: string;
   name: string;
+  firstname?: string;
+  lastname?: string;
   role: string;
   email: string;
   status: string;

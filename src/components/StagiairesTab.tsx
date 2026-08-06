@@ -140,7 +140,7 @@ export default function StagiairesTab({
     backgroundColor: '#000000',
     color: '#ffffff',
     boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
-    borderRadius: '10px',
+    borderRadius: '13px',
     fontSize: '18px',
     padding: '9px 19px',
     fontWeight: '100',
@@ -155,6 +155,19 @@ export default function StagiairesTab({
     ...rowActionButton18Style,
     backgroundColor: 'rgb(53, 86, 236)',
     boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+  };
+
+  const triggerFormShakeAndScroll = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const submitBtn = document.querySelector('#stagiaire-core-form button[type="submit"]') || document.querySelector('button[form="stagiaire-core-form"]');
+    if (submitBtn) {
+      submitBtn.classList.remove('shake-element');
+      void (submitBtn as HTMLElement).offsetWidth;
+      submitBtn.classList.add('shake-element');
+      setTimeout(() => {
+        submitBtn.classList.remove('shake-element');
+      }, 500);
+    }
   };
 
   const searchInputStyle: React.CSSProperties = {
@@ -196,7 +209,7 @@ export default function StagiairesTab({
               borderTop: 'none',
               borderRadius: '0px 0px 18px 18px',
               maxWidth: '98%',
-              margin: 'auto',
+              margin: '0 auto 24px auto',
               padding: '20px',
               backgroundColor: '#ffffff',
             }}
@@ -334,7 +347,11 @@ export default function StagiairesTab({
         </>
       ) : (
         /* Form Overlay */
-        <div className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto" id="stagiaire-form-overlay">
+        <div
+          className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto min-h-screen py-4"
+          id="stagiaire-form-overlay"
+          onClick={triggerFormShakeAndScroll}
+        >
           {/* Detached Form Header Box */}
           <div
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
@@ -347,6 +364,7 @@ export default function StagiairesTab({
               padding: '20px',
             }}
             id="stagiaire-form-header-box"
+            onClick={(e) => e.stopPropagation()}
           >
             <div>
               <h3 className="text-2xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
@@ -375,7 +393,11 @@ export default function StagiairesTab({
             </div>
           </div>
 
-          <div className="w-full animate-fadeIn mt-6" style={{ marginTop: '24px' }}>
+          <div
+            className="w-full animate-fadeIn mt-6"
+            style={{ marginTop: '24px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <style>{`
               #stagiaire-core-form input:not([type="radio"]):not([type="checkbox"]),
               #stagiaire-core-form select,
@@ -426,35 +448,6 @@ export default function StagiairesTab({
                 font-size: 16px !important;
                 color: #000000 !important;
                 font-weight: 600 !important;
-              }
-              #stagiaire-core-form input[type="radio"] {
-                appearance: none !important;
-                -webkit-appearance: none !important;
-                width: 18px !important;
-                height: 18px !important;
-                border: 2px solid #cbd5e1 !important;
-                border-radius: 50% !important;
-                background-color: #ffffff !important;
-                outline: none !important;
-                cursor: pointer !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                transition: all 0.2s ease !important;
-                margin-right: 6px !important;
-              }
-              #stagiaire-core-form input[type="radio"]:hover,
-              #stagiaire-core-form input[type="radio"]:checked {
-                border-color: oklch(0.44 0.16 324.65) !important;
-                background-color: oklch(0.44 0.16 324.65) !important;
-              }
-              #stagiaire-core-form input[type="radio"]:checked::after {
-                content: "" !important;
-                width: 8px !important;
-                height: 8px !important;
-                background-color: #ffffff !important;
-                border-radius: 50% !important;
-                display: block !important;
               }
             `}</style>
 
@@ -540,27 +533,30 @@ export default function StagiairesTab({
                   {/* Sexe (Radio) */}
                   <div className="space-y-1 pt-2">
                     <label className="block mb-2">Sexe.</label>
-                    <div className="flex items-center gap-6">
-                      <label className="flex items-center gap-2 cursor-pointer text-black font-normal" style={{ fontWeight: 400 }}>
-                        <input
-                          type="radio"
-                          name="stag-sexe"
-                          value="Homme"
-                          checked={sexe === 'Homme'}
-                          onChange={() => setSexe('Homme')}
-                        />
+                    <div className="flex items-center gap-6 py-1">
+                      <button
+                        type="button"
+                        onClick={() => setSexe('Homme')}
+                        className="inline-flex items-center cursor-pointer gap-2 select-none"
+                        style={{ fontSize: '16px', color: '#000' }}
+                      >
+                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sexe === 'Homme' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                          {sexe === 'Homme' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                        </span>
                         Homme
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer text-black font-normal" style={{ fontWeight: 400 }}>
-                        <input
-                          type="radio"
-                          name="stag-sexe"
-                          value="Femme"
-                          checked={sexe === 'Femme'}
-                          onChange={() => setSexe('Femme')}
-                        />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSexe('Femme')}
+                        className="inline-flex items-center cursor-pointer gap-2 select-none"
+                        style={{ fontSize: '16px', color: '#000' }}
+                      >
+                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sexe === 'Femme' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                          {sexe === 'Femme' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                        </span>
                         Femme
-                      </label>
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -48,8 +48,11 @@ function SignaturePad({ value, onChange }: SignaturePadProps) {
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     ctx.beginPath();
-    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    ctx.moveTo((clientX - rect.left) * scaleX, (clientY - rect.top) * scaleY);
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
@@ -63,10 +66,13 @@ function SignaturePad({ value, onChange }: SignaturePadProps) {
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.strokeStyle = '#000000';
-    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.lineTo((clientX - rect.left) * scaleX, (clientY - rect.top) * scaleY);
     ctx.stroke();
   };
 
@@ -89,13 +95,13 @@ function SignaturePad({ value, onChange }: SignaturePadProps) {
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" style={{ maxWidth: '380px', width: '100%' }}>
       <div className="border border-slate-300 rounded-[13px] overflow-hidden bg-white relative">
         <canvas
           ref={canvasRef}
-          width={350}
-          height={120}
-          className="w-full h-[120px] cursor-crosshair touch-none"
+          width={380}
+          height={140}
+          className="w-full h-[140px] cursor-crosshair touch-none"
           onMouseDown={startDrawing}
           onMouseMove={draw}
           onMouseUp={stopDrawing}
@@ -109,7 +115,8 @@ function SignaturePad({ value, onChange }: SignaturePadProps) {
         <button
           type="button"
           onClick={handleClear}
-          className="text-xs text-red-600 hover:text-red-800 underline font-medium cursor-pointer"
+          className="text-slate-600 hover:text-black font-medium cursor-pointer"
+          style={{ fontSize: '16px', border: 'none', background: 'none' }}
         >
           Effacer la signature
         </button>
@@ -148,7 +155,7 @@ export default function EmargementsTab({
 
     const dateHorodatage = stItem.horodatage || (formation?.dateHeure ? formation.dateHeure.replace('T', ' ') : new Date().toLocaleDateString('fr-FR'));
 
-    const formateurObj = members.find((m) => m.id === formation?.formateurId);
+    const formateurObj = members.find((m) => m.id === formation?.formateurId || m.email === formation?.formateurId);
     const formateurName = formateurObj
       ? ((formateurObj.name || `${formateurObj.firstname || ''} ${formateurObj.lastname || ''}`).trim() || formateurObj.email || 'Non renseigné')
       : (formation?.formateurId || 'Non renseigné');
@@ -181,7 +188,7 @@ export default function EmargementsTab({
       width: 100vw;
       height: 100vh;
       background-color: #ffffff;
-      font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-family: "DefibeoMain", "Civilprom", system-ui, -apple-system, sans-serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -194,27 +201,26 @@ export default function EmargementsTab({
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
+      font-family: "DefibeoMain", "Civilprom", system-ui, -apple-system, sans-serif;
     }
     .corniche-border {
       flex: 1;
       width: 100%;
       height: 100%;
-      border: 10px solid #1e40af;
-      outline: 3px solid #3b82f6;
+      border: 10px solid #65216D;
+      outline: 3px solid #FD4EBB;
       outline-offset: -12px;
-      padding: 20px 32px;
+      padding: 24px 36px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-      box-shadow: inset 0 0 15px rgba(30, 64, 175, 0.05);
+      background: #ffffff;
       position: relative;
     }
     .header-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 2px solid #e2e8f0;
       padding-bottom: 10px;
     }
     .logo-img {
@@ -225,78 +231,82 @@ export default function EmargementsTab({
     .company-title {
       font-size: 20px;
       font-weight: 800;
-      color: #1e40af;
+      color: #65216D;
       letter-spacing: 0.5px;
+      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
     }
     .company-sub {
-      font-size: 11px;
-      color: #64748b;
+      font-size: 12px;
+      color: #000000;
       text-transform: uppercase;
       letter-spacing: 1px;
+      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
     }
     .cert-heading {
       text-align: center;
       margin: 6px 0;
     }
     .cert-title {
-      font-family: Georgia, 'Times New Roman', serif;
-      font-size: 30px;
+      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
+      font-size: 32px;
       font-weight: 700;
-      color: #1e3a8a;
+      color: #65216D;
       text-transform: uppercase;
       letter-spacing: 2px;
       margin: 0;
     }
     .cert-sub {
-      font-size: 13px;
-      color: #475569;
-      margin-top: 3px;
+      font-size: 14px;
+      color: #000000;
+      margin-top: 4px;
+      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
     }
     .cert-body {
       text-align: center;
-      margin: 4px 0;
-    }
-    .cert-intro {
-      font-size: 14px;
-      color: #475569;
-    }
-    .stagiaire-name {
-      font-family: Georgia, 'Times New Roman', serif;
-      font-size: 26px;
-      font-weight: 700;
-      color: #0f172a;
-      border-bottom: 2px solid #2563eb;
-      display: inline-block;
-      padding: 0 24px 3px 24px;
       margin: 6px 0;
     }
+    .cert-intro {
+      font-size: 15px;
+      color: #000000;
+      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
+    }
+    .stagiaire-name {
+      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: #0362FF;
+      display: inline-block;
+      padding: 4px 24px;
+      margin: 8px 0;
+    }
     .formation-banner {
-      background: #eff6ff;
-      border: 1px solid #bfdbfe;
-      border-left: 6px solid #1e40af;
-      border-radius: 6px;
-      padding: 10px 18px;
-      margin: 6px auto;
+      background: #ffffff;
+      border: 2px solid #0362FF;
+      border-radius: 13px;
+      padding: 12px 20px;
+      margin: 8px auto;
       max-width: 92%;
       text-align: center;
     }
     .formation-title {
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 700;
-      color: #1e40af;
+      color: #65216D;
       margin: 0;
+      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
     }
     .info-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px 24px;
+      gap: 10px 28px;
       background: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 10px 18px;
-      font-size: 13px;
-      color: #334155;
-      margin: 4px 0;
+      border: 2px solid #65216D;
+      border-radius: 13px;
+      padding: 12px 20px;
+      font-size: 14px;
+      color: #000000;
+      margin: 6px 0;
+      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
     }
     .info-item {
       display: flex;
@@ -305,30 +315,31 @@ export default function EmargementsTab({
     }
     .info-label {
       font-weight: 700;
-      color: #1e293b;
-      min-width: 150px;
+      color: #65216D;
+      min-width: 160px;
     }
     .signatures-container {
       display: flex;
       justify-content: space-between;
       gap: 30px;
-      margin-top: 6px;
+      margin-top: 10px;
     }
     .signature-card {
       flex: 1;
-      border: 1px dashed #94a3b8;
-      border-radius: 6px;
-      padding: 8px 12px;
+      border: 2px solid #65216D;
+      border-radius: 13px;
+      padding: 10px 14px;
       background: #ffffff;
-      min-height: 85px;
+      min-height: 90px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      font-family: "DefibeoMain", "Civilprom", system-ui, sans-serif;
     }
     .sig-title {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 700;
-      color: #475569;
+      color: #65216D;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -340,12 +351,9 @@ export default function EmargementsTab({
       margin-top: 4px;
     }
     .sig-image {
-      max-height: 50px;
+      max-height: 55px;
       max-width: 100%;
       object-fit: contain;
-    }
-    .stamp-box {
-      text-align: center;
     }
 
     @media print {
@@ -418,19 +426,12 @@ export default function EmargementsTab({
         <div class="signature-card">
           <div class="sig-title">Signature du Stagiaire</div>
           <div class="sig-body">
-            ${stagiaireSig ? `<img src="${stagiaireSig}" class="sig-image" alt="Signature Stagiaire" />` : `<span style="font-size: 11px; color: #94a3b8; font-style: italic;">[ Signature Stagiaire ]</span>`}
+            ${stagiaireSig ? `<img src="${stagiaireSig}" class="sig-image" alt="Signature Stagiaire" />` : `<span style="font-size: 12px; color: #000000; font-style: italic;">[ Signature Stagiaire ]</span>`}
           </div>
         </div>
         <div class="signature-card">
           <div class="sig-title">Tampon & Signature de l'Entreprise</div>
-          <div class="sig-body">
-            <div class="stamp-box">
-              <div style="font-weight: 700; color: #1e293b; font-size: 12px;">${companyName}</div>
-              <div style="font-size: 10px; color: #64748b; margin-top: 4px; border: 1px dashed #cbd5e1; padding: 4px 10px; border-radius: 4px; display: inline-block;">
-                Cachet / Signature de l'organisme
-              </div>
-            </div>
-          </div>
+          <div class="sig-body"></div>
         </div>
       </div>
     </div>
@@ -580,7 +581,7 @@ export default function EmargementsTab({
     backgroundColor: '#000000',
     color: '#ffffff',
     boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
-    borderRadius: '10px',
+    borderRadius: '13px',
     fontSize: '18px',
     padding: '9px 19px',
     fontWeight: '100',
@@ -601,6 +602,19 @@ export default function EmargementsTab({
     ...rowActionButton18Style,
     backgroundColor: '#9333ea',
     boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #9333ea 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+  };
+
+  const triggerFormShakeAndScroll = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const submitBtn = document.querySelector('#emargement-core-form button[type="submit"]') || document.querySelector('button[form="emargement-core-form"]');
+    if (submitBtn) {
+      submitBtn.classList.remove('shake-element');
+      void (submitBtn as HTMLElement).offsetWidth;
+      submitBtn.classList.add('shake-element');
+      setTimeout(() => {
+        submitBtn.classList.remove('shake-element');
+      }, 500);
+    }
   };
 
   const searchInputStyle: React.CSSProperties = {
@@ -642,7 +656,7 @@ export default function EmargementsTab({
               borderTop: 'none',
               borderRadius: '0px 0px 18px 18px',
               maxWidth: '98%',
-              margin: 'auto',
+              margin: '0 auto 24px auto',
               padding: '20px',
               backgroundColor: '#ffffff',
             }}
@@ -791,7 +805,11 @@ export default function EmargementsTab({
         </>
       ) : (
         /* Form Overlay */
-        <div className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto" id="emargement-form-overlay">
+        <div
+          className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto min-h-screen py-4"
+          id="emargement-form-overlay"
+          onClick={triggerFormShakeAndScroll}
+        >
           {/* Detached Form Header Box */}
           <div
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
@@ -804,6 +822,7 @@ export default function EmargementsTab({
               padding: '20px',
             }}
             id="emargement-form-header-box"
+            onClick={(e) => e.stopPropagation()}
           >
             <div>
               <h3 className="text-2xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
@@ -832,7 +851,11 @@ export default function EmargementsTab({
             </div>
           </div>
 
-          <div className="w-full animate-fadeIn mt-6" style={{ marginTop: '24px' }}>
+          <div
+            className="w-full animate-fadeIn mt-6"
+            style={{ marginTop: '24px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <style>{`
               #emargement-core-form input:not([type="radio"]):not([type="checkbox"]),
               #emargement-core-form select,
@@ -876,35 +899,6 @@ export default function EmargementsTab({
                 font-size: 16px !important;
                 color: #000000 !important;
                 font-weight: 600 !important;
-              }
-              #emargement-core-form input[type="radio"] {
-                appearance: none !important;
-                -webkit-appearance: none !important;
-                width: 18px !important;
-                height: 18px !important;
-                border: 2px solid #cbd5e1 !important;
-                border-radius: 50% !important;
-                background-color: #ffffff !important;
-                outline: none !important;
-                cursor: pointer !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                transition: all 0.2s ease !important;
-                margin-right: 6px !important;
-              }
-              #emargement-core-form input[type="radio"]:hover,
-              #emargement-core-form input[type="radio"]:checked {
-                border-color: oklch(0.44 0.16 324.65) !important;
-                background-color: oklch(0.44 0.16 324.65) !important;
-              }
-              #emargement-core-form input[type="radio"]:checked::after {
-                content: "" !important;
-                width: 8px !important;
-                height: 8px !important;
-                background-color: #ffffff !important;
-                border-radius: 50% !important;
-                display: block !important;
               }
             `}</style>
 
@@ -996,147 +990,177 @@ export default function EmargementsTab({
                   <button
                     type="button"
                     onClick={handleAddStagiaireItem}
-                    disabled={stagiairesItems.length >= 50}
-                    style={{ ...blueButtonStyle, width: '100%' }}
+                    disabled={!editingId || stagiairesItems.length >= 50}
+                    style={{
+                      ...blueButtonStyle,
+                      width: '100%',
+                      opacity: !editingId ? 0.5 : 1,
+                      cursor: !editingId ? 'not-allowed' : 'pointer',
+                    }}
                   >
-                    + Ajouter un stagiaire
+                    Ajouter un stagiaire
                   </button>
 
                   <div className="space-y-6 pt-2">
-                    {stagiairesItems.length === 0 ? (
-                      <p className="text-gray-500 text-center py-4 font-sans">
+                    {!editingId ? (
+                      <p className="text-gray-500 text-center py-4 font-sans font-medium" style={{ fontSize: '15px' }}>
+                        Veuillez d'abord enregistrer l'émargement avant de pouvoir ajouter des stagiaires.
+                      </p>
+                    ) : stagiairesItems.length === 0 ? (
+                      <p className="text-gray-500 text-center py-4 font-sans font-medium" style={{ fontSize: '15px' }}>
                         Aucun stagiaire ajouté. Cliquez sur le bouton ci-dessus pour ajouter un stagiaire.
                       </p>
                     ) : (
-                      stagiairesItems.map((stItem, index) => (
-                        <div
-                          key={stItem.id}
-                          className="p-5 border border-slate-200 rounded-[18px] bg-white space-y-4 relative"
-                        >
-                          <div className="flex items-center justify-between pb-2">
-                            <span className="font-bold text-black font-sans" style={{ fontSize: '16px' }}>
-                              Stagiaire #{index + 1}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveStagiaireItem(stItem.id)}
-                              style={{ ...rowActionButton18Style, backgroundColor: '#991b1b', padding: '4px 12px', fontSize: '14px' }}
-                            >
-                              Supprimer
-                            </button>
-                          </div>
+                      stagiairesItems.map((stItem, index) => {
+                        const otherSelectedIds = stagiairesItems
+                          .filter((i) => i.id !== stItem.id)
+                          .map((i) => i.stagiaireId);
+                        const availableStagiaires = stagiaires.filter(
+                          (s) => !otherSelectedIds.includes(s.id)
+                        );
 
-                          {/* Sélection stagiaire */}
-                          <div className="space-y-1">
-                            <label className="block mb-1">Sélection stagiaire.</label>
-                            <select
-                              value={stItem.stagiaireId}
-                              onChange={(e) => handleUpdateStagiaireItem(stItem.id, { stagiaireId: e.target.value })}
-                              className="w-full"
-                            >
-                              <option value="">-- Sélectionner un stagiaire --</option>
-                              {stagiaires.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {getStagiaireDisplayLabel(s.id)}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Présent (Radio) */}
-                          <div className="space-y-1 pt-2">
-                            <label className="block mb-2">Présent.</label>
-                            <div className="flex items-center gap-6">
-                              <label className="flex items-center gap-2 cursor-pointer text-black font-normal" style={{ fontWeight: 400 }}>
-                                <input
-                                  type="radio"
-                                  name={`present_${stItem.id}`}
-                                  value="Oui"
-                                  checked={stItem.present === 'Oui'}
-                                  onChange={() => handleUpdateStagiaireItem(stItem.id, { present: 'Oui' })}
-                                />
-                                Oui
-                              </label>
-                              <label className="flex items-center gap-2 cursor-pointer text-black font-normal" style={{ fontWeight: 400 }}>
-                                <input
-                                  type="radio"
-                                  name={`present_${stItem.id}`}
-                                  value="Non"
-                                  checked={stItem.present === 'Non'}
-                                  onChange={() => handleUpdateStagiaireItem(stItem.id, { present: 'Non' })}
-                                />
-                                Non
-                              </label>
+                        return (
+                          <div
+                            key={stItem.id}
+                            className="p-5 border border-slate-200 rounded-[18px] bg-white space-y-4 relative"
+                          >
+                            <div className="flex items-center justify-between pb-2">
+                              <span className="font-bold text-black font-sans" style={{ fontSize: '16px' }}>
+                                Stagiaire #{index + 1}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveStagiaireItem(stItem.id)}
+                                style={{
+                                  ...rowActionButton18Style,
+                                  backgroundColor: '#991b1b',
+                                  borderRadius: '13px',
+                                  fontSize: '16px',
+                                  padding: '6px 14px',
+                                }}
+                              >
+                                Supprimer
+                              </button>
                             </div>
-                          </div>
 
-                          {/* Conditionnel si Oui à Présent */}
-                          {stItem.present === 'Oui' && (
-                            <div className="space-y-4 pt-4 border-t border-slate-200">
-                              {/* Signature */}
-                              <div className="space-y-1">
-                                <label className="block mb-1">Signature.</label>
-                                <SignaturePad
-                                  value={stItem.signature}
-                                  onChange={(dataUrl) => handleUpdateStagiaireItem(stItem.id, { signature: dataUrl })}
-                                />
-                              </div>
-
-                              {/* Horodatage */}
-                              <div className="space-y-1">
-                                <label className="block mb-1">Horodatage.</label>
-                                <input
-                                  type="text"
-                                  value={stItem.horodatage || ''}
-                                  onChange={(e) => handleUpdateStagiaireItem(stItem.id, { horodatage: e.target.value })}
-                                  className="w-full"
-                                  placeholder="ex: 06/08/2026 14:30"
-                                />
-                              </div>
-
-                              {/* Validation */}
-                              <div className="space-y-1 pt-2">
-                                <label className="block mb-2">Validation.</label>
-                                <div className="flex items-center gap-6">
-                                  <label className="flex items-center gap-2 cursor-pointer text-black font-normal" style={{ fontWeight: 400 }}>
-                                    <input
-                                      type="radio"
-                                      name={`validation_${stItem.id}`}
-                                      value="Oui"
-                                      checked={stItem.validation === 'Oui'}
-                                      onChange={() => handleUpdateStagiaireItem(stItem.id, { validation: 'Oui' })}
-                                    />
-                                    Oui
-                                  </label>
-                                  <label className="flex items-center gap-2 cursor-pointer text-black font-normal" style={{ fontWeight: 400 }}>
-                                    <input
-                                      type="radio"
-                                      name={`validation_${stItem.id}`}
-                                      value="Non"
-                                      checked={stItem.validation === 'Non'}
-                                      onChange={() => handleUpdateStagiaireItem(stItem.id, { validation: 'Non' })}
-                                    />
-                                    Non
-                                  </label>
-                                </div>
-                              </div>
-
-                              {/* Bouton Télécharger certificat si validation === 'Oui' */}
-                              {stItem.validation === 'Oui' && (
-                                <div className="pt-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDownloadCertificat(stItem)}
-                                    style={{ ...purpleButtonStyle, width: '100%' }}
-                                  >
-                                    Télécharger le certificat PDF
-                                  </button>
-                                </div>
-                              )}
+                            {/* Sélection stagiaire */}
+                            <div className="space-y-1">
+                              <label className="block mb-1">Sélection stagiaire.</label>
+                              <select
+                                value={stItem.stagiaireId}
+                                onChange={(e) => handleUpdateStagiaireItem(stItem.id, { stagiaireId: e.target.value })}
+                                className="w-full"
+                              >
+                                <option value="">-- Sélectionner un stagiaire --</option>
+                                {availableStagiaires.map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {getStagiaireDisplayLabel(s.id)}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
-                          )}
-                        </div>
-                      ))
+
+                            {/* Présent (Radio) */}
+                            <div className="space-y-1 pt-2">
+                              <label className="block mb-2">Présent.</label>
+                              <div className="flex items-center gap-6 py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateStagiaireItem(stItem.id, { present: 'Oui' })}
+                                  className="inline-flex items-center cursor-pointer gap-2 select-none"
+                                  style={{ fontSize: '16px', color: '#000' }}
+                                >
+                                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.present === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                    {stItem.present === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                  </span>
+                                  Oui
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateStagiaireItem(stItem.id, { present: 'Non' })}
+                                  className="inline-flex items-center cursor-pointer gap-2 select-none"
+                                  style={{ fontSize: '16px', color: '#000' }}
+                                >
+                                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.present === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                    {stItem.present === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                  </span>
+                                  Non
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Conditionnel si Oui à Présent */}
+                            {stItem.present === 'Oui' && (
+                              <div className="space-y-4 pt-4 border-t border-slate-200">
+                                {/* Signature */}
+                                <div className="space-y-1">
+                                  <label className="block mb-1">Signature.</label>
+                                  <SignaturePad
+                                    value={stItem.signature}
+                                    onChange={(dataUrl) => handleUpdateStagiaireItem(stItem.id, { signature: dataUrl })}
+                                  />
+                                </div>
+
+                                {/* Horodatage */}
+                                <div className="space-y-1">
+                                  <label className="block mb-1">Horodatage.</label>
+                                  <input
+                                    type="text"
+                                    value={stItem.horodatage || ''}
+                                    onChange={(e) => handleUpdateStagiaireItem(stItem.id, { horodatage: e.target.value })}
+                                    className="w-full"
+                                    placeholder="ex: 06/08/2026 14:30"
+                                  />
+                                </div>
+
+                                {/* Validation */}
+                                <div className="space-y-1 pt-2">
+                                  <label className="block mb-2">Validation.</label>
+                                  <div className="flex items-center gap-6 py-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateStagiaireItem(stItem.id, { validation: 'Oui' })}
+                                      className="inline-flex items-center cursor-pointer gap-2 select-none"
+                                      style={{ fontSize: '16px', color: '#000' }}
+                                    >
+                                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.validation === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                        {stItem.validation === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                      </span>
+                                      Oui
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateStagiaireItem(stItem.id, { validation: 'Non' })}
+                                      className="inline-flex items-center cursor-pointer gap-2 select-none"
+                                      style={{ fontSize: '16px', color: '#000' }}
+                                    >
+                                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.validation === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                        {stItem.validation === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                      </span>
+                                      Non
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Bouton Télécharger certificat si validation === 'Oui' */}
+                                {stItem.validation === 'Oui' && (
+                                  <div className="pt-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownloadCertificat(stItem)}
+                                      style={{ ...purpleButtonStyle, width: '100%' }}
+                                    >
+                                      Télécharger le certificat
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>

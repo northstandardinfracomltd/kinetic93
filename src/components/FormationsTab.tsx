@@ -8,7 +8,7 @@ interface FormationsTabProps {
   variables: Variable[];
   members: Member[];
   clients: Client[];
-  setActiveTab?: (tab: AppTab) => void;
+  setActiveTab?: (tab: any) => void;
 }
 
 export default function FormationsTab({
@@ -177,7 +177,7 @@ export default function FormationsTab({
     backgroundColor: '#000000',
     color: '#ffffff',
     boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
-    borderRadius: '10px',
+    borderRadius: '13px',
     fontSize: '18px',
     padding: '9px 19px',
     fontWeight: '100',
@@ -192,6 +192,19 @@ export default function FormationsTab({
     ...rowActionButton18Style,
     backgroundColor: 'rgb(53, 86, 236)',
     boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+  };
+
+  const triggerFormShakeAndScroll = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const submitBtn = document.querySelector('#formation-core-form button[type="submit"]') || document.querySelector('button[form="formation-core-form"]');
+    if (submitBtn) {
+      submitBtn.classList.remove('shake-element');
+      void (submitBtn as HTMLElement).offsetWidth;
+      submitBtn.classList.add('shake-element');
+      setTimeout(() => {
+        submitBtn.classList.remove('shake-element');
+      }, 500);
+    }
   };
 
   const searchInputStyle: React.CSSProperties = {
@@ -233,7 +246,7 @@ export default function FormationsTab({
               borderTop: 'none',
               borderRadius: '0px 0px 18px 18px',
               maxWidth: '98%',
-              margin: 'auto',
+              margin: '0 auto 24px auto',
               padding: '20px',
               backgroundColor: '#ffffff',
             }}
@@ -403,7 +416,11 @@ export default function FormationsTab({
         </>
       ) : (
         /* Form Overlay */
-        <div className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto" id="formation-form-overlay">
+        <div
+          className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto min-h-screen py-4"
+          id="formation-form-overlay"
+          onClick={triggerFormShakeAndScroll}
+        >
           {/* Detached Form Header Box */}
           <div
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
@@ -416,6 +433,7 @@ export default function FormationsTab({
               padding: '20px',
             }}
             id="formation-form-header-box"
+            onClick={(e) => e.stopPropagation()}
           >
             <div>
               <h3 className="text-2xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
@@ -444,7 +462,11 @@ export default function FormationsTab({
             </div>
           </div>
 
-          <div className="w-full animate-fadeIn mt-6" style={{ marginTop: '24px' }}>
+          <div
+            className="w-full animate-fadeIn mt-6"
+            style={{ marginTop: '24px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <style>{`
               #formation-core-form input:not([type="radio"]):not([type="checkbox"]),
               #formation-core-form select,
@@ -497,35 +519,6 @@ export default function FormationsTab({
                 color: #000000 !important;
                 font-weight: 600 !important;
               }
-              #formation-core-form input[type="radio"] {
-                appearance: none !important;
-                -webkit-appearance: none !important;
-                width: 18px !important;
-                height: 18px !important;
-                border: 2px solid #cbd5e1 !important;
-                border-radius: 50% !important;
-                background-color: #ffffff !important;
-                outline: none !important;
-                cursor: pointer !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                transition: all 0.2s ease !important;
-                margin-right: 6px !important;
-              }
-              #formation-core-form input[type="radio"]:hover,
-              #formation-core-form input[type="radio"]:checked {
-                border-color: oklch(0.44 0.16 324.65) !important;
-                background-color: oklch(0.44 0.16 324.65) !important;
-              }
-              #formation-core-form input[type="radio"]:checked::after {
-                content: "" !important;
-                width: 8px !important;
-                height: 8px !important;
-                background-color: #ffffff !important;
-                border-radius: 50% !important;
-                display: block !important;
-              }
             `}</style>
 
             <form onSubmit={handleSave} className="space-y-6" id="formation-core-form">
@@ -562,10 +555,10 @@ export default function FormationsTab({
                           <button
                             type="button"
                             onClick={() => setActiveTab('variables')}
-                            className="text-[14px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
-                            style={{ border: 'none', background: 'none' }}
+                            className="font-bold cursor-pointer"
+                            style={{ border: 'none', background: 'none', color: 'oklch(54.6% .245 262.881)', fontSize: '16px' }}
                           >
-                            + Variable
+                            Nouvelle variable
                           </button>
                         )}
                       </div>
@@ -608,29 +601,48 @@ export default function FormationsTab({
                         className="w-full"
                       >
                         <option value="">-- Sélectionner un formateur --</option>
-                        {members.map((m) => {
-                          const name = (m.name || `${m.firstname || ''} ${m.lastname || ''}`).trim() || m.email;
-                          return (
-                            <option key={m.id} value={m.id}>
-                              {name}
-                            </option>
-                          );
-                        })}
+                        {members
+                          .filter((m) => m.role?.toLowerCase() === 'technicien')
+                          .map((m, idx) => {
+                            const val = m.id || m.email || m.name || `m_${idx}`;
+                            const name = (m.name || `${m.firstname || ''} ${m.lastname || ''}`).trim() || m.email;
+                            return (
+                              <option key={val} value={val}>
+                                {name}
+                              </option>
+                            );
+                          })}
                       </select>
                     </div>
 
-                    {/* Statut */}
+                    {/* Statut (Radio) */}
                     <div className="space-y-1">
-                      <label htmlFor="form-statut" className="block mb-1">Statut.</label>
-                      <select
-                        id="form-statut"
-                        value={statut}
-                        onChange={(e) => setStatut(e.target.value as 'Brouillon' | 'Terminé')}
-                        className="w-full"
-                      >
-                        <option value="Brouillon">Brouillon</option>
-                        <option value="Terminé">Terminé</option>
-                      </select>
+                      <label className="block mb-2">Statut.</label>
+                      <div className="flex items-center gap-6 py-2">
+                        <button
+                          type="button"
+                          onClick={() => setStatut('Brouillon')}
+                          className="inline-flex items-center cursor-pointer gap-2 select-none"
+                          style={{ fontSize: '16px', color: '#000' }}
+                        >
+                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${statut === 'Brouillon' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                            {statut === 'Brouillon' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                          </span>
+                          Brouillon
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setStatut('Terminé')}
+                          className="inline-flex items-center cursor-pointer gap-2 select-none"
+                          style={{ fontSize: '16px', color: '#000' }}
+                        >
+                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${statut === 'Terminé' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                            {statut === 'Terminé' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                          </span>
+                          Terminé
+                        </button>
+                      </div>
                     </div>
                   </div>
 
