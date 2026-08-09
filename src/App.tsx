@@ -11330,6 +11330,7 @@ export default function App() {
               saveDefibs={saveDefibs}
               saveClients={saveClients}
               saveStocks={saveStocks}
+              saveVariables={saveVariables}
               setActiveTab={setActiveTab}
               dropboxActive={dropboxActive}
               dropboxAccessToken={dropboxAccessToken}

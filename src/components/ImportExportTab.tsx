@@ -5,11 +5,22 @@ import { generateRandomShortCode, computeProchaineMaintenance } from '../utils';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
 
+export type ImportExportCategory = 
+  | 'Défibrillateurs.' 
+  | 'Clients.' 
+  | 'Stocks.' 
+  | 'Temps.'
+  | 'Variable — Modèle Défibrillateur.'
+  | 'Variable — Modèle Électrode.'
+  | 'Variable — Modèle Batterie.'
+  | 'Variable — Modèle Service.'
+  | 'Variable — Modèle Coffret.';
+
 export interface ImportExportRecord {
   id: string;
   date: string;
   type: 'Importation.' | 'Exportation.';
-  categorie: 'Défibrillateurs.' | 'Clients.' | 'Stocks.' | 'Temps.';
+  categorie: ImportExportCategory;
   format: 'CSV.';
   csvData?: string;
   expiresAt?: number;
@@ -41,12 +52,13 @@ const INITIAL_RECORDS: ImportExportRecord[] = [
 ];
 
 function generateCSV(
-  compartment: 'Défibrillateurs.' | 'Clients.' | 'Stocks.' | 'Temps.', 
+  compartment: ImportExportCategory, 
   data: {
     defibrillateurs: Defibrillateur[];
     clients: Client[];
     stocks: StockRecord[];
     pointages: PointageLog[];
+    variables: Variable[];
   }
 ): string {
   let headers: string[] = [];
@@ -189,6 +201,27 @@ function generateCSV(
         "Date Fin", "Heure Fin", "Durée (secondes)", "En Cours", "Commentaire"
       ];
       break;
+
+    case 'Variable — Modèle Défibrillateur.':
+    case 'Variable — Modèle Électrode.':
+    case 'Variable — Modèle Batterie.':
+    case 'Variable — Modèle Service.':
+    case 'Variable — Modèle Coffret.': {
+      const categoryMap: Record<string, string> = {
+        'Variable — Modèle Défibrillateur.': 'Modèle Défibrillateur',
+        'Variable — Modèle Électrode.': 'Modèle Électrode',
+        'Variable — Modèle Batterie.': 'Modèle Batterie',
+        'Variable — Modèle Service.': 'Modèle Service',
+        'Variable — Modèle Coffret.': 'Modèle Coffret',
+      };
+      const targetCategory = categoryMap[compartment];
+      items = (data.variables || []).filter(v => v.category === targetCategory);
+      keys = ['id', 'nom', 'marque', 'category', 'description', 'identifiant', 'imageUrl'];
+      headers = [
+        "ID Variable", "Nom / Modèle", "Marque / Fabricant", "Catégorie", "Description", "Identifiant", "Image URL"
+      ];
+      break;
+    }
   }
 
   // Generate CSV lines
@@ -225,6 +258,7 @@ interface ImportExportTabProps {
   saveDefibs?: (newDefibs: Defibrillateur[]) => void;
   saveClients?: (newClients: Client[]) => void;
   saveStocks?: (newStocks: StockRecord[]) => void;
+  saveVariables?: (newVariables: Variable[]) => void;
   setActiveTab?: (tab: any) => void;
   dropboxActive?: boolean;
   dropboxAccessToken?: string;
@@ -704,36 +738,50 @@ const validateAndParseDefibs = (
 
 const validateAndParseClients = (csvText: string): Client[] | null => {
   const { headers, rows } = parseCSV(csvText);
-  if (rows.length < 5) return null;
+  if (rows.length < 1) return null;
 
-  const expected = [
-    'Entreprise.', 'Identifiant fiscal.', 'Email.', 'Téléphone.'
-  ];
-  if (headers.length !== expected.length) return null;
-  const hMatch = headers.every((h, i) => h.replace(/^\uFEFF/, '').trim() === expected[i]);
-  if (!hMatch) return null;
+  const normHeaders = headers.map(h => h.replace(/^\uFEFF/, '').trim().toLowerCase());
+
+  let denomIdx = normHeaders.findIndex(h => h.includes('dénomination') || h.includes('denomination') || h.includes('entreprise') || h.includes('client') || h.includes('nom'));
+  if (denomIdx === -1) denomIdx = 0;
+
+  let siretIdx = normHeaders.findIndex(h => h.includes('siret') || h.includes('fiscal') || h.includes('siren'));
+  let emailIdx = normHeaders.findIndex(h => h.includes('email') || h.includes('mail'));
+  let phoneIdx = normHeaders.findIndex(h => h.includes('téléphone') || h.includes('telephone') || h.includes('phone') || h.includes('tel'));
+  let accessKeyIdx = normHeaders.findIndex(h => h.includes('clé') || h.includes('cle') || h.includes('access'));
+  let nomSiteIdx = normHeaders.findIndex(h => h.includes('nom prénom site') || h.includes('site'));
+  let telSiteIdx = normHeaders.findIndex(h => h.includes('téléphone site'));
+  let emailSiteIdx = normHeaders.findIndex(h => h.includes('email site'));
+  let contratIdx = normHeaders.findIndex(h => h.includes('contrat actif') || h.includes('contrat'));
 
   const parsedItems: Client[] = [];
   for (let idx = 0; idx < rows.length; idx++) {
     const row = rows[idx];
-    if (row.length !== expected.length) return null;
+    if (row.length === 0) continue;
 
-    const entreprise = row[0];
-    const idFiscal = row[1];
-    const email = row[2];
-    const phone = row[3];
+    const denomination = row[denomIdx] ? row[denomIdx].trim() : '';
+    if (!denomination) continue;
+
+    const siret = siretIdx !== -1 && row[siretIdx] ? row[siretIdx].trim() : '';
+    const email = emailIdx !== -1 && row[emailIdx] ? row[emailIdx].trim() : '';
+    const phone = phoneIdx !== -1 && row[phoneIdx] ? row[phoneIdx].trim() : '';
+    const accessKey = accessKeyIdx !== -1 && row[accessKeyIdx] ? row[accessKeyIdx].trim() : ('AC-' + Math.floor(100 + Math.random() * 900));
+    const nomPrenomSite = nomSiteIdx !== -1 && row[nomSiteIdx] ? row[nomSiteIdx].trim() : '';
+    const telephoneSite = telSiteIdx !== -1 && row[telSiteIdx] ? row[telSiteIdx].trim() : '';
+    const emailSite = emailSiteIdx !== -1 && row[emailSiteIdx] ? row[emailSiteIdx].trim() : '';
+    const contrat = contratIdx !== -1 && row[contratIdx] && row[contratIdx].trim() === 'Oui' ? 'Oui' : 'Non';
 
     parsedItems.push({
       id: 'cl_' + Date.now() + '_' + idx + '_' + Math.floor(Math.random() * 1000),
-      denomination: entreprise,
-      siret: idFiscal,
-      email: email,
-      phone: phone,
-      accessKey: 'AC-' + Math.floor(100 + Math.random() * 900),
-      nomPrenomSite: '',
-      telephoneSite: '',
-      emailSite: '',
-      contrat: 'Non',
+      denomination,
+      siret,
+      email,
+      phone,
+      accessKey,
+      nomPrenomSite,
+      telephoneSite,
+      emailSite,
+      contrat,
       nomContrat: '',
       referenceContrat: '',
       debutContrat: '',
@@ -741,6 +789,49 @@ const validateAndParseClients = (csvText: string): Client[] | null => {
     });
   }
 
+  if (parsedItems.length === 0) return null;
+  return parsedItems;
+};
+
+const validateAndParseVariables = (csvText: string, targetCategory: any): Variable[] | null => {
+  const { headers, rows } = parseCSV(csvText);
+  if (rows.length < 1) return null;
+
+  const normHeaders = headers.map(h => h.replace(/^\uFEFF/, '').trim().toLowerCase());
+
+  let nomIdx = normHeaders.findIndex(h => h.includes('nom') || h.includes('modèle') || h.includes('modele') || h.includes('titre') || h.includes('piece'));
+  if (nomIdx === -1) nomIdx = 0;
+
+  let marqueIdx = normHeaders.findIndex(h => h.includes('marque') || h.includes('fabricant'));
+  let descIdx = normHeaders.findIndex(h => h.includes('description') || h.includes('detail') || h.includes('commentaire'));
+  let identIdx = normHeaders.findIndex(h => h.includes('identifiant'));
+  let imgIdx = normHeaders.findIndex(h => h.includes('image') || h.includes('url') || h.includes('photo'));
+
+  const parsedItems: Variable[] = [];
+  for (let idx = 0; idx < rows.length; idx++) {
+    const row = rows[idx];
+    if (row.length === 0) continue;
+
+    const nom = row[nomIdx] ? row[nomIdx].trim() : '';
+    if (!nom) continue;
+
+    const marque = marqueIdx !== -1 && row[marqueIdx] ? row[marqueIdx].trim() : '';
+    const description = descIdx !== -1 && row[descIdx] ? row[descIdx].trim() : '';
+    const identifiant = identIdx !== -1 && row[identIdx] ? row[identIdx].trim() : '';
+    const imageUrl = imgIdx !== -1 && row[imgIdx] ? row[imgIdx].trim() : '';
+
+    parsedItems.push({
+      id: 'v_' + Date.now() + '_' + idx + '_' + Math.floor(Math.random() * 1000),
+      nom: nom,
+      marque: marque,
+      description: description,
+      category: targetCategory,
+      identifiant: identifiant,
+      imageUrl: imageUrl
+    });
+  }
+
+  if (parsedItems.length === 0) return null;
   return parsedItems;
 };
 
@@ -833,6 +924,7 @@ export default function ImportExportTab({
   saveDefibs,
   saveClients,
   saveStocks,
+  saveVariables,
   setActiveTab,
   dropboxActive = false,
   dropboxAccessToken = '',
@@ -880,7 +972,7 @@ export default function ImportExportTab({
   const [formDate, setFormDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [formExpirationDate, setFormExpirationDate] = useState('');
   const [formType, setFormType] = useState<'Importation.' | 'Exportation.'>('Importation.');
-  const [formCategorie, setFormCategorie] = useState<'Défibrillateurs.' | 'Clients.' | 'Stocks.' | 'Temps.'>('Défibrillateurs.');
+  const [formCategorie, setFormCategorie] = useState<ImportExportCategory>('Défibrillateurs.');
   const [formFormat, setFormFormat] = useState<'CSV.'>('CSV.');
 
   // Import states
@@ -1035,6 +1127,20 @@ export default function ImportExportTab({
           setValidationError('Fichier invalide, veuillez vérifier votre CSV et essayer à nouveau.');
           return;
         }
+      } else if (formCategorie.startsWith('Variable — ')) {
+        const categoryMap: Record<string, string> = {
+          'Variable — Modèle Défibrillateur.': 'Modèle Défibrillateur',
+          'Variable — Modèle Électrode.': 'Modèle Électrode',
+          'Variable — Modèle Batterie.': 'Modèle Batterie',
+          'Variable — Modèle Service.': 'Modèle Service',
+          'Variable — Modèle Coffret.': 'Modèle Coffret',
+        };
+        const targetCategory = categoryMap[formCategorie];
+        parsedData = validateAndParseVariables(uploadedCsvContent, targetCategory);
+        if (!parsedData) {
+          setValidationError('Fichier invalide, veuillez vérifier votre CSV et essayer à nouveau.');
+          return;
+        }
       }
 
       setValidationError(null);
@@ -1049,6 +1155,8 @@ export default function ImportExportTab({
             saveClients([...clients, ...parsedData]);
           } else if (formCategorie === 'Stocks.' && saveStocks) {
             saveStocks([...stocks, ...parsedData]);
+          } else if (formCategorie.startsWith('Variable — ') && saveVariables) {
+            saveVariables([...variables, ...parsedData]);
           }
 
           const dExp = new Date();
@@ -1116,7 +1224,8 @@ export default function ImportExportTab({
           defibrillateurs: defibrillateurs || [],
           clients: clients || [],
           stocks: stocks || [],
-          pointages: pointages || []
+          pointages: pointages || [],
+          variables: variables || []
         });
 
         const newRecord: ImportExportRecord = {
@@ -1542,13 +1651,16 @@ export default function ImportExportTab({
                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white text-black cursor-pointer"
                       >
                         <option value="Défibrillateurs.">{t("Défibrillateurs.")}</option>
+                        <option value="Clients.">{t("Clients.")}</option>
+                        <option value="Stocks.">{t("Stocks.")}</option>
                         {formType !== 'Importation.' && (
-                          <>
-                            <option value="Clients.">{t("Clients.")}</option>
-                            <option value="Stocks.">{t("Stocks.")}</option>
-                            <option value="Temps.">{t("Temps.")}</option>
-                          </>
+                          <option value="Temps.">{t("Temps.")}</option>
                         )}
+                        <option value="Variable — Modèle Défibrillateur.">{t("Variable — Modèle Défibrillateur.")}</option>
+                        <option value="Variable — Modèle Électrode.">{t("Variable — Modèle Électrode.")}</option>
+                        <option value="Variable — Modèle Batterie.">{t("Variable — Modèle Batterie.")}</option>
+                        <option value="Variable — Modèle Service.">{t("Variable — Modèle Service.")}</option>
+                        <option value="Variable — Modèle Coffret.">{t("Variable — Modèle Coffret.")}</option>
                       </select>
                     </div>
 
