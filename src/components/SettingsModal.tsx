@@ -159,9 +159,6 @@ export default function SettingsModal({
     const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
     return localStorage.getItem(`defib_${tenantId}_communication_portail_client`) || '';
   });
-  const [showEpsonBanner, setShowEpsonBanner] = React.useState<boolean>(() => {
-    return !sessionStorage.getItem("help_dismissed_settings_epson");
-  });
 
   const [referralCompany, setReferralCompany] = React.useState('');
   const [referralSent, setReferralSent] = React.useState(false);
@@ -1588,73 +1585,6 @@ export default function SettingsModal({
           id="settings-tab-container-harmonized"
           style={isPage ? { maxWidth: '98%', margin: '0 auto', width: '100%' } : {}}
         >
-          {showEpsonBanner && disableHelpsAndTutorials !== 'Oui' && (
-            <div 
-              className="p-5 rounded-2xl border flex flex-col justify-between gap-3 animate-fadeIn transition-all relative overflow-hidden text-left shadow-sm hover:shadow-md"
-              style={{
-                borderColor: '#fe4eba',
-                background: 'linear-gradient(135deg, #fde5ff 0%, #ffd6f9 50%, #fbcfe8 100%)',
-                maxWidth: '320px',
-                minHeight: '230px',
-                margin: '0px 0px 16px 0px',
-              }}
-            >
-              {/* Fade / Wave Animation Overlay */}
-              <div 
-                className="absolute inset-0 pointer-events-none animate-card-pink-wave z-0"
-              />
-
-              <div className="flex flex-col gap-3 relative z-10">
-                <div className="flex items-center justify-between">
-                  <img 
-                    src="https://civilprom.s3.eu-north-1.amazonaws.com/EpsonRecommended.png" 
-                    alt="Epson Recommended" 
-                    referrerPolicy="no-referrer"
-                    style={{ height: '38px', width: 'auto', objectFit: 'contain' }}
-                  />
-                  <span 
-                    className="text-[11px] font-bold px-2.5 py-0.5 rounded-full text-white uppercase tracking-wider select-none"
-                    style={{ backgroundColor: '#fe4eba' }}
-                  >
-                    {t("Recommandé")}
-                  </span>
-                </div>
-                <p 
-                  className="font-sans leading-snug"
-                  style={{ 
-                    fontSize: '14px', 
-                    fontWeight: 500, 
-                    color: '#4a1246', 
-                    cursor: 'default' 
-                  }}
-                >
-                  {t("Imprimez vos codes-barres sur le terrain et au bureau avec la Epson LabelWorks.")}
-                </p>
-              </div>
-
-              <div className="relative z-10 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    sessionStorage.setItem("help_dismissed_settings_epson", "true");
-                    setShowEpsonBanner(false);
-                  }}
-                  className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer w-full text-center"
-                  style={{
-                    backgroundColor: '#000000',
-                    color: '#ffffff',
-                    fontSize: '15px',
-                    borderRadius: '11px',
-                    padding: '8px 16px',
-                  }}
-                >
-                  {t("J'ai compris")}
-                </button>
-              </div>
-            </div>
-          )}
-
-
           {/* SECTION 1: RÉGLAGES */}
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left" id="settings-section-company">
             {renderSectionHeader(t("Réglages"))}
