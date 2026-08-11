@@ -2718,7 +2718,7 @@ export default function DefibTab({
       </div>
 
       <div 
-        className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200" 
+        className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4" 
         id="defib-tab-total-summary"
       >
         <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
@@ -2727,51 +2727,35 @@ export default function DefibTab({
 
         {/* Pagination Controls */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setCurrentPage(p => Math.max(1, p - 1));
+          <select
+            value={currentPage}
+            onChange={(e) => {
+              setCurrentPage(Number(e.target.value));
               bottomScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            disabled={currentPage === 1}
-            className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            id="btn-defib-prev-page"
-          >
-            &larr; Précédent
-          </button>
-
-          <div className="relative inline-flex items-center">
-            <select
-              value={currentPage}
-              onChange={(e) => {
-                setCurrentPage(Number(e.target.value));
-                bottomScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              id="select-defib-page"
-              className="appearance-none bg-white border border-slate-300 hover:border-slate-400 text-slate-800 text-sm font-bold rounded-lg pl-3 pr-8 py-1.5 cursor-pointer shadow-xs focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/30"
-              style={{ cursor: 'pointer' }}
-            >
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <option key={p} value={p}>
-                  Page {p}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setCurrentPage(p => Math.min(totalPages, p + 1));
-              bottomScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+            id="select-defib-page"
+            className="appearance-none cursor-pointer focus:outline-none px-5 py-2"
+            style={{
+              fontSize: '18px',
+              borderRadius: '13px',
+              boxShadow: 'none',
+              backgroundColor: '#000000',
+              borderColor: '#000000',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              color: '#ffffff',
+              textAlign: 'center',
+              textAlignLast: 'center',
+              fontWeight: 'bold',
+              cursor: 'pointer'
             }}
-            disabled={currentPage === totalPages}
-            className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            id="btn-defib-next-page"
           >
-            Suivant &rarr;
-          </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <option key={p} value={p} style={{ backgroundColor: '#000000', color: '#ffffff', textAlign: 'center' }}>
+                Page {p}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

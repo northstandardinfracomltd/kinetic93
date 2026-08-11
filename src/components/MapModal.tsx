@@ -379,32 +379,53 @@ export default function MapModal({
 
   // Progressive batch loading state for high performance (e.g. 3,000 points)
   const [renderedCount, setRenderedCount] = useState<number>(0);
+  const [isMapBatchLoading, setIsMapBatchLoading] = useState<boolean>(true);
 
+  // Reset batch loading when modal opens or activeList changes
   useEffect(() => {
     if (!isOpen) {
       setRenderedCount(0);
+      setIsMapBatchLoading(true);
       return;
     }
+    setRenderedCount(0);
+    setIsMapBatchLoading(true);
+  }, [isOpen, activeList]);
+
+  useEffect(() => {
+    if (!isOpen) return;
 
     if (itemsWithCoords.length === 0) {
-      setRenderedCount(0);
-      return;
+      const timer = setTimeout(() => setIsMapBatchLoading(false), 200);
+      return () => clearTimeout(timer);
     }
 
     if (renderedCount < itemsWithCoords.length) {
-      const batchSize = Math.max(300, Math.ceil(itemsWithCoords.length / 8));
+      if (!isMapBatchLoading) {
+        // If initial batch load is already complete, keep renderedCount in sync silently
+        setRenderedCount(itemsWithCoords.length);
+        return;
+      }
+
+      const batchSize = Math.max(500, Math.ceil(itemsWithCoords.length / 6));
       const timer = setTimeout(() => {
-        setRenderedCount(prev => Math.min(prev + batchSize, itemsWithCoords.length));
+        setRenderedCount(prev => {
+          const next = Math.min(prev + batchSize, itemsWithCoords.length);
+          if (next >= itemsWithCoords.length) {
+            setIsMapBatchLoading(false);
+          }
+          return next;
+        });
       }, 16);
       return () => clearTimeout(timer);
+    } else if (isMapBatchLoading) {
+      setIsMapBatchLoading(false);
     }
-  }, [isOpen, itemsWithCoords.length, renderedCount]);
+  }, [isOpen, itemsWithCoords.length, renderedCount, isMapBatchLoading]);
 
   const displayedItems = useMemo(() => {
     return itemsWithCoords.slice(0, renderedCount);
   }, [itemsWithCoords, renderedCount]);
-
-  const isFullyLoaded = isOpen && itemsWithCoords.length > 0 && renderedCount >= itemsWithCoords.length;
 
   // Set initial selected item when opened
   useEffect(() => {
@@ -512,8 +533,8 @@ export default function MapModal({
 
       <div className="relative w-full h-full flex-1">
         
-        {/* Top-Bar Red Loading Banner (Visible as long as 100% of points are not displayed) */}
-        {!isFullyLoaded && isOpen && (
+        {/* Top-Bar Red Loading Banner (Visible as long as points are batch loading) */}
+        {isMapBatchLoading && isOpen && (
           <div 
             className="absolute top-0 left-0 right-0 z-[2000] py-2.5 px-4 text-center font-bold shadow-lg flex items-center justify-center gap-3 transition-all animate-fadeIn"
             style={{
