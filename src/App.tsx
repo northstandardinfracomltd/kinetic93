@@ -830,9 +830,11 @@ export default function App() {
     }
 
     setStocks(updated);
-    localStorage.setItem(`defib_${tenantId}_stocks`, JSON.stringify(updated));
-    if (isFirebaseLoaded && tenantId) {
-      saveCollectionToFirestore('stocks', updated);
+    const strS = JSON.stringify(updated);
+    safeSetLocalStorage(`defib_${tenantId}_stocks`, strS);
+    loadedDataRef.current.stocks = strS;
+    if (tenantId) {
+      saveCollectionToFirestore('stocks', updated, tenantId);
     }
   };
 
@@ -868,9 +870,11 @@ export default function App() {
     }
 
     setDistributedStocks(updated);
-    localStorage.setItem(`defib_${tenantId}_distributed_stocks`, JSON.stringify(updated));
-    if (isFirebaseLoaded && tenantId) {
-      saveCollectionToFirestore('distributed_stocks', updated);
+    const strDS = JSON.stringify(updated);
+    safeSetLocalStorage(`defib_${tenantId}_distributed_stocks`, strDS);
+    loadedDataRef.current.distributed_stocks = strDS;
+    if (tenantId) {
+      saveCollectionToFirestore('distributed_stocks', updated, tenantId);
     }
   };
   
@@ -5225,33 +5229,41 @@ export default function App() {
       return c;
     });
     setClients(sanitized);
-    safeSetLocalStorage(`defib_${tenantId}_clients`, JSON.stringify(sanitized));
-    if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
-      saveCollectionToFirestore('clients', sanitized);
+    const str = JSON.stringify(sanitized);
+    safeSetLocalStorage(`defib_${tenantId}_clients`, str);
+    loadedDataRef.current.clients = str;
+    if (tenantId) {
+      saveCollectionToFirestore('clients', sanitized, tenantId);
     }
   };
 
   const saveVariables = (newVariables: Variable[]) => {
     setVariables(newVariables);
-    safeSetLocalStorage(`defib_${tenantId}_variables`, JSON.stringify(newVariables));
-    if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
-      saveCollectionToFirestore('variables', newVariables);
+    const str = JSON.stringify(newVariables);
+    safeSetLocalStorage(`defib_${tenantId}_variables`, str);
+    loadedDataRef.current.variables = str;
+    if (tenantId) {
+      saveCollectionToFirestore('variables', newVariables, tenantId);
     }
   };
 
   const saveDefibs = (newDefibs: Defibrillateur[]) => {
     setDefibrillateurs(newDefibs);
-    safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, JSON.stringify(newDefibs));
-    if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
-      saveCollectionToFirestore('defibrillateurs', newDefibs);
+    const str = JSON.stringify(newDefibs);
+    safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, str);
+    loadedDataRef.current.defibrillateurs = str;
+    if (tenantId) {
+      saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId);
     }
   };
 
   const saveOtherEquipments = (newItems: OtherEquipment[]) => {
     setOtherEquipments(newItems);
-    safeSetLocalStorage(`defib_${tenantId}_other_equipments`, JSON.stringify(newItems));
-    if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
-      saveCollectionToFirestore('otherEquipments', newItems);
+    const str = JSON.stringify(newItems);
+    safeSetLocalStorage(`defib_${tenantId}_other_equipments`, str);
+    loadedDataRef.current.otherEquipments = str;
+    if (tenantId) {
+      saveCollectionToFirestore('otherEquipments', newItems, tenantId);
     }
   };
 

@@ -170,18 +170,19 @@ export function getFromLocalCache<T>(key: string): T | null {
 }
 
 /**
- * Fetches a collection (stored as a single document with a 'list' array or object data) 
+ * Fetches a collection (stored as a single document or chunked documents) 
  * from Firestore. Returns null if the document does not exist yet.
  */
 export async function fetchCollectionFromFirestore<T>(collectionName: string, tenantId?: string): Promise<T | null> {
-  const key = getCollectionKey(collectionName, tenantId || getTenantId());
+  const activeTenantId = tenantId || getTenantId();
+  const key = getCollectionKey(collectionName, activeTenantId);
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return getFromLocalCache<T>(key);
   }
   try {
     const docRef = doc(db, 'appData', key);
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Fetch timed out')), 5000)
+      setTimeout(() => reject(new Error('Fetch timed out')), 6000)
     );
     const serverSnap = await Promise.race([
       getDocFromServer(docRef),
@@ -189,9 +190,36 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
     ]);
     if (serverSnap.exists()) {
       const payload = serverSnap.data();
-      const val = payload.value as T;
-      saveToLocalCache(key, val);
-      return val;
+      if (payload._chunked && typeof payload.chunksCount === 'number') {
+        const chunksCount = payload.chunksCount;
+        const chunkPromises = [];
+        for (let i = 0; i < chunksCount; i++) {
+          const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
+          chunkPromises.push(
+            Promise.race([
+              getDocFromServer(chunkRef),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Chunk fetch timeout')), 5000))
+            ])
+          );
+        }
+        const chunkSnaps = await Promise.all(chunkPromises);
+        let combined: any[] = [];
+        for (const snap of chunkSnaps) {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (Array.isArray(data.value)) {
+              combined.push(...data.value);
+            }
+          }
+        }
+        const val = combined as unknown as T;
+        saveToLocalCache(key, val);
+        return val;
+      } else if (payload.value !== undefined) {
+        const val = payload.value as T;
+        saveToLocalCache(key, val);
+        return val;
+      }
     }
   } catch (error) {
     console.log(`[Firestore Server-First] Failed to fetch collection ${collectionName} from server, falling back to cache:`, error);
@@ -240,11 +268,11 @@ export function sanitizeUndefined(obj: any): any {
 }
 
 /**
- * Saves a collection array or object to Firestore.
+ * Saves a collection array or object to Firestore (auto-chunking if needed).
  */
-export async function saveCollectionToFirestore<T>(collectionName: string, value: T): Promise<void> {
-  const tenantId = getTenantId();
-  const key = getCollectionKey(collectionName, tenantId);
+export async function saveCollectionToFirestore<T>(collectionName: string, value: T, tenantIdOverride?: string): Promise<void> {
+  const activeTenantId = tenantIdOverride || getTenantId();
+  const key = getCollectionKey(collectionName, activeTenantId);
   
   // Auto-inject envId and tenantId if items are objects inside an array
   let sanitizedValue = value;
@@ -253,8 +281,8 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
       if (item && typeof item === 'object') {
         return {
           ...item,
-          envId: tenantId,
-          tenantId: tenantId
+          envId: activeTenantId,
+          tenantId: activeTenantId
         };
       }
       return item;
@@ -262,8 +290,8 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
   } else if (value && typeof value === 'object') {
     sanitizedValue = {
       ...value,
-      envId: tenantId,
-      tenantId: tenantId
+      envId: activeTenantId,
+      tenantId: activeTenantId
     } as unknown as T;
   }
 
@@ -273,9 +301,33 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
   saveToLocalCache(key, finalCleanValue);
 
   try {
-    const docRef = doc(db, 'appData', key);
-    await setDoc(docRef, { value: finalCleanValue });
-    console.log(`Successfully synced ${key} to Firestore with hidden environment fields.`);
+    const jsonStr = JSON.stringify(finalCleanValue);
+    // Firestore single doc limit is 1MB. If array and payload > 400 KB, chunk it!
+    if (Array.isArray(finalCleanValue) && jsonStr.length > 400000) {
+      const items = finalCleanValue;
+      const avgItemLen = Math.max(1, Math.ceil(jsonStr.length / items.length));
+      const chunkSize = Math.max(1, Math.floor(250000 / avgItemLen));
+      const chunksCount = Math.ceil(items.length / chunkSize);
+
+      for (let i = 0; i < chunksCount; i++) {
+        const chunkItems = items.slice(i * chunkSize, (i + 1) * chunkSize);
+        const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
+        await setDoc(chunkRef, { value: chunkItems });
+      }
+
+      const mainDocRef = doc(db, 'appData', key);
+      await setDoc(mainDocRef, { 
+        _chunked: true, 
+        chunksCount, 
+        totalItems: items.length,
+        updatedAt: new Date().toISOString() 
+      });
+      console.log(`Successfully synced chunked collection ${key} (${chunksCount} chunks, ${items.length} items) to Firestore.`);
+    } else {
+      const docRef = doc(db, 'appData', key);
+      await setDoc(docRef, { value: finalCleanValue, _chunked: false });
+      console.log(`Successfully synced ${key} to Firestore with hidden environment fields.`);
+    }
   } catch (error) {
     console.warn(`Error saving collection ${collectionName} to Firestore (kept in cache):`, error);
   }
