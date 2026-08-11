@@ -631,7 +631,7 @@ export function exportToCSV(
     "Section 2 — Client : Référence du contrat.",
     "Section 2 — Client : Début du contrat.",
     "Section 2 — Client : Expiration du contrat.",
-    "Section 3 — Boîtier : Modèle.",
+    "Section 3 — Boîtier : Modèle. (Identifiant unique)",
     "Section 3 — Boîtier : Lot.",
     "Section 3 — Boîtier : Commentaire.",
     "Section 4 — Localisation : Numéro et voie.",

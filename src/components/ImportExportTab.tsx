@@ -103,7 +103,7 @@ function generateCSV(
         "Section 2 — Client : Référence du contrat.",
         "Section 2 — Client : Début du contrat.",
         "Section 2 — Client : Expiration du contrat.",
-        "Section 3 — Boîtier : Modèle.",
+        "Section 3 — Boîtier : Modèle. (Identifiant unique)",
         "Section 3 — Boîtier : Lot.",
         "Section 3 — Boîtier : Commentaire.",
         "Section 4 — Localisation : Numéro et voie.",
@@ -334,7 +334,7 @@ const validateAndParseDefibs = (
     "Section 2 — Client : Référence du contrat.",
     "Section 2 — Client : Début du contrat.",
     "Section 2 — Client : Expiration du contrat.",
-    "Section 3 — Boîtier : Modèle.",
+    "Section 3 — Boîtier : Modèle. (Identifiant unique)",
     "Section 3 — Boîtier : Lot.",
     "Section 3 — Boîtier : Commentaire.",
     "Section 4 — Localisation : Numéro et voie.",
@@ -553,8 +553,8 @@ const validateAndParseDefibs = (
       }
     }
 
-    // Client. (Identifiant unique) starts with "c_" (if provided)
-    if (clientVal !== "" && !clientVal.startsWith("c_")) {
+    // Client. (Identifiant unique) starts with "c_" or "cl_" (if provided)
+    if (clientVal !== "" && !clientVal.startsWith("c_") && !clientVal.startsWith("cl_")) {
       errorsSet.add("Erreur D");
     }
 
@@ -1652,10 +1652,6 @@ export default function ImportExportTab({
                       >
                         <option value="Défibrillateurs.">{t("Défibrillateurs.")}</option>
                         <option value="Clients.">{t("Clients.")}</option>
-                        <option value="Stocks.">{t("Stocks.")}</option>
-                        {formType !== 'Importation.' && (
-                          <option value="Temps.">{t("Temps.")}</option>
-                        )}
                         <option value="Variable — Modèle Défibrillateur.">{t("Variable — Modèle Défibrillateur.")}</option>
                         <option value="Variable — Modèle Électrode.">{t("Variable — Modèle Électrode.")}</option>
                         <option value="Variable — Modèle Batterie.">{t("Variable — Modèle Batterie.")}</option>
