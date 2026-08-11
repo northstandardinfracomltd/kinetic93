@@ -361,67 +361,121 @@ export default function MapModal({
   // Maps configurations
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
 
-  // Extract all items with valid coordinates
+  // Comprehensive department center mapping for France
+  const DEPT_COORDS: Record<string, [number, number]> = useMemo(() => ({
+    '01': [46.000, 5.200], '02': [49.500, 3.600], '03': [46.300, 3.200], '04': [44.100, 6.200], '05': [44.600, 6.100],
+    '06': [43.700, 7.250], '07': [44.750, 4.400], '08': [49.600, 4.700], '09': [42.900, 1.600], '10': [48.300, 4.100],
+    '11': [43.100, 2.350], '12': [44.350, 2.570], '13': [43.300, 5.400], '14': [49.180, -0.370], '15': [45.030, 2.660],
+    '16': [45.650, 0.150], '17': [45.750, -0.630], '18': [47.080, 2.400], '19': [45.270, 1.770], '21': [47.320, 5.040],
+    '22': [48.510, -2.760], '23': [46.170, 1.870], '24': [45.180, 0.720], '25': [47.240, 6.020], '26': [44.930, 4.890],
+    '27': [49.020, 1.150], '28': [48.440, 1.480], '29': [48.390, -4.480], '2A': [41.920, 8.730], '2B': [42.700, 9.450],
+    '30': [43.830, 4.360], '31': [43.600, 1.440], '32': [43.650, 0.580], '33': [44.840, -0.580], '34': [43.610, 3.870],
+    '35': [48.110, -1.670], '36': [46.810, 1.690], '37': [47.390, 0.680], '38': [45.180, 5.720], '39': [46.670, 5.550],
+    '40': [43.890, -0.500], '41': [47.590, 1.330], '42': [45.430, 4.380], '43': [45.040, 3.880], '44': [47.210, -1.550],
+    '45': [47.900, 1.900], '46': [44.450, 1.440], '47': [44.200, 0.620], '48': [44.520, 3.500], '49': [47.470, -0.550],
+    '50': [49.110, -1.090], '51': [48.950, 4.360], '52': [48.110, 5.140], '53': [48.070, -0.770], '54': [48.690, 6.180],
+    '55': [48.960, 5.380], '56': [47.650, -2.750], '57': [49.120, 6.170], '58': [46.990, 3.160], '59': [50.630, 3.060],
+    '60': [49.410, 2.080], '61': [48.430, 0.090], '62': [50.530, 2.640], '63': [45.780, 3.080], '64': [43.300, -0.370],
+    '65': [43.230, 0.080], '66': [42.690, 2.890], '67': [48.570, 7.750], '68': [47.750, 7.330], '69': [45.760, 4.830],
+    '70': [47.620, 6.150], '71': [46.670, 4.830], '72': [48.000, 0.200], '73': [45.560, 5.920], '74': [45.890, 6.120],
+    '75': [48.8566, 2.3522], '76': [49.440, 1.100], '77': [48.600, 2.900], '78': [48.800, 2.130], '79': [46.320, -0.460],
+    '80': [49.890, 2.300], '81': [43.920, 2.140], '82': [44.010, 1.350], '83': [43.120, 5.930], '84': [43.950, 4.810],
+    '85': [46.670, -1.420], '86': [46.580, 0.340], '87': [45.830, 1.260], '88': [48.170, 6.450], '89': [47.790, 3.570],
+    '90': [47.630, 6.860], '91': [48.500, 2.200], '92': [48.880, 2.230], '93': [48.910, 2.480], '94': [48.790, 2.450],
+    '95': [49.040, 2.100]
+  }), []);
+
+  // Extract / resolve coordinates for 100% of items with jittering to prevent stacked hidden points
   const itemsWithCoords = useMemo(() => {
     const list: { item: any; coords: [number, number] }[] = [];
+    const usedCoordsMap = new Map<string, number>();
+
     for (let i = 0; i < activeList.length; i++) {
       const item = activeList[i];
-      const lat = parseFloat(item.latitude);
-      const lng = parseFloat(item.longitude);
+      let lat = parseFloat(item.latitude || item.lat || '');
+      let lng = parseFloat(item.longitude || item.lng || item.lon || '');
+      let baseCoords: [number, number] | null = null;
+
+      // 1. Check if direct coordinates are valid (ignoring placeholder defaults if there are better address details)
       if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-        list.push({ item, coords: [lat, lng] });
+        baseCoords = [lat, lng];
       } else if (geocodedCoords[item.id]) {
-        list.push({ item, coords: geocodedCoords[item.id] });
+        baseCoords = geocodedCoords[item.id];
+      } else {
+        // 2. Check if client associated with item has address/department
+        const clientObj = item.clientId ? clientMap.get(item.clientId) : null;
+        const cp = (item.cp || item.codePostal || clientObj?.codePostal || '').trim();
+        const dept = cp.substring(0, 2);
+
+        if (dept && DEPT_COORDS[dept]) {
+          baseCoords = DEPT_COORDS[dept];
+        } else if (clientObj?.adresse || item.ville || clientObj?.ville) {
+          baseCoords = [46.603354, 1.888334]; // France center default
+        } else {
+          baseCoords = [46.603354, 1.888334]; // Fallback
+        }
       }
+
+      // Apply deterministic spatial offset for co-located items so all items are individually visible
+      const key = `${baseCoords[0].toFixed(4)}_${baseCoords[1].toFixed(4)}`;
+      const stackIndex = usedCoordsMap.get(key) || 0;
+      usedCoordsMap.set(key, stackIndex + 1);
+
+      let finalLat = baseCoords[0];
+      let finalLng = baseCoords[1];
+
+      if (stackIndex > 0) {
+        const angle = (stackIndex * 137.5) * (Math.PI / 180); // Golden angle distribution
+        const radius = 0.0012 * Math.sqrt(stackIndex); // ~100m to 800m offset
+        finalLat += Math.sin(angle) * radius;
+        finalLng += Math.cos(angle) * radius;
+      }
+
+      list.push({ item, coords: [finalLat, finalLng] });
     }
     return list;
-  }, [activeList, geocodedCoords]);
+  }, [activeList, geocodedCoords, clientMap, DEPT_COORDS]);
 
-  // Progressive batch loading state for high performance (e.g. 3,000 points)
+  // Progressive batch loading state for high performance
   const [renderedCount, setRenderedCount] = useState<number>(0);
   const [isMapBatchLoading, setIsMapBatchLoading] = useState<boolean>(true);
 
-  // Reset batch loading when modal opens or activeList changes
+  // Progressive loading animation effect
   useEffect(() => {
     if (!isOpen) {
       setRenderedCount(0);
-      setIsMapBatchLoading(true);
+      setIsMapBatchLoading(false);
       return;
     }
+
     setRenderedCount(0);
     setIsMapBatchLoading(true);
-  }, [isOpen, activeList]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-
-    if (itemsWithCoords.length === 0) {
-      const timer = setTimeout(() => setIsMapBatchLoading(false), 200);
+    const total = itemsWithCoords.length;
+    if (total === 0) {
+      const timer = setTimeout(() => setIsMapBatchLoading(false), 500);
       return () => clearTimeout(timer);
     }
 
-    if (renderedCount < itemsWithCoords.length) {
-      if (!isMapBatchLoading) {
-        // If initial batch load is already complete, keep renderedCount in sync silently
-        setRenderedCount(itemsWithCoords.length);
-        return;
+    const batchSize = Math.max(1, Math.ceil(total / 12));
+    const intervalTime = 40; // ms per tick
+
+    let current = 0;
+    const interval = setInterval(() => {
+      current = Math.min(current + batchSize, total);
+      setRenderedCount(current);
+
+      if (current >= total) {
+        clearInterval(interval);
+        // Keep banner visible for 700ms at 100% so user can easily read complete count
+        setTimeout(() => {
+          setIsMapBatchLoading(false);
+        }, 700);
       }
+    }, intervalTime);
 
-      const batchSize = Math.max(500, Math.ceil(itemsWithCoords.length / 6));
-      const timer = setTimeout(() => {
-        setRenderedCount(prev => {
-          const next = Math.min(prev + batchSize, itemsWithCoords.length);
-          if (next >= itemsWithCoords.length) {
-            setIsMapBatchLoading(false);
-          }
-          return next;
-        });
-      }, 16);
-      return () => clearTimeout(timer);
-    } else if (isMapBatchLoading) {
-      setIsMapBatchLoading(false);
-    }
-  }, [isOpen, itemsWithCoords.length, renderedCount, isMapBatchLoading]);
+    return () => clearInterval(interval);
+  }, [isOpen, activeList, itemsWithCoords.length]);
 
   const displayedItems = useMemo(() => {
     return itemsWithCoords.slice(0, renderedCount);
