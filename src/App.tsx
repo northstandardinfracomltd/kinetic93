@@ -26,6 +26,7 @@ import {
   computeProchaineMaintenance,
   getLocationCustomName,
   getCapsuleBgColor,
+  safeSetLocalStorage,
 } from './utils';
 import {
   triggerEmail4Signalement,
@@ -3938,7 +3939,7 @@ export default function App() {
       const str = JSON.stringify(clients);
       if (loadedDataRef.current.clients === str) return;
       saveCollectionToFirestore('clients', clients);
-      localStorage.setItem(`defib_${tenantId}_clients`, str);
+      safeSetLocalStorage(`defib_${tenantId}_clients`, str);
       loadedDataRef.current.clients = str;
     }
   }, [clients, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -3948,7 +3949,7 @@ export default function App() {
       const str = JSON.stringify(variables);
       if (loadedDataRef.current.variables === str) return;
       saveCollectionToFirestore('variables', variables);
-      localStorage.setItem(`defib_${tenantId}_variables`, str);
+      safeSetLocalStorage(`defib_${tenantId}_variables`, str);
       loadedDataRef.current.variables = str;
     }
   }, [variables, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -3958,7 +3959,7 @@ export default function App() {
       const str = JSON.stringify(defibrillateurs);
       if (loadedDataRef.current.defibrillateurs === str) return;
       saveCollectionToFirestore('defibrillateurs', defibrillateurs);
-      localStorage.setItem(`defib_${tenantId}_defibrillateurs`, str);
+      safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, str);
       loadedDataRef.current.defibrillateurs = str;
     }
   }, [defibrillateurs, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -3968,7 +3969,7 @@ export default function App() {
       const str = JSON.stringify(stocks);
       if (loadedDataRef.current.stocks === str) return;
       saveCollectionToFirestore('stocks', stocks);
-      localStorage.setItem(`defib_${tenantId}_stocks`, str);
+      safeSetLocalStorage(`defib_${tenantId}_stocks`, str);
       loadedDataRef.current.stocks = str;
     }
   }, [stocks, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -3978,7 +3979,7 @@ export default function App() {
       const str = JSON.stringify(companyInfo);
       if (loadedDataRef.current.companyInfo === str) return;
       saveCollectionToFirestore('companyInfo', companyInfo);
-      localStorage.setItem(`defib_${tenantId}_company_info`, str);
+      safeSetLocalStorage(`defib_${tenantId}_company_info`, str);
       loadedDataRef.current.companyInfo = str;
     }
   }, [companyInfo, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -3988,7 +3989,7 @@ export default function App() {
       const str = JSON.stringify(members);
       if (loadedDataRef.current.members === str) return;
       saveCollectionToFirestore('members', members);
-      localStorage.setItem(`defib_${tenantId}_members`, str);
+      safeSetLocalStorage(`defib_${tenantId}_members`, str);
       loadedDataRef.current.members = str;
     }
   }, [members, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -3998,7 +3999,7 @@ export default function App() {
       const str = JSON.stringify(tickets);
       if (loadedDataRef.current.tickets === str) return;
       saveCollectionToFirestore('tickets', tickets);
-      localStorage.setItem(`defib_${tenantId}_support_tickets`, str);
+      safeSetLocalStorage(`defib_${tenantId}_support_tickets`, str);
       loadedDataRef.current.tickets = str;
     }
   }, [tickets, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -4008,7 +4009,7 @@ export default function App() {
       const str = JSON.stringify(pointages);
       if (loadedDataRef.current.pointages === str) return;
       saveCollectionToFirestore('pointages', pointages);
-      localStorage.setItem(`defib_${tenantId}_pointages_history`, str);
+      safeSetLocalStorage(`defib_${tenantId}_pointages_history`, str);
       loadedDataRef.current.pointages = str;
     }
   }, [pointages, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -4018,7 +4019,7 @@ export default function App() {
       const str = JSON.stringify(pointagesAutoVigilance);
       if (loadedDataRef.current.pointagesAutoVigilance === str) return;
       saveCollectionToFirestore('pointagesAutoVigilance', pointagesAutoVigilance);
-      localStorage.setItem(`defib_${tenantId}_pointages_auto_vigilance`, str);
+      safeSetLocalStorage(`defib_${tenantId}_pointages_auto_vigilance`, str);
       loadedDataRef.current.pointagesAutoVigilance = str;
     }
   }, [pointagesAutoVigilance, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -4028,7 +4029,7 @@ export default function App() {
       const str = JSON.stringify(commercialDocs);
       if (loadedDataRef.current.commercialDocs === str) return;
       saveCollectionToFirestore('commercialDocs', commercialDocs);
-      localStorage.setItem(`defib_${tenantId}_commercial_docs`, str);
+      safeSetLocalStorage(`defib_${tenantId}_commercial_docs`, str);
       loadedDataRef.current.commercialDocs = str;
     }
   }, [commercialDocs, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -4038,7 +4039,7 @@ export default function App() {
       const str = JSON.stringify(customerReviews);
       if (loadedDataRef.current.customerReviews === str) return;
       saveCollectionToFirestore('customerReviews', customerReviews);
-      localStorage.setItem(`defib_${tenantId}_customer_reviews`, str);
+      safeSetLocalStorage(`defib_${tenantId}_customer_reviews`, str);
       loadedDataRef.current.customerReviews = str;
     }
   }, [customerReviews, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -4048,7 +4049,7 @@ export default function App() {
       const str = JSON.stringify(notifications);
       if (loadedDataRef.current.notifications === str) return;
       saveCollectionToFirestore('notifications', notifications);
-      localStorage.setItem(`defib_${tenantId}_notifications`, str);
+      safeSetLocalStorage(`defib_${tenantId}_notifications`, str);
       loadedDataRef.current.notifications = str;
     }
   }, [notifications, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -5224,7 +5225,7 @@ export default function App() {
       return c;
     });
     setClients(sanitized);
-    localStorage.setItem(`defib_${tenantId}_clients`, JSON.stringify(sanitized));
+    safeSetLocalStorage(`defib_${tenantId}_clients`, JSON.stringify(sanitized));
     if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
       saveCollectionToFirestore('clients', sanitized);
     }
@@ -5232,7 +5233,7 @@ export default function App() {
 
   const saveVariables = (newVariables: Variable[]) => {
     setVariables(newVariables);
-    localStorage.setItem(`defib_${tenantId}_variables`, JSON.stringify(newVariables));
+    safeSetLocalStorage(`defib_${tenantId}_variables`, JSON.stringify(newVariables));
     if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
       saveCollectionToFirestore('variables', newVariables);
     }
@@ -5240,7 +5241,7 @@ export default function App() {
 
   const saveDefibs = (newDefibs: Defibrillateur[]) => {
     setDefibrillateurs(newDefibs);
-    localStorage.setItem(`defib_${tenantId}_defibrillateurs`, JSON.stringify(newDefibs));
+    safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, JSON.stringify(newDefibs));
     if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
       saveCollectionToFirestore('defibrillateurs', newDefibs);
     }
@@ -5248,7 +5249,7 @@ export default function App() {
 
   const saveOtherEquipments = (newItems: OtherEquipment[]) => {
     setOtherEquipments(newItems);
-    localStorage.setItem(`defib_${tenantId}_other_equipments`, JSON.stringify(newItems));
+    safeSetLocalStorage(`defib_${tenantId}_other_equipments`, JSON.stringify(newItems));
     if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
       saveCollectionToFirestore('otherEquipments', newItems);
     }

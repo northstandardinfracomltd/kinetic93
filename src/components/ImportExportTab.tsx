@@ -315,6 +315,11 @@ const validateAndParseDefibs = (
   const { headers, rows } = parseCSV(csvText);
   const errorsSet = new Set<string>();
 
+  // Erreur T : Size limit 5 Mo (5 * 1024 * 1024 bytes)
+  if (new Blob([csvText]).size > 5 * 1024 * 1024) {
+    errorsSet.add("Erreur T");
+  }
+
   const expected = [
     "Section 1 — Identification : Identifiant.",
     "Section 1 — Identification : Série.",
@@ -1105,6 +1110,11 @@ export default function ImportExportTab({
         return;
       }
 
+      if (new Blob([uploadedCsvContent]).size > 5 * 1024 * 1024) {
+        setValidationError(`Votre fichier contient une ou plusieurs erreurs : Erreur T. Vous trouverez sur notre aide en ligne (https://defibeo.com/school/) les solutions correspondantes pour résoudre ces anomalies. (Le fichier dépasse la taille maximale autorisée de 5 Mo).`);
+        return;
+      }
+
       let parsedData: any[] | null = null;
       if (formCategorie === 'Défibrillateurs.') {
         const valResult = validateAndParseDefibs(uploadedCsvContent, variables, defibrillateurs);
@@ -1690,6 +1700,13 @@ export default function ImportExportTab({
                               alert(t("Veuillez sélectionner un fichier au format .csv"));
                               return;
                             }
+                            if (file.size > 5 * 1024 * 1024) {
+                              setValidationError(`Votre fichier contient une ou plusieurs erreurs : Erreur T. Vous trouverez sur notre aide en ligne (https://defibeo.com/school/) les solutions correspondantes pour résoudre ces anomalies. (Le fichier dépasse la taille maximale autorisée de 5 Mo).`);
+                              alert(t("Le fichier est trop lourd : il dépasse la taille maximale autorisée de 5 Mo."));
+                              setSelectedFileName('');
+                              setUploadedCsvContent('');
+                              return;
+                            }
                             setSelectedFileName(file.name);
                             const reader = new FileReader();
                             reader.onload = (evt) => {
@@ -1716,6 +1733,13 @@ export default function ImportExportTab({
                               if (file) {
                                 if (!file.name.endsWith('.csv')) {
                                   alert(t("Veuillez sélectionner un fichier au format .csv"));
+                                  return;
+                                }
+                                if (file.size > 5 * 1024 * 1024) {
+                                  setValidationError(`Votre fichier contient une ou plusieurs erreurs : Erreur T. Vous trouverez sur notre aide en ligne (https://defibeo.com/school/) les solutions correspondantes pour résoudre ces anomalies. (Le fichier dépasse la taille maximale autorisée de 5 Mo).`);
+                                  alert(t("Le fichier est trop lourd : il dépasse la taille maximale autorisée de 5 Mo."));
+                                  setSelectedFileName('');
+                                  setUploadedCsvContent('');
                                   return;
                                 }
                                 setSelectedFileName(file.name);

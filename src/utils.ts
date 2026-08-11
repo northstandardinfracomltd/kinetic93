@@ -885,4 +885,12 @@ export function getCapsuleBgColor(dateStr: string): string {
   }
 }
 
+export function safeSetLocalStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn(`localStorage quota exceeded for key "${key}". Value saved in memory/cloud.`, e);
+  }
+}
+
 
