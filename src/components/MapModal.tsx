@@ -190,6 +190,63 @@ const createCustomIcon = (colorHex: string, activeFocused: boolean, isChecked: b
   });
 };
 
+// Global cache for custom icons to prevent recreating L.divIcon thousands of times
+const iconCache = new Map<string, L.DivIcon>();
+
+const getCustomIcon = (colorHex: string, activeFocused: boolean, isChecked: boolean) => {
+  const key = `${colorHex}_${activeFocused ? '1' : '0'}_${isChecked ? '1' : '0'}`;
+  let icon = iconCache.get(key);
+  if (!icon) {
+    icon = createCustomIcon(colorHex, activeFocused, isChecked);
+    iconCache.set(key, icon);
+  }
+  return icon;
+};
+
+// Memoized Marker component for fast map updates with thousands of points
+const DefibMarker = React.memo(function DefibMarker({
+  item,
+  coords,
+  isFocused,
+  isChecked,
+  statusColor,
+  clientDenomination,
+  onSelect,
+  onToggleSelect
+}: {
+  item: any;
+  coords: [number, number];
+  isFocused: boolean;
+  isChecked: boolean;
+  statusColor: string;
+  clientDenomination: string;
+  onSelect: (id: string) => void;
+  onToggleSelect?: (id: string) => void;
+}) {
+  const icon = getCustomIcon(statusColor, isFocused, isChecked);
+
+  return (
+    <Marker
+      position={coords}
+      icon={icon}
+      eventHandlers={{
+        click: (e) => {
+          onSelect(item.id);
+          onToggleSelect?.(item.id);
+          e.target.openPopup();
+        },
+        mouseover: (e) => {
+          e.target.openPopup();
+        }
+      }}
+    >
+      <Popup closeButton={false}>
+        <PopupContent item={item} clientDenomination={clientDenomination} />
+      </Popup>
+    </Marker>
+  );
+});
+
 // Popup Content component using map trigger actions
 function PopupContent({ 
   item, 
@@ -304,6 +361,51 @@ export default function MapModal({
   // Maps configurations
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
 
+  // Extract all items with valid coordinates
+  const itemsWithCoords = useMemo(() => {
+    const list: { item: any; coords: [number, number] }[] = [];
+    for (let i = 0; i < activeList.length; i++) {
+      const item = activeList[i];
+      const lat = parseFloat(item.latitude);
+      const lng = parseFloat(item.longitude);
+      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        list.push({ item, coords: [lat, lng] });
+      } else if (geocodedCoords[item.id]) {
+        list.push({ item, coords: geocodedCoords[item.id] });
+      }
+    }
+    return list;
+  }, [activeList, geocodedCoords]);
+
+  // Progressive batch loading state for high performance (e.g. 3,000 points)
+  const [renderedCount, setRenderedCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setRenderedCount(0);
+      return;
+    }
+
+    if (itemsWithCoords.length === 0) {
+      setRenderedCount(0);
+      return;
+    }
+
+    if (renderedCount < itemsWithCoords.length) {
+      const batchSize = Math.max(300, Math.ceil(itemsWithCoords.length / 8));
+      const timer = setTimeout(() => {
+        setRenderedCount(prev => Math.min(prev + batchSize, itemsWithCoords.length));
+      }, 16);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, itemsWithCoords.length, renderedCount]);
+
+  const displayedItems = useMemo(() => {
+    return itemsWithCoords.slice(0, renderedCount);
+  }, [itemsWithCoords, renderedCount]);
+
+  const isFullyLoaded = isOpen && itemsWithCoords.length > 0 && renderedCount >= itemsWithCoords.length;
+
   // Set initial selected item when opened
   useEffect(() => {
     if (isOpen && activeList.length > 0 && selectedItemId === null) {
@@ -410,6 +512,30 @@ export default function MapModal({
 
       <div className="relative w-full h-full flex-1">
         
+        {/* Top-Bar Red Loading Banner (Visible as long as 100% of points are not displayed) */}
+        {!isFullyLoaded && isOpen && (
+          <div 
+            className="absolute top-0 left-0 right-0 z-[2000] py-2.5 px-4 text-center font-bold shadow-lg flex items-center justify-center gap-3 transition-all animate-fadeIn"
+            style={{
+              backgroundColor: '#ef4444',
+              color: '#ffffff',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              fontSize: '17px',
+              letterSpacing: '0.01em',
+              boxShadow: '0 4px 15px rgba(239, 68, 68, 0.4)'
+            }}
+            id="map-loading-topbar"
+          >
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin flex-shrink-0" />
+            <span>Veuillez patienter, chargement en cours.</span>
+            {itemsWithCoords.length > 0 && (
+              <span className="text-sm bg-red-800/60 text-white px-2.5 py-0.5 rounded-full ml-1 font-mono">
+                {Math.min(renderedCount, itemsWithCoords.length)} / {itemsWithCoords.length}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Top-Right Header Container: Tournée button (visible only when selectedIds > 0) + Fermer button */}
         <div className="absolute top-4 right-4 z-[1000] flex items-center gap-3">
           {/* Tournée Dropdown Container */}
@@ -623,38 +749,24 @@ export default function MapModal({
           <ChangeMapView center={mapCenter} zoom={mapZoom} />
 
           {/* Plot Markers */}
-          {activeList.map(item => {
-            const coords = getDeviceCoords(item);
-            if (!coords) return null;
-
+          {displayedItems.map(({ item, coords }) => {
             const isFocused = item.id === selectedItemId;
             const isChecked = selectedIds.includes(item.id);
             const statusColor = getSafetyStatusColor(item);
             const clientDenomination = clientMap.get(item.clientId)?.denomination || '';
 
             return (
-              <Marker
+              <DefibMarker
                 key={item.id}
-                position={coords}
-                icon={createCustomIcon(statusColor, isFocused, isChecked)}
-                eventHandlers={{
-                  click: (e) => {
-                    setSelectedItemId(item.id);
-                    onToggleSelect?.(item.id);
-                    e.target.openPopup();
-                  },
-                  mouseover: (e) => {
-                    e.target.openPopup();
-                  }
-                }}
-              >
-                <Popup closeButton={false}>
-                  <PopupContent 
-                    item={item} 
-                    clientDenomination={clientDenomination} 
-                  />
-                </Popup>
-              </Marker>
+                item={item}
+                coords={coords}
+                isFocused={isFocused}
+                isChecked={isChecked}
+                statusColor={statusColor}
+                clientDenomination={clientDenomination}
+                onSelect={setSelectedItemId}
+                onToggleSelect={onToggleSelect}
+              />
             );
           })}
         </MapContainer>

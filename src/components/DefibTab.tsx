@@ -1396,6 +1396,27 @@ export default function DefibTab({
     });
   }, [defibrillateurs, search, activeFilters, clientMap, variableMap, fsmTours]);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const ITEMS_PER_PAGE = 100;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, activeFilters]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredDefibs.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedDefibs = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredDefibs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredDefibs, currentPage]);
+
   // Synchronization components for top and bottom horizontal scrollbars
   const topScrollRef = React.useRef<HTMLDivElement>(null);
   const bottomScrollRef = React.useRef<HTMLDivElement>(null);
@@ -2388,7 +2409,7 @@ export default function DefibTab({
                 </tr>
               </thead>
               <tbody className="text-slate-700 text-xs">
-                {filteredDefibs.map(df => {
+                {paginatedDefibs.map(df => {
                   const linkedClient = clientMap.get(df.clientId);
                   const linkedModel = variableMap.get(df.modeleId);
                   const isChecked = selectedIds.includes(df.id);
@@ -2696,8 +2717,62 @@ export default function DefibTab({
         </div>
       </div>
 
-      <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }} className="p-4 font-sans text-left" id="defib-tab-total-summary">
-        {t('Total défibrillateurs (Tous)')}: {defibrillateurs.length}.
+      <div 
+        className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200" 
+        id="defib-tab-total-summary"
+      >
+        <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
+          {t('Total défibrillateurs (Tous)')} : {defibrillateurs.length} ({paginatedDefibs.length} sur cette page).
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentPage(p => Math.max(1, p - 1));
+              bottomScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            disabled={currentPage === 1}
+            className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            id="btn-defib-prev-page"
+          >
+            &larr; Précédent
+          </button>
+
+          <div className="relative inline-flex items-center">
+            <select
+              value={currentPage}
+              onChange={(e) => {
+                setCurrentPage(Number(e.target.value));
+                bottomScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              id="select-defib-page"
+              className="appearance-none bg-white border border-slate-300 hover:border-slate-400 text-slate-800 text-sm font-bold rounded-lg pl-3 pr-8 py-1.5 cursor-pointer shadow-xs focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/30"
+              style={{ cursor: 'pointer' }}
+            >
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <option key={p} value={p}>
+                  Page {p}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-4 h-4 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentPage(p => Math.min(totalPages, p + 1));
+              bottomScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            id="btn-defib-next-page"
+          >
+            Suivant &rarr;
+          </button>
+        </div>
       </div>
 
       {/* Cartographie GIS Overlay */}

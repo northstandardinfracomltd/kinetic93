@@ -106,11 +106,66 @@ Renvoie obligatoirement un objet JSON contenant :
     }
   });
 
+// Helper function to fetch registered tenants safely on the server
+async function getRegisteredTenantsFromDb(): Promise<any[]> {
+  try {
+    const docRef = doc(db, 'appData', 'registered_tenants');
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data().value || [];
+    }
+  } catch (e) {
+    console.error("Error fetching registered tenants in server:", e);
+  }
+  return [];
+}
+
+// Helper function to read a collection from Firestore with support for chunked documents
+async function fetchServerCollection(colName: string, tenantId: string): Promise<any[]> {
+  const collectionKey = tenantId === 'demo' ? colName : `${tenantId}_${colName}`;
+  try {
+    const docRef = doc(db, 'appData', collectionKey);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return [];
+
+    const payload = snap.data();
+    if (payload._chunked && typeof payload.chunksCount === 'number') {
+      const chunkPromises = [];
+      for (let i = 0; i < payload.chunksCount; i++) {
+        const chunkRef = doc(db, 'appData', `${collectionKey}_chunk_${i}`);
+        chunkPromises.push(getDoc(chunkRef));
+      }
+      const chunkSnaps = await Promise.all(chunkPromises);
+      let combined: any[] = [];
+      for (const cSnap of chunkSnaps) {
+        if (cSnap.exists()) {
+          const cData = cSnap.data();
+          if (Array.isArray(cData.value)) {
+            combined.push(...cData.value);
+          }
+        }
+      }
+      return combined;
+    } else if (Array.isArray(payload.value)) {
+      return payload.value;
+    }
+  } catch (err) {
+    console.error(`Error fetching server collection ${colName} for tenant ${tenantId}:`, err);
+  }
+  return [];
+}
+
   // Proxy route for Pennylane API to prevent CORS
   app.all("/api/pennylane/*", async (req, res) => {
     try {
       const urlObj = new URL(req.url, 'http://localhost');
       const subPath = urlObj.pathname.replace(/^\/api\/pennylane\//, '');
+      
+      // Prevent Path Traversal / SSRF
+      if (subPath.includes('..') || subPath.includes('://') || subPath.includes('\0')) {
+        return res.status(400).json({ error: "Chemin de requête invalide ou non sécurisé." });
+      }
+
       const targetUrl = `https://app.pennylane.com/api/external/v2/${subPath}${urlObj.search}`;
 
       const headers: Record<string, string> = {
@@ -158,6 +213,11 @@ Renvoie obligatoirement un objet JSON contenant :
     try {
       const urlObj = new URL(req.url, 'http://localhost');
       const subPath = urlObj.pathname.replace(/^\/api\/dropbox\//, '');
+
+      // Prevent Path Traversal / SSRF
+      if (subPath.includes('..') || subPath.includes('://') || subPath.includes('\0')) {
+        return res.status(400).json({ error: "Chemin de requête invalide ou non sécurisé." });
+      }
       
       const isContent = subPath.includes("files/upload") || subPath.includes("files/download");
       const baseUrl = isContent ? "https://content.dropboxapi.com/2/" : "https://api.dropboxapi.com/2/";
@@ -339,7 +399,15 @@ Renvoie obligatoirement un objet JSON contenant :
         return res.status(400).json({ success: false, error: errMsg });
       }
       
-      const targetTenantId = tenantId || "demo";
+      // Sanitize tenantId (alphanumeric, underscore, hyphen only)
+      const rawTenantId = (tenantId || "demo").toString().trim();
+      const sanitizedTenantId = rawTenantId.replace(/[^a-zA-Z0-9_-]/g, '');
+
+      // Verify if target tenant exists in Database or fallback to 'demo'
+      const tenants = await getRegisteredTenantsFromDb();
+      const matchedTenant = sanitizedTenantId === "demo" ? true : tenants.find(t => t.id === sanitizedTenantId || t.shortEnvId === sanitizedTenantId);
+      const targetTenantId = matchedTenant ? (matchedTenant === true ? "demo" : matchedTenant.id) : "demo";
+      
       const collectionKey = targetTenantId === "demo" ? "tickets" : `${targetTenantId}_tickets`;
       
       // Fetch existing tickets from Firestore
@@ -350,13 +418,18 @@ Renvoie obligatoirement un objet JSON contenant :
         tickets = snap.data().value || [];
       }
       
+      // Sanitize input values to prevent XSS
+      const cleanMessage = String(message).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const cleanName = String(name || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const cleanEmail = String(email).trim();
+
       const randomId = `#${Math.floor(100000 + Math.random() * 900000)}`;
       const newTicket = {
         id: randomId,
         identifiant: "",
-        objet: "Formulaire intégré",
-        message: `[Message depuis le site web]\n${message}`,
-        email: email,
+        objet: cleanName ? `Formulaire intégré (${cleanName})` : "Formulaire intégré",
+        message: `[Message depuis le site web]\n${cleanMessage}`,
+        email: cleanEmail,
         phone: "-",
         date: new Date().toISOString().replace('T', ' ').substring(0, 19),
         status: "Nouveau",
@@ -367,8 +440,8 @@ Renvoie obligatoirement un objet JSON contenant :
       tickets.unshift(newTicket);
       await setDoc(docRef, { value: tickets });
       
-      // If redirectUrl is supplied, redirect there
-      if (redirectUrl) {
+      // If redirectUrl is supplied, redirect there if it's a valid relative or https URL
+      if (redirectUrl && (redirectUrl.startsWith('/') || redirectUrl.startsWith('http://') || redirectUrl.startsWith('https://'))) {
         return res.redirect(redirectUrl);
       }
       
@@ -391,11 +464,90 @@ Renvoie obligatoirement un objet JSON contenant :
       const urlObj = new URL(req.url, 'http://localhost');
       const cleanPath = urlObj.pathname.replace(/^\/(api\/)?v1\/?/, '');
       
-      const apiKey = req.headers['x-defibeo-api-key'] || req.query.api_key;
-      const tenantId = (req.headers['x-defibeo-tenant-id'] as string) || (req.query.tenant_id as string) || 'demo';
+      // Extract API key from headers, query, or bearer token
+      const authHeader = req.headers['authorization'];
+      const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
+      const apiKey = ((req.headers['x-defibeo-api-key'] as string) || (req.query.api_key as string) || bearerToken || '').trim();
 
-      // Example operational response for API tests and external calls
+      // Extract requested tenant ID
+      const rawTenantId = ((req.headers['x-defibeo-tenant-id'] as string) || (req.headers['x-tenant-id'] as string) || (req.query.tenant_id as string) || (req.query.env_id as string) || 'demo').trim();
+
+      // 1. Sanitize tenant ID format
+      const sanitizedTenantId = rawTenantId.replace(/[^a-zA-Z0-9_-]/g, '');
+      if (!sanitizedTenantId) {
+        return res.status(400).json({
+          status: "error",
+          error: "Format de l'identifiant d'environnement (tenant_id) invalide. Seuls les caractères alphanumériques, tirets et underscores sont autorisés."
+        });
+      }
+
+      // 2. Look up tenant in database
+      const tenants = await getRegisteredTenantsFromDb();
+      let targetTenant = null;
+      if (sanitizedTenantId === 'demo') {
+        targetTenant = { id: 'demo', disabled: false, companyName: 'Démo', shortEnvId: 'DEMO', adminPasswordHexOrPlain: 'demo' };
+      } else {
+        targetTenant = tenants.find(t => t.id === sanitizedTenantId || t.shortEnvId === sanitizedTenantId);
+      }
+
+      if (!targetTenant) {
+        return res.status(404).json({
+          status: "error",
+          error: `Accès refusé : l'environnement '${sanitizedTenantId}' n'existe pas ou n'est pas configuré.`,
+          code: "ENV_NOT_FOUND"
+        });
+      }
+
+      if (targetTenant.disabled) {
+        return res.status(403).json({
+          status: "error",
+          error: `L'environnement '${targetTenant.companyName || sanitizedTenantId}' est actuellement désactivé.`,
+          code: "ENV_DISABLED"
+        });
+      }
+
+      // 3. API Key Authentication & Multi-Tenant Security Check
+      const masterKey = process.env.DEFIBEO_API_KEY || process.env.GEMINI_API_KEY;
+      let isAuthorized = false;
+
+      if (apiKey) {
+        // Master server key gives access to any environment
+        if (masterKey && apiKey === masterKey) {
+          isAuthorized = true;
+        }
+        // Public / Demo key
+        else if (targetTenant.id === 'demo' && (apiKey === 'demo' || apiKey === 'public_demo_key' || apiKey === 'defibeo_demo')) {
+          isAuthorized = true;
+        }
+        // Tenant specific credentials or keys
+        else if (targetTenant) {
+          const allowedKeys = [
+            targetTenant.adminPasswordHexOrPlain,
+            targetTenant.shortEnvId,
+            targetTenant.id,
+            `defib_${targetTenant.id}`
+          ].filter(Boolean);
+
+          if (allowedKeys.includes(apiKey)) {
+            isAuthorized = true;
+          }
+        }
+      }
+
+      if (!isAuthorized) {
+        return res.status(401).json({
+          status: "error",
+          error: "Authentification API échouée. Vefifiez votre clé API ('x-defibeo-api-key') et vos droits d'accès pour cet environnement.",
+          code: "UNAUTHORIZED_TENANT_ACCESS",
+          environnement_demande: targetTenant.id
+        });
+      }
+
+      const tenantId = targetTenant.id;
+
+      // Variables Endpoint
       if (cleanPath === 'variables' || cleanPath === 'variables/') {
+        const storedVars = await fetchServerCollection('variables', tenantId);
         return res.json({
           status: "success",
           environnement: tenantId,
@@ -404,10 +556,12 @@ Renvoie obligatoirement un objet JSON contenant :
           taux_tva_defaut: 20.0,
           duree_validite_devis_jours: 30,
           marques_dae_supportees: ["ZOLL", "HEARTSINE", "PHYSIO-CONTROL", "SCHILLER", "MINDRAY"],
-          categories_crm: ["Technique", "Commercial", "Réclamation", "Formulaire Web", "Sans Catégorie"]
+          categories_crm: ["Technique", "Commercial", "Réclamation", "Formulaire Web", "Sans Catégorie"],
+          variables_personnalisees: storedVars
         });
       }
 
+      // CRM Tickets Endpoint
       if (cleanPath.startsWith('crm/tickets')) {
         if (req.method === 'POST') {
           const { categorie, situation, criticite, objet, client_id, collaborateur, description } = req.body;
@@ -440,85 +594,60 @@ Renvoie obligatoirement un objet JSON contenant :
           return res.status(201).json({
             status: "success",
             message: "Ticket CRM créé avec succès",
+            environnement: tenantId,
             ticket: newTicket
           });
         } else {
-          // GET tickets
-          const collectionKey = tenantId === "demo" ? "tickets" : `${tenantId}_tickets`;
-          const docRef = doc(db, 'appData', collectionKey);
-          const snap = await getDoc(docRef);
-          let tickets: any[] = [];
-          if (snap.exists()) {
-            tickets = snap.data().value || [];
-          }
-          return res.json({ status: "success", count: tickets.length, tickets });
+          // GET tickets strictly isolated for tenantId
+          const tickets = await fetchServerCollection('tickets', tenantId);
+          return res.json({
+            status: "success",
+            environnement: tenantId,
+            count: tickets.length,
+            tickets
+          });
         }
       }
 
+      // Clients Endpoint
       if (cleanPath.startsWith('clients')) {
+        const clients = await fetchServerCollection('clients', tenantId);
+        const subId = cleanPath.split('/')[1];
+
+        if (subId) {
+          const found = clients.find((c: any) => c.id === subId || c.identifiantUnique === subId || c.nom === subId);
+          if (found) {
+            return res.json({ status: "success", environnement: tenantId, client: found });
+          }
+          return res.status(404).json({ status: "error", error: `Client '${subId}' non trouvé dans l'environnement ${tenantId}` });
+        }
+
         return res.json({
           status: "success",
-          client_id: cleanPath.split('/')[1] || "CLI-0042",
-          entreprise: "Clinique Saint-Jean",
-          email: "contact@clinique-stjean.fr",
-          telephone: "0142680000",
-          payeur_id: "PAY-9901",
-          identifiant_unique: "SIRET-12345678900012",
-          reference_contrat: "CTR-2026-99",
-          debut_contrat: "2026-01-01",
-          fin_contrat: "2028-12-31"
+          environnement: tenantId,
+          count: clients.length,
+          clients
         });
       }
 
+      // Defibrillateurs Endpoint
       if (cleanPath.startsWith('defibrillateurs')) {
+        const defibs = await fetchServerCollection('defibrillateurs', tenantId);
+        const subId = cleanPath.split('/')[1];
+
+        if (subId) {
+          const found = defibs.find((d: any) => d.id === subId || d.identifiant === subId || d.numeroSerie === subId);
+          if (found) {
+            return res.json({ status: "success", environnement: tenantId, defibrillateur: found });
+          }
+          return res.status(404).json({ status: "error", error: `Défibrillateur '${subId}' non trouvé dans l'environnement ${tenantId}` });
+        }
+
         return res.json({
           status: "success",
-          serie: "SN-9981240",
-          identifiant: cleanPath.split('/')[1] || "DAE-88192",
-          modele: "AED Plus",
-          numero_atlasante: "ATLAS-77120",
-          version_logiciel: "v3.2.1",
-          client_id: "CLI-0042",
-          contact_nom_prenom: "Jean Dupont",
-          contact_portable: "0612345678",
-          contact_email: "j.dupont@clinique-stjean.fr",
-          boitier_modele: "Mural AIVIA 200",
-          boitier_lot: "LOT-B-88",
-          adresse_voie: "12 Avenue de Paris",
-          ville: "Paris",
-          code_postal: "75008",
-          region: "Île-de-France",
-          pays: "France",
-          latitude: 48.8708,
-          longitude: 2.3045,
-          aide_acces: "Code porte 45A12 - Hall RDC",
-          expiration_garantie: "2030-05-15",
-          date_fabrication: "2024-02-10",
-          derniere_maintenance: "2026-02-15",
-          electrodes_adulte: {
-            modele: "CPR-D Padz",
-            lot: "LOT-A-990",
-            date_insertion: "2026-02-15",
-            date_peremption: "2028-02-15",
-            lot_padpak: "PADPAK-A-01",
-            peremption_padpak: "2028-02-15"
-          },
-          electrodes_pediatrique: {
-            modele: "Pedi-Padz II",
-            lot: "LOT-P-441",
-            date_insertion: "2026-02-15",
-            date_peremption: "2028-06-30",
-            lot_padpak: "PADPAK-P-02",
-            peremption_padpak: "2028-06-30"
-          },
-          batterie: {
-            modele: "Pack Lithium 123A",
-            lot: "LOT-BAT-77",
-            date_insertion: "2026-02-15",
-            date_peremption: "2030-02-15",
-            pourcentage_constate: 100
-          },
-          peremption_trousse: "2028-12-31"
+          environnement: tenantId,
+          count: defibs.length,
+          defibrillateurs: defibs
         });
       }
 
@@ -527,7 +656,7 @@ Renvoie obligatoirement un objet JSON contenant :
         status: "success",
         message: "API Defibeo Operational Endpoint",
         endpoint: cleanPath,
-        tenant_id: tenantId,
+        environnement: tenantId,
         timestamp: new Date().toISOString()
       });
     } catch (err: any) {

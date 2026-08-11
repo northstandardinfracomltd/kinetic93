@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Client, ClientContract, Defibrillateur, Variable, CompanyInfo } from '../types';
-import { Plus, Search, Trash2, Edit2, X, Briefcase, Mail, Phone, FileText, Calendar, ShieldCheck, Download } from 'lucide-react';
+import { Plus, Search, Trash2, Edit2, X, Briefcase, Mail, Phone, FileText, Calendar, ShieldCheck, Download, ChevronDown } from 'lucide-react';
 import { checkIfEmailExistsAnywhere } from '../firebase';
 import { generateRandomPin, formatDateToFR } from '../utils';
 import { t } from '../utils/translate';
@@ -667,6 +667,27 @@ export default function ClientTab({
         (c.nomContrat || '').toLowerCase().includes(search.toLowerCase())
     );
   }, [clients, search]);
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const ITEMS_PER_PAGE = 100;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredClients.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedClients = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredClients.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredClients, currentPage]);
 
   const openAddModal = () => {
     setEditingClient(null);
@@ -2146,7 +2167,7 @@ export default function ClientTab({
                 </tr>
               </thead>
               <tbody className="text-slate-700 text-xs">
-                {filteredClients.map((client) => (
+                {paginatedClients.map((client) => (
                   <tr
                     key={client.id}
                     id={`client-row-${client.id}`}
@@ -2240,8 +2261,53 @@ export default function ClientTab({
         </div>
       </div>
 
-      <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }} className="p-4 font-sans text-left" id="client-tab-total-summary">
-        Total clients (Tous): {clients.length}.
+      <div 
+        className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200" 
+        id="client-tab-total-summary"
+      >
+        <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
+          Total clients (Tous) : {clients.length} ({paginatedClients.length} sur cette page).
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            id="btn-client-prev-page"
+          >
+            &larr; Précédent
+          </button>
+
+          <div className="relative inline-flex items-center">
+            <select
+              value={currentPage}
+              onChange={(e) => setCurrentPage(Number(e.target.value))}
+              id="select-client-page"
+              className="appearance-none bg-white border border-slate-300 hover:border-slate-400 text-slate-800 text-sm font-bold rounded-lg pl-3 pr-8 py-1.5 cursor-pointer shadow-xs focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/30"
+              style={{ cursor: 'pointer' }}
+            >
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <option key={p} value={p}>
+                  Page {p}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-4 h-4 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            id="btn-client-next-page"
+          >
+            Suivant &rarr;
+          </button>
+        </div>
       </div>
     </div>
   );

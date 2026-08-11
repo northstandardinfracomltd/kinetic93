@@ -6,7 +6,7 @@ service cloud.firestore {
     }
 
     match /appData/{documentId} {
-      allow read, write: if true;
+      allow read, write: if documentId.matches('^[a-zA-Z0-9_-]+$');
     }
   }
 }
