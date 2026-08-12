@@ -367,11 +367,13 @@ export default function VariableTab({
     });
   }, [variables, search, filterCategory]);
 
-  // Pagination State
+  // Pagination & Display Limit State
+  const [displayLimit, setDisplayLimit] = useState<number>(100);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const ITEMS_PER_PAGE = 100;
 
   useEffect(() => {
+    setDisplayLimit(100);
     setCurrentPage(1);
   }, [search, filterCategory]);
 
@@ -383,10 +385,9 @@ export default function VariableTab({
     }
   }, [currentPage, totalPages]);
 
-  const paginatedVariables = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredVariables.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredVariables, currentPage]);
+  const displayedVariables = useMemo(() => {
+    return filteredVariables.slice(0, displayLimit);
+  }, [filteredVariables, displayLimit]);
 
   // Suggestions de miniature selon l'intitulé tapé
   const matchingSuggestions = useMemo(() => {
@@ -1218,7 +1219,7 @@ export default function VariableTab({
                 </tr>
               </thead>
               <tbody className="text-slate-700 text-xs">
-                {paginatedVariables.map((v) => {
+                {displayedVariables.map((v) => {
                   const used = isVariableUsed(v);
                   return (
                     <tr
@@ -1317,7 +1318,7 @@ export default function VariableTab({
           )}
         </div>
 
-        {/* Total Summary & Pagination Bar */}
+        {/* Total Summary & Load More Bar */}
         <div 
           className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4" 
           id="variable-tab-total-summary"
@@ -1326,38 +1327,32 @@ export default function VariableTab({
             Total : {filteredVariables.length} {filteredVariables.length > 1 ? 'variables' : 'variable'}
           </div>
 
-          {/* Pagination Controls */}
-          <div className="flex items-center gap-2">
-            <select
-              value={currentPage}
-              onChange={(e) => {
-                setCurrentPage(Number(e.target.value));
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              id="select-variable-page"
-              className="appearance-none cursor-pointer focus:outline-none px-5 py-2"
-              style={{
-                fontSize: '18px',
-                borderRadius: '13px',
-                boxShadow: 'none',
-                backgroundColor: '#000000',
-                borderColor: '#000000',
-                borderWidth: '1px',
-                borderStyle: 'solid',
-                color: '#ffffff',
-                textAlign: 'center',
-                textAlignLast: 'center',
-                fontWeight: 'bold',
-                cursor: 'pointer'
-              }}
-            >
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <option key={p} value={p} style={{ backgroundColor: '#000000', color: '#ffffff', textAlign: 'center' }}>
-                  Page {p}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Load More Controls */}
+          {filteredVariables.length > displayLimit && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDisplayLimit((prev) => prev + 100)}
+                id="btn-load-more-variables"
+                className="appearance-none cursor-pointer focus:outline-none px-5 py-2 font-sans transition-all hover:bg-slate-800"
+                style={{
+                  fontSize: '18px',
+                  borderRadius: '13px',
+                  boxShadow: 'none',
+                  backgroundColor: '#000000',
+                  borderColor: '#000000',
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  color: '#ffffff',
+                  textAlign: 'center',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Afficher plus ({filteredVariables.length - displayLimit} restants)
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

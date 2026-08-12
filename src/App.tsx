@@ -6147,14 +6147,6 @@ export default function App() {
         )}
         {/* Dashboard Workspace Viewports wrapper */}
         <main className="flex-1 w-full" id="main-content">
-          {isDeveloper && (
-            <div className="bg-slate-900 text-white px-4 py-2 text-center font-sans font-semibold text-xs flex items-center justify-center gap-2 border-b border-slate-700 shadow-sm select-none" id="developer-role-notice-banner">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-              <span>
-                {t("Rôle Développeur actif — Accès complet en lecture seule et consultation des informations API dans Paramètres.")}
-              </span>
-            </div>
-          )}
           {/* Sub-component Active tab wrapper */}
           <section className={`${activeTab === 'parametres' ? 'bg-white' : 'pb-16'} p-0`} id="active-tab-content-wrapper">
           {activeTab === 'defibrillateurs' && (
