@@ -187,6 +187,8 @@ interface AutresMaterielsTabProps {
   members?: any[];
   defibrillateurs?: any[];
   variables?: Variable[];
+  isDeveloper?: boolean;
+  isReadOnly?: boolean;
 }
 
 // Custom Pink Radio Component
@@ -245,6 +247,8 @@ export default function AutresMaterielsTab({
   members = [],
   defibrillateurs = [],
   variables = [],
+  isDeveloper = false,
+  isReadOnly = false,
 }: AutresMaterielsTabProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isTourDropdownOpen, setIsTourDropdownOpen] = useState(false);
@@ -594,6 +598,10 @@ export default function AutresMaterielsTab({
 
   // Delete Action
   const handleDeleteItem = (id: string) => {
+    if (isDeveloper || isReadOnly) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     const updated = otherEquipments.filter(item => item.id !== id);
     saveOtherEquipments(updated);
   };
@@ -601,6 +609,10 @@ export default function AutresMaterielsTab({
   // Submit Action
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDeveloper || isReadOnly) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
 
     const itemData: OtherEquipment = {
       id: editingItem ? editingItem.id : 'oe_' + Date.now(),

@@ -614,7 +614,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               setIsLoading(false);
               return;
             }
-            handleSuccessLogin(matchedAdmin.email, matchedAdmin.name, matchedTenantId, 'admin');
+            const roleToPass = matchedAdmin.adminSubRole === 'Développeur' ? 'developpeur' : 'admin';
+            handleSuccessLogin(matchedAdmin.email, matchedAdmin.name, matchedTenantId, roleToPass);
           } else {
             setError(t.errorAdmin);
             setIsLoading(false);

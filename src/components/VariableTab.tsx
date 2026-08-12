@@ -63,6 +63,8 @@ interface VariableTabProps {
   otherEquipments?: OtherEquipment[];
   achatsFournisseurs?: AchatFournisseur[];
   fsmTours?: any[];
+  isDeveloper?: boolean;
+  isReadOnly?: boolean;
 }
 
 // Visual presets of premium defibrillator photos to select instantly
@@ -155,6 +157,8 @@ export default function VariableTab({
   otherEquipments = [],
   achatsFournisseurs = [],
   fsmTours = [],
+  isDeveloper = false,
+  isReadOnly = false,
 }: VariableTabProps) {
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('Tous');
@@ -506,6 +510,10 @@ export default function VariableTab({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDeveloper || isReadOnly) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     setError('');
 
     if (!category) {

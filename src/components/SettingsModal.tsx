@@ -44,6 +44,8 @@ interface SettingsModalProps {
   onClearOtherEquipments?: () => void;
   onConnectorsUpdated?: () => void;
   onUpdateLocationNames?: (names: Record<string, string>) => void;
+  isDeveloper?: boolean;
+  isReadOnly?: boolean;
 }
 
 export default function SettingsModal({
@@ -63,7 +65,9 @@ export default function SettingsModal({
   otherEquipments = [],
   onClearOtherEquipments,
   onConnectorsUpdated,
-  onUpdateLocationNames
+  onUpdateLocationNames,
+  isDeveloper = false,
+  isReadOnly = false,
 }: SettingsModalProps) {
   const [selectedLang, setSelectedLang] = React.useState(() => {
     const lang = localStorage.getItem('defib_lang') || 'Français, France';
@@ -1247,6 +1251,10 @@ export default function SettingsModal({
 
   // Perform overall save to parent state upon Enregistrer click
   const handleSaveAll = async (membersOverride?: Member[] | any) => {
+    if (isDeveloper || isReadOnly) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     if (isSaving) return;
     setIsSaving(true);
     setIsVerifyingEmail(true);

@@ -370,6 +370,8 @@ interface DefibTabProps {
   onShowGmaoReports?: (defibIdentifiant: string) => void;
   companyInfo?: CompanyInfo;
   members?: any[];
+  isDeveloper?: boolean;
+  isReadOnly?: boolean;
 }
 
 export default function DefibTab({
@@ -388,6 +390,8 @@ export default function DefibTab({
   onShowGmaoReports,
   companyInfo,
   members = [],
+  isDeveloper = false,
+  isReadOnly = false,
 }: DefibTabProps) {
   // Navigation, Search & Filters State
   const [search, setSearch] = useState('');
@@ -1514,6 +1518,10 @@ export default function DefibTab({
 
   // Populate form state for creation
   const openAddForm = () => {
+    if (isDeveloper || isReadOnly) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     setEditingDefib(null);
     setFormError('');
 
@@ -1801,6 +1809,10 @@ export default function DefibTab({
    // Submit handler
    const handleFormSubmit = async (e?: React.FormEvent): Promise<boolean> => {
      if (e) e.preventDefault();
+     if (isDeveloper || isReadOnly) {
+       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+       return false;
+     }
      if (isSubmitChecking) return false;
      setFormError('');
  

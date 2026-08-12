@@ -146,6 +146,8 @@ interface ClientTabProps {
   onDeleteClient: (id: string) => void;
   companyInfo: CompanyInfo;
   setActiveTab?: (tab: any, bypassBlock?: boolean) => void;
+  isDeveloper?: boolean;
+  isReadOnly?: boolean;
 }
 
 export default function ClientTab({
@@ -157,6 +159,8 @@ export default function ClientTab({
   onDeleteClient,
   companyInfo,
   setActiveTab,
+  isDeveloper = false,
+  isReadOnly = false,
 }: ClientTabProps) {
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -801,6 +805,10 @@ export default function ClientTab({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDeveloper || isReadOnly) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     setError('');
 
     // Validations

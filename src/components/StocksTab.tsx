@@ -117,6 +117,8 @@ interface StocksTabProps {
   saveDistributedStocks?: (updated: DistributedStockLocation[]) => void;
   logisticsNotifications?: LogisticsNotification[];
   saveLogisticsNotifications?: (updated: LogisticsNotification[]) => void;
+  isDeveloper?: boolean;
+  isReadOnly?: boolean;
 }
 
 export default function StocksTab({
@@ -137,6 +139,8 @@ export default function StocksTab({
   saveDistributedStocks,
   logisticsNotifications = [],
   saveLogisticsNotifications,
+  isDeveloper = false,
+  isReadOnly = false,
 }: StocksTabProps) {
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState<boolean>(false);
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
@@ -798,6 +802,10 @@ export default function StocksTab({
 
   const handleAddStockSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDeveloper || isReadOnly) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     if (!newDenomStr) return;
 
     // Check if this variable is already used by another stock record

@@ -800,6 +800,10 @@ export default function App() {
   }, [activeTab, tenantId]);
 
   const saveStocks = (updated: StockRecord[]) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     // Check for stock transition: from >= 1 to 0 or 1
     const newNotifs: LogisticsNotification[] = [];
     const nowStr = new Date().toLocaleDateString('fr-FR', {
@@ -839,6 +843,10 @@ export default function App() {
   };
 
   const saveDistributedStocks = (updated: DistributedStockLocation[]) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     // Check for distributed stock transition: from >= 1 to 0 or 1
     const newNotifs: LogisticsNotification[] = [];
     const nowStr = new Date().toLocaleDateString('fr-FR', {
@@ -962,7 +970,25 @@ export default function App() {
     ) || null;
   }, [loggedUser, members]);
 
-  const isDeveloper = currentLoggedInMember?.adminSubRole === 'Développeur';
+  const isDeveloper = useMemo(() => {
+    try {
+      const roleInStorage = (localStorage.getItem('defib_logged_user_role') || '').toLowerCase();
+      if (roleInStorage === 'developpeur' || roleInStorage === 'développeur') return true;
+    } catch (e) {}
+
+    if (currentLoggedInMember?.adminSubRole === 'Développeur' || currentLoggedInMember?.role === 'Développeur') return true;
+
+    if (loggedUser) {
+      const emailLower = loggedUser.email?.trim().toLowerCase();
+      const nameLower = loggedUser.name?.trim().toLowerCase();
+      const found = members.find(m => 
+        (emailLower && m.email?.trim().toLowerCase() === emailLower) ||
+        (nameLower && m.name?.trim().toLowerCase() === nameLower)
+      );
+      if (found?.adminSubRole === 'Développeur' || found?.role === 'Développeur') return true;
+    }
+    return false;
+  }, [currentLoggedInMember, loggedUser, members]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [memos, setMemos] = useState<Memo[]>([]);
   const [savedMemosMap, setSavedMemosMap] = useState<Record<string, boolean>>({});
@@ -1406,6 +1432,10 @@ export default function App() {
   }, [isPublicPortalOpen, activeTab, tenantId]);
 
   const saveFsmTours = (updated: any[]) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     setFsmTours(updated);
     localStorage.setItem(`defib_${tenantId}_fsm_tours`, JSON.stringify(updated));
     if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
@@ -5419,6 +5449,10 @@ export default function App() {
 
   // CLIENT CRUD HANDLERS
   const handleAddClient = (clientData: Omit<Client, 'id'>) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     const newClient: Client = {
       id: 'c_' + Date.now(),
       ...clientData,
@@ -5427,10 +5461,18 @@ export default function App() {
   };
 
   const handleUpdateClient = (updated: Client) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     saveClients(clients.map((c) => (c.id === updated.id ? updated : c)));
   };
 
   const handleDeleteClient = (id: string) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     // Check if any defibrillator is using this client
     const linked = defibrillateurs.some((d) => d.clientId === id);
     if (linked) {
@@ -5444,6 +5486,10 @@ export default function App() {
 
   // VARIABLE CRUD HANDLERS
   const handleAddVariable = (variableData: Omit<Variable, 'id'>) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     const newVar: Variable = {
       id: 'v_' + Date.now(),
       ...variableData,
@@ -5452,10 +5498,18 @@ export default function App() {
   };
 
   const handleUpdateVariable = (updated: Variable) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     saveVariables(variables.map((v) => (v.id === updated.id ? updated : v)));
   };
 
   const handleDeleteVariable = (id: string) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     // Check if linked to defibrillateurs inside selected model IDs
     const linked = defibrillateurs.some((d) => 
       d.modeleId === id || 
@@ -5475,6 +5529,10 @@ export default function App() {
 
   // DEFIBRILLATEUR CRUD HANDLERS
   const handleAddDefib = (defibData: Omit<Defibrillateur, 'id'>) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     const newDefib: Defibrillateur = {
       id: 'df_' + Date.now(),
       ...defibData,
@@ -5483,6 +5541,10 @@ export default function App() {
   };
 
   const handleUpdateDefib = (updated: Defibrillateur) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     const exists = defibrillateurs.some((df) => {
       const idMatch = !!(df.id && updated.id && df.id === updated.id);
       const identifiantMatch = !!(df.identifiant && updated.identifiant && df.identifiant.toUpperCase() === updated.identifiant.toUpperCase());
@@ -5502,14 +5564,26 @@ export default function App() {
   };
 
   const handleDeleteDefib = (id: string) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     saveDefibs(defibrillateurs.filter((df) => df.id !== id));
   };
 
   const handleBulkDeleteDefib = (ids: string[]) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     saveDefibs(defibrillateurs.filter((df) => !ids.includes(df.id)));
   };
 
   const handleBulkEditDefib = (ids: string[], updates: Partial<Omit<Defibrillateur, 'id'>>) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     const updatedList = defibrillateurs.map((df) => {
       if (ids.includes(df.id)) {
         return { ...df, ...updates };
@@ -6103,6 +6177,8 @@ export default function App() {
               }}
               companyInfo={companyInfo}
               members={members}
+              isDeveloper={isDeveloper}
+              isReadOnly={isDeveloper}
             />
           )}
 
@@ -6117,6 +6193,8 @@ export default function App() {
               members={members}
               defibrillateurs={defibrillateurs}
               variables={variables}
+              isDeveloper={isDeveloper}
+              isReadOnly={isDeveloper}
             />
           )}
 
@@ -6130,6 +6208,8 @@ export default function App() {
               onDeleteClient={handleDeleteClient}
               companyInfo={companyInfo}
               setActiveTab={setActiveTab}
+              isDeveloper={isDeveloper}
+              isReadOnly={isDeveloper}
             />
           )}
 
@@ -6145,6 +6225,8 @@ export default function App() {
               otherEquipments={otherEquipments}
               achatsFournisseurs={achatsFournisseurs}
               fsmTours={fsmTours}
+              isDeveloper={isDeveloper}
+              isReadOnly={isDeveloper}
             />
           )}
 
@@ -11199,6 +11281,8 @@ export default function App() {
               saveDistributedStocks={saveDistributedStocks}
               logisticsNotifications={logisticsNotifications}
               saveLogisticsNotifications={saveLogisticsNotifications}
+              isDeveloper={isDeveloper}
+              isReadOnly={isDeveloper}
             />
           )}
 
@@ -11372,6 +11456,8 @@ export default function App() {
               onClearOtherEquipments={() => saveOtherEquipments([])}
               onConnectorsUpdated={loadApiConnectors}
               onUpdateLocationNames={setLocationNames}
+              isDeveloper={isDeveloper}
+              isReadOnly={isDeveloper}
             />
           )}
 
@@ -11422,6 +11508,8 @@ export default function App() {
         onClearOtherEquipments={() => saveOtherEquipments([])}
         onConnectorsUpdated={loadApiConnectors}
         onUpdateLocationNames={setLocationNames}
+        isDeveloper={isDeveloper}
+        isReadOnly={isDeveloper}
       />
 
       {/* Modal Avisage Tournée */}
