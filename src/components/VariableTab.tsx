@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Variable, VariableCategory, Defibrillateur, StockRecord, DistributedStockLocation, OtherEquipment, AchatFournisseur } from '../types';
 import { Plus, Search, Trash2, Edit2, X, Sliders, Box, Image as ImageIcon, Sparkles, Check } from 'lucide-react';
 import { t } from '../utils/translate';
@@ -362,6 +362,27 @@ export default function VariableTab({
       return matchSearch && matchCategory;
     });
   }, [variables, search, filterCategory]);
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const ITEMS_PER_PAGE = 100;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterCategory]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredVariables.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedVariables = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredVariables.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredVariables, currentPage]);
 
   // Suggestions de miniature selon l'intitulé tapé
   const matchingSuggestions = useMemo(() => {
@@ -1189,7 +1210,7 @@ export default function VariableTab({
                 </tr>
               </thead>
               <tbody className="text-slate-700 text-xs">
-                {filteredVariables.map((v) => {
+                {paginatedVariables.map((v) => {
                   const used = isVariableUsed(v);
                   return (
                     <tr
@@ -1286,6 +1307,49 @@ export default function VariableTab({
               </tbody>
             </table>
           )}
+        </div>
+
+        {/* Total Summary & Pagination Bar */}
+        <div 
+          className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4" 
+          id="variable-tab-total-summary"
+        >
+          <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
+            Total : {filteredVariables.length} {filteredVariables.length > 1 ? 'variables' : 'variable'}
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center gap-2">
+            <select
+              value={currentPage}
+              onChange={(e) => {
+                setCurrentPage(Number(e.target.value));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              id="select-variable-page"
+              className="appearance-none cursor-pointer focus:outline-none px-5 py-2"
+              style={{
+                fontSize: '18px',
+                borderRadius: '13px',
+                boxShadow: 'none',
+                backgroundColor: '#000000',
+                borderColor: '#000000',
+                borderWidth: '1px',
+                borderStyle: 'solid',
+                color: '#ffffff',
+                textAlign: 'center',
+                textAlignLast: 'center',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <option key={p} value={p} style={{ backgroundColor: '#000000', color: '#ffffff', textAlign: 'center' }}>
+                  Page {p}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

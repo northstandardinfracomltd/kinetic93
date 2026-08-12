@@ -296,7 +296,7 @@ export interface Member {
   signature?: string;
   locationLink?: string;
   gpsSharingLink?: string;
-  adminSubRole?: 'Administrateur' | 'Administration' | 'Planification' | 'Logistique' | 'Comptabilité' | 'Contrôleur' | 'Administrateur & Contrôleur';
+  adminSubRole?: 'Administrateur' | 'Administration' | 'Planification' | 'Logistique' | 'Comptabilité' | 'Contrôleur' | 'Administrateur & Contrôleur' | 'Développeur';
   competences?: string[];
   semaineTypique?: MemberSchedule[];
   absences?: MemberAbsence[];

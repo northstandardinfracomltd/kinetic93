@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getRegionsForCountry } from './utils/regions';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants } from './firebase';
 import { generateReportModerationComment } from './utils/moderationComment';
@@ -951,6 +951,18 @@ export default function App() {
     };
   }, [tenantId]);
   const [members, setMembers] = useState<Member[]>([]);
+
+  const currentLoggedInMember = useMemo(() => {
+    if (!loggedUser) return null;
+    const emailLower = loggedUser.email?.trim().toLowerCase();
+    const nameLower = loggedUser.name?.trim().toLowerCase();
+    return members.find(m => 
+      (emailLower && m.email?.trim().toLowerCase() === emailLower) ||
+      (nameLower && m.name?.trim().toLowerCase() === nameLower)
+    ) || null;
+  }, [loggedUser, members]);
+
+  const isDeveloper = currentLoggedInMember?.adminSubRole === 'Développeur';
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [memos, setMemos] = useState<Memo[]>([]);
   const [savedMemosMap, setSavedMemosMap] = useState<Record<string, boolean>>({});
@@ -5222,6 +5234,10 @@ export default function App() {
 
   // Save changes to LocalStorage whenever state updates
   const saveClients = (newClients: Client[]) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     const sanitized = newClients.map(c => {
       if (!c.signaturePin || !c.signaturePin.trim()) {
         return { ...c, signaturePin: generateRandomPin() };
@@ -5238,6 +5254,10 @@ export default function App() {
   };
 
   const saveVariables = (newVariables: Variable[]) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     setVariables(newVariables);
     const str = JSON.stringify(newVariables);
     safeSetLocalStorage(`defib_${tenantId}_variables`, str);
@@ -5248,6 +5268,10 @@ export default function App() {
   };
 
   const saveDefibs = (newDefibs: Defibrillateur[]) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     setDefibrillateurs(newDefibs);
     const str = JSON.stringify(newDefibs);
     safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, str);
@@ -5258,6 +5282,10 @@ export default function App() {
   };
 
   const saveOtherEquipments = (newItems: OtherEquipment[]) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     setOtherEquipments(newItems);
     const str = JSON.stringify(newItems);
     safeSetLocalStorage(`defib_${tenantId}_other_equipments`, str);
@@ -5340,6 +5368,10 @@ export default function App() {
 
   // Company and Members Settings Sync
   const handleUpdateCompanyInfo = (info: CompanyInfo) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     setCompanyInfo(info);
     const infoStr = JSON.stringify(info);
     localStorage.setItem('defib_company_info', infoStr);
@@ -5351,6 +5383,10 @@ export default function App() {
   };
 
   const handleUpdateMembers = (updatedMembers: Member[]) => {
+    if (isDeveloper) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
     setMembers(updatedMembers);
     localStorage.setItem('defib_members', JSON.stringify(updatedMembers));
     localStorage.setItem(`defib_${tenantId}_members`, JSON.stringify(updatedMembers));
@@ -6037,6 +6073,14 @@ export default function App() {
         )}
         {/* Dashboard Workspace Viewports wrapper */}
         <main className="flex-1 w-full" id="main-content">
+          {isDeveloper && (
+            <div className="bg-slate-900 text-white px-4 py-2 text-center font-sans font-semibold text-xs flex items-center justify-center gap-2 border-b border-slate-700 shadow-sm select-none" id="developer-role-notice-banner">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              <span>
+                {t("Rôle Développeur actif — Accès complet en lecture seule et consultation des informations API dans Paramètres.")}
+              </span>
+            </div>
+          )}
           {/* Sub-component Active tab wrapper */}
           <section className={`${activeTab === 'parametres' ? 'bg-white' : 'pb-16'} p-0`} id="active-tab-content-wrapper">
           {activeTab === 'defibrillateurs' && (

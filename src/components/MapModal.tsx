@@ -20,12 +20,24 @@ interface MapModalProps {
   isAnySelectedInTour?: boolean;
 }
 
-// Sub-component to programmatically handle centering and zooming the Leaflet map
-function ChangeMapView({ center, zoom }: { center: [number, number]; zoom: number }) {
+interface ViewTarget {
+  center: [number, number];
+  zoom: number;
+  id: number;
+}
+
+// Sub-component to programmatically handle centering and zooming the Leaflet map ONLY when viewTarget changes
+function ChangeMapView({ viewTarget }: { viewTarget: ViewTarget | null }) {
   const map = useMap();
+  const lastHandledId = React.useRef<number>(0);
+
   useEffect(() => {
-    map.setView(center, zoom);
-  }, [center, zoom]);
+    if (viewTarget && viewTarget.id !== lastHandledId.current) {
+      lastHandledId.current = viewTarget.id;
+      map.setView(viewTarget.center, viewTarget.zoom, { animate: true });
+    }
+  }, [viewTarget, map]);
+
   return null;
 }
 
@@ -241,7 +253,7 @@ const DefibMarker = React.memo(function DefibMarker({
       }}
     >
       <Popup closeButton={false}>
-        <PopupContent item={item} clientDenomination={clientDenomination} />
+        <PopupContent item={item} coords={coords} clientDenomination={clientDenomination} />
       </Popup>
     </Marker>
   );
@@ -250,9 +262,11 @@ const DefibMarker = React.memo(function DefibMarker({
 // Popup Content component using map trigger actions
 function PopupContent({ 
   item, 
+  coords,
   clientDenomination
 }: { 
   item: any; 
+  coords: [number, number];
   clientDenomination: string;
 }) {
   const map = useMap();
@@ -312,7 +326,7 @@ function PopupContent({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          map.closePopup();
+          map.flyTo(coords, 14, { animate: true, duration: 0.6 });
         }}
         style={{
           fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -354,8 +368,7 @@ export default function MapModal({
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   
   // Real coordinates configuration
-  const [mapCenter, setMapCenter] = useState<[number, number]>([46.603354, 1.888334]);
-  const [mapZoom, setMapZoom] = useState<number>(6);
+  const [viewTarget, setViewTarget] = useState<ViewTarget | null>(null);
   const [geocodedCoords, setGeocodedCoords] = useState<Record<string, [number, number]>>({});
 
   // Maps configurations
@@ -481,6 +494,17 @@ export default function MapModal({
     return itemsWithCoords.slice(0, renderedCount);
   }, [itemsWithCoords, renderedCount]);
 
+  // Trigger initial map view target once when opened
+  useEffect(() => {
+    if (isOpen) {
+      setViewTarget({
+        center: [46.603354, 1.888334],
+        zoom: 6,
+        id: Date.now()
+      });
+    }
+  }, [isOpen]);
+
   // Set initial selected item when opened
   useEffect(() => {
     if (isOpen && activeList.length > 0 && selectedItemId === null) {
@@ -548,20 +572,6 @@ export default function MapModal({
     }
     return geocodedCoords[item.id] || null;
   };
-
-  // Center on selected device
-  useEffect(() => {
-    if (selectedItemId) {
-      const activeItem = activeList.find(item => item.id === selectedItemId);
-      if (activeItem) {
-        const coords = getDeviceCoords(activeItem);
-        if (coords) {
-          setMapCenter(coords);
-          setMapZoom(13);
-        }
-      }
-    }
-  }, [selectedItemId, geocodedCoords, activeList]);
 
   if (!isOpen) return null;
 
@@ -811,8 +821,8 @@ export default function MapModal({
 
         {/* Real OpenStreetMap Leaflet Container */}
         <MapContainer 
-          center={mapCenter} 
-          zoom={mapZoom} 
+          center={[46.603354, 1.888334]} 
+          zoom={6} 
           style={{ width: '100%', height: '100%' }}
           zoomControl={true}
         >
@@ -821,7 +831,7 @@ export default function MapModal({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           
-          <ChangeMapView center={mapCenter} zoom={mapZoom} />
+          <ChangeMapView viewTarget={viewTarget} />
 
           {/* Plot Markers */}
           {displayedItems.map(({ item, coords }) => {

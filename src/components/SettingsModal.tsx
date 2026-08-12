@@ -342,7 +342,7 @@ export default function SettingsModal({
   const [newMemberRole, setNewMemberRole] = React.useState('Administrateur');
   const [newMemberPin, setNewMemberPin] = React.useState('');
   const [newMemberLocation, setNewMemberLocation] = React.useState('');
-  const [newMemberAdminSubRole, setNewMemberAdminSubRole] = React.useState<'Administrateur' | 'Administration' | 'Planification' | 'Logistique' | 'Comptabilité' | 'Contrôleur' | 'Administrateur & Contrôleur'>('Administrateur');
+  const [newMemberAdminSubRole, setNewMemberAdminSubRole] = React.useState<'Administrateur' | 'Administration' | 'Planification' | 'Logistique' | 'Comptabilité' | 'Contrôleur' | 'Administrateur & Contrôleur' | 'Développeur'>('Administrateur');
 
   // LOCAL STATES FOR CONNECTORS
   const [apiDefibeoActive, setApiDefibeoActive] = React.useState(false);
@@ -1121,7 +1121,7 @@ export default function SettingsModal({
     });
   };
 
-  const handleAdminSubRoleChange = (index: number, val: 'Administrateur' | 'Administration' | 'Planification' | 'Logistique' | 'Comptabilité' | 'Contrôleur' | 'Administrateur & Contrôleur') => {
+  const handleAdminSubRoleChange = (index: number, val: 'Administrateur' | 'Administration' | 'Planification' | 'Logistique' | 'Comptabilité' | 'Contrôleur' | 'Administrateur & Contrôleur' | 'Développeur') => {
     if (!canEditMember(index)) return;
     setLocalMembers(prev => {
       const updated = [...prev];
@@ -2394,6 +2394,7 @@ export default function SettingsModal({
                       <option value="Comptabilité">Comptabilité</option>
                       <option value="Contrôleur">{t("Contrôleur")}</option>
                       <option value="Administrateur & Contrôleur">{t("Administrateur & Contrôleur")}</option>
+                      <option value="Développeur">{t("Développeur")}</option>
                     </select>
                   </div>
                 )}
@@ -3244,6 +3245,7 @@ export default function SettingsModal({
                                   <option value="Comptabilité">{t("Comptabilité")}</option>
                                   <option value="Contrôleur">{t("Contrôleur")}</option>
                                   <option value="Administrateur & Contrôleur">{t("Administrateur & Contrôleur")}</option>
+                                  <option value="Développeur">{t("Développeur")}</option>
                                 </select>
                               </div>
                             )}

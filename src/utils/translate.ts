@@ -15,6 +15,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Bienvenue! Pour commencer, vous devez planifier un appel de présentation avec un spécialiste Défibeo afin d'être guidé dans vos premiers pas.": "Welcome! To get started, you must schedule an introductory call with a Défibeo specialist to guide you through your first steps.",
     // Navigation / Sidebar Tabs
     "Défibrillateurs": "Defibrillators",
+    "Développeur": "Developer",
     "Autres matériels": "Other Equipment",
     "Clients": "Clients",
     "FSM": "FSM",
