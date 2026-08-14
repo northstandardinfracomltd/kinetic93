@@ -12,12 +12,12 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  // CORS support and preflight handling for CRM website form embedding
-  app.use("/api/crm/embed-lead", (req, res, next) => {
+  // CORS support and preflight handling for CRM website form embedding & Defibeo Public API
+  app.use(["/api/crm/embed-lead", "/v1/*", "/api/v1/*"], (req, res, next) => {
     const origin = req.headers.origin || "*";
     res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, X-Requested-With, Origin");
+    res.setHeader("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, X-Requested-With, Origin, X-Defibeo-Tenant-ID, X-Defibeo-API-Key, X-Defibeo-Secret-Key, X-Tenant-ID");
     res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Access-Control-Max-Age", "86400");
     if (req.method === "OPTIONS") {
@@ -468,6 +468,7 @@ async function fetchServerCollection(colName: string, tenantId: string): Promise
       const authHeader = req.headers['authorization'];
       const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
       const apiKey = ((req.headers['x-defibeo-api-key'] as string) || (req.query.api_key as string) || bearerToken || '').trim();
+      const secretKey = ((req.headers['x-defibeo-secret-key'] as string) || (req.headers['x-defibeo-secret-token'] as string) || (req.query.secret_key as string) || '').trim();
 
       // Extract requested tenant ID
       const rawTenantId = ((req.headers['x-defibeo-tenant-id'] as string) || (req.headers['x-tenant-id'] as string) || (req.query.tenant_id as string) || (req.query.env_id as string) || 'demo').trim();
@@ -481,13 +482,18 @@ async function fetchServerCollection(colName: string, tenantId: string): Promise
         });
       }
 
-      // 2. Look up tenant in database
+      // 2. Look up tenant in database (with case-insensitive fallback)
       const tenants = await getRegisteredTenantsFromDb();
       let targetTenant = null;
-      if (sanitizedTenantId === 'demo') {
+      if (sanitizedTenantId.toLowerCase() === 'demo') {
         targetTenant = { id: 'demo', disabled: false, companyName: 'Démo', shortEnvId: 'DEMO', adminPasswordHexOrPlain: 'demo' };
       } else {
-        targetTenant = tenants.find(t => t.id === sanitizedTenantId || t.shortEnvId === sanitizedTenantId);
+        targetTenant = tenants.find(t => 
+          t.id === sanitizedTenantId || 
+          t.shortEnvId === sanitizedTenantId ||
+          (t.id && t.id.toLowerCase() === sanitizedTenantId.toLowerCase()) ||
+          (t.shortEnvId && t.shortEnvId.toLowerCase() === sanitizedTenantId.toLowerCase())
+        );
       }
 
       if (!targetTenant) {
@@ -510,17 +516,36 @@ async function fetchServerCollection(colName: string, tenantId: string): Promise
       const masterKey = process.env.DEFIBEO_API_KEY || process.env.GEMINI_API_KEY;
       let isAuthorized = false;
 
-      if (apiKey) {
+      const keysToCheck = [apiKey, secretKey].filter(Boolean);
+
+      if (keysToCheck.length > 0) {
         // Master server key gives access to any environment
-        if (masterKey && apiKey === masterKey) {
+        if (masterKey && keysToCheck.includes(masterKey)) {
           isAuthorized = true;
         }
         // Public / Demo key
-        else if (targetTenant.id === 'demo' && (apiKey === 'demo' || apiKey === 'public_demo_key' || apiKey === 'defibeo_demo')) {
+        else if (targetTenant.id === 'demo' && keysToCheck.some(k => ['demo', 'public_demo_key', 'defibeo_demo'].includes(k))) {
           isAuthorized = true;
         }
         // Tenant specific credentials or keys
         else if (targetTenant) {
+          // Check connector keys saved in Firestore for this tenant
+          try {
+            const connectorsKey = targetTenant.id === 'demo' ? 'api_connectors' : `${targetTenant.id}_api_connectors`;
+            const connectorsDoc = await getDoc(doc(db, 'appData', connectorsKey));
+            if (connectorsDoc.exists()) {
+              const connData = connectorsDoc.data()?.value || connectorsDoc.data() || {};
+              if (connData.apiDefibeoApiKey && keysToCheck.includes(connData.apiDefibeoApiKey)) {
+                isAuthorized = true;
+              }
+              if (connData.apiDefibeoSecretKey && keysToCheck.includes(connData.apiDefibeoSecretKey)) {
+                isAuthorized = true;
+              }
+            }
+          } catch (e) {
+            console.error("Error reading tenant api_connectors:", e);
+          }
+
           const allowedKeys = [
             targetTenant.adminPasswordHexOrPlain,
             targetTenant.shortEnvId,
@@ -528,7 +553,7 @@ async function fetchServerCollection(colName: string, tenantId: string): Promise
             `defib_${targetTenant.id}`
           ].filter(Boolean);
 
-          if (allowedKeys.includes(apiKey)) {
+          if (keysToCheck.some(k => allowedKeys.includes(k))) {
             isAuthorized = true;
           }
         }
@@ -537,7 +562,7 @@ async function fetchServerCollection(colName: string, tenantId: string): Promise
       if (!isAuthorized) {
         return res.status(401).json({
           status: "error",
-          error: "Authentification API échouée. Vefifiez votre clé API ('x-defibeo-api-key') et vos droits d'accès pour cet environnement.",
+          error: "Authentification API échouée. Vérifiez votre clé API ('X-Defibeo-API-Key'), votre clé secrète ('X-Defibeo-Secret-Key') et vos droits d'accès pour cet environnement.",
           code: "UNAUTHORIZED_TENANT_ACCESS",
           environnement_demande: targetTenant.id
         });

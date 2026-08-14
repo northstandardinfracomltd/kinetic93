@@ -3448,14 +3448,14 @@ export default function SettingsModal({
                           <div className="flex items-center gap-2">
                             <input
                               type="text"
-                              value="https://api.defibeo.fr/v1"
+                              value="https://api.defibeo.com/v1"
                               readOnly
                               disabled
                               className="w-full text-black font-mono text-xs bg-slate-100 p-2 rounded-lg border border-slate-300"
                             />
                             <button
                               type="button"
-                              onClick={() => copyToClipboard('https://api.defibeo.fr/v1', 'endpoint')}
+                              onClick={() => copyToClipboard('https://api.defibeo.com/v1', 'endpoint')}
                               style={{ backgroundColor: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
                               className="whitespace-nowrap transition-opacity hover:opacity-80"
                             >
@@ -5052,7 +5052,7 @@ Content-Type: application/json`}
   "date": "2026-08-01",
   "technicien": "Thomas Martin",
   "client_id": "CLI-0042",
-  "pdf_download_url": "https://api.defibeo.fr/v1/rapports/RAP-2026-0412/pdf"
+  "pdf_download_url": "https://api.defibeo.com/v1/rapports/RAP-2026-0412/pdf"
 }`}
                         </pre>
                       </div>
