@@ -3448,14 +3448,14 @@ export default function SettingsModal({
                           <div className="flex items-center gap-2">
                             <input
                               type="text"
-                              value="https://api.defibeo.com/v1"
+                              value="https://consoledefibeo.deroesch.com/v1"
                               readOnly
                               disabled
                               className="w-full text-black font-mono text-xs bg-slate-100 p-2 rounded-lg border border-slate-300"
                             />
                             <button
                               type="button"
-                              onClick={() => copyToClipboard('https://api.defibeo.com/v1', 'endpoint')}
+                              onClick={() => copyToClipboard('https://consoledefibeo.deroesch.com/v1', 'endpoint')}
                               style={{ backgroundColor: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
                               className="whitespace-nowrap transition-opacity hover:opacity-80"
                             >
@@ -4590,12 +4590,24 @@ export default function SettingsModal({
                 
                 {/* Auth Banner */}
                 <div style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }} className="text-white space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-[16px] text-white">En-têtes HTTP requis (headers)</span>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="font-bold text-[16px] text-white">URL de Base & En-têtes HTTP (Headers)</span>
                     <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>JSON REST</span>
                   </div>
+                  <div className="text-sm text-slate-200 font-mono bg-black/25 p-3 rounded-lg border border-white/15 flex items-center justify-between flex-wrap gap-2">
+                    <span>Base URL : <strong className="text-emerald-300">https://consoledefibeo.deroesch.com/v1</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard('https://consoledefibeo.deroesch.com/v1', 'endpoint_drawer')}
+                      style={{ backgroundColor: '#ffffff', color: '#000000', fontSize: '14px', fontWeight: 'bold', border: 'none', borderRadius: '8px', padding: '4px 12px', cursor: 'pointer' }}
+                      className="transition-opacity hover:opacity-80"
+                    >
+                      {apiDefibeoCopied === 'endpoint_drawer' ? 'Copié !' : 'Copier'}
+                    </button>
+                  </div>
                   <pre style={{ background: 'rgba(0,0,0,0.25)', borderRadius: '10px', padding: '15px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
-{`X-Defibeo-Tenant-ID: ${envIdDisplay}
+{`Host: consoledefibeo.deroesch.com
+X-Defibeo-Tenant-ID: ${envIdDisplay}
 X-Defibeo-API-Key: ${apiDefibeoApiKey || 'dfb_live_xxxxxxxx'}
 X-Defibeo-Secret-Key: ${apiDefibeoSecretKey || 'dfb_sec_xxxxxxxx'}
 Content-Type: application/json`}
@@ -5052,7 +5064,7 @@ Content-Type: application/json`}
   "date": "2026-08-01",
   "technicien": "Thomas Martin",
   "client_id": "CLI-0042",
-  "pdf_download_url": "https://api.defibeo.com/v1/rapports/RAP-2026-0412/pdf"
+  "pdf_download_url": "https://consoledefibeo.deroesch.com/v1/rapports/RAP-2026-0412/pdf"
 }`}
                         </pre>
                       </div>
