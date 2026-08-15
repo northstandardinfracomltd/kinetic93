@@ -3339,7 +3339,7 @@ export default function SettingsModal({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div>
-                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Hébergement Datacenter DEROESCH (Anglet, France)</h5>
+                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>DEROESCH hébergement datacenter & redondance (Anglet, France)</h5>
                         <div className="select-none font-sans flex items-center mt-1">
                           <span
                             style={{
@@ -4591,19 +4591,8 @@ export default function SettingsModal({
                 {/* Auth Banner */}
                 <div style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }} className="text-white space-y-3">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="font-bold text-[16px] text-white">URL de Base & En-têtes HTTP (Headers)</span>
+                    <span className="font-bold text-[16px] text-white">En-têtes HTTP requis (headers)</span>
                     <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>JSON REST</span>
-                  </div>
-                  <div className="text-sm text-slate-200 font-mono bg-black/25 p-3 rounded-lg border border-white/15 flex items-center justify-between flex-wrap gap-2">
-                    <span>Base URL : <strong className="text-emerald-300">https://consoledefibeo.deroesch.com/v1</strong></span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard('https://consoledefibeo.deroesch.com/v1', 'endpoint_drawer')}
-                      style={{ backgroundColor: '#ffffff', color: '#000000', fontSize: '14px', fontWeight: 'bold', border: 'none', borderRadius: '8px', padding: '4px 12px', cursor: 'pointer' }}
-                      className="transition-opacity hover:opacity-80"
-                    >
-                      {apiDefibeoCopied === 'endpoint_drawer' ? 'Copié !' : 'Copier'}
-                    </button>
                   </div>
                   <pre style={{ background: 'rgba(0,0,0,0.25)', borderRadius: '10px', padding: '15px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`Host: consoledefibeo.deroesch.com
