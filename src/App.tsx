@@ -3786,6 +3786,20 @@ export default function App() {
         setLoadedTenantIdState(tenantId);
         setIsFirebaseLoaded(true);
 
+        // Synchronize browser's active local cache to the backend REST server in background
+        if (typeof fetch !== 'undefined') {
+          fetch('/api/sync-collection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ collectionName: 'defibrillateurs', tenantId, value: baseDefibrillateurs })
+          }).catch(() => {});
+          fetch('/api/sync-collection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ collectionName: 'clients', tenantId, value: sanitizedOffline })
+          }).catch(() => {});
+        }
+
         const elapsedMs = Date.now() - loadStartMs;
         const remainingMs = Math.max(0, 5000 - elapsedMs);
         minTimer = setTimeout(() => {

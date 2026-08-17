@@ -300,6 +300,23 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
   // Save to cache immediately so UI reads it instantly
   saveToLocalCache(key, finalCleanValue);
 
+  // Background sync to server so REST API /v1 has instant access
+  try {
+    if (typeof fetch !== 'undefined') {
+      fetch('/api/sync-collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName,
+          tenantId: activeTenantId,
+          value: finalCleanValue
+        })
+      }).catch(() => {});
+    }
+  } catch (syncErr) {
+    // Non-blocking
+  }
+
   try {
     const jsonStr = JSON.stringify(finalCleanValue);
     // Firestore single doc limit is 1MB. If array and payload > 400 KB, chunk it!

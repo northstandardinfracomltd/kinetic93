@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
@@ -7,6 +8,44 @@ import firebaseConfig from "./firebase-applet-config.json";
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
+
+const DATA_DIR = path.join(process.cwd(), '.data');
+const STORE_FILE = path.join(DATA_DIR, 'server-store.json');
+
+const serverMemoryStore = new Map<string, any[]>();
+
+// Initialize disk store
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (fs.existsSync(STORE_FILE)) {
+    const raw = fs.readFileSync(STORE_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    for (const [k, v] of Object.entries(parsed)) {
+      if (Array.isArray(v)) {
+        serverMemoryStore.set(k, v);
+      }
+    }
+  }
+} catch (e) {
+  console.warn("Failed to load server disk store:", e);
+}
+
+function persistServerStoreToDisk() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const obj: Record<string, any[]> = {};
+    for (const [k, v] of serverMemoryStore.entries()) {
+      obj[k] = v;
+    }
+    fs.writeFileSync(STORE_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn("Failed to persist server disk store:", e);
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -107,7 +146,6 @@ Renvoie obligatoirement un objet JSON contenant :
   });
 
 // Helper function to fetch registered tenants safely on the server
-const serverMemoryStore = new Map<string, any[]>();
 let cachedTenantsList: any[] = [];
 let lastTenantsFetchTime = 0;
 
@@ -149,7 +187,44 @@ async function resolveTenant(sanitizedTenantId: string): Promise<any | null> {
     return { id: 'demo', disabled: false, companyName: 'Démo', shortEnvId: 'DEMO', adminPasswordHexOrPlain: 'demo' };
   }
 
-  // 2. Structured tenant pattern (e.g. D58, 58, D1) - instant normalization
+  // Helper matching function across all tenant properties (id, shortEnvId, code, email, name)
+  const matchTenant = (list: any[]) => {
+    return list.find(t => {
+      if (!t) return false;
+      const tId = String(t.id || '').toLowerCase().trim();
+      const tShort = String(t.shortEnvId || t.code || '').toLowerCase().trim();
+      const tName = String(t.companyName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const tEmail = String(t.adminEmail || '').toLowerCase().trim();
+      const cleanNormName = normId.replace(/[^a-z0-9]/g, '');
+
+      const pureNormId = normId.replace(/^d/, '');
+      const pureTId = tId.replace(/^d/, '');
+      const pureTShort = tShort.replace(/^d/, '');
+
+      return (
+        tId === normId ||
+        tShort === normId ||
+        (pureNormId && pureTId && pureTId === pureNormId) ||
+        (pureNormId && pureTShort && pureTShort === pureNormId) ||
+        (pureNormId && tId === `d${pureNormId}`) ||
+        (pureNormId && tShort === `d${pureNormId}`) ||
+        (cleanNormName && tName && (tName.includes(cleanNormName) || cleanNormName.includes(tName))) ||
+        (tEmail && (tEmail === normId || tEmail.startsWith(normId)))
+      );
+    });
+  };
+
+  // 2. Prioritize lookup in registered_tenants from Firestore
+  const tenants = await getRegisteredTenantsFromDb();
+  const found = matchTenant(tenants);
+  if (found) return found;
+
+  // 3. Force refresh from DB if not matched yet
+  const refreshedTenants = await getRegisteredTenantsFromDb(true);
+  const foundRefreshed = matchTenant(refreshedTenants);
+  if (foundRefreshed) return foundRefreshed;
+
+  // 4. Fallback structured tenant pattern (e.g. D58, 58, D1) if not in registered_tenants list
   if (/^d?\d+$/i.test(normId)) {
     const rawDigits = normId.replace(/^d/, '');
     const formattedId = `D${rawDigits}`;
@@ -162,38 +237,6 @@ async function resolveTenant(sanitizedTenantId: string): Promise<any | null> {
     };
   }
 
-  // Helper matching function
-  const matchTenant = (list: any[]) => {
-    return list.find(t => {
-      if (!t) return false;
-      const tId = String(t.id || '').toLowerCase().trim();
-      const tShort = String(t.shortEnvId || '').toLowerCase().trim();
-      const tName = String(t.companyName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
-      const pureNormId = normId.replace(/^d/, '');
-      const pureTId = tId.replace(/^d/, '');
-
-      return (
-        tId === normId ||
-        tShort === normId ||
-        (pureNormId && pureTId && pureTId === pureNormId) ||
-        (pureNormId && tId === `d${pureNormId}`) ||
-        (pureNormId && tShort === pureNormId) ||
-        (tName && tName === normId)
-      );
-    });
-  };
-
-  // 3. Lookup in cached/loaded registered_tenants
-  const tenants = await getRegisteredTenantsFromDb();
-  const found = matchTenant(tenants);
-  if (found) return found;
-
-  // 4. Force refresh from DB if not matched yet
-  const refreshedTenants = await getRegisteredTenantsFromDb(true);
-  const foundRefreshed = matchTenant(refreshedTenants);
-  if (foundRefreshed) return foundRefreshed;
-
   // 5. Default fallback to preserve tenant access
   return {
     id: sanitizedTenantId,
@@ -204,15 +247,33 @@ async function resolveTenant(sanitizedTenantId: string): Promise<any | null> {
   };
 }
 
-// Helper function to read a collection from Firestore with support for chunked documents and resilient memory caching
-async function fetchServerCollection(colName: string, tenantId: string): Promise<any[]> {
-  const collectionKeys = tenantId === 'demo' 
-    ? ['demo', colName] 
-    : [
-        `${tenantId}_${colName}`,
-        `D${tenantId.replace(/^D/i, '')}_${colName}`,
-        `${tenantId.replace(/^D/i, '')}_${colName}`
-      ];
+// Helper function to read a collection from Firestore with support for chunked documents, multiple aliases and memory caching
+async function fetchServerCollection(colName: string, tenantId: string, extraAliases: (string | undefined | null)[] = []): Promise<any[]> {
+  const rawKeys: string[] = [];
+  
+  if (tenantId === 'demo') {
+    rawKeys.push('demo', colName);
+  } else {
+    rawKeys.push(
+      `${tenantId}_${colName}`,
+      `D${tenantId.replace(/^D/i, '')}_${colName}`,
+      `${tenantId.replace(/^D/i, '')}_${colName}`
+    );
+  }
+
+  for (const alias of extraAliases) {
+    if (alias && typeof alias === 'string' && alias.trim() && alias !== tenantId) {
+      const a = alias.trim();
+      rawKeys.push(
+        `${a}_${colName}`,
+        `D${a.replace(/^D/i, '')}_${colName}`,
+        `${a.replace(/^D/i, '')}_${colName}`
+      );
+    }
+  }
+
+  // Deduplicate keys
+  const collectionKeys = Array.from(new Set(rawKeys.filter(Boolean)));
 
   for (const collectionKey of collectionKeys) {
     if (serverMemoryStore.has(collectionKey)) {
@@ -245,10 +306,16 @@ async function fetchServerCollection(colName: string, tenantId: string): Promise
               }
             }
           }
-          serverMemoryStore.set(collectionKey, combined);
+          for (const ck of collectionKeys) {
+            serverMemoryStore.set(ck, combined);
+          }
+          persistServerStoreToDisk();
           return combined;
         } else if (Array.isArray(payload.value)) {
-          serverMemoryStore.set(collectionKey, payload.value);
+          for (const ck of collectionKeys) {
+            serverMemoryStore.set(ck, payload.value);
+          }
+          persistServerStoreToDisk();
           return payload.value;
         }
       }
@@ -258,13 +325,24 @@ async function fetchServerCollection(colName: string, tenantId: string): Promise
   }
 
   // Fallback to in-memory store
-  return serverMemoryStore.get(collectionKeys[0]) || [];
+  for (const collectionKey of collectionKeys) {
+    if (serverMemoryStore.has(collectionKey)) {
+      return serverMemoryStore.get(collectionKey) || [];
+    }
+  }
+  return [];
 }
 
 // Helper function to persist collection to Firestore and in-memory store
-async function saveServerCollection(colName: string, tenantId: string, items: any[]): Promise<void> {
+async function saveServerCollection(colName: string, tenantId: string, items: any[], extraAliases: (string | undefined | null)[] = []): Promise<void> {
   const collectionKey = tenantId === 'demo' ? colName : `${tenantId}_${colName}`;
   serverMemoryStore.set(collectionKey, items);
+  for (const a of extraAliases) {
+    if (a && typeof a === 'string' && a.trim() && a !== tenantId) {
+      serverMemoryStore.set(`${a.trim()}_${colName}`, items);
+    }
+  }
+  persistServerStoreToDisk();
   try {
     const docRef = doc(db, 'appData', collectionKey);
     withTimeout(setDoc(docRef, { value: items }), 4000, null).catch(() => {});
@@ -272,6 +350,40 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
     // Keep in memory if network offline
   }
 }
+
+  // Real-time synchronization endpoint from browser client to server
+  app.post("/api/sync-collection", (req, res) => {
+    try {
+      const { collectionName, tenantId, value } = req.body;
+      if (!collectionName || !tenantId) {
+        return res.status(400).json({ error: "Paramètres collectionName et tenantId requis." });
+      }
+      const rawTenant = String(tenantId).trim();
+      const collectionKey = rawTenant === 'demo' ? collectionName : `${rawTenant}_${collectionName}`;
+      
+      if (Array.isArray(value)) {
+        serverMemoryStore.set(collectionKey, value);
+        // Also map normalized key if D-prefixed
+        if (/^d\d+$/i.test(rawTenant)) {
+          const numOnly = rawTenant.replace(/^d/i, '');
+          serverMemoryStore.set(`D${numOnly}_${collectionName}`, value);
+          serverMemoryStore.set(`${numOnly}_${collectionName}`, value);
+        }
+        persistServerStoreToDisk();
+      }
+
+      // Also attempt asynchronous Firestore save
+      try {
+        const docRef = doc(db, 'appData', collectionKey);
+        setDoc(docRef, { value }).catch(() => {});
+      } catch (e) {}
+
+      return res.json({ status: "success", syncedKey: collectionKey, count: Array.isArray(value) ? value.length : 1 });
+    } catch (err: any) {
+      console.error("Error in /api/sync-collection:", err);
+      return res.status(500).json({ error: err.message || "Erreur interne de synchronisation." });
+    }
+  });
 
   // Proxy route for Pennylane API to prevent CORS
   app.all("/api/pennylane/*", async (req, res) => {
@@ -701,13 +813,14 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       }
 
       const tenantId = targetTenant.id;
+      const tenantAliases = [targetTenant.shortEnvId, targetTenant.id, sanitizedTenantId, rawTenantId].filter(Boolean);
 
       // Variables Endpoint
       if (cleanPath === 'variables' || cleanPath === 'variables/') {
-        const storedVars = await fetchServerCollection('variables', tenantId);
+        const storedVars = await fetchServerCollection('variables', tenantId, tenantAliases);
         return res.json({
           status: "success",
-          environnement: tenantId,
+          environnement: targetTenant.shortEnvId || tenantId,
           version_api: "1.4.0",
           devise: "EUR",
           taux_tva_defaut: 20.0,
@@ -751,15 +864,15 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           return res.status(201).json({
             status: "success",
             message: "Ticket CRM créé avec succès",
-            environnement: tenantId,
+            environnement: targetTenant.shortEnvId || tenantId,
             ticket: newTicket
           });
         } else {
           // GET tickets strictly isolated for tenantId
-          const tickets = await fetchServerCollection('tickets', tenantId);
+          const tickets = await fetchServerCollection('tickets', tenantId, tenantAliases);
           return res.json({
             status: "success",
-            environnement: tenantId,
+            environnement: targetTenant.shortEnvId || tenantId,
             count: tickets.length,
             tickets
           });
@@ -768,7 +881,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
 
       // Clients Endpoint
       if (cleanPath.startsWith('clients')) {
-        let clients = await fetchServerCollection('clients', tenantId);
+        let clients = await fetchServerCollection('clients', tenantId, tenantAliases);
 
         if (req.method === 'POST') {
           const body = req.body || {};
@@ -792,12 +905,12 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             clients = [newClient, ...clients];
           }
 
-          await saveServerCollection('clients', tenantId, clients);
+          await saveServerCollection('clients', tenantId, clients, tenantAliases);
 
           return res.status(201).json({
             status: "success",
             message: "Client enregistré avec succès",
-            environnement: tenantId,
+            environnement: targetTenant.shortEnvId || tenantId,
             id: newClientId,
             client: newClient,
             data: newClient
@@ -808,14 +921,14 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         if (subId) {
           const found = clients.find((c: any) => c.id === subId || c.identifiantUnique === subId || c.nom === subId || c.reference === subId);
           if (found) {
-            return res.json({ status: "success", environnement: tenantId, client: found, data: found });
+            return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, client: found, data: found });
           }
-          return res.status(404).json({ status: "error", error: `Client '${subId}' non trouvé dans l'environnement ${tenantId}` });
+          return res.status(404).json({ status: "error", error: `Client '${subId}' non trouvé dans l'environnement ${targetTenant.shortEnvId || tenantId}` });
         }
 
         return res.json({
           status: "success",
-          environnement: tenantId,
+          environnement: targetTenant.shortEnvId || tenantId,
           count: clients.length,
           total: clients.length,
           clients,
@@ -825,7 +938,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
 
       // Defibrillateurs Endpoint
       if (cleanPath.startsWith('defibrillateurs')) {
-        let defibs = await fetchServerCollection('defibrillateurs', tenantId);
+        let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
 
         if (req.method === 'POST') {
           const body = req.body || {};
@@ -855,12 +968,12 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             defibs = [newDefib, ...defibs];
           }
 
-          await saveServerCollection('defibrillateurs', tenantId, defibs);
+          await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
 
           return res.status(201).json({
             status: "success",
             message: "Défibrillateur enregistré avec succès",
-            environnement: tenantId,
+            environnement: targetTenant.shortEnvId || tenantId,
             id: newId,
             defibrillateur: newDefib,
             data: newDefib
@@ -892,18 +1005,18 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           }
 
           if (found) {
-            return res.json({ status: "success", environnement: tenantId, defibrillateur: found, data: found });
+            return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, defibrillateur: found, data: found });
           }
           return res.status(404).json({ 
             status: "error", 
-            error: `Défibrillateur '${subId}' non trouvé dans l'environnement ${tenantId}`,
+            error: `Défibrillateur '${subId}' non trouvé dans l'environnement ${targetTenant.shortEnvId || tenantId}`,
             code: "DEFIBRILLATEUR_NOT_FOUND" 
           });
         }
 
         return res.json({
           status: "success",
-          environnement: tenantId,
+          environnement: targetTenant.shortEnvId || tenantId,
           count: defibs.length,
           total: defibs.length,
           defibrillateurs: defibs,
