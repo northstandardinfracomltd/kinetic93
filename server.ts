@@ -20,7 +20,7 @@ const db = getFirestore(firebaseApp);
 const DATA_DIR = path.join(process.cwd(), '.data');
 const STORE_FILE = path.join(DATA_DIR, 'server-store.json');
 
-const serverMemoryStore = new Map<string, any[]>();
+const serverMemoryStore = new Map<string, any>();
 
 // Initialize disk store
 try {
@@ -253,6 +253,68 @@ async function resolveTenant(sanitizedTenantId: string): Promise<any | null> {
     shortEnvId: sanitizedTenantId,
     adminPasswordHexOrPlain: sanitizedTenantId
   };
+}
+
+// Helper function to read tenant API connector credentials from Firestore
+async function getTenantApiCredentials(tenantId: string, extraAliases: (string | undefined | null)[] = []): Promise<{ active: boolean; apiKey?: string; secretKey?: string }> {
+  const candidateKeys: string[] = [];
+  if (tenantId === 'demo') {
+    candidateKeys.push('api_connectors');
+  } else {
+    candidateKeys.push(
+      `${tenantId}_api_connectors`,
+      `D${tenantId.replace(/^D/i, '')}_api_connectors`,
+      `${tenantId.replace(/^D/i, '')}_api_connectors`
+    );
+  }
+
+  for (const alias of extraAliases) {
+    if (alias && typeof alias === 'string' && alias.trim() && alias !== tenantId) {
+      const a = alias.trim();
+      candidateKeys.push(
+        `${a}_api_connectors`,
+        `D${a.replace(/^D/i, '')}_api_connectors`,
+        `${a.replace(/^D/i, '')}_api_connectors`
+      );
+    }
+  }
+
+  const uniqueKeys = Array.from(new Set(candidateKeys.filter(Boolean)));
+
+  for (const cKey of uniqueKeys) {
+    if (serverMemoryStore.has(cKey)) {
+      const connData = serverMemoryStore.get(cKey);
+      if (connData && typeof connData === 'object') {
+        const apiKey = typeof connData.apiDefibeoApiKey === 'string' ? connData.apiDefibeoApiKey.trim() : '';
+        const secretKey = typeof connData.apiDefibeoSecretKey === 'string' ? connData.apiDefibeoSecretKey.trim() : '';
+        const active = connData.apiDefibeoActive !== false;
+        if (apiKey || secretKey) {
+          return { active, apiKey, secretKey };
+        }
+      }
+    }
+  }
+
+  for (const cKey of uniqueKeys) {
+    try {
+      const docRef = doc(db, 'appData', cKey);
+      const snap = await withTimeout(getDoc(docRef), 6000, null);
+      if (snap && snap.exists()) {
+        const payload = snap.data()?.value || snap.data() || {};
+        serverMemoryStore.set(cKey, payload);
+        const apiKey = typeof payload.apiDefibeoApiKey === 'string' ? payload.apiDefibeoApiKey.trim() : '';
+        const secretKey = typeof payload.apiDefibeoSecretKey === 'string' ? payload.apiDefibeoSecretKey.trim() : '';
+        const active = payload.apiDefibeoActive !== false;
+        if (apiKey || secretKey) {
+          return { active, apiKey, secretKey };
+        }
+      }
+    } catch (e) {
+      console.error(`[API Security] Error reading connector credentials from ${cKey}:`, e);
+    }
+  }
+
+  return { active: false };
 }
 
 // Helper function to read a collection from Firestore with support for chunked documents, multiple aliases and memory caching
@@ -750,63 +812,49 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         });
       }
 
-      // 3. API Key Authentication & Multi-Tenant Security Check
-      const masterKey = process.env.DEFIBEO_API_KEY || process.env.GEMINI_API_KEY;
+      // 3. Strict API Key Authentication & Multi-Tenant Isolation
+      const masterKey = process.env.DEFIBEO_MASTER_KEY || process.env.DEFIBEO_API_KEY;
       let isAuthorized = false;
 
       const keysToCheck = [apiKey, secretKey].filter(Boolean);
 
-      if (keysToCheck.length > 0) {
-        // Master server key gives access to any environment
-        if (masterKey && keysToCheck.includes(masterKey)) {
+      if (keysToCheck.length === 0) {
+        return res.status(401).json({
+          status: "error",
+          error: "Authentification requise : Veuillez fournir l'en-tête 'X-Defibeo-API-Key' ou 'X-Defibeo-Secret-Key'.",
+          code: "MISSING_API_KEY",
+          environnement_demande: targetTenant.shortEnvId || targetTenant.id
+        });
+      }
+
+      // Option A: Master server administrative key (if defined in secure server environment)
+      if (masterKey && masterKey.length >= 16 && keysToCheck.includes(masterKey)) {
+        isAuthorized = true;
+      }
+      // Option B: Demo environment
+      else if (targetTenant.id === 'demo') {
+        if (keysToCheck.some(k => ['demo', 'defibeo_demo', 'public_demo_key', 'demo_key'].includes(k.toLowerCase()))) {
           isAuthorized = true;
         }
-        // Public / Demo key
-        else if (targetTenant.id === 'demo' && keysToCheck.some(k => ['demo', 'public_demo_key', 'defibeo_demo'].includes(k))) {
-          isAuthorized = true;
+      }
+      // Option C: Strict Per-Tenant API Keys from Firestore (e.g. D27_api_connectors / D58_api_connectors)
+      else {
+        const tenantAliases = [targetTenant.id, targetTenant.shortEnvId, sanitizedTenantId].filter(Boolean);
+        const creds = await getTenantApiCredentials(targetTenant.id, tenantAliases);
+
+        if (creds && creds.active) {
+          if (creds.apiKey && keysToCheck.includes(creds.apiKey)) {
+            isAuthorized = true;
+          }
+          if (creds.secretKey && keysToCheck.includes(creds.secretKey)) {
+            isAuthorized = true;
+          }
         }
-        // Tenant specific credentials or keys
-        else if (targetTenant) {
-          const allowedKeys = [
-            targetTenant.adminPasswordHexOrPlain,
-            targetTenant.shortEnvId,
-            targetTenant.id,
-            `defib_${targetTenant.id}`,
-            `defib_${sanitizedTenantId}`,
-            sanitizedTenantId,
-            sanitizedTenantId.replace(/^D/i, '')
-          ].filter(Boolean);
 
-          if (keysToCheck.some(k => allowedKeys.includes(k))) {
+        // Option D: Specific Tenant Admin password if configured and passed as secret key
+        if (!isAuthorized && targetTenant.adminPasswordHexOrPlain && targetTenant.adminPasswordHexOrPlain.length >= 8) {
+          if (keysToCheck.includes(targetTenant.adminPasswordHexOrPlain)) {
             isAuthorized = true;
-          } else if (keysToCheck.some(k => k.startsWith('dfb_') || k.startsWith('defib_') || k.length >= 4)) {
-            isAuthorized = true;
-          } else {
-            // Check connector keys saved in Firestore for this tenant if needed
-            try {
-              const candidateKeys = [
-                targetTenant.id === 'demo' ? 'api_connectors' : `${targetTenant.id}_api_connectors`,
-                `D${sanitizedTenantId.replace(/^D/i, '')}_api_connectors`
-              ];
-
-              for (const cKey of candidateKeys) {
-                const docRef = doc(db, 'appData', cKey);
-                const connectorsDoc = await withTimeout(getDoc(docRef), 2500, null);
-                if (connectorsDoc && connectorsDoc.exists()) {
-                  const connData = connectorsDoc.data()?.value || connectorsDoc.data() || {};
-                  if (connData.apiDefibeoApiKey && keysToCheck.includes(connData.apiDefibeoApiKey)) {
-                    isAuthorized = true;
-                    break;
-                  }
-                  if (connData.apiDefibeoSecretKey && keysToCheck.includes(connData.apiDefibeoSecretKey)) {
-                    isAuthorized = true;
-                    break;
-                  }
-                }
-              }
-            } catch (e) {
-              console.error("Error reading tenant api_connectors:", e);
-            }
           }
         }
       }
@@ -814,9 +862,9 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       if (!isAuthorized) {
         return res.status(401).json({
           status: "error",
-          error: "Authentification API échouée. Vérifiez votre clé API ('X-Defibeo-API-Key'), votre clé secrète ('X-Defibeo-Secret-Key') et vos droits d'accès pour cet environnement.",
+          error: `Accès non autorisé : La clé API ou secrète fournie n'est pas valide pour l'environnement '${targetTenant.shortEnvId || targetTenant.id}'. Chaque environnement requiert sa propre clé API dédiée.`,
           code: "UNAUTHORIZED_TENANT_ACCESS",
-          environnement_demande: targetTenant.id
+          environnement_demande: targetTenant.shortEnvId || targetTenant.id
         });
       }
 
