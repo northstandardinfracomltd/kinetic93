@@ -4,9 +4,17 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
-import firebaseConfig from "./firebase-applet-config.json";
+const PROD_FIREBASE_CONFIG = {
+  apiKey: process.env.FIREBASE_API_KEY || "AIzaSyBsfSHoSrPXwnwLcWtIGLPUwUd7ZYWVCvA",
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN || "defibeo.firebaseapp.com",
+  projectId: process.env.FIREBASE_PROJECT_ID || "defibeo",
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "defibeo.appspot.com",
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "627487981610",
+  appId: process.env.FIREBASE_APP_ID || "1:627487981610:web:e4f496748c4ee0d1710353",
+  measurementId: ""
+};
 
-const firebaseApp = initializeApp(firebaseConfig);
+const firebaseApp = initializeApp(PROD_FIREBASE_CONFIG);
 const db = getFirestore(firebaseApp);
 
 const DATA_DIR = path.join(process.cwd(), '.data');
@@ -287,14 +295,14 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   for (const collectionKey of collectionKeys) {
     try {
       const docRef = doc(db, 'appData', collectionKey);
-      const snap = await withTimeout(getDoc(docRef), 3500, null);
+      const snap = await withTimeout(getDoc(docRef), 10000, null);
       if (snap && snap.exists()) {
         const payload = snap.data();
         if (payload._chunked && typeof payload.chunksCount === 'number') {
           const chunkPromises = [];
           for (let i = 0; i < payload.chunksCount; i++) {
             const chunkRef = doc(db, 'appData', `${collectionKey}_chunk_${i}`);
-            chunkPromises.push(withTimeout(getDoc(chunkRef), 3500, null));
+            chunkPromises.push(withTimeout(getDoc(chunkRef), 10000, null));
           }
           const chunkSnaps = await Promise.all(chunkPromises);
           let combined: any[] = [];
