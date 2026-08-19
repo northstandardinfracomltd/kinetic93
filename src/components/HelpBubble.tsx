@@ -65,16 +65,17 @@ export default function HelpBubble({ cacheKey, text, children, style, imageSrc, 
       className="p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fadeIn transition-all"
       style={{
         borderColor: 'rgb(218, 218, 218)',
-        background: '#ffffff00',
+        background: imageSrc ? '#ffffff' : '#ffffff00',
+        backgroundColor: imageSrc ? '#ffffff' : '#ffffff00',
         boxShadow: 'none',
         maxWidth: '98%',
         margin: '15px auto 5px auto',
         ...style,
       }}
     >
-      <div className="flex flex-col md:flex-row items-center md:items-start gap-4 flex-1">
+      <div className="flex flex-col md:flex-row items-center md:items-center gap-4 flex-1">
         {imageSrc && (
-          <div className="w-full md:w-[30%] flex justify-center items-center shrink-0">
+          <div className="w-full md:w-[30%] flex justify-center items-center self-center shrink-0">
             <img 
               src={imageSrc} 
               alt={imageAlt || "Illustration"} 
