@@ -2353,6 +2353,11 @@ export default function DefibTab({
             text="Sur cet onglet, retrouvez l’ensemble des défibrillateurs gérés dans votre environnement. L’identifiant est généré automatiquement, il s’agit d’une sorte de plaque d’immatriculation avec au centre l’identifiant unique de votre environnement. Cochez chaque ligne pour sélectionner un ou plusieurs défibrillateurs, et vous verrez apparaître des options au-dessus, par exemple pour insérer le ou les défibrillateurs dans une tournée, ou faire une correction de masse." 
           />
 
+          <HelpBubble 
+            cacheKey="help_dismissed_defib_colors" 
+            text="Bon à savoir concernant le code des couleurs des valeurs dans le tableau : Le rouge correspond à une action requise expirée (critique), l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois." 
+          />
+
       {/* Main Table Records Sheet */}
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         {/* Scrollbar supérieur pour faciliter la navigation horizontale sur ordinateur fixe */}

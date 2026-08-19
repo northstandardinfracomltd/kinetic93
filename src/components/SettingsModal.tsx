@@ -3559,89 +3559,6 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* PENNYLANE */}
-              <div style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Pennylane</h5>
-                        <div className="select-none font-sans flex items-center mt-1">
-                          <span
-                            style={{
-                              backgroundColor: pennylaneActive ? '#fe4eba' : 'rgb(57, 169, 143)',
-                              boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
-                              color: '#ffffff',
-                              fontSize: '16px',
-                              borderRadius: '100px',
-                              padding: '2px 10px',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            }}
-                            className="font-bold select-none"
-                          >
-                            {pennylaneActive ? t("Activé") : t("Disponible")}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={pennylaneActive}
-                          onChange={(e) => {
-                            setPennylaneActive(e.target.checked);
-                          }}
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'pointer' }}></div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {pennylaneActive && (
-                    <div className="mt-4 space-y-3 animate-slideUp">
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("ID Client.")}</label>
-                        <input
-                          type="text"
-                          value={pennylaneClientId}
-                          onChange={(e) => {
-                            setPennylaneClientId(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez l'ID Client.")}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Company API token")}.</label>
-                        <input
-                          type="text"
-                          value={pennylaneCompanyToken}
-                          onChange={(e) => {
-                            setPennylaneCompanyToken(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez le Company API token") + "."}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Secret API token")}.</label>
-                        <input
-                          type="text"
-                          value={pennylaneSecretToken}
-                          onChange={(e) => {
-                            setPennylaneSecretToken(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez le Secret API token") + "."}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
               {/* DROPBOX */}
               <div style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between">
                 <div>
@@ -3741,75 +3658,6 @@ export default function SettingsModal({
                           )}
                         </div>
                       )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* CEGID */}
-              <div style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Cegid</h5>
-                        <div className="select-none font-sans flex items-center mt-1">
-                          <span
-                            style={{
-                              backgroundColor: 'rgb(185, 28, 28)',
-                              boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
-                              color: '#ffffff',
-                              fontSize: '16px',
-                              borderRadius: '100px',
-                              padding: '2px 10px',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            }}
-                            className="font-bold select-none"
-                          >
-                            {t("Indisponible")}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center cursor-not-allowed select-none opacity-50" style={{ cursor: 'not-allowed' }}>
-                        <input
-                          type="checkbox"
-                          checked={cegidActive}
-                          disabled
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-not-allowed peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'not-allowed' }}></div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {cegidActive && (
-                    <div className="mt-4 space-y-3 animate-slideUp">
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Clé d’API.")}</label>
-                        <input
-                          type="text"
-                          value={cegidApiKey}
-                          onChange={(e) => {
-                            setCegidApiKey(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez la Clé d’API.")}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Clé secrète d’API.")}</label>
-                        <input
-                          type="text"
-                          value={cegidApiSecret}
-                          onChange={(e) => {
-                            setCegidApiSecret(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez la Clé secrète d’API.")}
-                        />
-                      </div>
                     </div>
                   )}
                 </div>
@@ -4040,70 +3888,6 @@ export default function SettingsModal({
                 </div>
               </div>
 
-            </div>
-          </div>
-
-          {/* SECTION 4: RECOMMANDATIONS */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left mt-4" id="settings-section-recommendations">
-            {renderSectionHeader(t("Recommandations"), false)}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Ad 1: Textelp */}
-              <div className="bg-white space-y-4 animate-fadeIn flex flex-col justify-between">
-                <div>
-                  <h4 className="font-bold text-black cursor-default select-none animate-fadeIn" style={{ fontSize: '18px', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
-                    {t("Découvrez Textelp pour l’IA agentique")}.
-                  </h4>
-                  <p style={{ fontSize: '18px', color: '#000000', lineHeight: '1.5' }} className="font-sans font-normal text-black mt-2">
-                    {t("Installez Textelp sur le site internet de votre entreprise pour permettre à vos clients et visiteurs d’obtenir des renseignements précis sur vos offres, produits et processus. Contactez Défibeo pour en savoir plus.")}
-                  </p>
-                </div>
-                <div className="flex justify-start mt-4">
-                  <a
-                    href="mailto:support@defibeo.com"
-                    className="inline-flex items-center justify-center font-bold px-5 py-2.5 text-[18px] text-white hover:opacity-90 active:scale-95 transition-all text-center select-none"
-                    style={{
-                      backgroundColor: 'rgb(53, 86, 236)',
-                      borderRadius: '13px',
-                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                      border: 'none',
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                    }}
-                  >
-                    {t("Contacter un spécialiste")}
-                  </a>
-                </div>
-              </div>
-
-              {/* Ad 2: Civilprom */}
-              <div className="bg-white space-y-4 animate-fadeIn flex flex-col justify-between">
-                <div>
-                  <h4 className="font-bold text-black cursor-default select-none animate-fadeIn" style={{ fontSize: '18px', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
-                    {t("Développez une marque forte avec Civilprom")}.
-                  </h4>
-                  <p style={{ fontSize: '18px', color: '#000000', lineHeight: '1.5' }} className="font-sans font-normal text-black mt-2">
-                    {t("Civilprom est une agence artistique qui peut vous accompagner sur vos sujets de marque (logo, charte graphique) ainsi que sur vos supports de communication (site internet, plaquette commerciale). Contactez-nous pour en savoir plus.")}
-                  </p>
-                </div>
-                <div className="flex justify-start mt-4">
-                  <a
-                    href="https://civilprom.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center font-bold px-5 py-2.5 text-[18px] text-white hover:opacity-90 active:scale-95 transition-all text-center select-none"
-                    style={{
-                      backgroundColor: 'rgb(53, 86, 236)',
-                      borderRadius: '13px',
-                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                      border: 'none',
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                    }}
-                  >
-                    {t("En savoir plus")}
-                  </a>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -4588,19 +4372,48 @@ export default function SettingsModal({
               {/* Drawer Content */}
               <div className="flex-1 py-2 space-y-6 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                 
-                {/* Auth Banner */}
-                <div style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }} className="text-white space-y-3">
+                {/* Auth Banner & Security Requirements */}
+                <div style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }} className="text-white space-y-4">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="font-bold text-[16px] text-white">En-têtes HTTP requis (headers)</span>
-                    <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>JSON REST</span>
+                    <span className="font-bold text-[17px] text-white">En-têtes HTTP requis & Sécurité Multi-Tenant</span>
+                    <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>REST JSON / ISO-8859 & UTF-8</span>
                   </div>
-                  <pre style={{ background: 'rgba(0,0,0,0.25)', borderRadius: '10px', padding: '15px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
+
+                  <p className="text-[15px] text-slate-200 leading-relaxed" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                    Chaque environnement (tenant) dispose d'un <strong>cloisonnement étanche</strong>. Votre clé API ou secrète est strictement rattachée à votre code environnement <code className="bg-white/20 text-white px-2 py-0.5 rounded font-bold">{envIdDisplay}</code> (ou son alias). Toute requête avec un identifiant de tenant non autorisé ou une mauvaise clé est automatiquement rejetée en <strong>HTTP 401 Unauthorized</strong>.
+                  </p>
+
+                  <pre style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '10px', padding: '15px', fontSize: '15px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`Host: consoledefibeo.deroesch.com
 X-Defibeo-Tenant-ID: ${envIdDisplay}
 X-Defibeo-API-Key: ${apiDefibeoApiKey || 'dfb_live_xxxxxxxx'}
 X-Defibeo-Secret-Key: ${apiDefibeoSecretKey || 'dfb_sec_xxxxxxxx'}
 Content-Type: application/json`}
                   </pre>
+
+                  {/* Quick Code Examples */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                    <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '10px', padding: '12px' }}>
+                      <div className="text-xs font-bold text-emerald-300 mb-1">Exemple cURL :</div>
+                      <pre style={{ fontSize: '13px', color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+{`curl -X GET "https://consoledefibeo.deroesch.com/v1/defibrillateurs" \\
+  -H "X-Defibeo-Tenant-ID: ${envIdDisplay}" \\
+  -H "X-Defibeo-API-Key: ${apiDefibeoApiKey || 'dfb_live_...'}"`}
+                      </pre>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '10px', padding: '12px' }}>
+                      <div className="text-xs font-bold text-sky-300 mb-1">Exemple JavaScript (Fetch) :</div>
+                      <pre style={{ fontSize: '13px', color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+{`const res = await fetch("https://consoledefibeo.deroesch.com/v1/defibrillateurs", {
+  headers: {
+    "X-Defibeo-Tenant-ID": "${envIdDisplay}",
+    "X-Defibeo-API-Key": "${apiDefibeoApiKey || 'dfb_live_...'}"
+  }
+});
+const { defibrillateurs } = await res.json();`}
+                      </pre>
+                    </div>
+                  </div>
                 </div>
 
                 {/* SEARCH & EXPLORER FOR SLUGS / FIELDS */}
@@ -4738,45 +4551,53 @@ Content-Type: application/json`}
                 {/* API Reference Endpoints */}
                 <div className="space-y-6" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
 
-                  {/* 1. Client - GET */}
+                  {/* 1. Clients - GET Liste & Unitaire */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3">
                         <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET</span>
-                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/clients/:client_id</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/clients OU /v1/clients/:client_id</span>
                       </div>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère les informations complètes d'un client spécifique selon la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:client_id</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>CLI-0042</code>).</p>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        Sans paramètre, <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET /v1/clients</code> retourne la <strong>liste complète des clients</strong> de votre environnement ({envIdDisplay}). Avec la variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:client_id</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>CLI-0042</code>), récupère la fiche unitaire.
+                      </p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Structure JSON complète retournée</div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
-  "entreprise": "Clinique Saint-Jean",
-  "email": "contact@clinique-stjean.fr",
-  "telephone": "0142680000",
-  "payeur_id": "PAY-0091",
-  "client_id": "CLI-0042",
-  "identifiant_unique": "SIRET-12345678900012",
-  "reference_contrat": "CTR-2026-99",
-  "debut_contrat": "2026-01-01",
-  "fin_contrat": "2028-12-31"
+  "status": "success",
+  "environnement": "${envIdDisplay}",
+  "count": 42,
+  "clients": [
+    {
+      "id": "CLI-0042",
+      "entreprise": "Clinique Saint-Jean",
+      "email": "contact@clinique-stjean.fr",
+      "telephone": "0142680000",
+      "payeur_id": "PAY-0091",
+      "reference_contrat": "CTR-2026-99",
+      "debut_contrat": "2026-01-01",
+      "fin_contrat": "2028-12-31"
+    }
+  ]
 }`}
                         </pre>
                       </div>
                     </div>
                   </div>
 
-                  {/* 2. Client - POST Update */}
+                  {/* 2. Client - POST Create or Update */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3">
                         <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
-                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/clients/:client_id</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/clients OU /v1/clients/:client_id</span>
                       </div>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Met à jour le jeu de données d'un client ciblé. La variable d'URL <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:client_id</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>CLI-0042</code>) désigne précisément le client à éditer dans la base de données.</p>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée un nouveau client ou met à jour un client existant ciblé. Synchronisé immédiatement en base de données.</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
@@ -4795,65 +4616,74 @@ Content-Type: application/json`}
                     </div>
                   </div>
 
-                  {/* 3. Défibrillateur - GET */}
+                  {/* 3. Défibrillateurs - GET Liste & Unitaire */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3">
                         <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET</span>
-                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/defibrillateurs/:identifiant</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/defibrillateurs OU /v1/defibrillateurs/:identifiant</span>
                       </div>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère la totalité des champs d'un défibrillateur spécifique selon son identifiant unique placé en URL : <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:identifiant</code> (ex: <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>DAE-88192</code> ou <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>AABBCC</code>).</p>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        Sans paramètre d'identifiant, <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET /v1/defibrillateurs</code> retourne le <strong>parc complet de DAE</strong> de l'environnement ({envIdDisplay}). Avec un identifiant en URL (<code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>DAE-88192</code> ou numéro de série <code className="bg-slate-100 text-black px-1.5 py-0.5 rounded font-bold" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>SN-9981240</code>), renvoie la fiche exhaustive.
+                      </p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Champs retournés (JSON complet)</div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Structure JSON retournée (Extrait)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
-  "serie": "SN-9981240",
-  "identifiant": "DAE-88192",
-  "marque": "ZOLL",
-  "modele": "AED Plus",
-  "statut": "Conforme",
-  "statut_voyant": "Vert OK",
-  "numero_atlasante": "ATLAS-77120",
-  "version_logiciel": "v3.2.1",
-  "client_id": "CLI-0042",
-  "nom_prenom": "Jean Dupont",
-  "telephone_portable": "0612345678",
-  "email": "j.dupont@clinique-stjean.fr",
-  "boitier_modele": "Mural AIVIA 200",
-  "boitier_lot": "LOT-B-88",
-  "numero_et_voie": "12 Avenue de Paris",
-  "ville": "Paris",
-  "code_postal": "75008",
-  "region": "Île-de-France",
-  "pays": "France",
-  "latitude": 48.8708,
-  "longitude": 2.3045,
-  "aide_acces": "Code porte 45A12 - Hall d'accueil RDC",
-  "expiration_garantie": "2030-05-15",
-  "date_fabrication": "2024-02-10",
-  "derniere_maintenance": "2026-02-15",
-  "prochaine_v": "2027-08-01",
-  "modele_a": "CPR-D Padz (Adulte)",
-  "lot_a": "LOT-A-990",
-  "insertion_a": "2026-02-15",
-  "peremption_a": "2028-02-15",
-  "lot_padpak_a": "PADPAK-A-01",
-  "peremption_padpak_a": "2028-02-15",
-  "modele_p": "Pedi-Padz II (Pédiatrique)",
-  "lot_p": "LOT-P-441",
-  "insertion_p": "2026-02-15",
-  "peremption_p": "2028-06-30",
-  "lot_padpak_p": "PADPAK-P-02",
-  "peremption_padpak_p": "2028-06-30",
-  "modele_b": "Pack Lithium 123A",
-  "lot_b": "LOT-BAT-77",
-  "peremption_b": "2030-02-15",
-  "insertion_b": "2026-02-15",
-  "pourcentage_constate_b": 100,
-  "peremption_trousse": "2028-12-31",
-  "etat_housse": "Conforme"
+  "status": "success",
+  "environnement": "${envIdDisplay}",
+  "count": 2492,
+  "defibrillateurs": [
+    {
+      "serie": "SN-9981240",
+      "identifiant": "DAE-88192",
+      "marque": "ZOLL",
+      "modele": "AED Plus",
+      "statut": "Conforme",
+      "statut_voyant": "Vert OK",
+      "numero_atlasante": "ATLAS-77120",
+      "version_logiciel": "v3.2.1",
+      "client_id": "CLI-0042",
+      "nom_prenom": "Jean Dupont",
+      "telephone_portable": "0612345678",
+      "email": "j.dupont@clinique-stjean.fr",
+      "boitier_modele": "Mural AIVIA 200",
+      "boitier_lot": "LOT-B-88",
+      "numero_et_voie": "12 Avenue de Paris",
+      "ville": "Paris",
+      "code_postal": "75008",
+      "region": "Île-de-France",
+      "pays": "France",
+      "latitude": 48.8708,
+      "longitude": 2.3045,
+      "aide_acces": "Code porte 45A12 - Hall d'accueil RDC",
+      "expiration_garantie": "2030-05-15",
+      "date_fabrication": "2024-02-10",
+      "derniere_maintenance": "2026-02-15",
+      "prochaine_v": "2027-08-01",
+      "modele_a": "CPR-D Padz (Adulte)",
+      "lot_a": "LOT-A-990",
+      "insertion_a": "2026-02-15",
+      "peremption_a": "2028-02-15",
+      "lot_padpak_a": "PADPAK-A-01",
+      "peremption_padpak_a": "2028-02-15",
+      "modele_p": "Pedi-Padz II (Pédiatrique)",
+      "lot_p": "LOT-P-441",
+      "insertion_p": "2026-02-15",
+      "peremption_p": "2028-06-30",
+      "lot_padpak_p": "PADPAK-P-02",
+      "peremption_padpak_p": "2028-06-30",
+      "modele_b": "Pack Lithium 123A",
+      "lot_b": "LOT-BAT-77",
+      "peremption_b": "2030-02-15",
+      "insertion_b": "2026-02-15",
+      "pourcentage_constate_b": 100,
+      "peremption_trousse": "2028-12-31",
+      "etat_housse": "Conforme"
+    }
+  ]
 }`}
                         </pre>
                       </div>
@@ -5283,18 +5113,20 @@ Content-Type: application/json`}
                     </div>
                   </div>
 
-                  {/* 13. CRM Ticket - POST Create */}
+                  {/* 13. CRM Tickets - GET Liste & POST Create */}
                   <div style={{ border: '1px solid #28134a', borderRadius: '13px' }} className="overflow-hidden bg-white shadow-2xs">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #28134a' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3">
-                        <span style={{ color: '#fff', background: '#106ff4', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST</span>
+                        <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>GET / POST</span>
                         <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>/v1/crm/tickets</span>
                       </div>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée un nouveau ticket/dossier de suivi dans le CRM de Defibeo.</p>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        En <strong>GET</strong>, récupère tous les tickets du CRM de l'environnement {envIdDisplay}. En <strong>POST</strong>, crée un nouveau ticket avec affectation collaborateur et criticité.
+                      </p>
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (POST JSON payload)</div>
                         <pre style={{ background: '#28134a', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#ffffff', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5' }}>
 {`{
   "categorie": "Technique",

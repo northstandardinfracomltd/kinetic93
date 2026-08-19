@@ -819,6 +819,22 @@ export default function MapModal({
           </button>
         </div>
 
+        {/* Bottom-Left Information Popup Overlay */}
+        <div 
+          id="map-info-popup"
+          className="absolute bottom-6 left-6 z-[1000] max-w-lg bg-white/95 backdrop-blur-xs p-4 rounded-xl border border-slate-200 shadow-xl text-black animate-fadeIn select-none"
+          style={{
+            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
+          }}
+        >
+          <div className="flex items-start gap-2.5">
+            <div className="flex-1 text-[14px] leading-relaxed text-slate-800" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif'" }}>
+              <span className="font-bold text-black">Bon à savoir :</span> Cliquez sur les points de position pour les intégrer à une tournée. Si le matériel est déjà présent dans une tournée, il n’est pas possible de le sélectionner. Pour rappel, le rouge correspond à une action requise expirée, l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois, tandis que le vert signifie qu’aucune action n’est requise et le gris que le logiciel manque d’informations pour déterminer son état.
+            </div>
+          </div>
+        </div>
+
         {/* Real OpenStreetMap Leaflet Container */}
         <MapContainer 
           center={[46.603354, 1.888334]} 

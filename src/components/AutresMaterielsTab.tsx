@@ -7,6 +7,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import MapModal from './MapModal';
+import HelpBubble from './HelpBubble';
 
 const CODE39_PATTERNS: Record<string, string> = {
   '0': '000110100', '1': '100100001', '2': '001100001', '3': '101100000',
@@ -1192,6 +1193,11 @@ export default function AutresMaterielsTab({
               </div>
             </div>
           )}
+
+          <HelpBubble 
+            cacheKey="help_dismissed_autres_materiels_colors" 
+            text="Bon à savoir concernant le code des couleurs des valeurs dans le tableau : Le rouge correspond à une action requise expirée (critique), l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois." 
+          />
 
           {/* Main Table Records Sheet */}
           <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

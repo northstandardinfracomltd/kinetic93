@@ -6690,6 +6690,11 @@ export default function App() {
                   text="Abréviation de Field Service Management, orchestrez depuis cet onglet les tournées que devront réaliser les techniciens. Chaque tournée est calculée intelligemment selon de nombreux critères comme les créneaux d’accès du défibrillateur, les plages de disponibilité du technicien, la route optimisée en termes de distance et de consommation, etc. Une tournée s'affiche sur la webapp technicien uniquement lorsqu’elle est placée en situation « À faire »." 
                 />
 
+                <HelpBubble 
+                  cacheKey="help_dismissed_fsm_spontane" 
+                  text="Aide populaire : Pour enregistrer un rapport de maintenance sans passer par le système de tournées : depuis votre mobile, connectez-vous au logiciel avec un compte technicien. Rendez-vous ensuite dans l'onglet Rapports, cliquez sur le bouton « Nouveau rapport spontané », puis cliquez sur « Sélection d'un matériel » dans le formulaire pour choisir l'équipement concerné." 
+                />
+
                 <datalist id="fsm-techs-list">
                   {members
                     .filter(m => {
@@ -10471,6 +10476,11 @@ export default function App() {
                     <HelpBubble 
                       cacheKey="help_dismissed_devis" 
                       text="Bon à savoir : lorsqu’un technicien enregistre un rapport d’intervention, il peut cocher l’option d’émettre une facture, alors Défibeo reprend les pièces utilisées et génère une facture brouillon que vous pouvez ensuite venir ajuster. Vous avez généré un devis et souhaitez le transformer en facture ? Cliquez sur le bouton Transformer pour la ligne en question." 
+                    />
+
+                    <HelpBubble 
+                      cacheKey="help_dismissed_devis_einvoicing" 
+                      text="Concernant le e-invoicing via le PPF ou une PDP en France et en Europe, si vous souhaitez opter pour Defibeo en tant que logiciel de facturation, vous devrez le connecter à un logiciel agréé comme Sage, Pennylane, Cegid ou autre avec l’aide de notre API disponible gratuitement dans l’onglet des paramètres." 
                     />
 
                     {/* Filters Pills Row */}
