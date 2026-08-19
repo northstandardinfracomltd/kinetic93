@@ -366,6 +366,49 @@ export default function MapModal({
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [isTourDropdownOpen, setIsTourDropdownOpen] = useState(false);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+
+  // User session isolation for map info popup dismissal
+  const tenantId = typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') || 'demo' : 'demo';
+  let userEmail = '';
+  if (typeof window !== 'undefined') {
+    try {
+      const savedUser = localStorage.getItem('defib_admin_logged_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed?.email) {
+          userEmail = parsed.email.toLowerCase().trim();
+        }
+      }
+    } catch (e) {}
+  }
+  const effectiveSessionKey = userEmail ? `help_dismissed_map_modal_user_${userEmail}` : `help_dismissed_map_modal`;
+
+  // Check if helps/tutorials are disabled specifically for this user session
+  let isHelpsDisabled = false;
+  if (typeof window !== 'undefined') {
+    const userSpecificDisableKey = userEmail ? `defib_${tenantId}_user_${userEmail}_disable_helps_tutorials` : `defib_${tenantId}_disable_helps_tutorials`;
+    if (localStorage.getItem(userSpecificDisableKey) === 'Oui') {
+      isHelpsDisabled = true;
+    }
+  }
+
+  const [isInfoPopupVisible, setIsInfoPopupVisible] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return !sessionStorage.getItem(effectiveSessionKey);
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsInfoPopupVisible(!sessionStorage.getItem(effectiveSessionKey));
+    }
+  }, [effectiveSessionKey, isOpen]);
+
+  const handleDismissInfoPopup = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(effectiveSessionKey, "true");
+    }
+    setIsInfoPopupVisible(false);
+  };
   
   // Real coordinates configuration
   const [viewTarget, setViewTarget] = useState<ViewTarget | null>(null);
@@ -820,20 +863,36 @@ export default function MapModal({
         </div>
 
         {/* Bottom-Left Information Popup Overlay */}
-        <div 
-          id="map-info-popup"
-          className="absolute bottom-6 left-6 z-[1000] max-w-lg bg-white/95 backdrop-blur-xs p-4 rounded-xl border border-slate-200 shadow-xl text-black animate-fadeIn select-none"
-          style={{
-            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
-          }}
-        >
-          <div className="flex items-start gap-2.5">
-            <div className="flex-1 text-[14px] leading-relaxed text-slate-800" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif'" }}>
-              <span className="font-bold text-black">Bon à savoir :</span> Cliquez sur les points de position pour les intégrer à une tournée. Si le matériel est déjà présent dans une tournée, il n’est pas possible de le sélectionner. Pour rappel, le rouge correspond à une action requise expirée, l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois, tandis que le vert signifie qu’aucune action n’est requise et le gris que le logiciel manque d’informations pour déterminer son état.
+        {!isHelpsDisabled && isInfoPopupVisible && (
+          <div 
+            id="map-info-popup"
+            className="absolute bottom-6 left-6 z-[1000] max-w-xl bg-white/95 backdrop-blur-xs p-4 rounded-xl border border-slate-200 text-black animate-fadeIn flex flex-col md:flex-row md:items-center justify-between gap-4"
+            style={{
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              borderColor: 'rgb(218, 218, 218)',
+              boxShadow: 'none',
+            }}
+          >
+            <div className="flex-1 text-[16px] leading-relaxed text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", cursor: 'default' }}>
+              <strong>Bon à savoir :</strong> Cliquez sur les points de position pour les intégrer à une tournée. Si le matériel est déjà présent dans une tournée, il n’est pas possible de le sélectionner. Pour rappel, le rouge correspond à une action requise expirée, l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois, tandis que le vert signifie qu’aucune action n’est requise et le gris que le logiciel manque d’informations pour déterminer son état.
             </div>
+            <button
+              type="button"
+              onClick={handleDismissInfoPopup}
+              className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 self-end md:self-center"
+              style={{
+                backgroundColor: '#000000',
+                color: '#ffffff',
+                fontSize: '18px',
+                borderRadius: '13px',
+                padding: '8px 20px',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              }}
+            >
+              J'ai compris
+            </button>
           </div>
-        </div>
+        )}
 
         {/* Real OpenStreetMap Leaflet Container */}
         <MapContainer 

@@ -1634,7 +1634,7 @@ export default function SettingsModal({
               background: '#ffffff00',
               boxShadow: 'none',
               width: '100%',
-              margin: '0 auto 5px auto',
+              margin: '0 auto 20px auto',
             }}
           >
             <p 
@@ -5340,27 +5340,10 @@ const { defibrillateurs } = await res.json();`}
               {/* Drawer Content */}
               <div className="flex-1 py-4 flex flex-col justify-between text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                 
-                <div className="space-y-6">
-                  {/* Header */}
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-                    <h3 className="font-bold text-[20px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      Boutique Defibeo
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => setIsShopDrawerOpen(false)}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  {/* Message box */}
-                  <div style={{ background: '#ececec6e', border: '1px solid #e4e1e1', borderRadius: '13px', padding: '24px', textAlign: 'center' }} className="space-y-3">
-                    <p className="text-[17px] font-medium text-black leading-relaxed" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      {t("Boutique en cours d’actualisation, veuillez revenir plus tard.")}
-                    </p>
-                  </div>
+                <div>
+                  <p className="text-[17px] text-black leading-relaxed" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', cursor: 'default' }}>
+                    {t("Boutique en cours d’actualisation, veuillez revenir plus tard.")}
+                  </p>
                 </div>
 
                 {/* Floating Close Button */}

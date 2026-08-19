@@ -6692,6 +6692,8 @@ export default function App() {
 
                 <HelpBubble 
                   cacheKey="help_dismissed_fsm_spontane" 
+                  imageSrc="https://civilprom.s3.eu-north-1.amazonaws.com/personnalise.svg"
+                  imageAlt="Aide populaire"
                   text="Aide populaire : Pour enregistrer un rapport de maintenance sans passer par le système de tournées : depuis votre mobile, connectez-vous au logiciel avec un compte technicien. Rendez-vous ensuite dans l'onglet Rapports, cliquez sur le bouton « Nouveau rapport spontané », puis cliquez sur « Sélection d'un matériel » dans le formulaire pour choisir l'équipement concerné." 
                 />
 
@@ -9255,12 +9257,9 @@ export default function App() {
                 </div>
 
                 <HelpBubble 
-                  cacheKey="help_dismissed_gmao" 
-                  text="Il s’agit des rapports générés par les techniciens. Pour actualiser votre base de données, vous devrez cliquer sur Valider, c’est un principe de modération. Vous avez trouvé une erreur : cliquez sur Corriger pour modifier le document. Attention, une fois validé conformément à la réglementation, le document PDF ne peut plus être altéré." 
-                />
-
-                <HelpBubble 
                   cacheKey="help_dismissed_gmao_options" 
+                  imageSrc="https://civilprom.s3.eu-north-1.amazonaws.com/TERRA.svg"
+                  imageAlt="Guide Rapports PDF"
                 >
                   <p>
                     <strong>Aide concernant l’option Gérer :</strong> Pour chaque rapport, le bouton Gérer ouvre un volet latéral vous permettant de consulter le commentaire du technicien, de sélectionner un ou plusieurs drapeaux de signalement et de suivi, d’ajouter un commentaire interne et bien plus encore. En soi, il permet d’effectuer un traitement post-rapport directement depuis le logiciel principal. Le saviez-vous ? Les drapeaux sélectionnés s'affichent en début de ligne dans le tableau, selon la couleur configurée dans votre variable Drapeau GMAO.
@@ -9927,7 +9926,8 @@ export default function App() {
                                   setManagingReportId(null);
                                   setActiveTab('variables');
                                 }}
-                                className="text-[14px] text-blue-600 hover:text-blue-800 hover:underline cursor-pointer bg-transparent border-0 p-0 font-medium font-sans"
+                                style={{ fontSize: '16px', textDecoration: 'none' }}
+                                className="text-[16px] text-blue-600 hover:text-blue-800 cursor-pointer bg-transparent border-0 p-0 font-medium font-sans no-underline hover:no-underline"
                               >
                                 Nouvelle variable drapeau
                               </button>
