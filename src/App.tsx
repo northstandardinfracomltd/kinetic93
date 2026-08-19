@@ -9259,6 +9259,26 @@ export default function App() {
                   text="Il s’agit des rapports générés par les techniciens. Pour actualiser votre base de données, vous devrez cliquer sur Valider, c’est un principe de modération. Vous avez trouvé une erreur : cliquez sur Corriger pour modifier le document. Attention, une fois validé conformément à la réglementation, le document PDF ne peut plus être altéré." 
                 />
 
+                <HelpBubble 
+                  cacheKey="help_dismissed_gmao_options" 
+                >
+                  <p>
+                    <strong>Aide concernant l’option Gérer :</strong> Pour chaque rapport, le bouton Gérer ouvre un volet latéral vous permettant de consulter le commentaire du technicien, de sélectionner un ou plusieurs drapeaux de signalement et de suivi, d’ajouter un commentaire interne et bien plus encore. En soi, il permet d’effectuer un traitement post-rapport directement depuis le logiciel principal. Le saviez-vous ? Les drapeaux sélectionnés s'affichent en début de ligne dans le tableau, selon la couleur configurée dans votre variable Drapeau GMAO.
+                  </p>
+                  <p>
+                    <strong>Aide concernant l’option Corriger :</strong> Pour chaque rapport, le bouton Corriger ouvre un volet latéral permettant de modifier manuellement les informations renseignées par le technicien depuis le logiciel.
+                  </p>
+                  <p>
+                    <strong>Aide concernant l’option Valider :</strong> Pour chaque rapport, le bouton Valider permet d'approuver définitivement le document complété par le technicien. Conformément à la législation, ce fichier PDF devient alors inaltérable.
+                  </p>
+                  <p>
+                    <strong>Aide concernant l’option Télécharger :</strong> Pour chaque rapport, le bouton Télécharger permet d’exporter le document au format PDF.
+                  </p>
+                  <p>
+                    <strong>Aide concernant la navigation À venir, Modération et Validés :</strong> Les rapports générés par les techniciens depuis la webapp s’affichent dans l’onglet Modération. L'onglet À venir regroupe les rapports attendus selon les maintenances prévues dans Tournées & Missions. L'onglet Validés réunit l'ensemble des rapports définitivement clôturés.
+                  </p>
+                </HelpBubble>
+
                 <div 
                   className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
                   style={{
@@ -9897,9 +9917,21 @@ export default function App() {
 
                           {/* Field A: Drapeau GMAO */}
                           <div className="space-y-2">
-                            <label className="block text-[16px] font-medium text-[#000]">
-                              Drapeau GMAO
-                            </label>
+                            <div className="flex items-center justify-between">
+                              <label className="block text-[16px] font-medium text-[#000]">
+                                Drapeau GMAO
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setManagingReportId(null);
+                                  setActiveTab('variables');
+                                }}
+                                className="text-[14px] text-blue-600 hover:text-blue-800 hover:underline cursor-pointer bg-transparent border-0 p-0 font-medium font-sans"
+                              >
+                                Nouvelle variable drapeau
+                              </button>
+                            </div>
 
                             {/* Select Lookup Dropdown */}
                             <select

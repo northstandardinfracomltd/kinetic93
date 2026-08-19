@@ -858,20 +858,9 @@ export default function VariableTab({
                 {/* Optional Line Source de l'image (No sub-div, simple list flow) */}
                 {category === 'Modèle Défibrillateur' && (
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="input-variable-image" className="block text-[11px] font-bold text-slate-500 uppercase">
-                        Lien source de l'image.
-                      </label>
-                      <a
-                        href="https://defibeo.com/school/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline"
-                        style={{ textDecoration: 'none' }}
-                      >
-                        Récupérer un lien source
-                      </a>
-                    </div>
+                    <label htmlFor="input-variable-image" className="block text-[11px] font-bold text-slate-500 uppercase">
+                      Lien source de l'image.
+                    </label>
                     <input
                       type="url"
                       id="input-variable-image"
