@@ -19,7 +19,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence } from '../types';
-import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage } from '../firebase';
+import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile } from '../firebase';
 import { getAppsScriptUrl, saveAppsScriptUrl, triggerEmail2TechnicianConnexion, triggerEmail3AdminConnexion, triggerEmailNewMemberAdded, sendScriptEmail } from '../utils/emailService';
 import { setLanguage, t } from '../utils/translate';
 import { REGIONS_FRANCAISES, getLocationCustomName } from '../utils';
@@ -1428,11 +1428,41 @@ export default function SettingsModal({
       onUpdateLocationNames(localLocationNames);
     }
 
-    // Save language to the master tenant list in Firestore
+    // Save language and super-admin profile to the master tenant list in Firestore
     if (myTenantId && myTenantId !== 'demo') {
       promises.push(
         updateTenantLanguage(myTenantId, selectedLang).catch(e => console.error("Error updating tenant lang:", e))
       );
+
+      // Find if super-admin member email was updated
+      const superAdminMember = membersToSave.find(m => 
+        m.role === 'Super-Administrateur' || 
+        m.role === 'Propriétaire / Admin' || 
+        m.role?.toLowerCase().includes('super') || 
+        m.role?.toLowerCase().includes('propriétaire')
+      );
+      if (superAdminMember && superAdminMember.email) {
+        const newAdminEmail = superAdminMember.email.trim();
+        const newAdminName = superAdminMember.name?.trim();
+        promises.push(
+          updateTenantAdminProfile(myTenantId, newAdminEmail, newAdminName).catch(e => 
+            console.error("Error updating tenant super-admin profile in registered_tenants:", e)
+          )
+        );
+
+        // If the current logged-in user is this super-admin, update their local session storage
+        try {
+          const savedUser = localStorage.getItem('defib_admin_logged_user');
+          if (savedUser) {
+            const parsed = JSON.parse(savedUser);
+            parsed.email = newAdminEmail;
+            if (newAdminName) parsed.name = newAdminName;
+            localStorage.setItem('defib_admin_logged_user', JSON.stringify(parsed));
+          }
+        } catch (err) {
+          console.warn("Error updating defib_admin_logged_user:", err);
+        }
+      }
     }
     
     // Set reload flags to automatically reopen settings and scroll to members

@@ -1184,4 +1184,34 @@ export async function updateTenantLanguage(tenantId: string, lang: string): Prom
   }
 }
 
+/**
+ * Synchronizes the super-admin email and name in the master registered_tenants registry.
+ */
+export async function updateTenantAdminProfile(tenantId: string, adminEmail: string, adminName?: string): Promise<void> {
+  if (!tenantId || tenantId === 'demo') return;
+  try {
+    const tenants = await getRegisteredTenants(true);
+    let changed = false;
+    const updated = tenants.map(t => {
+      if (t.id === tenantId) {
+        changed = true;
+        return {
+          ...t,
+          adminEmail: adminEmail.trim(),
+          adminName: adminName ? adminName.trim() : t.adminName
+        };
+      }
+      return t;
+    });
+    if (changed) {
+      const docRef = doc(db, 'appData', 'registered_tenants');
+      await setDoc(docRef, { value: updated });
+      saveToLocalCache('registered_tenants', updated);
+      console.log(`Successfully updated tenant ${tenantId} super-admin email to ${adminEmail} in registered_tenants.`);
+    }
+  } catch (err) {
+    console.warn(`Error updating tenant ${tenantId} super-admin profile in registered_tenants:`, err);
+  }
+}
+
 
