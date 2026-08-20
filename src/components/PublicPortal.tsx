@@ -75,6 +75,7 @@ import { auth } from "../firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions } from "../utils/fsmOptimizer";
 import { PlanningTab } from "./PlanningTab";
+import HelpBubble from "./HelpBubble";
 
 // Helper functions for French date <-> ISO date picker compatibility
 const getIsoDate = (dateStr: string) => {
@@ -437,6 +438,7 @@ export default function PublicPortal({
 
   // Theme support for technician session
   const [themeRefreshTrigger, setThemeRefreshTrigger] = useState(0);
+  const [isSettingsCardFlipped, setIsSettingsCardFlipped] = useState(false);
 
   useEffect(() => {
     const handleThemeChange = () => {
@@ -8372,6 +8374,11 @@ export default function PublicPortal({
                   className="space-y-4 pb-16 animate-fadeIn"
                   id="tab-stocks-screen"
                 >
+                  <HelpBubble
+                    cacheKey="help_webapp_stocks_improvement"
+                    text="Cette page est en cours d'amélioration. Un peu de patience : votre onglet sera bientôt encore plus intuitif et agréable à utiliser !"
+                  />
+
                   {/* Info: Emplacement (Disabled Input en premier, hors d'une div) */}
                   <input
                     type="text"
@@ -10501,6 +10508,11 @@ export default function PublicPortal({
                   className="space-y-6 pb-16 animate-fadeIn"
                   id="tab-temps-screen"
                 >
+                  <HelpBubble
+                    cacheKey="help_webapp_temps_improvement"
+                    text="Cette page est en cours d'amélioration. Un peu de patience : votre onglet sera bientôt encore plus intuitif et agréable à utiliser !"
+                  />
+
                   <style>{`
                     #tab-temps-screen input[type="date"]::-webkit-calendar-picker-indicator,
                     #tab-temps-screen input[type="time"]::-webkit-calendar-picker-indicator {
@@ -11362,6 +11374,11 @@ export default function PublicPortal({
                   className="space-y-6 pb-16 animate-fadeIn"
                   id="tab-veille-screen"
                 >
+                  <HelpBubble
+                    cacheKey="help_webapp_veille_improvement"
+                    text="Cette page est en cours d'amélioration. Un peu de patience : votre onglet sera bientôt encore plus intuitif et agréable à utiliser !"
+                  />
+
                   <style>{`
                     #tab-veille-screen input,
                     #tab-veille-screen label,
@@ -11598,82 +11615,159 @@ export default function PublicPortal({
                   className="space-y-6 pb-16 animate-fadeIn"
                   id="tab-localisation-screen"
                 >
-                  {/* Nom du logiciel / Entreprise - Banner Header */}
+                  {/* Nom du logiciel / Entreprise - Credit Card Banner Header (Recto / Verso) */}
                   <div
-                    className="px-4 flex items-center justify-center select-none"
+                    className="select-none"
                     style={{
-                      backgroundColor: "#FD4EBB",
-                      width: "98%",
-                      maxWidth: "310px",
+                      width: "100%",
+                      maxWidth: "340px",
+                      aspectRatio: "85.6 / 53.98",
                       margin: "15px auto 25px",
-                      paddingTop: "60px",
-                      paddingBottom: "50px",
-                      minHeight: "180px",
-                      borderRadius: "16px",
-                      position: "relative",
-                      overflow: "hidden",
-                      boxShadow: "none",
+                      perspective: "1000px",
+                      cursor: "pointer",
+                      touchAction: "manipulation",
                     }}
+                    onClick={() => setIsSettingsCardFlipped((prev) => !prev)}
+                    title="Toucher pour retourner la carte"
                   >
-                    {/* Left border alcove notch */}
                     <div
                       style={{
-                        position: "absolute",
-                        left: "-10px",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        width: "30px",
-                        height: "36px",
-                        backgroundColor: "rgb(211, 47, 149)",
-                        borderRadius: "0px 25px 25px 0px",
-                        zIndex: 10,
+                        position: "relative",
+                        width: "100%",
+                        height: "100%",
+                        transformStyle: "preserve-3d",
+                        transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+                        transform: isSettingsCardFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
                       }}
-                    />
-
-                    {/* Logo Top Right */}
-                    <img
-                      src="https://datacenter64000pau.s3.eu-north-1.amazonaws.com/Defibeo_2026_Logo2.svg"
-                      alt="Logo"
-                      style={{
-                        position: "absolute",
-                        top: "0px",
-                        right: "20px",
-                        height: "50px",
-                        width: "auto",
-                        objectFit: "contain",
-                      }}
-                    />
-
-                    {/* Technicien Bottom Left */}
-                    {authenticatedUser?.name && (
+                    >
+                      {/* RECTO (Front of the card) */}
                       <div
                         style={{
                           position: "absolute",
-                          bottom: "14px",
-                          left: "20px",
-                          color: "rgba(255, 255, 255, 0.95)",
-                          fontSize: "16px",
-                          fontWeight: "600",
-                          fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
+                          inset: 0,
+                          backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
+                          borderRadius: "16px",
+                          overflow: "hidden",
+                          backfaceVisibility: "hidden",
+                          WebkitBackfaceVisibility: "hidden",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "16px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.1)",
                         }}
                       >
-                        {authenticatedUser.name}
-                      </div>
-                    )}
+                        {/* Encoche sur le flan gauche avec filtre plus sombre pour contraster */}
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: "-10px",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            width: "28px",
+                            height: "36px",
+                            backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
+                            filter: "brightness(0.72)",
+                            borderRadius: "0px 25px 25px 0px",
+                            zIndex: 10,
+                          }}
+                        />
 
-                    <div
-                      style={{
-                        color: "rgb(255, 255, 255)",
-                        fontSize: "20px",
-                        textAlign: "center",
-                        fontFamily: 'var(--font-sans), "DefibeoMain", "Civilprom", sans-serif',
-                        fontWeight: "bold",
-                      }}
-                      className="tracking-wide w-full"
-                    >
-                      {((companyInfo.nomLogiciel || companyInfo.name || "Défibeo")).length > 25
-                        ? (companyInfo.nomLogiciel || companyInfo.name || "Défibeo").substring(0, 25) + "..."
-                        : (companyInfo.nomLogiciel || companyInfo.name || "Défibeo")}
+                        {/* Logo Top Right */}
+                        <img
+                          src="https://datacenter64000pau.s3.eu-north-1.amazonaws.com/Defibeo_2026_Logo2.svg"
+                          alt="Logo"
+                          style={{
+                            position: "absolute",
+                            top: "2px",
+                            right: "16px",
+                            height: "46px",
+                            width: "auto",
+                            objectFit: "contain",
+                          }}
+                        />
+
+                        {/* Technicien Bottom Left */}
+                        {authenticatedUser?.name && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              bottom: "12px",
+                              left: "18px",
+                              color: "rgba(255, 255, 255, 0.95)",
+                              fontSize: "15px",
+                              fontWeight: "600",
+                              fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
+                            }}
+                          >
+                            {authenticatedUser.name}
+                          </div>
+                        )}
+
+                        {/* Nom du logiciel / Entreprise au centre */}
+                        <div
+                          style={{
+                            color: "rgb(255, 255, 255)",
+                            fontSize: "20px",
+                            textAlign: "center",
+                            fontFamily: 'var(--font-sans), "DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: "bold",
+                          }}
+                          className="tracking-wide w-full px-6"
+                        >
+                          {((companyInfo.nomLogiciel || companyInfo.name || "Defibeo")).length > 25
+                            ? (companyInfo.nomLogiciel || companyInfo.name || "Defibeo").substring(0, 25) + "..."
+                            : (companyInfo.nomLogiciel || companyInfo.name || "Defibeo")}
+                        </div>
+                      </div>
+
+                      {/* VERSO (Back of the card) */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
+                          borderRadius: "16px",
+                          overflow: "hidden",
+                          backfaceVisibility: "hidden",
+                          WebkitBackfaceVisibility: "hidden",
+                          transform: "rotateY(180deg)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "20px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.1)",
+                        }}
+                      >
+                        {/* Encoche sur le flan opposé au verso pour continuité géométrique */}
+                        <div
+                          style={{
+                            position: "absolute",
+                            right: "-10px",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            width: "28px",
+                            height: "36px",
+                            backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
+                            filter: "brightness(0.72)",
+                            borderRadius: "25px 0px 0px 25px",
+                            zIndex: 10,
+                          }}
+                        />
+
+                        {/* Logo Defibeo Centré au verso */}
+                        <img
+                          src="https://datacenter64000pau.s3.eu-north-1.amazonaws.com/Defibeo_2026_Logo2.svg"
+                          alt="Defibeo Logo"
+                          style={{
+                            maxHeight: "60px",
+                            maxWidth: "60%",
+                            width: "auto",
+                            height: "auto",
+                            objectFit: "contain",
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
 
