@@ -1798,56 +1798,6 @@ export default function SettingsModal({
           id="settings-tab-container-harmonized"
           style={isPage ? { maxWidth: '98%', margin: '0 auto', width: '100%' } : {}}
         >
-          {/* BANNIÈRE BOUTIQUE EN LIGNE */}
-          <div 
-            className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
-            style={{
-              borderColor: 'rgb(218, 218, 218)',
-              background: '#ffffff00',
-              boxShadow: 'none',
-              width: '100%',
-              margin: '0 auto 20px auto',
-            }}
-          >
-            <p 
-              className="font-sans leading-relaxed flex-1"
-              style={{ 
-                fontSize: '16px', 
-                fontWeight: 400, 
-                color: '#000000', 
-                cursor: 'default' 
-              }}
-            >
-              {t("Imprimantes à codes-barres, tablettes, plaquettes d’intervention pour véhicules… Retrouvez tous les équipements optionnels sur la boutique en ligne Defibeo.")}
-            </p>
-            <button
-              type="button"
-              onClick={() => setIsShopDrawerOpen(true)}
-              style={{
-                backgroundColor: 'rgb(53, 86, 236)',
-                color: '#ffffff',
-                boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
-                borderRadius: '0.75rem',
-                fontSize: '18px',
-                padding: '11px 22px',
-                fontWeight: '100',
-                transition: 'all 0s ease-in-out',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                cursor: 'pointer',
-                border: 'none',
-                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                whiteSpace: 'nowrap',
-                flexShrink: 0
-              }}
-              className="transition-all hover:opacity-95 shrink-0"
-            >
-              {t("Ouvrir la boutique")}
-            </button>
-          </div>
-
           {/* SECTION 1: RÉGLAGES */}
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left" id="settings-section-company">
             {renderSectionHeader(t("Réglages"))}
@@ -1941,8 +1891,9 @@ export default function SettingsModal({
                 </label>
                 <input
                   type="text"
+                  maxLength={15}
                   value={localCompany.nomLogiciel ?? ''}
-                  onChange={(e) => handleCompanyChange('nomLogiciel', e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                  onChange={(e) => handleCompanyChange('nomLogiciel', e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15))}
                   className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white"
                   style={{ backgroundColor: '#ffffff' }}
                   placeholder={t("Ex: App360")}
@@ -4193,9 +4144,59 @@ export default function SettingsModal({
             </div>
           </div>
 
-          {/* SECTION 5: ASSISTANCE DÉFIBEO */}
+          {/* BANNIÈRE BOUTIQUE EN LIGNE */}
+          <div 
+            className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
+            style={{
+              borderColor: 'rgb(218, 218, 218)',
+              background: '#ffffff00',
+              boxShadow: 'none',
+              width: '100%',
+              margin: '0 auto',
+            }}
+          >
+            <p 
+              className="font-sans leading-relaxed flex-1"
+              style={{ 
+                fontSize: '16px', 
+                fontWeight: 400, 
+                color: '#000000', 
+                cursor: 'default' 
+              }}
+            >
+              {t("Imprimantes à codes-barres, tablettes, plaquettes d’intervention pour véhicules… Retrouvez tous les équipements optionnels sur la boutique en ligne Defibeo.")}
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsShopDrawerOpen(true)}
+              style={{
+                backgroundColor: 'rgb(53, 86, 236)',
+                color: '#ffffff',
+                boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                borderRadius: '0.75rem',
+                fontSize: '18px',
+                padding: '11px 22px',
+                fontWeight: '100',
+                transition: 'all 0s ease-in-out',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer',
+                border: 'none',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                whiteSpace: 'nowrap',
+                flexShrink: 0
+              }}
+              className="transition-all hover:opacity-95 shrink-0"
+            >
+              {t("Ouvrir la boutique")}
+            </button>
+          </div>
+
+          {/* SECTION 5: ASSISTANCE DEFIBEO */}
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left mt-4" id="settings-section-assistance-group">
-            {renderSectionHeader(t("Assistance Défibeo"), false)}
+            {renderSectionHeader(t("Assistance Defibeo"), false)}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* SECTION 2: SUBSCRIPTION */}
               <div 
@@ -4205,12 +4206,12 @@ export default function SettingsModal({
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <h4 className="font-bold text-white cursor-default select-none" style={{ fontSize: '18px', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
-                      {t("Facturation Défibeo")}.
+                      {t("Facturation Defibeo")}.
                     </h4>
                   </div>
                   <div style={{ backgroundColor: '#ffffff1c', border: 'none', padding: '20px', borderRadius: '13px' }}>
                     <div className="font-semibold text-white text-[16px] font-sans text-center" style={{ textTransform: 'none' }}>
-                      {t("Votre abonnement Défibeo")}.
+                      {t("Votre abonnement Defibeo")}.
                     </div>
                     <div className="mt-4">
                       <a
@@ -4239,7 +4240,7 @@ export default function SettingsModal({
                       {t("Les factures sont automatiquement envoyées par e-mail. Les taxes et frais sont inclus dans le montant de l'abonnement. Vous trouverez ci-dessous l'identifiant de votre environnement logiciel.")}
                     </span>
                     <div className="inline-flex items-center justify-center rounded-full bg-transparent text-white border border-white/30 px-3 py-1.5 text-sm font-semibold w-fit select-none" style={{ backgroundColor: 'transparent' }}>
-                      Défibeo {envIdDisplay.toUpperCase()}
+                      Defibeo {envIdDisplay.toUpperCase()}
                     </div>
                   </div>
                 </div>
@@ -4249,7 +4250,7 @@ export default function SettingsModal({
               <div className="flex flex-col justify-between bg-white animate-fadeIn" id="settings-section-support">
                 <div className="space-y-2">
                   <p className="text-[16px] text-black leading-relaxed font-sans">
-                    {t("L'assistance Défibeo est disponible tous les jours, y compris les jours fériés, en Français et en Anglais par email à")}{' '}
+                    {t("L'assistance Defibeo est disponible tous les jours, y compris les jours fériés, en Français et en Anglais par email à")}{' '}
                     <a href="mailto:contact@defibeo.com" className="text-blue-600 hover:underline hover:text-blue-700 font-bold">
                       contact@defibeo.com
                     </a>
@@ -5558,19 +5559,22 @@ const { defibrillateurs } = await res.json();`}
               {/* Drawer Content */}
               <div className="flex-1 py-4 flex flex-col justify-between text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                 
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {/* Item 1: Imprimante portable EPSON LW C410 */}
-                  <div className="space-y-2">
-                    <div className="text-[17px] font-bold text-black leading-snug">
+                  <div
+                    className="space-y-2 text-left"
+                    style={{ border: '1px solid #cfcfcf4a', background: '#f9f9fa', padding: '25px', borderRadius: '13px' }}
+                  >
+                    <div className="font-bold text-black leading-snug" style={{ fontSize: '18px' }}>
                       Imprimante portable EPSON LW C410.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Usage : Impression nomade de codes-barres.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Commentaire : Achat via site marchand.
                     </div>
-                    <div className="pt-1">
+                    <div className="pt-2">
                       <a
                         href="https://amzn.eu/d/0hoAS3kU"
                         target="_blank"
@@ -5579,8 +5583,8 @@ const { defibrillateurs } = await res.json();`}
                           ...rowActionButtonStyle,
                           backgroundColor: 'rgb(53, 86, 236)',
                           color: '#ffffff',
-                          fontSize: '16px',
-                          padding: '8px 18px',
+                          fontSize: '18px',
+                          padding: '10px 22px',
                           textDecoration: 'none'
                         }}
                         className="hover:opacity-95 transition-all inline-flex"
@@ -5591,25 +5595,28 @@ const { defibrillateurs } = await res.json();`}
                   </div>
 
                   {/* Item 2: Sticker mainteneur 30cm */}
-                  <div className="space-y-2">
-                    <div className="text-[17px] font-bold text-black leading-snug">
+                  <div
+                    className="space-y-2 text-left"
+                    style={{ border: '1px solid #cfcfcf4a', background: '#f9f9fa', padding: '25px', borderRadius: '13px' }}
+                  >
+                    <div className="font-bold text-black leading-snug" style={{ fontSize: '18px' }}>
                       Sticker mainteneur 30cm.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Usage : Étiquette informations du mainteneur, défibrillateur & visites pour boîtier.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Commentaire : Personnalisation et achat via Defibeo. Volume minimum de 300 unités.
                     </div>
-                    <div className="pt-1">
+                    <div className="pt-2">
                       <a
                         href="mailto:support@defibeo.com"
                         style={{
                           ...rowActionButtonStyle,
                           backgroundColor: 'rgb(53, 86, 236)',
                           color: '#ffffff',
-                          fontSize: '16px',
-                          padding: '8px 18px',
+                          fontSize: '18px',
+                          padding: '10px 22px',
                           textDecoration: 'none'
                         }}
                         className="hover:opacity-95 transition-all inline-flex"
@@ -5620,25 +5627,28 @@ const { defibrillateurs } = await res.json();`}
                   </div>
 
                   {/* Item 3: Plaquette intervention format A4 rigide */}
-                  <div className="space-y-2">
-                    <div className="text-[17px] font-bold text-black leading-snug">
+                  <div
+                    className="space-y-2 text-left"
+                    style={{ border: '1px solid #cfcfcf4a', background: '#f9f9fa', padding: '25px', borderRadius: '13px' }}
+                  >
+                    <div className="font-bold text-black leading-snug" style={{ fontSize: '18px' }}>
                       Plaquette intervention format A4 rigide.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Usage : À positionner sous le pare-brise dans le véhicule technicien.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Commentaire : Personnalisation et achat via Defibeo. Volume minimum de 2 unités.
                     </div>
-                    <div className="pt-1">
+                    <div className="pt-2">
                       <a
                         href="mailto:support@defibeo.com"
                         style={{
                           ...rowActionButtonStyle,
                           backgroundColor: 'rgb(53, 86, 236)',
                           color: '#ffffff',
-                          fontSize: '16px',
-                          padding: '8px 18px',
+                          fontSize: '18px',
+                          padding: '10px 22px',
                           textDecoration: 'none'
                         }}
                         className="hover:opacity-95 transition-all inline-flex"
@@ -5649,25 +5659,28 @@ const { defibrillateurs } = await res.json();`}
                   </div>
 
                   {/* Item 4: Registre de contrôle et de maintenance au format A5 */}
-                  <div className="space-y-2">
-                    <div className="text-[17px] font-bold text-black leading-snug">
+                  <div
+                    className="space-y-2 text-left"
+                    style={{ border: '1px solid #cfcfcf4a', background: '#f9f9fa', padding: '25px', borderRadius: '13px' }}
+                  >
+                    <div className="font-bold text-black leading-snug" style={{ fontSize: '18px' }}>
                       Registre de contrôle et de maintenance au format A5.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Usage : À placer dans le boîtier du défibrillateur.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Commentaire : Personnalisation et achat via Defibeo. Volume minimum de 100 unités.
                     </div>
-                    <div className="pt-1">
+                    <div className="pt-2">
                       <a
                         href="mailto:support@defibeo.com"
                         style={{
                           ...rowActionButtonStyle,
                           backgroundColor: 'rgb(53, 86, 236)',
                           color: '#ffffff',
-                          fontSize: '16px',
-                          padding: '8px 18px',
+                          fontSize: '18px',
+                          padding: '10px 22px',
                           textDecoration: 'none'
                         }}
                         className="hover:opacity-95 transition-all inline-flex"
@@ -5678,17 +5691,20 @@ const { defibrillateurs } = await res.json();`}
                   </div>
 
                   {/* Item 5: Smartphone Motorola G77 5G */}
-                  <div className="space-y-2">
-                    <div className="text-[17px] font-bold text-black leading-snug">
+                  <div
+                    className="space-y-2 text-left"
+                    style={{ border: '1px solid #cfcfcf4a', background: '#f9f9fa', padding: '25px', borderRadius: '13px' }}
+                  >
+                    <div className="font-bold text-black leading-snug" style={{ fontSize: '18px' }}>
                       Smartphone Motorola G77 5G.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Usage : Appareil destiné à l’accès webapp par le technicien.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Commentaire : Achat via site marchand.
                     </div>
-                    <div className="pt-1">
+                    <div className="pt-2">
                       <a
                         href="https://www.ldlc.com/fiche/PB00731043.html"
                         target="_blank"
@@ -5697,8 +5713,8 @@ const { defibrillateurs } = await res.json();`}
                           ...rowActionButtonStyle,
                           backgroundColor: 'rgb(53, 86, 236)',
                           color: '#ffffff',
-                          fontSize: '16px',
-                          padding: '8px 18px',
+                          fontSize: '18px',
+                          padding: '10px 22px',
                           textDecoration: 'none'
                         }}
                         className="hover:opacity-95 transition-all inline-flex"
@@ -5709,17 +5725,20 @@ const { defibrillateurs } = await res.json();`}
                   </div>
 
                   {/* Item 6: Smartphone Motorola Edge 70 Fusion */}
-                  <div className="space-y-2">
-                    <div className="text-[17px] font-bold text-black leading-snug">
+                  <div
+                    className="space-y-2 text-left"
+                    style={{ border: '1px solid #cfcfcf4a', background: '#f9f9fa', padding: '25px', borderRadius: '13px' }}
+                  >
+                    <div className="font-bold text-black leading-snug" style={{ fontSize: '18px' }}>
                       Smartphone Motorola Edge 70 Fusion.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Usage : Appareil destiné à l’accès webapp par le technicien.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Commentaire : Achat via site marchand.
                     </div>
-                    <div className="pt-1">
+                    <div className="pt-2">
                       <a
                         href="https://www.ldlc.com/fiche/PB00731023.html"
                         target="_blank"
@@ -5728,8 +5747,8 @@ const { defibrillateurs } = await res.json();`}
                           ...rowActionButtonStyle,
                           backgroundColor: 'rgb(53, 86, 236)',
                           color: '#ffffff',
-                          fontSize: '16px',
-                          padding: '8px 18px',
+                          fontSize: '18px',
+                          padding: '10px 22px',
                           textDecoration: 'none'
                         }}
                         className="hover:opacity-95 transition-all inline-flex"
@@ -5740,17 +5759,20 @@ const { defibrillateurs } = await res.json();`}
                   </div>
 
                   {/* Item 7: Smartphone Apple iPhone 16 */}
-                  <div className="space-y-2">
-                    <div className="text-[17px] font-bold text-black leading-snug">
+                  <div
+                    className="space-y-2 text-left"
+                    style={{ border: '1px solid #cfcfcf4a', background: '#f9f9fa', padding: '25px', borderRadius: '13px' }}
+                  >
+                    <div className="font-bold text-black leading-snug" style={{ fontSize: '18px' }}>
                       Smartphone Apple iPhone 16.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Usage : Appareil destiné à l’accès webapp par le technicien.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Commentaire : Achat via site marchand.
                     </div>
-                    <div className="pt-1">
+                    <div className="pt-2">
                       <a
                         href="https://www.ldlc.com/fiche/PB00668658.html"
                         target="_blank"
@@ -5759,8 +5781,8 @@ const { defibrillateurs } = await res.json();`}
                           ...rowActionButtonStyle,
                           backgroundColor: 'rgb(53, 86, 236)',
                           color: '#ffffff',
-                          fontSize: '16px',
-                          padding: '8px 18px',
+                          fontSize: '18px',
+                          padding: '10px 22px',
                           textDecoration: 'none'
                         }}
                         className="hover:opacity-95 transition-all inline-flex"
@@ -5771,17 +5793,20 @@ const { defibrillateurs } = await res.json();`}
                   </div>
 
                   {/* Item 8: Tablette Apple iPad Cellular */}
-                  <div className="space-y-2">
-                    <div className="text-[17px] font-bold text-black leading-snug">
+                  <div
+                    className="space-y-2 text-left"
+                    style={{ border: '1px solid #cfcfcf4a', background: '#f9f9fa', padding: '25px', borderRadius: '13px' }}
+                  >
+                    <div className="font-bold text-black leading-snug" style={{ fontSize: '18px' }}>
                       Tablette Apple iPad Cellular.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Usage : Appareil destiné à l’accès webapp par le technicien.
                     </div>
-                    <div className="text-[16px] text-black leading-normal">
+                    <div className="text-black leading-normal" style={{ fontSize: '14px' }}>
                       Commentaire : Achat via site marchand.
                     </div>
-                    <div className="pt-1">
+                    <div className="pt-2">
                       <a
                         href="https://www.ldlc.com/fiche/PB00671421.html"
                         target="_blank"
@@ -5790,8 +5815,8 @@ const { defibrillateurs } = await res.json();`}
                           ...rowActionButtonStyle,
                           backgroundColor: 'rgb(53, 86, 236)',
                           color: '#ffffff',
-                          fontSize: '16px',
-                          padding: '8px 18px',
+                          fontSize: '18px',
+                          padding: '10px 22px',
                           textDecoration: 'none'
                         }}
                         className="hover:opacity-95 transition-all inline-flex"

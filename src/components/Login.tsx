@@ -1291,9 +1291,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       <input
                         type="text"
                         required
+                        maxLength={15}
                         value={reqNomLogiciel}
                         onChange={(e) => {
-                          const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
+                          const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15);
                           setReqNomLogiciel(val);
                         }}
                         className="block w-full"

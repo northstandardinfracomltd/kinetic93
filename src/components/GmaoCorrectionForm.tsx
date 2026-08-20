@@ -1645,7 +1645,7 @@ export default function GmaoCorrectionForm({
     // 3. Special characters validation
     const checkSpecialChars = (val: string, label: string) => {
       if (!val || !val.trim()) return;
-      const regex = /^[a-zA-Z0-9\sÀ-ÿŒœÆæ.,'_\-]*$/;
+      const regex = /^[\p{L}\p{N}\s.,'’‘`´_\-\/\\():;"«»“”&°#+%@!?]*$/u;
       if (!regex.test(val)) {
         const capLabel = label.charAt(0).toUpperCase() + label.slice(1);
         errors.push(`${capLabel} contient des caractères spéciaux.`);

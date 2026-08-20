@@ -11605,10 +11605,10 @@ export default function PublicPortal({
                       backgroundColor: "#FD4EBB",
                       width: "98%",
                       maxWidth: "310px",
-                      margin: "20px auto 30px",
-                      paddingTop: "90px",
-                      paddingBottom: "80px",
-                      minHeight: "240px",
+                      margin: "15px auto 25px",
+                      paddingTop: "60px",
+                      paddingBottom: "50px",
+                      minHeight: "180px",
                       borderRadius: "16px",
                       position: "relative",
                       overflow: "hidden",
@@ -11623,7 +11623,7 @@ export default function PublicPortal({
                         top: "50%",
                         transform: "translateY(-50%)",
                         width: "30px",
-                        height: "40px",
+                        height: "36px",
                         backgroundColor: "rgb(211, 47, 149)",
                         borderRadius: "0px 25px 25px 0px",
                         zIndex: 10,
@@ -11638,7 +11638,7 @@ export default function PublicPortal({
                         position: "absolute",
                         top: "0px",
                         right: "20px",
-                        height: "60px",
+                        height: "50px",
                         width: "auto",
                         objectFit: "contain",
                       }}
@@ -11649,10 +11649,10 @@ export default function PublicPortal({
                       <div
                         style={{
                           position: "absolute",
-                          bottom: "18px",
-                          left: "22px",
+                          bottom: "14px",
+                          left: "20px",
                           color: "rgba(255, 255, 255, 0.95)",
-                          fontSize: "18px",
+                          fontSize: "16px",
                           fontWeight: "600",
                           fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
                         }}
@@ -11664,7 +11664,7 @@ export default function PublicPortal({
                     <div
                       style={{
                         color: "rgb(255, 255, 255)",
-                        fontSize: "40px",
+                        fontSize: "20px",
                         textAlign: "center",
                         fontFamily: 'var(--font-sans), "DefibeoMain", "Civilprom", sans-serif',
                         fontWeight: "bold",
