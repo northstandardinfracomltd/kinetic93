@@ -12097,7 +12097,7 @@ export default function PublicPortal({
                                 )}
                               </span>
                               <span
-                                className="text-[15px] font-medium text-slate-900 cursor-pointer select-none font-sans"
+                                className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans"
                               >
                                 {t(theme.name)}
                               </span>

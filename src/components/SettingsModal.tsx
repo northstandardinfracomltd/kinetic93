@@ -2590,7 +2590,7 @@ export default function SettingsModal({
                         )}
                       </span>
                       <span
-                        className="text-[14px] font-medium text-slate-900 cursor-pointer select-none font-sans"
+                        className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans"
                       >
                         {t(theme.name)}
                       </span>

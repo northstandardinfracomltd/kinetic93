@@ -494,22 +494,22 @@ export default function ClientPortal({
             font-weight: 100 !important;
           }
 
-          /* 2 COLUMNS COMPACT BODY (-2px font-size) */
+          /* 2 COLUMNS COMPACT BODY (+2px font-size) */
           .contract-body-text {
             column-count: 2;
-            column-gap: 14px;
+            column-gap: 16px;
             text-align: justify;
             white-space: pre-wrap;
-            font-size: 7px !important;
-            line-height: 1.25 !important;
+            font-size: 9px !important;
+            line-height: 1.32 !important;
             color: #111827 !important;
             padding: 0 !important;
             border: none !important;
             background: transparent !important;
             background-color: transparent !important;
             border-radius: 0 !important;
-            margin-top: 4px;
-            margin-bottom: 4px;
+            margin-top: 6px;
+            margin-bottom: 6px;
           }
           
           .avoid-break {
@@ -557,10 +557,10 @@ export default function ClientPortal({
         <div class="print-wrapper max-w-4xl mx-auto" style="background-color: #ffffff; display: flex; flex-direction: column; gap: 4px; box-sizing: border-box;">
           
           <!-- HAUT DE PAGE / HEADER COMPACT -->
-          <div class="flex justify-between items-start pb-1.5" style="border-bottom: 1px solid #e2e8f0; gap: 12px;">
+          <div class="flex justify-between items-start mb-2" style="gap: 12px;">
             <!-- GAUCHE: TITRE DU CONTRAT + INFOS DATE/EXPIRATION + INFOS PRESTATAIRE -->
             <div class="header-left-col" style="max-width: 48%; display: flex; flex-direction: column; gap: 2px;">
-              ${compLogo ? `<img src="${compLogo}" style="max-width: 130px; max-height: 38px; object-fit: contain; margin-bottom: 2px; display: block;" referrerPolicy="no-referrer" />` : ''}
+              ${compLogo ? `<img src="${compLogo}" style="max-width: 155px; max-height: 48px; object-fit: contain; margin-bottom: 4px; display: block;" referrerPolicy="no-referrer" />` : ''}
               <div>
                 <div style="font-weight: bold; font-size: 11px !important; letter-spacing: 0.5px; text-transform: uppercase;">CONTRAT DE MAINTENANCE</div>
                 <div style="color: #64748b; font-size: 8px !important;">Généré le ${new Date().toLocaleDateString('fr-FR')}</div>
@@ -568,7 +568,7 @@ export default function ClientPortal({
                   Début : <strong>${formatDateToFR(authenticatedClient.debutContrat) || authenticatedClient.debutContrat || '-'}</strong> — Expiration : <strong>${formatDateToFR(authenticatedClient.finContrat) || authenticatedClient.finContrat || '-'}</strong>
                 </div>
               </div>
-              <div style="margin-top: 3px; padding-top: 3px; border-top: 1px dashed #e2e8f0; font-size: 8px !important; color: #475569;">
+              <div style="margin-top: 6px; font-size: 8px !important; color: #475569;">
                 <span class="header-company-title" style="display: block; margin-bottom: 1px; font-size: 9.5px !important;">${compName}</span>
                 <div>${compEmail} ${compPhone ? '— ' + compPhone : ''}</div>
                 ${compWebsite ? `<div><a href="https://${compWebsite}" target="_blank" class="blue-link">${compWebsite}</a></div>` : ''}
@@ -581,18 +581,18 @@ export default function ClientPortal({
               <div style="width: 100%; border: 1px solid #e2e8f0; padding: 5px 8px; border-radius: 5px; background-color: #fafafa; font-size: 8px !important; text-align: left;">
                 <div style="font-weight: bold; color: #475569; font-size: 7.5px !important; text-transform: uppercase;">Client bénéficiaire</div>
                 <div style="font-size: 10.5px !important; font-weight: bold !important; color: #0f172a; line-height: 1.15 !important; margin-bottom: 2px;">${authenticatedClient.denomination || 'Non renseigné'}</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1px 4px; font-size: 8px !important; color: #334155;">
+                <div style="display: flex; flex-direction: column; gap: 1.5px; font-size: 8px !important; color: #334155;">
                   ${authenticatedClient.siret ? `<div>SIRET : <strong>${authenticatedClient.siret}</strong></div>` : ''}
                   ${authenticatedClient.numeroMarche ? `<div>Marché : <strong>${authenticatedClient.numeroMarche}</strong></div>` : ''}
                   ${authenticatedClient.payeurId ? `<div>Payeur ID : <strong>${authenticatedClient.payeurId}</strong></div>` : ''}
                   ${authenticatedClient.clientIdField ? `<div>Client ID : <strong>${authenticatedClient.clientIdField}</strong></div>` : ''}
                   ${authenticatedClient.nomPrenomSite ? `<div>Contact : <strong>${authenticatedClient.nomPrenomSite}</strong></div>` : ''}
                   ${authenticatedClient.phone ? `<div>Tél : <strong>${authenticatedClient.phone}</strong></div>` : ''}
-                  ${authenticatedClient.email ? `<div style="grid-column: span 2;">Email : <strong>${authenticatedClient.email}</strong></div>` : ''}
+                  ${authenticatedClient.email ? `<div>Email : <strong>${authenticatedClient.email}</strong></div>` : ''}
                 </div>
 
                 <!-- SIGNATURE CLIENT / STATUT DANS LE BLOC CLIENT DU HEADER -->
-                <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0;">
+                <div style="margin-top: 6px;">
                   ${portalSignatureClientContratImage ? `
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
                       <div>

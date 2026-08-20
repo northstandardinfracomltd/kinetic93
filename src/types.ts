@@ -321,7 +321,7 @@ export interface AppThemeOption {
 }
 
 export const APP_THEMES: AppThemeOption[] = [
-  { id: 'defibeo_nextgen', name: 'Defibeo NextGen', color: '#3F0E40' },
+  { id: 'defibeo_nextgen', name: 'Defibeo NextGen', color: 'rgb(101, 25, 106)' },
   { id: 'node_calm', name: 'Node Calm', color: '#573D82' },
   { id: 'logic_liquid', name: 'Logic Liquid', color: '#0E3386' },
   { id: 'postal_odysee', name: 'Postal Odysee', color: '#0000AA' },
@@ -329,7 +329,7 @@ export const APP_THEMES: AppThemeOption[] = [
   { id: 'orbital_shift', name: 'Orbital Shift', color: '#21252B' }
 ];
 
-export const DEFAULT_THEME_COLOR = '#3F0E40';
+export const DEFAULT_THEME_COLOR = 'rgb(101, 25, 106)';
 
 export interface CompanyInfo {
   name: string;
