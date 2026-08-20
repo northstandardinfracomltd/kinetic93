@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { VeilleRecord } from '../types';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 
 interface VeillesTabProps {
   veilles: VeilleRecord[];
@@ -114,11 +115,7 @@ export default function VeillesTab({ veilles, onDeleteVeille }: VeillesTabProps)
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         <div className="overflow-x-auto">
           {filteredVeilles.length === 0 ? (
-            <div className="p-16 text-center font-sans lg:py-24" id="no-veilles-view">
-              <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
-                Aucun résultat.
-              </p>
-            </div>
+            <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
           ) : (
             <table className="w-full text-left font-sans border-collapse text-xs" id="veilles-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
               <thead>

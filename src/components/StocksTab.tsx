@@ -3,6 +3,7 @@ import { t } from '../utils/translate';
 import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, StockTraceability, Member, LogisticsNotification } from '../types';
 import { getLocationCustomName } from '../utils';
 import HelpBubble from './HelpBubble';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 
 const CODE39_MAP: Record<string, string> = {
   '0': '101001101101',
@@ -1312,8 +1313,8 @@ export default function StocksTab({
                 <tbody className="text-slate-700 text-xs">
                   {filteredStocks.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-16 text-center font-sans lg:py-24 text-sm bg-white" style={{ color: '#000000', fontWeight: 100, fontSize: '16px' }}>
-                        Aucun résultat.
+                      <td colSpan={10}>
+                        <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                       </td>
                     </tr>
                   ) : (

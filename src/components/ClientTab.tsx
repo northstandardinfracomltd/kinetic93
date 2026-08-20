@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Client, ClientContract, Defibrillateur, Variable, CompanyInfo } from '../types';
 import { Plus, Search, Trash2, Edit2, X, Briefcase, Mail, Phone, FileText, Calendar, ShieldCheck, Download, ChevronDown } from 'lucide-react';
 import { checkIfEmailExistsAnywhere } from '../firebase';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { generateRandomPin, formatDateToFR } from '../utils';
 import { t } from '../utils/translate';
 
@@ -398,13 +399,6 @@ export default function ClientTab({
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
           @font-face {
-            font-family: "Gochi";
-            src: url("https://civilprom.s3.eu-north-1.amazonaws.com/gochi.otf") format("opentype");
-            font-weight: normal;
-            font-style: normal;
-            font-display: swap;
-          }
-          @font-face {
             font-family: "Civilprom";
             src: url("https://civilprom.s3.eu-north-1.amazonaws.com/Civilprom1.otf") format("opentype");
             font-weight: 100 900;
@@ -413,8 +407,18 @@ export default function ClientTab({
           }
           
           @page {
-            size: auto;
-            margin: 0;
+            size: A4 portrait;
+            margin: 8mm 8mm 12mm 8mm;
+            @bottom-right {
+              content: "Page " counter(page) " / " counter(pages);
+              font-family: "Civilprom", sans-serif;
+              font-size: 8px;
+              color: #64748b;
+            }
+          }
+
+          * {
+            box-sizing: border-box;
           }
           
           body, select, input, textarea, div, p, span, h1, h2, h3, h4, table, tr, th, td, a {
@@ -423,18 +427,18 @@ export default function ClientTab({
             color: #000000 !important;
             letter-spacing: normal !important;
             text-transform: none !important;
-            font-size: 16px !important;
+            font-size: 9.5px !important;
+            line-height: 1.32 !important;
           }
-          
-          .text-large {
-            font-size: 18px !important;
+
+          .header-left-col, .header-left-col div, .header-left-col span, .header-left-col a {
+            font-size: 10.5px !important;
+            line-height: 1.3 !important;
           }
-          
-          h1.doc-title {
-            font-family: "Gochi" !important;
-            font-size: 55px !important;
-            font-weight: normal !important;
-            line-height: 1 !important;
+
+          .header-company-title {
+            font-size: 12px !important;
+            font-weight: bold !important;
           }
           
           .blue-link {
@@ -442,14 +446,69 @@ export default function ClientTab({
             text-decoration: underline !important;
             font-weight: 100 !important;
           }
-          
-          @media print {
-            body { background: white !important; padding: 0 !important; margin: 1.6cm 1.6cm 1.6cm 1.6cm !important; }
-            .max-w-3xl { border: none !important; box-shadow: none !important; max-width: 100% !important; width: 100% !important; padding: 0 !important; }
+
+          /* 2 COLUMNS COMPACT BODY */
+          .contract-body-text {
+            column-count: 2;
+            column-gap: 18px;
+            text-align: justify;
+            white-space: pre-wrap;
+            font-size: 9px !important;
+            line-height: 1.32 !important;
+            color: #111827 !important;
+            padding: 0 !important;
+            border: none !important;
+            background: transparent !important;
+            background-color: transparent !important;
+            border-radius: 0 !important;
+            margin-top: 8px;
+            margin-bottom: 8px;
           }
+          
           .avoid-break {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
+          }
+
+          @media print {
+            body {
+              background: white !important;
+              padding: 0 !important;
+              margin: 4mm 6mm !important;
+            }
+            .print-wrapper {
+              border: none !important;
+              box-shadow: none !important;
+              max-width: 100% !important;
+              width: 100% !important;
+              padding: 0 !important;
+              gap: 8px !important;
+            }
+            .pagination-footer {
+              position: fixed;
+              bottom: 3mm;
+              right: 6mm;
+              font-size: 8px !important;
+              color: #64748b !important;
+              display: block !important;
+            }
+            .page-dyn-counter::after {
+              content: "Page " counter(page) " / " counter(pages);
+            }
+          }
+
+          @media screen {
+            .pagination-footer {
+              font-size: 8.5px !important;
+              color: #64748b !important;
+              text-align: right;
+              margin-top: 10px;
+              padding-top: 4px;
+              border-top: 1px solid #f1f5f9;
+            }
+            .page-dyn-counter::after {
+              content: "Page 1 / 1";
+            }
           }
         </style>
         <script>
@@ -458,77 +517,72 @@ export default function ClientTab({
           };
         </script>
       </head>
-      <body class="bg-white text-black p-8">
-        <div class="max-w-3xl mx-auto p-4 md:p-8" style="background-color: #ffffff; display: flex; flex-direction: column; gap: 24px; box-sizing: border-box;">
+      <body class="bg-white text-black p-4 md:p-6">
+        <div class="print-wrapper max-w-4xl mx-auto" style="background-color: #ffffff; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
           
-          <!-- HAUT DE PAGE / COORDONNEES -->
-          <div class="flex justify-between items-start pb-4" style="border-bottom: none;">
-            <div>
-              ${compLogo ? `<img src="${compLogo}" style="max-width: 300px; max-height: 100px; object-fit: contain; margin-bottom: 12px; display: block;" referrerPolicy="no-referrer" />` : ''}
-              <span class="text-large" style="display: block; margin-bottom: 4px;">${compName}</span>
+          <!-- HAUT DE PAGE / HEADER COMPACT -->
+          <div class="flex justify-between items-start pb-2" style="border-bottom: 1px solid #e2e8f0; gap: 16px;">
+            <!-- GAUCHE: LOGO REDUIT DE MOITIE + INFOS ENTREPRISE (10-12px) -->
+            <div class="header-left-col" style="max-width: 48%;">
+              ${compLogo ? `<img src="${compLogo}" style="max-width: 140px; max-height: 44px; object-fit: contain; margin-bottom: 4px; display: block;" referrerPolicy="no-referrer" />` : ''}
+              <span class="header-company-title" style="display: block; margin-bottom: 2px;">${compName}</span>
               <div>${compEmail}</div>
               <div>${compPhone}</div>
-              <div style="margin-top: 2px;"><a href="https://${compWebsite}" target="_blank" class="blue-link">${compWebsite}</a></div>
+              <div style="margin-top: 1px;"><a href="https://${compWebsite}" target="_blank" class="blue-link">${compWebsite}</a></div>
             </div>
-            <div style="text-align: right;">
-              <div style="font-weight: bold;">CONTRAT DE MAINTENANCE</div>
-              <div style="margin-top: 4px; color: #555;">Généré le ${new Date().toLocaleDateString('fr-FR')}</div>
-              <div style="margin-top: 4px; color: #555; font-size: 14px !important;">
-                Début : <strong>${formatDateToFR(debutContrat) || debutContrat || '-'}</strong>
+
+            <!-- DROITE: CONTRAT & CLIENT BENEFICIAIRE -->
+            <div style="max-width: 50%; width: 100%; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+              <div style="text-align: right;">
+                <div style="font-weight: bold; font-size: 11px !important; letter-spacing: 0.5px;">CONTRAT DE MAINTENANCE</div>
+                <div style="color: #64748b; font-size: 8.5px !important;">Généré le ${new Date().toLocaleDateString('fr-FR')}</div>
+                <div style="color: #475569; font-size: 8.5px !important; margin-top: 2px;">
+                  Début : <strong>${formatDateToFR(debutContrat) || debutContrat || '-'}</strong> — Expiration : <strong>${formatDateToFR(finContrat) || finContrat || '-'}</strong>
+                </div>
               </div>
-              <div style="margin-top: 2px; color: #555; font-size: 14px !important;">
-                Expiration : <strong>${formatDateToFR(finContrat) || finContrat || '-'}</strong>
+
+              <!-- CARTE CLIENT BENEFICIAIRE COMPACTE -->
+              <div style="width: 100%; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 6px; background-color: #fafafa; font-size: 9px !important; text-align: left;">
+                <div style="font-weight: bold; color: #475569; font-size: 8px !important; text-transform: uppercase;">Client bénéficiaire</div>
+                <div style="font-size: 11.5px !important; font-weight: bold !important; color: #0f172a; line-height: 1.2 !important; margin-bottom: 2px;">${denomination || 'Non renseigné'}</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1px 6px; font-size: 8.5px !important; color: #334155;">
+                  ${siret ? `<div>SIRET : <strong>${siret}</strong></div>` : ''}
+                  ${numeroMarche ? `<div>Marché : <strong>${numeroMarche}</strong></div>` : ''}
+                  ${payeurId ? `<div>Payeur ID : <strong>${payeurId}</strong></div>` : ''}
+                  ${clientIdField ? `<div>Client ID : <strong>${clientIdField}</strong></div>` : ''}
+                  ${nomPrenomSite ? `<div>Contact : <strong>${nomPrenomSite}</strong></div>` : ''}
+                  ${phone ? `<div>Tél : <strong>${phone}</strong></div>` : ''}
+                  ${email ? `<div style="grid-column: span 2;">Email : <strong>${email}</strong></div>` : ''}
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- TITRE DU DOCUMENT / INFOS CLIENT -->
-          <div class="grid grid-cols-2 gap-6 avoid-break" style="margin-top: 20px;">
-            <div>
-              <h1 class="doc-title" style="margin-bottom: 10px;">CONTRAT</h1>
-              <div style="font-size: 14px !important; color: #555 !important; display: flex; flex-direction: column; gap: 4px; margin-top: 6px;">
-                <div>Numéro de marché : <strong>${numeroMarche || '-'}</strong></div>
-                <div>Payeur ID : <strong>${payeurId || '-'}</strong></div>
-                <div>Client ID : <strong>${clientIdField || '-'}</strong></div>
-              </div>
-            </div>
-            <div style="border: 1px solid #dcdcdc; padding: 16px; border-radius: 12px; background-color: #ffffff;">
-              <div style="margin-bottom: 6px; font-weight: bold; color: #555;">Client bénéficiaire.</div>
-              <div style="font-size: 24px !important; font-weight: bold !important; margin-bottom: 6px; line-height: 1.2 !important;">${denomination || 'Non renseigné'}</div>
-              ${siret ? `<div style="margin-bottom: 2px;">SIRET. ${siret}</div>` : ''}
-              ${nomPrenomSite ? `<div style="margin-bottom: 2px;">Contact site. ${nomPrenomSite}</div>` : ''}
-              ${email ? `<div style="margin-bottom: 2px;">Email. ${email}</div>` : ''}
-              ${phone ? `<div style="margin-bottom: 2px;">Téléphone. ${phone}</div>` : ''}
-            </div>
+          <!-- CORPS DU CONTRAT EN GRID 2 COLONNES (COMPACT SANS PADDING/BORDER/BG/RADIUS) -->
+          <div class="contract-body-text">
+            ${redactionContrat || "Aucun détail contractuel n'est rédigé."}
           </div>
 
-          <!-- CORPS DU CONTRAT -->
-          <div class="avoid-break" style="border: 1px solid #dcdcdc; border-radius: 12px; padding: 20px; background-color: #fafafa; margin-top: 10px;">
-            <div style="white-space: pre-wrap; font-size: 15px !important; line-height: 1.6 !important; color: #333333 !important;">
-              ${redactionContrat || "Aucun détail contractuel n'est rédigé."}
-            </div>
-          </div>
-
-          <!-- SIGNATURES -->
-          <div class="avoid-break" style="border: 1px solid #dcdcdc; border-radius: 12px; padding: 20px; background-color: #ffffff; margin-top: 10px;">
-            <div class="grid grid-cols-2 gap-6" style="margin-top: 12px;">
+          <!-- SIGNATURES COMPACTES -->
+          <div class="avoid-break" style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; background-color: #ffffff; margin-top: 6px;">
+            <div class="grid grid-cols-2 gap-4">
               <div>
-                <div style="font-weight: bold; margin-bottom: 6px; color: #555;">Le prestataire :</div>
-                <div style="font-size: 15px !important; font-weight: bold !important;">${compName}</div>
-                <div style="font-size: 13px !important; color: #64748b; margin-top: 4px;">Signé électroniquement par défaut de service contractuel.</div>
+                <div style="font-weight: bold; margin-bottom: 2px; color: #475569; font-size: 8.5px !important; text-transform: uppercase;">Le prestataire :</div>
+                <div style="font-size: 10.5px !important; font-weight: bold !important;">${compName}</div>
+                <div style="font-size: 8px !important; color: #64748b; margin-top: 2px;">Signé électroniquement par défaut de service contractuel.</div>
               </div>
-              <div style="border-left: 1px solid #e2e8f0; padding-left: 20px;">
-                <div style="font-weight: bold; margin-bottom: 6px; color: #555;">Le Client :</div>
-                <div style="font-size: 15px !important;"><span style="color: #64748b;">Signataire :</span> <strong>${signeParContrat || '-'}</strong></div>
-                <div style="font-size: 13px !important; color: #64748b; margin-top: 2px;">Date signature : ${formattedDate}</div>
+              <div style="border-left: 1px solid #e2e8f0; padding-left: 12px;">
+                <div style="font-weight: bold; margin-bottom: 2px; color: #475569; font-size: 8.5px !important; text-transform: uppercase;">Le Client :</div>
+                <div style="font-size: 9.5px !important;"><span style="color: #64748b;">Signataire :</span> <strong>${signeParContrat || '-'}</strong></div>
+                <div style="font-size: 8px !important; color: #64748b;">Date signature : ${formattedDate}</div>
                 
-                <div style="margin-top: 12px; text-align: center;">
+                <div style="margin-top: 4px; text-align: center;">
                   ${signatureClientContratImage ? `
-                    <div style="display: inline-block; padding: 6px; border-radius: 8px; background-color: #fff;">
-                      <img src="${signatureClientContratImage}" style="max-height: 70px; max-width: 220px; object-fit: contain;" alt="Signature Client" />
+                    <div style="display: inline-block; padding: 3px; border-radius: 4px; background-color: #fff;">
+                      <img src="${signatureClientContratImage}" style="max-height: 48px; max-width: 160px; object-fit: contain;" alt="Signature Client" />
                     </div>
                   ` : `
-                    <div style="border: 1px dashed #dcdcdc; padding: 20px; color: #a1a1a1; font-style: italic; font-size: 14px !important; border-radius: 8px;">
+                    <div style="border: 1px dashed #cbd5e1; padding: 8px; color: #94a3b8; font-style: italic; font-size: 8.5px !important; border-radius: 4px;">
                       Contrat en attente de signature client
                     </div>
                   `}
@@ -537,7 +591,10 @@ export default function ClientTab({
             </div>
           </div>
 
-
+          <!-- PAGINATION EN BAS A DROITE -->
+          <div class="pagination-footer">
+            <span class="page-dyn-counter"></span>
+          </div>
 
         </div>
       </body>
@@ -2160,9 +2217,7 @@ export default function ClientTab({
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         <div className="overflow-x-auto">
           {filteredClients.length === 0 ? (
-            <div className="p-16 text-center font-sans lg:py-24" id="no-clients-view">
-              <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>Aucun résultat.</p>
-            </div>
+            <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
           ) : (
             <table className="w-full text-left font-sans border-collapse text-xs" id="clients-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
               <thead>

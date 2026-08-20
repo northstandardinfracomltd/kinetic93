@@ -4,7 +4,7 @@ import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
-import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord } from './types';
+import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, APP_THEMES, DEFAULT_THEME_COLOR } from './types';
 import {
   INITIAL_CLIENTS,
   INITIAL_VARIABLES,
@@ -69,6 +69,7 @@ import SatisfactionFormPage from './components/SatisfactionFormPage';
 import NotificationsTab from './components/NotificationsTab';
 import { PlanningTab } from './components/PlanningTab';
 import FeedbackDrawer from './components/FeedbackDrawer';
+import { EmptyTablePlaceholder } from './components/EmptyTablePlaceholder';
 
 import {
   Heart,
@@ -960,6 +961,18 @@ export default function App() {
   }, [tenantId]);
   const [members, setMembers] = useState<Member[]>([]);
 
+  const [themeRefreshTrigger, setThemeRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleThemeEvent = () => {
+      setThemeRefreshTrigger(prev => prev + 1);
+    };
+    window.addEventListener('defib-theme-changed', handleThemeEvent);
+    return () => {
+      window.removeEventListener('defib-theme-changed', handleThemeEvent);
+    };
+  }, []);
+
   const currentLoggedInMember = useMemo(() => {
     if (!loggedUser) return null;
     const emailLower = loggedUser.email?.trim().toLowerCase();
@@ -969,6 +982,42 @@ export default function App() {
       (nameLower && m.name?.trim().toLowerCase() === nameLower)
     ) || null;
   }, [loggedUser, members]);
+
+  const currentSidebarTheme = useMemo(() => {
+    const userEmail = loggedUser?.email?.trim().toLowerCase() || '';
+
+    // 1. From currentLoggedInMember themePreference
+    if (currentLoggedInMember?.themePreference) {
+      const found = APP_THEMES.find(t => t.id === currentLoggedInMember.themePreference || t.color.toLowerCase() === currentLoggedInMember.themePreference?.toLowerCase());
+      if (found) return found;
+    }
+
+    // 2. From members list matching userEmail
+    if (userEmail) {
+      const mem = members.find(m => m.email?.trim().toLowerCase() === userEmail);
+      if (mem?.themePreference) {
+        const found = APP_THEMES.find(t => t.id === mem.themePreference || t.color.toLowerCase() === mem.themePreference?.toLowerCase());
+        if (found) return found;
+      }
+      const tenantKey = tenantId || 'demo';
+      const userTheme = localStorage.getItem(`defib_${tenantKey}_user_${userEmail}_theme`) || localStorage.getItem(`defib_user_theme_${userEmail}`);
+      if (userTheme) {
+        const found = APP_THEMES.find(t => t.id === userTheme || t.color.toLowerCase() === userTheme.toLowerCase());
+        if (found) return found;
+      }
+    }
+
+    // 3. Fallback to localStorage
+    const tenantKey = tenantId || 'demo';
+    const savedTheme = localStorage.getItem(`defib_${tenantKey}_theme`) || localStorage.getItem('defib_current_user_theme');
+    if (savedTheme) {
+      const found = APP_THEMES.find(t => t.id === savedTheme || t.color.toLowerCase() === savedTheme.toLowerCase());
+      if (found) return found;
+    }
+
+    // 4. Default: Defibeo NextGen (Violet)
+    return APP_THEMES[0];
+  }, [currentLoggedInMember, loggedUser, members, tenantId, themeRefreshTrigger]);
 
   const isDeveloper = useMemo(() => {
     try {
@@ -3786,18 +3835,22 @@ export default function App() {
         setLoadedTenantIdState(tenantId);
         setIsFirebaseLoaded(true);
 
-        // Synchronize browser's active local cache to the backend REST server in background
+        // Synchronize browser's active local cache to the backend REST server in background (only if local data is populated)
         if (typeof fetch !== 'undefined') {
-          fetch('/api/sync-collection', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ collectionName: 'defibrillateurs', tenantId, value: baseDefibrillateurs })
-          }).catch(() => {});
-          fetch('/api/sync-collection', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ collectionName: 'clients', tenantId, value: sanitizedOffline })
-          }).catch(() => {});
+          if (Array.isArray(baseDefibrillateurs) && baseDefibrillateurs.length > 0) {
+            fetch('/api/sync-collection', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ collectionName: 'defibrillateurs', tenantId, value: baseDefibrillateurs })
+            }).catch(() => {});
+          }
+          if (Array.isArray(sanitizedOffline) && sanitizedOffline.length > 0) {
+            fetch('/api/sync-collection', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ collectionName: 'clients', tenantId, value: sanitizedOffline })
+            }).catch(() => {});
+          }
         }
 
         const elapsedMs = Date.now() - loadStartMs;
@@ -5886,7 +5939,7 @@ export default function App() {
       <aside 
         className="w-64 text-slate-100 flex flex-col h-screen sticky top-0 shrink-0 shadow-xl z-30" 
         style={{ 
-          background: 'linear-gradient(#7e2e86, #36093a)',
+          background: currentSidebarTheme.color,
           borderRight: '1px solid rgba(255, 255, 255, 0.1)'
         }} 
         id="app-sidebar"
@@ -5895,8 +5948,8 @@ export default function App() {
         <div 
           className="py-1 px-4" 
           style={{ 
-            background: 'rgb(255 255 255 / 5%)', 
-            borderBottom: '1px solid rgba(255, 255, 255, 0.15)' 
+            background: currentSidebarTheme.color, 
+            borderBottom: '1px solid rgb(255 255 255 / 27%)' 
           }}
         >
           <div className="flex justify-center items-center">
@@ -5911,7 +5964,10 @@ export default function App() {
         </div>
 
         {/* Scrollable Navigation Items */}
-        <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 scrollbar-none">
+        <div 
+          className="flex-1 overflow-y-auto p-3.5 space-y-2.5 scrollbar-none"
+          style={{ background: currentSidebarTheme.color }}
+        >
           {(() => {
             const rawTabs = [
               { id: 'defibrillateurs', label: t('Défibrillateurs'), icon: Heart },
@@ -6027,7 +6083,7 @@ export default function App() {
                   <div
                     key="equip-group-container"
                     className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid #ffffff1a' }}
+                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
                   >
                     {equipGroup.map(gt => renderButton(gt))}
                   </div>
@@ -6042,7 +6098,7 @@ export default function App() {
                   <div
                     key="stock-group-container"
                     className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid #ffffff1a' }}
+                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
                   >
                     {stockGroup.map(gt => renderButton(gt))}
                   </div>
@@ -6057,7 +6113,7 @@ export default function App() {
                   <div
                     key="crm-group-container"
                     className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid #ffffff1a' }}
+                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
                   >
                     {crmGroup.map(gt => renderButton(gt))}
                   </div>
@@ -6072,7 +6128,7 @@ export default function App() {
                   <div
                     key="new-group-container"
                     className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid #ffffff1a' }}
+                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
                   >
                     {newGroup.map(gt => renderButton(gt))}
                   </div>
@@ -6087,7 +6143,7 @@ export default function App() {
                   <div
                     key="formation-group-container"
                     className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid #ffffff1a' }}
+                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
                   >
                     {formationGroup.map(gt => renderButton(gt))}
                   </div>
@@ -6106,8 +6162,8 @@ export default function App() {
         <div 
           className="p-3.5" 
           style={{ 
-            background: 'rgb(255 255 255 / 5%)', 
-            borderTop: '1px solid rgba(255, 255, 255, 0.15)' 
+            background: currentSidebarTheme.color, 
+            borderTop: '1px solid rgb(255 255 255 / 27%)' 
           }}
         >
           <button
@@ -6788,13 +6844,9 @@ export default function App() {
                 })()}
 
                 {fsmTours.length === 0 ? (
-                  <div className="p-16 text-center font-sans lg:py-24" id="no-fsm-view">
-                    <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>Aucun résultat.</p>
-                  </div>
+                  <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                 ) : filteredTours.length === 0 ? (
-                  <div className="p-16 text-center font-sans lg:py-24" id="fsm-no-results-view">
-                    <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>Aucune tournée ne correspond à votre recherche</p>
-                  </div>
+                  <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                 ) : (
                   <div className="space-y-8">
                     {filteredTours.map((t) => {
@@ -9349,11 +9401,7 @@ export default function App() {
                 <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
                   <div className="overflow-x-auto">
                     {filteredReports.length === 0 ? (
-                      <div className="p-16 text-center font-sans lg:py-24" id="no-gmao-view">
-                        <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
-                          {gmaoSearchQuery ? "Aucun rapport ne correspond à votre recherche" : "Aucun résultat."}
-                        </p>
-                      </div>
+                      <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                     ) : (
                       <table className="w-full text-left font-sans border-collapse text-xs" id="gmao-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
                         <thead>
@@ -10557,11 +10605,7 @@ export default function App() {
                     <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
                       <div className="overflow-x-auto">
                         {filtDocs.length === 0 ? (
-                          <div className="p-16 text-center font-sans lg:py-24" id="no-devis-view bg-white">
-                            <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
-                              {t("Aucun résultat.")}
-                            </p>
-                          </div>
+                          <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                         ) : (
                           <table className="w-full text-left font-sans border-collapse text-xs" id="devis-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
                             <thead>

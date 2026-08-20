@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AchatFournisseur, Variable } from '../types';
 import { ShoppingBag, Eye, Trash2, Edit, Plus, FileText, Upload, Search, X } from 'lucide-react';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { t } from '../utils/translate';
 
 interface AchatsFournisseursTabProps {
@@ -388,8 +389,8 @@ export default function AchatsFournisseursTab({
                 <tbody className="text-slate-700 text-xs">
                   {filteredAchats.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-16 text-center font-sans lg:py-24 text-sm bg-white" style={{ color: '#000000', fontWeight: 100, fontSize: '16px' }}>
-                        {t("Aucun résultat.")}
+                      <td colSpan={6} className="bg-white">
+                        <EmptyTablePlaceholder className="py-16 text-center font-sans lg:py-24" />
                       </td>
                     </tr>
                   ) : (

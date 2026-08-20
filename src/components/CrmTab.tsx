@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SupportTicket, Member, Client, CompanyInfo } from '../types';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 
 interface CrmTabProps {
   tickets: SupportTicket[];
@@ -436,11 +437,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       <div className="bg-white overflow-hidden mt-4" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         <div className="overflow-x-auto">
           {filteredTickets.length === 0 ? (
-            <div className="p-16 text-center font-sans lg:py-24" id="no-crm-view">
-              <p style={{ color: '#000000', fontSize: '18px', fontWeight: 400, cursor: 'default' }}>
-                Aucun résultat.
-              </p>
-            </div>
+            <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
           ) : (
             <table className="w-full text-left font-sans border-collapse text-sm" id="crm-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
               <thead>

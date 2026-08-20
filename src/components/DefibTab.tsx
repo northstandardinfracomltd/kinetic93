@@ -6,6 +6,7 @@ import HelpBubble from './HelpBubble';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
 import { runMonthlyVigilanceCampaign } from '../utils/emailService';
 import { checkIfDefibIdentifiantExistsAnywhere, fetchCollectionFromFirestore } from '../firebase';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -2377,9 +2378,7 @@ export default function DefibTab({
           className="overflow-x-auto"
         >
           {filteredDefibs.length === 0 ? (
-            <div className="p-16 text-center font-sans lg:py-24" id="no-defibs-view">
-              <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>Aucun résultat.</p>
-            </div>
+            <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
           ) : (
             <table className="w-full text-left font-sans border-collapse text-xs" id="records-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
               <thead ref={theadRef}>

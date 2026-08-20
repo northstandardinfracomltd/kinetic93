@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { t } from '../utils/translate';
 import { Variable, StockRecord, DistributedStockLocation, Member } from '../types';
 import { getLocationCustomName } from '../utils';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 
 const CODE39_MAP: Record<string, string> = {
   '0': '101001101101',
@@ -904,8 +905,8 @@ export default function StocksDistribuesTab({
                 <tbody className="text-slate-700 text-xs">
                   {filteredItems.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-16 text-center font-sans lg:py-24 text-sm bg-white" style={{ color: '#000000', fontWeight: 100, fontSize: '16px' }}>
-                        Aucun résultat.
+                      <td colSpan={10}>
+                        <EmptyTablePlaceholder className="py-16 text-center font-sans lg:py-24 text-sm bg-white" />
                       </td>
                     </tr>
                   ) : (

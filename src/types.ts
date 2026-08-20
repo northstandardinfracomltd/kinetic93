@@ -311,7 +311,25 @@ export interface Member {
   optimizationPreference?: 'loin' | 'proche';
   googleCalEmail?: string;
   googleCalId?: string;
+  themePreference?: string;
 }
+
+export interface AppThemeOption {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export const APP_THEMES: AppThemeOption[] = [
+  { id: 'defibeo_nextgen', name: 'Defibeo NextGen (Violet)', color: '#3F0E40' },
+  { id: 'node_calm', name: 'Node Calm (Violet)', color: '#573D82' },
+  { id: 'logic_liquid', name: 'Logic Liquid (Blue)', color: '#0E3386' },
+  { id: 'postal_odysee', name: 'Postal Odysee (Blue)', color: '#0000AA' },
+  { id: 'root_terra', name: 'Root Terra (Terracotta)', color: '#751C01' },
+  { id: 'orbital_shift', name: 'Orbital Shift (Dark)', color: '#21252B' }
+];
+
+export const DEFAULT_THEME_COLOR = '#3F0E40';
 
 export interface CompanyInfo {
   name: string;

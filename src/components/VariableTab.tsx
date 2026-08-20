@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Variable, VariableCategory, Defibrillateur, StockRecord, DistributedStockLocation, OtherEquipment, AchatFournisseur } from '../types';
 import { Plus, Search, Trash2, Edit2, X, Sliders, Box, Image as ImageIcon, Sparkles, Check } from 'lucide-react';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { t } from '../utils/translate';
 
 // Custom Radio Component with exact design styling (representing white gap, rose border and pink dot)
@@ -1193,9 +1194,7 @@ export default function VariableTab({
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         <div className="overflow-x-auto">
           {filteredVariables.length === 0 ? (
-            <div className="p-16 text-center font-sans lg:py-24" id="no-variables-view">
-              <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>Aucun résultat.</p>
-            </div>
+            <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
           ) : (
             <table className="w-full text-left font-sans border-collapse text-xs" id="variables-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
               <thead>

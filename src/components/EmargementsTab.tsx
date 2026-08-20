@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { EmargementRecord, EmargementStagiaireItem, FormationRecord, StagiaireRecord, Member, CompanyInfo } from '../types';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 
 interface EmargementsTabProps {
   emargements: EmargementRecord[];
@@ -740,8 +741,8 @@ export default function EmargementsTab({
                 <tbody className="text-slate-700 text-xs">
                   {filteredEmargements.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="p-16 text-center font-sans lg:py-24" style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
-                        Aucun résultat.
+                      <td colSpan={4}>
+                        <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                       </td>
                     </tr>
                   ) : (

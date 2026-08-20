@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { GedDocument } from '../types';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { t } from '../utils/translate';
 
 interface GedTabProps {
@@ -268,11 +269,7 @@ export default function GedTab({
           <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
             <div className="overflow-x-auto">
               {filteredDocs.length === 0 ? (
-                <div className="p-16 text-center font-sans lg:py-24" id="no-ged-view">
-                  <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
-                    {t("Aucun résultat.")}
-                  </p>
-                </div>
+                <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
               ) : (
                 <table className="w-full text-left font-sans border-collapse text-xs" id="ged-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
                   <thead>

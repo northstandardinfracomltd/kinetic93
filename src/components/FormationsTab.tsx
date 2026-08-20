@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FormationRecord, Variable, Member, Client, AppTab } from '../types';
 import { getRegionsForCountry } from '../utils/regions';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 
 interface FormationsTabProps {
   formations: FormationRecord[];
@@ -626,8 +627,8 @@ export default function FormationsTab({
                 <tbody className="text-slate-700 text-xs">
                   {filteredFormations.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-16 text-center font-sans lg:py-24" style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
-                        Aucun résultat.
+                      <td colSpan={8}>
+                        <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                       </td>
                     </tr>
                   ) : (

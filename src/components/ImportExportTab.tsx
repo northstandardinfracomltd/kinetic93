@@ -4,6 +4,7 @@ import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../fire
 import { generateRandomShortCode, computeProchaineMaintenance } from '../utils';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 
 export type ImportExportCategory = 
   | 'Défibrillateurs.' 
@@ -1820,11 +1821,7 @@ export default function ImportExportTab({
             id="import-export-report-container"
           >
             {filteredRecords.length === 0 ? (
-              <div className="p-16 text-center font-sans lg:py-24" id="no-records-view">
-                <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                  {t("Aucun résultat.")}
-                </p>
-              </div>
+              <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
             ) : (
               <div className="overflow-x-auto">
                 <table 

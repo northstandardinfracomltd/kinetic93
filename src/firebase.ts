@@ -172,23 +172,29 @@ export function getFromLocalCache<T>(key: string): T | null {
 /**
  * Fetches a collection (stored as a single document or chunked documents) 
  * from Firestore. Returns null if the document does not exist yet.
+ * Includes resilience against chunk timeouts, local cache, and backend server proxy fallback.
  */
 export async function fetchCollectionFromFirestore<T>(collectionName: string, tenantId?: string): Promise<T | null> {
   const activeTenantId = tenantId || getTenantId();
   const key = getCollectionKey(collectionName, activeTenantId);
+
+  // If completely offline in browser, immediately return cached version
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return getFromLocalCache<T>(key);
   }
+
+  // 1. Primary Strategy: Try direct Firestore query with graceful timeout & chunk reconstruction
   try {
     const docRef = doc(db, 'appData', key);
+    // Allow generous 12s on mobile connections
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Fetch timed out')), 6000)
+      setTimeout(() => reject(new Error('Firestore fetch timeout')), 12000)
     );
     const serverSnap = await Promise.race([
-      getDocFromServer(docRef),
+      getDoc(docRef),
       timeoutPromise
     ]);
-    if (serverSnap.exists()) {
+    if (serverSnap && serverSnap.exists()) {
       const payload = serverSnap.data();
       if (payload._chunked && typeof payload.chunksCount === 'number') {
         const chunksCount = payload.chunksCount;
@@ -197,24 +203,27 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
           const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
           chunkPromises.push(
             Promise.race([
-              getDocFromServer(chunkRef),
-              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Chunk fetch timeout')), 5000))
+              getDoc(chunkRef),
+              new Promise<any>((resolve) => setTimeout(() => resolve(null), 9000))
             ])
           );
         }
         const chunkSnaps = await Promise.all(chunkPromises);
         let combined: any[] = [];
-        for (const snap of chunkSnaps) {
-          if (snap.exists()) {
+        for (let idx = 0; idx < chunkSnaps.length; idx++) {
+          const snap = chunkSnaps[idx];
+          if (snap && snap.exists && snap.exists()) {
             const data = snap.data();
             if (Array.isArray(data.value)) {
               combined.push(...data.value);
             }
           }
         }
-        const val = combined as unknown as T;
-        saveToLocalCache(key, val);
-        return val;
+        if (combined.length > 0) {
+          const val = combined as unknown as T;
+          saveToLocalCache(key, val);
+          return val;
+        }
       } else if (payload.value !== undefined) {
         const val = payload.value as T;
         saveToLocalCache(key, val);
@@ -222,9 +231,37 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
       }
     }
   } catch (error) {
-    console.log(`[Firestore Server-First] Failed to fetch collection ${collectionName} from server, falling back to cache:`, error);
+    console.log(`[Firestore Server-First] Direct Firestore fetch for ${collectionName} had issue, engaging multi-tier fallback:`, error);
   }
-  return getFromLocalCache<T>(key);
+
+  // 2. Secondary Strategy: High-availability backend server relay (/api/sync-collection)
+  // This completely bypasses IndexedDB / WebKit Firestore WebChannel connection constraints on Safari/iPad
+  if (typeof fetch !== 'undefined') {
+    try {
+      const resp = await fetch(`/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(activeTenantId)}`, {
+        signal: AbortSignal.timeout(6000)
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json && json.value !== undefined) {
+          if (!Array.isArray(json.value) || json.value.length > 0) {
+            saveToLocalCache(key, json.value);
+            return json.value as T;
+          }
+        }
+      }
+    } catch (apiErr) {
+      // Non-blocking
+    }
+  }
+
+  // 3. Tertiary Strategy: Local storage cache
+  const localVal = getFromLocalCache<T>(key);
+  if (localVal !== null) {
+    return localVal;
+  }
+
+  return null;
 }
 
 /**

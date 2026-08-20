@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StagiaireRecord } from '../types';
 import { getRegionsForCountry } from '../utils/regions';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 
 interface StagiairesTabProps {
   stagiaires: StagiaireRecord[];
@@ -265,8 +266,8 @@ export default function StagiairesTab({
                 <tbody className="text-slate-700 text-xs">
                   {filteredStagiaires.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-16 text-center font-sans lg:py-24" style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
-                        Aucun résultat.
+                      <td colSpan={5}>
+                        <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                       </td>
                     </tr>
                   ) : (

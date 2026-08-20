@@ -422,6 +422,21 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
 }
 
   // Real-time synchronization endpoint from browser client to server
+  app.get("/api/sync-collection", async (req, res) => {
+    try {
+      const collectionName = req.query.collectionName as string;
+      const tenantId = (req.query.tenantId as string) || 'demo';
+      if (!collectionName) {
+        return res.status(400).json({ error: "collectionName is required" });
+      }
+      const rawTenant = tenantId.trim();
+      const items = await fetchServerCollection(collectionName, rawTenant);
+      return res.json({ value: items });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/sync-collection", (req, res) => {
     try {
       const { collectionName, tenantId, value } = req.body;
@@ -431,7 +446,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       const rawTenant = String(tenantId).trim();
       const collectionKey = rawTenant === 'demo' ? collectionName : `${rawTenant}_${collectionName}`;
       
-      if (Array.isArray(value)) {
+      if (Array.isArray(value) && value.length > 0) {
         serverMemoryStore.set(collectionKey, value);
         // Also map normalized key if D-prefixed
         if (/^d\d+$/i.test(rawTenant)) {

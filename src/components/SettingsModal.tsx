@@ -18,8 +18,9 @@ import {
   Plus,
   Trash2
 } from 'lucide-react';
-import { CompanyInfo, Member, MemberSchedule, MemberAbsence } from '../types';
-import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile } from '../firebase';
+import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR } from '../types';
+import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile, auth } from '../firebase';
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { getAppsScriptUrl, saveAppsScriptUrl, triggerEmail2TechnicianConnexion, triggerEmail3AdminConnexion, triggerEmailNewMemberAdded, sendScriptEmail } from '../utils/emailService';
 import { setLanguage, t } from '../utils/translate';
 import { REGIONS_FRANCAISES, getLocationCustomName } from '../utils';
@@ -173,6 +174,105 @@ export default function SettingsModal({
     const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
     return localStorage.getItem(`defib_${tenantId}_communication_portail_client`) || '';
   });
+
+  const [selectedTheme, setSelectedTheme] = React.useState<string>(() => {
+    let userEmail = '';
+    if (currentUser && currentUser.email) {
+      userEmail = currentUser.email.toLowerCase().trim();
+    } else {
+      try {
+        const saved = localStorage.getItem('defib_admin_logged_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.email) userEmail = parsed.email.toLowerCase().trim();
+        }
+      } catch (e) {}
+    }
+    
+    // 1. Check matching member in members prop
+    if (userEmail) {
+      const mem = members.find(m => m.email?.toLowerCase().trim() === userEmail);
+      if (mem?.themePreference) return mem.themePreference;
+    }
+    
+    const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+    const userThemeKey = userEmail ? `defib_${tenantId}_user_${userEmail}_theme` : `defib_${tenantId}_theme`;
+    const savedLocal = localStorage.getItem(userThemeKey) || (userEmail ? localStorage.getItem(`defib_user_theme_${userEmail}`) : null) || localStorage.getItem('defib_current_user_theme');
+    if (savedLocal) return savedLocal;
+
+    return 'defibeo_nextgen';
+  });
+
+  const handleThemeSelect = (themeId: string) => {
+    setSelectedTheme(themeId);
+    let userEmail = '';
+    if (currentUser && currentUser.email) {
+      userEmail = currentUser.email.toLowerCase().trim();
+    } else {
+      try {
+        const saved = localStorage.getItem('defib_admin_logged_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.email) userEmail = parsed.email.toLowerCase().trim();
+        }
+      } catch (e) {}
+    }
+
+    const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+    const foundTheme = APP_THEMES.find(t => t.id === themeId);
+    const themeColor = foundTheme ? foundTheme.color : DEFAULT_THEME_COLOR;
+
+    // Save locally for instant UI update
+    if (userEmail) {
+      localStorage.setItem(`defib_${tenantId}_user_${userEmail}_theme`, themeId);
+      localStorage.setItem(`defib_user_theme_${userEmail}`, themeId);
+      localStorage.setItem(`defib_user_theme_color_${userEmail}`, themeColor);
+    }
+    localStorage.setItem(`defib_${tenantId}_theme`, themeId);
+    localStorage.setItem('defib_current_user_theme', themeId);
+
+    // Dispatch global event for instant background change of the sidebar
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('defib-theme-changed', {
+        detail: { themeId, themeColor, userEmail }
+      }));
+    }
+
+    // Update local members state
+    setLocalMembers(prev => {
+      let matched = false;
+      const next = prev.map(m => {
+        if (userEmail && m.email?.toLowerCase().trim() === userEmail) {
+          matched = true;
+          return { ...m, themePreference: themeId };
+        }
+        return m;
+      });
+      if (!matched && userEmail) {
+        next.push({
+          name: currentUser?.name || 'Administrateur',
+          email: userEmail,
+          role: 'Super-Administrateur',
+          status: 'Actif',
+          lastActive: 'En ligne',
+          pin: '1234',
+          themePreference: themeId
+        });
+      }
+      return next;
+    });
+
+    // Save directly to Firebase Firestore for this user
+    if (tenantId && tenantId !== 'demo' && userEmail) {
+      const cleanEmail = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
+      saveCollectionToFirestore(`userTheme_${cleanEmail}`, {
+        userEmail,
+        themeId,
+        themeColor,
+        updatedAt: new Date().toISOString()
+      }, tenantId).catch(err => console.warn('Error saving user theme to Firestore:', err));
+    }
+  };
 
   const [referralCompany, setReferralCompany] = React.useState('');
   const [referralSent, setReferralSent] = React.useState(false);
@@ -664,85 +764,99 @@ export default function SettingsModal({
   const handleGoogleDriveToggle = async (checked: boolean) => {
     if (checked) {
       try {
-        const client_id = "627487981610-1srkug4lp1qeih26pd2thd1241andaq4.apps.googleusercontent.com";
-        const redirect_uri = window.location.origin;
-        const scopes = [
-          "https://www.googleapis.com/auth/drive.file",
-          "https://www.googleapis.com/auth/userinfo.email"
-        ].join(" ");
-        
-        const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + 
-          `client_id=${client_id}` +
-          `&redirect_uri=${encodeURIComponent(redirect_uri)}` +
-          `&response_type=token` +
-          `&scope=${encodeURIComponent(scopes)}` +
-          `&prompt=select_account`;
+        const provider = new GoogleAuthProvider();
+        provider.addScope('https://www.googleapis.com/auth/drive.file');
+        provider.addScope('https://www.googleapis.com/auth/userinfo.email');
 
-        const popup = window.open(oauthUrl, 'google-oauth', 'width=500,height=600');
-        if (!popup) {
-          throw new Error("Le bloqueur de fenêtres pop-up a empêché l'ouverture de la fenêtre de connexion Google. Veuillez autoriser les pop-ups pour ce site.");
+        const result = await signInWithPopup(auth, provider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const token = credential?.accessToken;
+        const email = result?.user?.email || 'connected-account@google.com';
+
+        if (!token) {
+          throw new Error("Impossible d'obtenir le jeton d'accès OAuth Google Drive.");
         }
 
-        const pollTimer = setInterval(async () => {
-          try {
-            if (!popup || popup.closed) {
-              clearInterval(pollTimer);
-              return;
-            }
-
-            let currentHref = "";
-            try {
-              currentHref = popup.location.href;
-            } catch (e) {
-              // Ignore cross-origin frame access errors while user is on Google Auth domains
-              return;
-            }
-
-            if (currentHref && currentHref.startsWith(redirect_uri)) {
-              clearInterval(pollTimer);
-              const hash = popup.location.hash;
-              popup.close();
-
-              const params = new URLSearchParams(hash.substring(1));
-              const token = params.get('access_token');
-              const error = params.get('error');
-
-              if (error) {
-                throw new Error(`Erreur OAuth Google : ${error}`);
-              }
-
-              if (token) {
-                // Fetch user email using the access token
-                const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                  headers: { Authorization: `Bearer ${token}` }
-                });
-                
-                if (!userinfoRes.ok) {
-                  throw new Error(`Impossible de récupérer les informations de l'utilisateur Google : ${userinfoRes.statusText}`);
-                }
-                
-                const userinfo = await userinfoRes.json();
-                const email = userinfo.email || 'connected-account@google.com';
-
-                setGoogleDriveActive(true);
-                setGoogleDriveEmail(email);
-                setGoogleDriveAccessToken(token);
-              } else {
-                throw new Error("Aucun token d'accès n'a été retourné par Google.");
-              }
-            }
-          } catch (e: any) {
-            console.error("OAuth Polling Error:", e);
-            clearInterval(pollTimer);
-            setGoogleDriveActive(false);
-            alert("Erreur de connexion Google Drive : " + (e.message || e));
-          }
-        }, 500);
-
+        setGoogleDriveActive(true);
+        setGoogleDriveEmail(email);
+        setGoogleDriveAccessToken(token);
       } catch (err: any) {
-        console.error("Google Drive connection failed:", err);
-        setGoogleDriveActive(false);
-        alert("Erreur de connexion Google Drive : " + (err.message || err));
+        console.error("Google Drive connection failed with Firebase popup, falling back:", err);
+        // Fallback for custom clients if popup cancelled or domain restricted
+        if (err.code === 'auth/popup-closed-by-user') {
+          setGoogleDriveActive(false);
+          return;
+        }
+        try {
+          const client_id = "627487981610-1srkug4lp1qeih26pd2thd1241andaq4.apps.googleusercontent.com";
+          const redirect_uri = window.location.origin;
+          const scopes = [
+            "https://www.googleapis.com/auth/drive.file",
+            "https://www.googleapis.com/auth/userinfo.email"
+          ].join(" ");
+          
+          const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + 
+            `client_id=${client_id}` +
+            `&redirect_uri=${encodeURIComponent(redirect_uri)}` +
+            `&response_type=token` +
+            `&scope=${encodeURIComponent(scopes)}` +
+            `&prompt=select_account`;
+
+          const popup = window.open(oauthUrl, 'google-oauth', 'width=500,height=600');
+          if (!popup) {
+            throw new Error("Le bloqueur de fenêtres pop-up a empêché l'ouverture de la fenêtre de connexion Google.");
+          }
+
+          const pollTimer = setInterval(async () => {
+            try {
+              if (!popup || popup.closed) {
+                clearInterval(pollTimer);
+                return;
+              }
+
+              let currentHref = "";
+              try {
+                currentHref = popup.location.href;
+              } catch (e) {
+                return;
+              }
+
+              if (currentHref && currentHref.startsWith(redirect_uri)) {
+                clearInterval(pollTimer);
+                const hash = popup.location.hash;
+                popup.close();
+
+                const params = new URLSearchParams(hash.substring(1));
+                const token = params.get('access_token');
+                const error = params.get('error');
+
+                if (error) {
+                  throw new Error(`Erreur OAuth Google : ${error}`);
+                }
+
+                if (token) {
+                  const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+                  
+                  const userinfo = userinfoRes.ok ? await userinfoRes.json() : {};
+                  const email = userinfo.email || 'connected-account@google.com';
+
+                  setGoogleDriveActive(true);
+                  setGoogleDriveEmail(email);
+                  setGoogleDriveAccessToken(token);
+                }
+              }
+            } catch (e: any) {
+              clearInterval(pollTimer);
+              setGoogleDriveActive(false);
+              alert("Erreur de connexion Google Drive : " + (e.message || e));
+            }
+          }, 500);
+        } catch (fallbackErr: any) {
+          setGoogleDriveActive(false);
+          alert("Erreur de connexion Google Drive : " + (fallbackErr.message || fallbackErr));
+        }
       }
     } else {
       setGoogleDriveActive(false);
@@ -1377,6 +1491,34 @@ export default function SettingsModal({
           console.error('Error saving members directly to Firestore:', err)
         )
       );
+
+      let saveUserEmail = '';
+      if (currentUser && currentUser.email) {
+        saveUserEmail = currentUser.email.toLowerCase().trim();
+      } else {
+        try {
+          const saved = localStorage.getItem('defib_admin_logged_user');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed?.email) saveUserEmail = parsed.email.toLowerCase().trim();
+          }
+        } catch (e) {}
+      }
+
+      if (saveUserEmail) {
+        const cleanEmail = saveUserEmail.replace(/[^a-zA-Z0-9]/g, '_');
+        const foundTheme = APP_THEMES.find(t => t.id === selectedTheme);
+        promises.push(
+          saveCollectionToFirestore(`userTheme_${cleanEmail}`, {
+            userEmail: saveUserEmail,
+            themeId: selectedTheme,
+            themeColor: foundTheme ? foundTheme.color : DEFAULT_THEME_COLOR,
+            updatedAt: new Date().toISOString()
+          }, myTenantId).catch(err =>
+            console.error('Error saving userTheme directly to Firestore:', err)
+          )
+        );
+      }
     }
 
     // Envoi des emails aux nouveaux membres (Email de bienvenue personnalisé)
@@ -2409,6 +2551,51 @@ export default function SettingsModal({
                 >
                   {t("Réinitialiser les couleurs")}
                 </button>
+              </div>
+            </div>
+          </div>
+
+          {/* APPARENCE DU LOGICIEL POUR VOTRE SESSION */}
+          <div className="pt-6 mt-6 space-y-4" id="settings-section-software-theme">
+            {renderSectionHeader(t("Apparence du logiciel pour votre session"), false)}
+
+            <div className="space-y-3">
+              <label className="block text-[16px] font-bold text-black font-sans">
+                {t("Thème du logiciel (conforme accessibilité ISO/IEC 40500).")}
+              </label>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {APP_THEMES.map((theme) => {
+                  const isSelected = selectedTheme === theme.id;
+                  return (
+                    <div
+                      key={theme.id}
+                      onClick={() => handleThemeSelect(theme.id)}
+                      className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none bg-white ${
+                        isSelected
+                          ? 'border-pink-500 bg-pink-50/20 ring-1 ring-pink-500'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                      id={`theme-card-${theme.id}`}
+                    >
+                      <input
+                        type="radio"
+                        id={`radio-theme-${theme.id}`}
+                        name="software-session-theme"
+                        checked={isSelected}
+                        onChange={() => handleThemeSelect(theme.id)}
+                        className="w-4 h-4 text-pink-600 border-slate-300 focus:ring-pink-500 cursor-pointer shrink-0"
+                        style={{ accentColor: '#db2777' }}
+                      />
+                      <label
+                        htmlFor={`radio-theme-${theme.id}`}
+                        className="text-[14px] font-medium text-slate-900 cursor-pointer select-none font-sans"
+                      >
+                        {t(theme.name)}
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

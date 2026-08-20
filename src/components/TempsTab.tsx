@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PointageLog, Member } from '../types';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { t } from '../utils/translate';
 
 interface TempsTabProps {
@@ -719,11 +720,7 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
         style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}
       >
         {filteredRows.length === 0 ? (
-          <div className="p-16 text-center font-sans lg:py-24 max-w-2xl mx-auto" id="no-pointage-view">
-            <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
-              {t("Aucun résultat.")}
-            </p>
-          </div>
+          <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24 max-w-2xl mx-auto" />
         ) : (
           <div className="overflow-x-auto">
             <table
