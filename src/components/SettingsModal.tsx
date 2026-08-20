@@ -5558,14 +5558,252 @@ const { defibrillateurs } = await res.json();`}
               {/* Drawer Content */}
               <div className="flex-1 py-4 flex flex-col justify-between text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                 
-                <div>
-                  <p className="text-[17px] text-black leading-relaxed" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', cursor: 'default' }}>
-                    {t("Boutique en cours d’actualisation, veuillez revenir plus tard.")}
-                  </p>
+                <div className="space-y-6">
+                  {/* Item 1: Imprimante portable EPSON LW C410 */}
+                  <div className="space-y-2">
+                    <div className="text-[17px] font-bold text-black leading-snug">
+                      Imprimante portable EPSON LW C410.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Usage : Impression nomade de codes-barres.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Commentaire : Achat via site marchand.
+                    </div>
+                    <div className="pt-1">
+                      <a
+                        href="https://amzn.eu/d/0hoAS3kU"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          ...rowActionButtonStyle,
+                          backgroundColor: 'rgb(53, 86, 236)',
+                          color: '#ffffff',
+                          fontSize: '16px',
+                          padding: '8px 18px',
+                          textDecoration: 'none'
+                        }}
+                        className="hover:opacity-95 transition-all inline-flex"
+                      >
+                        Consulter
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Item 2: Sticker mainteneur 30cm */}
+                  <div className="space-y-2">
+                    <div className="text-[17px] font-bold text-black leading-snug">
+                      Sticker mainteneur 30cm.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Usage : Étiquette informations du mainteneur, défibrillateur & visites pour boîtier.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Commentaire : Personnalisation et achat via Defibeo. Volume minimum de 300 unités.
+                    </div>
+                    <div className="pt-1">
+                      <a
+                        href="mailto:support@defibeo.com"
+                        style={{
+                          ...rowActionButtonStyle,
+                          backgroundColor: 'rgb(53, 86, 236)',
+                          color: '#ffffff',
+                          fontSize: '16px',
+                          padding: '8px 18px',
+                          textDecoration: 'none'
+                        }}
+                        className="hover:opacity-95 transition-all inline-flex"
+                      >
+                        Contact
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Item 3: Plaquette intervention format A4 rigide */}
+                  <div className="space-y-2">
+                    <div className="text-[17px] font-bold text-black leading-snug">
+                      Plaquette intervention format A4 rigide.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Usage : À positionner sous le pare-brise dans le véhicule technicien.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Commentaire : Personnalisation et achat via Defibeo. Volume minimum de 2 unités.
+                    </div>
+                    <div className="pt-1">
+                      <a
+                        href="mailto:support@defibeo.com"
+                        style={{
+                          ...rowActionButtonStyle,
+                          backgroundColor: 'rgb(53, 86, 236)',
+                          color: '#ffffff',
+                          fontSize: '16px',
+                          padding: '8px 18px',
+                          textDecoration: 'none'
+                        }}
+                        className="hover:opacity-95 transition-all inline-flex"
+                      >
+                        Contact
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Item 4: Registre de contrôle et de maintenance au format A5 */}
+                  <div className="space-y-2">
+                    <div className="text-[17px] font-bold text-black leading-snug">
+                      Registre de contrôle et de maintenance au format A5.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Usage : À placer dans le boîtier du défibrillateur.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Commentaire : Personnalisation et achat via Defibeo. Volume minimum de 100 unités.
+                    </div>
+                    <div className="pt-1">
+                      <a
+                        href="mailto:support@defibeo.com"
+                        style={{
+                          ...rowActionButtonStyle,
+                          backgroundColor: 'rgb(53, 86, 236)',
+                          color: '#ffffff',
+                          fontSize: '16px',
+                          padding: '8px 18px',
+                          textDecoration: 'none'
+                        }}
+                        className="hover:opacity-95 transition-all inline-flex"
+                      >
+                        Contact
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Item 5: Smartphone Motorola G77 5G */}
+                  <div className="space-y-2">
+                    <div className="text-[17px] font-bold text-black leading-snug">
+                      Smartphone Motorola G77 5G.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Usage : Appareil destiné à l’accès webapp par le technicien.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Commentaire : Achat via site marchand.
+                    </div>
+                    <div className="pt-1">
+                      <a
+                        href="https://www.ldlc.com/fiche/PB00731043.html"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          ...rowActionButtonStyle,
+                          backgroundColor: 'rgb(53, 86, 236)',
+                          color: '#ffffff',
+                          fontSize: '16px',
+                          padding: '8px 18px',
+                          textDecoration: 'none'
+                        }}
+                        className="hover:opacity-95 transition-all inline-flex"
+                      >
+                        Consulter
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Item 6: Smartphone Motorola Edge 70 Fusion */}
+                  <div className="space-y-2">
+                    <div className="text-[17px] font-bold text-black leading-snug">
+                      Smartphone Motorola Edge 70 Fusion.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Usage : Appareil destiné à l’accès webapp par le technicien.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Commentaire : Achat via site marchand.
+                    </div>
+                    <div className="pt-1">
+                      <a
+                        href="https://www.ldlc.com/fiche/PB00731023.html"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          ...rowActionButtonStyle,
+                          backgroundColor: 'rgb(53, 86, 236)',
+                          color: '#ffffff',
+                          fontSize: '16px',
+                          padding: '8px 18px',
+                          textDecoration: 'none'
+                        }}
+                        className="hover:opacity-95 transition-all inline-flex"
+                      >
+                        Consulter
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Item 7: Smartphone Apple iPhone 16 */}
+                  <div className="space-y-2">
+                    <div className="text-[17px] font-bold text-black leading-snug">
+                      Smartphone Apple iPhone 16.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Usage : Appareil destiné à l’accès webapp par le technicien.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Commentaire : Achat via site marchand.
+                    </div>
+                    <div className="pt-1">
+                      <a
+                        href="https://www.ldlc.com/fiche/PB00668658.html"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          ...rowActionButtonStyle,
+                          backgroundColor: 'rgb(53, 86, 236)',
+                          color: '#ffffff',
+                          fontSize: '16px',
+                          padding: '8px 18px',
+                          textDecoration: 'none'
+                        }}
+                        className="hover:opacity-95 transition-all inline-flex"
+                      >
+                        Consulter
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Item 8: Tablette Apple iPad Cellular */}
+                  <div className="space-y-2">
+                    <div className="text-[17px] font-bold text-black leading-snug">
+                      Tablette Apple iPad Cellular.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Usage : Appareil destiné à l’accès webapp par le technicien.
+                    </div>
+                    <div className="text-[16px] text-black leading-normal">
+                      Commentaire : Achat via site marchand.
+                    </div>
+                    <div className="pt-1">
+                      <a
+                        href="https://www.ldlc.com/fiche/PB00671421.html"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          ...rowActionButtonStyle,
+                          backgroundColor: 'rgb(53, 86, 236)',
+                          color: '#ffffff',
+                          fontSize: '16px',
+                          padding: '8px 18px',
+                          textDecoration: 'none'
+                        }}
+                        className="hover:opacity-95 transition-all inline-flex"
+                      >
+                        Consulter
+                      </a>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Floating Close Button */}
-                <div className="sticky bottom-4 z-20 flex justify-center pt-6 w-full">
+                <div className="sticky bottom-4 z-20 flex justify-center pt-8 w-full">
                   <button
                     type="button"
                     onClick={() => setIsShopDrawerOpen(false)}

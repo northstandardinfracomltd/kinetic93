@@ -579,7 +579,6 @@ export default function ClientPortal({
             <div style="max-width: 50%; width: 100%; display: flex; flex-direction: column; gap: 3px;">
               <!-- CARTE CLIENT BENEFICIAIRE COMPACTE -->
               <div style="width: 100%; border: 1px solid #e2e8f0; padding: 5px 8px; border-radius: 5px; background-color: #fafafa; font-size: 8px !important; text-align: left;">
-                <div style="font-weight: bold; color: #475569; font-size: 7.5px !important; text-transform: uppercase;">Client bénéficiaire</div>
                 <div style="font-size: 10.5px !important; font-weight: bold !important; color: #0f172a; line-height: 1.15 !important; margin-bottom: 2px;">${authenticatedClient.denomination || 'Non renseigné'}</div>
                 <div style="display: flex; flex-direction: column; gap: 1.5px; font-size: 8px !important; color: #334155;">
                   ${authenticatedClient.siret ? `<div>SIRET : <strong>${authenticatedClient.siret}</strong></div>` : ''}
