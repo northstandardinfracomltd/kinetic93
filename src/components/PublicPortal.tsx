@@ -57,6 +57,8 @@ import {
   LogisticsNotification,
   EmargementRecord,
   StagiaireRecord,
+  APP_THEMES,
+  AppThemeOption,
 } from "../types";
 import EmargementsTab from "./EmargementsTab";
 import { REGIONS_FRANCAISES } from "../utils";
@@ -432,6 +434,113 @@ export default function PublicPortal({
       return null;
     },
   );
+
+  // Theme support for technician session
+  const [themeRefreshTrigger, setThemeRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleThemeChange = () => {
+      setThemeRefreshTrigger((prev) => prev + 1);
+    };
+    window.addEventListener("defib-theme-changed", handleThemeChange);
+    return () => window.removeEventListener("defib-theme-changed", handleThemeChange);
+  }, []);
+
+  const currentTechTheme = useMemo<AppThemeOption>(() => {
+    const userEmail = (authenticatedUser?.email || "").trim().toLowerCase();
+    const userName = (authenticatedUser?.name || "").trim().toLowerCase();
+    const tenantKey = localStorage.getItem("defib_tenant_id") || "demo";
+
+    // 1. Check member profile in members list if userEmail or userName matches
+    if (userEmail || userName) {
+      const foundMember = members.find(
+        (m) =>
+          (userEmail && m.email?.trim().toLowerCase() === userEmail) ||
+          (userName && m.name?.trim().toLowerCase() === userName)
+      );
+      if (foundMember?.themePreference) {
+        const found = APP_THEMES.find((t) => t.id === foundMember.themePreference);
+        if (found) return found;
+      }
+    }
+
+    // 2. Check authenticatedUser direct field
+    if (authenticatedUser?.themePreference) {
+      const found = APP_THEMES.find((t) => t.id === authenticatedUser.themePreference);
+      if (found) return found;
+    }
+
+    // 3. User-specific localStorage
+    if (userEmail) {
+      const userSaved =
+        localStorage.getItem(`defib_user_theme_${userEmail}`) ||
+        localStorage.getItem(`defib_${tenantKey}_user_${userEmail}_theme`);
+      if (userSaved) {
+        const found = APP_THEMES.find((t) => t.id === userSaved);
+        if (found) return found;
+      }
+    }
+
+    // 4. Global localStorage
+    const savedTheme =
+      localStorage.getItem(`defib_${tenantKey}_theme`) ||
+      localStorage.getItem("defib_current_user_theme");
+    if (savedTheme) {
+      const found = APP_THEMES.find(
+        (t) => t.id === savedTheme || t.color.toLowerCase() === savedTheme.toLowerCase()
+      );
+      if (found) return found;
+    }
+
+    // 5. Default
+    return APP_THEMES[0];
+  }, [authenticatedUser, members, themeRefreshTrigger]);
+
+  const handleThemeSelect = (themeId: string) => {
+    const selected = APP_THEMES.find((t) => t.id === themeId);
+    if (!selected) return;
+
+    const userEmail = (authenticatedUser?.email || "").trim().toLowerCase();
+    const userName = (authenticatedUser?.name || "").trim().toLowerCase();
+    const tenantKey = localStorage.getItem("defib_tenant_id") || "demo";
+
+    // 1. Save in localStorage
+    localStorage.setItem(`defib_${tenantKey}_theme`, selected.id);
+    localStorage.setItem("defib_current_user_theme", selected.id);
+    if (userEmail) {
+      localStorage.setItem(`defib_${tenantKey}_user_${userEmail}_theme`, selected.id);
+      localStorage.setItem(`defib_user_theme_${userEmail}`, selected.id);
+    }
+
+    // 2. Update authenticatedUser state and localStorage active session
+    if (authenticatedUser) {
+      const updatedUser = { ...authenticatedUser, themePreference: selected.id };
+      setAuthenticatedUser(updatedUser);
+      localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
+    }
+
+    // 3. Update member in members list & trigger onUpdateMembers
+    if (members && onUpdateMembers) {
+      const updatedMembers = members.map((m) => {
+        if (
+          (userEmail && m.email?.trim().toLowerCase() === userEmail) ||
+          (userName && m.name?.trim().toLowerCase() === userName)
+        ) {
+          return { ...m, themePreference: selected.id };
+        }
+        return m;
+      });
+      onUpdateMembers(updatedMembers);
+    }
+
+    // 4. Dispatch event and force re-render
+    window.dispatchEvent(
+      new CustomEvent("defib-theme-changed", {
+        detail: { themeId: selected.id, color: selected.color },
+      })
+    );
+    setThemeRefreshTrigger((prev) => prev + 1);
+  };
 
   // Webapp preloader animation state
   const [showPreloader, setShowPreloader] = useState<boolean>(true);
@@ -4738,7 +4847,7 @@ export default function PublicPortal({
       <div 
         className="fixed inset-0 z-[99999] flex flex-col items-center justify-center text-center font-sans p-6 select-none" 
         style={{ 
-          background: 'radial-gradient(#7e2e86, #36093a)',
+          background: currentTechTheme.color,
           color: '#ffffff'
         }}
         id="resolution-warning-overlay-webapp"
@@ -4764,7 +4873,7 @@ export default function PublicPortal({
             isSlidingUp ? "pointer-events-none" : "pointer-events-auto"
           }`}
           style={{
-            background: "linear-gradient(93deg, rgb(12 40 166), rgb(0 14 80))",
+            background: currentTechTheme.color,
             borderRadius: "0px 0px 13px 13px",
             transform: isSlidingUp ? "translateY(-100%)" : "translateY(0%)",
             boxShadow: isSlidingUp ? "0 10px 25px -5px rgba(0, 0, 0, 0.3)" : "none",
@@ -6832,8 +6941,8 @@ export default function PublicPortal({
               </div>
             )}
 
-            {/* Top Bar Navigation and Tab Selector Wrapper with Linear Gradient */}
-            <div style={{ background: "linear-gradient(93deg, rgb(12 40 166), rgb(0 14 80))", padding: "6px 0px", borderRadius: "0px 0px 13px 13px" }}>
+            {/* Top Bar Navigation and Tab Selector Wrapper with Theme Color */}
+            <div style={{ background: currentTechTheme.color, padding: "6px 0px", borderRadius: "0px 0px 13px 13px" }}>
               {/* TAB SELECTOR: Horizontal capsule switch toggle layout with dynamic fades */}
               <nav
                 className="py-0 px-0 relative shrink-0"
@@ -11952,6 +12061,51 @@ export default function PublicPortal({
                     >
                       <span>Enregistrer</span>
                     </button>
+
+                    {/* Section: Choix du thème pour la session technicien */}
+                    <div className="pt-5 space-y-3 text-left" id="webapp-section-software-theme">
+                      <h3 className="text-lg font-bold text-slate-800">
+                        {t("Apparence du logiciel pour votre session")}
+                      </h3>
+                      <p style={{ fontSize: "15px", color: "black", lineHeight: "1.5" }} className="font-sans font-normal">
+                        {t("Thème du logiciel (conforme accessibilité ISO/IEC 40500).")}
+                      </p>
+
+                      <div className="flex flex-col gap-2.5 pt-1">
+                        {APP_THEMES.map((theme) => {
+                          const isSelected = currentTechTheme.id === theme.id;
+                          return (
+                            <div
+                              key={theme.id}
+                              onClick={() => handleThemeSelect(theme.id)}
+                              className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 cursor-pointer select-none bg-white"
+                              id={`webapp-theme-card-${theme.id}`}
+                            >
+                              <span 
+                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                style={{
+                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                  width: '20px',
+                                  height: '20px',
+                                  minWidth: '20px',
+                                  minHeight: '20px',
+                                  backgroundColor: '#ffffff'
+                                }}
+                              >
+                                {isSelected && (
+                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                                )}
+                              </span>
+                              <span
+                                className="text-[15px] font-medium text-slate-900 cursor-pointer select-none font-sans"
+                              >
+                                {t(theme.name)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
 
                     {/* Google Calendar integration section */}
                     <div className="pt-5 space-y-4">

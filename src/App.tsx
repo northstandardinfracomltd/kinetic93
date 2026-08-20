@@ -5901,7 +5901,7 @@ export default function App() {
       <div 
         className="fixed inset-0 z-[99999] flex flex-col items-center justify-center text-center font-sans p-6" 
         style={{ 
-          background: 'radial-gradient(#7e2e86, #36093a)',
+          background: currentSidebarTheme.color,
           color: '#ffffff'
         }}
         id="resolution-warning-overlay"
@@ -5921,7 +5921,7 @@ export default function App() {
         <div 
           className="fixed inset-0 z-[99999] flex flex-col items-center justify-center text-center font-sans gap-4" 
           style={{ 
-            background: 'radial-gradient(#7e2e86, #36093a)',
+            background: currentSidebarTheme.color,
             fontSize: '18px',
             color: '#ffffff'
           }}

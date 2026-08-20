@@ -2571,28 +2571,29 @@ export default function SettingsModal({
                     <div
                       key={theme.id}
                       onClick={() => handleThemeSelect(theme.id)}
-                      className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none bg-white ${
-                        isSelected
-                          ? 'border-pink-500 bg-pink-50/20 ring-1 ring-pink-500'
-                          : 'border-slate-200 hover:border-slate-300'
-                      }`}
+                      className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 cursor-pointer select-none bg-white"
                       id={`theme-card-${theme.id}`}
                     >
-                      <input
-                        type="radio"
-                        id={`radio-theme-${theme.id}`}
-                        name="software-session-theme"
-                        checked={isSelected}
-                        onChange={() => handleThemeSelect(theme.id)}
-                        className="w-4 h-4 text-pink-600 border-slate-300 focus:ring-pink-500 cursor-pointer shrink-0"
-                        style={{ accentColor: '#db2777' }}
-                      />
-                      <label
-                        htmlFor={`radio-theme-${theme.id}`}
+                      <span 
+                        className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                        style={{
+                          border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                          width: '20px',
+                          height: '20px',
+                          minWidth: '20px',
+                          minHeight: '20px',
+                          backgroundColor: '#ffffff'
+                        }}
+                      >
+                        {isSelected && (
+                          <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                        )}
+                      </span>
+                      <span
                         className="text-[14px] font-medium text-slate-900 cursor-pointer select-none font-sans"
                       >
                         {t(theme.name)}
-                      </label>
+                      </span>
                     </div>
                   );
                 })}

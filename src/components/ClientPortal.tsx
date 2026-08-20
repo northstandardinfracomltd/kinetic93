@@ -455,11 +455,11 @@ export default function ClientPortal({
           
           @page {
             size: A4 portrait;
-            margin: 8mm 8mm 12mm 8mm;
+            margin: 4mm 4mm 6mm 4mm;
             @bottom-right {
               content: "Page " counter(page) " / " counter(pages);
               font-family: "Civilprom", sans-serif;
-              font-size: 8px;
+              font-size: 7.5px;
               color: #64748b;
             }
           }
@@ -474,17 +474,17 @@ export default function ClientPortal({
             color: #000000 !important;
             letter-spacing: normal !important;
             text-transform: none !important;
-            font-size: 9.5px !important;
-            line-height: 1.32 !important;
+            font-size: 7.5px !important;
+            line-height: 1.25 !important;
           }
 
           .header-left-col, .header-left-col div, .header-left-col span, .header-left-col a {
-            font-size: 10.5px !important;
-            line-height: 1.3 !important;
+            font-size: 9.5px !important;
+            line-height: 1.25 !important;
           }
 
           .header-company-title {
-            font-size: 12px !important;
+            font-size: 11px !important;
             font-weight: bold !important;
           }
           
@@ -494,22 +494,22 @@ export default function ClientPortal({
             font-weight: 100 !important;
           }
 
-          /* 2 COLUMNS COMPACT BODY */
+          /* 2 COLUMNS COMPACT BODY (-2px font-size) */
           .contract-body-text {
             column-count: 2;
-            column-gap: 18px;
+            column-gap: 14px;
             text-align: justify;
             white-space: pre-wrap;
-            font-size: 9px !important;
-            line-height: 1.32 !important;
+            font-size: 7px !important;
+            line-height: 1.25 !important;
             color: #111827 !important;
             padding: 0 !important;
             border: none !important;
             background: transparent !important;
             background-color: transparent !important;
             border-radius: 0 !important;
-            margin-top: 8px;
-            margin-bottom: 8px;
+            margin-top: 4px;
+            margin-bottom: 4px;
           }
           
           .avoid-break {
@@ -521,7 +521,7 @@ export default function ClientPortal({
             body {
               background: white !important;
               padding: 0 !important;
-              margin: 4mm 6mm !important;
+              margin: 2mm 3mm !important;
             }
             .print-wrapper {
               border: none !important;
@@ -529,32 +529,21 @@ export default function ClientPortal({
               max-width: 100% !important;
               width: 100% !important;
               padding: 0 !important;
-              gap: 8px !important;
+              gap: 4px !important;
             }
-            .pagination-footer {
-              position: fixed;
-              bottom: 3mm;
-              right: 6mm;
-              font-size: 8px !important;
-              color: #64748b !important;
-              display: block !important;
-            }
-            .page-dyn-counter::after {
-              content: "Page " counter(page) " / " counter(pages);
+            .screen-pagination {
+              display: none !important;
             }
           }
 
           @media screen {
-            .pagination-footer {
-              font-size: 8.5px !important;
+            .screen-pagination {
+              font-size: 8px !important;
               color: #64748b !important;
               text-align: right;
-              margin-top: 10px;
-              padding-top: 4px;
+              margin-top: 6px;
+              padding-top: 3px;
               border-top: 1px solid #f1f5f9;
-            }
-            .page-dyn-counter::after {
-              content: "Page 1 / 1";
             }
           }
         </style>
@@ -564,35 +553,35 @@ export default function ClientPortal({
           };
         </script>
       </head>
-      <body class="bg-white text-black p-4 md:p-6">
-        <div class="print-wrapper max-w-4xl mx-auto" style="background-color: #ffffff; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
+      <body class="bg-white text-black p-2 md:p-3">
+        <div class="print-wrapper max-w-4xl mx-auto" style="background-color: #ffffff; display: flex; flex-direction: column; gap: 4px; box-sizing: border-box;">
           
           <!-- HAUT DE PAGE / HEADER COMPACT -->
-          <div class="flex justify-between items-start pb-2" style="border-bottom: 1px solid #e2e8f0; gap: 16px;">
-            <!-- GAUCHE: LOGO REDUIT DE MOITIE + INFOS ENTREPRISE (10-12px) -->
-            <div class="header-left-col" style="max-width: 48%;">
-              ${compLogo ? `<img src="${compLogo}" style="max-width: 140px; max-height: 44px; object-fit: contain; margin-bottom: 4px; display: block;" referrerPolicy="no-referrer" />` : ''}
-              <span class="header-company-title" style="display: block; margin-bottom: 2px;">${compName}</span>
-              <div>${compEmail}</div>
-              <div>${compPhone}</div>
-              <div style="margin-top: 1px;"><a href="https://${compWebsite}" target="_blank" class="blue-link">${compWebsite}</a></div>
-            </div>
-
-            <!-- DROITE: CONTRAT & CLIENT BENEFICIAIRE -->
-            <div style="max-width: 50%; width: 100%; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
-              <div style="text-align: right;">
-                <div style="font-weight: bold; font-size: 11px !important; letter-spacing: 0.5px;">CONTRAT DE MAINTENANCE</div>
-                <div style="color: #64748b; font-size: 8.5px !important;">Généré le ${new Date().toLocaleDateString('fr-FR')}</div>
-                <div style="color: #475569; font-size: 8.5px !important; margin-top: 2px;">
+          <div class="flex justify-between items-start pb-1.5" style="border-bottom: 1px solid #e2e8f0; gap: 12px;">
+            <!-- GAUCHE: TITRE DU CONTRAT + INFOS DATE/EXPIRATION + INFOS PRESTATAIRE -->
+            <div class="header-left-col" style="max-width: 48%; display: flex; flex-direction: column; gap: 2px;">
+              ${compLogo ? `<img src="${compLogo}" style="max-width: 130px; max-height: 38px; object-fit: contain; margin-bottom: 2px; display: block;" referrerPolicy="no-referrer" />` : ''}
+              <div>
+                <div style="font-weight: bold; font-size: 11px !important; letter-spacing: 0.5px; text-transform: uppercase;">CONTRAT DE MAINTENANCE</div>
+                <div style="color: #64748b; font-size: 8px !important;">Généré le ${new Date().toLocaleDateString('fr-FR')}</div>
+                <div style="color: #334155; font-size: 8.5px !important; margin-top: 1px;">
                   Début : <strong>${formatDateToFR(authenticatedClient.debutContrat) || authenticatedClient.debutContrat || '-'}</strong> — Expiration : <strong>${formatDateToFR(authenticatedClient.finContrat) || authenticatedClient.finContrat || '-'}</strong>
                 </div>
               </div>
+              <div style="margin-top: 3px; padding-top: 3px; border-top: 1px dashed #e2e8f0; font-size: 8px !important; color: #475569;">
+                <span class="header-company-title" style="display: block; margin-bottom: 1px; font-size: 9.5px !important;">${compName}</span>
+                <div>${compEmail} ${compPhone ? '— ' + compPhone : ''}</div>
+                ${compWebsite ? `<div><a href="https://${compWebsite}" target="_blank" class="blue-link">${compWebsite}</a></div>` : ''}
+              </div>
+            </div>
 
+            <!-- DROITE: CLIENT BENEFICIAIRE + SIGNATURE DU CLIENT DIRECTEMENT DEDANS -->
+            <div style="max-width: 50%; width: 100%; display: flex; flex-direction: column; gap: 3px;">
               <!-- CARTE CLIENT BENEFICIAIRE COMPACTE -->
-              <div style="width: 100%; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 6px; background-color: #fafafa; font-size: 9px !important; text-align: left;">
-                <div style="font-weight: bold; color: #475569; font-size: 8px !important; text-transform: uppercase;">Client bénéficiaire</div>
-                <div style="font-size: 11.5px !important; font-weight: bold !important; color: #0f172a; line-height: 1.2 !important; margin-bottom: 2px;">${authenticatedClient.denomination || 'Non renseigné'}</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1px 6px; font-size: 8.5px !important; color: #334155;">
+              <div style="width: 100%; border: 1px solid #e2e8f0; padding: 5px 8px; border-radius: 5px; background-color: #fafafa; font-size: 8px !important; text-align: left;">
+                <div style="font-weight: bold; color: #475569; font-size: 7.5px !important; text-transform: uppercase;">Client bénéficiaire</div>
+                <div style="font-size: 10.5px !important; font-weight: bold !important; color: #0f172a; line-height: 1.15 !important; margin-bottom: 2px;">${authenticatedClient.denomination || 'Non renseigné'}</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1px 4px; font-size: 8px !important; color: #334155;">
                   ${authenticatedClient.siret ? `<div>SIRET : <strong>${authenticatedClient.siret}</strong></div>` : ''}
                   ${authenticatedClient.numeroMarche ? `<div>Marché : <strong>${authenticatedClient.numeroMarche}</strong></div>` : ''}
                   ${authenticatedClient.payeurId ? `<div>Payeur ID : <strong>${authenticatedClient.payeurId}</strong></div>` : ''}
@@ -601,36 +590,23 @@ export default function ClientPortal({
                   ${authenticatedClient.phone ? `<div>Tél : <strong>${authenticatedClient.phone}</strong></div>` : ''}
                   ${authenticatedClient.email ? `<div style="grid-column: span 2;">Email : <strong>${authenticatedClient.email}</strong></div>` : ''}
                 </div>
-              </div>
-            </div>
-          </div>
 
-          <!-- CORPS DU CONTRAT EN GRID 2 COLONNES (COMPACT SANS PADDING/BORDER/BG/RADIUS) -->
-          <div class="contract-body-text">
-            ${portalRedactionContrat || "Aucun détail contractuel n'est rédigé."}
-          </div>
-
-          <!-- SIGNATURES COMPACTES -->
-          <div class="avoid-break" style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; background-color: #ffffff; margin-top: 6px;">
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <div style="font-weight: bold; margin-bottom: 2px; color: #475569; font-size: 8.5px !important; text-transform: uppercase;">Le prestataire :</div>
-                <div style="font-size: 10.5px !important; font-weight: bold !important;">${compName}</div>
-                <div style="font-size: 8px !important; color: #64748b; margin-top: 2px;">Signé électroniquement par défaut de service contractuel.</div>
-              </div>
-              <div style="border-left: 1px solid #e2e8f0; padding-left: 12px;">
-                <div style="font-weight: bold; margin-bottom: 2px; color: #475569; font-size: 8.5px !important; text-transform: uppercase;">Le Client :</div>
-                <div style="font-size: 9.5px !important;"><span style="color: #64748b;">Signataire :</span> <strong>${portalSigneParContrat || '-'}</strong></div>
-                <div style="font-size: 8px !important; color: #64748b;">Date signature : ${formattedDate}</div>
-                
-                <div style="margin-top: 4px; text-align: center;">
+                <!-- SIGNATURE CLIENT / STATUT DANS LE BLOC CLIENT DU HEADER -->
+                <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0;">
                   ${portalSignatureClientContratImage ? `
-                    <div style="display: inline-block; padding: 3px; border-radius: 4px; background-color: #fff;">
-                      <img src="${portalSignatureClientContratImage}" style="max-height: 48px; max-width: 160px; object-fit: contain;" alt="Signature Client" />
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                      <div>
+                        <div style="font-size: 7.5px !important; color: #475569; text-transform: uppercase; font-weight: bold;">Signature client :</div>
+                        <div style="font-size: 8px !important; color: #0f172a;">Signé par : <strong>${portalSigneParContrat || authenticatedClient.denomination || '-'}</strong></div>
+                        <div style="font-size: 7.5px !important; color: #64748b;">Le : ${formattedDate}</div>
+                      </div>
+                      <div style="display: inline-block; padding: 2px; border: 1px solid #e2e8f0; border-radius: 4px; background-color: #fff;">
+                        <img src="${portalSignatureClientContratImage}" style="max-height: 38px; max-width: 120px; object-fit: contain;" alt="Signature Client" />
+                      </div>
                     </div>
                   ` : `
-                    <div style="border: 1px dashed #cbd5e1; padding: 8px; color: #94a3b8; font-style: italic; font-size: 8.5px !important; border-radius: 4px;">
-                      Contrat en attente de signature client
+                    <div style="color: #64748b; font-size: 8px !important; font-weight: normal;">
+                      Contrat non signé.
                     </div>
                   `}
                 </div>
@@ -638,9 +614,9 @@ export default function ClientPortal({
             </div>
           </div>
 
-          <!-- PAGINATION EN BAS A DROITE -->
-          <div class="pagination-footer">
-            <span class="page-dyn-counter"></span>
+          <!-- CORPS DU CONTRAT EN GRID 2 COLONNES (COMPACT SANS PADDING/BORDER/BG/RADIUS) -->
+          <div class="contract-body-text">
+            ${portalRedactionContrat || "Aucun détail contractuel n'est rédigé."}
           </div>
 
         </div>
