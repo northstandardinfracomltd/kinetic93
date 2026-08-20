@@ -21,12 +21,6 @@ import {
 } from './utils';
 import { Member, Client, Defibrillateur } from './types';
 
-const isProductionDomain = typeof window !== 'undefined' && 
-  window.location.hostname && 
-  !window.location.hostname.includes('run.app') && 
-  !window.location.hostname.includes('localhost') && 
-  !window.location.hostname.includes('127.0.0.1');
-
 const PROD_FIREBASE_CONFIG = {
   apiKey: "AIzaSyBsfSHoSrPXwnwLcWtIGLPUwUd7ZYWVCvA",
   authDomain: "defibeo.firebaseapp.com",
@@ -38,13 +32,13 @@ const PROD_FIREBASE_CONFIG = {
 };
 
 const firebaseConfigOverride = {
-  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || (isProductionDomain ? PROD_FIREBASE_CONFIG.apiKey : firebaseConfig.apiKey),
-  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || (isProductionDomain ? PROD_FIREBASE_CONFIG.authDomain : firebaseConfig.authDomain),
-  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || (isProductionDomain ? PROD_FIREBASE_CONFIG.projectId : firebaseConfig.projectId),
-  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || (isProductionDomain ? PROD_FIREBASE_CONFIG.storageBucket : firebaseConfig.storageBucket),
-  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || (isProductionDomain ? PROD_FIREBASE_CONFIG.messagingSenderId : firebaseConfig.messagingSenderId),
-  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || (isProductionDomain ? PROD_FIREBASE_CONFIG.appId : firebaseConfig.appId),
-  measurementId: (import.meta as any).env.VITE_FIREBASE_MEASUREMENT_ID || (isProductionDomain ? PROD_FIREBASE_CONFIG.measurementId : firebaseConfig.measurementId)
+  apiKey: (import.meta as any).env?.VITE_FIREBASE_API_KEY || PROD_FIREBASE_CONFIG.apiKey,
+  authDomain: (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN || PROD_FIREBASE_CONFIG.authDomain,
+  projectId: (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID || PROD_FIREBASE_CONFIG.projectId,
+  storageBucket: (import.meta as any).env?.VITE_FIREBASE_STORAGE_BUCKET || PROD_FIREBASE_CONFIG.storageBucket,
+  messagingSenderId: (import.meta as any).env?.VITE_FIREBASE_MESSAGING_SENDER_ID || PROD_FIREBASE_CONFIG.messagingSenderId,
+  appId: (import.meta as any).env?.VITE_FIREBASE_APP_ID || PROD_FIREBASE_CONFIG.appId,
+  measurementId: (import.meta as any).env?.VITE_FIREBASE_MEASUREMENT_ID || PROD_FIREBASE_CONFIG.measurementId
 };
 
 const app = initializeApp(firebaseConfigOverride);
@@ -220,18 +214,22 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
   const primaryKey = getCollectionKey(collectionName, activeTenantId);
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
 
-  // If completely offline in browser, immediately check cached versions
+  // If completely offline in browser, immediately check cached versions (prefer non-empty)
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     for (const ck of candidateKeys) {
       const cachedVal = getFromLocalCache<T>(ck);
-      if (cachedVal !== null) {
+      if (cachedVal !== null && (!Array.isArray(cachedVal) || cachedVal.length > 0)) {
         return cachedVal;
       }
+    }
+    for (const ck of candidateKeys) {
+      const cachedVal = getFromLocalCache<T>(ck);
+      if (cachedVal !== null) return cachedVal;
     }
     return null;
   }
 
-  // 1. Primary Strategy: Try direct Firestore query with graceful timeout & chunk reconstruction across candidate keys
+  // 1. Primary Strategy: Try direct Firestore query with chunk reconstruction across candidate keys
   for (const key of candidateKeys) {
     try {
       const docRef = doc(db, 'appData', key);
@@ -242,12 +240,32 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
         getDoc(docRef),
         timeoutPromise
       ]);
+
       if (serverSnap && serverSnap.exists()) {
         const payload = serverSnap.data();
-        if (payload._chunked && typeof payload.chunksCount === 'number') {
-          const chunksCount = payload.chunksCount;
+        
+        // Check if explicitly chunked OR if chunk_0 exists
+        let isChunked = payload._chunked && typeof payload.chunksCount === 'number';
+        let chunksCount = payload.chunksCount || 0;
+
+        if (!isChunked) {
+          // Verify if chunk_0 exists anyway as auto-recovery
+          try {
+            const c0Ref = doc(db, 'appData', `${key}_chunk_0`);
+            const c0Snap = await Promise.race([
+              getDoc(c0Ref),
+              new Promise<any>((resolve) => setTimeout(() => resolve(null), 3000))
+            ]);
+            if (c0Snap && c0Snap.exists()) {
+              isChunked = true;
+              chunksCount = 30; // Scan up to 30 chunks
+            }
+          } catch (_) {}
+        }
+
+        if (isChunked) {
           const chunkPromises = [];
-          for (let i = 0; i < chunksCount; i++) {
+          for (let i = 0; i < (chunksCount || 30); i++) {
             const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
             chunkPromises.push(
               Promise.race([
@@ -276,10 +294,14 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
           }
         } else if (payload.value !== undefined) {
           const val = payload.value as T;
-          for (const ck of candidateKeys) {
-            saveToLocalCache(ck, val);
+          // If array with elements or object, return it!
+          if (!Array.isArray(val) || val.length > 0) {
+            for (const ck of candidateKeys) {
+              saveToLocalCache(ck, val);
+            }
+            return val;
           }
-          return val;
+          // If empty array, continue to other candidate keys in case data is in another alias
         }
       }
     } catch (error) {
@@ -288,7 +310,6 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
   }
 
   // 2. Secondary Strategy: High-availability backend server relay (/api/sync-collection)
-  // This completely bypasses IndexedDB / WebKit Firestore WebChannel connection constraints on Safari/iPad
   if (typeof fetch !== 'undefined') {
     try {
       const resp = await fetch(`/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(activeTenantId)}`, {
@@ -310,7 +331,13 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
     }
   }
 
-  // 3. Tertiary Strategy: Local storage cache across candidate keys
+  // 3. Tertiary Strategy: Local storage cache across candidate keys (prefer non-empty)
+  for (const ck of candidateKeys) {
+    const localVal = getFromLocalCache<T>(ck);
+    if (localVal !== null && (!Array.isArray(localVal) || localVal.length > 0)) {
+      return localVal;
+    }
+  }
   for (const ck of candidateKeys) {
     const localVal = getFromLocalCache<T>(ck);
     if (localVal !== null) {
@@ -367,7 +394,19 @@ export function sanitizeUndefined(obj: any): any {
 export async function saveCollectionToFirestore<T>(collectionName: string, value: T, tenantIdOverride?: string): Promise<void> {
   const activeTenantId = tenantIdOverride || getTenantId();
   const key = getCollectionKey(collectionName, activeTenantId);
+  const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
   
+  // Guard against accidental empty array overwrite of an existing populated collection
+  if (Array.isArray(value) && value.length === 0) {
+    for (const ck of candidateKeys) {
+      const cached = getFromLocalCache<any[]>(ck);
+      if (Array.isArray(cached) && cached.length > 0) {
+        console.warn(`[Protection] Refusing to overwrite populated ${ck} (${cached.length} items) with empty array.`);
+        return;
+      }
+    }
+  }
+
   // Auto-inject envId and tenantId if items are objects inside an array
   let sanitizedValue = value;
   if (Array.isArray(value)) {
@@ -392,7 +431,6 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
   const finalCleanValue = sanitizeUndefined(sanitizedValue);
   
   // Save to cache immediately across candidate keys so UI reads it instantly
-  const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
   for (const ck of candidateKeys) {
     saveToLocalCache(ck, finalCleanValue);
   }
@@ -425,21 +463,27 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
 
       for (let i = 0; i < chunksCount; i++) {
         const chunkItems = items.slice(i * chunkSize, (i + 1) * chunkSize);
-        const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
-        await setDoc(chunkRef, { value: chunkItems });
+        for (const ck of candidateKeys) {
+          const chunkRef = doc(db, 'appData', `${ck}_chunk_${i}`);
+          await setDoc(chunkRef, { value: chunkItems });
+        }
       }
 
-      const mainDocRef = doc(db, 'appData', key);
-      await setDoc(mainDocRef, { 
-        _chunked: true, 
-        chunksCount, 
-        totalItems: items.length,
-        updatedAt: new Date().toISOString() 
-      });
-      console.log(`Successfully synced chunked collection ${key} (${chunksCount} chunks, ${items.length} items) to Firestore.`);
+      for (const ck of candidateKeys) {
+        const mainDocRef = doc(db, 'appData', ck);
+        await setDoc(mainDocRef, { 
+          _chunked: true, 
+          chunksCount, 
+          totalItems: items.length,
+          updatedAt: new Date().toISOString() 
+        });
+      }
+      console.log(`Successfully synced chunked collection ${key} (${chunksCount} chunks, ${items.length} items) to Firestore across candidate keys.`);
     } else {
-      const docRef = doc(db, 'appData', key);
-      await setDoc(docRef, { value: finalCleanValue, _chunked: false });
+      for (const ck of candidateKeys) {
+        const docRef = doc(db, 'appData', ck);
+        await setDoc(docRef, { value: finalCleanValue, _chunked: false });
+      }
       console.log(`Successfully synced ${key} to Firestore with hidden environment fields.`);
     }
   } catch (error) {

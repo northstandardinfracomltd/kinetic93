@@ -348,19 +348,8 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   // Auto-discover shortEnvId and tenantId mappings from registered_tenants if not fetching registered_tenants itself
   if (colName !== 'registered_tenants' && tenantId !== 'demo') {
     try {
-      const regTenants = serverMemoryStore.get('registered_tenants') || serverMemoryStore.get('demo_registered_tenants');
-      let tenantList = Array.isArray(regTenants) ? regTenants : [];
-      if (tenantList.length === 0) {
-        const docRef = doc(db, 'appData', 'registered_tenants');
-        const snap = await withTimeout(getDoc(docRef), 3000, null);
-        if (snap && snap.exists()) {
-          const data = snap.data();
-          if (Array.isArray(data.value)) {
-            tenantList = data.value;
-          }
-        }
-      }
-      if (tenantList.length > 0) {
+      const tenantList = await getRegisteredTenantsFromDb(false);
+      if (Array.isArray(tenantList) && tenantList.length > 0) {
         const cleanTid = tenantId.trim().toLowerCase();
         const numOnly = cleanTid.replace(/^d/i, '');
         const matched = tenantList.find(t => 
@@ -390,6 +379,7 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   // Deduplicate keys
   const collectionKeys = Array.from(new Set(rawKeys.filter(Boolean)));
 
+  // 1. Check memory store first for populated list
   for (const collectionKey of collectionKeys) {
     if (serverMemoryStore.has(collectionKey)) {
       const memItems = serverMemoryStore.get(collectionKey);
@@ -399,15 +389,31 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     }
   }
 
+  // 2. Query Firestore with chunk auto-discovery across candidate keys
   for (const collectionKey of collectionKeys) {
     try {
       const docRef = doc(db, 'appData', collectionKey);
       const snap = await withTimeout(getDoc(docRef), 10000, null);
       if (snap && snap.exists()) {
         const payload = snap.data();
-        if (payload._chunked && typeof payload.chunksCount === 'number') {
+        let isChunked = payload._chunked && typeof payload.chunksCount === 'number';
+        let chunksCount = payload.chunksCount || 0;
+
+        if (!isChunked) {
+          // Auto-discovery of chunk_0
+          try {
+            const c0Ref = doc(db, 'appData', `${collectionKey}_chunk_0`);
+            const c0Snap = await withTimeout(getDoc(c0Ref), 3000, null);
+            if (c0Snap && c0Snap.exists()) {
+              isChunked = true;
+              chunksCount = 30;
+            }
+          } catch (_) {}
+        }
+
+        if (isChunked) {
           const chunkPromises = [];
-          for (let i = 0; i < payload.chunksCount; i++) {
+          for (let i = 0; i < (chunksCount || 30); i++) {
             const chunkRef = doc(db, 'appData', `${collectionKey}_chunk_${i}`);
             chunkPromises.push(withTimeout(getDoc(chunkRef), 10000, null));
           }
@@ -421,12 +427,14 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
               }
             }
           }
-          for (const ck of collectionKeys) {
-            serverMemoryStore.set(ck, combined);
+          if (combined.length > 0) {
+            for (const ck of collectionKeys) {
+              serverMemoryStore.set(ck, combined);
+            }
+            persistServerStoreToDisk();
+            return combined;
           }
-          persistServerStoreToDisk();
-          return combined;
-        } else if (Array.isArray(payload.value)) {
+        } else if (Array.isArray(payload.value) && payload.value.length > 0) {
           for (const ck of collectionKeys) {
             serverMemoryStore.set(ck, payload.value);
           }
@@ -435,11 +443,19 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         }
       }
     } catch (err) {
-      // Graceful offline fallback
+      // Graceful fallback
     }
   }
 
-  // Fallback to in-memory store
+  // 3. Fallback to in-memory store (prefer non-empty)
+  for (const collectionKey of collectionKeys) {
+    if (serverMemoryStore.has(collectionKey)) {
+      const val = serverMemoryStore.get(collectionKey);
+      if (Array.isArray(val) && val.length > 0) {
+        return val;
+      }
+    }
+  }
   for (const collectionKey of collectionKeys) {
     if (serverMemoryStore.has(collectionKey)) {
       return serverMemoryStore.get(collectionKey) || [];
