@@ -3883,7 +3883,7 @@ export default function App() {
               }
               stateSetter(finalData);
               const strVal = JSON.stringify(finalData);
-              localStorage.setItem(`defib_${tenantId}_${localStorageKeySuffix}`, strVal);
+              safeSetLocalStorage(`defib_${tenantId}_${localStorageKeySuffix}`, strVal);
               loadedDataRef.current[localStorageKeySuffix] = strVal;
               loadedDataRef.current[collectionName] = strVal;
             }

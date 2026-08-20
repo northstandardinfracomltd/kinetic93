@@ -151,6 +151,47 @@ export function getCollectionKey(collectionName: string, tenantId: string = curr
   return `${tenantId}_${collectionName}`;
 }
 
+export function getCollectionKeyCandidates(collectionName: string, tenantId: string = currentTenantId): string[] {
+  if (tenantId === 'demo' || !tenantId) {
+    return [collectionName, 'demo'];
+  }
+  const rawClean = tenantId.trim();
+  const numOnly = rawClean.replace(/^D/i, '');
+  const candidates: string[] = [
+    `${rawClean}_${collectionName}`,
+    `D${numOnly}_${collectionName}`,
+    `${numOnly}_${collectionName}`
+  ];
+
+  try {
+    const cachedTenants = getFromLocalCache<Tenant[]>('registered_tenants');
+    if (Array.isArray(cachedTenants)) {
+      const matched = cachedTenants.find(t => 
+        (t.id && t.id.toLowerCase() === rawClean.toLowerCase()) ||
+        (t.shortEnvId && t.shortEnvId.toLowerCase() === rawClean.toLowerCase()) ||
+        (t.id && t.id.toLowerCase().replace(/^d/i, '') === numOnly.toLowerCase()) ||
+        (t.shortEnvId && t.shortEnvId.toLowerCase().replace(/^d/i, '') === numOnly.toLowerCase())
+      );
+      if (matched) {
+        if (matched.id) {
+          const mId = matched.id.trim();
+          const mNum = mId.replace(/^D/i, '');
+          candidates.push(`${mId}_${collectionName}`, `D${mNum}_${collectionName}`, `${mNum}_${collectionName}`);
+        }
+        if (matched.shortEnvId) {
+          const mShort = matched.shortEnvId.trim();
+          const mShortNum = mShort.replace(/^D/i, '');
+          candidates.push(`${mShort}_${collectionName}`, `D${mShortNum}_${collectionName}`, `${mShortNum}_${collectionName}`);
+        }
+      }
+    }
+  } catch (e) {
+    // Non-blocking
+  }
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
 export function saveToLocalCache(key: string, value: any): void {
   try {
     localStorage.setItem(`fs_cache_${key}`, JSON.stringify(value));
@@ -176,62 +217,74 @@ export function getFromLocalCache<T>(key: string): T | null {
  */
 export async function fetchCollectionFromFirestore<T>(collectionName: string, tenantId?: string): Promise<T | null> {
   const activeTenantId = tenantId || getTenantId();
-  const key = getCollectionKey(collectionName, activeTenantId);
+  const primaryKey = getCollectionKey(collectionName, activeTenantId);
+  const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
 
-  // If completely offline in browser, immediately return cached version
+  // If completely offline in browser, immediately check cached versions
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    return getFromLocalCache<T>(key);
-  }
-
-  // 1. Primary Strategy: Try direct Firestore query with graceful timeout & chunk reconstruction
-  try {
-    const docRef = doc(db, 'appData', key);
-    // Allow generous 12s on mobile connections
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Firestore fetch timeout')), 12000)
-    );
-    const serverSnap = await Promise.race([
-      getDoc(docRef),
-      timeoutPromise
-    ]);
-    if (serverSnap && serverSnap.exists()) {
-      const payload = serverSnap.data();
-      if (payload._chunked && typeof payload.chunksCount === 'number') {
-        const chunksCount = payload.chunksCount;
-        const chunkPromises = [];
-        for (let i = 0; i < chunksCount; i++) {
-          const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
-          chunkPromises.push(
-            Promise.race([
-              getDoc(chunkRef),
-              new Promise<any>((resolve) => setTimeout(() => resolve(null), 9000))
-            ])
-          );
-        }
-        const chunkSnaps = await Promise.all(chunkPromises);
-        let combined: any[] = [];
-        for (let idx = 0; idx < chunkSnaps.length; idx++) {
-          const snap = chunkSnaps[idx];
-          if (snap && snap.exists && snap.exists()) {
-            const data = snap.data();
-            if (Array.isArray(data.value)) {
-              combined.push(...data.value);
-            }
-          }
-        }
-        if (combined.length > 0) {
-          const val = combined as unknown as T;
-          saveToLocalCache(key, val);
-          return val;
-        }
-      } else if (payload.value !== undefined) {
-        const val = payload.value as T;
-        saveToLocalCache(key, val);
-        return val;
+    for (const ck of candidateKeys) {
+      const cachedVal = getFromLocalCache<T>(ck);
+      if (cachedVal !== null) {
+        return cachedVal;
       }
     }
-  } catch (error) {
-    console.log(`[Firestore Server-First] Direct Firestore fetch for ${collectionName} had issue, engaging multi-tier fallback:`, error);
+    return null;
+  }
+
+  // 1. Primary Strategy: Try direct Firestore query with graceful timeout & chunk reconstruction across candidate keys
+  for (const key of candidateKeys) {
+    try {
+      const docRef = doc(db, 'appData', key);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Firestore fetch timeout')), 10000)
+      );
+      const serverSnap = await Promise.race([
+        getDoc(docRef),
+        timeoutPromise
+      ]);
+      if (serverSnap && serverSnap.exists()) {
+        const payload = serverSnap.data();
+        if (payload._chunked && typeof payload.chunksCount === 'number') {
+          const chunksCount = payload.chunksCount;
+          const chunkPromises = [];
+          for (let i = 0; i < chunksCount; i++) {
+            const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
+            chunkPromises.push(
+              Promise.race([
+                getDoc(chunkRef),
+                new Promise<any>((resolve) => setTimeout(() => resolve(null), 10000))
+              ])
+            );
+          }
+          const chunkSnaps = await Promise.all(chunkPromises);
+          let combined: any[] = [];
+          for (let idx = 0; idx < chunkSnaps.length; idx++) {
+            const snap = chunkSnaps[idx];
+            if (snap && snap.exists && snap.exists()) {
+              const data = snap.data();
+              if (Array.isArray(data.value)) {
+                combined.push(...data.value);
+              }
+            }
+          }
+          if (combined.length > 0) {
+            const val = combined as unknown as T;
+            for (const ck of candidateKeys) {
+              saveToLocalCache(ck, val);
+            }
+            return val;
+          }
+        } else if (payload.value !== undefined) {
+          const val = payload.value as T;
+          for (const ck of candidateKeys) {
+            saveToLocalCache(ck, val);
+          }
+          return val;
+        }
+      }
+    } catch (error) {
+      console.log(`[Firestore Server-First] Direct Firestore fetch for ${key} had issue:`, error);
+    }
   }
 
   // 2. Secondary Strategy: High-availability backend server relay (/api/sync-collection)
@@ -239,26 +292,30 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
   if (typeof fetch !== 'undefined') {
     try {
       const resp = await fetch(`/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(activeTenantId)}`, {
-        signal: AbortSignal.timeout(6000)
+        signal: AbortSignal.timeout(20000)
       });
       if (resp.ok) {
         const json = await resp.json();
         if (json && json.value !== undefined) {
           if (!Array.isArray(json.value) || json.value.length > 0) {
-            saveToLocalCache(key, json.value);
+            for (const ck of candidateKeys) {
+              saveToLocalCache(ck, json.value);
+            }
             return json.value as T;
           }
         }
       }
     } catch (apiErr) {
-      // Non-blocking
+      console.warn(`[Sync Server Relay] Error fetching ${collectionName} via /api/sync-collection:`, apiErr);
     }
   }
 
-  // 3. Tertiary Strategy: Local storage cache
-  const localVal = getFromLocalCache<T>(key);
-  if (localVal !== null) {
-    return localVal;
+  // 3. Tertiary Strategy: Local storage cache across candidate keys
+  for (const ck of candidateKeys) {
+    const localVal = getFromLocalCache<T>(ck);
+    if (localVal !== null) {
+      return localVal;
+    }
   }
 
   return null;
@@ -334,8 +391,11 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
 
   const finalCleanValue = sanitizeUndefined(sanitizedValue);
   
-  // Save to cache immediately so UI reads it instantly
-  saveToLocalCache(key, finalCleanValue);
+  // Save to cache immediately across candidate keys so UI reads it instantly
+  const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
+  for (const ck of candidateKeys) {
+    saveToLocalCache(ck, finalCleanValue);
+  }
 
   // Background sync to server so REST API /v1 has instant access
   try {

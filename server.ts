@@ -324,21 +324,66 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   if (tenantId === 'demo') {
     rawKeys.push('demo', colName);
   } else {
+    const rawClean = tenantId.trim();
+    const numOnly = rawClean.replace(/^D/i, '');
     rawKeys.push(
-      `${tenantId}_${colName}`,
-      `D${tenantId.replace(/^D/i, '')}_${colName}`,
-      `${tenantId.replace(/^D/i, '')}_${colName}`
+      `${rawClean}_${colName}`,
+      `D${numOnly}_${colName}`,
+      `${numOnly}_${colName}`
     );
   }
 
   for (const alias of extraAliases) {
     if (alias && typeof alias === 'string' && alias.trim() && alias !== tenantId) {
       const a = alias.trim();
+      const numOnly = a.replace(/^D/i, '');
       rawKeys.push(
         `${a}_${colName}`,
-        `D${a.replace(/^D/i, '')}_${colName}`,
-        `${a.replace(/^D/i, '')}_${colName}`
+        `D${numOnly}_${colName}`,
+        `${numOnly}_${colName}`
       );
+    }
+  }
+
+  // Auto-discover shortEnvId and tenantId mappings from registered_tenants if not fetching registered_tenants itself
+  if (colName !== 'registered_tenants' && tenantId !== 'demo') {
+    try {
+      const regTenants = serverMemoryStore.get('registered_tenants') || serverMemoryStore.get('demo_registered_tenants');
+      let tenantList = Array.isArray(regTenants) ? regTenants : [];
+      if (tenantList.length === 0) {
+        const docRef = doc(db, 'appData', 'registered_tenants');
+        const snap = await withTimeout(getDoc(docRef), 3000, null);
+        if (snap && snap.exists()) {
+          const data = snap.data();
+          if (Array.isArray(data.value)) {
+            tenantList = data.value;
+          }
+        }
+      }
+      if (tenantList.length > 0) {
+        const cleanTid = tenantId.trim().toLowerCase();
+        const numOnly = cleanTid.replace(/^d/i, '');
+        const matched = tenantList.find(t => 
+          (t.id && t.id.toLowerCase() === cleanTid) ||
+          (t.shortEnvId && t.shortEnvId.toLowerCase() === cleanTid) ||
+          (t.id && t.id.toLowerCase().replace(/^d/i, '') === numOnly) ||
+          (t.shortEnvId && t.shortEnvId.toLowerCase().replace(/^d/i, '') === numOnly)
+        );
+        if (matched) {
+          if (matched.id) {
+            const mId = matched.id.trim();
+            const mNum = mId.replace(/^D/i, '');
+            rawKeys.push(`${mId}_${colName}`, `D${mNum}_${colName}`, `${mNum}_${colName}`);
+          }
+          if (matched.shortEnvId) {
+            const mShort = matched.shortEnvId.trim();
+            const mShortNum = mShort.replace(/^D/i, '');
+            rawKeys.push(`${mShort}_${colName}`, `D${mShortNum}_${colName}`, `${mShortNum}_${colName}`);
+          }
+        }
+      }
+    } catch (e) {
+      // Non-blocking alias discovery
     }
   }
 
@@ -887,7 +932,31 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       const tenantAliases = [targetTenant.shortEnvId, targetTenant.id, sanitizedTenantId, rawTenantId].filter(Boolean);
 
       // Variables Endpoint
-      if (cleanPath === 'variables' || cleanPath === 'variables/') {
+      if (cleanPath.startsWith('variables')) {
+        // Strict blocking: Prohibit deletion of system variables and settings via API DEFIBEO
+        const isDeleteAction = 
+          req.method === 'DELETE' || 
+          req.query.action === 'delete' || 
+          req.query.action === 'supprimer' || 
+          req.query.delete === 'true' ||
+          (req.body && (
+            req.body.action === 'delete' || 
+            req.body.action === 'supprimer' || 
+            req.body.delete === true || 
+            req.body.supprimer === true ||
+            req.body._method === 'DELETE'
+          ));
+
+        if (isDeleteAction) {
+          return res.status(403).json({
+            status: "error",
+            error: "Suppression interdite : La suppression des variables système et de configuration via l'API DEFIBEO est strictement bloquée pour préserver la stabilité et l'intégrité de l'environnement.",
+            code: "VARIABLE_DELETION_PROHIBITED",
+            message: "Action non autorisée : Les variables ne peuvent pas être supprimées via l'API DEFIBEO.",
+            environnement: targetTenant.shortEnvId || tenantId
+          });
+        }
+
         const storedVars = await fetchServerCollection('variables', tenantId, tenantAliases);
         return res.json({
           status: "success",
@@ -952,6 +1021,30 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
 
       // Clients Endpoint
       if (cleanPath.startsWith('clients')) {
+        // Strict blocking: Prohibit deletion of clients via API DEFIBEO
+        const isDeleteAction = 
+          req.method === 'DELETE' || 
+          req.query.action === 'delete' || 
+          req.query.action === 'supprimer' || 
+          req.query.delete === 'true' ||
+          (req.body && (
+            req.body.action === 'delete' || 
+            req.body.action === 'supprimer' || 
+            req.body.delete === true || 
+            req.body.supprimer === true ||
+            req.body._method === 'DELETE'
+          ));
+
+        if (isDeleteAction) {
+          return res.status(403).json({
+            status: "error",
+            error: "Suppression interdite : La suppression des clients via l'API DEFIBEO est strictement bloquée pour des raisons de conformité, traçabilité et intégrité des données comptables et contractuelles.",
+            code: "CLIENT_DELETION_PROHIBITED",
+            message: "Action non autorisée : Les clients ne peuvent pas être supprimés via l'API DEFIBEO.",
+            environnement: targetTenant.shortEnvId || tenantId
+          });
+        }
+
         let clients = await fetchServerCollection('clients', tenantId, tenantAliases);
 
         if (req.method === 'POST') {
@@ -1009,6 +1102,30 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
 
       // Defibrillateurs Endpoint
       if (cleanPath.startsWith('defibrillateurs')) {
+        // Strict blocking: Prohibit deletion of defibrillators via API DEFIBEO
+        const isDeleteAction = 
+          req.method === 'DELETE' || 
+          req.query.action === 'delete' || 
+          req.query.action === 'supprimer' || 
+          req.query.delete === 'true' ||
+          (req.body && (
+            req.body.action === 'delete' || 
+            req.body.action === 'supprimer' || 
+            req.body.delete === true || 
+            req.body.supprimer === true ||
+            req.body._method === 'DELETE'
+          ));
+
+        if (isDeleteAction) {
+          return res.status(403).json({
+            status: "error",
+            error: "Suppression interdite : La suppression des défibrillateurs via l'API DEFIBEO est strictement bloquée pour des raisons de conformité, traçabilité et intégrité des données de sécurité sanitaire.",
+            code: "DEFIBRILLATEUR_DELETION_PROHIBITED",
+            message: "Action non autorisée : Les défibrillateurs ne peuvent pas être supprimés via l'API DEFIBEO.",
+            environnement: targetTenant.shortEnvId || tenantId
+          });
+        }
+
         let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
 
         if (req.method === 'POST') {
