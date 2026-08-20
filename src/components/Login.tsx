@@ -11,6 +11,7 @@ import {
 } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { triggerEmail1Inscription, triggerEmail4Signalement } from '../utils/emailService';
+import TopBarProgress from './TopBarProgress';
 
 interface LoginProps {
   onLoginSuccess: (email: string, name: string, tenantId: string, role?: string) => void;
@@ -792,6 +793,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   return (
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans relative" id="login-viewport-wrapper">
+      {/* Top Bar Progress Animation for Tab & Role Switching */}
+      <TopBarProgress triggerKey={`${activeTab}-${loginRole}`} duration={3000} height={3.5} zIndex={99999} />
+
       <style>{`
         body {
           background: radial-gradient(#7e2e86, #36093a) !important;

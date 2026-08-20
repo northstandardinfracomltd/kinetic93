@@ -76,6 +76,8 @@ import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions } from "../utils/fsmOptimizer";
 import { PlanningTab } from "./PlanningTab";
 import HelpBubble from "./HelpBubble";
+import TopBarProgress from "./TopBarProgress";
+
 
 // Helper functions for French date <-> ISO date picker compatibility
 const getIsoDate = (dateStr: string) => {
@@ -4921,6 +4923,9 @@ export default function PublicPortal({
             className="flex-1 flex flex-col overflow-hidden bg-white relative"
             id="authenticated-console-layout"
           >
+            {/* Top Bar Progress Animation for Tab Switching */}
+            <TopBarProgress triggerKey={activeTab} duration={3000} height={3.5} zIndex={99999} />
+
             {/* FULL WIDTH SPECIAL REPORT FORM OVERLAY */}
             {isReportOverlayOpen && (
               <div

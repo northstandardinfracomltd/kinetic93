@@ -142,14 +142,65 @@ html, body {
   }
 }
 
-.animate-card-pink-wave {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.55) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  background-size: 200% 100%;
-  animation: pinkCardWave 2.8s infinite linear;
+@keyframes matSlide1 {
+  0% {
+    left: -35%;
+    right: 100%;
+  }
+  60% {
+    left: 100%;
+    right: -90%;
+  }
+  100% {
+    left: 100%;
+    right: -90%;
+  }
 }
+
+@keyframes matSlide2 {
+  0% {
+    left: -180%;
+    right: 100%;
+  }
+  65% {
+    left: 105%;
+    right: -15%;
+  }
+  100% {
+    left: 105%;
+    right: -15%;
+  }
+}
+
+@keyframes matSlide3 {
+  0% {
+    left: -100%;
+    right: 100%;
+  }
+  80% {
+    left: 100%;
+    right: -60%;
+  }
+  100% {
+    left: 100%;
+    right: -60%;
+  }
+}
+
+.mat-bar-1 {
+  animation: matSlide1 2.1s cubic-bezier(0.65, 0.815, 0.735, 0.395) infinite;
+  will-change: left, right;
+}
+
+.mat-bar-2 {
+  animation: matSlide2 2.1s cubic-bezier(0.165, 0.84, 0.44, 1) 0.9s infinite;
+  will-change: left, right;
+}
+
+.mat-bar-3 {
+  animation: matSlide3 2.1s cubic-bezier(0.25, 0.1, 0.25, 1) 0.45s infinite;
+  will-change: left, right;
+}
+
+
 
