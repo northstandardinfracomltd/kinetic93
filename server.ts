@@ -377,6 +377,8 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         if (!itemEnv && item.id === 'c1' && item.denomination === 'Secours Pro Ouest') return false;
       } else if (colName === 'notifications') {
         if (item.id === 'conn-2' || item.id === 'conn-3' || (item.title && item.title.includes('admin@defibeo.com vient s’est connecté'))) return false;
+      } else if (colName === 'members') {
+        if (!itemEnv && (item.email === 'techniciendemo1@demo.com' || item.name === 'Jakub Démo')) return false;
       }
 
       return true;

@@ -7181,6 +7181,13 @@ export default function PublicPortal({
                       className="space-y-4 pb-16 animate-fadeIn"
                       id="tab-interventions-screen"
                     >
+                      {!selectedTourId && (
+                        <HelpBubble
+                          cacheKey="help_webapp_interventions_no_tour"
+                          text="Seules les tournées marquées « À faire » et attribuées au technicien peuvent être sélectionnées."
+                        />
+                      )}
+
                       {/* Technician Name display field */}
                       <div className="px-1 select-none">
                         <input
@@ -8361,7 +8368,7 @@ export default function PublicPortal({
                 >
                   <PlanningTab
                     companyInfo={companyInfo}
-                    fsmTours={fsmTours}
+                    fsmTours={fsmTours && fsmTours.length > 0 ? fsmTours : tours}
                     authenticatedUser={authenticatedUser}
                     defibrillateurs={defibrillateurs}
                     otherEquipments={otherEquipments}
@@ -8369,6 +8376,7 @@ export default function PublicPortal({
                     variables={variables}
                     members={members}
                     t={t}
+                    initialTech={authenticatedUser?.name || ""}
                   />
                 </div>
               )}

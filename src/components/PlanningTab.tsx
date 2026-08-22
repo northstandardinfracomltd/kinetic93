@@ -221,29 +221,66 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     }));
   };
 
-  // List of technician members only
+  // List of technician members only (strictly tenant-isolated)
   const techniciansList = useMemo(() => {
-    const all = members && members.length > 0 ? members : (companyInfo?.members || []);
+    const rawAll = members && members.length > 0 ? members : (companyInfo?.members || []);
+    const activeTenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+    const isDemo = activeTenantId === 'demo';
+    const cleanTid = activeTenantId.trim().toLowerCase();
+
+    let all = rawAll.filter((m: any) => {
+      if (!m || typeof m !== 'object') return false;
+      const mEnv = (m.envId || m.tenantId || '').trim().toLowerCase();
+      if (isDemo) {
+        if (mEnv && mEnv !== 'demo') return false;
+        return true;
+      }
+      if (mEnv && mEnv !== cleanTid) return false;
+      if (!mEnv && (m.email === 'techniciendemo1@demo.com' || m.name === 'Jakub Démo')) return false;
+      return true;
+    });
+
+    if (authenticatedUser && authenticatedUser.name) {
+      const exists = all.some(m => m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase());
+      if (!exists) {
+        all = [authenticatedUser, ...all];
+      }
+    }
+
     const techOnly = all.filter(m => {
       const r = (m.role || '').toLowerCase();
       return r.includes('tech') || r.includes('technicien');
     });
     return techOnly.length > 0 ? techOnly : all;
-  }, [members, companyInfo]);
+  }, [members, companyInfo, authenticatedUser]);
 
-  // Default selected technician
+  // Default selected technician: auto-select logged-in technician
   useEffect(() => {
-    if (initialTech !== undefined) {
+    if (initialTech !== undefined && initialTech !== '') {
       setSelectedTech(initialTech);
     } else if (authenticatedUser?.name) {
       setSelectedTech(authenticatedUser.name);
+    } else {
+      try {
+        const activeUserRaw = localStorage.getItem("defib_active_tech_session");
+        if (activeUserRaw) {
+          const u = JSON.parse(activeUserRaw);
+          if (u?.name) {
+            setSelectedTech(u.name);
+            return;
+          }
+        }
+      } catch (_) {}
+      if ((!selectedTech || selectedTech === 'Tous') && techniciansList.length > 0) {
+        setSelectedTech(techniciansList[0].name);
+      }
     }
-  }, [initialTech, authenticatedUser]);
+  }, [initialTech, authenticatedUser, techniciansList]);
 
   // Active member object
   const activeMember = useMemo(() => {
-    if (selectedTech === 'Tous') {
-      return authenticatedUser || null;
+    if (selectedTech === 'Tous' || !selectedTech) {
+      return authenticatedUser || (techniciansList.length > 0 ? techniciansList[0] : null);
     }
     const found = techniciansList.find(m => m.name.trim().toLowerCase() === selectedTech.trim().toLowerCase());
     return found || authenticatedUser || null;
@@ -948,6 +985,42 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           defib?.nomPrenomSite ||
                           '';
 
+                        const isFormationMission =
+                          mission.equipmentType === 'Formation' ||
+                          mission.equipmentType?.toLowerCase()?.includes('formation') ||
+                          !!mission.formationId ||
+                          mission.reason?.toLowerCase()?.includes('formation') ||
+                          mission.defibIdentifiant === 'Formation';
+
+                        const typeVal = isFormationMission
+                          ? 'Formation'
+                          : (mission.equipmentType || (defib ? 'Défibrillateur' : (other ? other.categorie : 'Défibrillateur')));
+
+                        const situationVal = mission.status || mission.missionStatus || mission.situation || 'À faire';
+
+                        const identifiant = (() => {
+                          if (isFormationMission) {
+                            if (mission.formationId) return mission.formationId;
+                            if (mission.interventionReference) return mission.interventionReference;
+                            if (
+                              mission.defibIdentifiant &&
+                              mission.defibIdentifiant !== 'Formation' &&
+                              mission.defibIdentifiant !== mission.reason &&
+                              !mission.defibIdentifiant.toLowerCase().includes('formation')
+                            ) {
+                              return mission.defibIdentifiant;
+                            }
+                            return mission.id || 'FMT-001';
+                          }
+                          return (
+                            mission.defibIdentifiant ||
+                            mission.identifiant ||
+                            defib?.identifiant ||
+                            other?.identifiant ||
+                            ''
+                          );
+                        })();
+
                         const siteName = (() => {
                           if (isFormationMission) return '';
                           let rawVal = '';
@@ -988,42 +1061,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                             if (parts.length > 0) return parts.join(', ');
                           }
                           return '';
-                        })();
-
-                        const isFormationMission =
-                          mission.equipmentType === 'Formation' ||
-                          mission.equipmentType?.toLowerCase()?.includes('formation') ||
-                          !!mission.formationId ||
-                          mission.reason?.toLowerCase()?.includes('formation') ||
-                          mission.defibIdentifiant === 'Formation';
-
-                        const typeVal = isFormationMission
-                          ? 'Formation'
-                          : (mission.equipmentType || (defib ? 'Défibrillateur' : (other ? other.categorie : 'Défibrillateur')));
-
-                        const situationVal = mission.status || mission.missionStatus || mission.situation || 'À faire';
-
-                        const identifiant = (() => {
-                          if (isFormationMission) {
-                            if (mission.formationId) return mission.formationId;
-                            if (mission.interventionReference) return mission.interventionReference;
-                            if (
-                              mission.defibIdentifiant &&
-                              mission.defibIdentifiant !== 'Formation' &&
-                              mission.defibIdentifiant !== mission.reason &&
-                              !mission.defibIdentifiant.toLowerCase().includes('formation')
-                            ) {
-                              return mission.defibIdentifiant;
-                            }
-                            return mission.id || 'FMT-001';
-                          }
-                          return (
-                            mission.defibIdentifiant ||
-                            mission.identifiant ||
-                            defib?.identifiant ||
-                            other?.identifiant ||
-                            ''
-                          );
                         })();
 
                         const creneauVal = mission.estimatedSlot || mission.creneau || mission.estimatedTime || mission.time || '08:00';

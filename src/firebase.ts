@@ -330,6 +330,10 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
       if (item.id === 'conn-2' || item.id === 'conn-3' || (item.title && item.title.includes('admin@defibeo.com vient s’est connecté'))) {
         return false;
       }
+    } else if (collectionName === 'members') {
+      if (!itemEnv && (item.email === 'techniciendemo1@demo.com' || item.name === 'Jakub Démo')) {
+        return false;
+      }
     }
 
     return true;
