@@ -676,131 +676,7 @@ export default function App() {
     }));
   };
 
-  useEffect(() => {
-    const key = `defib_${tenantId}_stocks`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        setStocks(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
-      }
-    } else {
-      const defaultStocks: StockRecord[] = tenantId === 'demo' ? [
-        {
-          id: 'st_1',
-          denominationPieceId: 'v_el_1',
-          quantite: 45,
-          livraisonDate: '2026-04-12',
-          reapprovisionnementDate: '2026-06-15',
-          valeurAchat: 45.00,
-          marge: 44.00,
-          prixVenteHt: 89.00,
-          stockage: 'Entrepôt A'
-        },
-        {
-          id: 'st_2',
-          denominationPieceId: 'v_el_p_1',
-          quantite: 12,
-          livraisonDate: '2026-03-22',
-          reapprovisionnementDate: '2026-07-01',
-          valeurAchat: 60.00,
-          marge: 59.00,
-          prixVenteHt: 119.00,
-          stockage: 'Entrepôt B'
-        },
-        {
-          id: 'st_3',
-          denominationPieceId: 'v_bat_1',
-          quantite: 18,
-          livraisonDate: '2026-01-10',
-          reapprovisionnementDate: '2026-06-30',
-          valeurAchat: 110.00,
-          marge: 89.00,
-          prixVenteHt: 199.00,
-          stockage: 'Véhicule A'
-        },
-        {
-          id: 'st_4',
-          denominationPieceId: 'v_def_2',
-          quantite: 3,
-          livraisonDate: '2026-05-02',
-          reapprovisionnementDate: '2026-08-15',
-          valeurAchat: 1200.50,
-          marge: 450.00,
-          prixVenteHt: 1650.50,
-          stockage: 'Entrepôt A'
-        },
-        {
-          id: 'st_srv_1',
-          denominationPieceId: 'v_srv_1',
-          quantite: 9991, // Virtual large quantity for services
-          livraisonDate: '2026-01-01',
-          reapprovisionnementDate: '2026-06-01',
-          valeurAchat: 0,
-          marge: 150.00,
-          prixVenteHt: 150.00,
-          stockage: 'Siège'
-        },
-        {
-          id: 'st_srv_2',
-          denominationPieceId: 'v_srv_2',
-          quantite: 9992,
-          livraisonDate: '2026-01-01',
-          reapprovisionnementDate: '2026-06-01',
-          valeurAchat: 0,
-          marge: 120.00,
-          prixVenteHt: 120.00,
-          stockage: 'Siège'
-        }
-      ] : [];
-      setStocks(defaultStocks);
-      localStorage.setItem(key, JSON.stringify(defaultStocks));
-    }
-  }, [activeTab, tenantId]);
-
   const [distributedStocks, setDistributedStocks] = useState<DistributedStockLocation[]>([]);
-
-  useEffect(() => {
-    const key = `defib_${tenantId}_distributed_stocks`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        setDistributedStocks(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
-      }
-    } else {
-      const defaultDistrib: DistributedStockLocation[] = tenantId === 'demo' ? [
-        {
-          id: 'ds_1',
-          denominationPieceId: 'v_el_1',
-          locationName: 'Entrepôt A',
-          volumeDisponible: 15,
-          volumeReserve: 5,
-          volumeEntrant: 2,
-        },
-        {
-          id: 'ds_2',
-          denominationPieceId: 'v_el_p_1',
-          locationName: 'Véhicule A',
-          volumeDisponible: 8,
-          volumeReserve: 2,
-          volumeEntrant: 0,
-        },
-        {
-          id: 'ds_3',
-          denominationPieceId: 'v_bat_1',
-          locationName: 'Véhicule B',
-          volumeDisponible: 5,
-          volumeReserve: 1,
-          volumeEntrant: 3,
-        }
-      ] : [];
-      setDistributedStocks(defaultDistrib);
-      localStorage.setItem(key, JSON.stringify(defaultDistrib));
-    }
-  }, [activeTab, tenantId]);
 
   const saveStocks = (updated: StockRecord[]) => {
     if (isDeveloper) {
@@ -1216,52 +1092,7 @@ export default function App() {
   const [selectedGedFile, setSelectedGedFile] = useState<File | null>(null);
 
 
-  useEffect(() => {
-    const key = `defib_${tenantId}_customer_reviews`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        setCustomerReviews(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
-      }
-    } else {
-      const defaultReviews = tenantId === 'demo' ? [
-        {
-          id: 'rev-1',
-          clientName: 'Secours Pro Ouest (Jean-Marc DUPONT)',
-          comment: "Excellent travail ! Le technicien Thierry a été très soigné et a remplacé les piles rapidement en expliquant le fonctionnement du boîtier thermique.",
-          label: 'Excellent'
-        },
-        {
-          id: 'rev-2',
-          clientName: 'Espace Vert Bordeaux (Marc VIGNAL)',
-          comment: "L'intervention s'est déroulée à l'heure convenue. Explications claires et professionnalisme au rendez-vous. Matériel de rechange disponible immédiatement.",
-          label: 'Parfait'
-        },
-        {
-          id: 'rev-3',
-          clientName: 'Gymnase Jean Bouin (Stéphanie LEFEVRE)',
-          comment: "Remplacement de l'appareil effectué comme prévu. Cependant, l'un des autocollants signalétiques était légèrement corné.",
-          label: 'Moyen'
-        },
-        {
-          id: 'rev-4',
-          clientName: 'Hôtel Splendid Nantes',
-          comment: "Le technicien a oublié de nous laisser le document papier de visite, bien que nous l'ayons reçu par e-mail peu après.",
-          label: 'Décevant'
-        },
-        {
-          id: 'rev-5',
-          clientName: 'Camping des Pins',
-          comment: "Délai de passage non respecté deux fois de suite, aucune notification de retard reçue. Nous attendons un geste commercial.",
-          label: 'Médiocre'
-        }
-      ] : [];
-      setCustomerReviews(defaultReviews);
-      localStorage.setItem(key, JSON.stringify(defaultReviews));
-    }
-  }, [isPublicPortalOpen, activeTab, tenantId]);
+
 
   const saveReviews = (updated: any[]) => {
     setCustomerReviews(updated);
@@ -1276,95 +1107,8 @@ export default function App() {
     endTime: string;
   } | null>(null);
 
-  // Reload pointages from localStorage when portal closes or tab changes
-  useEffect(() => {
-    const key = `defib_${tenantId}_pointages_history`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      setPointages(JSON.parse(saved));
-    } else {
-      setPointages([]);
-    }
-  }, [isPublicPortalOpen, activeTab, tenantId]);
-
-  // Load expenses/tickets from localStorage when portal closes or tab changes
   const [expenses, setExpenses] = useState<any[]>([]);
-  useEffect(() => {
-    const key = `defib_${tenantId}_expenses`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        setExpenses(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
-      }
-    } else {
-      const defaultExpenses = tenantId === 'demo' ? [
-        {
-          id: 'exp-1',
-          techName: 'Thierry Martin',
-          title: 'Abonnement Parking Nantes',
-          amountTtc: 18.20,
-          amountHt: 15.17,
-          amountTva: 3.03,
-          dateStr: '2026-06-02',
-          photoUrl: 'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?w=100&auto=format&fit=crop'
-        },
-        {
-          id: 'exp-2',
-          techName: 'Marc VIGNAL',
-          title: 'Achat consommables - Électrodes Lot A3',
-          amountTtc: 220.00,
-          amountHt: 183.33,
-          amountTva: 36.67,
-          dateStr: '2026-06-03',
-          photoUrl: ''
-        },
-        {
-          id: 'exp-3',
-          techName: 'Thierry LEFEBVRE',
-          title: 'Batteries Spécifiques Type B2 (x2)',
-          amountTtc: 2550.00,
-          amountHt: 2125.00,
-          amountTva: 425.00,
-          dateStr: '2026-06-01',
-          photoUrl: ''
-        }
-      ] : [];
-      setExpenses(defaultExpenses);
-      localStorage.setItem(key, JSON.stringify(defaultExpenses));
-    }
-  }, [isPublicPortalOpen, activeTab, tenantId]);
-
-  // Load veilles from localStorage when portal closes or tab changes
   const [veilles, setVeilles] = useState<VeilleRecord[]>([]);
-  useEffect(() => {
-    const key = `defib_${tenantId}_veilles`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        setVeilles(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
-      }
-    } else {
-      const defaultVeilles = tenantId === 'demo' ? [
-        {
-          id: 'veille-1',
-          commune: 'Nantes',
-          volume: 12,
-          mainteneurActuel: 'Défibeo SAV',
-          prochaineMaintenance: '2026-12-15',
-          contactNomPrenom: 'Jean Dupont',
-          contactEmail: 'jean.dupont@nantes.fr',
-          contactTelephone: '0140000000',
-          createdAt: '2026-06-27 10:00:00'
-        }
-      ] : [];
-      setVeilles(defaultVeilles);
-      localStorage.setItem(key, JSON.stringify(defaultVeilles));
-    }
-  }, [isPublicPortalOpen, activeTab, tenantId]);
 
   // Sync and manage technician generated reports in main GMAO tab
   const [generatedReports, setGeneratedReports] = useState<any[]>([]);
@@ -1376,33 +1120,6 @@ export default function App() {
     siteMission: string;
   } | null>(null);
 
-  useEffect(() => {
-    const key = `defib_${tenantId}_generated_reports`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        setGeneratedReports(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
-      }
-    } else {
-      const defaultReports = tenantId === 'demo' ? [
-        {
-          id: 'rep-1',
-          date: '02-06-2026 14:15',
-          techName: 'Thierry Martin',
-          defibId: 'df_1',
-          defibIdentifiant: 'PAR-101',
-          title: 'CONSTAT DE MAINTENANCE DÉFIBRILLATEUR',
-          siteMission: 'DÉPLACEMENT',
-          photoUrl: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=100&auto=format&fit=crop'
-        }
-      ] : [];
-      setGeneratedReports(defaultReports);
-      localStorage.setItem(key, JSON.stringify(defaultReports));
-    }
-  }, [isPublicPortalOpen, activeTab, tenantId]);
-
   const saveReports = (updated: any[]) => {
     setGeneratedReports(updated);
     try {
@@ -1410,77 +1127,12 @@ export default function App() {
     } catch (e) {
       console.warn("Storage quota exceeded in saveReports:", e);
     }
-    if (isFirebaseLoaded && tenantId) {
+    if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
       saveCollectionToFirestore('generatedReports', updated);
     }
   };
 
   const [fsmTours, setFsmTours] = useState<any[]>([]);
-
-  useEffect(() => {
-    const key = `defib_${tenantId}_fsm_tours`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        setFsmTours(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
-      }
-    } else {
-      const defaultTours = tenantId === 'demo' ? [
-        {
-          id: 'fsm-tour-1',
-          title: 'Tournée Nantes Hyper-Centre',
-          techName: 'Thierry LEFEBVRE',
-          startDate: '2026-06-08',
-          status: 'À faire',
-          missions: [
-            {
-              id: 'fsm-m-1',
-              clientName: 'Jean-Marc DUPONT (SPO-891)',
-              defibIdentifiant: 'PAR-101',
-              reason: 'Remplacement B',
-              requiredParts: ['Batterie Lithium 5 ans'],
-              status: 'À faire',
-              priority: 'Haute',
-              time: '14:00'
-            },
-            {
-              id: 'fsm-m-2',
-              clientName: 'Espace Vert Nantes (EVB-411)',
-              defibIdentifiant: 'PAR-102',
-              reason: 'Remplacer B & A',
-              requiredParts: ['Batterie Lithium 5 ans', 'Électrodes Adultes'],
-              status: 'Effectué',
-              priority: 'Normale',
-              time: '16:30'
-            }
-          ]
-        },
-        {
-          id: 'fsm-tour-2',
-          title: 'Tournée Agglomération Ouest',
-          techName: 'Marc VIGNAL',
-          startDate: '2026-06-09',
-          status: 'En cours',
-          missions: [
-            {
-              id: 'fsm-m-3',
-              clientName: 'Gymnase Jean Bouin (GJB-330)',
-              defibIdentifiant: 'PAR-105',
-              reason: 'Mise en service',
-              requiredParts: ['Signalétique DAE Normative', 'Boîtier Mural Chauffant Aivia'],
-              status: 'En cours',
-              priority: 'Normale',
-              time: '09:30'
-            }
-          ]
-        }
-      ] : [];
-      setFsmTours(defaultTours);
-      localStorage.setItem(key, JSON.stringify(defaultTours));
-    }
-  }, [isPublicPortalOpen, activeTab, tenantId]);
 
   const saveFsmTours = (updated: any[]) => {
     if (isDeveloper) {
@@ -1488,7 +1140,11 @@ export default function App() {
       return;
     }
     setFsmTours(updated);
-    localStorage.setItem(`defib_${tenantId}_fsm_tours`, JSON.stringify(updated));
+    try {
+      localStorage.setItem(`defib_${tenantId}_fsm_tours`, JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Storage quota exceeded in saveFsmTours:", e);
+    }
     if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
       saveCollectionToFirestore('fsmTours', updated);
     }

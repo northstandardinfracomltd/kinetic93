@@ -317,62 +317,115 @@ async function getTenantApiCredentials(tenantId: string, extraAliases: (string |
   return { active: false };
 }
 
+function getCollectionNameAliases(collectionName: string): string[] {
+  const aliases = [collectionName];
+  if (collectionName === 'generatedReports' || collectionName === 'generated_reports' || collectionName === 'reports') {
+    aliases.push('generatedReports', 'generated_reports', 'reports');
+  } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
+    aliases.push('fsmTours', 'fsm_tours', 'tours');
+  } else if (collectionName === 'tickets' || collectionName === 'support_tickets') {
+    aliases.push('tickets', 'support_tickets');
+  } else if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
+    aliases.push('commercialDocs', 'commercial_docs');
+  } else if (collectionName === 'gedDocs' || collectionName === 'ged_docs') {
+    aliases.push('gedDocs', 'ged_docs');
+  } else if (collectionName === 'customerReviews' || collectionName === 'customer_reviews') {
+    aliases.push('customerReviews', 'customer_reviews');
+  } else if (collectionName === 'pointages' || collectionName === 'pointages_history') {
+    aliases.push('pointages', 'pointages_history');
+  } else if (collectionName === 'pointagesAutoVigilance' || collectionName === 'pointages_auto_vigilance') {
+    aliases.push('pointagesAutoVigilance', 'pointages_auto_vigilance');
+  } else if (collectionName === 'otherEquipments' || collectionName === 'other_equipments') {
+    aliases.push('otherEquipments', 'other_equipments');
+  } else if (collectionName === 'distributed_stocks' || collectionName === 'distributedStocks') {
+    aliases.push('distributed_stocks', 'distributedStocks');
+  } else if (collectionName === 'achats_fournisseurs' || collectionName === 'achatsFournisseurs') {
+    aliases.push('achats_fournisseurs', 'achatsFournisseurs');
+  } else if (collectionName === 'companyInfo' || collectionName === 'company_info') {
+    aliases.push('companyInfo', 'company_info');
+  }
+  return Array.from(new Set(aliases));
+}
+
 // Helper function to read a collection from Firestore with support for chunked documents, multiple aliases and memory caching
 async function fetchServerCollection(colName: string, tenantId: string, extraAliases: (string | undefined | null)[] = []): Promise<any[]> {
+  const colAliases = getCollectionNameAliases(colName);
   const rawKeys: string[] = [];
   
   if (tenantId === 'demo') {
-    rawKeys.push('demo', colName);
+    for (const c of colAliases) {
+      rawKeys.push(c, `demo_${c}`, 'demo');
+    }
   } else {
     const rawClean = tenantId.trim();
     const numOnly = rawClean.replace(/^D/i, '');
-    rawKeys.push(
-      `${rawClean}_${colName}`,
-      `D${numOnly}_${colName}`,
-      `${numOnly}_${colName}`
-    );
-  }
+    const tenantAliases: string[] = [rawClean, `D${numOnly}`, numOnly];
 
-  for (const alias of extraAliases) {
-    if (alias && typeof alias === 'string' && alias.trim() && alias !== tenantId) {
-      const a = alias.trim();
-      const numOnly = a.replace(/^D/i, '');
-      rawKeys.push(
-        `${a}_${colName}`,
-        `D${numOnly}_${colName}`,
-        `${numOnly}_${colName}`
-      );
+    for (const alias of extraAliases) {
+      if (alias && typeof alias === 'string' && alias.trim() && alias !== tenantId) {
+        const a = alias.trim();
+        const aNumOnly = a.replace(/^D/i, '');
+        tenantAliases.push(a, `D${aNumOnly}`, aNumOnly);
+      }
     }
-  }
 
-  // Auto-discover shortEnvId and tenantId mappings from registered_tenants if not fetching registered_tenants itself
-  if (colName !== 'registered_tenants' && tenantId !== 'demo') {
-    try {
-      const tenantList = await getRegisteredTenantsFromDb(false);
-      if (Array.isArray(tenantList) && tenantList.length > 0) {
-        const cleanTid = tenantId.trim().toLowerCase();
-        const numOnly = cleanTid.replace(/^d/i, '');
-        const matched = tenantList.find(t => 
-          (t.id && t.id.toLowerCase() === cleanTid) ||
-          (t.shortEnvId && t.shortEnvId.toLowerCase() === cleanTid) ||
-          (t.id && t.id.toLowerCase().replace(/^d/i, '') === numOnly) ||
-          (t.shortEnvId && t.shortEnvId.toLowerCase().replace(/^d/i, '') === numOnly)
-        );
-        if (matched) {
-          if (matched.id) {
-            const mId = matched.id.trim();
-            const mNum = mId.replace(/^D/i, '');
-            rawKeys.push(`${mId}_${colName}`, `D${mNum}_${colName}`, `${mNum}_${colName}`);
-          }
-          if (matched.shortEnvId) {
-            const mShort = matched.shortEnvId.trim();
-            const mShortNum = mShort.replace(/^D/i, '');
-            rawKeys.push(`${mShort}_${colName}`, `D${mShortNum}_${colName}`, `${mShortNum}_${colName}`);
+    // Auto-discover shortEnvId and tenantId mappings from registered_tenants if not fetching registered_tenants itself
+    if (colName !== 'registered_tenants') {
+      try {
+        const tenantList = await getRegisteredTenantsFromDb(false);
+        if (Array.isArray(tenantList) && tenantList.length > 0) {
+          const cleanTid = tenantId.trim().toLowerCase();
+          const numTid = cleanTid.replace(/^d/i, '');
+          const matched = tenantList.find(t => 
+            (t.id && t.id.toLowerCase() === cleanTid) ||
+            (t.shortEnvId && t.shortEnvId.toLowerCase() === cleanTid) ||
+            (t.id && t.id.toLowerCase().replace(/^d/i, '') === numTid) ||
+            (t.shortEnvId && t.shortEnvId.toLowerCase().replace(/^d/i, '') === numTid)
+          );
+          if (matched) {
+            if (matched.id) {
+              const mId = matched.id.trim();
+              const mNum = mId.replace(/^D/i, '');
+              tenantAliases.push(mId, `D${mNum}`, mNum);
+            }
+            if (matched.shortEnvId) {
+              const mShort = matched.shortEnvId.trim();
+              const mShortNum = mShort.replace(/^D/i, '');
+              tenantAliases.push(mShort, `D${mShortNum}`, mShortNum);
+            }
+            // Match organization siblings if UDPLV or same company name / email
+            const compName = (matched.companyName || '').trim().toLowerCase();
+            const adminEmail = (matched.adminEmail || '').trim().toLowerCase();
+            if (compName.includes('défi') || compName.includes('defi') || adminEmail.includes('udplv') || adminEmail.includes('civilprom.com')) {
+              tenantList.forEach(sibling => {
+                const sComp = (sibling.companyName || '').trim().toLowerCase();
+                const sEmail = (sibling.adminEmail || '').trim().toLowerCase();
+                if (sComp.includes('défi') || sComp.includes('defi') || sEmail.includes('udplv') || sEmail.includes('civilprom.com')) {
+                  if (sibling.id) {
+                    const sId = sibling.id.trim();
+                    const sNum = sId.replace(/^D/i, '');
+                    tenantAliases.push(sId, `D${sNum}`, sNum);
+                  }
+                  if (sibling.shortEnvId) {
+                    const sShort = sibling.shortEnvId.trim();
+                    const sShortNum = sShort.replace(/^D/i, '');
+                    tenantAliases.push(sShort, `D${sShortNum}`, sShortNum);
+                  }
+                }
+              });
+            }
           }
         }
+      } catch (e) {
+        // Non-blocking alias discovery
       }
-    } catch (e) {
-      // Non-blocking alias discovery
+    }
+
+    const uniqueTenants = Array.from(new Set(tenantAliases.filter(Boolean)));
+    for (const t of uniqueTenants) {
+      for (const c of colAliases) {
+        rawKeys.push(`${t}_${c}`);
+      }
     }
   }
 
