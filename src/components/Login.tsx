@@ -1574,7 +1574,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         email: reportEmail.trim(),
                         phone: '',
                         date: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-                        status: 'Nouveau'
+                        status: 'Nouveau',
+                        envId: tenantId,
+                        tenantId: tenantId
                       };
 
                       const updatedList = [newTicket, ...existingTickets];
@@ -1583,10 +1585,18 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       const docRef = doc(db, 'appData', key);
                       await setDoc(docRef, { value: updatedList });
 
+                      // Also persist under normalized D-prefixed key if applicable
+                      if (/^d\d+$/i.test(tenantId)) {
+                        const numOnly = tenantId.replace(/^d/i, '');
+                        try {
+                          await setDoc(doc(db, 'appData', `D${numOnly}_tickets`), { value: updatedList });
+                        } catch (_) {}
+                      }
+
                       // Also synchronize local storage if that same tenant is active in cached/demo mode
                       const currentActiveTenant = localStorage.getItem('defib_tenant_id') || 'demo';
-                      if (currentActiveTenant === tenantId) {
-                        localStorage.setItem(`defib_${tenantId}_support_tickets`, JSON.stringify(updatedList));
+                      if (currentActiveTenant === tenantId || currentActiveTenant.replace(/^d/i, '') === tenantId.replace(/^d/i, '')) {
+                        localStorage.setItem(`defib_${currentActiveTenant}_support_tickets`, JSON.stringify(updatedList));
                       }
 
                       // 3. Dispatch the Email 4 notification warns the tenant

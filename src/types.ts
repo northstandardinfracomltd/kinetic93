@@ -262,6 +262,8 @@ export interface SupportTicket {
   date?: string;
   status?: 'Nouveau' | 'En cours' | 'Résolu' | 'Terminé' | string;
   reponse?: string;
+  envId?: string;
+  tenantId?: string;
 }
 
 export interface MemberSchedule {
@@ -565,6 +567,8 @@ export interface AppNotification {
   title: string;
   timestamp: string; // YYYY-MM-DD HH:mm:ss
   situation: 'Nouveau' | 'En cours' | 'Terminé';
+  envId?: string;
+  tenantId?: string;
 }
 
 export interface VeilleRecord {

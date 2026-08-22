@@ -1011,28 +1011,40 @@ export default function App() {
   };
 
   const saveNotifications = (updated: AppNotification[]) => {
-    const cleaned = updated.filter(n => !isNotificationOlderThan3Months(n.timestamp));
+    const stamped = updated.map(n => ({
+      ...n,
+      envId: n.envId || tenantId,
+      tenantId: n.tenantId || tenantId,
+    }));
+    const cleaned = stamped.filter(n => !isNotificationOlderThan3Months(n.timestamp));
     setNotifications(cleaned);
-    localStorage.setItem(`defib_${tenantId}_notifications`, JSON.stringify(cleaned));
-    if (isFirebaseLoaded && tenantId) {
-      saveCollectionToFirestore('notifications', cleaned);
+    const str = JSON.stringify(cleaned);
+    safeSetLocalStorage(`defib_${tenantId}_notifications`, str);
+    loadedDataRef.current.notifications = str;
+    if (tenantId) {
+      saveCollectionToFirestore('notifications', cleaned, tenantId);
     }
   };
 
   const addNotification = (category: AppNotification['category'], title: string) => {
+    const currentTenant = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
     const newNotif: AppNotification = {
       id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
       category,
       title,
       timestamp: getParisTimestamp(),
       situation: 'Nouveau',
+      envId: currentTenant,
+      tenantId: currentTenant,
     };
     // Fetch latest notifications from current state to prevent stale state issues
     setNotifications((prev) => {
       const updated = [newNotif, ...prev].filter(n => !isNotificationOlderThan3Months(n.timestamp));
-      localStorage.setItem(`defib_${tenantId}_notifications`, JSON.stringify(updated));
-      if (isFirebaseLoaded && tenantId) {
-        saveCollectionToFirestore('notifications', updated);
+      const str = JSON.stringify(updated);
+      safeSetLocalStorage(`defib_${currentTenant}_notifications`, str);
+      loadedDataRef.current.notifications = str;
+      if (currentTenant) {
+        saveCollectionToFirestore('notifications', updated, currentTenant);
       }
       return updated;
     });
@@ -3383,7 +3395,33 @@ export default function App() {
         setMembers(baseMembers);
 
         const savedTickets = localStorage.getItem(`defib_${tenantId}_support_tickets`);
-        const baseTickets = savedTickets ? JSON.parse(savedTickets) : (tenantId === 'demo' ? INITIAL_TICKETS : []);
+        let baseTickets: SupportTicket[] = [];
+        if (savedTickets) {
+          try {
+            const parsed = JSON.parse(savedTickets) as SupportTicket[];
+            if (Array.isArray(parsed)) {
+              if (tenantId === 'demo') {
+                baseTickets = parsed.filter(t => {
+                  const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
+                  return !tEnv || tEnv === 'demo';
+                });
+              } else {
+                const cleanTenant = tenantId.trim().toLowerCase();
+                const numTenant = cleanTenant.replace(/^d/i, '');
+                baseTickets = parsed.filter(t => {
+                  const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
+                  const numEnv = tEnv.replace(/^d/i, '');
+                  if (tEnv === 'demo') return false;
+                  if (tEnv && tEnv !== cleanTenant && numEnv !== numTenant) return false;
+                  if (!tEnv && (t.id === '#482910' || t.id === '#719203' || t.identifiant === 'DEF-75001' || t.identifiant === 'DEF-69002')) return false;
+                  return true;
+                });
+              }
+            }
+          } catch (e) {}
+        } else {
+          baseTickets = tenantId === 'demo' ? INITIAL_TICKETS : [];
+        }
         setTickets(baseTickets);
 
         const savedMemos = localStorage.getItem(`defib_${tenantId}_memos`);
@@ -3479,7 +3517,27 @@ export default function App() {
         if (savedNotifications) {
           try {
             const loadedNotifs = JSON.parse(savedNotifications) as AppNotification[];
-            cleanedNotifications = loadedNotifs.filter(n => !isNotificationOlderThan3Months(n.timestamp));
+            if (Array.isArray(loadedNotifs)) {
+              if (tenantId === 'demo') {
+                cleanedNotifications = loadedNotifs.filter(n => {
+                  if (!n || typeof n !== 'object') return false;
+                  const tEnv = (n.envId || n.tenantId || '').trim().toLowerCase();
+                  return (!tEnv || tEnv === 'demo') && !isNotificationOlderThan3Months(n.timestamp);
+                });
+              } else {
+                const cleanTenant = tenantId.trim().toLowerCase();
+                const numTenant = cleanTenant.replace(/^d/i, '');
+                cleanedNotifications = loadedNotifs.filter(n => {
+                  if (!n || typeof n !== 'object') return false;
+                  const tEnv = (n.envId || n.tenantId || '').trim().toLowerCase();
+                  const numEnv = tEnv.replace(/^d/i, '');
+                  if (tEnv === 'demo') return false;
+                  if (tEnv && tEnv !== cleanTenant && numEnv !== numTenant) return false;
+                  if (n.id === 'conn-2' || n.id === 'conn-3' || (n.title && n.title.includes('admin@defibeo.com vient s’est connecté'))) return false;
+                  return !isNotificationOlderThan3Months(n.timestamp);
+                });
+              }
+            }
             setNotifications(cleanedNotifications);
           } catch (e) {}
         } else {
@@ -3643,7 +3701,25 @@ export default function App() {
           return mems;
         }));
 
-        syncTasks.push(syncBackground<SupportTicket[]>('tickets', 'support_tickets', setTickets));
+        syncTasks.push(syncBackground<SupportTicket[]>('tickets', 'support_tickets', setTickets, (rawTickets) => {
+          if (!Array.isArray(rawTickets)) return [];
+          if (tenantId === 'demo') {
+            return rawTickets.filter(t => {
+              const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
+              return !tEnv || tEnv === 'demo';
+            });
+          }
+          const cleanTenant = tenantId.trim().toLowerCase();
+          const numTenant = cleanTenant.replace(/^d/i, '');
+          return rawTickets.filter(t => {
+            const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
+            const numEnv = tEnv.replace(/^d/i, '');
+            if (tEnv === 'demo') return false;
+            if (tEnv && tEnv !== cleanTenant && numEnv !== numTenant) return false;
+            if (!tEnv && (t.id === '#482910' || t.id === '#719203' || t.identifiant === 'DEF-75001' || t.identifiant === 'DEF-69002')) return false;
+            return true;
+          });
+        }));
         syncTasks.push(syncBackground<CommercialDoc[]>('commercialDocs', 'commercial_docs', setCommercialDocs, (docs) => {
           if (!Array.isArray(docs)) return [];
           if (tenantId === 'demo') return docs;
@@ -3697,8 +3773,28 @@ export default function App() {
         }
 
         syncTasks.push(
-          syncBackground<AppNotification[]>('notifications', 'notifications', (notifs) => {
-            const cleaned = notifs.filter(n => 
+          syncBackground<AppNotification[]>('notifications', 'notifications', setNotifications, (notifs) => {
+            if (!Array.isArray(notifs)) return [];
+            const cleanTenant = tenantId.trim().toLowerCase();
+            const numTenant = cleanTenant.replace(/^d/i, '');
+            const isDemo = cleanTenant === 'demo';
+
+            const filteredByTenant = notifs.filter(n => {
+              if (!n || typeof n !== 'object') return false;
+              const tEnv = (n.envId || n.tenantId || '').trim().toLowerCase();
+              const numEnv = tEnv.replace(/^d/i, '');
+              if (isDemo) {
+                return !tEnv || tEnv === 'demo';
+              }
+              if (tEnv === 'demo') return false;
+              if (tEnv) {
+                return tEnv === cleanTenant || (numEnv && numEnv === numTenant);
+              }
+              if (n.id === 'conn-2' || n.id === 'conn-3' || (n.title && n.title.includes('admin@defibeo.com vient s’est connecté'))) return false;
+              return true;
+            });
+
+            const cleaned = filteredByTenant.filter(n => 
               n && 
               typeof n.title === 'string' && 
               n.title.trim() && 
@@ -3706,11 +3802,12 @@ export default function App() {
               n.category.trim() && 
               !n.title.toUpperCase().includes('CONSTAT DE MAINTENANCE') &&
               !isNotificationOlderThan3Months(n.timestamp)
-            );
-            setNotifications(cleaned);
-            if (cleaned.length !== notifs.length) {
-              saveCollectionToFirestore('notifications', cleaned);
-            }
+            ).map(n => ({
+              ...n,
+              envId: n.envId || tenantId,
+              tenantId: n.tenantId || tenantId,
+            }));
+
             return cleaned;
           })
         );
@@ -3918,9 +4015,14 @@ export default function App() {
 
   useEffect(() => {
     if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
-      const str = JSON.stringify(notifications);
+      const stamped = notifications.map(n => ({
+        ...n,
+        envId: n.envId || tenantId,
+        tenantId: n.tenantId || tenantId,
+      }));
+      const str = JSON.stringify(stamped);
       if (loadedDataRef.current.notifications === str) return;
-      saveCollectionToFirestore('notifications', notifications);
+      saveCollectionToFirestore('notifications', stamped, tenantId);
       safeSetLocalStorage(`defib_${tenantId}_notifications`, str);
       loadedDataRef.current.notifications = str;
     }
@@ -5164,11 +5266,17 @@ export default function App() {
       id: ticketId,
       ...ticketData,
       date: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-      status: 'Nouveau'
+      status: 'Nouveau',
+      envId: tenantId,
+      tenantId: tenantId
     };
     const updated = [newTicket, ...tickets];
     setTickets(updated);
-    localStorage.setItem('defib_support_tickets', JSON.stringify(updated));
+    safeSetLocalStorage(`defib_${tenantId}_support_tickets`, JSON.stringify(updated));
+    loadedDataRef.current.tickets = JSON.stringify(updated);
+    if (tenantId) {
+      saveCollectionToFirestore('tickets', updated, tenantId);
+    }
 
     // Email 4: NOUVEAU SIGNALEMENT FORMULAIRE PUBLIQUE
     try {
@@ -5187,13 +5295,21 @@ export default function App() {
   const handleUpdateTicketStatus = (id: string, newStatus: SupportTicket['status']) => {
     const updated = tickets.map(t => t.id === id ? { ...t, status: newStatus } : t);
     setTickets(updated);
-    localStorage.setItem('defib_support_tickets', JSON.stringify(updated));
+    safeSetLocalStorage(`defib_${tenantId}_support_tickets`, JSON.stringify(updated));
+    loadedDataRef.current.tickets = JSON.stringify(updated);
+    if (tenantId) {
+      saveCollectionToFirestore('tickets', updated, tenantId);
+    }
   };
 
   const handleDeleteTicket = (id: string) => {
     const updated = tickets.filter(t => t.id !== id);
     setTickets(updated);
-    localStorage.setItem('defib_support_tickets', JSON.stringify(updated));
+    safeSetLocalStorage(`defib_${tenantId}_support_tickets`, JSON.stringify(updated));
+    loadedDataRef.current.tickets = JSON.stringify(updated);
+    if (tenantId) {
+      saveCollectionToFirestore('tickets', updated, tenantId);
+    }
   };
 
   const handleUpdateMemoText = (id: string, text: string) => {
@@ -5210,7 +5326,11 @@ export default function App() {
     const ticketObj = tickets.find(t => t.id === id);
     const updated = tickets.map(t => t.id === id ? { ...t, reponse: responseText } : t);
     setTickets(updated);
-    localStorage.setItem('defib_support_tickets', JSON.stringify(updated));
+    safeSetLocalStorage(`defib_${tenantId}_support_tickets`, JSON.stringify(updated));
+    loadedDataRef.current.tickets = JSON.stringify(updated);
+    if (tenantId) {
+      saveCollectionToFirestore('tickets', updated, tenantId);
+    }
 
     // Email 7: RÉPONSE ENVOYÉE DEPUIS LE CRM POUR LE CLIENT
     if (ticketObj && ticketObj.email && ticketObj.email.trim()) {
@@ -8855,9 +8975,9 @@ export default function App() {
             };
 
             const isGmaoController = (() => {
-              if (!loggedUser || !loggedUser.email) return false;
+              if (!loggedUser || !loggedUser.email) return true;
               const m = members.find(lm => lm.email?.toLowerCase().trim() === loggedUser.email.toLowerCase().trim());
-              if (!m) return false;
+              if (!m) return true;
               
               const isSuperAdmin = m.role === 'Super-Administrateur' || 
                                    m.role === 'Propriétaire / Admin' || 
@@ -9196,7 +9316,34 @@ export default function App() {
                         <tbody className="text-slate-700 text-xs">
                           {filteredReports.map((rep) => {
                             const isConforme = (rep.defibSnapshot?.conforme || 'Oui') === 'Oui';
-                            const isUpcoming = rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming';
+                            const isEffectue = 
+                              rep.missionStatus === 'Effectué' ||
+                              rep.conforme === 'Conforme' ||
+                              rep.conforme === 'Non Conforme' ||
+                              rep.conforme === 'Intervention impossible';
+
+                            const isUpcoming = gmaoFilter === 'upcoming' || (!isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture));
+                            const isValidated = gmaoFilter === 'validated' || !!rep.validated;
+                            const isModeration = gmaoFilter === 'moderation' || (!isUpcoming && !isValidated);
+
+                            // Button states according to specifications:
+                            // — À VENIR : Gérer (Enabled), Corriger (Disabled), Valider (Disabled), Télécharger (Disabled)
+                            // — MODÉRATION : Gérer (Enabled), Corriger (Enabled), Valider (Enabled), Télécharger (Enabled)
+                            // — VALIDÉS : Gérer (Enabled), Corriger (Disabled), Valider (Disabled), Télécharger (Enabled)
+                            const isGererDisabled = !isGmaoController;
+                            const isCorrigerDisabled = isUpcoming || isValidated || !isGmaoController;
+                            const isValiderDisabled = isUpcoming || isValidated || !isGmaoController;
+                            const isTelechargerDisabled = isUpcoming;
+
+                            const getBtnStyle = (isDisabled: boolean) => ({
+                              ...rowActionButtonStyle,
+                              opacity: isDisabled ? 0.35 : 1,
+                              cursor: isDisabled ? 'not-allowed' : 'pointer',
+                              backgroundColor: isDisabled ? '#cbd5e1' : '#000000',
+                              color: isDisabled ? '#64748b' : '#ffffff',
+                              boxShadow: isDisabled ? 'none' : rowActionButtonStyle.boxShadow,
+                              border: 'none',
+                            });
                             
                             // Retrieve category name elegantly
                             const getCategoryName = (r: any) => {
@@ -9497,38 +9644,21 @@ export default function App() {
                                 {/* Actions */}
                                 <td className="px-4 py-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                   <div className="inline-flex gap-2">
-                                    {!rep.validated && (
-                                      <button
-                                        type="button"
-                                        disabled={!isGmaoController}
-                                        onClick={() => setManagingReportId(rep.id)}
-                                        style={{
-                                          ...rowActionButtonStyle,
-                                          opacity: !isGmaoController ? 0.35 : 1,
-                                          cursor: !isGmaoController ? 'not-allowed' : 'pointer',
-                                          backgroundColor: !isGmaoController ? '#cbd5e1' : '#000000',
-                                          color: !isGmaoController ? '#64748b' : '#ffffff',
-                                          boxShadow: !isGmaoController ? 'none' : rowActionButtonStyle.boxShadow,
-                                          border: 'none',
-                                        }}
-                                        className={`${!isGmaoController ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}`}
-                                      >
-                                        Gérer
-                                      </button>
-                                    )}
                                     <button
                                       type="button"
-                                      disabled={rep.validated || !isGmaoController || isUpcoming}
-                                      onClick={() => !isUpcoming && setEditingReportId(rep.id)}
-                                      style={{
-                                        ...rowActionButtonStyle,
-                                        opacity: (rep.validated || !isGmaoController || isUpcoming) ? 0.35 : 1,
-                                        cursor: (rep.validated || !isGmaoController || isUpcoming) ? 'not-allowed' : 'pointer',
-                                        backgroundColor: (rep.validated || !isGmaoController || isUpcoming) ? '#cbd5e1' : '#000000',
-                                        color: (rep.validated || !isGmaoController || isUpcoming) ? '#64748b' : '#ffffff',
-                                        boxShadow: (rep.validated || !isGmaoController || isUpcoming) ? 'none' : rowActionButtonStyle.boxShadow,
-                                      }}
-                                      className={`${(rep.validated || !isGmaoController || isUpcoming) ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}`}
+                                      disabled={isGererDisabled}
+                                      onClick={() => !isGererDisabled && setManagingReportId(rep.id)}
+                                      style={getBtnStyle(isGererDisabled)}
+                                      className={isGererDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
+                                    >
+                                      Gérer
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isCorrigerDisabled}
+                                      onClick={() => !isCorrigerDisabled && setEditingReportId(rep.id)}
+                                      style={getBtnStyle(isCorrigerDisabled)}
+                                      className={isCorrigerDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
                                     >
                                       Corriger
                                     </button>
@@ -9662,32 +9792,17 @@ export default function App() {
                                           alert("Le rapport d'intervention a été validé avec succès ! L'état de l'équipement a été mis à jour et un e-mail avec le rapport a été envoyé au client.");
                                         }
                                       }}
-                                      style={{
-                                        ...rowActionButtonStyle,
-                                        backgroundColor: (rep.validated || !isGmaoController || isUpcoming) ? '#cbd5e1' : '#000000',
-                                        color: (rep.validated || !isGmaoController || isUpcoming) ? '#64748b' : '#ffffff',
-                                        opacity: (rep.validated || !isGmaoController || isUpcoming) ? 0.35 : 1,
-                                        boxShadow: (rep.validated || !isGmaoController || isUpcoming) ? 'none' : rowActionButtonStyle.boxShadow,
-                                        cursor: (rep.validated || !isGmaoController || isUpcoming) ? 'not-allowed' : 'pointer',
-                                        border: 'none',
-                                      }}
-                                      className={`${(rep.validated || !isGmaoController || isUpcoming) ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}`}
+                                      style={getBtnStyle(isValiderDisabled)}
+                                      className={isValiderDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
                                     >
-                                      {rep.validated ? 'Validé' : 'Valider'}
+                                      {isValidated ? 'Validé' : 'Valider'}
                                     </button>
                                     <button
                                       type="button"
-                                      disabled={isUpcoming}
-                                      onClick={() => !isUpcoming && handleDownloadReport(rep)}
-                                      style={{
-                                        ...rowActionButtonStyle,
-                                        border: 'none',
-                                        opacity: isUpcoming ? 0.35 : 1,
-                                        cursor: isUpcoming ? 'not-allowed' : 'pointer',
-                                        backgroundColor: isUpcoming ? '#cbd5e1' : rowActionButtonStyle.backgroundColor,
-                                        color: isUpcoming ? '#64748b' : rowActionButtonStyle.color,
-                                      }}
-                                      className={isUpcoming ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
+                                      disabled={isTelechargerDisabled}
+                                      onClick={() => !isTelechargerDisabled && handleDownloadReport(rep)}
+                                      style={getBtnStyle(isTelechargerDisabled)}
+                                      className={isTelechargerDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
                                     >
                                       Télécharger
                                     </button>
@@ -10053,10 +10168,20 @@ export default function App() {
               members={members}
               clients={clients}
               companyInfo={companyInfo}
+              tenantId={tenantId}
               onSaveTickets={(updatedTickets) => {
-                setTickets(updatedTickets);
-                saveCollectionToFirestore('support_tickets', updatedTickets);
-                localStorage.setItem('defib_support_tickets', JSON.stringify(updatedTickets));
+                const stampedTickets = updatedTickets.map(t => ({
+                  ...t,
+                  envId: t.envId || tenantId,
+                  tenantId: t.tenantId || tenantId,
+                }));
+                setTickets(stampedTickets);
+                const str = JSON.stringify(stampedTickets);
+                safeSetLocalStorage(`defib_${tenantId}_support_tickets`, str);
+                loadedDataRef.current.tickets = str;
+                if (tenantId) {
+                  saveCollectionToFirestore('tickets', stampedTickets, tenantId);
+                }
               }}
               t={t}
             />

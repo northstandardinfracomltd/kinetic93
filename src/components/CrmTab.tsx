@@ -7,6 +7,7 @@ interface CrmTabProps {
   members: Member[];
   clients: Client[];
   companyInfo: CompanyInfo;
+  tenantId?: string;
   onSaveTickets: (updated: SupportTicket[]) => void;
   t: (key: string) => string;
 }
@@ -16,6 +17,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   members,
   clients,
   companyInfo,
+  tenantId,
   onSaveTickets,
   t
 }) => {
@@ -39,6 +41,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formCustomClientName, setFormCustomClientName] = useState('');
   const [formDescription, setFormDescription] = useState('');
 
+  const activeTenant = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+
   const getTodayFormatted = (): string => {
     const d = new Date();
     const day = String(d.getDate()).padStart(2, '0');
@@ -48,7 +52,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   const generateNextReference = (): string => {
-    const envCode = (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || 'D18';
+    let envCode = (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null);
+    if (!envCode) {
+      if (activeTenant && activeTenant !== 'demo') {
+        envCode = activeTenant.toUpperCase().startsWith('D') ? activeTenant.toUpperCase() : `D${activeTenant.toUpperCase()}`;
+      } else {
+        envCode = 'D18';
+      }
+    }
     const now = new Date();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const yy = String(now.getFullYear()).slice(-2);
@@ -153,6 +164,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             customClientName: formClientSelect === 'Autre' ? formCustomClientName : '',
             description: formDescription,
             message: formDescription,
+            envId: t.envId || activeTenant,
+            tenantId: t.tenantId || activeTenant,
           };
         }
         return t;
@@ -180,6 +193,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         email: resolvedClientName,
         phone: '',
         date: formOuverture || today,
+        envId: activeTenant,
+        tenantId: activeTenant,
       };
       onSaveTickets([newTicket, ...tickets]);
     }

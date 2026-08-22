@@ -38,9 +38,51 @@ export const EmptyTablePlaceholder: React.FC<EmptyTablePlaceholderProps> = ({
           letterSpacing: '0.01em'
         }}
       >
-        {!isOnline
-          ? "Vos données ne s’affichent pas ? Votre connexion internet semble instable ou hors réseau, vérifiez et actualisez."
-          : "Vos données ne s’affichent pas ? Essayez avec Google Chrome ou vérifiez que votre navigateur est à jour."}
+        {!isOnline ? (
+          <>
+            Vos données ne s’affichent pas ? Votre connexion internet semble instable ou hors réseau, vérifiez et{' '}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              style={{
+                color: '#2563eb',
+                textDecoration: 'none',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                font: 'inherit',
+                cursor: 'pointer',
+                display: 'inline'
+              }}
+              className="hover:opacity-80 transition-opacity"
+            >
+              actualisez
+            </button>
+            .
+          </>
+        ) : (
+          <>
+            Vos données ne s’affichent pas ?{' '}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              style={{
+                color: '#2563eb',
+                textDecoration: 'none',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                font: 'inherit',
+                cursor: 'pointer',
+                display: 'inline'
+              }}
+              className="hover:opacity-80 transition-opacity"
+            >
+              Actualisez la page
+            </button>
+            , essayez avec Google Chrome et vérifiez que votre navigateur est à jour.
+          </>
+        )}
       </p>
     </div>
   );

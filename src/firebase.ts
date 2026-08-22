@@ -171,6 +171,8 @@ export function getCollectionNameAliases(collectionName: string): string[] {
     aliases.push('achats_fournisseurs', 'achatsFournisseurs');
   } else if (collectionName === 'companyInfo' || collectionName === 'company_info') {
     aliases.push('companyInfo', 'company_info');
+  } else if (collectionName === 'notifications' || collectionName === 'app_notifications') {
+    aliases.push('notifications', 'app_notifications');
   }
   return Array.from(new Set(aliases));
 }
@@ -195,10 +197,16 @@ export function getCollectionKeyCandidates(collectionName: string, tenantId: str
     return Array.from(new Set(list));
   }
 
-  // Strict tenant candidate keys: ONLY prefix with this exact tenantId, preventing cross-tenant leakage
+  // Strict tenant candidate keys: prefix with this exact tenantId and its normalized variations
   const candidates: string[] = [];
+  const numOnly = activeTenant.replace(/^d/i, '');
   for (const c of colAliases) {
     candidates.push(`${activeTenant}_${c}`);
+    if (numOnly) {
+      candidates.push(`D${numOnly}_${c}`);
+      candidates.push(`d${numOnly}_${c}`);
+      candidates.push(`${numOnly}_${c}`);
+    }
   }
 
   return Array.from(new Set(candidates.filter(Boolean)));
@@ -250,18 +258,26 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
       const k = localStorage.key(i);
       if (!k) continue;
       
-      // If a specific tenant is targeted, only clear keys for that tenant
+      // If a specific tenant is targeted: clear other tenant fs_caches and legacy unpartitioned tickets
       if (targetTenantId) {
         if (
-          k.startsWith(`fs_cache_${targetTenantId}_`) ||
-          k.startsWith(`defib_${targetTenantId}_`) ||
-          k === `fs_cache_${targetTenantId}`
+          k.startsWith('fs_cache_') && 
+          k !== 'fs_cache_registered_tenants' && 
+          !k.startsWith(`fs_cache_${targetTenantId}_`) &&
+          !k.startsWith(`fs_cache_D${targetTenantId.replace(/^d/i, '')}_`) &&
+          !k.startsWith(`fs_cache_${targetTenantId.replace(/^d/i, '')}_`)
         ) {
+          keysToRemove.push(k);
+        }
+        if (k === 'defib_support_tickets' || k === 'defib_tickets' || k === 'defib_notifications') {
           keysToRemove.push(k);
         }
       } else {
         // For global purge, clear partition cache except registered_tenants
         if (k.startsWith('fs_cache_') && k !== 'fs_cache_registered_tenants') {
+          keysToRemove.push(k);
+        }
+        if (k === 'defib_support_tickets' || k === 'defib_tickets' || k === 'defib_notifications') {
           keysToRemove.push(k);
         }
       }
@@ -294,10 +310,12 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
   
   const isDemo = !activeTenantId || activeTenantId === 'demo';
   const cleanTid = (activeTenantId || 'demo').trim().toLowerCase();
+  const numTid = cleanTid.replace(/^d/i, '');
 
   return (data as any[]).filter((item: any) => {
     if (!item || typeof item !== 'object') return true;
     const itemEnv = (item.envId || item.tenantId || '').trim().toLowerCase();
+    const numItemEnv = itemEnv.replace(/^d/i, '');
 
     if (isDemo) {
       // In demo mode: discard items explicitly created for specific customer tenants
@@ -307,14 +325,24 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
       return true;
     }
 
-    // In customer tenant mode (e.g. D1, D2, etc.):
+    // In customer tenant mode (e.g. D1, D2, D58, etc.):
     // If the item has an explicit envId/tenantId, it MUST match this tenant
-    if (itemEnv && itemEnv !== cleanTid) {
-      return false;
+    if (itemEnv) {
+      if (itemEnv === 'demo') return false;
+      if (itemEnv !== cleanTid && (numItemEnv !== numTid || !numItemEnv)) {
+        return false;
+      }
     }
 
     // Never leak demo-specific mock items into customer environments
-    if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
+    if (collectionName === 'tickets' || collectionName === 'support_tickets') {
+      if (!itemEnv) {
+        return false;
+      }
+      if (item.id === '#482910' || item.id === '#719203' || item.identifiant === 'DEF-75001' || item.identifiant === 'DEF-69002') {
+        return false;
+      }
+    } else if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
       if (!itemEnv && item.clientDenomination && (item.clientDenomination.includes('Medical360') || item.clientDenomination.includes('SecoursProOuest'))) {
         return false;
       }
@@ -326,9 +354,15 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
       if (!itemEnv && item.id === 'c1' && item.denomination === 'Secours Pro Ouest') {
         return false;
       }
-    } else if (collectionName === 'notifications') {
+    } else if (collectionName === 'notifications' || collectionName === 'app_notifications') {
       if (item.id === 'conn-2' || item.id === 'conn-3' || (item.title && item.title.includes('admin@defibeo.com vient s’est connecté'))) {
         return false;
+      }
+      if (!itemEnv) {
+        // If not stamped with env in customer mode, reject if it carries demo content
+        if (item.id?.startsWith('demo') || item.title?.includes('Démo') || item.title?.includes('demo')) {
+          return false;
+        }
       }
     } else if (collectionName === 'members') {
       if (!itemEnv && (item.email === 'techniciendemo1@demo.com' || item.name === 'Jakub Démo')) {

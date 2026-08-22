@@ -343,6 +343,8 @@ function getCollectionNameAliases(collectionName: string): string[] {
     aliases.push('achats_fournisseurs', 'achatsFournisseurs');
   } else if (collectionName === 'companyInfo' || collectionName === 'company_info') {
     aliases.push('companyInfo', 'company_info');
+  } else if (collectionName === 'notifications' || collectionName === 'app_notifications') {
+    aliases.push('notifications', 'app_notifications');
   }
   return Array.from(new Set(aliases));
 }
@@ -353,21 +355,31 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     if (!Array.isArray(items)) return items;
     const isDemo = !tenantId || tenantId === 'demo';
     const cleanTid = (tenantId || 'demo').trim().toLowerCase();
+    const numTid = cleanTid.replace(/^d/i, '');
 
     return items.filter((item: any) => {
       if (!item || typeof item !== 'object') return true;
       const itemEnv = (item.envId || item.tenantId || '').trim().toLowerCase();
+      const numItemEnv = itemEnv.replace(/^d/i, '');
 
       if (isDemo) {
         if (itemEnv && itemEnv !== 'demo') return false;
         return true;
       }
 
-      if (itemEnv && itemEnv !== cleanTid) {
-        return false;
+      if (itemEnv) {
+        if (itemEnv === 'demo') return false;
+        if (itemEnv !== cleanTid && (numItemEnv !== numTid || !numItemEnv)) {
+          return false;
+        }
       }
 
-      if (colName === 'commercialDocs' || colName === 'commercial_docs') {
+      if (colName === 'tickets' || colName === 'support_tickets') {
+        if (!itemEnv) return false;
+        if (item.id === '#482910' || item.id === '#719203' || item.identifiant === 'DEF-75001' || item.identifiant === 'DEF-69002') {
+          return false;
+        }
+      } else if (colName === 'commercialDocs' || colName === 'commercial_docs') {
         if (!itemEnv && item.clientDenomination && (item.clientDenomination.includes('Medical360') || item.clientDenomination.includes('SecoursProOuest'))) {
           return false;
         }
@@ -375,8 +387,11 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         if (item.id === 'fsm-tour-demo' || item.techName === 'Jakub Démo') return false;
       } else if (colName === 'clients') {
         if (!itemEnv && item.id === 'c1' && item.denomination === 'Secours Pro Ouest') return false;
-      } else if (colName === 'notifications') {
+      } else if (colName === 'notifications' || colName === 'app_notifications') {
         if (item.id === 'conn-2' || item.id === 'conn-3' || (item.title && item.title.includes('admin@defibeo.com vient s’est connecté'))) return false;
+        if (!itemEnv) {
+          if (item.id?.startsWith('demo') || item.title?.includes('Démo') || item.title?.includes('demo')) return false;
+        }
       } else if (colName === 'members') {
         if (!itemEnv && (item.email === 'techniciendemo1@demo.com' || item.name === 'Jakub Démo')) return false;
       }
@@ -388,6 +403,7 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   const colAliases = getCollectionNameAliases(colName);
   const rawKeys: string[] = [];
   const activeTenant = (tenantId || 'demo').trim();
+  const numOnly = activeTenant.replace(/^d/i, '');
   
   if (activeTenant === 'demo') {
     for (const c of colAliases) {
@@ -396,6 +412,25 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   } else {
     for (const c of colAliases) {
       rawKeys.push(`${activeTenant}_${c}`);
+      if (numOnly) {
+        rawKeys.push(`D${numOnly}_${c}`);
+        rawKeys.push(`d${numOnly}_${c}`);
+        rawKeys.push(`${numOnly}_${c}`);
+      }
+    }
+  }
+
+  for (const alias of extraAliases) {
+    if (alias && typeof alias === 'string' && alias.trim() && alias !== activeTenant) {
+      const a = alias.trim();
+      const aNum = a.replace(/^d/i, '');
+      for (const c of colAliases) {
+        rawKeys.push(`${a}_${c}`);
+        if (aNum) {
+          rawKeys.push(`D${aNum}_${c}`);
+          rawKeys.push(`${aNum}_${c}`);
+        }
+      }
     }
   }
 

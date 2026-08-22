@@ -5020,11 +5020,6 @@ const { defibrillateurs } = await res.json();`}
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                       <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée un nouveau client ou met à jour un client existant ciblé. Synchronisé immédiatement en base de données.</p>
-                      
-                      <div className="p-3 bg-rose-50 border border-rose-200 rounded-[11px] flex items-center gap-2.5 text-rose-800 text-[15px] font-bold">
-                        <span className="bg-rose-600 text-white text-xs px-2 py-0.5 rounded-full uppercase tracking-wider">Sécurité</span>
-                        <span>Blocage de sécurité actif : La suppression de clients est strictement interdite et bloquée via l'API DEFIBEO pour des raisons de conformité et de traçabilité comptable.</span>
-                      </div>
 
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
@@ -5127,11 +5122,6 @@ const { defibrillateurs } = await res.json();`}
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                       <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Édite et met à jour le jeu de données d'un défibrillateur spécifique. La variable d'URL <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:identifiant</code> (ex: <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>AABBCC</code> ou <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>DAE-88192</code>) désigne le matériel exact à cibler et modifier.</p>
-                      
-                      <div className="p-3 bg-rose-50 border border-rose-200 rounded-[11px] flex items-center gap-2.5 text-rose-800 text-[15px] font-bold">
-                        <span className="bg-rose-600 text-white text-xs px-2 py-0.5 rounded-full uppercase tracking-wider">Sécurité</span>
-                        <span>Blocage de sécurité actif : La suppression de défibrillateurs est strictement interdite et bloquée via l'API DEFIBEO afin de garantir l'intégrité et la traçabilité réglementaire.</span>
-                      </div>
 
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload exhaustif)</div>
@@ -5520,11 +5510,6 @@ const { defibrillateurs } = await res.json();`}
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                       <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère la liste des variables globales système et paramétrages de Defibeo.</p>
-                      
-                      <div className="p-3 bg-rose-50 border border-rose-200 rounded-[11px] flex items-center gap-2.5 text-rose-800 text-[15px] font-bold">
-                        <span className="bg-rose-600 text-white text-xs px-2 py-0.5 rounded-full uppercase tracking-wider">Sécurité</span>
-                        <span>Blocage de sécurité actif : La suppression des variables système et de configuration est strictement interdite et bloquée via l'API DEFIBEO pour garantir la stabilité opérationnelle.</span>
-                      </div>
 
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK)</div>

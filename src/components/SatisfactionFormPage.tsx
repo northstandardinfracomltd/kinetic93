@@ -158,13 +158,23 @@ export default function SatisfactionFormPage() {
           title: `Le client ${client_denomination} a soumis un avis de satisfaction (Note globale : ${avgVal}/4)${comment_text}.`,
           timestamp: getParisTimestamp(),
           situation: 'Nouveau',
+          envId: tenantId,
+          tenantId: tenantId
         };
         const updatedNotifs = [newNotif, ...existingNotifications];
         await setDoc(doc(db, 'appData', notifKey), { value: updatedNotifs });
 
+        // Also persist under normalized D-prefixed key if applicable
+        if (/^d\d+$/i.test(tenantId)) {
+          const numOnly = tenantId.replace(/^d/i, '');
+          try {
+            await setDoc(doc(db, 'appData', `D${numOnly}_notifications`), { value: updatedNotifs });
+          } catch (_) {}
+        }
+
         const currentActiveTenant = localStorage.getItem('defib_tenant_id') || 'demo';
-        if (currentActiveTenant === tenantId) {
-          localStorage.setItem(`defib_${tenantId}_notifications`, JSON.stringify(updatedNotifs));
+        if (currentActiveTenant === tenantId || currentActiveTenant.replace(/^d/i, '') === tenantId.replace(/^d/i, '')) {
+          localStorage.setItem(`defib_${currentActiveTenant}_notifications`, JSON.stringify(updatedNotifs));
         }
       } catch (notifErr) {
         console.warn("Failed to save corresponding system notification:", notifErr);
