@@ -350,79 +350,50 @@ function getCollectionNameAliases(collectionName: string): string[] {
 // Helper function to read a collection from Firestore with support for chunked documents, multiple aliases and memory caching
 async function fetchServerCollection(colName: string, tenantId: string, extraAliases: (string | undefined | null)[] = []): Promise<any[]> {
   const sanitizeForTenant = (items: any): any => {
-    if (!Array.isArray(items) || tenantId === 'demo') return items;
-    const cleanTid = tenantId.trim().toLowerCase();
-    const numTid = cleanTid.replace(/^d/i, '');
-    if (colName === 'commercialDocs' || colName === 'commercial_docs') {
-      return items.filter((d: any) => {
-        const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
-        if (dEnv === 'demo') return false;
-        if (dEnv && dEnv !== cleanTid && dEnv.replace(/^d/i, '') !== numTid) return false;
-        if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
+    if (!Array.isArray(items)) return items;
+    const isDemo = !tenantId || tenantId === 'demo';
+    const cleanTid = (tenantId || 'demo').trim().toLowerCase();
+
+    return items.filter((item: any) => {
+      if (!item || typeof item !== 'object') return true;
+      const itemEnv = (item.envId || item.tenantId || '').trim().toLowerCase();
+
+      if (isDemo) {
+        if (itemEnv && itemEnv !== 'demo') return false;
         return true;
-      });
-    } else if (colName === 'fsmTours' || colName === 'fsm_tours' || colName === 'tours') {
-      return items.filter((t: any) => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo');
-    }
-    return items;
+      }
+
+      if (itemEnv && itemEnv !== cleanTid) {
+        return false;
+      }
+
+      if (colName === 'commercialDocs' || colName === 'commercial_docs') {
+        if (!itemEnv && item.clientDenomination && (item.clientDenomination.includes('Medical360') || item.clientDenomination.includes('SecoursProOuest'))) {
+          return false;
+        }
+      } else if (colName === 'fsmTours' || colName === 'fsm_tours' || colName === 'tours') {
+        if (item.id === 'fsm-tour-demo' || item.techName === 'Jakub Démo') return false;
+      } else if (colName === 'clients') {
+        if (!itemEnv && item.id === 'c1' && item.denomination === 'Secours Pro Ouest') return false;
+      } else if (colName === 'notifications') {
+        if (item.id === 'conn-2' || item.id === 'conn-3' || (item.title && item.title.includes('admin@defibeo.com vient s’est connecté'))) return false;
+      }
+
+      return true;
+    });
   };
 
   const colAliases = getCollectionNameAliases(colName);
   const rawKeys: string[] = [];
+  const activeTenant = (tenantId || 'demo').trim();
   
-  if (tenantId === 'demo') {
+  if (activeTenant === 'demo') {
     for (const c of colAliases) {
       rawKeys.push(c, `demo_${c}`);
     }
   } else {
-    const rawClean = tenantId.trim();
-    const numOnly = rawClean.replace(/^D/i, '');
-    const tenantAliases: string[] = [rawClean, `D${numOnly}`, numOnly];
-
-    for (const alias of extraAliases) {
-      if (alias && typeof alias === 'string' && alias.trim() && alias !== tenantId) {
-        const a = alias.trim();
-        const aNumOnly = a.replace(/^D/i, '');
-        tenantAliases.push(a, `D${aNumOnly}`, aNumOnly);
-      }
-    }
-
-    // Auto-discover shortEnvId and tenantId mappings from registered_tenants if not fetching registered_tenants itself
-    if (colName !== 'registered_tenants') {
-      try {
-        const tenantList = await getRegisteredTenantsFromDb(false);
-        if (Array.isArray(tenantList) && tenantList.length > 0) {
-          const cleanTid = tenantId.trim().toLowerCase();
-          const numTid = cleanTid.replace(/^d/i, '');
-          const matched = tenantList.find(t => 
-            (t.id && t.id.toLowerCase() === cleanTid) ||
-            (t.shortEnvId && t.shortEnvId.toLowerCase() === cleanTid) ||
-            (t.id && t.id.toLowerCase().replace(/^d/i, '') === numTid) ||
-            (t.shortEnvId && t.shortEnvId.toLowerCase().replace(/^d/i, '') === numTid)
-          );
-          if (matched) {
-            if (matched.id) {
-              const mId = matched.id.trim();
-              const mNum = mId.replace(/^D/i, '');
-              tenantAliases.push(mId, `D${mNum}`, mNum);
-            }
-            if (matched.shortEnvId) {
-              const mShort = matched.shortEnvId.trim();
-              const mShortNum = mShort.replace(/^D/i, '');
-              tenantAliases.push(mShort, `D${mShortNum}`, mShortNum);
-            }
-          }
-        }
-      } catch (e) {
-        // Non-blocking alias discovery
-      }
-    }
-
-    const uniqueTenants = Array.from(new Set(tenantAliases.filter(Boolean)));
-    for (const t of uniqueTenants) {
-      for (const c of colAliases) {
-        rawKeys.push(`${t}_${c}`);
-      }
+    for (const c of colAliases) {
+      rawKeys.push(`${activeTenant}_${c}`);
     }
   }
 
@@ -434,7 +405,7 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     if (serverMemoryStore.has(collectionKey)) {
       const memItems = serverMemoryStore.get(collectionKey);
       if (Array.isArray(memItems) && memItems.length > 0) {
-        return memItems;
+        return sanitizeForTenant(memItems);
       }
     }
   }

@@ -176,15 +176,17 @@ export function getCollectionNameAliases(collectionName: string): string[] {
 }
 
 export function getCollectionKey(collectionName: string, tenantId: string = currentTenantId): string {
-  if (tenantId === 'demo' || !tenantId) {
+  const activeTenant = (tenantId || 'demo').trim();
+  if (activeTenant === 'demo' || !activeTenant) {
     return collectionName;
   }
-  return `${tenantId}_${collectionName}`;
+  return `${activeTenant}_${collectionName}`;
 }
 
 export function getCollectionKeyCandidates(collectionName: string, tenantId: string = currentTenantId): string[] {
   const colAliases = getCollectionNameAliases(collectionName);
-  if (tenantId === 'demo' || !tenantId) {
+  const activeTenant = (tenantId || 'demo').trim();
+  if (activeTenant === 'demo' || !activeTenant) {
     const list: string[] = [];
     for (const c of colAliases) {
       list.push(c);
@@ -192,42 +194,11 @@ export function getCollectionKeyCandidates(collectionName: string, tenantId: str
     }
     return Array.from(new Set(list));
   }
-  const rawClean = tenantId.trim();
-  const numOnly = rawClean.replace(/^D/i, '');
-  const tenantAliases: string[] = [rawClean, `D${numOnly}`, numOnly];
 
-  try {
-    const cachedTenants = getFromLocalCache<Tenant[]>('registered_tenants');
-    if (Array.isArray(cachedTenants)) {
-      const matched = cachedTenants.find(t => 
-        (t.id && t.id.toLowerCase() === rawClean.toLowerCase()) ||
-        (t.shortEnvId && t.shortEnvId.toLowerCase() === rawClean.toLowerCase()) ||
-        (t.id && t.id.toLowerCase().replace(/^d/i, '') === numOnly.toLowerCase()) ||
-        (t.shortEnvId && t.shortEnvId.toLowerCase().replace(/^d/i, '') === numOnly.toLowerCase())
-      );
-      if (matched) {
-        if (matched.id) {
-          const mId = matched.id.trim();
-          const mNum = mId.replace(/^D/i, '');
-          tenantAliases.push(mId, `D${mNum}`, mNum);
-        }
-        if (matched.shortEnvId) {
-          const mShort = matched.shortEnvId.trim();
-          const mShortNum = mShort.replace(/^D/i, '');
-          tenantAliases.push(mShort, `D${mShortNum}`, mShortNum);
-        }
-      }
-    }
-  } catch (e) {
-    // Non-blocking
-  }
-
-  const uniqueTenants = Array.from(new Set(tenantAliases.filter(Boolean)));
+  // Strict tenant candidate keys: ONLY prefix with this exact tenantId, preventing cross-tenant leakage
   const candidates: string[] = [];
-  for (const t of uniqueTenants) {
-    for (const c of colAliases) {
-      candidates.push(`${t}_${c}`);
-    }
+  for (const c of colAliases) {
+    candidates.push(`${activeTenant}_${c}`);
   }
 
   return Array.from(new Set(candidates.filter(Boolean)));
@@ -315,13 +286,63 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
 }
 
 /**
+ * Strictly filters a collection array to guarantee 100% tenant isolation without cross-contamination.
+ */
+export function filterCollectionForTenant<T>(data: T, collectionName: string, activeTenantId: string): T {
+  if (!data) return data;
+  if (!Array.isArray(data)) return data;
+  
+  const isDemo = !activeTenantId || activeTenantId === 'demo';
+  const cleanTid = (activeTenantId || 'demo').trim().toLowerCase();
+
+  return (data as any[]).filter((item: any) => {
+    if (!item || typeof item !== 'object') return true;
+    const itemEnv = (item.envId || item.tenantId || '').trim().toLowerCase();
+
+    if (isDemo) {
+      // In demo mode: discard items explicitly created for specific customer tenants
+      if (itemEnv && itemEnv !== 'demo') {
+        return false;
+      }
+      return true;
+    }
+
+    // In customer tenant mode (e.g. D1, D2, etc.):
+    // If the item has an explicit envId/tenantId, it MUST match this tenant
+    if (itemEnv && itemEnv !== cleanTid) {
+      return false;
+    }
+
+    // Never leak demo-specific mock items into customer environments
+    if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
+      if (!itemEnv && item.clientDenomination && (item.clientDenomination.includes('Medical360') || item.clientDenomination.includes('SecoursProOuest'))) {
+        return false;
+      }
+    } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
+      if (item.id === 'fsm-tour-demo' || item.techName === 'Jakub Démo') {
+        return false;
+      }
+    } else if (collectionName === 'clients') {
+      if (!itemEnv && item.id === 'c1' && item.denomination === 'Secours Pro Ouest') {
+        return false;
+      }
+    } else if (collectionName === 'notifications') {
+      if (item.id === 'conn-2' || item.id === 'conn-3' || (item.title && item.title.includes('admin@defibeo.com vient s’est connecté'))) {
+        return false;
+      }
+    }
+
+    return true;
+  }) as unknown as T;
+}
+
+/**
  * Fetches a collection (stored as a single document or chunked documents) 
  * from Firestore. Returns null if the document does not exist yet.
  * Includes resilience against chunk timeouts, local cache, and backend server proxy fallback.
  */
 export async function fetchCollectionFromFirestore<T>(collectionName: string, tenantId?: string): Promise<T | null> {
   const activeTenantId = tenantId || getTenantId();
-  const primaryKey = getCollectionKey(collectionName, activeTenantId);
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
 
   // If completely offline in browser, immediately check cached versions (prefer non-empty)
@@ -329,12 +350,12 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
     for (const ck of candidateKeys) {
       const cachedVal = getFromLocalCache<T>(ck);
       if (cachedVal !== null && (!Array.isArray(cachedVal) || cachedVal.length > 0)) {
-        return cachedVal;
+        return filterCollectionForTenant(cachedVal, collectionName, activeTenantId);
       }
     }
     for (const ck of candidateKeys) {
       const cachedVal = getFromLocalCache<T>(ck);
-      if (cachedVal !== null) return cachedVal;
+      if (cachedVal !== null) return filterCollectionForTenant(cachedVal, collectionName, activeTenantId);
     }
     return null;
   }
@@ -396,22 +417,7 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
             }
           }
           if (combined.length > 0) {
-            let val = combined as unknown as T;
-            if (Array.isArray(val) && activeTenantId !== 'demo') {
-              const cleanTid = activeTenantId.trim().toLowerCase();
-              const numTid = cleanTid.replace(/^d/i, '');
-              if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
-                val = (combined).filter(d => {
-                  const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
-                  if (dEnv === 'demo') return false;
-                  if (dEnv && dEnv !== cleanTid && dEnv.replace(/^d/i, '') !== numTid) return false;
-                  if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
-                  return true;
-                }) as unknown as T;
-              } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
-                val = (combined).filter(t => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo') as unknown as T;
-              }
-            }
+            const val = filterCollectionForTenant(combined as unknown as T, collectionName, activeTenantId);
             for (const ck of candidateKeys) {
               saveToLocalCache(ck, val);
             }
@@ -419,30 +425,19 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
           }
         } else if (payload.value !== undefined) {
           const val = payload.value as T;
-          // If array with elements or object, return it!
+          // If array or object, sanitize for tenant and return it!
           if (!Array.isArray(val) || val.length > 0) {
-            let sanitizedVal = val;
-            if (Array.isArray(val) && activeTenantId !== 'demo') {
-              const cleanTid = activeTenantId.trim().toLowerCase();
-              const numTid = cleanTid.replace(/^d/i, '');
-              if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
-                sanitizedVal = (val as any[]).filter(d => {
-                  const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
-                  if (dEnv === 'demo') return false;
-                  if (dEnv && dEnv !== cleanTid && dEnv.replace(/^d/i, '') !== numTid) return false;
-                  if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
-                  return true;
-                }) as unknown as T;
-              } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
-                sanitizedVal = (val as any[]).filter(t => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo') as unknown as T;
-              }
-            }
+            const sanitizedVal = filterCollectionForTenant(val, collectionName, activeTenantId);
             for (const ck of candidateKeys) {
               saveToLocalCache(ck, sanitizedVal);
             }
             return sanitizedVal;
           }
-          // If empty array, continue to other candidate keys in case data is in another alias
+          // If empty array, it is a valid initialized empty collection for this tenant!
+          for (const ck of candidateKeys) {
+            saveToLocalCache(ck, val);
+          }
+          return val;
         }
       }
     } catch (error) {
@@ -459,28 +454,11 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
       if (resp.ok) {
         const json = await resp.json();
         if (json && json.value !== undefined) {
-          if (!Array.isArray(json.value) || json.value.length > 0) {
-            let val = json.value;
-            if (Array.isArray(val) && activeTenantId !== 'demo') {
-              const cleanTid = activeTenantId.trim().toLowerCase();
-              const numTid = cleanTid.replace(/^d/i, '');
-              if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
-                val = (val).filter(d => {
-                  const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
-                  if (dEnv === 'demo') return false;
-                  if (dEnv && dEnv !== cleanTid && dEnv.replace(/^d/i, '') !== numTid) return false;
-                  if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
-                  return true;
-                });
-              } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
-                val = (val).filter(t => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo');
-              }
-            }
-            for (const ck of candidateKeys) {
-              saveToLocalCache(ck, val);
-            }
-            return val as T;
+          const val = filterCollectionForTenant(json.value as T, collectionName, activeTenantId);
+          for (const ck of candidateKeys) {
+            saveToLocalCache(ck, val);
           }
+          return val;
         }
       }
     } catch (apiErr) {
@@ -492,13 +470,13 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
   for (const ck of candidateKeys) {
     const localVal = getFromLocalCache<T>(ck);
     if (localVal !== null && (!Array.isArray(localVal) || localVal.length > 0)) {
-      return localVal;
+      return filterCollectionForTenant(localVal, collectionName, activeTenantId);
     }
   }
   for (const ck of candidateKeys) {
     const localVal = getFromLocalCache<T>(ck);
     if (localVal !== null) {
-      return localVal;
+      return filterCollectionForTenant(localVal, collectionName, activeTenantId);
     }
   }
 
@@ -552,17 +530,6 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
   const activeTenantId = tenantIdOverride || getTenantId();
   const key = getCollectionKey(collectionName, activeTenantId);
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
-  
-  // Guard against accidental empty array overwrite of an existing populated collection
-  if (Array.isArray(value) && value.length === 0) {
-    for (const ck of candidateKeys) {
-      const cached = getFromLocalCache<any[]>(ck);
-      if (Array.isArray(cached) && cached.length > 0) {
-        console.warn(`[Protection] Refusing to overwrite populated ${ck} (${cached.length} items) with empty array.`);
-        return;
-      }
-    }
-  }
 
   // Guard against accidental blank placeholder overwrite of companyInfo
   if ((collectionName === 'companyInfo' || collectionName === 'company_info') && value && typeof value === 'object' && !Array.isArray(value)) {
