@@ -312,6 +312,7 @@ export interface Member {
   googleCalEmail?: string;
   googleCalId?: string;
   themePreference?: string;
+  hidePointage?: boolean;
 }
 
 export interface AppThemeOption {

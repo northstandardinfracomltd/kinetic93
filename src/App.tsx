@@ -7690,7 +7690,7 @@ export default function App() {
 
                           {/* Pause banner if tour is paused */}
                           {(() => {
-                            const isPaused = t.isPaused || t.pauseEnabled || (typeof window !== "undefined" && localStorage.getItem("defib_pause_enabled") === "true" && localStorage.getItem("defib_selected_tour_id") === t.id);
+                            const isPaused = t.status !== "Terminé" && (t.isPaused || t.pauseEnabled || (typeof window !== "undefined" && localStorage.getItem("defib_pause_enabled") === "true" && (localStorage.getItem("defib_selected_tour_id") === t.id || !t.status || t.status === "À faire")));
                             const reason = t.pauseReason || (typeof window !== "undefined" ? localStorage.getItem("defib_pause_reason") : null) || "Nuit Hôtel";
                             if (!isPaused) return null;
                             return (

@@ -626,6 +626,55 @@ export default function PublicPortal({
   const [showCalendarApiHelp, setShowCalendarApiHelp] = useState(false);
   const [disabledProjectNumber, setDisabledProjectNumber] = useState("");
 
+  // Toggle "Masquer le pointage" state
+  const [hidePointage, setHidePointage] = useState<boolean>(() => {
+    try {
+      const activeTechRaw = localStorage.getItem("defib_active_tech_session");
+      if (activeTechRaw) {
+        const activeTech = JSON.parse(activeTechRaw);
+        if (typeof activeTech?.hidePointage === "boolean") {
+          return activeTech.hidePointage;
+        }
+      }
+      const envId = localStorage.getItem("defib_tenant_id") || "demo";
+      const localVal = localStorage.getItem(`defib_${envId}_tech_hide_pointage`);
+      if (localVal !== null) return localVal === "true";
+      return localStorage.getItem("defib_hide_pointage") === "true";
+    } catch (e) {
+      return false;
+    }
+  });
+
+  // Effective hidden tabs & visibility rules
+  const effectiveHiddenTabs: string[] = (() => {
+    if (Array.isArray(companyInfo?.hiddenTabs) && companyInfo.hiddenTabs.length > 0) {
+      return companyInfo.hiddenTabs;
+    }
+    try {
+      const tid = localStorage.getItem("defib_tenant_id") || "demo";
+      const raw = localStorage.getItem(`defib_${tid}_company_info`) || localStorage.getItem("defib_company_info");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed?.hiddenTabs)) return parsed.hiddenTabs;
+      }
+    } catch (e) {}
+    return companyInfo?.hiddenTabs || [];
+  })();
+
+  const isStocksHidden =
+    effectiveHiddenTabs.includes("Centrale des stocks") ||
+    effectiveHiddenTabs.includes("Stocks distribués") ||
+    effectiveHiddenTabs.includes("Stock distribués") ||
+    effectiveHiddenTabs.includes("Stocks (Webapp)") ||
+    effectiveHiddenTabs.includes("Stocks");
+
+  const isFraisHidden =
+    effectiveHiddenTabs.includes("Tickets Caisse") ||
+    effectiveHiddenTabs.includes("Tickets de caisse") ||
+    effectiveHiddenTabs.includes("Tickets de Caisse") ||
+    effectiveHiddenTabs.includes("Frais (Webapp)") ||
+    effectiveHiddenTabs.includes("Frais");
+
   // Selected tour ID for mobile view
   const [selectedTourId, setSelectedTourId] = useState<string>(() => {
     try {
@@ -657,7 +706,7 @@ export default function PublicPortal({
       localStorage.setItem("defib_pause_reason", reason);
     } catch (e) {}
 
-    if (!selectedTourId) return;
+    const activeTechName = (authenticatedUser?.name || "").trim().toLowerCase();
 
     const activeToursSource = (fsmTours && fsmTours.length > 0)
       ? fsmTours
@@ -671,12 +720,16 @@ export default function PublicPortal({
         })();
 
     const updatedToursList = activeToursSource.map((t: any) => {
-      if (t.id === selectedTourId) {
+      const tTech = (t.techName || "").trim().toLowerCase();
+      const isThisTech = !activeTechName || tTech === activeTechName;
+      const isNotDone = t.status !== "Terminé";
+
+      if (isThisTech && isNotDone) {
         return {
           ...t,
           isPaused: enabled,
           pauseEnabled: enabled,
-          pauseReason: reason,
+          pauseReason: enabled ? reason : (t.pauseReason || reason),
         };
       }
       return t;
@@ -684,30 +737,49 @@ export default function PublicPortal({
 
     if (onUpdateFsmTours) {
       onUpdateFsmTours(updatedToursList);
-    } else {
-      try {
-        const tid = localStorage.getItem("defib_tenant_id") || "demo";
-        localStorage.setItem(`defib_${tid}_fsm_tours`, JSON.stringify(updatedToursList));
-        localStorage.setItem("defib_fsm_tours", JSON.stringify(updatedToursList));
-      } catch (e) {}
     }
+    try {
+      const tid = localStorage.getItem("defib_tenant_id") || "demo";
+      localStorage.setItem(`defib_${tid}_fsm_tours`, JSON.stringify(updatedToursList));
+      localStorage.setItem("defib_fsm_tours", JSON.stringify(updatedToursList));
+    } catch (e) {}
+
+    setTours((prevTours) =>
+      prevTours.map((t) => {
+        const isNotDone = t.status !== "Terminé";
+        if (isNotDone) {
+          return {
+            ...t,
+            isPaused: enabled,
+            pauseEnabled: enabled,
+            pauseReason: enabled ? reason : (t.pauseReason || reason),
+          };
+        }
+        return t;
+      })
+    );
+
+    try {
+      window.dispatchEvent(new Event("storage"));
+    } catch (_) {}
   };
 
   useEffect(() => {
-    if (selectedTourId && fsmTours && fsmTours.length > 0) {
-      const tour = fsmTours.find((t: any) => t.id === selectedTourId);
-      if (tour) {
-        if (typeof tour.isPaused === "boolean") {
-          setPauseEnabled(tour.isPaused);
-        } else if (typeof tour.pauseEnabled === "boolean") {
-          setPauseEnabled(tour.pauseEnabled);
-        }
-        if (tour.pauseReason) {
-          setPauseReason(tour.pauseReason);
+    const activeTechName = (authenticatedUser?.name || "").trim().toLowerCase();
+    if (fsmTours && fsmTours.length > 0) {
+      const activeTechTours = fsmTours.filter((t: any) => {
+        const tTech = (t.techName || "").trim().toLowerCase();
+        return (!activeTechName || tTech === activeTechName) && t.status !== "Terminé";
+      });
+      const pausedTour = activeTechTours.find((t: any) => t.isPaused || t.pauseEnabled);
+      if (pausedTour) {
+        setPauseEnabled(true);
+        if (pausedTour.pauseReason) {
+          setPauseReason(pausedTour.pauseReason);
         }
       }
     }
-  }, [selectedTourId, fsmTours]);
+  }, [fsmTours, authenticatedUser]);
 
   const [windowWidth, setWindowWidth] = useState<number>(() =>
     typeof window !== "undefined" ? window.innerWidth : 1000
@@ -3582,8 +3654,10 @@ export default function PublicPortal({
         setTechStartZip(liveMember.startAddressZip || "");
         setTechStartRegion(liveMember.startAddressRegion || "");
         setTechStartCountry(liveMember.startAddressCountry || "France");
-        setTechStartLat(liveMember.startAddressLat !== undefined ? String(liveMember.startAddressLat) : "");
-        setTechStartLng(liveMember.startAddressLng !== undefined ? String(liveMember.startAddressLng) : "");
+        const cleanLat = (liveMember.startAddressLat !== undefined && liveMember.startAddressLat !== null && String(liveMember.startAddressLat).toLowerCase() !== 'null' && String(liveMember.startAddressLat).toLowerCase() !== 'nan' && !isNaN(Number(liveMember.startAddressLat))) ? String(liveMember.startAddressLat) : "";
+        const cleanLng = (liveMember.startAddressLng !== undefined && liveMember.startAddressLng !== null && String(liveMember.startAddressLng).toLowerCase() !== 'null' && String(liveMember.startAddressLng).toLowerCase() !== 'nan' && !isNaN(Number(liveMember.startAddressLng))) ? String(liveMember.startAddressLng) : "";
+        setTechStartLat(cleanLat);
+        setTechStartLng(cleanLng);
         setTechSignature(liveMember.signature);
       } else {
         // Fallback or read from localStorage if any
@@ -3593,8 +3667,12 @@ export default function PublicPortal({
         setTechStartZip(localStorage.getItem(`defib_${envId}_tech_start_zip_${authenticatedUser.name}`) || "");
         setTechStartRegion(localStorage.getItem(`defib_${envId}_tech_start_region_${authenticatedUser.name}`) || "");
         setTechStartCountry(localStorage.getItem(`defib_${envId}_tech_start_country_${authenticatedUser.name}`) || "France");
-        setTechStartLat(localStorage.getItem(`defib_${envId}_tech_start_lat_${authenticatedUser.name}`) || "");
-        setTechStartLng(localStorage.getItem(`defib_${envId}_tech_start_lng_${authenticatedUser.name}`) || "");
+        const rawLocalLat = localStorage.getItem(`defib_${envId}_tech_start_lat_${authenticatedUser.name}`) || "";
+        const cleanLocalLat = (rawLocalLat && rawLocalLat.toLowerCase() !== 'null' && rawLocalLat.toLowerCase() !== 'undefined' && rawLocalLat.toLowerCase() !== 'nan') ? rawLocalLat : "";
+        const rawLocalLng = localStorage.getItem(`defib_${envId}_tech_start_lng_${authenticatedUser.name}`) || "";
+        const cleanLocalLng = (rawLocalLng && rawLocalLng.toLowerCase() !== 'null' && rawLocalLng.toLowerCase() !== 'undefined' && rawLocalLng.toLowerCase() !== 'nan') ? rawLocalLng : "";
+        setTechStartLat(cleanLocalLat);
+        setTechStartLng(cleanLocalLng);
         setTechSignature(authenticatedUser.signature);
       }
 
@@ -3619,6 +3697,15 @@ export default function PublicPortal({
       }
 
       if (savedNavApp) setDefaultNavApp(savedNavApp);
+
+      const savedHidePointage = (liveMember && typeof liveMember.hidePointage === "boolean")
+        ? liveMember.hidePointage
+        : (authenticatedUser && typeof authenticatedUser.hidePointage === "boolean")
+          ? authenticatedUser.hidePointage
+          : (localStorage.getItem(`defib_${envId}_tech_hide_pointage_${authenticatedUser.name}`) !== null
+              ? localStorage.getItem(`defib_${envId}_tech_hide_pointage_${authenticatedUser.name}`) === "true"
+              : localStorage.getItem("defib_hide_pointage") === "true");
+      setHidePointage(savedHidePointage);
     }
   }, [authenticatedUser, activeTab, members]);
 
@@ -4325,7 +4412,8 @@ export default function PublicPortal({
           startAddressLat: techStartLat ? parseFloat(techStartLat) : undefined,
           startAddressLng: techStartLng ? parseFloat(techStartLng) : undefined,
           optimizationPreference: (routeOptimization.includes("loin") ? "loin" : "proche") as "loin" | "proche",
-          signature: techSignature
+          signature: techSignature,
+          hidePointage: hidePointage,
         };
         return updatedM;
       }
@@ -4347,13 +4435,26 @@ export default function PublicPortal({
       startAddressLat: techStartLat ? parseFloat(techStartLat) : undefined,
       startAddressLng: techStartLng ? parseFloat(techStartLng) : undefined,
       optimizationPreference: (routeOptimization.includes("loin") ? "loin" : "proche") as "loin" | "proche",
-      signature: techSignature
+      signature: techSignature,
+      hidePointage: hidePointage,
     };
     setAuthenticatedUser(updatedUser);
     localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
 
     // 2. Persist starting address & optimized route to local storage
     const envId = localStorage.getItem("defib_tenant_id") || "demo";
+    localStorage.setItem(
+      `defib_${envId}_tech_hide_pointage_${authenticatedUser.name}`,
+      hidePointage ? "true" : "false"
+    );
+    localStorage.setItem(
+      `defib_${envId}_tech_hide_pointage`,
+      hidePointage ? "true" : "false"
+    );
+    localStorage.setItem(
+      "defib_hide_pointage",
+      hidePointage ? "true" : "false"
+    );
     localStorage.setItem(
       `defib_${envId}_tech_start_address_${authenticatedUser.name}`,
       composedAddress
@@ -4774,8 +4875,13 @@ export default function PublicPortal({
   };
 
   const getNextPassageZone = () => {
-    if (!selectedTourId) return "";
-    const activeTour = getSortedTours().find((t) => t.id === selectedTourId);
+    let activeTour: any = null;
+    if (selectedTourId) {
+      activeTour = getSortedTours().find((t) => t.id === selectedTourId);
+    }
+    if (!activeTour) {
+      activeTour = getSortedTours().find((t) => t.status !== "Terminé");
+    }
     if (!activeTour || !activeTour.passages || activeTour.passages.length === 0)
       return "";
 
@@ -5011,6 +5117,7 @@ export default function PublicPortal({
                   />
                 ) : (
                   <GmaoCorrectionForm
+                    key={reportToEdit ? `edit-${reportToEdit.id}-${reportToEdit.date || ''}` : `new-${selectedDefibId || 'new'}`}
                     isNew={reportToEdit ? false : true}
                     report={reportToEdit}
                     clients={clients}
@@ -6935,7 +7042,7 @@ export default function PublicPortal({
             )}
 
             {/* Alert banner if no ongoing pointage for connected technician session */}
-            {!pointages.some((p) => p.isOngoing && p.techName?.trim().toLowerCase() === (authenticatedUser?.name || "").trim().toLowerCase()) && (
+            {!hidePointage && !pointages.some((p) => p.isOngoing && p.techName?.trim().toLowerCase() === (authenticatedUser?.name || "").trim().toLowerCase()) && (
               <div
                 className="text-white text-center font-semibold select-none shadow-xs font-sans shrink-0"
                 style={{
@@ -7031,7 +7138,7 @@ export default function PublicPortal({
                     <span>Planning</span>
                   </button>
 
-                  {!companyInfo?.hiddenTabs?.includes("Temps (Webapp)") && (
+                  {!hidePointage && !companyInfo?.hiddenTabs?.includes("Temps (Webapp)") && (
                     <button
                       onClick={() => setActiveTab("temps")}
                       style={
@@ -7056,30 +7163,32 @@ export default function PublicPortal({
                     </button>
                   )}
 
-                  <button
-                    onClick={() => setActiveTab("stocks")}
-                    style={
-                      activeTab === "stocks"
-                        ? {
-                            background: "rgb(53, 86, 236)",
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                            borderRadius: "12px",
-                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                          }
-                        : {
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                          }
-                    }
-                    className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <span>Stocks</span>
-                  </button>
+                  {!isStocksHidden && (
+                    <button
+                      onClick={() => setActiveTab("stocks")}
+                      style={
+                        activeTab === "stocks"
+                          ? {
+                              background: "rgb(53, 86, 236)",
+                              color: "#ffffff",
+                              fontSize: "18px",
+                              fontWeight: "bold",
+                              borderRadius: "12px",
+                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                            }
+                          : {
+                              color: "#ffffff",
+                              fontSize: "18px",
+                              fontWeight: "bold",
+                            }
+                      }
+                      className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <span>Stocks</span>
+                    </button>
+                  )}
 
-                  {!companyInfo?.hiddenTabs?.includes("Frais (Webapp)") && (
+                  {!isFraisHidden && (
                     <button
                       onClick={() => setActiveTab("frais")}
                       style={
@@ -7181,13 +7290,6 @@ export default function PublicPortal({
                       className="space-y-4 pb-16 animate-fadeIn"
                       id="tab-interventions-screen"
                     >
-                      {!selectedTourId && (
-                        <HelpBubble
-                          cacheKey="help_webapp_interventions_no_tour"
-                          text="Seules les tournées marquées « À faire » et attribuées au technicien peuvent être sélectionnées."
-                        />
-                      )}
-
                       {/* Technician Name display field */}
                       <div className="px-1 select-none">
                         <input
@@ -7238,75 +7340,79 @@ export default function PublicPortal({
                         </select>
                       </div>
 
-                      {/* Toggle "Suspendre pour pause" */}
-                      {selectedTourId && isTourActive && (
-                        <div className="px-1" id="pause-toggle-block">
-                          <div
-                            className="bg-white border px-4 py-4 space-y-3 flex flex-col justify-center"
-                            style={{
-                              borderColor: "rgb(201, 190, 205)",
-                              borderRadius: "14px",
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[18px] font-bold text-black font-sans">
-                                {t("Suspendre pour pause.")}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => updateTourPauseState(!pauseEnabled, pauseReason || "Nuit Hôtel")}
-                                className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                      {/* Toggle "Suspendre pour pause" - Hors de la div de la tournée */}
+                      <div className="px-1" id="pause-toggle-block">
+                        <div
+                          className="bg-white border px-4 py-4 space-y-3 flex flex-col justify-center"
+                          style={{
+                            borderColor: "rgb(201, 190, 205)",
+                            borderRadius: "14px",
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[18px] font-bold text-black font-sans">
+                              {t("Suspendre pour pause.")}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateTourPauseState(!pauseEnabled, pauseReason || "Nuit Hôtel")}
+                              className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                              style={{
+                                backgroundColor: pauseEnabled
+                                  ? "#fe4eba"
+                                  : "#cbd5e1",
+                              }}
+                            >
+                              <span
+                                className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
                                 style={{
-                                  backgroundColor: pauseEnabled
-                                    ? "#fe4eba"
-                                    : "#cbd5e1",
+                                  transform: pauseEnabled
+                                    ? "translateX(20px)"
+                                    : "translateX(0px)",
                                 }}
-                              >
-                                <span
-                                  className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
-                                  style={{
-                                    transform: pauseEnabled
-                                      ? "translateX(20px)"
-                                      : "translateX(0px)",
-                                  }}
-                                />
-                              </button>
-                            </div>
-                            {pauseEnabled && (
-                              <div className="space-y-3 pt-1">
-                                {getNextPassageZone() && (
-                                  <div className="text-[18px] font-semibold text-[#fe4eba] font-sans">
-                                    {t("Zone recommandée pour votre pause :")}{" "}
-                                    <span className="font-bold">
-                                      {getNextPassageZone()}
-                                    </span>
-                                    .
-                                  </div>
-                                )}
-                                <div>
-                                  <select
-                                    value={pauseReason}
-                                    onChange={(e) => updateTourPauseState(true, e.target.value)}
-                                    className="w-full bg-white text-black font-semibold transition-all duration-150 focus:outline-none cursor-pointer"
-                                    style={{
-                                      border: "1px solid rgb(201, 190, 205)",
-                                      borderRadius: "14px",
-                                      padding: "10px 14px",
-                                      fontSize: "16px",
-                                    }}
-                                  >
-                                    <option value="Nuit Hôtel">Nuit Hôtel</option>
-                                    <option value="Week-End">Week-End</option>
-                                    <option value="Jour Férié">Jour Férié</option>
-                                    <option value="Incident">Incident</option>
-                                    <option value="Autre">Autre</option>
-                                  </select>
-                                </div>
-                              </div>
-                            )}
+                              />
+                            </button>
                           </div>
+                          {pauseEnabled && (
+                            <div className="space-y-3 pt-1">
+                              {getNextPassageZone() && (
+                                <div className="text-[18px] font-semibold text-[#fe4eba] font-sans">
+                                  {t("Zone recommandée pour votre pause :")}{" "}
+                                  <span className="font-bold">
+                                    {getNextPassageZone()}
+                                  </span>
+                                  .
+                                </div>
+                              )}
+                              <div>
+                                <select
+                                  value={pauseReason}
+                                  onChange={(e) => updateTourPauseState(true, e.target.value)}
+                                  className="w-full bg-white text-black font-semibold transition-all duration-150 focus:outline-none cursor-pointer"
+                                  style={{
+                                    border: "1px solid rgb(201, 190, 205)",
+                                    borderRadius: "14px",
+                                    padding: "10px 14px",
+                                    fontSize: "16px",
+                                  }}
+                                >
+                                  <option value="Nuit Hôtel">Nuit Hôtel</option>
+                                  <option value="Week-End">Week-End</option>
+                                  <option value="Jour Férié">Jour Férié</option>
+                                  <option value="Incident">Incident</option>
+                                  <option value="Autre">Autre</option>
+                                </select>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
+
+                      {/* Div-Info */}
+                      <HelpBubble
+                        cacheKey="help_webapp_interventions_no_tour"
+                        text="Seules les tournées marquées « À faire » et attribuées au technicien peuvent être sélectionnées."
+                      />
 
                       {/* Section "Affiner la tournée" */}
                       {selectedTourId && isTourActive && (
@@ -7974,6 +8080,8 @@ export default function PublicPortal({
                                         return {
                                           ...item,
                                           status: "Terminé",
+                                          isPaused: false,
+                                          pauseEnabled: false,
                                           passages: item.passages.map(
                                             (pass) => {
                                               if (
@@ -8326,13 +8434,31 @@ export default function PublicPortal({
                             type="button"
                             onClick={() => {
                               setReportToEdit(rep);
-                              setSelectedDefibId(rep.defibId || "");
+                              const targetDefibId = rep.defibId || rep.defibSnapshot?.id || "";
+                              setSelectedDefibId(targetDefibId);
                               const defib = defibrillateurs.find(
                                 (d) =>
-                                  d.id === rep.defibId ||
-                                  d.identifiant === rep.defibIdentifiant,
+                                  (targetDefibId && d.id === targetDefibId) ||
+                                  (rep.defibIdentifiant && d.identifiant?.trim().toLowerCase() === rep.defibIdentifiant.trim().toLowerCase()) ||
+                                  (rep.defibSnapshot?.identifiant && d.identifiant?.trim().toLowerCase() === rep.defibSnapshot.identifiant.trim().toLowerCase())
                               );
-                              if (defib) setSelectedDefibData(defib);
+                              if (defib) {
+                                setSelectedDefibData(defib);
+                              } else if (rep.defibSnapshot) {
+                                setSelectedDefibData(rep.defibSnapshot);
+                              }
+
+                              const matchedOther = otherEquipments.find(o => 
+                                o.id === rep.defibId || 
+                                o.id === (rep as any).otherEquipmentId || 
+                                (rep.defibIdentifiant && o.identifiant?.trim().toLowerCase() === rep.defibIdentifiant.trim().toLowerCase())
+                              );
+                              if (matchedOther && (rep.isOtherEquipment || (rep as any).equipmentType === 'OTHER')) {
+                                setSelectedOtherEquipmentUnique(matchedOther);
+                              } else {
+                                setSelectedOtherEquipmentUnique(null);
+                              }
+
                               setIsReportOverlayOpen(true);
                             }}
                             style={{
@@ -8382,7 +8508,7 @@ export default function PublicPortal({
               )}
 
               {/* ----------------- TAB: STOCKS ----------------- */}
-              {activeTab === "stocks" && (
+              {activeTab === "stocks" && !isStocksHidden && (
                 <div
                   className="space-y-4 pb-16 animate-fadeIn"
                   id="tab-stocks-screen"
@@ -11119,7 +11245,7 @@ export default function PublicPortal({
               )}
 
               {/* ----------------- TAB 4: FRAIS ----------------- */}
-              {activeTab === "frais" && (
+              {activeTab === "frais" && !isFraisHidden && (
                 <div
                   className="space-y-6 pb-16 animate-fadeIn"
                   id="tab-frais-screen"
@@ -11804,6 +11930,55 @@ export default function PublicPortal({
                     id="auth-main-card"
                   >
                     <div className="space-y-4">
+                      {/* Toggle Masquer le pointage */}
+                      <div className="space-y-1.5" style={{ marginTop: "24px" }}>
+                        <div
+                          className="bg-white border px-4 py-[25px]"
+                          style={{
+                            borderColor: "rgb(201, 190, 205)",
+                            borderRadius: "14px",
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[18px] font-bold text-black font-sans select-none">
+                              {t("Masquer le pointage.")}
+                            </span>
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newVal = !hidePointage;
+                                  setHidePointage(newVal);
+                                  try {
+                                    const envId = localStorage.getItem("defib_tenant_id") || "demo";
+                                    localStorage.setItem("defib_hide_pointage", newVal ? "true" : "false");
+                                    localStorage.setItem(`defib_${envId}_tech_hide_pointage`, newVal ? "true" : "false");
+                                    if (authenticatedUser?.name) {
+                                      localStorage.setItem(`defib_${envId}_tech_hide_pointage_${authenticatedUser.name}`, newVal ? "true" : "false");
+                                    }
+                                  } catch (e) {}
+                                }}
+                                className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                                style={{
+                                  backgroundColor: hidePointage
+                                    ? "#fe4eba"
+                                    : "#cbd5e1",
+                                }}
+                              >
+                                <span
+                                  className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
+                                  style={{
+                                    transform: hidePointage
+                                      ? "translateX(20px)"
+                                      : "translateX(0px)",
+                                  }}
+                                />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Live map link replaced by toggle */}
                       {!companyInfo?.hiddenTabs?.includes("Localisation") && !companyInfo?.hiddenTabs?.includes("Localisation (Webapp)") && !companyInfo?.hiddenTabs?.includes("Localisations") && (
                         <div className="space-y-1.5" style={{ marginTop: "24px" }}>
@@ -12001,7 +12176,7 @@ export default function PublicPortal({
                               type="text"
                               readOnly
                               required
-                              value={techStartLat}
+                              value={(techStartLat && techStartLat.toLowerCase() !== 'null' && techStartLat.toLowerCase() !== 'undefined' && techStartLat.toLowerCase() !== 'nan') ? techStartLat : ''}
                               placeholder="Rempli automatiquement"
                               style={{
                                 fontSize: "15px",
@@ -12024,7 +12199,7 @@ export default function PublicPortal({
                               type="text"
                               readOnly
                               required
-                              value={techStartLng}
+                              value={(techStartLng && techStartLng.toLowerCase() !== 'null' && techStartLng.toLowerCase() !== 'undefined' && techStartLng.toLowerCase() !== 'nan') ? techStartLng : ''}
                               placeholder="Rempli automatiquement"
                               style={{
                                 fontSize: "15px",

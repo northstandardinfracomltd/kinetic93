@@ -43,10 +43,11 @@ const DAY_NAMES_FR = [
   'Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'
 ];
 
-const getFormattedDateFR = (dateStr?: string) => {
+const getFormattedDateFR = (dateStr?: any): string => {
   if (!dateStr || dateStr === 'A trier') return '';
-  if (dateStr.includes('-')) {
-    const parts = dateStr.split('-');
+  const s = String(dateStr);
+  if (s.includes('-')) {
+    const parts = s.split('-');
     if (parts.length === 3) {
       if (parts[0].length === 4) {
         return `${parts[2]}/${parts[1]}/${parts[0]}`;
@@ -55,19 +56,20 @@ const getFormattedDateFR = (dateStr?: string) => {
       }
     }
   }
-  return dateStr;
+  return s;
 };
 
-const toIsoDateStr = (rawDate?: string) => {
+const toIsoDateStr = (rawDate?: any): string => {
   if (!rawDate || rawDate === 'A trier') return '';
-  if (rawDate.includes('-')) {
-    const parts = rawDate.split('-');
+  const s = String(rawDate);
+  if (s.includes('-')) {
+    const parts = s.split('-');
     if (parts.length === 3) {
-      if (parts[0].length === 4) return rawDate;
+      if (parts[0].length === 4) return s;
       if (parts[2].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
   }
-  return rawDate;
+  return s;
 };
 
 const getISOWeekNumber = (date: Date): number => {
@@ -93,18 +95,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(today.getMonth());
-  const [selectedTech, setSelectedTech] = useState<string>(
-    initialTech !== undefined ? initialTech : (authenticatedUser?.name || 'Tous')
-  );
-  const [expandedMissions, setExpandedMissions] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    if (initialTech !== undefined) {
-      setSelectedTech(initialTech);
-    } else if (authenticatedUser?.name && (selectedTech === 'Tous' || !selectedTech)) {
-      setSelectedTech(authenticatedUser.name);
-    }
-  }, [initialTech, authenticatedUser?.name]);
 
   // Mini Form Spontaneous Event states
   const [isSpontaneousFormOpen, setIsSpontaneousFormOpen] = useState<boolean>(false);
@@ -166,53 +156,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     }
   };
 
-  const handleSaveSpontaneousEvent = () => {
-    setFormError('');
-    if (!formDate || !formCreneau || !formIntitule.trim() || !formCommentaire.trim()) {
-      setFormError('Tous les champs sont requis.');
-      return;
-    }
-
-    const techForEvent = (selectedTech && selectedTech !== 'Tous')
-      ? selectedTech
-      : (authenticatedUser?.name || 'Technicien');
-
-    const newEvt: SpontaneousEvent = {
-      id: `spont_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-      techName: techForEvent,
-      date: formDate,
-      creneau: formCreneau,
-      intitule: formIntitule.trim(),
-      commentaire: formCommentaire.trim(),
-      createdAt: new Date().toISOString()
-    };
-
-    const updated = [...spontaneousEvents, newEvt];
-    saveSpontaneousEvents(updated);
-
-    // Auto switch calendar month/year if needed
-    if (formDate.includes('-')) {
-      const parts = formDate.split('-');
-      const yVal = parseInt(parts[0], 10);
-      const mVal = parseInt(parts[1], 10) - 1;
-      if (!isNaN(yVal) && !isNaN(mVal)) {
-        setSelectedYear(yVal);
-        setSelectedMonth(mVal);
-      }
-    }
-
-    // Reset & close form
-    setFormDate('');
-    setFormCreneau('');
-    setFormIntitule('');
-    setFormCommentaire('');
-    setIsSpontaneousFormOpen(false);
-  };
-
-  const handleDeleteSpontaneousEvent = (id: string) => {
-    const updated = spontaneousEvents.filter(e => e.id !== id);
-    saveSpontaneousEvents(updated);
-  };
+  const [expandedMissions, setExpandedMissions] = useState<Record<string, boolean>>({});
 
   const toggleMissionExpanded = (key: string) => {
     setExpandedMissions(prev => ({
@@ -223,44 +167,90 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
   // List of technician members only (strictly tenant-isolated)
   const techniciansList = useMemo(() => {
-    const rawAll = members && members.length > 0 ? members : (companyInfo?.members || []);
-    const activeTenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+    const rawAll = (members && members.length > 0) ? members : (companyInfo?.members || []);
+    const activeTenantId = (
+      authenticatedUser?.tenantId ||
+      authenticatedUser?.envId ||
+      localStorage.getItem('defib_tenant_id') ||
+      'demo'
+    ).trim().toLowerCase();
     const isDemo = activeTenantId === 'demo';
-    const cleanTid = activeTenantId.trim().toLowerCase();
 
-    let all = rawAll.filter((m: any) => {
-      if (!m || typeof m !== 'object') return false;
+    let filtered = rawAll.filter((m: any) => {
+      if (!m || typeof m !== 'object' || !m.name) return false;
       const mEnv = (m.envId || m.tenantId || '').trim().toLowerCase();
+
       if (isDemo) {
         if (mEnv && mEnv !== 'demo') return false;
         return true;
       }
-      if (mEnv && mEnv !== cleanTid) return false;
-      if (!mEnv && (m.email === 'techniciendemo1@demo.com' || m.name === 'Jakub Démo')) return false;
+
+      if (mEnv) {
+        return mEnv === activeTenantId;
+      }
+
+      // Member has no explicit envId/tenantId:
+      // If in custom env, strictly reject demo members!
+      if (m.email === 'techniciendemo1@demo.com' || m.name === 'Jakub Démo' || m.name === 'Jakub Demo') {
+        return false;
+      }
       return true;
     });
 
+    // Ensure authenticated user is included
     if (authenticatedUser && authenticatedUser.name) {
-      const exists = all.some(m => m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase());
+      const exists = filtered.some(m => m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase());
       if (!exists) {
-        all = [authenticatedUser, ...all];
+        filtered = [authenticatedUser, ...filtered];
       }
     }
 
-    const techOnly = all.filter(m => {
+    const techOnly = filtered.filter(m => {
       const r = (m.role || '').toLowerCase();
       return r.includes('tech') || r.includes('technicien');
     });
-    return techOnly.length > 0 ? techOnly : all;
+
+    const result = techOnly.length > 0 ? techOnly : (filtered.length > 0 ? filtered : (authenticatedUser ? [authenticatedUser] : []));
+
+    // Deduplicate by name
+    const uniqueMap = new Map<string, Member>();
+    result.forEach(m => {
+      if (m && m.name) {
+        const key = m.name.trim().toLowerCase();
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, m);
+        }
+      }
+    });
+
+    return Array.from(uniqueMap.values());
   }, [members, companyInfo, authenticatedUser]);
+
+  // Selected technician state - auto select logged-in technician
+  const [selectedTech, setSelectedTech] = useState<string>(() => {
+    if (authenticatedUser?.name && authenticatedUser.name.trim() !== '') {
+      return authenticatedUser.name;
+    }
+    if (initialTech && initialTech.trim() !== '') {
+      return initialTech;
+    }
+    try {
+      const activeUserRaw = localStorage.getItem("defib_active_tech_session");
+      if (activeUserRaw) {
+        const u = JSON.parse(activeUserRaw);
+        if (u?.name) return u.name;
+      }
+    } catch (_) {}
+    return '';
+  });
 
   // Default selected technician: auto-select logged-in technician
   useEffect(() => {
-    if (initialTech !== undefined && initialTech !== '') {
-      setSelectedTech(initialTech);
-    } else if (authenticatedUser?.name) {
+    if (authenticatedUser?.name && authenticatedUser.name.trim() !== '') {
       setSelectedTech(authenticatedUser.name);
-    } else {
+    } else if (initialTech && initialTech.trim() !== '') {
+      setSelectedTech(initialTech);
+    } else if (!selectedTech || selectedTech === 'Tous' || selectedTech === 'Sélectionner un technicien' || selectedTech === '') {
       try {
         const activeUserRaw = localStorage.getItem("defib_active_tech_session");
         if (activeUserRaw) {
@@ -271,11 +261,11 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           }
         }
       } catch (_) {}
-      if ((!selectedTech || selectedTech === 'Tous') && techniciansList.length > 0) {
+      if (techniciansList.length > 0 && techniciansList[0]?.name) {
         setSelectedTech(techniciansList[0].name);
       }
     }
-  }, [initialTech, authenticatedUser, techniciansList]);
+  }, [authenticatedUser?.name, initialTech, techniciansList]);
 
   // Active member object
   const activeMember = useMemo(() => {
@@ -342,29 +332,33 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       return map;
     }
 
-    fsmTours.forEach(tour => {
-      if (selectedTech !== 'Tous') {
-        const tourTech = (tour.techName || '').trim().toLowerCase();
-        const selTech = selectedTech.trim().toLowerCase();
-        if (tourTech !== selTech) return;
-      }
-
-      const tourMissions = tour.missions || tour.passages || [];
-      if (!Array.isArray(tourMissions)) return;
-
-      tourMissions.forEach((m: any) => {
-        const rawDate = m.estimatedDate || m.date || (tour.startDate !== 'A trier' ? tour.startDate : null);
-        if (!rawDate) return;
-
-        const missionIso = toIsoDateStr(rawDate);
-        if (!missionIso) return;
-
-        if (!map[missionIso]) {
-          map[missionIso] = [];
+    if (Array.isArray(fsmTours)) {
+      fsmTours.forEach(tour => {
+        if (!tour) return;
+        if (selectedTech !== 'Tous') {
+          const tourTech = String(tour.techName || '').trim().toLowerCase();
+          const selTech = selectedTech.trim().toLowerCase();
+          if (tourTech !== selTech) return;
         }
-        map[missionIso].push({ tour, mission: m });
+
+        const tourMissions = tour.missions || tour.passages || [];
+        if (!Array.isArray(tourMissions)) return;
+
+        tourMissions.forEach((m: any) => {
+          if (!m) return;
+          const rawDate = m.estimatedDate || m.date || (tour.startDate !== 'A trier' ? tour.startDate : null);
+          if (!rawDate) return;
+
+          const missionIso = toIsoDateStr(rawDate);
+          if (!missionIso) return;
+
+          if (!map[missionIso]) {
+            map[missionIso] = [];
+          }
+          map[missionIso].push({ tour, mission: m });
+        });
       });
-    });
+    }
 
     return map;
   }, [fsmTours, selectedTech]);
@@ -377,10 +371,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     const todayIso = `${yearStr}-${monthStr}-${dayStr}`;
 
     const timer = setTimeout(() => {
-      const todayEl = document.getElementById(`calendar-day-${todayIso}`);
-      if (todayEl) {
-        todayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      try {
+        const todayEl = document.getElementById(`calendar-day-${todayIso}`);
+        if (todayEl) {
+          todayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      } catch (_) {}
     }, 150);
 
     return () => clearTimeout(timer);
@@ -391,7 +387,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
   useEffect(() => {
     const checkScroll = () => {
-      const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      const scrollY = window.scrollY || window.pageYOffset || document.documentElement?.scrollTop || document.body?.scrollTop || 0;
       if (scrollY > 200) {
         setShowScrollTop(true);
       } else {
@@ -400,7 +396,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     };
 
     window.addEventListener('scroll', checkScroll, { passive: true });
-    // Also check on main wrapper / container scroll if any
     const mainWrapper = document.getElementById('planning-tab-wrapper');
     const scrollParent = mainWrapper?.parentElement;
     if (scrollParent) {
@@ -418,15 +413,67 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   }, []);
 
   const handleScrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    const mainWrapper = document.getElementById('planning-tab-wrapper');
-    if (mainWrapper) {
-      mainWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const mainWrapper = document.getElementById('planning-tab-wrapper');
+      if (mainWrapper) {
+        mainWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      const scrollParent = mainWrapper?.parentElement;
+      if (scrollParent) {
+        scrollParent.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } catch (_) {
+      window.scrollTo(0, 0);
     }
-    const scrollParent = mainWrapper?.parentElement;
-    if (scrollParent) {
-      scrollParent.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSaveSpontaneousEvent = () => {
+    setFormError('');
+    if (!formDate || !formCreneau || !formIntitule.trim() || !formCommentaire.trim()) {
+      setFormError('Tous les champs sont requis.');
+      return;
     }
+
+    const techForEvent = (selectedTech && selectedTech !== 'Tous')
+      ? selectedTech
+      : (authenticatedUser?.name || 'Technicien');
+
+    const newEvt: SpontaneousEvent = {
+      id: `spont_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      techName: techForEvent,
+      date: formDate,
+      creneau: formCreneau,
+      intitule: formIntitule.trim(),
+      commentaire: formCommentaire.trim(),
+      createdAt: new Date().toISOString()
+    };
+
+    const updated = [...spontaneousEvents, newEvt];
+    saveSpontaneousEvents(updated);
+
+    // Auto switch calendar month/year if needed
+    if (formDate.includes('-')) {
+      const parts = formDate.split('-');
+      const yVal = parseInt(parts[0], 10);
+      const mVal = parseInt(parts[1], 10) - 1;
+      if (!isNaN(yVal) && !isNaN(mVal)) {
+        setSelectedYear(yVal);
+        setSelectedMonth(mVal);
+      }
+    }
+
+    // Reset & close form
+    setFormDate('');
+    setFormCreneau('');
+    setFormIntitule('');
+    setFormCommentaire('');
+    setIsSpontaneousFormOpen(false);
+  };
+
+  const handleDeleteSpontaneousEvent = (id: string) => {
+    const updated = spontaneousEvents.filter(e => e.id !== id);
+    saveSpontaneousEvents(updated);
   };
 
   return (
@@ -449,7 +496,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             textAlignLast: "center",
           }}
         >
-          <option value="">-- Sélectionner un technicien --</option>
+          {techniciansList.length === 0 && (
+            <option value="">-- Aucun technicien --</option>
+          )}
           {techniciansList.map((m) => (
             <option key={m.name} value={m.name}>
               {m.name}
@@ -549,7 +598,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                       WebkitAppearance: "none",
                       appearance: "none",
                     }}
-                    required
                   />
                 </div>
 
@@ -564,19 +612,18 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                       setFormCreneau(e.target.value);
                       if (formError) setFormError('');
                     }}
-                    className="w-full bg-white text-black font-medium appearance-none transition-all duration-150 focus:outline-none cursor-pointer"
+                    className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none cursor-pointer"
                     style={{
                       border: "1px solid rgb(201, 190, 205)",
                       borderRadius: "14px",
                       padding: "12px 14px",
                       fontSize: "16px",
                     }}
-                    required
                   >
-                    <option value="">-- Sélectionner un créneau --</option>
-                    {CRENEAU_OPTIONS.map((slot) => (
-                      <option key={slot} value={slot}>
-                        {slot}
+                    <option value="">Sélectionner un créneau</option>
+                    {CRENEAU_OPTIONS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
                       </option>
                     ))}
                   </select>
@@ -589,12 +636,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                   </label>
                   <input
                     type="text"
+                    placeholder="Ex : Réunion équipe, Formation..."
                     value={formIntitule}
                     onChange={(e) => {
                       setFormIntitule(e.target.value);
                       if (formError) setFormError('');
                     }}
-                    placeholder="Saisir l'intitulé"
                     className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
                     style={{
                       border: "1px solid rgb(201, 190, 205)",
@@ -602,7 +649,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                       padding: "12px 14px",
                       fontSize: "16px",
                     }}
-                    required
                   />
                 </div>
 
@@ -612,41 +658,39 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                     Commentaire <span className="text-red-500">*</span>
                   </label>
                   <textarea
+                    rows={3}
+                    placeholder="Détails de l'événement..."
                     value={formCommentaire}
                     onChange={(e) => {
                       setFormCommentaire(e.target.value);
                       if (formError) setFormError('');
                     }}
-                    placeholder="Saisir un commentaire"
-                    rows={3}
-                    className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none resize-y"
+                    className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
                     style={{
                       border: "1px solid rgb(201, 190, 205)",
                       borderRadius: "14px",
                       padding: "12px 14px",
                       fontSize: "16px",
                     }}
-                    required
                   />
                 </div>
 
-                <div className="flex justify-end pt-1">
+                {/* Bouton Annuler */}
+                <div className="pt-2">
                   <button
                     type="button"
                     onClick={() => {
                       setIsSpontaneousFormOpen(false);
                       setFormError('');
                     }}
+                    className="w-full text-black font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer select-none"
                     style={{
-                      textDecoration: "none",
-                      color: "#fd4ebb",
-                      fontSize: "18px",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                      border: "none",
-                      background: "transparent",
+                      backgroundColor: "rgb(243, 244, 246)",
+                      borderRadius: "14px",
+                      padding: "12px 14px",
+                      fontSize: "16px",
+                      border: "1px solid rgb(201, 190, 205)",
                     }}
-                    className="font-bold select-none cursor-pointer"
                   >
                     Annuler
                   </button>
@@ -659,7 +703,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
       {/* Divs "Technicien en pause" */}
       {selectedTech && selectedTech !== 'Tous' && selectedTech.trim() !== '' && (() => {
-        const toursSource = (fsmTours && fsmTours.length > 0)
+        const toursSource = (Array.isArray(fsmTours) && fsmTours.length > 0)
           ? fsmTours
           : (() => {
               try {
@@ -671,10 +715,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
               }
             })();
 
-        const pausedTours = toursSource.filter((t: any) => {
-          const nameMatch = (t.techName || '').trim().toLowerCase() === selectedTech.trim().toLowerCase();
-          return nameMatch && (t.isPaused || t.pauseEnabled);
-        });
+        const pausedTours = Array.isArray(toursSource) ? toursSource.filter((t: any) => {
+          if (!t) return false;
+          const nameMatch = String(t.techName || '').trim().toLowerCase() === selectedTech.trim().toLowerCase();
+          const isActive = t.status !== "Terminé";
+          return nameMatch && isActive && (t.isPaused || t.pauseEnabled);
+        }) : [];
 
         let showFallback = false;
         let fallbackReason = "Nuit Hôtel";
@@ -684,7 +730,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           const activeUserRaw = localStorage.getItem("defib_active_tech_session");
           if (isLocalPaused && activeUserRaw) {
             const activeUser = JSON.parse(activeUserRaw);
-            if ((activeUser?.name || '').trim().toLowerCase() === selectedTech.trim().toLowerCase()) {
+            if (String(activeUser?.name || '').trim().toLowerCase() === selectedTech.trim().toLowerCase()) {
               if (pausedTours.length === 0) {
                 showFallback = true;
               }
@@ -694,11 +740,15 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
         if (pausedTours.length === 0 && !showFallback) return null;
 
+        const distinctReasons = Array.from(new Set(
+          pausedTours.map((t: any) => t.pauseReason || "Nuit Hôtel")
+        ));
+
         return (
           <div className="space-y-3 mb-4">
-            {pausedTours.map((tour: any) => (
+            {distinctReasons.map((reason: string, idx: number) => (
               <div
-                key={`paused-tour-planning-${tour.id}`}
+                key={`paused-tour-planning-${idx}`}
                 className="w-full font-bold p-4 text-[16px] text-center select-none"
                 style={{
                   backgroundColor: "rgb(255, 232, 247)",
@@ -710,7 +760,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                   boxShadow: "none",
                 }}
               >
-                Technicien en pause : {tour.pauseReason || "Nuit Hôtel"}.
+                Technicien en pause : {reason}.
               </div>
             ))}
             {showFallback && (
@@ -772,9 +822,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                     : (activeMember ? [activeMember] : []);
 
                   techsToCheck.forEach(m => {
-                    if (m.absences && Array.isArray(m.absences)) {
+                    if (m && m.absences && Array.isArray(m.absences)) {
                       m.absences.forEach(abs => {
-                        if (abs.startDate && abs.endDate) {
+                        if (abs && abs.startDate && abs.endDate) {
                           if (isoDate >= abs.startDate && isoDate <= abs.endDate) {
                             matchingAbsences.push({ memberName: m.name, abs });
                           }
@@ -786,8 +836,8 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                   // Semaine typique
                   const scheduleSlotsByTech: { memberName: string; schedule: MemberSchedule }[] = [];
                   techsToCheck.forEach(m => {
-                    if (m.semaineTypique && Array.isArray(m.semaineTypique)) {
-                      const sch = m.semaineTypique.find(s => s.days && s.days.includes(dayName));
+                    if (m && m.semaineTypique && Array.isArray(m.semaineTypique)) {
+                      const sch = m.semaineTypique.find(s => s && s.days && Array.isArray(s.days) && s.days.includes(dayName));
                       if (sch) {
                         scheduleSlotsByTech.push({ memberName: m.name, schedule: sch });
                       }
@@ -876,10 +926,11 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                       {/* Événements spontanés */}
                       {(() => {
                         const daySpontaneousEvents = spontaneousEvents.filter((evt) => {
+                          if (!evt) return false;
                           const evtIso = toIsoDateStr(evt.date);
                           if (!evtIso || evtIso !== isoDate) return false;
                           if (!selectedTech || selectedTech === 'Tous') return true;
-                          const evtTech = (evt.techName || '').trim().toLowerCase();
+                          const evtTech = String(evt.techName || '').trim().toLowerCase();
                           const selTech = selectedTech.trim().toLowerCase();
                           return evtTech === selTech || evtTech.includes(selTech) || selTech.includes(evtTech);
                         });
@@ -913,7 +964,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 onClick={() => handleDeleteSpontaneousEvent(evt.id)}
                                 style={{
                                   color: "#fff",
-                                  boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgba(220, 38, 38, 0.5) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                  boxShadow: "none",
                                   background: "rgb(220, 38, 38)",
                                   borderRadius: "13px",
                                   padding: "8px 18px",
@@ -949,29 +1000,36 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
                       {/* Missions */}
                       {dayMissions.map(({ tour, mission }, mIdx) => {
+                        if (!mission || !tour) return null;
                         // Find associated equipment & client
                         const defib = defibrillateurs.find(
                           (d: any) =>
-                            d.identifiant === mission.defibIdentifiant ||
-                            d.id === mission.defibIdentifiant ||
-                            (mission.identifiant && d.identifiant === mission.identifiant) ||
-                            (mission.defibId && d.id === mission.defibId)
+                            d && (
+                              d.identifiant === mission.defibIdentifiant ||
+                              d.id === mission.defibIdentifiant ||
+                              (mission.identifiant && d.identifiant === mission.identifiant) ||
+                              (mission.defibId && d.id === mission.defibId)
+                            )
                         );
 
                         const other = otherEquipments.find(
                           (o: any) =>
-                            o.identifiant === mission.defibIdentifiant ||
-                            o.id === mission.defibIdentifiant ||
-                            (mission.identifiant && o.identifiant === mission.identifiant) ||
-                            (mission.defibId && o.id === mission.defibId)
+                            o && (
+                              o.identifiant === mission.defibIdentifiant ||
+                              o.id === mission.defibIdentifiant ||
+                              (mission.identifiant && o.identifiant === mission.identifiant) ||
+                              (mission.defibId && o.id === mission.defibId)
+                            )
                         );
 
                         const clientObj = clients.find(
                           c =>
-                            c.id === mission.clientId ||
-                            c.id === defib?.clientId ||
-                            c.id === other?.clientId ||
-                            (c.denomination && mission.clientDenomination && c.denomination.toLowerCase() === mission.clientDenomination.toLowerCase())
+                            c && (
+                              c.id === mission.clientId ||
+                              c.id === defib?.clientId ||
+                              c.id === other?.clientId ||
+                              (c.denomination && mission.clientDenomination && String(c.denomination).toLowerCase() === String(mission.clientDenomination).toLowerCase())
+                            )
                         );
 
                         const tourTitle = tour.title || tour.name || 'Tournée';
@@ -985,12 +1043,16 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           defib?.nomPrenomSite ||
                           '';
 
+                        const eqTypeStr = String(mission.equipmentType || '');
+                        const reasonStr = String(mission.reason || '');
+                        const defibIdentStr = String(mission.defibIdentifiant || '');
+
                         const isFormationMission =
-                          mission.equipmentType === 'Formation' ||
-                          mission.equipmentType?.toLowerCase()?.includes('formation') ||
-                          !!mission.formationId ||
-                          mission.reason?.toLowerCase()?.includes('formation') ||
-                          mission.defibIdentifiant === 'Formation';
+                          eqTypeStr === 'Formation' ||
+                          eqTypeStr.toLowerCase().includes('formation') ||
+                          Boolean(mission.formationId) ||
+                          reasonStr.toLowerCase().includes('formation') ||
+                          defibIdentStr === 'Formation';
 
                         const typeVal = isFormationMission
                           ? 'Formation'
@@ -1000,19 +1062,19 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
                         const identifiant = (() => {
                           if (isFormationMission) {
-                            if (mission.formationId) return mission.formationId;
-                            if (mission.interventionReference) return mission.interventionReference;
+                            if (mission.formationId) return String(mission.formationId);
+                            if (mission.interventionReference) return String(mission.interventionReference);
                             if (
-                              mission.defibIdentifiant &&
-                              mission.defibIdentifiant !== 'Formation' &&
-                              mission.defibIdentifiant !== mission.reason &&
-                              !mission.defibIdentifiant.toLowerCase().includes('formation')
+                              defibIdentStr &&
+                              defibIdentStr !== 'Formation' &&
+                              defibIdentStr !== reasonStr &&
+                              !defibIdentStr.toLowerCase().includes('formation')
                             ) {
-                              return mission.defibIdentifiant;
+                              return defibIdentStr;
                             }
-                            return mission.id || 'FMT-001';
+                            return String(mission.id || 'FMT-001');
                           }
-                          return (
+                          return String(
                             mission.defibIdentifiant ||
                             mission.identifiant ||
                             defib?.identifiant ||
@@ -1055,7 +1117,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                             const parts = [other.numeroVoie, other.codePostal, other.ville].filter(Boolean);
                             if (parts.length > 0) return parts.join(', ');
                           }
-                          if (mission.address) return mission.address;
+                          if (mission.address) return String(mission.address);
                           if (clientObj) {
                             const parts = [clientObj.adresse, clientObj.codePostal, clientObj.ville].filter(Boolean);
                             if (parts.length > 0) return parts.join(', ');
@@ -1121,7 +1183,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 onClick={() => toggleMissionExpanded(missionKey)}
                                 style={{
                                   color: "#fff",
-                                  boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97 28 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                  boxShadow: "none",
                                   background: "rgb(96 28 104)",
                                   borderRadius: "13px",
                                   padding: "8px 18px",
@@ -1175,35 +1237,21 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
       {/* Floating Button "Remonter" when header is not visible (>200px scroll) */}
       {showScrollTop && (
-        <div className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 animate-fade-in">
+        <div className="fixed bottom-4 right-4 sm:bottom-4 sm:right-6 z-40 animate-fade-in">
           <button
             type="button"
             onClick={handleScrollToTop}
-            className="text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none shadow-lg hover:opacity-95 active:scale-95"
+            className="text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none hover:opacity-95 active:scale-95"
             style={{
               backgroundColor: "rgb(22, 93, 252)",
               borderRadius: "14px",
-              padding: "12px 20px",
-              fontSize: "16px",
+              padding: "14px 20px",
+              fontSize: "18px",
               border: "none",
-              boxShadow: "0 4px 14px rgba(22, 93, 252, 0.4)"
+              boxShadow: "none"
             }}
           >
-            <span className="flex items-center gap-2">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Remonter
-            </span>
+            {t("Remonter")}
           </button>
         </div>
       )}

@@ -25,6 +25,7 @@ import { getAppsScriptUrl, saveAppsScriptUrl, triggerEmail2TechnicianConnexion, 
 import { setLanguage, t } from '../utils/translate';
 import { REGIONS_FRANCAISES, getLocationCustomName } from '../utils';
 import { getRegionsForCountry } from '../utils/regions';
+import { geocodeAddress } from '../utils/fsmOptimizer';
 import HelpBubble from './HelpBubble';
 
 interface SettingsModalProps {
@@ -275,6 +276,46 @@ export default function SettingsModal({
         updatedAt: new Date().toISOString()
       }, tenantId).catch(err => console.warn('Error saving user theme to Firestore:', err));
     }
+  };
+
+  const geocodeTimersRef = React.useRef<{ [key: number]: any }>({});
+
+  const triggerMemberGeocoding = (memberIdx: number, street: string, zip: string, city: string, country: string) => {
+    if (geocodeTimersRef.current[memberIdx]) {
+      clearTimeout(geocodeTimersRef.current[memberIdx]);
+    }
+    geocodeTimersRef.current[memberIdx] = setTimeout(async () => {
+      const s = (street || '').trim();
+      const z = (zip || '').trim();
+      const c = (city || '').trim();
+      const co = (country || 'France').trim();
+      if (!c && !z && !s) return;
+      
+      let fullAddress = "";
+      if (s) {
+        fullAddress = `${s}, ${z} ${c}, ${co}`.trim();
+      } else {
+        fullAddress = `${z} ${c}, ${co}`.trim();
+      }
+      let coord = await geocodeAddress(fullAddress);
+      if (!coord && s) {
+        const fallback = `${z} ${c}, ${co}`.trim();
+        coord = await geocodeAddress(fallback);
+      }
+      if (coord) {
+        setLocalMembers(prev => {
+          const updated = [...prev];
+          if (updated[memberIdx]) {
+            updated[memberIdx] = {
+              ...updated[memberIdx],
+              startAddressLat: coord.lat,
+              startAddressLng: coord.lng
+            };
+          }
+          return updated;
+        });
+      }
+    }, 1000);
   };
 
   React.useEffect(() => {
@@ -1435,7 +1476,41 @@ export default function SettingsModal({
     setIsSaving(true);
     setIsVerifyingEmail(true);
 
-    const membersToSave = (Array.isArray(membersOverride) ? membersOverride : null) || localMembers;
+    let rawMembersToSave = (Array.isArray(membersOverride) ? membersOverride : null) || localMembers;
+    const membersToSave: Member[] = await Promise.all(rawMembersToSave.map(async (m: Member) => {
+      let lat = m.startAddressLat;
+      let lng = m.startAddressLng;
+      if (typeof lat === 'string' && ((lat as string).toLowerCase() === 'null' || (lat as string).toLowerCase() === 'nan')) lat = undefined;
+      if (typeof lng === 'string' && ((lng as string).toLowerCase() === 'null' || (lng as string).toLowerCase() === 'nan')) lng = undefined;
+      if (lat !== undefined && (lat === null || isNaN(Number(lat)))) lat = undefined;
+      if (lng !== undefined && (lng === null || isNaN(Number(lng)))) lng = undefined;
+      if (lat !== undefined) lat = Number(lat);
+      if (lng !== undefined) lng = Number(lng);
+
+      if (m.role === 'Technicien' && (lat === undefined || lng === undefined)) {
+        const s = (m.startAddressStreet || '').trim();
+        const z = (m.startAddressZip || '').trim();
+        const c = (m.startAddressCity || '').trim();
+        const co = (m.startAddressCountry || 'France').trim();
+        if (s || z || c) {
+          const fullAddr = s ? `${s}, ${z} ${c}, ${co}`.trim() : `${z} ${c}, ${co}`.trim();
+          let coord = await geocodeAddress(fullAddr);
+          if (!coord && s) {
+            coord = await geocodeAddress(`${z} ${c}, ${co}`.trim());
+          }
+          if (coord) {
+            lat = coord.lat;
+            lng = coord.lng;
+          }
+        }
+      }
+
+      return {
+        ...m,
+        startAddressLat: lat,
+        startAddressLng: lng
+      };
+    }));
     const myTenantId = localStorage.getItem('defib_tenant_id') || 'demo';
 
     try {
@@ -2999,6 +3074,7 @@ export default function SettingsModal({
                                          startAddress: composed
                                        };
                                        setLocalMembers(updated);
+                                       triggerMemberGeocoding(idx, street, old.startAddressZip || '', old.startAddressCity || '', old.startAddressCountry || 'France');
                                      }}
                                      placeholder="Ex: 1 Rue de Paris"
                                      className="w-full text-black text-xs disabled:opacity-60 disabled:cursor-not-allowed bg-white border border-slate-200"
@@ -3025,6 +3101,7 @@ export default function SettingsModal({
                                            startAddress: composed
                                          };
                                          setLocalMembers(updated);
+                                         triggerMemberGeocoding(idx, old.startAddressStreet || '', old.startAddressZip || '', city, old.startAddressCountry || 'France');
                                        }}
                                        placeholder="Ex: Paris"
                                        className="w-full text-black text-xs disabled:opacity-60 disabled:cursor-not-allowed bg-white border border-slate-200"
@@ -3050,6 +3127,7 @@ export default function SettingsModal({
                                            startAddress: composed
                                          };
                                          setLocalMembers(updated);
+                                         triggerMemberGeocoding(idx, old.startAddressStreet || '', zip, old.startAddressCity || '', old.startAddressCountry || 'France');
                                        }}
                                        placeholder="Ex: 75001"
                                        className="w-full text-black text-xs disabled:opacity-60 disabled:cursor-not-allowed bg-white border border-slate-200 font-mono"
@@ -3098,6 +3176,7 @@ export default function SettingsModal({
                                            startAddress: composed
                                          };
                                          setLocalMembers(updated);
+                                         triggerMemberGeocoding(idx, old.startAddressStreet || '', old.startAddressZip || '', old.startAddressCity || '', country);
                                        }}
                                        className="w-full font-sans text-xs bg-white text-black cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed border border-slate-200"
                                        style={{ height: '36px', padding: '6px 10px' }}
@@ -3116,12 +3195,13 @@ export default function SettingsModal({
                                      <input
                                        type="number"
                                        step="any"
-                                       value={m.startAddressLat !== undefined ? m.startAddressLat : ''}
+                                       value={m.startAddressLat !== undefined && m.startAddressLat !== null && String(m.startAddressLat).toLowerCase() !== 'null' && String(m.startAddressLat).toLowerCase() !== 'nan' && !isNaN(Number(m.startAddressLat)) ? m.startAddressLat : ''}
                                        disabled={!canEditThisMember}
                                        onChange={(e) => {
-                                         const lat = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                         const raw = e.target.value.trim();
+                                         const lat = (raw === '' || raw.toLowerCase() === 'null' || raw.toLowerCase() === 'nan') ? undefined : parseFloat(raw);
                                          const updated = [...localMembers];
-                                         updated[idx] = { ...updated[idx], startAddressLat: lat };
+                                         updated[idx] = { ...updated[idx], startAddressLat: (lat !== undefined && !isNaN(lat)) ? lat : undefined };
                                          setLocalMembers(updated);
                                        }}
                                        placeholder="Ex: 48.8566"
@@ -3136,12 +3216,13 @@ export default function SettingsModal({
                                      <input
                                        type="number"
                                        step="any"
-                                       value={m.startAddressLng !== undefined ? m.startAddressLng : ''}
+                                       value={m.startAddressLng !== undefined && m.startAddressLng !== null && String(m.startAddressLng).toLowerCase() !== 'null' && String(m.startAddressLng).toLowerCase() !== 'nan' && !isNaN(Number(m.startAddressLng)) ? m.startAddressLng : ''}
                                        disabled={!canEditThisMember}
                                        onChange={(e) => {
-                                         const lng = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                         const raw = e.target.value.trim();
+                                         const lng = (raw === '' || raw.toLowerCase() === 'null' || raw.toLowerCase() === 'nan') ? undefined : parseFloat(raw);
                                          const updated = [...localMembers];
-                                         updated[idx] = { ...updated[idx], startAddressLng: lng };
+                                         updated[idx] = { ...updated[idx], startAddressLng: (lng !== undefined && !isNaN(lng)) ? lng : undefined };
                                          setLocalMembers(updated);
                                        }}
                                        placeholder="Ex: 2.3522"

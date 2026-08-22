@@ -22,17 +22,36 @@ export async function geocodeAddress(address: string): Promise<Coordinate | null
     const response = await fetch(
       `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(cleaned)}&limit=1`
     );
-    if (!response.ok) throw new Error('Geocoding response not ok');
-    const data = await response.json();
-    if (data?.features?.[0]?.geometry?.coordinates) {
-      const [lng, lat] = data.features[0].geometry.coordinates;
-      const coord = { lat, lng };
-      geocodeCache[cleaned] = coord;
-      return coord;
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.features?.[0]?.geometry?.coordinates) {
+        const [lng, lat] = data.features[0].geometry.coordinates;
+        const coord = { lat, lng };
+        geocodeCache[cleaned] = coord;
+        return coord;
+      }
     }
   } catch (error) {
-    console.error('Failed to geocode address:', cleaned, error);
+    // API data.gouv failed or network error, fallback below
   }
+
+  // Fallback to OpenStreetMap Nominatim for international or other addresses
+  try {
+    const nomRes = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleaned)}&limit=1`
+    );
+    if (nomRes.ok) {
+      const nomData = await nomRes.json();
+      if (nomData && nomData.length > 0 && nomData[0].lat && nomData[0].lon) {
+        const coord = { lat: parseFloat(nomData[0].lat), lng: parseFloat(nomData[0].lon) };
+        geocodeCache[cleaned] = coord;
+        return coord;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to geocode address via fallback:', cleaned, e);
+  }
+
   return null;
 }
 

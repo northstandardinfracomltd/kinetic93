@@ -14,15 +14,17 @@ interface HelpBubbleProps {
 export default function HelpBubble({ cacheKey, text, children, style, imageSrc, imageAlt, imageStyle }: HelpBubbleProps) {
   const tenantId = typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') || 'demo' : 'demo';
   
-  // Identify currently logged-in user email for user-session isolation
+  // Identify currently logged-in user email or identifier for user-session isolation
   let userEmail = '';
   if (typeof window !== 'undefined') {
     try {
-      const savedUser = localStorage.getItem('defib_admin_logged_user');
+      const savedUser = localStorage.getItem('defib_active_tech_session') || localStorage.getItem('defib_admin_logged_user') || localStorage.getItem('defib_logged_user');
       if (savedUser) {
         const parsed = JSON.parse(savedUser);
         if (parsed?.email) {
           userEmail = parsed.email.toLowerCase().trim();
+        } else if (parsed?.name) {
+          userEmail = parsed.name.toLowerCase().trim();
         }
       }
     } catch (e) {}

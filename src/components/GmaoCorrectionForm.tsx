@@ -12,6 +12,7 @@ import { fetchCollectionFromFirestore } from '../firebase';
 import { generateReportModerationComment } from '../utils/moderationComment';
 
 interface GmaoCorrectionFormProps {
+  key?: React.Key;
   report?: any;
   isNew?: boolean;
   onSave: (updatedReport: any) => void;
@@ -667,25 +668,94 @@ export default function GmaoCorrectionForm({
 
   // Auto-determination of selected DAE
   const [selectedDefibId, setSelectedDefibId] = useState(() => {
-    return report?.defibId || initialDefibId || '';
+    return report?.defibId || report?.defibSnapshot?.id || initialDefibId || '';
   });
 
-  const origDefib = defibrillateurs.find(
-    d => d.id === selectedDefibId || d.identifiant === selectedDefibId
-  );
+  const origDefib = useMemo(() => {
+    const idToMatch = selectedDefibId || report?.defibId || report?.defibSnapshot?.id || initialDefibId || '';
+    const identToMatch = report?.defibIdentifiant || report?.defibSnapshot?.identifiant || '';
+    return defibrillateurs.find(
+      d => (idToMatch && (d.id === idToMatch || d.identifiant?.trim().toLowerCase() === idToMatch.trim().toLowerCase())) ||
+           (identToMatch && d.identifiant?.trim().toLowerCase() === identToMatch.trim().toLowerCase())
+    );
+  }, [defibrillateurs, selectedDefibId, report, initialDefibId]);
 
-  // Snapshot initialization
-  const [snapshot, setSnapshot] = useState<Defibrillateur>(() => {
-    const base = {
+  const getInitialSnapshot = (): Defibrillateur => {
+    const base: Defibrillateur = {
       ...DEFAULT_DEFIB,
       ...(origDefib ? origDefib : {}),
-      ...(report?.defibSnapshot ? report.defibSnapshot : {})
+      ...(report?.defibSnapshot ? report.defibSnapshot : {}),
+      // Fallback fields directly on report if defibSnapshot was flattened or omitted:
+      ...(report?.numeroSerie ? { numeroSerie: report.numeroSerie } : {}),
+      ...(report?.identifiant ? { identifiant: report.identifiant } : {}),
+      ...(report?.defibIdentifiant ? { identifiant: report.defibIdentifiant } : {}),
+      ...(report?.modeleId ? { modeleId: report.modeleId } : {}),
+      ...(report?.clientId ? { clientId: report.clientId } : {}),
+      ...(report?.nomPrenomSite ? { nomPrenomSite: report.nomPrenomSite } : {}),
+      ...(report?.telephoneSite ? { telephoneSite: report.telephoneSite } : {}),
+      ...(report?.emailSite ? { emailSite: report.emailSite } : {}),
+      ...(report?.numVoie ? { numVoie: report.numVoie } : {}),
+      ...(report?.ville ? { ville: report.ville } : {}),
+      ...(report?.cp ? { cp: report.cp } : {}),
+      ...(report?.region ? { region: report.region } : {}),
+      ...(report?.pays ? { pays: report.pays } : {}),
+      ...(report?.latitude ? { latitude: report.latitude } : {}),
+      ...(report?.longitude ? { longitude: report.longitude } : {}),
+      ...(report?.commentaireAdresse ? { commentaireAdresse: report.commentaireAdresse } : {}),
+      ...(report?.derniereMaintenance ? { derniereMaintenance: report.derniereMaintenance } : {}),
+      ...(report?.miseEnService ? { miseEnService: report.miseEnService } : {}),
+      ...(report?.finGarantie ? { finGarantie: report.finGarantie } : {}),
+      ...(report?.fabrication ? { fabrication: report.fabrication } : {}),
+      ...(report?.sortieFabricant ? { sortieFabricant: report.sortieFabricant } : {}),
+      ...(report?.contrat ? { contrat: report.contrat } : {}),
+      ...(report?.nomContrat ? { nomContrat: report.nomContrat } : {}),
+      ...(report?.referenceContrat ? { referenceContrat: report.referenceContrat } : {}),
+      ...(report?.debutContrat ? { debutContrat: report.debutContrat } : {}),
+      ...(report?.finContrat ? { finContrat: report.finContrat } : {}),
+      ...(report?.acces247 ? { acces247: report.acces247 } : {}),
+      ...(report?.accesSemaine ? { accesSemaine: report.accesSemaine } : {}),
+      ...(report?.accesWeekend ? { accesWeekend: report.accesWeekend } : {}),
+      ...(report?.exterieur ? { exterieur: report.exterieur } : {}),
+      ...(report?.modeleCoffretId ? { modeleCoffretId: report.modeleCoffretId } : {}),
+      ...(report?.numeroLotCoffret ? { numeroLotCoffret: report.numeroLotCoffret } : {}),
+      ...(report?.commentaireCoffret ? { commentaireCoffret: report.commentaireCoffret } : {}),
+      ...(report?.modeleElectrodeAId ? { modeleElectrodeAId: report.modeleElectrodeAId } : {}),
+      ...(report?.lotElectrodeA ? { lotElectrodeA: report.lotElectrodeA } : {}),
+      ...(report?.peremptionElectrodeA ? { peremptionElectrodeA: report.peremptionElectrodeA } : {}),
+      ...(report?.insertionElectrodeA ? { insertionElectrodeA: report.insertionElectrodeA } : {}),
+      ...(report?.livraisonElectrodeA ? { livraisonElectrodeA: report.livraisonElectrodeA } : {}),
+      ...(report?.situationElectrodeA ? { situationElectrodeA: report.situationElectrodeA } : {}),
+      ...(report?.commentaireElectrodeA ? { commentaireElectrodeA: report.commentaireElectrodeA } : {}),
+      ...(report?.peremptionSecoursElectrodeA ? { peremptionSecoursElectrodeA: report.peremptionSecoursElectrodeA } : {}),
+      ...(report?.modeleElectrodePId ? { modeleElectrodePId: report.modeleElectrodePId } : {}),
+      ...(report?.lotElectrodeP ? { lotElectrodeP: report.lotElectrodeP } : {}),
+      ...(report?.peremptionElectrodeP ? { peremptionElectrodeP: report.peremptionElectrodeP } : {}),
+      ...(report?.insertionElectrodeP ? { insertionElectrodeP: report.insertionElectrodeP } : {}),
+      ...(report?.livraisonElectrodeP ? { livraisonElectrodeP: report.livraisonElectrodeP } : {}),
+      ...(report?.situationElectrodeP ? { situationElectrodeP: report.situationElectrodeP } : {}),
+      ...(report?.commentaireElectrodeP ? { commentaireElectrodeP: report.commentaireElectrodeP } : {}),
+      ...(report?.peremptionSecoursElectrodeP ? { peremptionSecoursElectrodeP: report.peremptionSecoursElectrodeP } : {}),
+      ...(report?.modeleBatterieId ? { modeleBatterieId: report.modeleBatterieId } : {}),
+      ...(report?.lotBatterie ? { lotBatterie: report.lotBatterie } : {}),
+      ...(report?.peremptionBatterie ? { peremptionBatterie: report.peremptionBatterie } : {}),
+      ...(report?.insertionBatterie ? { insertionBatterie: report.insertionBatterie } : {}),
+      ...(report?.fabricationBatterie ? { fabricationBatterie: report.fabricationBatterie } : {}),
+      ...(report?.livraisonBatterie ? { livraisonBatterie: report.livraisonBatterie } : {}),
+      ...(report?.situationBatterie ? { situationBatterie: report.situationBatterie } : {}),
+      ...(report?.pourcentageBatterie ? { pourcentageBatterie: report.pourcentageBatterie } : {}),
+      ...(report?.commentaireBatterie ? { commentaireBatterie: report.commentaireBatterie } : {}),
+      ...(report?.conforme !== undefined ? { conforme: report.conforme } : {}),
+      ...(report?.commentaire ? { commentaire: report.commentaire } : {}),
+      ...(report?.commentaireInterne ? { commentaireInterne: report.commentaireInterne } : {}),
     };
-    if (isNew) {
+    if (isNew && !report) {
       base.conforme = '' as any; // Par défaut à l’arrivée deselect
     }
     return base;
-  });
+  };
+
+  // Snapshot initialization
+  const [snapshot, setSnapshot] = useState<Defibrillateur>(() => getInitialSnapshot());
 
   // Report fields
   const [clientPinCode, setClientPinCode] = useState(report?.clientPinCode || '');
@@ -1040,6 +1110,79 @@ export default function GmaoCorrectionForm({
   const isDrawing = useRef(false);
 
   const [currentTickTime, setCurrentTickTime] = useState(() => new Date());
+
+  useEffect(() => {
+    if (report) {
+      const defibIdFound = report.defibId || report.defibSnapshot?.id || initialDefibId || '';
+      setSelectedDefibId(defibIdFound);
+      setSnapshot(getInitialSnapshot());
+      setClientPinCode(report.clientPinCode || '');
+      setReportTitle(report.title || 'RAPPORT D’INTERVENTION');
+      if (report.techName) setTechName(report.techName);
+      if (report.date) setInterventionDate(report.date);
+      if (report.siteMission) setMissionSite(report.siteMission === 'ATELIER SAV' ? 'ATELIER SAV' : 'DÉPLACEMENT');
+      setPhotoUrl(report.photoUrl || report.defibSnapshot?.photoUrl || '');
+      setPhotoArriereUrl(report.photoArriereUrl || '');
+      setPhotoResultatTestUrl(report.photoResultatTestUrl || '');
+      setInterventionReference(report.interventionReference || '');
+      setMaterielInterchangeClient(report.materielInterchangeClient || 'Non');
+      setCommentaireChangement(report.commentaireChangement || '');
+      setFournitureMaterielPret(report.fournitureMaterielPret || 'Non');
+      setSelectionMaterielPrete(report.selectionMaterielPrete || '');
+      setAttachments(report.attachments || []);
+      setKitPeremption(report.kitPeremption || report.defibSnapshot?.peremptionTrousse || origDefib?.peremptionTrousse || '');
+      setEquipeAlarme(report.equipeAlarme !== undefined ? report.equipeAlarme : 'Oui');
+      setAlarme(report.alarme !== undefined ? report.alarme : 'Non');
+      setArmoireConnectee(report.armoireConnectee || 'Non');
+      setDispositifHandicap(report.dispositifHandicap || 'Non');
+      setSignaletiqueConforme(report.signaletiqueConforme || 'Non');
+      setElectrodeARemplacee(report.electrodeARemplacee || 'Non');
+      setSelectionElectrodeARemplacee(report.selectionElectrodeARemplacee || '');
+      setCustomElectrodeARemplacee(report.customElectrodeARemplacee || '');
+      setElectrodeAConformeSante(report.electrodeAConformeSante || 'Oui');
+      setElectrodeASecoursRemplacee(report.electrodeASecoursRemplacee || 'Non');
+      setSelectionElectrodeASecoursRemplacee(report.selectionElectrodeASecoursRemplacee || '');
+      setCustomElectrodeASecoursRemplacee(report.customElectrodeASecoursRemplacee || '');
+      setElectrodePRemplacee(report.electrodePRemplacee || 'Non');
+      setSelectionElectrodePRemplacee(report.selectionElectrodePRemplacee || '');
+      setCustomElectrodePRemplacee(report.customElectrodePRemplacee || '');
+      setElectrodePConformeSante(report.electrodePConformeSante || 'Oui');
+      setElectrodePSecoursRemplacee(report.electrodePSecoursRemplacee || 'Non');
+      setSelectionElectrodePSecoursRemplacee(report.selectionElectrodePSecoursRemplacee || '');
+      setCustomElectrodePSecoursRemplacee(report.customElectrodePSecoursRemplacee || '');
+      setBatterieRemplacee(report.batterieRemplacee || 'Non');
+      setSelectionBatterieRemplacee(report.selectionBatterieRemplacee || '');
+      setCustomBatterieRemplacee(report.customBatterieRemplacee || '');
+      setBatterieConformeSante(report.batterieConformeSante || (report.defibSnapshot?.situationBatterie === 'Vert' ? 'Oui' : 'Non') || 'Oui');
+      setTechConformeArrivee(report.techConformeArrivee || '');
+      setTechCommentaireArrivee(report.techCommentaireArrivee || '');
+      setTechVoyantConforme(report.techVoyantConforme || '');
+      setTechEquipeMessageNumerique(report.techEquipeMessageNumerique || 'Oui');
+      setTechMessageNumeroConforme(report.techMessageNumeroConforme || '');
+      setTechGuidesVocauxConformes(report.techGuidesVocauxConformes || '');
+      setTechNettoyage(report.techNettoyage || '');
+      setTechBranchementElectrodesConforme(report.techBranchementElectrodesConforme || '');
+      setTechDelivranceChocConforme(report.techDelivranceChocConforme || '');
+      setTechResultatJoulesElectrodeA(report.techResultatJoulesElectrodeA || '');
+      setTechResultatJoulesElectrodeA2(report.techResultatJoulesElectrodeA2 || '');
+      setKitTrousseSecoursPresent(report.kitTrousseSecoursPresent || 'Oui');
+      setKitCiseauxPresents(report.kitCiseauxPresents || 'Oui');
+      setKitMasquePresent(report.kitMasquePresent || 'Oui');
+      setKitPeremptionMasque(report.kitPeremptionMasque || '');
+      setKitServiettesPresentes(report.kitServiettesPresentes || 'Oui');
+      setKitPeremptionServiettes(report.kitPeremptionServiettes || '');
+      setKitGantsPresents(report.kitGantsPresents || 'Oui');
+      setKitRasoirPresent(report.kitRasoirPresent || 'Oui');
+      setKitSecoursRemplaceOuAjoute(report.kitSecoursRemplaceOuAjoute || 'Non');
+      setSelectionKitSecoursRemplace(report.selectionKitSecoursRemplace || '');
+      setCustomKitSecoursRemplace(report.customKitSecoursRemplace || '');
+      setFichierDonneesRecupere(report.fichierDonneesRecupere || 'Non');
+      setEmettreFactureBrouillon(report.emettreFactureBrouillon || 'Oui');
+      setServiceEmettreId(report.serviceEmettreId || '');
+      setTechSignature(report.techSignature || '');
+      setEndTimeStamp(report.endTimeStamp || '');
+    }
+  }, [report]);
 
   useEffect(() => {
     if (!isWebapp) return;
