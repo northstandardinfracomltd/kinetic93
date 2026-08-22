@@ -3150,7 +3150,13 @@ export default function ClientPortal({
               const clientOtherIdents = new Set(clientOthers.map(o => o.identifiant));
 
               const clientReports = generatedReports.filter(rep => {
-                const isUpcoming = rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture;
+                const isEffectue = 
+                  rep.missionStatus === 'Effectué' ||
+                  rep.conforme === 'Conforme' ||
+                  rep.conforme === 'Non Conforme' ||
+                  rep.conforme === 'Intervention impossible';
+
+                const isUpcoming = !isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture);
                 if (reportsFilter === 'upcoming') {
                   if (!isUpcoming) return false;
                 } else {

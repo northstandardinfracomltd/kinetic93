@@ -259,6 +259,9 @@ export default function SettingsModal({
           themePreference: themeId
         });
       }
+      if (onUpdateMembers) {
+        onUpdateMembers(next);
+      }
       return next;
     });
 
@@ -273,6 +276,31 @@ export default function SettingsModal({
       }, tenantId).catch(err => console.warn('Error saving user theme to Firestore:', err));
     }
   };
+
+  React.useEffect(() => {
+    let userEmail = '';
+    if (currentUser && currentUser.email) {
+      userEmail = currentUser.email.toLowerCase().trim();
+    } else {
+      try {
+        const saved = localStorage.getItem('defib_admin_logged_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.email) userEmail = parsed.email.toLowerCase().trim();
+        }
+      } catch (e) {}
+    }
+    if (userEmail && members && members.length > 0) {
+      const mem = members.find(m => m.email?.toLowerCase().trim() === userEmail);
+      if (mem?.themePreference) {
+        setSelectedTheme(mem.themePreference);
+        const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+        localStorage.setItem(`defib_${tid}_user_${userEmail}_theme`, mem.themePreference);
+        localStorage.setItem(`defib_user_theme_${userEmail}`, mem.themePreference);
+        localStorage.setItem('defib_current_user_theme', mem.themePreference);
+      }
+    }
+  }, [members, currentUser]);
 
   const [referralCompany, setReferralCompany] = React.useState('');
   const [referralSent, setReferralSent] = React.useState(false);
@@ -446,18 +474,32 @@ export default function SettingsModal({
   React.useEffect(() => {
     if (JSON.stringify(companyInfo) !== JSON.stringify(lastPropsCompanyRef.current)) {
       setLocalCompany(companyInfo);
+      if (companyInfo?.customLocationNames) setLocalLocationNames(companyInfo.customLocationNames);
+      if (companyInfo?.enableAutoEmails) setEnableAutoEmails(companyInfo.enableAutoEmails);
+      if (companyInfo?.enableSatisfactionAvis) setEnableSatisfactionAvis(companyInfo.enableSatisfactionAvis);
+      if (companyInfo?.enableDevisFactures) setEnableDevisFactures(companyInfo.enableDevisFactures);
+      if (companyInfo?.communicationPortailClient !== undefined) setCommunicationPortailClient(companyInfo.communicationPortailClient);
+      if (companyInfo?.disableHelpsAndTutorials) setDisableHelpsAndTutorials(companyInfo.disableHelpsAndTutorials);
+      if (companyInfo?.enableOtherEquipments) setEnableOtherEquipments(companyInfo.enableOtherEquipments);
       lastPropsCompanyRef.current = companyInfo;
     }
   }, [companyInfo]);
 
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen || isPage) {
       setLocalCompany(companyInfo);
       setLocalMembers(members);
+      if (companyInfo?.customLocationNames) setLocalLocationNames(companyInfo.customLocationNames);
+      if (companyInfo?.enableAutoEmails) setEnableAutoEmails(companyInfo.enableAutoEmails);
+      if (companyInfo?.enableSatisfactionAvis) setEnableSatisfactionAvis(companyInfo.enableSatisfactionAvis);
+      if (companyInfo?.enableDevisFactures) setEnableDevisFactures(companyInfo.enableDevisFactures);
+      if (companyInfo?.communicationPortailClient !== undefined) setCommunicationPortailClient(companyInfo.communicationPortailClient);
+      if (companyInfo?.disableHelpsAndTutorials) setDisableHelpsAndTutorials(companyInfo.disableHelpsAndTutorials);
+      if (companyInfo?.enableOtherEquipments) setEnableOtherEquipments(companyInfo.enableOtherEquipments);
       lastPropsMembersRef.current = members;
       lastPropsCompanyRef.current = companyInfo;
     }
-  }, [isOpen]);
+  }, [isOpen, isPage]);
 
   // States for the member addition form inside the local state
   const [newMemberName, setNewMemberName] = React.useState('');

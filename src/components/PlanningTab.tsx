@@ -349,6 +349,49 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     return () => clearTimeout(timer);
   }, [selectedMonth, selectedYear]);
 
+  // Track scroll position to show/hide "Remonter" button after ~200px
+  const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkScroll = () => {
+      const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      if (scrollY > 200) {
+        setShowScrollTop(true);
+      } else {
+        setShowScrollTop(false);
+      }
+    };
+
+    window.addEventListener('scroll', checkScroll, { passive: true });
+    // Also check on main wrapper / container scroll if any
+    const mainWrapper = document.getElementById('planning-tab-wrapper');
+    const scrollParent = mainWrapper?.parentElement;
+    if (scrollParent) {
+      scrollParent.addEventListener('scroll', checkScroll, { passive: true });
+    }
+
+    checkScroll();
+
+    return () => {
+      window.removeEventListener('scroll', checkScroll);
+      if (scrollParent) {
+        scrollParent.removeEventListener('scroll', checkScroll);
+      }
+    };
+  }, []);
+
+  const handleScrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const mainWrapper = document.getElementById('planning-tab-wrapper');
+    if (mainWrapper) {
+      mainWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    const scrollParent = mainWrapper?.parentElement;
+    if (scrollParent) {
+      scrollParent.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="space-y-4 font-sans pb-12" id="planning-tab-wrapper">
       {/* Field Technicien */}
@@ -815,12 +858,16 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           >
                             {/* Gélules Créneau, Badge + Bouton Supprimer */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex flex-wrap items-center gap-2 flex-1">
-                                <span className="px-3.5 py-1.5 rounded-full bg-blue-600 text-white font-bold text-[16px]">
+                              <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                                <span className="px-3.5 py-1.5 rounded-full bg-blue-600 text-white font-bold text-[16px] inline-flex items-center shrink-0 whitespace-nowrap">
                                   Événement spontané
                                 </span>
-                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
-                                  Créneau : {evt.creneau}
+                                <span
+                                  className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
+                                  title={`Créneau : ${evt.creneau}`}
+                                >
+                                  <span className="shrink-0 whitespace-nowrap">Créneau :&nbsp;</span>
+                                  <span className="truncate whitespace-nowrap">{evt.creneau}</span>
                                 </span>
                               </div>
 
@@ -901,13 +948,27 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           defib?.nomPrenomSite ||
                           '';
 
-                        const siteName =
-                          mission.site ||
-                          mission.siteName ||
-                          defib?.nomSite ||
-                          other?.nomSite ||
-                          defib?.nomPrenomSite ||
-                          '';
+                        const siteName = (() => {
+                          if (isFormationMission) return '';
+                          let rawVal = '';
+                          if (defib) {
+                            rawVal = defib.nomSite || '';
+                          } else if (other) {
+                            rawVal = other.nomPrenomSite || other.nomSite || '';
+                          } else if (mission.site || mission.siteName) {
+                            rawVal = mission.site || mission.siteName || '';
+                          }
+                          if (
+                            !rawVal ||
+                            rawVal === 'Représentant Standard' ||
+                            rawVal === 'Représentant standard' ||
+                            rawVal === 'Non renseigné' ||
+                            rawVal === 'Nom du Site'
+                          ) {
+                            return '';
+                          }
+                          return rawVal;
+                        })();
 
                         const locationStr = (() => {
                           if (mission.ville) {
@@ -939,6 +1000,8 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         const typeVal = isFormationMission
                           ? 'Formation'
                           : (mission.equipmentType || (defib ? 'Défibrillateur' : (other ? other.categorie : 'Défibrillateur')));
+
+                        const situationVal = mission.status || mission.missionStatus || mission.situation || 'À faire';
 
                         const identifiant = (() => {
                           if (isFormationMission) {
@@ -976,17 +1039,43 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                               borderRadius: "14px",
                             }}
                           >
-                            {/* Gélules Client, Créneau et Type & Bouton Dérouler / Réduire */}
+                            {/* Gélules Client, Créneau, Type et Situation & Bouton Dérouler / Réduire */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex flex-wrap items-center gap-2 flex-1">
-                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
-                                  Client : {clientName || 'NC'}
+                              <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                                {/* Gélule 1 : Client */}
+                                <span
+                                  className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
+                                  title={`Client : ${clientName || 'NC'}`}
+                                >
+                                  <span className="shrink-0 whitespace-nowrap">Client :&nbsp;</span>
+                                  <span className="truncate whitespace-nowrap">{clientName || 'NC'}</span>
                                 </span>
-                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
-                                  Créneau : {creneauVal}
+
+                                {/* Gélule 2 : Créneau */}
+                                <span
+                                  className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
+                                  title={`Créneau : ${creneauVal}`}
+                                >
+                                  <span className="shrink-0 whitespace-nowrap">Créneau :&nbsp;</span>
+                                  <span className="truncate whitespace-nowrap">{creneauVal}</span>
                                 </span>
-                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
-                                  Type : {typeVal}
+
+                                {/* Gélule 3 : Type */}
+                                <span
+                                  className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
+                                  title={`Type : ${typeVal}`}
+                                >
+                                  <span className="shrink-0 whitespace-nowrap">Type :&nbsp;</span>
+                                  <span className="truncate whitespace-nowrap">{typeVal}</span>
+                                </span>
+
+                                {/* Gélule 4 : Situation */}
+                                <span
+                                  className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
+                                  title={`Situation : ${situationVal}`}
+                                >
+                                  <span className="shrink-0 whitespace-nowrap">Situation :&nbsp;</span>
+                                  <span className="truncate whitespace-nowrap">{situationVal}</span>
                                 </span>
                               </div>
 
@@ -1044,6 +1133,41 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Floating Button "Remonter" when header is not visible (>200px scroll) */}
+      {showScrollTop && (
+        <div className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 animate-fade-in">
+          <button
+            type="button"
+            onClick={handleScrollToTop}
+            className="text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none shadow-lg hover:opacity-95 active:scale-95"
+            style={{
+              backgroundColor: "rgb(22, 93, 252)",
+              borderRadius: "14px",
+              padding: "12px 20px",
+              fontSize: "16px",
+              border: "none",
+              boxShadow: "0 4px 14px rgba(22, 93, 252, 0.4)"
+            }}
+          >
+            <span className="flex items-center gap-2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Remonter
+            </span>
+          </button>
         </div>
       )}
     </div>

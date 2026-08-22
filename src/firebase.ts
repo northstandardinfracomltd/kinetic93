@@ -178,7 +178,7 @@ export function getCollectionKey(collectionName: string, tenantId: string = curr
 export function getCollectionKeyCandidates(collectionName: string, tenantId: string = currentTenantId): string[] {
   const colAliases = getCollectionNameAliases(collectionName);
   if (tenantId === 'demo' || !tenantId) {
-    const list: string[] = ['demo'];
+    const list: string[] = [];
     for (const c of colAliases) {
       list.push(c);
       list.push(`demo_${c}`);
@@ -208,27 +208,6 @@ export function getCollectionKeyCandidates(collectionName: string, tenantId: str
           const mShort = matched.shortEnvId.trim();
           const mShortNum = mShort.replace(/^D/i, '');
           tenantAliases.push(mShort, `D${mShortNum}`, mShortNum);
-        }
-        // Match organization siblings if UDPLV or same company name / email
-        const compName = (matched.companyName || '').trim().toLowerCase();
-        const adminEmail = (matched.adminEmail || '').trim().toLowerCase();
-        if (compName.includes('défi') || compName.includes('defi') || adminEmail.includes('udplv') || adminEmail.includes('civilprom.com')) {
-          cachedTenants.forEach(sibling => {
-            const sComp = (sibling.companyName || '').trim().toLowerCase();
-            const sEmail = (sibling.adminEmail || '').trim().toLowerCase();
-            if (sComp.includes('défi') || sComp.includes('defi') || sEmail.includes('udplv') || sEmail.includes('civilprom.com')) {
-              if (sibling.id) {
-                const sId = sibling.id.trim();
-                const sNum = sId.replace(/^D/i, '');
-                tenantAliases.push(sId, `D${sNum}`, sNum);
-              }
-              if (sibling.shortEnvId) {
-                const sShort = sibling.shortEnvId.trim();
-                const sShortNum = sShort.replace(/^D/i, '');
-                tenantAliases.push(sShort, `D${sShortNum}`, sShortNum);
-              }
-            }
-          });
         }
       }
     }
@@ -262,6 +241,52 @@ export function getFromLocalCache<T>(key: string): T | null {
   } catch (err) {
     console.warn(`Failed to read from local cache for key ${key}:`, err);
     return null;
+  }
+}
+
+/**
+ * Force clear all cache partitions (Firestore cache, temporary local storage snapshots,
+ * and session items) to ensure clean loading of the targeted tenant environment.
+ * Preserves user language preferences and active tenant credentials if needed.
+ */
+export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    // 1. Purge all fs_cache_* keys
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      
+      // Clear Firestore local response cache
+      if (k.startsWith('fs_cache_')) {
+        keysToRemove.push(k);
+      }
+      
+      // If a specific tenant is targeted or for global purge, clear defib_${tenantId}_* keys
+      if (targetTenantId) {
+        if (k.startsWith(`defib_${targetTenantId}_`)) {
+          keysToRemove.push(k);
+        }
+      }
+      
+      // Clear generic cache flags
+      if (k.startsWith('help_dismissed') || k.startsWith('defib_temp_')) {
+        keysToRemove.push(k);
+      }
+    }
+
+    for (const k of keysToRemove) {
+      localStorage.removeItem(k);
+    }
+
+    // Also clear session storage
+    if (window.sessionStorage) {
+      sessionStorage.clear();
+    }
+    console.log(`[Cache] Successfully purged environment caches${targetTenantId ? ` for tenant ${targetTenantId}` : ''}.`);
+  } catch (e) {
+    console.warn('[Cache] Error purging environment cache:', e);
   }
 }
 
@@ -347,7 +372,22 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
             }
           }
           if (combined.length > 0) {
-            const val = combined as unknown as T;
+            let val = combined as unknown as T;
+            if (Array.isArray(val) && activeTenantId !== 'demo') {
+              const cleanTid = activeTenantId.trim().toLowerCase();
+              const numTid = cleanTid.replace(/^d/i, '');
+              if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
+                val = (combined).filter(d => {
+                  const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
+                  if (dEnv === 'demo') return false;
+                  if (dEnv && dEnv !== cleanTid && dEnv.replace(/^d/i, '') !== numTid) return false;
+                  if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
+                  return true;
+                }) as unknown as T;
+              } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
+                val = (combined).filter(t => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo') as unknown as T;
+              }
+            }
             for (const ck of candidateKeys) {
               saveToLocalCache(ck, val);
             }
@@ -357,10 +397,26 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
           const val = payload.value as T;
           // If array with elements or object, return it!
           if (!Array.isArray(val) || val.length > 0) {
-            for (const ck of candidateKeys) {
-              saveToLocalCache(ck, val);
+            let sanitizedVal = val;
+            if (Array.isArray(val) && activeTenantId !== 'demo') {
+              const cleanTid = activeTenantId.trim().toLowerCase();
+              const numTid = cleanTid.replace(/^d/i, '');
+              if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
+                sanitizedVal = (val as any[]).filter(d => {
+                  const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
+                  if (dEnv === 'demo') return false;
+                  if (dEnv && dEnv !== cleanTid && dEnv.replace(/^d/i, '') !== numTid) return false;
+                  if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
+                  return true;
+                }) as unknown as T;
+              } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
+                sanitizedVal = (val as any[]).filter(t => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo') as unknown as T;
+              }
             }
-            return val;
+            for (const ck of candidateKeys) {
+              saveToLocalCache(ck, sanitizedVal);
+            }
+            return sanitizedVal;
           }
           // If empty array, continue to other candidate keys in case data is in another alias
         }
@@ -380,10 +436,26 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
         const json = await resp.json();
         if (json && json.value !== undefined) {
           if (!Array.isArray(json.value) || json.value.length > 0) {
-            for (const ck of candidateKeys) {
-              saveToLocalCache(ck, json.value);
+            let val = json.value;
+            if (Array.isArray(val) && activeTenantId !== 'demo') {
+              const cleanTid = activeTenantId.trim().toLowerCase();
+              const numTid = cleanTid.replace(/^d/i, '');
+              if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
+                val = (val).filter(d => {
+                  const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
+                  if (dEnv === 'demo') return false;
+                  if (dEnv && dEnv !== cleanTid && dEnv.replace(/^d/i, '') !== numTid) return false;
+                  if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
+                  return true;
+                });
+              } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
+                val = (val).filter(t => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo');
+              }
             }
-            return json.value as T;
+            for (const ck of candidateKeys) {
+              saveToLocalCache(ck, val);
+            }
+            return val as T;
           }
         }
       }
@@ -464,6 +536,23 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
       if (Array.isArray(cached) && cached.length > 0) {
         console.warn(`[Protection] Refusing to overwrite populated ${ck} (${cached.length} items) with empty array.`);
         return;
+      }
+    }
+  }
+
+  // Guard against accidental blank placeholder overwrite of companyInfo
+  if ((collectionName === 'companyInfo' || collectionName === 'company_info') && value && typeof value === 'object' && !Array.isArray(value)) {
+    const incoming = value as any;
+    for (const ck of candidateKeys) {
+      const cached = getFromLocalCache<any>(ck);
+      if (cached && typeof cached === 'object' && !Array.isArray(cached)) {
+        // If cached has hiddenTabs or custom info, preserve them if incoming lacks them
+        if (Array.isArray(cached.hiddenTabs) && cached.hiddenTabs.length > 0 && (!incoming.hiddenTabs || incoming.hiddenTabs.length === 0)) {
+          if (incoming.name === 'Mon Cabinet' && cached.name && cached.name !== 'Mon Cabinet') {
+            console.warn(`[Protection] Refusing to overwrite populated companyInfo ${ck} with default empty placeholder.`);
+            return;
+          }
+        }
       }
     }
   }
@@ -956,9 +1045,16 @@ export async function registerNewTenant(tenantData: Omit<Tenant, 'id' | 'created
  */
 export async function seedTenantDemoData(tenantId: string): Promise<void> {
   const tenants = await getRegisteredTenants();
-  const tenant = tenants.find(t => t.id === tenantId);
-  const adminEmail = tenant ? tenant.adminEmail : 'roesch.ronan@gmail.com';
-  const adminName = tenant ? tenant.adminName : 'Ronan Roesch';
+  const rawTid = tenantId.trim().toLowerCase();
+  const numTid = rawTid.replace(/^d/i, '');
+  const tenant = tenants.find(t => 
+    (t.id && t.id.toLowerCase() === rawTid) ||
+    (t.shortEnvId && t.shortEnvId.toLowerCase() === rawTid) ||
+    (t.id && t.id.toLowerCase().replace(/^d/i, '') === numTid) ||
+    (t.shortEnvId && t.shortEnvId.toLowerCase().replace(/^d/i, '') === numTid)
+  );
+  const adminEmail = tenant ? tenant.adminEmail : `admin.${tenantId.toLowerCase()}@defibeo.com`;
+  const adminName = tenant ? tenant.adminName : (tenant ? tenant.companyName : `Administrateur ${tenantId}`);
 
   const getSuffix = (tid: string): string => {
     const match = tid.match(/\d+/);

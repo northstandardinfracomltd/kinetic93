@@ -347,6 +347,7 @@ export interface CompanyInfo {
   enableDevisFactures?: 'Oui' | 'Non';
   gmailPartageLocalisation?: string;
   disableHelpsAndTutorials?: 'Oui' | 'Non';
+  enableOtherEquipments?: 'Oui' | 'Non';
   hiddenTabs?: string[];
   communicationPortailClient?: string;
   pdfHeaderImg?: string;
@@ -465,6 +466,8 @@ export interface CommercialDoc {
   codeTaxe?: string;
   payeurId?: string;
   clientIdField?: string;
+  envId?: string;
+  tenantId?: string;
 }
 
 export interface GedDocument {

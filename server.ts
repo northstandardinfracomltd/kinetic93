@@ -349,12 +349,30 @@ function getCollectionNameAliases(collectionName: string): string[] {
 
 // Helper function to read a collection from Firestore with support for chunked documents, multiple aliases and memory caching
 async function fetchServerCollection(colName: string, tenantId: string, extraAliases: (string | undefined | null)[] = []): Promise<any[]> {
+  const sanitizeForTenant = (items: any): any => {
+    if (!Array.isArray(items) || tenantId === 'demo') return items;
+    const cleanTid = tenantId.trim().toLowerCase();
+    const numTid = cleanTid.replace(/^d/i, '');
+    if (colName === 'commercialDocs' || colName === 'commercial_docs') {
+      return items.filter((d: any) => {
+        const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
+        if (dEnv === 'demo') return false;
+        if (dEnv && dEnv !== cleanTid && dEnv.replace(/^d/i, '') !== numTid) return false;
+        if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
+        return true;
+      });
+    } else if (colName === 'fsmTours' || colName === 'fsm_tours' || colName === 'tours') {
+      return items.filter((t: any) => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo');
+    }
+    return items;
+  };
+
   const colAliases = getCollectionNameAliases(colName);
   const rawKeys: string[] = [];
   
   if (tenantId === 'demo') {
     for (const c of colAliases) {
-      rawKeys.push(c, `demo_${c}`, 'demo');
+      rawKeys.push(c, `demo_${c}`);
     }
   } else {
     const rawClean = tenantId.trim();
@@ -392,27 +410,6 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
               const mShort = matched.shortEnvId.trim();
               const mShortNum = mShort.replace(/^D/i, '');
               tenantAliases.push(mShort, `D${mShortNum}`, mShortNum);
-            }
-            // Match organization siblings if UDPLV or same company name / email
-            const compName = (matched.companyName || '').trim().toLowerCase();
-            const adminEmail = (matched.adminEmail || '').trim().toLowerCase();
-            if (compName.includes('défi') || compName.includes('defi') || adminEmail.includes('udplv') || adminEmail.includes('civilprom.com')) {
-              tenantList.forEach(sibling => {
-                const sComp = (sibling.companyName || '').trim().toLowerCase();
-                const sEmail = (sibling.adminEmail || '').trim().toLowerCase();
-                if (sComp.includes('défi') || sComp.includes('defi') || sEmail.includes('udplv') || sEmail.includes('civilprom.com')) {
-                  if (sibling.id) {
-                    const sId = sibling.id.trim();
-                    const sNum = sId.replace(/^D/i, '');
-                    tenantAliases.push(sId, `D${sNum}`, sNum);
-                  }
-                  if (sibling.shortEnvId) {
-                    const sShort = sibling.shortEnvId.trim();
-                    const sShortNum = sShort.replace(/^D/i, '');
-                    tenantAliases.push(sShort, `D${sShortNum}`, sShortNum);
-                  }
-                }
-              });
             }
           }
         }
@@ -481,18 +478,22 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
             }
           }
           if (combined.length > 0) {
+            const sanitized = sanitizeForTenant(combined);
             for (const ck of collectionKeys) {
-              serverMemoryStore.set(ck, combined);
+              serverMemoryStore.set(ck, sanitized);
             }
             persistServerStoreToDisk();
-            return combined;
+            return sanitized;
           }
-        } else if (Array.isArray(payload.value) && payload.value.length > 0) {
-          for (const ck of collectionKeys) {
-            serverMemoryStore.set(ck, payload.value);
+        } else if (payload.value !== undefined && payload.value !== null) {
+          if (!Array.isArray(payload.value) || payload.value.length > 0) {
+            const sanitized = sanitizeForTenant(payload.value);
+            for (const ck of collectionKeys) {
+              serverMemoryStore.set(ck, sanitized);
+            }
+            persistServerStoreToDisk();
+            return sanitized;
           }
-          persistServerStoreToDisk();
-          return payload.value;
         }
       }
     } catch (err) {
@@ -504,21 +505,21 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   for (const collectionKey of collectionKeys) {
     if (serverMemoryStore.has(collectionKey)) {
       const val = serverMemoryStore.get(collectionKey);
-      if (Array.isArray(val) && val.length > 0) {
-        return val;
+      if (val !== undefined && val !== null && (!Array.isArray(val) || val.length > 0)) {
+        return sanitizeForTenant(val);
       }
     }
   }
   for (const collectionKey of collectionKeys) {
     if (serverMemoryStore.has(collectionKey)) {
-      return serverMemoryStore.get(collectionKey) || [];
+      return sanitizeForTenant(serverMemoryStore.get(collectionKey));
     }
   }
   return [];
 }
 
 // Helper function to persist collection to Firestore and in-memory store
-async function saveServerCollection(colName: string, tenantId: string, items: any[], extraAliases: (string | undefined | null)[] = []): Promise<void> {
+async function saveServerCollection(colName: string, tenantId: string, items: any, extraAliases: (string | undefined | null)[] = []): Promise<void> {
   const collectionKey = tenantId === 'demo' ? colName : `${tenantId}_${colName}`;
   serverMemoryStore.set(collectionKey, items);
   for (const a of extraAliases) {
@@ -560,7 +561,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       const rawTenant = String(tenantId).trim();
       const collectionKey = rawTenant === 'demo' ? collectionName : `${rawTenant}_${collectionName}`;
       
-      if (Array.isArray(value) && value.length > 0) {
+      if (value !== undefined && value !== null && (!Array.isArray(value) || value.length > 0)) {
         serverMemoryStore.set(collectionKey, value);
         // Also map normalized key if D-prefixed
         if (/^d\d+$/i.test(rawTenant)) {

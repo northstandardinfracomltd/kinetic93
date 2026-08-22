@@ -7,6 +7,7 @@ import {
   fetchCollectionFromFirestore,
   fetchRawCollectionFromFirestore,
   findTenantAndDefibGlobally,
+  purgeAllLocalEnvironmentCaches,
   db
 } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
@@ -409,6 +410,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [clientIp, setClientIp] = useState<string>('local_ip');
 
   React.useEffect(() => {
+    // Purge cached collection snapshots on arriving at the login screen to ensure fresh synchronization
+    purgeAllLocalEnvironmentCaches();
+
     fetch('https://api64.ipify.org?format=json')
       .then(res => res.json())
       .then(data => {
@@ -476,6 +480,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const handleSuccessLogin = (emailVal: string, nameVal: string, tenantIdVal: string, roleVal?: string) => {
     try {
       localStorage.removeItem(`login_attempts_${clientIp}`);
+      purgeAllLocalEnvironmentCaches(tenantIdVal);
     } catch (e) {
       console.error(e);
     }

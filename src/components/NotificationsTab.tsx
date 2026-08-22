@@ -85,17 +85,26 @@ export default function NotificationsTab({
 
   const allNotifications = React.useMemo(() => {
     const combined = [...localConnectionNotifs, ...notifications];
-    return combined.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    return combined
+      .filter(n => 
+        n && 
+        typeof n.title === 'string' && 
+        n.title.trim() && 
+        typeof n.category === 'string' && 
+        n.category.trim() && 
+        !n.title.toUpperCase().includes('CONSTAT DE MAINTENANCE')
+      )
+      .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
   }, [notifications, localConnectionNotifs]);
 
   const filtered = allNotifications.filter((notif) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
-      notif.title.toLowerCase().includes(q) ||
-      notif.category.toLowerCase().includes(q) ||
+      (notif.title && notif.title.toLowerCase().includes(q)) ||
+      (notif.category && notif.category.toLowerCase().includes(q)) ||
       (notif.timestamp && notif.timestamp.toLowerCase().includes(q)) ||
-      notif.situation.toLowerCase().includes(q)
+      (notif.situation && notif.situation.toLowerCase().includes(q))
     );
   });
 

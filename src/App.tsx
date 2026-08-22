@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getRegionsForCountry } from './utils/regions';
-import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants } from './firebase';
+import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches } from './firebase';
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
@@ -324,6 +324,9 @@ export default function App() {
   const handleLoginSuccess = (email: string, name: string, activeTenantId?: string, loggedInRole?: string) => {
     const tenantToSet = activeTenantId || 'demo';
     
+    // Purge local cached payloads to guarantee that we fetch fresh collections for the new tenant
+    purgeAllLocalEnvironmentCaches(tenantToSet);
+
     setTenantIdState(tenantToSet);
     setFirebaseTenantId(tenantToSet);
     localStorage.setItem('defib_tenant_id', tenantToSet);
@@ -396,6 +399,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    // Purge local cached payloads on logout to avoid residual tenant leaks
+    purgeAllLocalEnvironmentCaches();
+
     setIsLoggedIn(false);
     setLoggedUser(null);
     setTenantIdState('demo');
@@ -807,6 +813,8 @@ export default function App() {
       }
 
       if (updated) {
+        const str = JSON.stringify(nextCompanyInfo);
+        loadedDataRef.current.companyInfo = str;
         setCompanyInfo(nextCompanyInfo);
       }
     }
@@ -3383,7 +3391,27 @@ export default function App() {
         setMemos(baseMemos);
 
         const savedCommercialDocs = localStorage.getItem(`defib_${tenantId}_commercial_docs`);
-        const baseDocs = savedCommercialDocs ? JSON.parse(savedCommercialDocs) : (tenantId === 'demo' ? INITIAL_COMMERCIAL_DOCS : []);
+        let baseDocs: CommercialDoc[] = [];
+        if (savedCommercialDocs) {
+          try {
+            const parsed = JSON.parse(savedCommercialDocs) as CommercialDoc[];
+            if (Array.isArray(parsed)) {
+              baseDocs = parsed.filter(d => {
+                if (tenantId !== 'demo') {
+                  const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
+                  const cleanTenant = tenantId.trim().toLowerCase();
+                  const numTenant = cleanTenant.replace(/^d/i, '');
+                  if (dEnv === 'demo') return false;
+                  if (dEnv && dEnv !== cleanTenant && dEnv.replace(/^d/i, '') !== numTenant) return false;
+                  if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
+                }
+                return true;
+              });
+            }
+          } catch (e) {}
+        } else {
+          baseDocs = tenantId === 'demo' ? INITIAL_COMMERCIAL_DOCS : [];
+        }
         setCommercialDocs(baseDocs);
 
         const savedGedDocs = localStorage.getItem(`defib_${tenantId}_ged_docs`);
@@ -3490,8 +3518,6 @@ export default function App() {
         };
 
         loadedTenantIdRef.current = tenantId;
-        setLoadedTenantIdState(tenantId);
-        setIsFirebaseLoaded(true);
 
         // Synchronize browser's active local cache to the backend REST server in background (only if local data is populated)
         if (typeof fetch !== 'undefined') {
@@ -3510,18 +3536,13 @@ export default function App() {
             }).catch(() => {});
           }
         }
-
-        const elapsedMs = Date.now() - loadStartMs;
-        const remainingMs = Math.max(0, 5000 - elapsedMs);
-        minTimer = setTimeout(() => {
-          setMinEnvLoading(false);
-        }, remainingMs);
       } catch (localErr) {
         console.warn("Failed to load instant offline fallback data:", localErr);
       }
 
       try {
         console.log('Démarrage de la synchronisation Firestore en arrière-plan...');
+        const syncTasks: Promise<any>[] = [];
 
         // Helper for independent background syncing of each collection
         const syncBackground = async <T,>(
@@ -3548,8 +3569,8 @@ export default function App() {
           }
         };
 
-        // Fire all sync tasks completely concurrently and in parallel
-        syncBackground<Client[]>('clients', 'clients', setClients, (data) => {
+        // Fire all sync tasks completely concurrently and collect promises
+        syncTasks.push(syncBackground<Client[]>('clients', 'clients', setClients, (data) => {
           let changed = false;
           const sanitized = data.map(c => {
             if (!c.signaturePin || !c.signaturePin.trim()) {
@@ -3562,72 +3583,152 @@ export default function App() {
             saveCollectionToFirestore('clients', sanitized);
           }
           return sanitized;
-        });
+        }));
 
-        syncBackground<Variable[]>('variables', 'variables', setVariables);
-        syncBackground<Defibrillateur[]>('defibrillateurs', 'defibrillateurs', setDefibrillateurs);
-        syncBackground<CompanyInfo>('companyInfo', 'company_info', setCompanyInfo, (firestoreData) => {
+        syncTasks.push(syncBackground<Variable[]>('variables', 'variables', setVariables));
+        syncTasks.push(syncBackground<Defibrillateur[]>('defibrillateurs', 'defibrillateurs', setDefibrillateurs));
+        syncTasks.push(syncBackground<CompanyInfo>('companyInfo', 'company_info', setCompanyInfo, (firestoreData) => {
           const localRaw = localStorage.getItem(`defib_${tenantId}_company_info`);
+          let localData: Partial<CompanyInfo> = {};
           if (localRaw) {
             try {
-              const localData = JSON.parse(localRaw) as CompanyInfo;
-              // Firestore takes absolute priority, local is only fallback for missing values
-              return {
-                ...localData,
-                ...firestoreData,
-                hiddenTabs: firestoreData.hiddenTabs !== undefined ? firestoreData.hiddenTabs : (localData.hiddenTabs || []),
-                customLocationNames: firestoreData.customLocationNames !== undefined ? firestoreData.customLocationNames : localData.customLocationNames,
-                enableAutoEmails: firestoreData.enableAutoEmails !== undefined ? firestoreData.enableAutoEmails : localData.enableAutoEmails,
-                enableSatisfactionAvis: firestoreData.enableSatisfactionAvis !== undefined ? firestoreData.enableSatisfactionAvis : localData.enableSatisfactionAvis,
-                enableDevisFactures: firestoreData.enableDevisFactures !== undefined ? firestoreData.enableDevisFactures : localData.enableDevisFactures,
-                disableHelpsAndTutorials: firestoreData.disableHelpsAndTutorials !== undefined ? firestoreData.disableHelpsAndTutorials : localData.disableHelpsAndTutorials,
-                communicationPortailClient: firestoreData.communicationPortailClient !== undefined ? firestoreData.communicationPortailClient : localData.communicationPortailClient,
-                pdfHeaderBgColor: firestoreData.pdfHeaderBgColor !== undefined ? firestoreData.pdfHeaderBgColor : localData.pdfHeaderBgColor,
-                pdfCardBorderColor: firestoreData.pdfCardBorderColor !== undefined ? firestoreData.pdfCardBorderColor : localData.pdfCardBorderColor,
-                pdfCardBgColor: firestoreData.pdfCardBgColor !== undefined ? firestoreData.pdfCardBgColor : localData.pdfCardBgColor,
-                pdfLabelTextColor: firestoreData.pdfLabelTextColor !== undefined ? firestoreData.pdfLabelTextColor : localData.pdfLabelTextColor,
-                pdfHeaderImg: firestoreData.pdfHeaderImg !== undefined ? firestoreData.pdfHeaderImg : localData.pdfHeaderImg,
-                pdfPageHeaderText: firestoreData.pdfPageHeaderText !== undefined ? firestoreData.pdfPageHeaderText : localData.pdfPageHeaderText,
-                pdfPageFooterText: firestoreData.pdfPageFooterText !== undefined ? firestoreData.pdfPageFooterText : localData.pdfPageFooterText,
-                pdfLastPageInfoText: firestoreData.pdfLastPageInfoText !== undefined ? firestoreData.pdfLastPageInfoText : localData.pdfLastPageInfoText,
-              };
-            } catch (e) {
-              console.error("Error merging local company info:", e);
+              localData = JSON.parse(localRaw) as CompanyInfo;
+            } catch (e) {}
+          }
+          // Firestore is the supreme source of truth for cross-device consistency
+          const merged: CompanyInfo = {
+            ...localData,
+            ...firestoreData,
+            hiddenTabs: firestoreData.hiddenTabs !== undefined ? firestoreData.hiddenTabs : (localData.hiddenTabs || []),
+            customLocationNames: firestoreData.customLocationNames !== undefined ? firestoreData.customLocationNames : (localData.customLocationNames || {}),
+            enableAutoEmails: firestoreData.enableAutoEmails !== undefined ? firestoreData.enableAutoEmails : (localData.enableAutoEmails || 'Oui'),
+            enableSatisfactionAvis: firestoreData.enableSatisfactionAvis !== undefined ? firestoreData.enableSatisfactionAvis : (localData.enableSatisfactionAvis || 'Oui'),
+            enableDevisFactures: firestoreData.enableDevisFactures !== undefined ? firestoreData.enableDevisFactures : (localData.enableDevisFactures || 'Oui'),
+            disableHelpsAndTutorials: firestoreData.disableHelpsAndTutorials !== undefined ? firestoreData.disableHelpsAndTutorials : (localData.disableHelpsAndTutorials || 'Non'),
+            communicationPortailClient: firestoreData.communicationPortailClient !== undefined ? firestoreData.communicationPortailClient : (localData.communicationPortailClient || ''),
+            pdfHeaderBgColor: firestoreData.pdfHeaderBgColor !== undefined ? firestoreData.pdfHeaderBgColor : localData.pdfHeaderBgColor,
+            pdfCardBorderColor: firestoreData.pdfCardBorderColor !== undefined ? firestoreData.pdfCardBorderColor : localData.pdfCardBorderColor,
+            pdfCardBgColor: firestoreData.pdfCardBgColor !== undefined ? firestoreData.pdfCardBgColor : localData.pdfCardBgColor,
+            pdfLabelTextColor: firestoreData.pdfLabelTextColor !== undefined ? firestoreData.pdfLabelTextColor : localData.pdfLabelTextColor,
+            pdfHeaderImg: firestoreData.pdfHeaderImg !== undefined ? firestoreData.pdfHeaderImg : localData.pdfHeaderImg,
+            pdfPageHeaderText: firestoreData.pdfPageHeaderText !== undefined ? firestoreData.pdfPageHeaderText : localData.pdfPageHeaderText,
+            pdfPageFooterText: firestoreData.pdfPageFooterText !== undefined ? firestoreData.pdfPageFooterText : localData.pdfPageFooterText,
+            pdfLastPageInfoText: firestoreData.pdfLastPageInfoText !== undefined ? firestoreData.pdfLastPageInfoText : localData.pdfLastPageInfoText,
+          };
+          if (merged.customLocationNames) {
+            setLocationNames(merged.customLocationNames);
+            safeSetLocalStorage(`defib_${tenantId}_custom_location_names`, JSON.stringify(merged.customLocationNames));
+          }
+          if (merged.enableAutoEmails) {
+            safeSetLocalStorage(`defib_${tenantId}_enable_auto_emails`, merged.enableAutoEmails);
+          }
+          if (merged.enableOtherEquipments) {
+            setEnableOtherEquipments(merged.enableOtherEquipments);
+            safeSetLocalStorage(`defib_${tenantId}_enable_other_equipments`, merged.enableOtherEquipments);
+          }
+          return merged;
+        }));
+
+        syncTasks.push(syncBackground<Member[]>('members', 'members', setMembers, (mems) => {
+          const uEmail = loggedUser?.email?.trim().toLowerCase();
+          if (uEmail && Array.isArray(mems)) {
+            const m = mems.find(item => item.email?.trim().toLowerCase() === uEmail);
+            if (m?.themePreference) {
+              localStorage.setItem(`defib_${tenantId}_user_${uEmail}_theme`, m.themePreference);
+              localStorage.setItem(`defib_user_theme_${uEmail}`, m.themePreference);
+              localStorage.setItem('defib_current_user_theme', m.themePreference);
+              setThemeRefreshTrigger(prev => prev + 1);
             }
           }
-          return firestoreData;
-        });
-        syncBackground<Member[]>('members', 'members', setMembers);
-        syncBackground<SupportTicket[]>('tickets', 'support_tickets', setTickets);
-        syncBackground<CommercialDoc[]>('commercialDocs', 'commercial_docs', setCommercialDocs);
-        syncBackground<GedDocument[]>('gedDocs', 'ged_docs', setGedDocs);
-        syncBackground<StockRecord[]>('stocks', 'stocks', setStocks);
-        syncBackground<DistributedStockLocation[]>('distributed_stocks', 'distributed_stocks', setDistributedStocks);
-        syncBackground<any[]>('customerReviews', 'customer_reviews', setCustomerReviews);
-        syncBackground<PointageLog[]>('pointages', 'pointages_history', setPointages);
-        syncBackground<any[]>('expenses', 'expenses', setExpenses);
-        syncBackground<VeilleRecord[]>('veilles', 'veilles', setVeilles);
-        syncBackground<any[]>('generatedReports', 'generated_reports', setGeneratedReports);
-        syncBackground<any[]>('fsmTours', 'fsm_tours', setFsmTours);
-        syncBackground<Memo[]>('memos', 'memos', setMemos);
-        syncBackground<OtherEquipment[]>('otherEquipments', 'other_equipments', setOtherEquipments);
-        syncBackground<PointageAutoVigilance[]>('pointagesAutoVigilance', 'pointages_auto_vigilance', setPointagesAutoVigilance);
-        syncBackground<AchatFournisseur[]>('achats_fournisseurs', 'achats_fournisseurs', setAchatsFournisseurs);
-        syncBackground<LogisticsNotification[]>('logistics_notifications', 'logistics_notifications', setLogisticsNotifications);
-        syncBackground<FormationRecord[]>('formations', 'formations', setFormations);
-        syncBackground<StagiaireRecord[]>('stagiaires', 'stagiaires', setStagiaires);
-        syncBackground<EmargementRecord[]>('emargements', 'emargements', setEmargements);
+          return mems;
+        }));
 
-        syncBackground<AppNotification[]>('notifications', 'notifications', (notifs) => {
-          const cleaned = notifs.filter(n => !isNotificationOlderThan3Months(n.timestamp));
-          setNotifications(cleaned);
-          if (cleaned.length !== notifs.length) {
-            saveCollectionToFirestore('notifications', cleaned);
-          }
-          return cleaned;
-        });
+        syncTasks.push(syncBackground<SupportTicket[]>('tickets', 'support_tickets', setTickets));
+        syncTasks.push(syncBackground<CommercialDoc[]>('commercialDocs', 'commercial_docs', setCommercialDocs, (docs) => {
+          if (!Array.isArray(docs)) return [];
+          if (tenantId === 'demo') return docs;
+          const cleanTenant = tenantId.trim().toLowerCase();
+          const numTenant = cleanTenant.replace(/^d/i, '');
+          return docs.filter(d => {
+            const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
+            if (dEnv === 'demo') return false;
+            if (dEnv && dEnv !== cleanTenant && dEnv.replace(/^d/i, '') !== numTenant) return false;
+            if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
+            return true;
+          });
+        }));
+        syncTasks.push(syncBackground<GedDocument[]>('gedDocs', 'ged_docs', setGedDocs));
+        syncTasks.push(syncBackground<StockRecord[]>('stocks', 'stocks', setStocks));
+        syncTasks.push(syncBackground<DistributedStockLocation[]>('distributed_stocks', 'distributed_stocks', setDistributedStocks));
+        syncTasks.push(syncBackground<any[]>('customerReviews', 'customer_reviews', setCustomerReviews));
+        syncTasks.push(syncBackground<PointageLog[]>('pointages', 'pointages_history', setPointages));
+        syncTasks.push(syncBackground<any[]>('expenses', 'expenses', setExpenses));
+        syncTasks.push(syncBackground<VeilleRecord[]>('veilles', 'veilles', setVeilles));
+        syncTasks.push(syncBackground<any[]>('generatedReports', 'generated_reports', setGeneratedReports));
+        syncTasks.push(syncBackground<any[]>('fsmTours', 'fsm_tours', setFsmTours, (tours) => {
+          if (!Array.isArray(tours)) return [];
+          if (tenantId === 'demo') return tours;
+          return tours.filter(t => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo');
+        }));
+        syncTasks.push(syncBackground<Memo[]>('memos', 'memos', setMemos));
+        syncTasks.push(syncBackground<OtherEquipment[]>('otherEquipments', 'other_equipments', setOtherEquipments));
+        syncTasks.push(syncBackground<PointageAutoVigilance[]>('pointagesAutoVigilance', 'pointages_auto_vigilance', setPointagesAutoVigilance));
+        syncTasks.push(syncBackground<AchatFournisseur[]>('achats_fournisseurs', 'achats_fournisseurs', setAchatsFournisseurs));
+        syncTasks.push(syncBackground<LogisticsNotification[]>('logistics_notifications', 'logistics_notifications', setLogisticsNotifications));
+        syncTasks.push(syncBackground<FormationRecord[]>('formations', 'formations', setFormations));
+        syncTasks.push(syncBackground<StagiaireRecord[]>('stagiaires', 'stagiaires', setStagiaires));
+        syncTasks.push(syncBackground<EmargementRecord[]>('emargements', 'emargements', setEmargements));
+
+        const currentEmail = loggedUser?.email?.trim().toLowerCase();
+        if (currentEmail && tenantId && tenantId !== 'demo') {
+          const cleanEmail = currentEmail.replace(/[^a-zA-Z0-9]/g, '_');
+          syncTasks.push(
+            fetchCollectionFromFirestore<{ themeId?: string }>(`userTheme_${cleanEmail}`, tenantId)
+              .then(tData => {
+                if (tData?.themeId) {
+                  localStorage.setItem(`defib_${tenantId}_user_${currentEmail}_theme`, tData.themeId);
+                  localStorage.setItem(`defib_user_theme_${currentEmail}`, tData.themeId);
+                  localStorage.setItem('defib_current_user_theme', tData.themeId);
+                  setThemeRefreshTrigger(prev => prev + 1);
+                }
+              })
+              .catch(() => {})
+          );
+        }
+
+        syncTasks.push(
+          syncBackground<AppNotification[]>('notifications', 'notifications', (notifs) => {
+            const cleaned = notifs.filter(n => 
+              n && 
+              typeof n.title === 'string' && 
+              n.title.trim() && 
+              typeof n.category === 'string' && 
+              n.category.trim() && 
+              !n.title.toUpperCase().includes('CONSTAT DE MAINTENANCE') &&
+              !isNotificationOlderThan3Months(n.timestamp)
+            );
+            setNotifications(cleaned);
+            if (cleaned.length !== notifs.length) {
+              saveCollectionToFirestore('notifications', cleaned);
+            }
+            return cleaned;
+          })
+        );
+
+        // Await all initial background fetches so that states and loadedDataRef are fully initialized
+        await Promise.allSettled(syncTasks);
       } catch (err) {
         console.warn("Background firestore synchronization failed on startup:", err);
+      } finally {
+        loadedTenantIdRef.current = tenantId;
+        setLoadedTenantIdState(tenantId);
+        setIsFirebaseLoaded(true);
+
+        const elapsedMs = Date.now() - loadStartMs;
+        const remainingMs = Math.max(0, 2000 - elapsedMs);
+        minTimer = setTimeout(() => {
+          setMinEnvLoading(false);
+        }, remainingMs);
       }
     }
     loadFirebaseAndSeed();
@@ -3947,10 +4048,15 @@ export default function App() {
 
 
   const saveCommercialDocs = (newDocs: CommercialDoc[]) => {
-    setCommercialDocs(newDocs);
-    localStorage.setItem(`defib_${tenantId}_commercial_docs`, JSON.stringify(newDocs));
+    const stampedDocs = newDocs.map(d => ({
+      ...d,
+      envId: d.envId || tenantId,
+      tenantId: d.tenantId || tenantId
+    }));
+    setCommercialDocs(stampedDocs);
+    localStorage.setItem(`defib_${tenantId}_commercial_docs`, JSON.stringify(stampedDocs));
     if (isFirebaseLoaded && tenantId) {
-      saveCollectionToFirestore('commercialDocs', newDocs);
+      saveCollectionToFirestore('commercialDocs', stampedDocs);
     }
   };
 
@@ -8774,7 +8880,14 @@ export default function App() {
                 rep.defibIdentifiant === 'Formation';
               if (isFormation) return false;
 
-              const isUpcoming = rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture;
+              const isEffectue = 
+                rep.missionStatus === 'Effectué' ||
+                rep.conforme === 'Conforme' ||
+                rep.conforme === 'Non Conforme' ||
+                rep.conforme === 'Intervention impossible';
+
+              const isUpcoming = !isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture);
+
               if (gmaoFilter === 'upcoming') {
                 if (!isUpcoming) return false;
               } else if (gmaoFilter === 'validated') {
@@ -9997,7 +10110,19 @@ export default function App() {
               fontWeight: 100,
             };
 
-            const filtDocs = commercialDocs.filter((doc) => {
+            const tenantCommercialDocs = commercialDocs.filter((doc) => {
+              if (tenantId !== 'demo') {
+                const dEnv = (doc.envId || doc.tenantId || '').trim().toLowerCase();
+                const cleanTenant = tenantId.trim().toLowerCase();
+                const numTenant = cleanTenant.replace(/^d/i, '');
+                if (dEnv === 'demo') return false;
+                if (dEnv && dEnv !== cleanTenant && dEnv.replace(/^d/i, '') !== numTenant) return false;
+                if (!dEnv && doc.clientDenomination && (doc.clientDenomination.includes('Medical360') || doc.clientDenomination.includes('SecoursProOuest'))) return false;
+              }
+              return true;
+            });
+
+            const filtDocs = tenantCommercialDocs.filter((doc) => {
               const matchType =
                 docTypeFilter === 'Tous' ||
                 (docTypeFilter === 'Bon de commande' ? (doc.type === 'Bon de commande' || !!doc.hasBonCommande) : doc.type === docTypeFilter);
@@ -10229,11 +10354,11 @@ export default function App() {
                       {(['Tous', 'Devis', 'Facture', 'Bon de commande', 'Bon de livraison'] as const).map((filterOpt) => {
                         let count = 0;
                         if (filterOpt === 'Tous') {
-                          count = commercialDocs.length;
+                          count = tenantCommercialDocs.length;
                         } else if (filterOpt === 'Bon de commande') {
-                          count = commercialDocs.filter(d => d.type === 'Bon de commande' || d.hasBonCommande).length;
+                          count = tenantCommercialDocs.filter(d => d.type === 'Bon de commande' || d.hasBonCommande).length;
                         } else {
-                          count = commercialDocs.filter(d => d.type === filterOpt).length;
+                          count = tenantCommercialDocs.filter(d => d.type === filterOpt).length;
                         }
                         
                         return (
