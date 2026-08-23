@@ -917,8 +917,8 @@ export default function App() {
       if (found) return found;
     }
 
-    // 4. Default: rainbow
-    return APP_FAVICONS.find(f => f.id === 'rainbow') || APP_FAVICONS[0];
+    // 4. Default: serious_blue
+    return APP_FAVICONS.find(f => f.id === 'serious_blue') || APP_FAVICONS[1] || APP_FAVICONS[0];
   }, [currentLoggedInMember, loggedUser, members, tenantId, faviconRefreshTrigger]);
 
   // Effect to update document favicon dynamically

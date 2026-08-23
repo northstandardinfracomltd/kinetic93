@@ -962,6 +962,27 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         </div>
                       </div>
 
+                      {/* Tournée(s) en cours ce jour (sans border/padding/background, texte en rose) */}
+                      {dayActiveTours.length > 0 && (
+                        <div className="space-y-1">
+                          {dayActiveTours.map((tItem, idx) => (
+                            <div
+                              key={`day-tour-${tItem.tourId}-${idx}`}
+                              className="flex items-center gap-2 text-[16px] font-bold"
+                              style={{ color: "#FD4EBB" }}
+                            >
+                              <span
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: "#FD4EBB" }}
+                              />
+                              <span>
+                                Tournée : {tItem.title}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
                       {/* Schedules / Absences Plages */}
                       {matchingAbsences.map(({ abs }, aIdx) => (
                         <div
@@ -985,33 +1006,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         </div>
                       ))}
 
-                      {scheduleSlotsByTech.length === 0 && dayActiveTours.length > 0 && (
-                        <div
-                          className="bg-white p-3 space-y-2"
-                          style={{
-                            border: "1px solid rgb(201, 190, 205)",
-                            borderRadius: "14px",
-                          }}
-                        >
-                          <div className="space-y-1">
-                            {dayActiveTours.map((tItem, idx) => (
-                              <div
-                                key={`day-tour-nosch-${tItem.tourId}-${idx}`}
-                                className="flex items-center gap-2 text-[16px] font-bold text-black"
-                              >
-                                <span
-                                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                                  style={{ backgroundColor: "#FD4EBB" }}
-                                />
-                                <span>
-                                  Tournée : {tItem.title}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
                       {scheduleSlotsByTech.map(({ schedule }, sIdx) => {
                         const slotText = schedule.fermetureMidi
                           ? `${schedule.openMorning || '09:00'} - ${schedule.closeMorning || '12:00'} / ${schedule.openAfternoon || '14:00'} - ${schedule.closeAfternoon || '18:00'}`
@@ -1026,26 +1020,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                               borderRadius: "14px",
                             }}
                           >
-                            {/* Tournées en cours pour ce jour (affichées au dessus de la gélule noire) */}
-                            {dayActiveTours.length > 0 && (
-                              <div className="space-y-1 pb-1">
-                                {dayActiveTours.map((tItem, idx) => (
-                                  <div
-                                    key={`day-tour-${tItem.tourId}-${idx}`}
-                                    className="flex items-center gap-2 text-[16px] font-bold text-black"
-                                  >
-                                    <span
-                                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                                      style={{ backgroundColor: "#FD4EBB" }}
-                                    />
-                                    <span>
-                                      Tournée : {tItem.title}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
                                 {slotText}

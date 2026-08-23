@@ -302,7 +302,7 @@ export default function SettingsModal({
     const savedLocal = localStorage.getItem(userFaviconKey) || (userEmail ? localStorage.getItem(`defib_user_favicon_${userEmail}`) : null) || localStorage.getItem('defib_current_user_favicon');
     if (savedLocal) return savedLocal;
 
-    return 'rainbow';
+    return 'serious_blue';
   });
 
   const handleFaviconSelect = (faviconId: string) => {

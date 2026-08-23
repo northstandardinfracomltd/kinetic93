@@ -350,7 +350,8 @@ export const APP_FAVICONS: AppFaviconOption[] = [
   { id: 'rainbow', name: 'Rainbow', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoRainbow.png' }
 ];
 
-export const DEFAULT_FAVICON_URL = 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoRainbow.png';
+export const DEFAULT_FAVICON_ID = 'serious_blue';
+export const DEFAULT_FAVICON_URL = 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoBlue.png';
 
 export const formatPdfHeaderText = (text?: string): string => {
   if (!text) return '';
