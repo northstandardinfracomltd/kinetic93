@@ -8045,7 +8045,7 @@ export default function PublicPortal({
                                                 : "#000000")
                                               : (isCompleted
                                                 ? "#e2e8f0"
-                                                : "rgb(53, 86, 236)"),
+                                                : "rgb(40 79 255)"),
                                             color: isFormationMission
                                               ? (isCompleted || !matchedEmargement
                                                 ? "#94a3b8"
@@ -8064,7 +8064,7 @@ export default function PublicPortal({
                                                 : "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset")
                                               : (isCompleted
                                                 ? "none"
-                                                : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset"),
+                                                : "rgb(255 255 255 / 41%) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 22%) 0px 6px 12px inset"),
                                             cursor: isFormationMission
                                               ? (isCompleted || !matchedEmargement
                                                 ? "not-allowed"
@@ -8089,8 +8089,9 @@ export default function PublicPortal({
                                       {/* Rejection reason input for uncompleted passages */}
                                       {!isCompleted && (
                                           <div
-                                            className="mt-2.5 p-3 rounded-lg"
+                                            className="mt-2.5 p-3"
                                             style={{
+                                              borderRadius: "13px",
                                               backgroundColor: "rgb(238, 241, 255)",
                                               color: "rgb(49, 85, 255)",
                                             }}
@@ -8147,7 +8148,7 @@ export default function PublicPortal({
                                             style={{
                                               backgroundColor: "#ffffff",
                                               color: "#000000",
-                                              borderRadius: "8px",
+                                              borderRadius: "13px",
                                               padding: "7px 10px",
                                               width: "100%",
                                               fontSize: "18px",
@@ -8467,83 +8468,69 @@ export default function PublicPortal({
                                       {rep.title || "RAPPORT D’INTERVENTION"}
                                     </span>
                                   </p>
-                                  {isReal(identifiantVal) && (
-                                    <p style={{ color: "#000000" }}>
-                                      Identifiant :{" "}
-                                      <span
-                                        className="font-semibold"
-                                        style={{ color: "#000000" }}
-                                      >
-                                        {identifiantVal}
-                                      </span>
-                                    </p>
-                                  )}
-                                  {isReal(serieVal) && (
-                                    <p style={{ color: "#000000" }}>
-                                      Série :{" "}
-                                      <span
-                                        className="font-semibold"
-                                        style={{ color: "#000000" }}
-                                      >
-                                        {serieVal}
-                                      </span>
-                                    </p>
-                                  )}
-                                  {isReal(siteVal) && (
-                                    <p style={{ color: "#000000" }}>
-                                      Site :{" "}
-                                      <span
-                                        className="font-semibold"
-                                        style={{ color: "#000000" }}
-                                      >
-                                        {formatToNormalCase(siteVal)}
-                                      </span>
-                                    </p>
-                                  )}
-                                  {isReal(clientVal) && (
-                                    <p style={{ color: "#000000" }}>
-                                      Client :{" "}
-                                      <span
-                                        className="font-semibold"
-                                        style={{ color: "#000000" }}
-                                      >
-                                        {formatToNormalCase(clientVal)}
-                                      </span>
-                                    </p>
-                                  )}
-                                  {isReal(materielVal) && (
-                                    <p style={{ color: "#000000" }}>
-                                      Matériel :{" "}
-                                      <span
-                                        className="font-semibold"
-                                        style={{ color: "#000000" }}
-                                      >
-                                        {materielVal}
-                                      </span>
-                                    </p>
-                                  )}
-                                  {isReal(techVal) && (
-                                    <p style={{ color: "#000000" }}>
-                                      Technicien :{" "}
-                                      <span
-                                        className="font-semibold"
-                                        style={{ color: "#000000" }}
-                                      >
-                                        {techVal}
-                                      </span>
-                                    </p>
-                                  )}
-                                  {isReal(locVal) && (
-                                    <p style={{ color: "#000000" }}>
-                                      Localisation :{" "}
-                                      <span
-                                        className="font-semibold"
-                                        style={{ color: "#000000" }}
-                                      >
-                                        {locVal}
-                                      </span>
-                                    </p>
-                                  )}
+                                  <p style={{ color: "#000000" }}>
+                                    Identifiant :{" "}
+                                    <span
+                                      className="font-semibold"
+                                      style={{ color: "#000000" }}
+                                    >
+                                      {isReal(identifiantVal) ? identifiantVal : ""}
+                                    </span>
+                                  </p>
+                                  <p style={{ color: "#000000" }}>
+                                    Série :{" "}
+                                    <span
+                                      className="font-semibold"
+                                      style={{ color: "#000000" }}
+                                    >
+                                      {isReal(serieVal) ? serieVal : ""}
+                                    </span>
+                                  </p>
+                                  <p style={{ color: "#000000" }}>
+                                    Site :{" "}
+                                    <span
+                                      className="font-semibold"
+                                      style={{ color: "#000000" }}
+                                    >
+                                      {isReal(siteVal) ? formatToNormalCase(siteVal) : ""}
+                                    </span>
+                                  </p>
+                                  <p style={{ color: "#000000" }}>
+                                    Client :{" "}
+                                    <span
+                                      className="font-semibold"
+                                      style={{ color: "#000000" }}
+                                    >
+                                      {isReal(clientVal) ? formatToNormalCase(clientVal) : ""}
+                                    </span>
+                                  </p>
+                                  <p style={{ color: "#000000" }}>
+                                    Matériel :{" "}
+                                    <span
+                                      className="font-semibold"
+                                      style={{ color: "#000000" }}
+                                    >
+                                      {isReal(materielVal) ? materielVal : ""}
+                                    </span>
+                                  </p>
+                                  <p style={{ color: "#000000" }}>
+                                    Technicien :{" "}
+                                    <span
+                                      className="font-semibold"
+                                      style={{ color: "#000000" }}
+                                    >
+                                      {isReal(techVal) ? techVal : ""}
+                                    </span>
+                                  </p>
+                                  <p style={{ color: "#000000" }}>
+                                    Localisation :{" "}
+                                    <span
+                                      className="font-semibold"
+                                      style={{ color: "#000000" }}
+                                    >
+                                      {isReal(locVal) ? locVal : ""}
+                                    </span>
+                                  </p>
                                 </>
                               );
                             })()}
@@ -10958,14 +10945,15 @@ export default function PublicPortal({
                                   type="date"
                                   value={getIsoDate(p.startDate)}
                                   style={{
-                                    color: "#000",
-                                    fontSize: "16px",
-                                    border: "1px solid #c9bfcd",
+                                    fontSize: "18px",
+                                    padding: "14px",
                                     borderRadius: "13px",
-                                    padding: "10px 12px",
+                                    border: "1px solid rgb(201, 191, 205)",
+                                    outline: "none",
+                                    color: "rgb(0, 0, 0)",
                                     backgroundColor: "#ffffff",
                                   }}
-                                  className="w-full outline-none"
+                                  className="w-full"
                                   onChange={(e) =>
                                     handleEditPointageField(p.id, {
                                       startDate: getFrenchDate(e.target.value),
@@ -10988,14 +10976,15 @@ export default function PublicPortal({
                                       type="time"
                                       value={p.startTime}
                                       style={{
-                                        color: "#000",
-                                        fontSize: "16px",
-                                        border: "1px solid #c9bfcd",
+                                        fontSize: "18px",
+                                        padding: "14px",
                                         borderRadius: "13px",
-                                        padding: "10px 12px",
+                                        border: "1px solid rgb(201, 191, 205)",
+                                        outline: "none",
+                                        color: "rgb(0, 0, 0)",
                                         backgroundColor: "#ffffff",
                                       }}
-                                      className="w-full outline-none"
+                                      className="w-full"
                                       onChange={(e) =>
                                         handleEditPointageField(p.id, {
                                           startTime: e.target.value,
@@ -11016,14 +11005,15 @@ export default function PublicPortal({
                                       type="time"
                                       value={endTime}
                                       style={{
-                                        color: "#000",
-                                        fontSize: "16px",
-                                        border: "1px solid #c9bfcd",
+                                        fontSize: "18px",
+                                        padding: "14px",
                                         borderRadius: "13px",
-                                        padding: "10px 12px",
+                                        border: "1px solid rgb(201, 191, 205)",
+                                        outline: "none",
+                                        color: "rgb(0, 0, 0)",
                                         backgroundColor: "#ffffff",
                                       }}
-                                      className="w-full outline-none"
+                                      className="w-full"
                                       onChange={(e) =>
                                         handleEditPointageField(p.id, {
                                           endTime: e.target.value,
@@ -11046,14 +11036,15 @@ export default function PublicPortal({
                                       readOnly
                                       value={ampFormatted}
                                       style={{
-                                        color: "#000",
-                                        fontSize: "16px",
-                                        border: "1px solid #c9bfcd",
+                                        fontSize: "18px",
+                                        padding: "14px",
                                         borderRadius: "13px",
-                                        padding: "10px 12px",
+                                        border: "1px solid rgb(201, 191, 205)",
+                                        outline: "none",
+                                        color: "rgb(0, 0, 0)",
                                         backgroundColor: "#e2d9e6",
                                       }}
-                                      className="w-full cursor-not-allowed outline-none"
+                                      className="w-full cursor-not-allowed"
                                     />
                                   </div>
 
@@ -11071,14 +11062,15 @@ export default function PublicPortal({
                                       placeholder={t("Entrez un commentaire.")}
                                       value={p.comment || ""}
                                       style={{
-                                        color: "#000",
-                                        fontSize: "16px",
-                                        border: "1px solid #c9bfcd",
+                                        fontSize: "18px",
+                                        padding: "14px",
                                         borderRadius: "13px",
-                                        padding: "10px 12px",
+                                        border: "1px solid rgb(201, 191, 205)",
+                                        outline: "none",
+                                        color: "rgb(0, 0, 0)",
                                         backgroundColor: "#ffffff",
                                       }}
-                                      className="w-full outline-none"
+                                      className="w-full"
                                       onChange={(e) =>
                                         handleEditPointageField(p.id, {
                                           comment: e.target.value,
@@ -11141,14 +11133,15 @@ export default function PublicPortal({
                                         placeholder="00:00"
                                         value={p.trajetMatin ?? "00:00"}
                                         style={{
-                                          color: "#000",
-                                          fontSize: "16px",
-                                          border: "1px solid #c9bfcd",
+                                          fontSize: "18px",
+                                          padding: "14px",
                                           borderRadius: "13px",
-                                          padding: "10px 12px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
                                           backgroundColor: "#ffffff",
                                         }}
-                                        className="w-full outline-none"
+                                        className="w-full"
                                         onChange={(e) =>
                                           handleEditPointageField(p.id, {
                                             trajetMatin: e.target.value,
@@ -11170,14 +11163,15 @@ export default function PublicPortal({
                                         placeholder="00:00"
                                         value={p.trajetSoir ?? "00:00"}
                                         style={{
-                                          color: "#000",
-                                          fontSize: "16px",
-                                          border: "1px solid #c9bfcd",
+                                          fontSize: "18px",
+                                          padding: "14px",
                                           borderRadius: "13px",
-                                          padding: "10px 12px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
                                           backgroundColor: "#ffffff",
                                         }}
-                                        className="w-full outline-none"
+                                        className="w-full"
                                         onChange={(e) =>
                                           handleEditPointageField(p.id, {
                                             trajetSoir: e.target.value,
@@ -11200,14 +11194,15 @@ export default function PublicPortal({
                                         readOnly
                                         value={trajetJourneeFormatted}
                                         style={{
-                                          color: "#000",
-                                          fontSize: "16px",
-                                          border: "1px solid #c9bfcd",
+                                          fontSize: "18px",
+                                          padding: "14px",
                                           borderRadius: "13px",
-                                          padding: "10px 12px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
                                           backgroundColor: "#e2d9e6",
                                         }}
-                                        className="w-full cursor-not-allowed outline-none"
+                                        className="w-full cursor-not-allowed"
                                       />
                                     </div>
                                   </div>
@@ -11235,14 +11230,15 @@ export default function PublicPortal({
                                         placeholder="00:00"
                                         value={p.tempsRepas ?? "00:00"}
                                         style={{
-                                          color: "#000",
-                                          fontSize: "16px",
-                                          border: "1px solid #c9bfcd",
+                                          fontSize: "18px",
+                                          padding: "14px",
                                           borderRadius: "13px",
-                                          padding: "10px 12px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
                                           backgroundColor: "#ffffff",
                                         }}
-                                        className="w-full outline-none"
+                                        className="w-full"
                                         onChange={(e) =>
                                           handleEditPointageField(p.id, {
                                             tempsRepas: e.target.value,
@@ -11276,14 +11272,15 @@ export default function PublicPortal({
                                         readOnly
                                         value={cttAmpFormatted}
                                         style={{
-                                          color: "#000",
-                                          fontSize: "16px",
-                                          border: "1px solid #c9bfcd",
+                                          fontSize: "18px",
+                                          padding: "14px",
                                           borderRadius: "13px",
-                                          padding: "10px 12px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
                                           backgroundColor: "#e2d9e6",
                                         }}
-                                        className="w-full cursor-not-allowed outline-none"
+                                        className="w-full cursor-not-allowed"
                                       />
                                     </div>
 
@@ -11300,14 +11297,15 @@ export default function PublicPortal({
                                         placeholder="00:00"
                                         value={p.tempsAdmin ?? "00:00"}
                                         style={{
-                                          color: "#000",
-                                          fontSize: "16px",
-                                          border: "1px solid #c9bfcd",
+                                          fontSize: "18px",
+                                          padding: "14px",
                                           borderRadius: "13px",
-                                          padding: "10px 12px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
                                           backgroundColor: "#ffffff",
                                         }}
-                                        className="w-full outline-none"
+                                        className="w-full"
                                         onChange={(e) =>
                                           handleEditPointageField(p.id, {
                                             tempsAdmin: e.target.value,
@@ -11426,13 +11424,14 @@ export default function PublicPortal({
                           onChange={(e) => setExpenseTitle(e.target.value)}
                           placeholder="Entrez une raison."
                           style={{
-                            fontSize: "16px",
+                            fontSize: "18px",
                             padding: "14px",
                             borderRadius: "13px",
-                            border: "1px solid #dedede",
+                            border: "1px solid rgb(201, 191, 205)",
                             outline: "none",
+                            color: "rgb(0, 0, 0)",
                           }}
-                          className="w-full bg-white focus:border-indigo-500"
+                          className="w-full bg-white"
                         />
                       </div>
 
@@ -11453,13 +11452,14 @@ export default function PublicPortal({
                             onChange={(e) => handleTtcChange(e.target.value)}
                             placeholder="0.00"
                             style={{
-                              fontSize: "16px",
+                              fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid #dedede",
+                              border: "1px solid rgb(201, 191, 205)",
                               outline: "none",
+                              color: "rgb(0, 0, 0)",
                             }}
-                            className="w-full bg-white text-black font-bold focus:border-indigo-500"
+                            className="w-full bg-white text-black font-bold"
                           />
                         </div>
 
@@ -11477,13 +11477,14 @@ export default function PublicPortal({
                             onChange={(e) => handleHtChange(e.target.value)}
                             placeholder="0.00"
                             style={{
-                              fontSize: "16px",
+                              fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid #dedede",
+                              border: "1px solid rgb(201, 191, 205)",
                               outline: "none",
+                              color: "rgb(0, 0, 0)",
                             }}
-                            className="w-full bg-white text-black focus:border-indigo-500"
+                            className="w-full bg-white text-black"
                           />
                         </div>
                       </div>
@@ -11503,13 +11504,14 @@ export default function PublicPortal({
                             onChange={(e) => setExpenseTva(e.target.value)}
                             placeholder="0.00"
                             style={{
-                              fontSize: "16px",
+                              fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid #dedede",
+                              border: "1px solid rgb(201, 191, 205)",
                               outline: "none",
+                              color: "rgb(0, 0, 0)",
                             }}
-                            className="w-full bg-white text-black focus:border-indigo-500"
+                            className="w-full bg-white text-black"
                           />
                         </div>
 
@@ -11527,13 +11529,14 @@ export default function PublicPortal({
                             onChange={(e) => setExpenseDate(e.target.value)}
                             placeholder={new Date().toISOString().split("T")[0]}
                             style={{
-                              fontSize: "16px",
+                              fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid #dedede",
+                              border: "1px solid rgb(201, 191, 205)",
                               outline: "none",
+                              color: "rgb(0, 0, 0)",
                             }}
-                            className="w-full bg-white focus:border-indigo-500"
+                            className="w-full bg-white"
                           />
                         </div>
                       </div>
@@ -11687,23 +11690,24 @@ export default function PublicPortal({
                     {/* Commune */}
                     <div className="space-y-2">
                       <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
-                        Commune.
+                        Commune ou Entreprise.
                       </label>
                       <input
                         type="text"
                         value={veilleCommune}
                         onChange={(e) => setVeilleCommune(e.target.value)}
-                        placeholder="Entrez une commune."
+                        placeholder="Entrez une dénomination."
                         required
                         style={{
-                          fontSize: "16px",
+                          fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid #dedede",
+                          border: "1px solid rgb(201, 191, 205)",
                           outline: "none",
+                          color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black focus:border-indigo-500"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11719,14 +11723,15 @@ export default function PublicPortal({
                         placeholder="Entrez un volume."
                         required
                         style={{
-                          fontSize: "16px",
+                          fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid #dedede",
+                          border: "1px solid rgb(201, 191, 205)",
                           outline: "none",
+                          color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black focus:border-indigo-500"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11742,14 +11747,15 @@ export default function PublicPortal({
                         placeholder="Entrez un mainteneur actuel."
                         required
                         style={{
-                          fontSize: "16px",
+                          fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid #dedede",
+                          border: "1px solid rgb(201, 191, 205)",
                           outline: "none",
+                          color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black focus:border-indigo-500"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11765,14 +11771,15 @@ export default function PublicPortal({
                         placeholder="jj/mm/aaaa"
                         required
                         style={{
-                          fontSize: "16px",
+                          fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid #dedede",
+                          border: "1px solid rgb(201, 191, 205)",
                           outline: "none",
+                          color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black focus:border-indigo-500"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11788,14 +11795,15 @@ export default function PublicPortal({
                         placeholder="Entrez un nom et prénom."
                         required
                         style={{
-                          fontSize: "16px",
+                          fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid #dedede",
+                          border: "1px solid rgb(201, 191, 205)",
                           outline: "none",
+                          color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black focus:border-indigo-500"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11811,14 +11819,15 @@ export default function PublicPortal({
                         placeholder="Entrez un email."
                         required
                         style={{
-                          fontSize: "16px",
+                          fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid #dedede",
+                          border: "1px solid rgb(201, 191, 205)",
                           outline: "none",
+                          color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black focus:border-indigo-500"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11834,14 +11843,15 @@ export default function PublicPortal({
                         placeholder="Entrez un téléphone."
                         required
                         style={{
-                          fontSize: "16px",
+                          fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid #dedede",
+                          border: "1px solid rgb(201, 191, 205)",
                           outline: "none",
+                          color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black focus:border-indigo-500"
+                        className="w-full text-black"
                       />
                     </div>
 

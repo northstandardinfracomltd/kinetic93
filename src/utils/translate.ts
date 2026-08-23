@@ -580,7 +580,9 @@ const dictionaries: Record<string, Record<string, string>> = {
 
     "Relevé Concurrentiel": "Competitive Analysis",
     "Commune.": "Municipality.",
+    "Commune ou Entreprise.": "Municipality or Company.",
     "Entrez une commune.": "Enter a municipality.",
+    "Entrez une dénomination.": "Enter a name/entity.",
     "Volume (Chiffre).": "Volume (Number).",
     "Entrez un volume.": "Enter a volume.",
     "Mainteneur actuel.": "Current maintainer.",

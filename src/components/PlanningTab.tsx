@@ -678,10 +678,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                     }}
                     className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden cursor-pointer"
                     style={{
-                      border: "1px solid rgb(201, 190, 205)",
-                      borderRadius: "14px",
-                      padding: "12px 14px",
-                      fontSize: "16px",
+                      fontSize: "18px",
+                      padding: "14px",
+                      borderRadius: "13px",
+                      border: "1px solid rgb(201, 191, 205)",
+                      outline: "none",
+                      color: "rgb(0, 0, 0)",
                       WebkitAppearance: "none",
                       appearance: "none",
                     }}
@@ -701,10 +703,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                     }}
                     className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none cursor-pointer"
                     style={{
-                      border: "1px solid rgb(201, 190, 205)",
-                      borderRadius: "14px",
-                      padding: "12px 14px",
-                      fontSize: "16px",
+                      fontSize: "18px",
+                      padding: "14px",
+                      borderRadius: "13px",
+                      border: "1px solid rgb(201, 191, 205)",
+                      outline: "none",
+                      color: "rgb(0, 0, 0)",
                     }}
                   >
                     <option value="">Sélectionner un créneau</option>
@@ -731,10 +735,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                     }}
                     className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
                     style={{
-                      border: "1px solid rgb(201, 190, 205)",
-                      borderRadius: "14px",
-                      padding: "12px 14px",
-                      fontSize: "16px",
+                      fontSize: "18px",
+                      padding: "14px",
+                      borderRadius: "13px",
+                      border: "1px solid rgb(201, 191, 205)",
+                      outline: "none",
+                      color: "rgb(0, 0, 0)",
                     }}
                   />
                 </div>
@@ -754,10 +760,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                     }}
                     className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
                     style={{
-                      border: "1px solid rgb(201, 190, 205)",
-                      borderRadius: "14px",
-                      padding: "12px 14px",
-                      fontSize: "16px",
+                      fontSize: "18px",
+                      padding: "14px",
+                      borderRadius: "13px",
+                      border: "1px solid rgb(201, 191, 205)",
+                      outline: "none",
+                      color: "rgb(0, 0, 0)",
                     }}
                   />
                 </div>
@@ -770,14 +778,14 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                       setIsSpontaneousFormOpen(false);
                       setFormError('');
                     }}
-                    className="w-full text-black font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer select-none"
+                    className="w-full font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer select-none"
                     style={{
-                      backgroundColor: "rgba(255, 255, 255, 0)",
+                      backgroundColor: "#000000",
                       borderRadius: "13px",
-                      color: "rgb(0, 0, 0)",
-                      padding: "10px 20px",
+                      color: "#ffffff",
+                      padding: "14px 20px",
                       fontSize: "18px",
-                      border: "1px solid rgb(203, 192, 206)",
+                      border: "none",
                     }}
                   >
                     Annuler
