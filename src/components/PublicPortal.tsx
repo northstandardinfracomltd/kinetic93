@@ -2143,6 +2143,13 @@ export default function PublicPortal({
         });
 
         setTours(mapped);
+        setSelectedTourId((prev) => {
+          if (prev && mapped.some((t: any) => t.id === prev)) {
+            return prev;
+          }
+          const firstActive = mapped.find((t: any) => t.status !== "Terminé") || mapped[0];
+          return firstActive ? firstActive.id : "";
+        });
       } else {
         setTours([]);
       }
@@ -4995,14 +5002,14 @@ export default function PublicPortal({
     return { count: missionsToSync.length, calendarId };
   };
 
-  const getNextPassageZone = () => {
-    let activeTour: any = null;
-    if (selectedTourId) {
-      activeTour = getSortedTours().find((t) => t.id === selectedTourId);
-    }
-    if (!activeTour) {
-      activeTour = getSortedTours().find((t) => t.status !== "Terminé");
-    }
+  const getNextPassageZone = (tourId?: string) => {
+    const targetTourId = tourId || selectedTourId;
+    if (!targetTourId) return "";
+
+    const activeTour: any =
+      getSortedTours().find((t) => t.id === targetTourId) ||
+      tours.find((t) => t.id === targetTourId);
+
     if (!activeTour || !activeTour.passages || activeTour.passages.length === 0)
       return "";
 
@@ -5014,7 +5021,7 @@ export default function PublicPortal({
     if (donePassages.length > 0) {
       const highestDoneNum = Math.max(...donePassages.map((p: any) => p.num));
       nextPassage = activeTour.passages.find(
-        (p: any) => p.num === highestDoneNum + 1,
+        (p: any) => p.num === highestDoneNum + 1 && p.status === "À faire",
       );
       if (!nextPassage) {
         nextPassage = activeTour.passages.find(
@@ -5050,12 +5057,26 @@ export default function PublicPortal({
       if (other && other.ville && other.ville.trim() && other.ville !== "Ville_CP" && other.ville !== "Non renseigné") {
         const cpStr = other.codePostal && other.codePostal !== "CP" && other.codePostal !== "Ville_CP" ? ` ${other.codePostal}` : "";
         resolvedZone = `${other.ville}${cpStr}`;
-      } else if (nextPassage.address) {
-        const parts = nextPassage.address.split(",");
-        if (parts.length > 1) {
-          resolvedZone = parts[parts.length - 1].trim();
+      } else {
+        const fmt = formations?.find((f: any) => f.id === nextPassage.formationId || f.id === nextPassage.identifiant);
+        if (fmt && fmt.ville && fmt.ville.trim()) {
+          const cpStr = fmt.codePostal ? ` ${fmt.codePostal}` : "";
+          resolvedZone = `${fmt.ville}${cpStr}`;
         } else {
-          resolvedZone = nextPassage.address;
+          const client = clients?.find((c: any) => c.id === nextPassage.clientId);
+          if (client && client.ville && client.ville.trim()) {
+            const cpStr = client.codePostal ? ` ${client.codePostal}` : "";
+            resolvedZone = `${client.ville}${cpStr}`;
+          } else if (nextPassage.address) {
+            const parts = nextPassage.address.split(",");
+            if (parts.length > 1) {
+              resolvedZone = parts[parts.length - 1].trim();
+            } else {
+              resolvedZone = nextPassage.address;
+            }
+          } else if (nextPassage.location && nextPassage.location !== "Non renseigné") {
+            resolvedZone = nextPassage.location;
+          }
         }
       }
     }
@@ -7496,11 +7517,11 @@ export default function PublicPortal({
                           </div>
                           {pauseEnabled && (
                             <div className="space-y-3 pt-1">
-                              {getNextPassageZone() && (
+                              {getNextPassageZone(selectedTourId) && (
                                 <div className="text-[18px] font-semibold text-[#fe4eba] font-sans">
                                   {t("Zone recommandée pour votre pause :")}{" "}
                                   <span className="font-bold">
-                                    {getNextPassageZone()}
+                                    {getNextPassageZone(selectedTourId)}
                                   </span>
                                   .
                                 </div>
@@ -8021,7 +8042,7 @@ export default function PublicPortal({
                                             backgroundColor: isFormationMission
                                               ? (isCompleted || !matchedEmargement
                                                 ? "#e2e8f0"
-                                                : "rgb(96, 28, 104)")
+                                                : "#000000")
                                               : (isCompleted
                                                 ? "#e2e8f0"
                                                 : "rgb(53, 86, 236)"),
@@ -8040,7 +8061,7 @@ export default function PublicPortal({
                                             boxShadow: isFormationMission
                                               ? (isCompleted || !matchedEmargement
                                                 ? "none"
-                                                : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset")
+                                                : "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset")
                                               : (isCompleted
                                                 ? "none"
                                                 : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset"),
@@ -10785,7 +10806,7 @@ export default function PublicPortal({
 
                   {/* Digital Clock Section */}
                   <div
-                    style={{ backgroundColor: "#000f55", color: "#fff" }}
+                    style={{ backgroundColor: "#000", color: "#fff" }}
                     className="p-5 rounded-2xl text-center space-y-2"
                   >
                     <span
@@ -10836,11 +10857,11 @@ export default function PublicPortal({
                           type="button"
                           onClick={handleTogglePointage}
                           style={{
-                            backgroundColor: isTracking ? "#dc2626" : "rgb(53, 86, 236)",
+                            backgroundColor: isTracking ? "#dc2626" : "rgb(39, 78, 255)",
                             color: "#fff",
                             fontSize: "18px",
                             fontWeight: "bold",
-                            borderRadius: "12px",
+                            borderRadius: "13px",
                             padding: "14px 20px",
                             border: "none",
                             boxShadow: isTracking
@@ -10910,7 +10931,7 @@ export default function PublicPortal({
                                 <span
                                   style={{
                                     color: "#fff",
-                                    background: "#0f172a",
+                                    background: "#000",
                                     border: "none",
                                     fontSize: "18px",
                                     padding: "8px 16px",
@@ -11076,11 +11097,11 @@ export default function PublicPortal({
                               style={{
                                 color: "#fff",
                                 boxShadow:
-                                  "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97 28 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                                background: "rgb(96 28 104)",
+                                  "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                backgroundColor: "rgb(39, 78, 255)",
                                 borderRadius: "13px",
                                 padding: "10px 18px",
-                                fontSize: "16px",
+                                fontSize: "18px",
                                 fontWeight: 700,
                                 border: "none",
                                 cursor: "pointer",
@@ -11097,7 +11118,7 @@ export default function PublicPortal({
 
                             {/* Expanded Details */}
                             {isExpanded && (
-                              <div className="space-y-4 pt-1 border-t border-slate-100">
+                              <div className="space-y-4 pt-1">
                                 {/* Section Title : « Trajet » */}
                                 <div className="space-y-3 pt-1">
                                   <h4
@@ -11320,9 +11341,9 @@ export default function PublicPortal({
                                     style={{
                                       backgroundColor: p.isOngoing ? "#9ca3af" : "#dc2626",
                                       color: "#ffffff",
-                                      fontSize: "16px",
+                                      fontSize: "18px",
                                       fontWeight: "bold",
-                                      borderRadius: "12px",
+                                      borderRadius: "13px",
                                       padding: "12px 18px",
                                       border: "none",
                                       cursor: p.isOngoing ? "not-allowed" : "pointer",
@@ -11341,9 +11362,9 @@ export default function PublicPortal({
                                     style={{
                                       backgroundColor: "#000000",
                                       color: "#ffffff",
-                                      fontSize: "16px",
+                                      fontSize: "18px",
                                       fontWeight: "bold",
-                                      borderRadius: "12px",
+                                      borderRadius: "13px",
                                       padding: "12px 18px",
                                       border: "none",
                                       cursor: "pointer",
@@ -12036,6 +12057,10 @@ export default function PublicPortal({
                     #tab-localisation-screen input::placeholder {
                       font-family: var(--font-sans), "Civilprom", "DefibeoMain", sans-serif !important;
                     }
+                    #tab-localisation-screen input::placeholder {
+                      font-size: 18px !important;
+                      color: #9ca3af !important;
+                    }
                   `}</style>
                   <form
                     onSubmit={handleSaveLocalisation}
@@ -12122,7 +12147,7 @@ export default function PublicPortal({
                                   className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
                                   style={{
                                     backgroundColor: gpsSharingLink === "Partagé"
-                                      ? "#16a34a"
+                                      ? "rgb(254, 78, 187)"
                                       : "#cbd5e1",
                                   }}
                                 >
@@ -12169,12 +12194,12 @@ export default function PublicPortal({
                             onChange={(e) => setTechStartStreet(e.target.value)}
                             placeholder="Ex: 15 Rue de la Paix"
                             style={{
-                              fontSize: "15px",
+                              fontSize: "18px",
                               padding: "14px",
-                              borderRadius: "10px",
-                              border: "1px solid #dedede",
+                              borderRadius: "13px",
+                              border: "1px solid rgb(201, 191, 205)",
                               outline: "none",
-                              color: "#000000",
+                              color: "rgb(0, 0, 0)",
                             }}
                             className="w-full bg-white focus:border-indigo-500 font-sans"
                           />
@@ -12191,12 +12216,12 @@ export default function PublicPortal({
                               onChange={(e) => setTechStartCity(e.target.value)}
                               placeholder="Ex: Paris"
                               style={{
-                                fontSize: "15px",
+                                fontSize: "18px",
                                 padding: "14px",
-                                borderRadius: "10px",
-                                border: "1px solid #dedede",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
                                 outline: "none",
-                                color: "#000000",
+                                color: "rgb(0, 0, 0)",
                               }}
                               className="w-full bg-white focus:border-indigo-500 font-sans"
                             />
@@ -12212,12 +12237,12 @@ export default function PublicPortal({
                               onChange={(e) => setTechStartZip(e.target.value)}
                               placeholder="Ex: 75002"
                               style={{
-                                fontSize: "15px",
+                                fontSize: "18px",
                                 padding: "14px",
-                                borderRadius: "10px",
-                                border: "1px solid #dedede",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
                                 outline: "none",
-                                color: "#000000",
+                                color: "rgb(0, 0, 0)",
                               }}
                               className="w-full bg-white focus:border-indigo-500 font-sans"
                             />
@@ -12233,12 +12258,12 @@ export default function PublicPortal({
                               value={techStartRegion}
                               onChange={(e) => setTechStartRegion(e.target.value)}
                               style={{
-                                fontSize: "15px",
+                                fontSize: "18px",
                                 padding: "14px",
-                                borderRadius: "10px",
-                                border: "1px solid #dedede",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
                                 outline: "none",
-                                color: "#000000",
+                                color: "rgb(0, 0, 0)",
                                 appearance: "none",
                                 WebkitAppearance: "none",
                                 MozAppearance: "none",
@@ -12260,12 +12285,12 @@ export default function PublicPortal({
                               value={techStartCountry}
                               onChange={(e) => setTechStartCountry(e.target.value)}
                               style={{
-                                fontSize: "15px",
+                                fontSize: "18px",
                                 padding: "14px",
-                                borderRadius: "10px",
-                                border: "1px solid #dedede",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
                                 outline: "none",
-                                color: "#000000",
+                                color: "rgb(0, 0, 0)",
                                 appearance: "none",
                                 WebkitAppearance: "none",
                                 MozAppearance: "none",
@@ -12290,19 +12315,19 @@ export default function PublicPortal({
                               value={(techStartLat && techStartLat.toLowerCase() !== 'null' && techStartLat.toLowerCase() !== 'undefined' && techStartLat.toLowerCase() !== 'nan') ? techStartLat : ''}
                               placeholder="Rempli automatiquement"
                               style={{
-                                fontSize: "15px",
+                                fontSize: "18px",
                                 padding: "14px",
-                                borderRadius: "10px",
-                                border: "1px solid #dedede",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
                                 outline: "none",
-                                color: "#4b5563",
+                                color: "rgb(0, 0, 0)",
                                 backgroundColor: "#f3f4f6",
                                 cursor: "not-allowed",
                               }}
                               className="w-full"
                             />
                           </div>
- 
+
                           {/* Longitude */}
                           <div className="space-y-1">
                             <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Longitude.</label>
@@ -12313,12 +12338,12 @@ export default function PublicPortal({
                               value={(techStartLng && techStartLng.toLowerCase() !== 'null' && techStartLng.toLowerCase() !== 'undefined' && techStartLng.toLowerCase() !== 'nan') ? techStartLng : ''}
                               placeholder="Rempli automatiquement"
                               style={{
-                                fontSize: "15px",
+                                fontSize: "18px",
                                 padding: "14px",
-                                borderRadius: "10px",
-                                border: "1px solid #dedede",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
                                 outline: "none",
-                                color: "#4b5563",
+                                color: "rgb(0, 0, 0)",
                                 backgroundColor: "#f3f4f6",
                                 cursor: "not-allowed",
                               }}
@@ -12331,7 +12356,7 @@ export default function PublicPortal({
                       {/* Route Optimization selector */}
                       <div className="space-y-1.5">
                         <label
-                          style={{ fontSize: "16px" }}
+                          style={{ fontSize: "18px", color: "#000000" }}
                           className="block font-bold text-black select-none"
                         >
                           Stratégie des déplacements. *
@@ -12340,11 +12365,12 @@ export default function PublicPortal({
                           value={routeOptimization}
                           onChange={(e) => setRouteOptimization(e.target.value)}
                           style={{
-                            fontSize: "16px",
+                            fontSize: "18px",
                             padding: "14px",
                             borderRadius: "13px",
-                            border: "1px solid #dedede",
+                            border: "1px solid rgb(201, 191, 205)",
                             outline: "none",
+                            color: "rgb(0, 0, 0)",
                             appearance: "none",
                             WebkitAppearance: "none",
                             MozAppearance: "none",
@@ -12363,7 +12389,7 @@ export default function PublicPortal({
                       {/* Navigation App selector */}
                       <div className="space-y-1.5">
                         <label
-                          style={{ fontSize: "16px" }}
+                          style={{ fontSize: "18px", color: "#000000" }}
                           className="block font-bold text-black select-none"
                         >
                           Application de navigation par défaut. *
@@ -12372,11 +12398,12 @@ export default function PublicPortal({
                           value={defaultNavApp}
                           onChange={(e) => setDefaultNavApp(e.target.value)}
                           style={{
-                            fontSize: "16px",
+                            fontSize: "18px",
                             padding: "14px",
                             borderRadius: "13px",
-                            border: "1px solid #dedede",
+                            border: "1px solid rgb(201, 191, 205)",
                             outline: "none",
+                            color: "rgb(0, 0, 0)",
                             appearance: "none",
                             WebkitAppearance: "none",
                             MozAppearance: "none",
@@ -12403,11 +12430,18 @@ export default function PublicPortal({
                         >
                           Signature.
                         </label>
-                        <p style={{ fontSize: "15px", color: "black", lineHeight: "1.5" }} className="font-sans font-normal">
+                        <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
                           Dessinez votre signature ci-dessous. Elle sera automatiquement apposée sur tous vos rapports de maintenance validés.
                         </p>
 
-                        <div className="border rounded-lg p-3 bg-white relative" style={{ borderColor: "#DEDEDE", maxWidth: "400px" }}>
+                        <div 
+                          className="p-3 bg-white relative" 
+                          style={{ 
+                            border: "1px solid #c9bfcd", 
+                            borderRadius: "13px", 
+                            maxWidth: "400px" 
+                          }}
+                        >
                           <canvas
                             ref={sigCanvasRef}
                             width={380}
@@ -12457,10 +12491,10 @@ export default function PublicPortal({
 
                     {/* Section: Choix du thème pour la session technicien */}
                     <div className="pt-5 space-y-3 text-left" id="webapp-section-software-theme">
-                      <h3 className="text-lg font-bold text-slate-800">
-                        {t("Apparence du logiciel pour votre session")}
+                      <h3 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
+                        {t("Apparence du logiciel pour votre session.")}
                       </h3>
-                      <p style={{ fontSize: "15px", color: "black", lineHeight: "1.5" }} className="font-sans font-normal">
+                      <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
                         {t("Thème du logiciel (conforme accessibilité ISO/IEC 40500).")}
                       </p>
 
@@ -12471,7 +12505,11 @@ export default function PublicPortal({
                             <div
                               key={theme.id}
                               onClick={() => handleThemeSelect(theme.id)}
-                              className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 cursor-pointer select-none bg-white"
+                              style={{
+                                border: "1px solid #c9bfcd",
+                                borderRadius: "13px",
+                              }}
+                              className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
                               id={`webapp-theme-card-${theme.id}`}
                             >
                               <span 
@@ -12490,7 +12528,8 @@ export default function PublicPortal({
                                 )}
                               </span>
                               <span
-                                className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans"
+                                className="font-medium text-black cursor-pointer select-none font-sans"
+                                style={{ fontSize: "18px", color: "#000000" }}
                               >
                                 {t(theme.name)}
                               </span>
@@ -12502,10 +12541,10 @@ export default function PublicPortal({
 
                     {/* Section: Choix du favicon pour la session technicien */}
                     <div className="pt-5 space-y-3 text-left" id="webapp-section-software-favicon">
-                      <h3 className="text-lg font-bold text-slate-800">
-                        {t("Choix du favicon du logiciel")}
+                      <h3 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
+                        {t("Choix du favicon du logiciel.")}
                       </h3>
-                      <p style={{ fontSize: "15px", color: "black", lineHeight: "1.5" }} className="font-sans font-normal">
+                      <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
                         {t("Il s’agit de l’icône montré dans l’onglet de votre navigateur.")}
                       </p>
 
@@ -12516,7 +12555,11 @@ export default function PublicPortal({
                             <div
                               key={fav.id}
                               onClick={() => handleFaviconSelect(fav.id)}
-                              className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 cursor-pointer select-none bg-white"
+                              style={{
+                                border: "1px solid #c9bfcd",
+                                borderRadius: "13px",
+                              }}
+                              className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
                               id={`webapp-favicon-card-${fav.id}`}
                             >
                               <span 
@@ -12541,7 +12584,8 @@ export default function PublicPortal({
                                 referrerPolicy="no-referrer"
                               />
                               <span
-                                className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans"
+                                className="font-medium text-black cursor-pointer select-none font-sans"
+                                style={{ fontSize: "18px", color: "#000000" }}
                               >
                                 {t(fav.name)}
                               </span>
@@ -12553,15 +12597,19 @@ export default function PublicPortal({
 
                     {/* Illustration Add to Home Screen at the bottom touching bottom border */}
                     <div 
-                      className="mt-6 border border-slate-200 rounded-2xl bg-white overflow-hidden text-left flex flex-col justify-between"
+                      className="mt-6 bg-white overflow-hidden text-left flex flex-col justify-between"
+                      style={{
+                        border: "1px solid #c9bfcd",
+                        borderRadius: "13px",
+                      }}
                       id="webapp-add-to-home-screen-card"
                     >
                       <div className="p-5 pb-2 space-y-1">
-                        <h4 className="text-[18px] font-bold text-slate-900 font-sans">
-                          {t("Ajouter à l'écran d'accueil")}
+                        <h4 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
+                          {t("Ajouter à l'écran d'accueil.")}
                         </h4>
-                        <p className="text-[15px] text-slate-700 font-sans leading-relaxed">
-                          {t("Pour un accès rapide depuis votre smartphone, ajoutez Defibeo directement sur votre écran d'accueil.")}
+                        <p className="font-sans leading-relaxed" style={{ fontSize: "16px", color: "#000000" }}>
+                          {t("Sur iPhone ou iPad, depuis Safari (iOS 26), touchez l’icône Partager (le carré avec une flèche vers le haut), faites défiler le menu vers le bas puis sélectionnez Sur l’écran d’accueil (carré avec un « + »). Vérifiez ensuite que l’option Ouvrir en tant qu’app web est bien activée, puis appuyez sur Ajouter en haut à droite.")}
                         </p>
                       </div>
                       <div className="w-full flex justify-center items-end pt-2">

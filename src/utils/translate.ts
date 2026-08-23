@@ -736,6 +736,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Commentaires ou observations.": "Comments or observations.",
 
     "Suspendre pour pause.": "Suspend for break.",
+    "Sur iPhone ou iPad, depuis Safari (iOS 26), touchez l’icône Partager (le carré avec une flèche vers le haut), faites défiler le menu vers le bas puis sélectionnez Sur l’écran d’accueil (carré avec un « + »). Vérifiez ensuite que l’option Ouvrir en tant qu’app web est bien activée, puis appuyez sur Ajouter en haut à droite.": "On iPhone or iPad, from Safari (iOS 26), tap the Share icon (square with an arrow pointing up), scroll down the menu then select Add to Home Screen (square with a '+'). Then make sure the Open as Web App option is enabled, and tap Add at top right.",
     "Masquer le pointage.": "Hide clock-in / time tracking.",
     "Affiner la tournée.": "Refine the tour.",
     "Re/Calculer": "Re/Calculate",

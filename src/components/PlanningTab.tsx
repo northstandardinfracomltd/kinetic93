@@ -1000,7 +1000,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                             </span>
                           </div>
                           {abs.commentaire && (
-                            <div className="text-[16px] text-slate-800">
+                            <div className="text-[16px] text-black" style={{ color: "#000", fontSize: "16px" }}>
                               {abs.commentaire}
                             </div>
                           )}
@@ -1027,7 +1027,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                               </span>
                             </div>
                             {schedule.commentaire && (
-                              <div className="text-[16px] text-slate-800">
+                              <div className="text-[16px] text-black" style={{ color: "#000", fontSize: "16px" }}>
                                 {schedule.commentaire}
                               </div>
                             )}
@@ -1059,7 +1059,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                             {/* Gélules Créneau, Badge + Bouton Supprimer */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-                                <span className="px-3.5 py-1.5 rounded-full bg-blue-600 text-white font-bold text-[16px] inline-flex items-center shrink-0 whitespace-nowrap">
+                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-bold text-[16px] inline-flex items-center shrink-0 whitespace-nowrap">
                                   Événement spontané
                                 </span>
                                 <span
@@ -1075,19 +1075,19 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 type="button"
                                 onClick={() => handleDeleteSpontaneousEvent(evt.id)}
                                 style={{
-                                  color: "#fff",
-                                  boxShadow: "none",
-                                  background: "rgb(220, 38, 38)",
+                                  boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.29) 0px 6px 12px inset",
+                                  color: "rgb(255, 255, 255)",
+                                  background: "rgb(212 10 10)",
                                   borderRadius: "13px",
-                                  padding: "8px 18px",
-                                  fontSize: "16px",
+                                  padding: "10px 18px",
+                                  fontSize: "18px",
                                   fontWeight: 700,
                                   border: "none",
                                   cursor: "pointer",
                                   display: "inline-flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  gap: "6px"
+                                  gap: "6px",
                                 }}
                                 className="w-full sm:w-auto mx-0 sm:ml-10 sm:mr-2.5 shrink-0 select-none"
                               >
@@ -1096,7 +1096,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                             </div>
 
                             {/* Details */}
-                            <div className="space-y-1.5 text-[16px] text-slate-800 pt-1">
+                            <div className="space-y-1.5 text-[16px] text-black pt-1" style={{ color: "#000", fontSize: "16px" }}>
                               <div>
                                 <span className="font-bold">Intitulé : </span>
                                 <span>{evt.intitule}</span>
@@ -1295,7 +1295,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 onClick={() => toggleMissionExpanded(missionKey)}
                                 style={{
                                   color: "rgb(255, 255, 255)",
-                                  background: "rgb(0, 0, 0)",
+                                  background: "rgb(20, 87, 236)",
                                   boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
                                   padding: "10px 20px",
                                   fontSize: "18px",
@@ -1316,7 +1316,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
                             {/* Details (Déroulés si actif) */}
                             {isExpanded && (
-                              <div className="space-y-1.5 text-[16px] text-slate-800 pt-2">
+                              <div className="space-y-1.5 text-[16px] text-black pt-2" style={{ color: "#000", fontSize: "16px" }}>
                                 <div>
                                   <span className="font-bold">Tournée : </span>
                                   <span>{tourTitle}</span>
