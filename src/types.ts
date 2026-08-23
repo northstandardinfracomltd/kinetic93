@@ -346,7 +346,7 @@ export const APP_FAVICONS: AppFaviconOption[] = [
   { id: 'serious_blue', name: 'Serious Blue', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoBlue.png' },
   { id: 'grass_green', name: 'Grass Green', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoGreen.png' },
   { id: 'zen_purple', name: 'Zen Purple', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoPurple.png' },
-  { id: 'italia_pink', name: 'Italia Pink', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoPink.png' },
+  { id: 'italia_pink', name: 'Giro Pink', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoPink.png' },
   { id: 'rainbow', name: 'Rainbow', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoRainbow.png' }
 ];
 

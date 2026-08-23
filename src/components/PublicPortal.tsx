@@ -7188,7 +7188,7 @@ export default function PublicPortal({
               <div
                 className="text-white text-center font-semibold select-none shadow-xs font-sans shrink-0"
                 style={{
-                  background: "rgb(30, 71, 255)",
+                  background: "#3556ec",
                   fontSize: "14px",
                   padding: "12px 0px",
                 }}
@@ -7216,12 +7216,12 @@ export default function PublicPortal({
                     style={
                       activeTab === "interventions"
                         ? {
-                            background: "rgb(30, 71, 255)",
+                            background: "rgb(53, 86, 236)",
                             color: "#ffffff",
                             fontSize: "18px",
                             fontWeight: "bold",
                             borderRadius: "12px",
-                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                           }
                         : {
                             color: "#ffffff",
@@ -7239,12 +7239,12 @@ export default function PublicPortal({
                     style={
                       activeTab === "rapports"
                         ? {
-                            background: "rgb(30, 71, 255)",
+                            background: "rgb(53, 86, 236)",
                             color: "#ffffff",
                             fontSize: "18px",
                             fontWeight: "bold",
                             borderRadius: "12px",
-                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                           }
                         : {
                             color: "#ffffff",
@@ -7262,12 +7262,12 @@ export default function PublicPortal({
                     style={
                       activeTab === "planning"
                         ? {
-                            background: "rgb(30, 71, 255)",
+                            background: "rgb(53, 86, 236)",
                             color: "#ffffff",
                             fontSize: "18px",
                             fontWeight: "bold",
                             borderRadius: "12px",
-                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                           }
                         : {
                             color: "#ffffff",
@@ -7286,12 +7286,12 @@ export default function PublicPortal({
                       style={
                         activeTab === "temps"
                           ? {
-                              background: "rgb(30, 71, 255)",
+                              background: "rgb(53, 86, 236)",
                               color: "#ffffff",
                               fontSize: "18px",
                               fontWeight: "bold",
                               borderRadius: "12px",
-                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                             }
                           : {
                               color: "#ffffff",
@@ -7311,12 +7311,12 @@ export default function PublicPortal({
                       style={
                         activeTab === "stocks"
                           ? {
-                              background: "rgb(30, 71, 255)",
+                              background: "rgb(53, 86, 236)",
                               color: "#ffffff",
                               fontSize: "18px",
                               fontWeight: "bold",
                               borderRadius: "12px",
-                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                             }
                           : {
                               color: "#ffffff",
@@ -7336,12 +7336,12 @@ export default function PublicPortal({
                       style={
                         activeTab === "frais"
                           ? {
-                              background: "rgb(30, 71, 255)",
+                              background: "rgb(53, 86, 236)",
                               color: "#ffffff",
                               fontSize: "18px",
                               fontWeight: "bold",
                               borderRadius: "12px",
-                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                             }
                           : {
                               color: "#ffffff",
@@ -7361,12 +7361,12 @@ export default function PublicPortal({
                       style={
                         activeTab === "veille"
                           ? {
-                              background: "rgb(30, 71, 255)",
+                              background: "rgb(53, 86, 236)",
                               color: "#ffffff",
                               fontSize: "18px",
                               fontWeight: "bold",
                               borderRadius: "12px",
-                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                             }
                           : {
                               color: "#ffffff",
@@ -7385,12 +7385,12 @@ export default function PublicPortal({
                     style={
                       activeTab === "localisation"
                         ? {
-                            background: "rgb(30, 71, 255)",
+                            background: "rgb(53, 86, 236)",
                             color: "#ffffff",
                             fontSize: "18px",
                             fontWeight: "bold",
                             borderRadius: "12px",
-                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                           }
                         : {
                             color: "#ffffff",
@@ -8318,7 +8318,7 @@ export default function PublicPortal({
                       setIsReportOverlayOpen(true);
                     }}
                     style={{
-                      backgroundColor: "rgb(30, 71, 255)",
+                      backgroundColor: "rgb(53, 86, 236)",
                       color: "#ffffff",
                       fontSize: "18px",
                       fontWeight: "bold",
@@ -8326,7 +8326,7 @@ export default function PublicPortal({
                       padding: "14px 20px",
                       border: "none",
                       boxShadow:
-                        "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                        "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                       cursor: "pointer",
                       width: "100%",
                     }}
@@ -8370,8 +8370,8 @@ export default function PublicPortal({
                           <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
                             <span
                               style={{
-                                color: "rgb(30, 71, 255)",
-                                backgroundColor: "rgb(240, 242, 255)",
+                                color: "#ffffff",
+                                backgroundColor: "#FD4EBB",
                                 padding: "8px 16px",
                                 borderRadius: "9999px",
                                 fontWeight: "bold",
@@ -8540,7 +8540,7 @@ export default function PublicPortal({
                             type="button"
                             onClick={() => handleDownloadReport(rep)}
                             style={{
-                              backgroundColor: "rgb(30, 71, 255)",
+                              backgroundColor: "rgb(53, 86, 236)",
                               color: "#fff",
                               fontSize: "18px",
                               fontWeight: "bold",
@@ -8548,7 +8548,7 @@ export default function PublicPortal({
                               padding: "12px 20px",
                               border: "none",
                               boxShadow:
-                                "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                               cursor: "pointer",
                               width: "100%",
                             }}
@@ -8726,7 +8726,7 @@ export default function PublicPortal({
                         setShowRapatriementForm(false);
                       }}
                       style={{
-                        backgroundColor: "rgb(30, 71, 255)",
+                        backgroundColor: "rgb(53, 86, 236)",
                         color: "#ffffff",
                         fontSize: "18px",
                         fontWeight: "bold",
@@ -8734,7 +8734,7 @@ export default function PublicPortal({
                         padding: "14px 20px",
                         border: "none",
                         boxShadow:
-                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                         cursor: "pointer",
                         width: "100%",
                       }}
@@ -8757,12 +8757,11 @@ export default function PublicPortal({
                     >
                       {/* Info Message */}
                       <div
-                        className="p-3.5 text-[15px] font-sans font-medium mb-2"
+                        className="p-3.5 rounded-[13px] text-[15px] font-sans font-medium mb-2"
                         style={{
-                          backgroundColor: "rgb(240, 242, 255)",
-                          color: "rgb(30, 71, 255)",
-                          border: "none",
-                          borderRadius: "13px",
+                          backgroundColor: "rgb(246, 236, 247)",
+                          color: "rgb(99, 31, 106)",
+                          border: "1px solid #d2a3d7",
                         }}
                       >
                         Pour être sélectionnée, une pièce doit exister (être référencée) dans la centrale des stocks, et ne pas déjà être existante dans l’emplacement du technicien.
@@ -8930,7 +8929,7 @@ export default function PublicPortal({
                               type="button"
                               onClick={() => setShowNewDistribTraceForm(!showNewDistribTraceForm)}
                               style={{
-                                backgroundColor: "rgb(30, 71, 255)",
+                                backgroundColor: "rgb(53, 86, 236)",
                                 color: "#ffffff",
                                 borderRadius: "11px",
                                 fontSize: "16px",
@@ -9265,14 +9264,14 @@ export default function PublicPortal({
                             setNewDistribTraceabilityEnabled(false);
                           }}
                           style={{
-                            backgroundColor: "rgb(30, 71, 255)",
+                            backgroundColor: "rgb(53, 86, 236)",
                             color: "#ffffff",
                             fontSize: "18px",
                             borderRadius: "13px",
                             padding: "12px 16px",
                             border: "none",
                             boxShadow:
-                              "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                              "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                             cursor: "pointer",
                           }}
                           className="flex-1 font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
@@ -9891,7 +9890,7 @@ export default function PublicPortal({
                                 setShowNewWebappTraceForm(!showNewWebappTraceForm);
                               }}
                               style={{
-                                backgroundColor: "rgb(30, 71, 255)",
+                                backgroundColor: "rgb(53, 86, 236)",
                                 color: "#ffffff",
                                 borderRadius: "13px",
                                 fontSize: "18px",
@@ -9899,7 +9898,7 @@ export default function PublicPortal({
                                 padding: "12px 16px",
                                 border: "none",
                                 boxShadow:
-                                  "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                  "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                                 cursor: "pointer",
                               }}
                               className="flex-1 font-sans active:scale-[0.98] transition-all hover:opacity-90 text-center"
@@ -10179,7 +10178,7 @@ export default function PublicPortal({
                                     setNewWebappMovementId("Autre (Aucun mouvement)");
                                   }}
                                   style={{
-                                    backgroundColor: "rgb(30, 71, 255)",
+                                    backgroundColor: "rgb(53, 86, 236)",
                                     color: "#ffffff",
                                     fontSize: "18px",
                                     borderRadius: "13px",
@@ -11664,11 +11663,14 @@ export default function PublicPortal({
 
                   <style>{`
                     #tab-veille-screen input,
+                    #tab-veille-screen textarea,
                     #tab-veille-screen label,
-                    #tab-veille-screen input::placeholder {
+                    #tab-veille-screen input::placeholder,
+                    #tab-veille-screen textarea::placeholder {
                       font-family: var(--font-sans), "Civilprom", "DefibeoMain", sans-serif !important;
                     }
-                    #tab-veille-screen input::placeholder {
+                    #tab-veille-screen input::placeholder,
+                    #tab-veille-screen textarea::placeholder {
                       font-size: 18px !important;
                     }
                     #tab-veille-screen input[type="date"]::-webkit-calendar-picker-indicator {
@@ -11708,7 +11710,7 @@ export default function PublicPortal({
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black placeholder:text-[18px]"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11732,7 +11734,7 @@ export default function PublicPortal({
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black placeholder:text-[18px]"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11756,7 +11758,7 @@ export default function PublicPortal({
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black placeholder:text-[18px]"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11780,7 +11782,7 @@ export default function PublicPortal({
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black placeholder:text-[18px]"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11804,7 +11806,7 @@ export default function PublicPortal({
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black placeholder:text-[18px]"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11828,7 +11830,7 @@ export default function PublicPortal({
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black placeholder:text-[18px]"
+                        className="w-full text-black"
                       />
                     </div>
 
@@ -11852,14 +11854,14 @@ export default function PublicPortal({
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black placeholder:text-[18px]"
+                        className="w-full text-black"
                       />
                     </div>
 
                     <button
                       type="submit"
                       style={{
-                        backgroundColor: "rgb(30, 71, 255)",
+                        backgroundColor: "rgb(53, 86, 236)",
                         color: "#fff",
                         fontSize: "18px",
                         fontWeight: "bold",
@@ -11867,7 +11869,7 @@ export default function PublicPortal({
                         padding: "14px 20px",
                         border: "none",
                         boxShadow:
-                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                         cursor: "pointer",
                         width: "100%",
                       }}
@@ -12480,28 +12482,25 @@ export default function PublicPortal({
                       </div>
                     </div>
 
-                    {/* Floating Enregistrer button at the bottom of the webview */}
-                    <div className="sticky bottom-0 left-0 right-0 z-30 pt-3 pb-3 bg-white/95 backdrop-blur-xs -mx-4 px-4 border-t border-slate-100 mt-6 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
-                      <button
-                        type="submit"
-                        style={{
-                          backgroundColor: "rgb(30, 71, 255)",
-                          color: "#fff",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderRadius: "12px",
-                          padding: "14px 20px",
-                          border: "none",
-                          boxShadow:
-                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(30, 71, 255) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                          cursor: "pointer",
-                          width: "100%",
-                        }}
-                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 w-full"
-                      >
-                        <span>Enregistrer</span>
-                      </button>
-                    </div>
+                    <button
+                      type="submit"
+                      style={{
+                        backgroundColor: "rgb(53, 86, 236)",
+                        color: "#fff",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                        borderRadius: "12px",
+                        padding: "14px 20px",
+                        border: "none",
+                        boxShadow:
+                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                        cursor: "pointer",
+                        width: "100%",
+                      }}
+                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <span>Enregistrer</span>
+                    </button>
 
                     {/* Section: Choix du thème pour la session technicien */}
                     <div className="pt-5 space-y-3 text-left" id="webapp-section-software-theme">
