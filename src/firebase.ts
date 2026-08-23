@@ -199,7 +199,10 @@ export function getCollectionKeyCandidates(collectionName: string, tenantId: str
 
   // Strict tenant candidate keys: prefix with this exact tenantId and its normalized variations
   const candidates: string[] = [];
-  const numOnly = activeTenant.replace(/^d/i, '');
+  const isDNum = /^d\d+$/i.test(activeTenant);
+  const isNum = /^\d+$/.test(activeTenant);
+  const numOnly = isDNum || isNum ? activeTenant.replace(/^d/i, '') : '';
+
   for (const c of colAliases) {
     candidates.push(`${activeTenant}_${c}`);
     if (numOnly) {
@@ -254,31 +257,63 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     const keysToRemove: string[] = [];
+    const isDNum = targetTenantId ? /^d\d+$/i.test(targetTenantId) : false;
+    const numOnly = isDNum && targetTenantId ? targetTenantId.replace(/^d/i, '') : '';
+
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
+
+      // Preserve system configuration & persistent auth/language keys
+      if (
+        k === 'defib_lang' ||
+        k === 'defib_lang_preference' ||
+        k === 'defib_app_language' ||
+        k === 'fs_cache_registered_tenants'
+      ) {
+        continue;
+      }
       
-      // If a specific tenant is targeted: clear other tenant fs_caches and legacy unpartitioned tickets
+      // If a specific tenant is targeted (e.g. logging into D2):
+      // Clear any fs_cache_ or defib_ key that belongs to other tenants
       if (targetTenantId) {
-        if (
-          k.startsWith('fs_cache_') && 
-          k !== 'fs_cache_registered_tenants' && 
-          !k.startsWith(`fs_cache_${targetTenantId}_`) &&
-          !k.startsWith(`fs_cache_D${targetTenantId.replace(/^d/i, '')}_`) &&
-          !k.startsWith(`fs_cache_${targetTenantId.replace(/^d/i, '')}_`)
-        ) {
-          keysToRemove.push(k);
-        }
-        if (k === 'defib_support_tickets' || k === 'defib_tickets' || k === 'defib_notifications') {
-          keysToRemove.push(k);
+        const isTargetMatch = 
+          k.startsWith(`fs_cache_${targetTenantId}_`) ||
+          k.startsWith(`defib_${targetTenantId}_`) ||
+          (numOnly && (
+            k.startsWith(`fs_cache_D${numOnly}_`) ||
+            k.startsWith(`fs_cache_d${numOnly}_`) ||
+            k.startsWith(`fs_cache_${numOnly}_`) ||
+            k.startsWith(`defib_D${numOnly}_`) ||
+            k.startsWith(`defib_d${numOnly}_`) ||
+            k.startsWith(`defib_${numOnly}_`)
+          ));
+
+        if (!isTargetMatch) {
+          if (k.startsWith('fs_cache_') || k.startsWith('defib_')) {
+            // Keep active session keys during tenant switch
+            if (
+              k !== 'defib_admin_logged_in' &&
+              k !== 'defib_admin_logged_user' &&
+              k !== 'defib_logged_user_role' &&
+              k !== 'defib_tenant_id' &&
+              k !== 'defib_active_tech_session'
+            ) {
+              keysToRemove.push(k);
+            }
+          }
         }
       } else {
-        // For global purge, clear partition cache except registered_tenants
-        if (k.startsWith('fs_cache_') && k !== 'fs_cache_registered_tenants') {
-          keysToRemove.push(k);
-        }
-        if (k === 'defib_support_tickets' || k === 'defib_tickets' || k === 'defib_notifications') {
-          keysToRemove.push(k);
+        // Global purge on logout: Clear all tenant data partitions and snapshots
+        if (k.startsWith('fs_cache_') || k.startsWith('defib_')) {
+          if (
+            k !== 'defib_tenant_id' &&
+            k !== 'defib_admin_logged_in' &&
+            k !== 'defib_admin_logged_user' &&
+            k !== 'defib_logged_user_role'
+          ) {
+            keysToRemove.push(k);
+          }
         }
       }
       
@@ -310,12 +345,16 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
   
   const isDemo = !activeTenantId || activeTenantId === 'demo';
   const cleanTid = (activeTenantId || 'demo').trim().toLowerCase();
-  const numTid = cleanTid.replace(/^d/i, '');
+  const isDNum = /^d\d+$/i.test(cleanTid);
+  const isNum = /^\d+$/.test(cleanTid);
+  const numTid = isDNum || isNum ? cleanTid.replace(/^d/i, '') : '';
 
   return (data as any[]).filter((item: any) => {
     if (!item || typeof item !== 'object') return true;
     const itemEnv = (item.envId || item.tenantId || '').trim().toLowerCase();
-    const numItemEnv = itemEnv.replace(/^d/i, '');
+    const isItemDNum = /^d\d+$/i.test(itemEnv);
+    const isItemNum = /^\d+$/.test(itemEnv);
+    const numItemEnv = isItemDNum || isItemNum ? itemEnv.replace(/^d/i, '') : '';
 
     if (isDemo) {
       // In demo mode: discard items explicitly created for specific customer tenants
@@ -329,9 +368,9 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
     // If the item has an explicit envId/tenantId, it MUST match this tenant
     if (itemEnv) {
       if (itemEnv === 'demo') return false;
-      if (itemEnv !== cleanTid && (numItemEnv !== numTid || !numItemEnv)) {
-        return false;
-      }
+      if (itemEnv === cleanTid) return true;
+      if (numTid && numItemEnv && numTid === numItemEnv) return true;
+      return false; // Rejects items belonging to another tenant!
     }
 
     // Never leak demo-specific mock items into customer environments
@@ -351,7 +390,7 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
         return false;
       }
     } else if (collectionName === 'clients') {
-      if (!itemEnv && item.id === 'c1' && item.denomination === 'Secours Pro Ouest') {
+      if (!itemEnv && (item.id === 'c1' || item.id === 'c2' || item.id === 'c3') && item.denomination === 'Secours Pro Ouest') {
         return false;
       }
     } else if (collectionName === 'notifications' || collectionName === 'app_notifications') {
@@ -359,7 +398,6 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
         return false;
       }
       if (!itemEnv) {
-        // If not stamped with env in customer mode, reject if it carries demo content
         if (item.id?.startsWith('demo') || item.title?.includes('Démo') || item.title?.includes('demo')) {
           return false;
         }

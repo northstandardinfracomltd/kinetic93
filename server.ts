@@ -355,12 +355,16 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     if (!Array.isArray(items)) return items;
     const isDemo = !tenantId || tenantId === 'demo';
     const cleanTid = (tenantId || 'demo').trim().toLowerCase();
-    const numTid = cleanTid.replace(/^d/i, '');
+    const isDNum = /^d\d+$/i.test(cleanTid);
+    const isNum = /^\d+$/.test(cleanTid);
+    const numTid = isDNum || isNum ? cleanTid.replace(/^d/i, '') : '';
 
     return items.filter((item: any) => {
       if (!item || typeof item !== 'object') return true;
       const itemEnv = (item.envId || item.tenantId || '').trim().toLowerCase();
-      const numItemEnv = itemEnv.replace(/^d/i, '');
+      const isItemDNum = /^d\d+$/i.test(itemEnv);
+      const isItemNum = /^\d+$/.test(itemEnv);
+      const numItemEnv = isItemDNum || isItemNum ? itemEnv.replace(/^d/i, '') : '';
 
       if (isDemo) {
         if (itemEnv && itemEnv !== 'demo') return false;
@@ -369,9 +373,9 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
 
       if (itemEnv) {
         if (itemEnv === 'demo') return false;
-        if (itemEnv !== cleanTid && (numItemEnv !== numTid || !numItemEnv)) {
-          return false;
-        }
+        if (itemEnv === cleanTid) return true;
+        if (numTid && numItemEnv && numTid === numItemEnv) return true;
+        return false; // Rejects items belonging to other tenants!
       }
 
       if (colName === 'tickets' || colName === 'support_tickets') {
@@ -386,7 +390,7 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
       } else if (colName === 'fsmTours' || colName === 'fsm_tours' || colName === 'tours') {
         if (item.id === 'fsm-tour-demo' || item.techName === 'Jakub Démo') return false;
       } else if (colName === 'clients') {
-        if (!itemEnv && item.id === 'c1' && item.denomination === 'Secours Pro Ouest') return false;
+        if (!itemEnv && (item.id === 'c1' || item.id === 'c2' || item.id === 'c3') && item.denomination === 'Secours Pro Ouest') return false;
       } else if (colName === 'notifications' || colName === 'app_notifications') {
         if (item.id === 'conn-2' || item.id === 'conn-3' || (item.title && item.title.includes('admin@defibeo.com vient s’est connecté'))) return false;
         if (!itemEnv) {
@@ -403,7 +407,9 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   const colAliases = getCollectionNameAliases(colName);
   const rawKeys: string[] = [];
   const activeTenant = (tenantId || 'demo').trim();
-  const numOnly = activeTenant.replace(/^d/i, '');
+  const isDNum = /^d\d+$/i.test(activeTenant);
+  const isNum = /^\d+$/.test(activeTenant);
+  const numOnly = isDNum || isNum ? activeTenant.replace(/^d/i, '') : '';
   
   if (activeTenant === 'demo') {
     for (const c of colAliases) {
@@ -423,11 +429,14 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   for (const alias of extraAliases) {
     if (alias && typeof alias === 'string' && alias.trim() && alias !== activeTenant) {
       const a = alias.trim();
-      const aNum = a.replace(/^d/i, '');
+      const isADNum = /^d\d+$/i.test(a);
+      const isANum = /^\d+$/.test(a);
+      const aNum = isADNum || isANum ? a.replace(/^d/i, '') : '';
       for (const c of colAliases) {
         rawKeys.push(`${a}_${c}`);
         if (aNum) {
           rawKeys.push(`D${aNum}_${c}`);
+          rawKeys.push(`d${aNum}_${c}`);
           rawKeys.push(`${aNum}_${c}`);
         }
       }
@@ -569,12 +578,13 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       const rawTenant = String(tenantId).trim();
       const collectionKey = rawTenant === 'demo' ? collectionName : `${rawTenant}_${collectionName}`;
       
-      if (value !== undefined && value !== null && (!Array.isArray(value) || value.length > 0)) {
+      if (value !== undefined && value !== null) {
         serverMemoryStore.set(collectionKey, value);
         // Also map normalized key if D-prefixed
         if (/^d\d+$/i.test(rawTenant)) {
           const numOnly = rawTenant.replace(/^d/i, '');
           serverMemoryStore.set(`D${numOnly}_${collectionName}`, value);
+          serverMemoryStore.set(`d${numOnly}_${collectionName}`, value);
           serverMemoryStore.set(`${numOnly}_${collectionName}`, value);
         }
         persistServerStoreToDisk();
