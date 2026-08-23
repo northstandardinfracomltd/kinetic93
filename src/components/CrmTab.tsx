@@ -348,15 +348,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         #crm-tab-container textarea:focus:not(:disabled),
         #crm-tab-container #search-crm-input:hover,
         #crm-tab-container #search-crm-input:focus {
-          outline: 2px solid #3556ec !important;
-          outline-offset: 1px !important;
+          outline: 2.5px solid #fa53d5 !important;
+          outline-offset: 2px !important;
         }
         #crm-tab-container input:disabled,
         #crm-tab-container select:disabled {
-          background-color: #e2d9e6 !important;
+          background-color: #f1f5f9 !important;
           color: #000000 !important;
           cursor: not-allowed !important;
-          opacity: 0.9 !important;
+          opacity: 1 !important;
+          font-size: 18px !important;
         }
         #crm-tab-container label {
           font-size: 18px !important;
@@ -593,158 +594,195 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               {/* Form */}
               <form onSubmit={handleSaveForm} className="space-y-5 flex-1 pt-2">
                 
-                {/* 1. Référence */}
-                <div>
-                  <label>Référence.</label>
-                  <input
-                    type="text"
-                    value={formRef}
-                    disabled
-                    readOnly
-                  />
-                </div>
-
-                {/* 2. Sélection Catégorie */}
-                <div>
-                  <label>Sélection Catégorie.</label>
-                  <select
-                    value={formCategorie}
-                    onChange={(e: any) => setFormCategorie(e.target.value)}
-                    style={selectStyle}
-                  >
-                    <option value="Technique">Technique</option>
-                    <option value="Commercial">Commercial</option>
-                    <option value="Réclamation">Réclamation</option>
-                    <option value="Sans Catégorie">Sans Catégorie</option>
-                  </select>
-                </div>
-
-                {/* 3. Situation */}
-                <div>
+                {/* 1. Situation (Moved first, 3 cards in 33% 33% 33% with pink radio check) */}
+                <div className="space-y-2">
                   <label>Situation.</label>
-                  <select
-                    value={formSituation}
-                    onChange={(e: any) => setFormSituation(e.target.value)}
-                    style={selectStyle}
-                  >
-                    <option value="Nouveau">Nouveau</option>
-                    <option value="En cours">En cours</option>
-                    <option value="Terminé">Terminé</option>
-                  </select>
-                </div>
-
-                {/* 4. Criticité */}
-                <div>
-                  <label>Criticité.</label>
-                  <select
-                    value={formCriticite}
-                    onChange={(e: any) => setFormCriticite(e.target.value)}
-                    style={selectStyle}
-                  >
-                    <option value="Urgent">Urgent</option>
-                    <option value="Semaine prochaine">Semaine prochaine</option>
-                    <option value="Ce mois">Ce mois</option>
-                    <option value="Mois prochain">Mois prochain</option>
-                    <option value="Non renseigné">Non renseigné</option>
-                  </select>
-                </div>
-
-                {/* 5. Ouverture */}
-                <div>
-                  <label>Ouverture.</label>
-                  <input
-                    type="text"
-                    value={formOuverture}
-                    disabled
-                    readOnly
-                  />
-                </div>
-
-                {/* 6. Dernière actualisation */}
-                <div>
-                  <label>Dernière actualisation.</label>
-                  <input
-                    type="text"
-                    value={formDerActual}
-                    disabled
-                    readOnly
-                  />
-                </div>
-
-                {/* 7. Objet */}
-                <div>
-                  <label>Objet.</label>
-                  <input
-                    type="text"
-                    maxLength={55}
-                    placeholder="Entrez un objet (max 55 caractères)"
-                    value={formObjet}
-                    onChange={(e) => setFormObjet(e.target.value)}
-                    required
-                  />
-                  <div className="text-right text-xs text-slate-500 mt-1">
-                    {formObjet.length}/55
+                  <div className="grid grid-cols-3 gap-3">
+                    {(['Nouveau', 'En cours', 'Terminé'] as const).map((sit) => {
+                      const isSelected = formSituation === sit;
+                      return (
+                        <div
+                          key={sit}
+                          onClick={() => setFormSituation(sit)}
+                          className="flex items-center justify-start gap-2.5 p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                          id={`crm-situation-${sit.toLowerCase().replace(/\s+/g, '-')}`}
+                        >
+                          <span 
+                            className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                            style={{
+                              border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                              width: '20px',
+                              height: '20px',
+                              minWidth: '20px',
+                              minHeight: '20px',
+                              backgroundColor: '#ffffff'
+                            }}
+                          >
+                            {isSelected && (
+                              <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                            )}
+                          </span>
+                          <span className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
+                            {sit}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* 8. Collaborateur */}
-                <div>
-                  <label>Collaborateur.</label>
-                  <select
-                    value={formCollaborateur}
-                    onChange={(e) => setFormCollaborateur(e.target.value)}
-                    style={selectStyle}
-                  >
-                    <option value="Non attribué">Non attribué</option>
-                    {members.map((m) => (
-                      <option key={m.id || m.email || m.name} value={m.name}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
+                {/* 2. Référence, Ouverture, Dernière actualisation (Side-by-side 33% 33% 33%, light-grey disabled, 18px font) */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label>Référence.</label>
+                    <input
+                      type="text"
+                      value={formRef}
+                      disabled
+                      readOnly
+                      style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#000000', cursor: 'not-allowed' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label>Ouverture.</label>
+                    <input
+                      type="text"
+                      value={formOuverture}
+                      disabled
+                      readOnly
+                      style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#000000', cursor: 'not-allowed' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label>Dernière actualisation.</label>
+                    <input
+                      type="text"
+                      value={formDerActual}
+                      disabled
+                      readOnly
+                      style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#000000', cursor: 'not-allowed' }}
+                    />
+                  </div>
                 </div>
 
-                {/* 9. Client */}
-                <div>
-                  <label>Client.</label>
-                  <select
-                    value={formClientSelect}
-                    onChange={(e) => setFormClientSelect(e.target.value)}
-                    style={selectStyle}
-                  >
-                    <option value="Autre">Autre</option>
-                    {clients.map((c) => {
-                      const cName = c.denomination || (c as any).name || c.id || 'Client';
-                      return (
-                        <option key={c.id || cName} value={cName}>
-                          {cName}
-                        </option>
-                      );
-                    })}
-                  </select>
+                {/* 3. Catégorie & Criticité (Side-by-side 50% 50%) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label>Catégorie.</label>
+                    <select
+                      value={formCategorie}
+                      onChange={(e: any) => setFormCategorie(e.target.value)}
+                      style={selectStyle}
+                    >
+                      <option value="Technique">Technique</option>
+                      <option value="Commercial">Commercial</option>
+                      <option value="Réclamation">Réclamation</option>
+                      <option value="Sans Catégorie">Sans Catégorie</option>
+                    </select>
+                  </div>
 
-                  {/* Manual input if "Autre" is selected */}
-                  {formClientSelect === 'Autre' && (
-                    <div className="mt-2">
-                      <input
-                        type="text"
-                        placeholder="Entrez le nom du client"
-                        value={formCustomClientName}
-                        onChange={(e) => setFormCustomClientName(e.target.value)}
-                      />
+                  <div>
+                    <label>Criticité.</label>
+                    <select
+                      value={formCriticite}
+                      onChange={(e: any) => setFormCriticite(e.target.value)}
+                      style={selectStyle}
+                    >
+                      <option value="Urgent">Urgent</option>
+                      <option value="Semaine prochaine">Semaine prochaine</option>
+                      <option value="Ce mois">Ce mois</option>
+                      <option value="Mois prochain">Mois prochain</option>
+                      <option value="Non renseigné">Non renseigné</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* 4. Encart border light-grey, border-radius 13px, padding: Client / Objet / Description / Collaborateur */}
+                <div 
+                  className="space-y-4 p-4"
+                  style={{
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '13px',
+                    backgroundColor: '#ffffff'
+                  }}
+                >
+                  {/* Client */}
+                  <div>
+                    <label>Client.</label>
+                    <select
+                      value={formClientSelect}
+                      onChange={(e) => setFormClientSelect(e.target.value)}
+                      style={selectStyle}
+                    >
+                      <option value="Autre">Autre</option>
+                      {clients.map((c) => {
+                        const cName = c.denomination || (c as any).name || c.id || 'Client';
+                        return (
+                          <option key={c.id || cName} value={cName}>
+                            {cName}
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    {/* Manual input if "Autre" is selected */}
+                    {formClientSelect === 'Autre' && (
+                      <div className="mt-2">
+                        <input
+                          type="text"
+                          placeholder="Entrez le nom du client"
+                          value={formCustomClientName}
+                          onChange={(e) => setFormCustomClientName(e.target.value)}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Objet */}
+                  <div>
+                    <label>Objet.</label>
+                    <input
+                      type="text"
+                      maxLength={55}
+                      placeholder="Entrez un objet (max 55 caractères)"
+                      value={formObjet}
+                      onChange={(e) => setFormObjet(e.target.value)}
+                      required
+                    />
+                    <div className="text-right text-xs text-slate-500 mt-1 font-sans">
+                      {formObjet.length}/55
                     </div>
-                  )}
-                </div>
+                  </div>
 
-                {/* 10. Description */}
-                <div>
-                  <label>Description.</label>
-                  <textarea
-                    rows={4}
-                    placeholder="Entrez une description détaillée..."
-                    value={formDescription}
-                    onChange={(e) => setFormDescription(e.target.value)}
-                  />
+                  {/* Description */}
+                  <div>
+                    <label>Description.</label>
+                    <textarea
+                      rows={4}
+                      placeholder="Entrez une description détaillée..."
+                      value={formDescription}
+                      onChange={(e) => setFormDescription(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Collaborateur */}
+                  <div>
+                    <label>Collaborateur.</label>
+                    <select
+                      value={formCollaborateur}
+                      onChange={(e) => setFormCollaborateur(e.target.value)}
+                      style={selectStyle}
+                    >
+                      <option value="Non attribué">Non attribué</option>
+                      {members.map((m) => (
+                        <option key={m.id || m.email || m.name} value={m.name}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Buttons */}
