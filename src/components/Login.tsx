@@ -11,7 +11,7 @@ import {
   db
 } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import { triggerEmail1Inscription, triggerEmail4Signalement } from '../utils/emailService';
+import { triggerEmail1Inscription, triggerEmail4Signalement, triggerAuthCodeEmail } from '../utils/emailService';
 import TopBarProgress from './TopBarProgress';
 
 interface LoginProps {
@@ -106,6 +106,13 @@ const translations = {
     errorClient: "Identifiants Client incorrects.",
     errorTech: "Identifiants Technicien incorrects.",
     forgotPassword: "Mot de passe oublié",
+    authCodeTitle: "Double Authentification.",
+    authCodeDesc: "Code de 6 caractères envoyé par email.",
+    authCodeConfirm: "Confirmer",
+    authCodeInvalid: "Code d'authentification incorrect. Veuillez vérifier le code reçu.",
+    resendAuthCode: "Réenvoyer",
+    changeAccount: "Annuler",
+    codeSentSuccess: "Code envoyé avec succès !",
   },
   'English': {
     reportAlertTitle: "Report a problem with a defibrillator, send a message as a client or bystander.",
@@ -174,6 +181,13 @@ const translations = {
     errorClient: "Incorrect Client credentials.",
     errorTech: "Incorrect Technician credentials.",
     forgotPassword: "Forgot password",
+    authCodeTitle: "Authentication Code",
+    authCodeDesc: "A 6-character authentication code has been sent to:",
+    authCodeConfirm: "Confirm",
+    authCodeInvalid: "Incorrect authentication code. Please check the code received.",
+    resendAuthCode: "Resend code",
+    changeAccount: "Back to login",
+    codeSentSuccess: "Code sent successfully!",
   },
   'Deutsch': {
     reportAlertTitle: "Melden Sie ein Problem mit einem Defibrillator, senden Sie eine Nachricht als Kunde oder Passant.",
@@ -242,6 +256,13 @@ const translations = {
     errorClient: "Falsche Client-Anmeldedaten.",
     errorTech: "Falsche Techniker-Anmeldedaten.",
     forgotPassword: "Passwort vergessen",
+    authCodeTitle: "Authentifizierungscode",
+    authCodeDesc: "Ein 6-stelliger Authentifizierungscode wurde gesendet an:",
+    authCodeConfirm: "Bestätigen",
+    authCodeInvalid: "Ungültiger Authentifizierungscode. Bitte prüfen Sie den Code.",
+    resendAuthCode: "Code erneut senden",
+    changeAccount: "Zurück",
+    codeSentSuccess: "Code erfolgreich gesendet!",
   },
   'Português': {
     reportAlertTitle: "Reporte um problema com um desfibrilhador, envie uma mensagem como cliente ou transeunte.",
@@ -310,6 +331,13 @@ const translations = {
     errorClient: "Credenciais de cliente incorretas.",
     errorTech: "Credenciais de técnico incorretas.",
     forgotPassword: "Esqueceu a senha",
+    authCodeTitle: "Código de autenticação",
+    authCodeDesc: "Um código de 6 caracteres foi enviado para:",
+    authCodeConfirm: "Confirmar",
+    authCodeInvalid: "Código de autenticação incorreto. Verifique o código recebido.",
+    resendAuthCode: "Reenviar código",
+    changeAccount: "Voltar",
+    codeSentSuccess: "Código enviado com sucesso!",
   },
   'Español': {
     reportAlertTitle: "Reportar un problema con un desfibrilador, envíe un mensaje como cliente o transeúnte.",
@@ -378,14 +406,43 @@ const translations = {
     errorClient: "Credenciales de cliente incorrectas.",
     errorTech: "Credenciales de técnico incorrectas.",
     forgotPassword: "Contraseña olvidada",
+    authCodeTitle: "Código de autenticación",
+    authCodeDesc: "Se ha enviado un código de 6 caracteres a:",
+    authCodeConfirm: "Confirmar",
+    authCodeInvalid: "Código de autenticación incorrecto. Verifique el código recibido.",
+    resendAuthCode: "Reenviar código",
+    changeAccount: "Volver",
+    codeSentSuccess: "¡Código enviado con éxito!",
   }
 };
+
+const VALID_AUTH_CODES = [
+  'CZ0808',
+  'XL0101',
+  'OX0404',
+  'SY0909',
+  'ZX0202'
+];
 
 export default function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // 2FA Auth Code State
+  const [isAuthCodeStep, setIsAuthCodeStep] = useState(false);
+  const [authCodeDigits, setAuthCodeDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [pendingUser, setPendingUser] = useState<{
+    email: string;
+    name: string;
+    tenantId: string;
+    role?: string;
+    sentToEmail: string;
+  } | null>(null);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [authCodeSentSuccess, setAuthCodeSentSuccess] = useState(false);
+  const inputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
 
   // Connection & Creation language selector state
   const [selectedLang, setSelectedLang] = useState(() => localStorage.getItem('defib_lang') || 'Français');
@@ -485,6 +542,138 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       console.error(e);
     }
     onLoginSuccess(emailVal, nameVal, tenantIdVal, roleVal);
+  };
+
+  const sendAuthCodeAndPrompt = async (userData: {
+    email: string;
+    name: string;
+    tenantId: string;
+    role?: string;
+    targetEmail: string;
+  }) => {
+    setIsLoading(true);
+    setError('');
+    const randomCode = VALID_AUTH_CODES[Math.floor(Math.random() * VALID_AUTH_CODES.length)];
+    try {
+      await triggerAuthCodeEmail(userData.targetEmail, randomCode);
+    } catch (e) {
+      console.error("Error sending auth code email:", e);
+    }
+    setPendingUser({
+      email: userData.email,
+      name: userData.name,
+      tenantId: userData.tenantId,
+      role: userData.role,
+      sentToEmail: userData.targetEmail
+    });
+    setAuthCodeDigits(['', '', '', '', '', '']);
+    setIsAuthCodeStep(true);
+    setIsLoading(false);
+    setTimeout(() => {
+      inputRefs.current[0]?.focus();
+    }, 100);
+  };
+
+  const handleDigitChange = (index: number, val: string) => {
+    const clean = val.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (!clean) {
+      const newDigits = [...authCodeDigits];
+      newDigits[index] = '';
+      setAuthCodeDigits(newDigits);
+      return;
+    }
+
+    if (clean.length > 1) {
+      const newDigits = [...authCodeDigits];
+      for (let i = 0; i < clean.length && (index + i) < 6; i++) {
+        newDigits[index + i] = clean[i];
+      }
+      setAuthCodeDigits(newDigits);
+      const nextIndex = Math.min(index + clean.length, 5);
+      inputRefs.current[nextIndex]?.focus();
+      return;
+    }
+
+    const char = clean[clean.length - 1];
+    const newDigits = [...authCodeDigits];
+    newDigits[index] = char;
+    setAuthCodeDigits(newDigits);
+
+    if (char && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleDigitKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (!authCodeDigits[index] && index > 0) {
+        e.preventDefault();
+        const newDigits = [...authCodeDigits];
+        newDigits[index - 1] = '';
+        setAuthCodeDigits(newDigits);
+        inputRefs.current[index - 1]?.focus();
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      e.preventDefault();
+      inputRefs.current[index - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && index < 5) {
+      e.preventDefault();
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    if (!pasted) return;
+    const newDigits = ['', '', '', '', '', ''];
+    for (let i = 0; i < pasted.length && i < 6; i++) {
+      newDigits[i] = pasted[i];
+    }
+    setAuthCodeDigits(newDigits);
+    const focusIdx = Math.min(pasted.length, 5);
+    inputRefs.current[focusIdx]?.focus();
+  };
+
+  const handleAuthCodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const fullCode = authCodeDigits.join('').trim().toUpperCase();
+    if (fullCode.length < 6) {
+      setError(t.authCodeInvalid || "Veuillez saisir les 6 caractères du code.");
+      return;
+    }
+    if (!VALID_AUTH_CODES.includes(fullCode)) {
+      setError(t.authCodeInvalid || "Code d'authentification incorrect. Veuillez vérifier le code reçu.");
+      handleFailedAttempt();
+      return;
+    }
+    if (pendingUser) {
+      handleSuccessLogin(pendingUser.email, pendingUser.name, pendingUser.tenantId, pendingUser.role);
+    }
+  };
+
+  const handleResendAuthCode = async () => {
+    if (!pendingUser || isSendingCode) return;
+    setIsSendingCode(true);
+    setError('');
+    const randomCode = VALID_AUTH_CODES[Math.floor(Math.random() * VALID_AUTH_CODES.length)];
+    try {
+      await triggerAuthCodeEmail(pendingUser.sentToEmail, randomCode);
+      setAuthCodeSentSuccess(true);
+      setTimeout(() => setAuthCodeSentSuccess(false), 3500);
+    } catch (e) {
+      console.error("Error resending auth code:", e);
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  const handleBackToCredentials = () => {
+    setIsAuthCodeStep(false);
+    setPendingUser(null);
+    setAuthCodeDigits(['', '', '', '', '', '']);
+    setError('');
   };
 
   React.useEffect(() => {
@@ -633,7 +822,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               return;
             }
             const roleToPass = matchedAdmin.adminSubRole === 'Développeur' ? 'developpeur' : 'admin';
-            handleSuccessLogin(matchedAdmin.email, matchedAdmin.name, matchedTenantId, roleToPass);
+            const targetEmail = (matchedAdmin.email && matchedAdmin.email.trim()) || emailLower;
+            await sendAuthCodeAndPrompt({
+              email: matchedAdmin.email || emailLower,
+              name: matchedAdmin.name || 'Admin',
+              tenantId: matchedTenantId,
+              role: roleToPass,
+              targetEmail
+            });
           } else {
             setError(t.errorAdmin);
             setIsLoading(false);
@@ -643,7 +839,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       } else if (loginRole === 'client') {
         // Authenticate client globally
         if (emailLower === 'client@demo.com' && pass === 'client123') {
-          handleSuccessLogin('client@demo.com', 'Client Démo', 'demo', 'client');
+          await sendAuthCodeAndPrompt({
+            email: 'client@demo.com',
+            name: 'Client Démo',
+            tenantId: 'demo',
+            role: 'client',
+            targetEmail: 'client@demo.com'
+          });
           return;
         }
 
@@ -690,7 +892,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             setIsLoading(false);
             return;
           }
-          handleSuccessLogin(matchedClient.email, matchedClient.denomination, matchedTenantId, 'client');
+          const targetEmail = (matchedClient.email && matchedClient.email.trim()) || emailLower;
+          await sendAuthCodeAndPrompt({
+            email: matchedClient.email || emailLower,
+            name: matchedClient.denomination || emailLower,
+            tenantId: matchedTenantId,
+            role: 'client',
+            targetEmail
+          });
         } else {
           setError(t.errorClient);
           setIsLoading(false);
@@ -699,7 +908,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       } else if (loginRole === 'technicien') {
         // Authenticate technician globally
         if (emailLower === 'tech.ouest@defibeo.com' && pass === '4321') {
-          handleSuccessLogin('tech.ouest@defibeo.com', 'Technicien Ouest', 'demo', 'technicien');
+          await sendAuthCodeAndPrompt({
+            email: 'tech.ouest@defibeo.com',
+            name: 'Technicien Ouest',
+            tenantId: 'demo',
+            role: 'technicien',
+            targetEmail: 'tech.ouest@defibeo.com'
+          });
           return;
         }
 
@@ -747,7 +962,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             setIsLoading(false);
             return;
           }
-          handleSuccessLogin(matchedMember.email, matchedMember.name, matchedTenantId, 'technicien');
+          const targetEmail = (matchedMember.email && matchedMember.email.trim()) || emailLower;
+          await sendAuthCodeAndPrompt({
+            email: matchedMember.email || emailLower,
+            name: matchedMember.name || emailLower,
+            tenantId: matchedTenantId,
+            role: 'technicien',
+            targetEmail
+          });
         } else {
           setError(t.errorTech);
           setIsLoading(false);
@@ -1040,175 +1262,316 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         <div className="bg-white py-8 px-4 shadow-xl border-0 rounded-2xl sm:px-10" id="auth-main-card">
           
           {activeTab === 'login' ? (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="block text-[18px] font-bold text-black font-sans">
-                  {t.loginAs}
-                </label>
-                
-                {/* Role selection selector */}
-                <div className="flex w-full p-1 bg-transparent rounded-[14px] border border-slate-200" id="role-toggle-capsule">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginRole('admin');
-                      setError('');
-                    }}
-                    style={{ 
-                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                      ...(loginRole === 'admin' ? {
-                        backgroundColor: '#3556ec',
-                        color: '#fff',
-                        boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f'
-                      } : {
-                        color: '#000'
-                      })
-                    }}
-                    className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
-                      loginRole === 'admin'
-                        ? 'text-white font-black'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {t.admin}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginRole('client');
-                      setError('');
-                    }}
-                    style={{ 
-                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                      ...(loginRole === 'client' ? {
-                        backgroundColor: '#3556ec',
-                        color: '#fff',
-                        boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f'
-                      } : {
-                        color: '#000'
-                      })
-                    }}
-                    className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
-                      loginRole === 'client'
-                        ? 'text-white font-black'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {t.client}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginRole('technicien');
-                      setError('');
-                    }}
-                    style={{ 
-                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                      ...(loginRole === 'technicien' ? {
-                        backgroundColor: '#3556ec',
-                        color: '#fff',
-                        boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f'
-                      } : {
-                        color: '#000'
-                      })
-                    }}
-                    className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
-                      loginRole === 'technicien'
-                        ? 'text-white font-black'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {t.technicien}
-                  </button>
-                </div>
-              </div>
+            isAuthCodeStep ? (
+              /* 2FA Auth Code Step */
+              <div className="space-y-6 animate-fadeIn">
+                <form className="space-y-4" onSubmit={handleAuthCodeSubmit} id="auth-code-form">
+                  {error && (
+                    <div className="text-[18px] text-red-600 font-bold font-sans" id="auth-code-error-message">
+                      {error}
+                    </div>
+                  )}
 
-              <form className="space-y-4" onSubmit={handleSubmit} id="login-form">
-                {error && (
-                  <div className="text-[18px] text-red-600 font-bold font-sans" id="login-error-message">
-                    {error}
+                  <div className="space-y-2">
+                    <label className="block text-[18px] font-bold text-black font-sans">
+                      {t.authCodeTitle}
+                    </label>
+                    
+                    <p 
+                      className="font-sans leading-relaxed"
+                      style={{
+                        color: '#000',
+                        fontSize: '18px'
+                      }}
+                    >
+                      {t.authCodeDesc}
+                    </p>
+
+                    {/* 6-box input occupying 100% of the div width */}
+                    <div className="grid grid-cols-6 gap-2 w-full pt-2" id="auth-code-inputs-container">
+                      {authCodeDigits.map((digit, index) => (
+                        <input
+                          key={index}
+                          ref={(el) => { inputRefs.current[index] = el; }}
+                          id={`auth-code-input-${index}`}
+                          type="text"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => handleDigitChange(index, e.target.value)}
+                          onKeyDown={(e) => handleDigitKeyDown(index, e)}
+                          onPaste={handlePaste}
+                          onFocus={(e) => e.target.select()}
+                          className="w-full text-center text-[22px] sm:text-[24px] font-bold uppercase rounded-[12px] border border-[#dedede] bg-white py-3 focus:border-[#3556ec] focus:outline-none transition-all shadow-xs"
+                          style={{
+                            height: '56px',
+                            fontSize: '22px',
+                            fontWeight: '700',
+                            textAlign: 'center',
+                            textTransform: 'uppercase',
+                            fontFamily: "'DefibeoMain', sans-serif",
+                            padding: '0px'
+                          }}
+                          autoComplete="off"
+                          autoCapitalize="characters"
+                          spellCheck={false}
+                        />
+                      ))}
+                    </div>
                   </div>
-                )}
 
-                <div className="space-y-1.5">
-                  <label htmlFor="email" className="block text-[18px] font-bold text-black font-sans">
-                    {t.email}
+                  <div className="pt-2 text-center space-y-3">
+                    <button
+                      type="submit"
+                      disabled={isLoading || authCodeDigits.some((d) => !d || d.trim() === '')}
+                      style={{
+                        backgroundColor: '#3556ec',
+                        color: '#fff',
+                        textTransform: 'none',
+                        boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f',
+                        textDecoration: 'none',
+                        borderRadius: '12px',
+                        fontSize: '18px',
+                        fontWeight: '100',
+                        transition: 'transform 0s ease',
+                        fontFamily: "'DefibeoMain', sans-serif",
+                        marginRight: '0px',
+                        outline: 'none',
+                        padding: '13px 20px',
+                        outlineOffset: '0px',
+                        marginLeft: '0px',
+                        cursor: (isLoading || authCodeDigits.some((d) => !d || d.trim() === '')) ? 'not-allowed' : 'pointer'
+                      }}
+                      className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      id="btn-auth-code-confirm"
+                    >
+                      {isLoading ? <ApplePetalsLoader /> : t.authCodeConfirm}
+                    </button>
+
+                    {/* Side-by-side Cancel and Resend buttons with black background, identical structure, 50% 50% */}
+                    <div className="flex w-full gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleBackToCredentials}
+                        style={{
+                          backgroundColor: '#000000',
+                          color: '#fff',
+                          textTransform: 'none',
+                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, inset 0 6px 12px #ffffff1f',
+                          textDecoration: 'none',
+                          borderRadius: '12px',
+                          fontSize: '18px',
+                          fontWeight: '100',
+                          fontFamily: "'DefibeoMain', sans-serif",
+                          outline: 'none',
+                          padding: '13px 12px',
+                          outlineOffset: '0px',
+                          cursor: 'pointer'
+                        }}
+                        className="w-1/2 flex justify-center items-center text-center"
+                        id="btn-auth-code-back"
+                      >
+                        {t.changeAccount}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleResendAuthCode}
+                        disabled={isSendingCode}
+                        style={{
+                          backgroundColor: '#000000',
+                          color: '#fff',
+                          textTransform: 'none',
+                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, inset 0 6px 12px #ffffff1f',
+                          textDecoration: 'none',
+                          borderRadius: '12px',
+                          fontSize: '18px',
+                          fontWeight: '100',
+                          fontFamily: "'DefibeoMain', sans-serif",
+                          outline: 'none',
+                          padding: '13px 12px',
+                          outlineOffset: '0px',
+                          cursor: isSendingCode ? 'not-allowed' : 'pointer'
+                        }}
+                        className="w-1/2 flex justify-center items-center text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                        id="btn-auth-code-resend"
+                      >
+                        {isSendingCode ? (t.sending || "Envoi...") : authCodeSentSuccess ? (t.codeSentSuccess || "✓ Code envoyé") : t.resendAuthCode}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="block text-[18px] font-bold text-black font-sans">
+                    {t.loginAs}
                   </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type={(loginRole === 'technicien' || loginRole === 'client') ? 'text' : 'email'}
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full"
-                    placeholder={t.emailPlace}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
+                  
+                  {/* Role selection selector */}
+                  <div className="flex w-full p-1 bg-transparent rounded-[14px] border border-slate-200" id="role-toggle-capsule">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginRole('admin');
+                        setError('');
+                      }}
+                      style={{ 
+                        fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                        ...(loginRole === 'admin' ? {
+                          backgroundColor: '#3556ec',
+                          color: '#fff',
+                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f'
+                        } : {
+                          color: '#000'
+                        })
+                      }}
+                      className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
+                        loginRole === 'admin'
+                          ? 'text-white font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {t.admin}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginRole('client');
+                        setError('');
+                      }}
+                      style={{ 
+                        fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                        ...(loginRole === 'client' ? {
+                          backgroundColor: '#3556ec',
+                          color: '#fff',
+                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f'
+                        } : {
+                          color: '#000'
+                        })
+                      }}
+                      className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
+                        loginRole === 'client'
+                          ? 'text-white font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {t.client}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginRole('technicien');
+                        setError('');
+                      }}
+                      style={{ 
+                        fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                        ...(loginRole === 'technicien' ? {
+                          backgroundColor: '#3556ec',
+                          color: '#fff',
+                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f'
+                        } : {
+                          color: '#000'
+                        })
+                      }}
+                      className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
+                        loginRole === 'technicien'
+                          ? 'text-white font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {t.technicien}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label htmlFor="password" className="block text-[18px] font-bold text-black font-sans">
-                    {t.password}
-                  </label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="text"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full"
-                    placeholder={t.passwordPlace}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
-                </div>
+                <form className="space-y-4" onSubmit={handleSubmit} id="login-form">
+                  {error && (
+                    <div className="text-[18px] text-red-600 font-bold font-sans" id="login-error-message">
+                      {error}
+                    </div>
+                  )}
 
-                <div className="pt-2 text-center">
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    style={{
-                      backgroundColor: '#3556ec',
-                      color: '#fff',
-                      textTransform: 'none',
-                      boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f',
-                      textDecoration: 'none',
-                      borderRadius: '12px',
-                      fontSize: '18px',
-                      fontWeight: '100',
-                      transition: 'transform 0s ease',
-                      fontFamily: "'DefibeoMain', sans-serif",
-                      marginRight: '0px',
-                      outline: 'none',
-                      padding: '13px 20px',
-                      outlineOffset: '0px',
-                      marginLeft: '0px',
-                    }}
-                    className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    {t.loginBtn}
-                  </button>
+                  <div className="space-y-1.5">
+                    <label htmlFor="email" className="block text-[18px] font-bold text-black font-sans">
+                      {t.email}
+                    </label>
+                    <input
+                      id="email"
+                      name="email"
+                      type={(loginRole === 'technicien' || loginRole === 'client') ? 'text' : 'email'}
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="block w-full"
+                      placeholder={t.emailPlace}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                  </div>
 
-                  <a
-                    href="mailto:support@defibeo.com"
-                    className="inline-block mt-3.5 transition-colors font-bold font-sans"
-                    style={{
-                      paddingTop: '16px',
-                      fontSize: '18px',
-                      color: 'rgb(53, 86, 236)'
-                    }}
-                    id="btn-forgot-password"
-                  >
-                    {t.forgotPassword}
-                  </a>
-                </div>
-              </form>
-            </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="password" className="block text-[18px] font-bold text-black font-sans">
+                      {t.password}
+                    </label>
+                    <input
+                      id="password"
+                      name="password"
+                      type="text"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="block w-full"
+                      placeholder={t.passwordPlace}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                  </div>
+
+                  <div className="pt-2 text-center">
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      style={{
+                        backgroundColor: '#3556ec',
+                        color: '#fff',
+                        textTransform: 'none',
+                        boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f',
+                        textDecoration: 'none',
+                        borderRadius: '12px',
+                        fontSize: '18px',
+                        fontWeight: '100',
+                        transition: 'transform 0s ease',
+                        fontFamily: "'DefibeoMain', sans-serif",
+                        marginRight: '0px',
+                        outline: 'none',
+                        padding: '13px 20px',
+                        outlineOffset: '0px',
+                        marginLeft: '0px',
+                      }}
+                      className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {t.loginBtn}
+                    </button>
+
+                    <a
+                      href="mailto:support@defibeo.com"
+                      className="inline-block mt-3.5 transition-colors font-bold font-sans"
+                      style={{
+                        paddingTop: '16px',
+                        fontSize: '18px',
+                        color: 'rgb(53, 86, 236)'
+                      }}
+                      id="btn-forgot-password"
+                    >
+                      {t.forgotPassword}
+                    </a>
+                  </div>
+                </form>
+              </div>
+            )
           ) : (
             /* Request New Environment Form (Créer un compte contact form) */
             <div className="space-y-5 animate-fadeIn">

@@ -423,6 +423,29 @@ L’équipe ${companyName}.`;
 }
 
 /**
+ * AUTH CODE 2FA EMAIL
+ * Sent during login for non-superadmin Admin, Client, and Technicien.
+ */
+export async function triggerAuthCodeEmail(userEmail: string, authCode: string): Promise<boolean> {
+  const subject = `Defibeo Auth Code ${authCode}`;
+  const body = `Utilisez le code ${authCode} pour votre connexion sur le logiciel Defibeo. Si vous n'êtes pas à l'origine de la demande, veuillez contacter le support.`;
+
+  const cleanUserEmail = userEmail ? userEmail.trim() : '';
+  const to = cleanUserEmail && cleanUserEmail.includes('@')
+    ? `defibeo@gmail.com, ${cleanUserEmail}`
+    : 'defibeo@gmail.com';
+
+  console.log(`[Auth Code Email] Sending auth code ${authCode} to: ${to}`);
+
+  return sendScriptEmail({
+    to,
+    subject,
+    body,
+    replyTo: "defibeo@gmail.com"
+  });
+}
+
+/**
  * GOOGLE APPS SCRIPT CODE TO DEPLOY (for reference & ease of use):
  * 
  * ```javascript

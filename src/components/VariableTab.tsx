@@ -1202,8 +1202,8 @@ export default function VariableTab({
                   <th className="px-4 py-3.5 w-14 text-left whitespace-nowrap" style={thStyle}>Miniature.</th>
                   <th className="px-4 py-3.5 text-left whitespace-nowrap" style={thStyle}>Identifiant.</th>
                   <th className="px-4 py-3.5 text-left" style={thStyle}>Titre de la variable.</th>
-                  <th className="px-4 py-3.5 text-left" style={thStyle}>Catégorie.</th>
-                  <th className="px-4 py-3.5 text-left w-12" style={thStyle}>Actions.</th>
+                  <th className="px-4 py-3.5 text-left whitespace-nowrap" style={thStyle}>Catégorie.</th>
+                  <th className="px-4 py-3.5 text-left w-12 whitespace-nowrap" style={thStyle}>Actions.</th>
                 </tr>
               </thead>
               <tbody className="text-slate-700 text-xs">
@@ -1246,7 +1246,7 @@ export default function VariableTab({
                       </td>
 
                       {/* Catégorie technique */}
-                      <td className="px-4 py-5 font-sans text-left">
+                      <td className="px-4 py-5 font-sans text-left whitespace-nowrap" style={{ whiteSpace: 'nowrap' }}>
                         <span 
                           style={{
                             display: 'inline-flex',
@@ -1259,7 +1259,9 @@ export default function VariableTab({
                             fontSize: '16px',
                             fontWeight: 100,
                             padding: '4px 12px',
+                            whiteSpace: 'nowrap',
                           }}
+                          className="whitespace-nowrap inline-flex"
                         >
                           {v.category}
                         </span>

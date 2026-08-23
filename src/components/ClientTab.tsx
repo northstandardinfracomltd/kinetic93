@@ -2200,7 +2200,7 @@ export default function ClientTab({
                   <th className="px-4 py-3.5 w-12 text-center" style={thStyle}>Volume.</th>
                   <th className="px-4 py-3.5" style={thStyle}>Entreprise.</th>
                   <th className="px-4 py-3.5" style={thStyle}>Numéro fiscal.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Contrat.</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Contrat.</th>
                   <th className="px-4 py-3.5 text-right w-12" style={thStyle}>Actions.</th>
                 </tr>
               </thead>
@@ -2250,9 +2250,9 @@ export default function ClientTab({
                     </td>
 
                     {/* Nom et Ref Contrat */}
-                    <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                    <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, whiteSpace: 'nowrap' }}>
                       {client.contrat === 'Oui' ? (
-                        <p className="font-semibold text-slate-800">{client.nomContrat}</p>
+                        <p className="font-semibold text-slate-800 whitespace-nowrap inline-block" style={{ whiteSpace: 'nowrap' }}>{client.nomContrat}</p>
                       ) : null}
                     </td>
 
