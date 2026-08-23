@@ -313,6 +313,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     WebkitAppearance: 'none',
     MozAppearance: 'none',
     backgroundImage: 'none',
+    fontSize: '18px',
   };
 
   return (
@@ -324,7 +325,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           padding: 10px 12px !important;
           border: 1px solid #c9bfcd !important;
           border-radius: 13px !important;
-          font-size: 16px !important;
+          font-size: 18px !important;
           font-weight: 400 !important;
           background: #ffffff !important;
           color: #000000 !important;
@@ -656,7 +657,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </div>
 
                   <div>
-                    <label>Dernière actualisation.</label>
+                    <label>Actualisation.</label>
                     <input
                       type="text"
                       value={formDerActual}
@@ -719,9 +720,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       <option value="Autre">Autre</option>
                       {clients.map((c) => {
                         const cName = c.denomination || (c as any).name || c.id || 'Client';
+                        const cEmail = c.email || c.emailSite || '';
+                        const labelText = cEmail ? `${cName} (${cEmail})` : cName;
                         return (
                           <option key={c.id || cName} value={cName}>
-                            {cName}
+                            {labelText}
                           </option>
                         );
                       })}
