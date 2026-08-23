@@ -66,12 +66,13 @@ export default function HelpBubble({ cacheKey, text, children, style, imageSrc, 
     <div 
       className="p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fadeIn transition-all"
       style={{
-        borderColor: 'rgb(218, 218, 218)',
-        background: imageSrc ? '#ffffff' : '#ffffff00',
-        backgroundColor: imageSrc ? '#ffffff' : '#ffffff00',
+        borderColor: 'rgb(203 192 206)',
+        background: 'rgba(255, 255, 255, 0)',
+        backgroundColor: 'rgba(255, 255, 255, 0)',
         boxShadow: 'none',
         maxWidth: '98%',
         margin: '15px auto 5px auto',
+        marginBottom: '20px',
         ...style,
       }}
     >
@@ -119,11 +120,12 @@ export default function HelpBubble({ cacheKey, text, children, style, imageSrc, 
         onClick={handleDismiss}
         className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0"
         style={{
-          backgroundColor: '#000000',
-          color: '#ffffff',
+          backgroundColor: 'rgb(0, 0, 0)',
+          color: 'rgb(255, 255, 255)',
           fontSize: '18px',
           borderRadius: '13px',
-          padding: '8px 20px',
+          padding: '10px 20px',
+          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset',
         }}
       >
         {t("J'ai compris")}

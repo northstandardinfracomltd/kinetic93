@@ -59,6 +59,8 @@ import {
   StagiaireRecord,
   APP_THEMES,
   AppThemeOption,
+  APP_FAVICONS,
+  AppFaviconOption,
   formatPdfHeaderText,
 } from "../types";
 import EmargementsTab from "./EmargementsTab";
@@ -439,16 +441,24 @@ export default function PublicPortal({
     },
   );
 
-  // Theme support for technician session
+  // Theme and Favicon support for technician session
   const [themeRefreshTrigger, setThemeRefreshTrigger] = useState(0);
+  const [faviconRefreshTrigger, setFaviconRefreshTrigger] = useState(0);
   const [isSettingsCardFlipped, setIsSettingsCardFlipped] = useState(false);
 
   useEffect(() => {
     const handleThemeChange = () => {
       setThemeRefreshTrigger((prev) => prev + 1);
     };
+    const handleFaviconChange = () => {
+      setFaviconRefreshTrigger((prev) => prev + 1);
+    };
     window.addEventListener("defib-theme-changed", handleThemeChange);
-    return () => window.removeEventListener("defib-theme-changed", handleThemeChange);
+    window.addEventListener("defib-favicon-changed", handleFaviconChange);
+    return () => {
+      window.removeEventListener("defib-theme-changed", handleThemeChange);
+      window.removeEventListener("defib-favicon-changed", handleFaviconChange);
+    };
   }, []);
 
   const currentTechTheme = useMemo<AppThemeOption>(() => {
@@ -500,6 +510,116 @@ export default function PublicPortal({
     // 5. Default
     return APP_THEMES[0];
   }, [authenticatedUser, members, themeRefreshTrigger]);
+
+  const currentTechFavicon = useMemo<AppFaviconOption>(() => {
+    const userEmail = (authenticatedUser?.email || "").trim().toLowerCase();
+    const userName = (authenticatedUser?.name || "").trim().toLowerCase();
+    const tenantKey = localStorage.getItem("defib_tenant_id") || "demo";
+
+    // 1. Check member profile in members list if userEmail or userName matches
+    if (userEmail || userName) {
+      const foundMember = members.find(
+        (m) =>
+          (userEmail && m.email?.trim().toLowerCase() === userEmail) ||
+          (userName && m.name?.trim().toLowerCase() === userName)
+      );
+      if (foundMember?.faviconPreference) {
+        const found = APP_FAVICONS.find((f) => f.id === foundMember.faviconPreference || f.url === foundMember.faviconPreference);
+        if (found) return found;
+      }
+    }
+
+    // 2. Check authenticatedUser direct field
+    if (authenticatedUser?.faviconPreference) {
+      const found = APP_FAVICONS.find((f) => f.id === authenticatedUser.faviconPreference || f.url === authenticatedUser.faviconPreference);
+      if (found) return found;
+    }
+
+    // 3. User-specific localStorage
+    if (userEmail) {
+      const userSaved =
+        localStorage.getItem(`defib_user_favicon_${userEmail}`) ||
+        localStorage.getItem(`defib_${tenantKey}_user_${userEmail}_favicon`);
+      if (userSaved) {
+        const found = APP_FAVICONS.find((f) => f.id === userSaved || f.url === userSaved);
+        if (found) return found;
+      }
+    }
+
+    // 4. Global localStorage
+    const savedFavicon =
+      localStorage.getItem(`defib_${tenantKey}_favicon`) ||
+      localStorage.getItem("defib_current_user_favicon");
+    if (savedFavicon) {
+      const found = APP_FAVICONS.find(
+        (f) => f.id === savedFavicon || f.url === savedFavicon
+      );
+      if (found) return found;
+    }
+
+    // 5. Default
+    return APP_FAVICONS.find((f) => f.id === "serious_blue") || APP_FAVICONS[1] || APP_FAVICONS[0];
+  }, [authenticatedUser, members, faviconRefreshTrigger]);
+
+  const handleFaviconSelect = (faviconId: string) => {
+    const selected = APP_FAVICONS.find((f) => f.id === faviconId);
+    if (!selected) return;
+
+    const userEmail = (authenticatedUser?.email || "").trim().toLowerCase();
+    const userName = (authenticatedUser?.name || "").trim().toLowerCase();
+    const tenantKey = localStorage.getItem("defib_tenant_id") || "demo";
+    const faviconUrl = selected.url;
+
+    // 1. Save in localStorage
+    localStorage.setItem(`defib_${tenantKey}_favicon`, selected.id);
+    localStorage.setItem("defib_current_user_favicon", selected.id);
+    if (userEmail) {
+      localStorage.setItem(`defib_${tenantKey}_user_${userEmail}_favicon`, selected.id);
+      localStorage.setItem(`defib_user_favicon_${userEmail}`, selected.id);
+      localStorage.setItem(`defib_user_favicon_url_${userEmail}`, faviconUrl);
+    }
+
+    // 2. Update DOM link directly
+    if (typeof document !== "undefined") {
+      let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement("link");
+        link.rel = "icon";
+        document.getElementsByTagName("head")[0].appendChild(link);
+      }
+      link.type = "image/png";
+      link.href = faviconUrl;
+    }
+
+    // 3. Update authenticatedUser state and localStorage active session
+    if (authenticatedUser) {
+      const updatedUser = { ...authenticatedUser, faviconPreference: selected.id };
+      setAuthenticatedUser(updatedUser);
+      localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
+    }
+
+    // 4. Update member in members list & trigger onUpdateMembers
+    if (members && onUpdateMembers) {
+      const updatedMembers = members.map((m) => {
+        if (
+          (userEmail && m.email?.trim().toLowerCase() === userEmail) ||
+          (userName && m.name?.trim().toLowerCase() === userName)
+        ) {
+          return { ...m, faviconPreference: selected.id };
+        }
+        return m;
+      });
+      onUpdateMembers(updatedMembers);
+    }
+
+    // 5. Dispatch event and force re-render
+    window.dispatchEvent(
+      new CustomEvent("defib-favicon-changed", {
+        detail: { faviconId: selected.id, faviconUrl: selected.url, userEmail },
+      })
+    );
+    setFaviconRefreshTrigger((prev) => prev + 1);
+  };
 
   const handleThemeSelect = (themeId: string) => {
     const selected = APP_THEMES.find((t) => t.id === themeId);
@@ -10195,7 +10315,7 @@ export default function PublicPortal({
                                         <td className="px-3 py-2 bg-white align-middle">
                                           <div className="flex items-center gap-2">
                                             <div
-                                              className="inline-block"
+                                              className="hidden md:inline-block"
                                               dangerouslySetInnerHTML={{
                                                 __html: generateBarcodeSVGString(trace.lotOrSerial),
                                               }}
@@ -11990,17 +12110,9 @@ export default function PublicPortal({
                           >
                             <div className="flex items-center justify-between">
                               <span className="text-[18px] font-bold text-black font-sans select-none">
-                                Partage de localisation avec Google Maps.
+                                Activer la localisation.
                               </span>
                               <div className="flex items-center gap-3">
-                                <span
-                                  className="text-[18px] font-bold"
-                                  style={{
-                                    color: gpsSharingLink === "Partagé" ? "#16a34a" : "#e11d48"
-                                  }}
-                                >
-                                  {gpsSharingLink === "Partagé" ? "Partagé" : "Non partagé"}
-                                </span>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -12385,6 +12497,81 @@ export default function PublicPortal({
                             </div>
                           );
                         })}
+                      </div>
+                    </div>
+
+                    {/* Section: Choix du favicon pour la session technicien */}
+                    <div className="pt-5 space-y-3 text-left" id="webapp-section-software-favicon">
+                      <h3 className="text-lg font-bold text-slate-800">
+                        {t("Choix du favicon du logiciel")}
+                      </h3>
+                      <p style={{ fontSize: "15px", color: "black", lineHeight: "1.5" }} className="font-sans font-normal">
+                        {t("Il s’agit de l’icône montré dans l’onglet de votre navigateur.")}
+                      </p>
+
+                      <div className="flex flex-col gap-2.5 pt-1">
+                        {APP_FAVICONS.map((fav) => {
+                          const isSelected = currentTechFavicon.id === fav.id;
+                          return (
+                            <div
+                              key={fav.id}
+                              onClick={() => handleFaviconSelect(fav.id)}
+                              className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 cursor-pointer select-none bg-white"
+                              id={`webapp-favicon-card-${fav.id}`}
+                            >
+                              <span 
+                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                style={{
+                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                  width: '20px',
+                                  height: '20px',
+                                  minWidth: '20px',
+                                  minHeight: '20px',
+                                  backgroundColor: '#ffffff'
+                                }}
+                              >
+                                {isSelected && (
+                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                                )}
+                              </span>
+                              <img
+                                src={fav.url}
+                                alt={fav.name}
+                                className="w-5 h-5 object-contain shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                              <span
+                                className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans"
+                              >
+                                {t(fav.name)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Illustration Add to Home Screen at the bottom touching bottom border */}
+                    <div 
+                      className="mt-6 border border-slate-200 rounded-2xl bg-white overflow-hidden text-left flex flex-col justify-between"
+                      id="webapp-add-to-home-screen-card"
+                    >
+                      <div className="p-5 pb-2 space-y-1">
+                        <h4 className="text-[18px] font-bold text-slate-900 font-sans">
+                          {t("Ajouter à l'écran d'accueil")}
+                        </h4>
+                        <p className="text-[15px] text-slate-700 font-sans leading-relaxed">
+                          {t("Pour un accès rapide depuis votre smartphone, ajoutez Defibeo directement sur votre écran d'accueil.")}
+                        </p>
+                      </div>
+                      <div className="w-full flex justify-center items-end pt-2">
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/Illustration+Add+To+Home+Screen.svg"
+                          alt="Illustration Add To Home Screen"
+                          className="w-full h-auto block select-none pointer-events-none"
+                          style={{ marginBottom: 0, display: "block" }}
+                          referrerPolicy="no-referrer"
+                        />
                       </div>
                     </div>
 

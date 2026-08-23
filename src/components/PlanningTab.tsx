@@ -772,11 +772,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                     }}
                     className="w-full text-black font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer select-none"
                     style={{
-                      backgroundColor: "rgb(243, 244, 246)",
-                      borderRadius: "14px",
-                      padding: "12px 14px",
-                      fontSize: "16px",
-                      border: "1px solid rgb(201, 190, 205)",
+                      backgroundColor: "rgba(255, 255, 255, 0)",
+                      borderRadius: "13px",
+                      color: "rgb(0, 0, 0)",
+                      padding: "10px 20px",
+                      fontSize: "18px",
+                      border: "1px solid rgb(203, 192, 206)",
                     }}
                   >
                     Annuler
@@ -1293,14 +1294,14 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 type="button"
                                 onClick={() => toggleMissionExpanded(missionKey)}
                                 style={{
-                                  color: "#fff",
-                                  boxShadow: "none",
-                                  background: "rgb(96 28 104)",
-                                  borderRadius: "13px",
-                                  padding: "5px 16px",
-                                  fontSize: "15px",
-                                  fontWeight: 700,
+                                  color: "rgb(255, 255, 255)",
+                                  background: "rgb(0, 0, 0)",
+                                  boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
+                                  padding: "10px 20px",
+                                  fontSize: "18px",
                                   border: "none",
+                                  borderRadius: "13px",
+                                  fontWeight: 700,
                                   cursor: "pointer",
                                   display: "inline-flex",
                                   alignItems: "center",
@@ -1354,12 +1355,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             onClick={handleScrollToTop}
             className="text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none hover:opacity-95 active:scale-95"
             style={{
-              backgroundColor: "rgb(22, 93, 252)",
-              borderRadius: "14px",
-              padding: "14px 20px",
+              backgroundColor: "rgb(20 87 236)",
+              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
+              borderRadius: "13px",
+              padding: "10px 20px",
               fontSize: "18px",
               border: "none",
-              boxShadow: "none"
             }}
           >
             {t("Remonter")}
