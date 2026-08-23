@@ -59,6 +59,7 @@ import {
   StagiaireRecord,
   APP_THEMES,
   AppThemeOption,
+  formatPdfHeaderText,
 } from "../types";
 import EmargementsTab from "./EmargementsTab";
 import { REGIONS_FRANCAISES } from "../utils";
@@ -2329,7 +2330,7 @@ export default function PublicPortal({
       const renderHeader = (title: string) => {
         const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
         const showHeaderLogo = pdfLogo ? `<img src="${pdfLogo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
-        const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${pdfPageHeaderText}</div>` : '';
+        const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${formatPdfHeaderText(pdfPageHeaderText)}</div>` : '';
         const showEmail = compEmail ? `<div>${compEmail}</div>` : '';
         const showPhone = compPhone ? `<div>${compPhone}</div>` : '';
 
@@ -2697,7 +2698,7 @@ export default function PublicPortal({
     const renderHeader = (title: string) => {
       const showHeaderImg = companyInfo.pdfHeaderImg ? `<img src="${companyInfo.pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
       const showHeaderLogo = companyInfo.logo ? `<img src="${companyInfo.logo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
-      const showHeaderInfoText = companyInfo.pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${companyInfo.pdfPageHeaderText}</div>` : '';
+      const showHeaderInfoText = companyInfo.pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${formatPdfHeaderText(companyInfo.pdfPageHeaderText)}</div>` : '';
       const showEmail = companyInfo.email ? `<div>${companyInfo.email}</div>` : '';
       const showPhone = companyInfo.phone ? `<div>${companyInfo.phone}</div>` : '';
 
@@ -8322,9 +8323,7 @@ export default function PublicPortal({
                                       className="font-semibold"
                                       style={{ color: "#000000" }}
                                     >
-                                      {formatToNormalCase(
-                                        rep.title || "Rapport de maintenance",
-                                      )}
+                                      {rep.title || "RAPPORT D’INTERVENTION"}
                                     </span>
                                   </p>
                                   {isReal(identifiantVal) && (

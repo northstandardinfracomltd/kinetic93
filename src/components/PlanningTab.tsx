@@ -363,6 +363,93 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     return map;
   }, [fsmTours, selectedTech]);
 
+  // Compute active tours per day based on tour period (startDate) and the last mission date
+  const activeToursByDate = useMemo(() => {
+    const map: Record<string, { tourId: string; title: string; tour: any }[]> = {};
+
+    if (!selectedTech || selectedTech.trim() === '') {
+      return map;
+    }
+
+    if (Array.isArray(fsmTours)) {
+      fsmTours.forEach((tour, tIdx) => {
+        if (!tour || tour.id === 'a-trier') return;
+        if (selectedTech !== 'Tous') {
+          const tourTech = String(tour.techName || '').trim().toLowerCase();
+          const selTech = selectedTech.trim().toLowerCase();
+          if (tourTech !== selTech) return;
+        }
+
+        const rawStart = tour.startDate !== 'A trier' ? tour.startDate : null;
+        const startIso = toIsoDateStr(rawStart);
+        if (!startIso) return;
+
+        // Find the farthest (latest) date among all missions
+        const tourMissions = tour.missions || tour.passages || [];
+        let endIso = startIso;
+
+        if (Array.isArray(tourMissions) && tourMissions.length > 0) {
+          tourMissions.forEach((m: any) => {
+            if (!m) return;
+            const mRawDate = m.estimatedDate || m.date;
+            if (mRawDate && mRawDate !== 'A trier') {
+              const mIso = toIsoDateStr(mRawDate);
+              if (mIso && mIso > endIso) {
+                endIso = mIso;
+              }
+            }
+          });
+        }
+
+        const tourTitle = tour.title || tour.name || `Tournée ${tIdx + 1}`;
+        const tourId = String(tour.id || `tour-${tIdx}`);
+
+        // Iterate from startIso to endIso day by day
+        try {
+          const cur = new Date(startIso + 'T00:00:00');
+          const end = new Date(endIso + 'T00:00:00');
+
+          // Guard against invalid dates or runaway loops (max 90 days)
+          let daysCount = 0;
+          while (cur <= end && daysCount < 90) {
+            const y = cur.getFullYear();
+            const m = String(cur.getMonth() + 1).padStart(2, '0');
+            const d = String(cur.getDate()).padStart(2, '0');
+            const curIso = `${y}-${m}-${d}`;
+
+            if (!map[curIso]) {
+              map[curIso] = [];
+            }
+            if (!map[curIso].some(item => item.tourId === tourId)) {
+              map[curIso].push({
+                tourId,
+                title: tourTitle,
+                tour
+              });
+            }
+
+            cur.setDate(cur.getDate() + 1);
+            daysCount++;
+          }
+        } catch (_) {
+          // Fallback to startIso only if date parsing fails
+          if (!map[startIso]) {
+            map[startIso] = [];
+          }
+          if (!map[startIso].some(item => item.tourId === tourId)) {
+            map[startIso].push({
+              tourId,
+              title: tourTitle,
+              tour
+            });
+          }
+        }
+      });
+    }
+
+    return map;
+  }, [fsmTours, selectedTech]);
+
   // Auto-scroll to today's date card on load
   useEffect(() => {
     const yearStr = today.getFullYear();
@@ -847,6 +934,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                   // Missions
                   const dayMissions = missionsByDate[isoDate] || [];
 
+                  // Active ongoing tours for this day
+                  const dayActiveTours = activeToursByDate[isoDate] || [];
+
                   return (
                     <div
                       key={isoDate}
@@ -895,6 +985,33 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         </div>
                       ))}
 
+                      {scheduleSlotsByTech.length === 0 && dayActiveTours.length > 0 && (
+                        <div
+                          className="bg-white p-3 space-y-2"
+                          style={{
+                            border: "1px solid rgb(201, 190, 205)",
+                            borderRadius: "14px",
+                          }}
+                        >
+                          <div className="space-y-1">
+                            {dayActiveTours.map((tItem, idx) => (
+                              <div
+                                key={`day-tour-nosch-${tItem.tourId}-${idx}`}
+                                className="flex items-center gap-2 text-[16px] font-bold text-black"
+                              >
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: "#FD4EBB" }}
+                                />
+                                <span>
+                                  Tournée : {tItem.title}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {scheduleSlotsByTech.map(({ schedule }, sIdx) => {
                         const slotText = schedule.fermetureMidi
                           ? `${schedule.openMorning || '09:00'} - ${schedule.closeMorning || '12:00'} / ${schedule.openAfternoon || '14:00'} - ${schedule.closeAfternoon || '18:00'}`
@@ -909,6 +1026,26 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                               borderRadius: "14px",
                             }}
                           >
+                            {/* Tournées en cours pour ce jour (affichées au dessus de la gélule noire) */}
+                            {dayActiveTours.length > 0 && (
+                              <div className="space-y-1 pb-1">
+                                {dayActiveTours.map((tItem, idx) => (
+                                  <div
+                                    key={`day-tour-${tItem.tourId}-${idx}`}
+                                    className="flex items-center gap-2 text-[16px] font-bold text-black"
+                                  >
+                                    <span
+                                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                                      style={{ backgroundColor: "#FD4EBB" }}
+                                    />
+                                    <span>
+                                      Tournée : {tItem.title}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
                                 {slotText}
@@ -1186,8 +1323,8 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                   boxShadow: "none",
                                   background: "rgb(96 28 104)",
                                   borderRadius: "13px",
-                                  padding: "8px 18px",
-                                  fontSize: "16px",
+                                  padding: "5px 16px",
+                                  fontSize: "15px",
                                   fontWeight: 700,
                                   border: "none",
                                   cursor: "pointer",

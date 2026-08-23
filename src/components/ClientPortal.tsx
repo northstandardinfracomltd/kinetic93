@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Client, Defibrillateur, CommercialDoc, CompanyInfo, Variable, OtherEquipment, PointageAutoVigilance } from '../types';
+import { Client, Defibrillateur, CommercialDoc, CompanyInfo, Variable, OtherEquipment, PointageAutoVigilance, formatPdfHeaderText } from '../types';
 import { formatDateToFR, computeProchaineMaintenance, formatDateToMonthYear } from '../utils';
 import { t } from '../utils/translate';
 
@@ -1510,7 +1510,7 @@ export default function ClientPortal({
       const renderHeader = (title: string) => {
         const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
         const showHeaderLogo = pdfLogo ? `<img src="${pdfLogo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
-        const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${pdfPageHeaderText}</div>` : '';
+        const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${formatPdfHeaderText(pdfPageHeaderText)}</div>` : '';
         const showEmail = compEmail ? `<div>${compEmail}</div>` : '';
         const showPhone = compPhone ? `<div>${compPhone}</div>` : '';
 
@@ -1957,7 +1957,7 @@ export default function ClientPortal({
       const renderHeader = (title: string) => {
         const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
         const showHeaderLogo = pdfLogo ? `<img src="${pdfLogo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
-        const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${pdfPageHeaderText}</div>` : '';
+        const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${formatPdfHeaderText(pdfPageHeaderText)}</div>` : '';
         const showEmail = compEmail ? `<div>${compEmail}</div>` : '';
         const showPhone = compPhone ? `<div>${compPhone}</div>` : '';
 

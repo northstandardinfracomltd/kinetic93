@@ -808,8 +808,18 @@ export default function GmaoCorrectionForm({
   const isDefibrillator = useMemo(() => {
     if (selectedDefibId && selectedDefibId.startsWith('OTHER:')) return false;
     if (report?.defibId && String(report.defibId).startsWith('OTHER:')) return false;
-    if (report?.isOtherEquipment || report?.equipmentType === 'OTHER' || report?.type === 'OTHER' || report?.category || report?.categorie) return false;
-    if (snapshot && ((snapshot as any).categorie || (snapshot as any).category)) return false;
+    if (report?.isOtherEquipment || report?.equipmentType === 'OTHER' || report?.type === 'OTHER' || (report as any)?.isOther) return false;
+    
+    const reportCat = String(report?.category || report?.categorie || '').trim().toLowerCase();
+    if (reportCat && !reportCat.includes('défib') && !reportCat.includes('defib') && !reportCat.includes('dae')) {
+      return false;
+    }
+    
+    const snapshotCat = String((snapshot as any)?.categorie || (snapshot as any)?.category || '').trim().toLowerCase();
+    if (snapshotCat && !snapshotCat.includes('défib') && !snapshotCat.includes('defib') && !snapshotCat.includes('dae')) {
+      return false;
+    }
+
     if (otherEquipments && otherEquipments.length > 0) {
       const matchOther = otherEquipments.some(o => 
         (selectedDefibId && (o.id === selectedDefibId || o.identifiant === selectedDefibId || `OTHER:${o.id}` === selectedDefibId)) ||

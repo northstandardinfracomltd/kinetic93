@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   X,
   Users,
@@ -18,7 +18,7 @@ import {
   Plus,
   Trash2
 } from 'lucide-react';
-import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR } from '../types';
+import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText } from '../types';
 import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile, auth } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { getAppsScriptUrl, saveAppsScriptUrl, triggerEmail2TechnicianConnexion, triggerEmail3AdminConnexion, triggerEmailNewMemberAdded, sendScriptEmail } from '../utils/emailService';
@@ -275,6 +275,119 @@ export default function SettingsModal({
         themeColor,
         updatedAt: new Date().toISOString()
       }, tenantId).catch(err => console.warn('Error saving user theme to Firestore:', err));
+    }
+  };
+
+  const [selectedFavicon, setSelectedFavicon] = useState<string>(() => {
+    let userEmail = '';
+    if (currentUser && currentUser.email) {
+      userEmail = currentUser.email.toLowerCase().trim();
+    } else {
+      try {
+        const saved = localStorage.getItem('defib_admin_logged_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.email) userEmail = parsed.email.toLowerCase().trim();
+        }
+      } catch (e) {}
+    }
+
+    if (userEmail) {
+      const mem = members.find(m => m.email?.toLowerCase().trim() === userEmail);
+      if (mem?.faviconPreference) return mem.faviconPreference;
+    }
+
+    const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+    const userFaviconKey = userEmail ? `defib_${tenantId}_user_${userEmail}_favicon` : `defib_${tenantId}_favicon`;
+    const savedLocal = localStorage.getItem(userFaviconKey) || (userEmail ? localStorage.getItem(`defib_user_favicon_${userEmail}`) : null) || localStorage.getItem('defib_current_user_favicon');
+    if (savedLocal) return savedLocal;
+
+    return 'rainbow';
+  });
+
+  const handleFaviconSelect = (faviconId: string) => {
+    setSelectedFavicon(faviconId);
+    let userEmail = '';
+    if (currentUser && currentUser.email) {
+      userEmail = currentUser.email.toLowerCase().trim();
+    } else {
+      try {
+        const saved = localStorage.getItem('defib_admin_logged_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.email) userEmail = parsed.email.toLowerCase().trim();
+        }
+      } catch (e) {}
+    }
+
+    const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+    const foundFavicon = APP_FAVICONS.find(f => f.id === faviconId);
+    const faviconUrl = foundFavicon ? foundFavicon.url : DEFAULT_FAVICON_URL;
+
+    // Save locally for instant UI update
+    if (userEmail) {
+      localStorage.setItem(`defib_${tenantId}_user_${userEmail}_favicon`, faviconId);
+      localStorage.setItem(`defib_user_favicon_${userEmail}`, faviconId);
+      localStorage.setItem(`defib_user_favicon_url_${userEmail}`, faviconUrl);
+    }
+    localStorage.setItem(`defib_${tenantId}_favicon`, faviconId);
+    localStorage.setItem('defib_current_user_favicon', faviconId);
+
+    // Update DOM link directly
+    if (typeof document !== 'undefined') {
+      let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
+      link.type = 'image/png';
+      link.href = faviconUrl;
+    }
+
+    // Dispatch global event for instant favicon change
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('defib-favicon-changed', {
+        detail: { faviconId, faviconUrl, userEmail }
+      }));
+    }
+
+    // Update local members state
+    setLocalMembers(prev => {
+      let matched = false;
+      const next = prev.map(m => {
+        if (userEmail && m.email?.toLowerCase().trim() === userEmail) {
+          matched = true;
+          return { ...m, faviconPreference: faviconId };
+        }
+        return m;
+      });
+      if (!matched && userEmail) {
+        next.push({
+          name: currentUser?.name || 'Administrateur',
+          email: userEmail,
+          role: 'Super-Administrateur',
+          status: 'Actif',
+          lastActive: 'En ligne',
+          pin: '1234',
+          faviconPreference: faviconId
+        });
+      }
+      if (onUpdateMembers) {
+        onUpdateMembers(next);
+      }
+      return next;
+    });
+
+    // Save directly to Firebase Firestore for this user
+    if (tenantId && tenantId !== 'demo' && userEmail) {
+      const cleanEmail = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
+      saveCollectionToFirestore(`userFavicon_${cleanEmail}`, {
+        userEmail,
+        faviconId,
+        faviconUrl,
+        updatedAt: new Date().toISOString()
+      }, tenantId).catch(err => console.warn('Error saving user favicon to Firestore:', err));
     }
   };
 
@@ -1635,6 +1748,17 @@ export default function SettingsModal({
             console.error('Error saving userTheme directly to Firestore:', err)
           )
         );
+        const foundFavicon = APP_FAVICONS.find(f => f.id === selectedFavicon);
+        promises.push(
+          saveCollectionToFirestore(`userFavicon_${cleanEmail}`, {
+            userEmail: saveUserEmail,
+            faviconId: selectedFavicon,
+            faviconUrl: foundFavicon ? foundFavicon.url : DEFAULT_FAVICON_URL,
+            updatedAt: new Date().toISOString()
+          }, myTenantId).catch(err =>
+            console.error('Error saving userFavicon directly to Firestore:', err)
+          )
+        );
       }
     }
 
@@ -2438,7 +2562,6 @@ export default function SettingsModal({
                 "CRM",
                 "GED",
                 "Satisfaction",
-                "Notifications",
                 "Temps",
                 "Temps (Webapp)",
                 "Localisations",
@@ -2450,7 +2573,8 @@ export default function SettingsModal({
                 "Importer Exporter",
                 "Formations",
                 "Stagiaires",
-                "Émargements"
+                "Émargements",
+                "Notifications"
               ].map((pillLabel) => {
                 const isHidden = localCompany?.hiddenTabs?.includes(pillLabel);
                 return (
@@ -2661,6 +2785,58 @@ export default function SettingsModal({
                         className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans"
                       >
                         {t(theme.name)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* CHOIX DU FAVICON DU LOGICIEL */}
+          <div className="pt-6 mt-6 space-y-4" id="settings-section-software-favicon">
+            {renderSectionHeader(t("Choix du favicon du logiciel"), false)}
+
+            <div className="space-y-3">
+              <label className="block text-[16px] font-bold text-black font-sans">
+                {t("Il s’agit de l’icône montré dans l’onglet de votre navigateur.")}
+              </label>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {APP_FAVICONS.map((fav) => {
+                  const isSelected = selectedFavicon === fav.id;
+                  return (
+                    <div
+                      key={fav.id}
+                      onClick={() => handleFaviconSelect(fav.id)}
+                      className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                      id={`favicon-card-${fav.id}`}
+                    >
+                      <span 
+                        className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                        style={{
+                          border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                          width: '20px',
+                          height: '20px',
+                          minWidth: '20px',
+                          minHeight: '20px',
+                          backgroundColor: '#ffffff'
+                        }}
+                      >
+                        {isSelected && (
+                          <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                        )}
+                      </span>
+                      <img
+                        src={fav.url}
+                        alt={fav.name}
+                        className="w-5 h-5 object-contain shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                      <span
+                        className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans"
+                      >
+                        {t(fav.name)}
                       </span>
                     </div>
                   );

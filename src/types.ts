@@ -314,6 +314,7 @@ export interface Member {
   googleCalEmail?: string;
   googleCalId?: string;
   themePreference?: string;
+  faviconPreference?: string;
   hidePointage?: boolean;
 }
 
@@ -333,6 +334,31 @@ export const APP_THEMES: AppThemeOption[] = [
 ];
 
 export const DEFAULT_THEME_COLOR = 'rgb(101, 25, 106)';
+
+export interface AppFaviconOption {
+  id: string;
+  name: string;
+  url: string;
+}
+
+export const APP_FAVICONS: AppFaviconOption[] = [
+  { id: 'vuelta_red', name: 'Vuelta Red', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoRed.png' },
+  { id: 'serious_blue', name: 'Serious Blue', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoBlue.png' },
+  { id: 'grass_green', name: 'Grass Green', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoGreen.png' },
+  { id: 'zen_purple', name: 'Zen Purple', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoPurple.png' },
+  { id: 'italia_pink', name: 'Italia Pink', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoPink.png' },
+  { id: 'rainbow', name: 'Rainbow', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoRainbow.png' }
+];
+
+export const DEFAULT_FAVICON_URL = 'https://civilprom.s3.eu-north-1.amazonaws.com/FaviconDefibeoRainbow.png';
+
+export const formatPdfHeaderText = (text?: string): string => {
+  if (!text) return '';
+  return String(text)
+    .replace(/&lt;br\s*\/?&gt;/gi, '<br />')
+    .replace(/<br\s*\/?>/gi, '<br />')
+    .replace(/\r?\n/g, '<br />');
+};
 
 export interface CompanyInfo {
   name: string;

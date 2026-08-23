@@ -4,7 +4,7 @@ import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
-import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, APP_THEMES, DEFAULT_THEME_COLOR } from './types';
+import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText } from './types';
 import {
   INITIAL_CLIENTS,
   INITIAL_VARIABLES,
@@ -848,14 +848,30 @@ export default function App() {
   const [members, setMembers] = useState<Member[]>([]);
 
   const [themeRefreshTrigger, setThemeRefreshTrigger] = useState(0);
+  const [faviconRefreshTrigger, setFaviconRefreshTrigger] = useState(0);
 
   useEffect(() => {
     const handleThemeEvent = () => {
       setThemeRefreshTrigger(prev => prev + 1);
     };
+    const handleFaviconEvent = (e: any) => {
+      setFaviconRefreshTrigger(prev => prev + 1);
+      if (e?.detail?.faviconUrl && typeof document !== 'undefined') {
+        let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.getElementsByTagName('head')[0].appendChild(link);
+        }
+        link.type = 'image/png';
+        link.href = e.detail.faviconUrl;
+      }
+    };
     window.addEventListener('defib-theme-changed', handleThemeEvent);
+    window.addEventListener('defib-favicon-changed', handleFaviconEvent);
     return () => {
       window.removeEventListener('defib-theme-changed', handleThemeEvent);
+      window.removeEventListener('defib-favicon-changed', handleFaviconEvent);
     };
   }, []);
 
@@ -868,6 +884,56 @@ export default function App() {
       (nameLower && m.name?.trim().toLowerCase() === nameLower)
     ) || null;
   }, [loggedUser, members]);
+
+  const currentFavicon = useMemo(() => {
+    const userEmail = loggedUser?.email?.trim().toLowerCase() || '';
+
+    // 1. From currentLoggedInMember faviconPreference
+    if (currentLoggedInMember?.faviconPreference) {
+      const found = APP_FAVICONS.find(f => f.id === currentLoggedInMember.faviconPreference || f.url === currentLoggedInMember.faviconPreference);
+      if (found) return found;
+    }
+
+    // 2. From members list matching userEmail
+    if (userEmail) {
+      const mem = members.find(m => m.email?.trim().toLowerCase() === userEmail);
+      if (mem?.faviconPreference) {
+        const found = APP_FAVICONS.find(f => f.id === mem.faviconPreference || f.url === mem.faviconPreference);
+        if (found) return found;
+      }
+      const tenantKey = tenantId || 'demo';
+      const userFavicon = localStorage.getItem(`defib_${tenantKey}_user_${userEmail}_favicon`) || localStorage.getItem(`defib_user_favicon_${userEmail}`);
+      if (userFavicon) {
+        const found = APP_FAVICONS.find(f => f.id === userFavicon || f.url === userFavicon);
+        if (found) return found;
+      }
+    }
+
+    // 3. Fallback to localStorage
+    const tenantKey = tenantId || 'demo';
+    const savedFavicon = localStorage.getItem(`defib_${tenantKey}_favicon`) || localStorage.getItem('defib_current_user_favicon');
+    if (savedFavicon) {
+      const found = APP_FAVICONS.find(f => f.id === savedFavicon || f.url === savedFavicon);
+      if (found) return found;
+    }
+
+    // 4. Default: rainbow
+    return APP_FAVICONS.find(f => f.id === 'rainbow') || APP_FAVICONS[0];
+  }, [currentLoggedInMember, loggedUser, members, tenantId, faviconRefreshTrigger]);
+
+  // Effect to update document favicon dynamically
+  useEffect(() => {
+    if (typeof document !== 'undefined' && currentFavicon?.url) {
+      let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
+      link.type = 'image/png';
+      link.href = currentFavicon.url;
+    }
+  }, [currentFavicon]);
 
   const currentSidebarTheme = useMemo(() => {
     const userEmail = loggedUser?.email?.trim().toLowerCase() || '';
@@ -2290,7 +2356,7 @@ export default function App() {
     const renderHeader = () => {
       const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
       const showHeaderLogo = pdfLogo ? `<img src="${pdfLogo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
-      const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${pdfPageHeaderText}</div>` : '';
+      const showHeaderInfoText = pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${formatPdfHeaderText(pdfPageHeaderText)}</div>` : '';
       const showEmail = compEmail ? `<div>${compEmail}</div>` : '';
       const showPhone = compPhone ? `<div>${compPhone}</div>` : '';
 
@@ -3697,6 +3763,12 @@ export default function App() {
               localStorage.setItem('defib_current_user_theme', m.themePreference);
               setThemeRefreshTrigger(prev => prev + 1);
             }
+            if (m?.faviconPreference) {
+              localStorage.setItem(`defib_${tenantId}_user_${uEmail}_favicon`, m.faviconPreference);
+              localStorage.setItem(`defib_user_favicon_${uEmail}`, m.faviconPreference);
+              localStorage.setItem('defib_current_user_favicon', m.faviconPreference);
+              setFaviconRefreshTrigger(prev => prev + 1);
+            }
           }
           return mems;
         }));
@@ -3766,6 +3838,18 @@ export default function App() {
                   localStorage.setItem(`defib_user_theme_${currentEmail}`, tData.themeId);
                   localStorage.setItem('defib_current_user_theme', tData.themeId);
                   setThemeRefreshTrigger(prev => prev + 1);
+                }
+              })
+              .catch(() => {})
+          );
+          syncTasks.push(
+            fetchCollectionFromFirestore<{ faviconId?: string; faviconUrl?: string }>(`userFavicon_${cleanEmail}`, tenantId)
+              .then(fData => {
+                if (fData?.faviconId) {
+                  localStorage.setItem(`defib_${tenantId}_user_${currentEmail}_favicon`, fData.faviconId);
+                  localStorage.setItem(`defib_user_favicon_${currentEmail}`, fData.faviconId);
+                  localStorage.setItem('defib_current_user_favicon', fData.faviconId);
+                  setFaviconRefreshTrigger(prev => prev + 1);
                 }
               })
               .catch(() => {})
@@ -5870,16 +5954,16 @@ export default function App() {
               { id: 'crm', label: t('CRM'), icon: FolderSync },
               { id: 'ged', label: t('GED'), icon: ClipboardList },
               { id: 'satisfaction', label: t('Satisfaction'), icon: ThumbsUp },
-              { id: 'notifications', label: 'Notifications', icon: Bell },
               { id: 'temps', label: t('Temps'), icon: Clock },
               { id: 'localisations', label: t('Localisations'), icon: MapPin },
               { id: 'tickets', label: t('Tickets Caisse'), icon: Ticket },
               { id: 'veilles', label: t('Relevé Concurrentiel'), icon: ClipboardList },
               { id: 'import-export', label: t('Importer Exporter'), icon: Download },
-              { id: 'statistiques', label: t('Statistiques'), icon: TrendingUp },
               { id: 'formations', label: t('Formations'), icon: Layers },
               { id: 'stagiaires', label: t('Stagiaires'), icon: User },
               { id: 'emargements', label: t('Émargements'), icon: ClipboardList },
+              { id: 'statistiques', label: t('Statistiques'), icon: TrendingUp },
+              { id: 'notifications', label: 'Notifications', icon: Bell },
             ];
 
             const filteredTabs = rawTabs.filter(tab => {
