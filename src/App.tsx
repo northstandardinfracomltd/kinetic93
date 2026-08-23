@@ -288,6 +288,7 @@ export default function App() {
   });
   const [showEnvLoading, setShowEnvLoading] = useState<boolean>(false);
   const [minEnvLoading, setMinEnvLoading] = useState<boolean>(true);
+  const [envReloadTrigger, setEnvReloadTrigger] = useState<number>(0);
   const [avisageConfirmTour, setAvisageConfirmTour] = useState<any | null>(null);
   const [isOffline, setIsOffline] = useState<boolean>(() => {
     if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
@@ -324,7 +325,7 @@ export default function App() {
   const handleLoginSuccess = (email: string, name: string, activeTenantId?: string, loggedInRole?: string) => {
     const tenantToSet = activeTenantId || 'demo';
     
-    // Purge local cached payloads to guarantee that we fetch fresh collections for the new tenant
+    // Purge volatile local cached payloads
     purgeAllLocalEnvironmentCaches(tenantToSet);
 
     // Immediately clear all in-memory database states to prevent any cross-tenant state bleed
@@ -376,6 +377,8 @@ export default function App() {
     const roleToSet = loggedInRole || 'admin';
     localStorage.setItem('defib_logged_user_role', roleToSet);
     setActiveTab('defibrillateurs');
+
+    setEnvReloadTrigger(prev => prev + 1);
 
     // Optimistically set isBlockedByPrez if the environment is blocked
     if (tenantToSet !== 'demo' && roleToSet !== 'megaadmin') {
@@ -483,6 +486,7 @@ export default function App() {
     localStorage.removeItem('defib_admin_logged_user');
     localStorage.removeItem('defib_logged_user_role');
     localStorage.removeItem('defib_active_tech_session');
+    setEnvReloadTrigger(prev => prev + 1);
     
     // Clear help_dismissed keys from sessionStorage and localStorage on logout
     try {
@@ -3492,10 +3496,68 @@ export default function App() {
     async function loadFirebaseAndSeed() {
       setIsFirebaseLoaded(false);
       setLoadedTenantIdState('');
+      const activeRunTenantId = tenantId;
+
+      // Multi-candidate resilient local storage reader (checks all alias & prefix combinations)
+      const getLocalTenantValue = <T,>(suffix: string, fallback: T): T => {
+        const isDNum = /^d\d+$/i.test(activeRunTenantId);
+        const isNum = /^\d+$/.test(activeRunTenantId);
+        const num = (isDNum || isNum) ? activeRunTenantId.replace(/^d/i, '') : '';
+        const candidateKeys = [
+          `defib_${activeRunTenantId}_${suffix}`,
+          `fs_cache_${activeRunTenantId}_${suffix}`
+        ];
+        if (num) {
+          candidateKeys.push(
+            `defib_D${num}_${suffix}`,
+            `defib_d${num}_${suffix}`,
+            `defib_${num}_${suffix}`,
+            `fs_cache_D${num}_${suffix}`,
+            `fs_cache_d${num}_${suffix}`,
+            `fs_cache_${num}_${suffix}`
+          );
+        }
+        const aliases = getCollectionNameAliases(suffix);
+        for (const a of aliases) {
+          if (a !== suffix) {
+            candidateKeys.push(`defib_${activeRunTenantId}_${a}`, `fs_cache_${activeRunTenantId}_${a}`);
+            if (num) {
+              candidateKeys.push(
+                `defib_D${num}_${a}`,
+                `defib_d${num}_${a}`,
+                `defib_${num}_${a}`,
+                `fs_cache_D${num}_${a}`,
+                `fs_cache_d${num}_${a}`,
+                `fs_cache_${num}_${a}`
+              );
+            }
+          }
+        }
+        for (const k of candidateKeys) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed) && parsed.length > 0) return parsed as T;
+              if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) return parsed as T;
+            } catch (_) {}
+          }
+        }
+        for (const k of candidateKeys) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            try {
+              return JSON.parse(raw) as T;
+            } catch (_) {}
+          }
+        }
+        return fallback;
+      };
+
       // 1. Instantly load local cache so the app is immediately usable (0ms delay!)
       try {
-        const savedClients = localStorage.getItem(`defib_${tenantId}_clients`);
-        let offlineClients: Client[] = savedClients ? JSON.parse(savedClients) : (tenantId === 'demo' ? INITIAL_CLIENTS : []);
+        const rawOfflineClients = getLocalTenantValue<Client[]>('clients', activeRunTenantId === 'demo' ? INITIAL_CLIENTS : []);
+        let offlineClients: Client[] = Array.isArray(rawOfflineClients) ? rawOfflineClients : [];
         let offlineChanged = false;
         const sanitizedOffline = offlineClients.map(c => {
           if (!c.signaturePin || !c.signaturePin.trim()) {
@@ -3506,183 +3568,142 @@ export default function App() {
         });
         setClients(sanitizedOffline);
         if (offlineChanged) {
-          localStorage.setItem(`defib_${tenantId}_clients`, JSON.stringify(sanitizedOffline));
+          localStorage.setItem(`defib_${activeRunTenantId}_clients`, JSON.stringify(sanitizedOffline));
         }
 
-        const savedVariables = localStorage.getItem(`defib_${tenantId}_variables`);
-        const baseVariables = savedVariables ? JSON.parse(savedVariables) : INITIAL_VARIABLES;
+        const baseVariables = getLocalTenantValue<Variable[]>('variables', INITIAL_VARIABLES);
         setVariables(baseVariables);
 
-        const savedDefibs = localStorage.getItem(`defib_${tenantId}_defibrillateurs`);
-        const baseDefibrillateurs = savedDefibs ? JSON.parse(savedDefibs) : (tenantId === 'demo' ? INITIAL_DEFIBRILLATEURS : []);
+        const baseDefibrillateurs = getLocalTenantValue<Defibrillateur[]>('defibrillateurs', activeRunTenantId === 'demo' ? INITIAL_DEFIBRILLATEURS : []);
         setDefibrillateurs(baseDefibrillateurs);
 
         const defaultInfo = {
-          name: tenantId === 'demo' ? "Défibeo Solutions" : "Mon Cabinet",
-          logo: tenantId === 'demo' ? "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=80&auto=format&fit=crop" : "",
-          website: tenantId === 'demo' ? "29382302.defibeo.com" : "",
-          email: tenantId === 'demo' ? "contact@defibeo-solutions.com" : "",
-          phone: tenantId === 'demo' ? "+33 1 47 20 00 01" : ""
+          name: activeRunTenantId === 'demo' ? "Défibeo Solutions" : "Mon Cabinet",
+          logo: activeRunTenantId === 'demo' ? "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=80&auto=format&fit=crop" : "",
+          website: activeRunTenantId === 'demo' ? "29382302.defibeo.com" : "",
+          email: activeRunTenantId === 'demo' ? "contact@defibeo-solutions.com" : "",
+          phone: activeRunTenantId === 'demo' ? "+33 1 47 20 00 01" : ""
         };
-        const savedCompanyInfo = localStorage.getItem(`defib_${tenantId}_company_info`);
-        const baseCompanyInfo = savedCompanyInfo ? JSON.parse(savedCompanyInfo) : defaultInfo;
+        const baseCompanyInfo = getLocalTenantValue<CompanyInfo>('company_info', defaultInfo);
         setCompanyInfo(baseCompanyInfo);
 
-        const savedMembers = localStorage.getItem(`defib_${tenantId}_members`);
-        const baseMembers = savedMembers ? JSON.parse(savedMembers) : (tenantId === 'demo' ? INITIAL_MEMBERS : []);
+        const baseMembers = getLocalTenantValue<Member[]>('members', activeRunTenantId === 'demo' ? INITIAL_MEMBERS : []);
         setMembers(baseMembers);
 
-        const savedTickets = localStorage.getItem(`defib_${tenantId}_support_tickets`);
+        const rawTickets = getLocalTenantValue<SupportTicket[]>('support_tickets', activeRunTenantId === 'demo' ? INITIAL_TICKETS : []);
         let baseTickets: SupportTicket[] = [];
-        if (savedTickets) {
-          try {
-            const parsed = JSON.parse(savedTickets) as SupportTicket[];
-            if (Array.isArray(parsed)) {
-              if (tenantId === 'demo') {
-                baseTickets = parsed.filter(t => {
-                  const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
-                  return !tEnv || tEnv === 'demo';
-                });
-              } else {
-                const cleanTenant = tenantId.trim().toLowerCase();
-                const numTenant = cleanTenant.replace(/^d/i, '');
-                baseTickets = parsed.filter(t => {
-                  const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
-                  const numEnv = tEnv.replace(/^d/i, '');
-                  if (tEnv === 'demo') return false;
-                  if (tEnv && tEnv !== cleanTenant && numEnv !== numTenant) return false;
-                  if (!tEnv && (t.id === '#482910' || t.id === '#719203' || t.identifiant === 'DEF-75001' || t.identifiant === 'DEF-69002')) return false;
-                  return true;
-                });
-              }
-            }
-          } catch (e) {}
-        } else {
-          baseTickets = tenantId === 'demo' ? INITIAL_TICKETS : [];
+        if (Array.isArray(rawTickets)) {
+          if (activeRunTenantId === 'demo') {
+            baseTickets = rawTickets.filter(t => {
+              const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
+              return !tEnv || tEnv === 'demo';
+            });
+          } else {
+            const cleanTenant = activeRunTenantId.trim().toLowerCase();
+            const numTenant = cleanTenant.replace(/^d/i, '');
+            baseTickets = rawTickets.filter(t => {
+              const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
+              const numEnv = tEnv.replace(/^d/i, '');
+              if (tEnv === 'demo') return false;
+              if (tEnv && tEnv !== cleanTenant && numEnv !== numTenant) return false;
+              if (!tEnv && (t.id === '#482910' || t.id === '#719203' || t.identifiant === 'DEF-75001' || t.identifiant === 'DEF-69002')) return false;
+              return true;
+            });
+          }
         }
         setTickets(baseTickets);
 
-        const savedMemos = localStorage.getItem(`defib_${tenantId}_memos`);
-        const baseMemos = savedMemos ? JSON.parse(savedMemos) : [];
+        const baseMemos = getLocalTenantValue<any[]>('memos', []);
         setMemos(baseMemos);
 
-        const savedCommercialDocs = localStorage.getItem(`defib_${tenantId}_commercial_docs`);
+        const rawDocs = getLocalTenantValue<CommercialDoc[]>('commercial_docs', activeRunTenantId === 'demo' ? INITIAL_COMMERCIAL_DOCS : []);
         let baseDocs: CommercialDoc[] = [];
-        if (savedCommercialDocs) {
-          try {
-            const parsed = JSON.parse(savedCommercialDocs) as CommercialDoc[];
-            if (Array.isArray(parsed)) {
-              baseDocs = parsed.filter(d => {
-                if (tenantId !== 'demo') {
-                  const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
-                  const cleanTenant = tenantId.trim().toLowerCase();
-                  const numTenant = cleanTenant.replace(/^d/i, '');
-                  if (dEnv === 'demo') return false;
-                  if (dEnv && dEnv !== cleanTenant && dEnv.replace(/^d/i, '') !== numTenant) return false;
-                  if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
-                }
-                return true;
-              });
+        if (Array.isArray(rawDocs)) {
+          baseDocs = rawDocs.filter(d => {
+            if (activeRunTenantId !== 'demo') {
+              const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
+              const cleanTenant = activeRunTenantId.trim().toLowerCase();
+              const numTenant = cleanTenant.replace(/^d/i, '');
+              if (dEnv === 'demo') return false;
+              if (dEnv && dEnv !== cleanTenant && dEnv.replace(/^d/i, '') !== numTenant) return false;
+              if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
             }
-          } catch (e) {}
-        } else {
-          baseDocs = tenantId === 'demo' ? INITIAL_COMMERCIAL_DOCS : [];
+            return true;
+          });
         }
         setCommercialDocs(baseDocs);
 
-        const savedGedDocs = localStorage.getItem(`defib_${tenantId}_ged_docs`);
-        const baseGed = savedGedDocs ? JSON.parse(savedGedDocs) : (tenantId === 'demo' ? INITIAL_GED_DOCS : []);
+        const baseGed = getLocalTenantValue<GedDoc[]>('ged_docs', activeRunTenantId === 'demo' ? INITIAL_GED_DOCS : []);
         setGedDocs(baseGed);
 
-        const savedStocks = localStorage.getItem(`defib_${tenantId}_stocks`);
-        const baseStocks = savedStocks ? JSON.parse(savedStocks) : (tenantId === 'demo' ? INITIAL_STOCKS : []);
+        const baseStocks = getLocalTenantValue<StockItem[]>('stocks', activeRunTenantId === 'demo' ? INITIAL_STOCKS : []);
         setStocks(baseStocks);
 
-        const savedDistrib = localStorage.getItem(`defib_${tenantId}_distributed_stocks`);
-        const baseDistrib = savedDistrib ? JSON.parse(savedDistrib) : (tenantId === 'demo' ? INITIAL_DISTRIBUTED_STOCKS : []);
+        const baseDistrib = getLocalTenantValue<DistributedStock[]>('distributed_stocks', activeRunTenantId === 'demo' ? INITIAL_DISTRIBUTED_STOCKS : []);
         setDistributedStocks(baseDistrib);
 
-        const savedReviews = localStorage.getItem(`defib_${tenantId}_customer_reviews`);
-        const baseReviews = savedReviews ? JSON.parse(savedReviews) : (tenantId === 'demo' ? INITIAL_REVIEWS : []);
+        const baseReviews = getLocalTenantValue<CustomerReview[]>('customer_reviews', activeRunTenantId === 'demo' ? INITIAL_REVIEWS : []);
         setCustomerReviews(baseReviews);
 
-        const savedReports = localStorage.getItem(`defib_${tenantId}_generated_reports`);
-        const baseReports = savedReports ? JSON.parse(savedReports) : (tenantId === 'demo' ? INITIAL_REPORTS : []);
+        const baseReports = getLocalTenantValue<GeneratedReport[]>('generated_reports', activeRunTenantId === 'demo' ? INITIAL_REPORTS : []);
         setGeneratedReports(baseReports);
 
-        const savedFsmTours = localStorage.getItem(`defib_${tenantId}_fsm_tours`);
-        const baseTours = savedFsmTours ? JSON.parse(savedFsmTours) : (tenantId === 'demo' ? INITIAL_TOURS : []);
+        const baseTours = getLocalTenantValue<FsmTour[]>('fsm_tours', activeRunTenantId === 'demo' ? INITIAL_TOURS : []);
         setFsmTours(baseTours);
 
-        const savedExpenses = localStorage.getItem(`defib_${tenantId}_expenses`);
-        const baseExpenses = savedExpenses ? JSON.parse(savedExpenses) : (tenantId === 'demo' ? INITIAL_EXPENSES : []);
+        const baseExpenses = getLocalTenantValue<ExpenseItem[]>('expenses', activeRunTenantId === 'demo' ? INITIAL_EXPENSES : []);
         setExpenses(baseExpenses);
 
-        const savedOtherEquipments = localStorage.getItem(`defib_${tenantId}_other_equipments`);
-        const baseOtherEquip = savedOtherEquipments ? JSON.parse(savedOtherEquipments) : (tenantId === 'demo' ? INITIAL_OTHER_EQUIPMENTS : []);
+        const baseOtherEquip = getLocalTenantValue<OtherEquipment[]>('other_equipments', activeRunTenantId === 'demo' ? INITIAL_OTHER_EQUIPMENTS : []);
         setOtherEquipments(baseOtherEquip);
 
-        const savedPointagesHistory = localStorage.getItem(`defib_${tenantId}_pointages_history`);
-        const basePointages = savedPointagesHistory ? JSON.parse(savedPointagesHistory) : [];
+        const basePointages = getLocalTenantValue<Pointage[]>('pointages_history', []);
         setPointages(basePointages);
 
-        const savedPointagesAutoVigilance = localStorage.getItem(`defib_${tenantId}_pointages_auto_vigilance`);
-        const basePointagesAuto = savedPointagesAutoVigilance ? JSON.parse(savedPointagesAutoVigilance) : [];
+        const basePointagesAuto = getLocalTenantValue<PointageAutoVigilanceItem[]>('pointages_auto_vigilance', []);
         setPointagesAutoVigilance(basePointagesAuto);
 
-        const savedAchatsFournisseurs = localStorage.getItem(`defib_${tenantId}_achats_fournisseurs`);
-        const baseAchats = savedAchatsFournisseurs ? JSON.parse(savedAchatsFournisseurs) : [];
+        const baseAchats = getLocalTenantValue<AchatFournisseur[]>('achats_fournisseurs', []);
         setAchatsFournisseurs(baseAchats);
 
-        const savedVeilles = localStorage.getItem(`defib_${tenantId}_veilles`);
-        const baseVeilles = savedVeilles ? JSON.parse(savedVeilles) : (tenantId === 'demo' ? INITIAL_VEILLES : []);
+        const baseVeilles = getLocalTenantValue<VeilleItem[]>('veilles', activeRunTenantId === 'demo' ? INITIAL_VEILLES : []);
         setVeilles(baseVeilles);
 
-        const savedFormations = localStorage.getItem(`defib_${tenantId}_formations`);
-        const baseFormations = savedFormations ? JSON.parse(savedFormations) : [];
+        const baseFormations = getLocalTenantValue<Formation[]>('formations', []);
         setFormations(baseFormations);
 
-        const savedStagiaires = localStorage.getItem(`defib_${tenantId}_stagiaires`);
-        const baseStagiaires = savedStagiaires ? JSON.parse(savedStagiaires) : [];
+        const baseStagiaires = getLocalTenantValue<Stagiaire[]>('stagiaires', []);
         setStagiaires(baseStagiaires);
 
-        const savedEmargements = localStorage.getItem(`defib_${tenantId}_emargements`);
-        const baseEmargements = savedEmargements ? JSON.parse(savedEmargements) : [];
+        const baseEmargements = getLocalTenantValue<Emargement[]>('emargements', []);
         setEmargements(baseEmargements);
 
         let cleanedNotifications: AppNotification[] = [];
-        const savedNotifications = localStorage.getItem(`defib_${tenantId}_notifications`);
-        if (savedNotifications) {
-          try {
-            const loadedNotifs = JSON.parse(savedNotifications) as AppNotification[];
-            if (Array.isArray(loadedNotifs)) {
-              if (tenantId === 'demo') {
-                cleanedNotifications = loadedNotifs.filter(n => {
-                  if (!n || typeof n !== 'object') return false;
-                  const tEnv = (n.envId || n.tenantId || '').trim().toLowerCase();
-                  return (!tEnv || tEnv === 'demo') && !isNotificationOlderThan3Months(n.timestamp);
-                });
-              } else {
-                const cleanTenant = tenantId.trim().toLowerCase();
-                const numTenant = cleanTenant.replace(/^d/i, '');
-                cleanedNotifications = loadedNotifs.filter(n => {
-                  if (!n || typeof n !== 'object') return false;
-                  const tEnv = (n.envId || n.tenantId || '').trim().toLowerCase();
-                  const numEnv = tEnv.replace(/^d/i, '');
-                  if (tEnv === 'demo') return false;
-                  if (tEnv && tEnv !== cleanTenant && numEnv !== numTenant) return false;
-                  if (n.id === 'conn-2' || n.id === 'conn-3' || (n.title && n.title.includes('admin@defibeo.com vient s’est connecté'))) return false;
-                  return !isNotificationOlderThan3Months(n.timestamp);
-                });
-              }
-            }
-            setNotifications(cleanedNotifications);
-          } catch (e) {}
-        } else {
-          setNotifications([]);
+        const rawNotifs = getLocalTenantValue<AppNotification[]>('notifications', []);
+        if (Array.isArray(rawNotifs)) {
+          if (activeRunTenantId === 'demo') {
+            cleanedNotifications = rawNotifs.filter(n => {
+              if (!n || typeof n !== 'object') return false;
+              const tEnv = (n.envId || n.tenantId || '').trim().toLowerCase();
+              return (!tEnv || tEnv === 'demo') && !isNotificationOlderThan3Months(n.timestamp);
+            });
+          } else {
+            const cleanTenant = activeRunTenantId.trim().toLowerCase();
+            const numTenant = cleanTenant.replace(/^d/i, '');
+            cleanedNotifications = rawNotifs.filter(n => {
+              if (!n || typeof n !== 'object') return false;
+              const tEnv = (n.envId || n.tenantId || '').trim().toLowerCase();
+              const numEnv = tEnv.replace(/^d/i, '');
+              if (tEnv === 'demo') return false;
+              if (tEnv && tEnv !== cleanTenant && numEnv !== numTenant) return false;
+              if (n.id === 'conn-2' || n.id === 'conn-3' || (n.title && n.title.includes('admin@defibeo.com vient s’est connecté'))) return false;
+              return !isNotificationOlderThan3Months(n.timestamp);
+            });
+          }
         }
+        setNotifications(cleanedNotifications);
 
-        const savedEnable = localStorage.getItem(`defib_${tenantId}_enable_other_equipments`);
+        const savedEnable = localStorage.getItem(`defib_${activeRunTenantId}_enable_other_equipments`);
         setEnableOtherEquipments(savedEnable || baseCompanyInfo.enableOtherEquipments || 'Non');
 
         // Prime the loadedDataRef instantly with the loaded offline cached data
@@ -3713,7 +3734,7 @@ export default function App() {
           emargements: JSON.stringify(baseEmargements)
         };
 
-        loadedTenantIdRef.current = tenantId;
+        loadedTenantIdRef.current = activeRunTenantId;
 
         // Synchronize browser's active local cache to the backend REST server in background (only if local data is populated)
         if (typeof fetch !== 'undefined') {
@@ -3721,14 +3742,14 @@ export default function App() {
             fetch('/api/sync-collection', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ collectionName: 'defibrillateurs', tenantId, value: baseDefibrillateurs })
+              body: JSON.stringify({ collectionName: 'defibrillateurs', tenantId: activeRunTenantId, value: baseDefibrillateurs })
             }).catch(() => {});
           }
           if (Array.isArray(sanitizedOffline) && sanitizedOffline.length > 0) {
             fetch('/api/sync-collection', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ collectionName: 'clients', tenantId, value: sanitizedOffline })
+              body: JSON.stringify({ collectionName: 'clients', tenantId: activeRunTenantId, value: sanitizedOffline })
             }).catch(() => {});
           }
         }
@@ -3748,7 +3769,8 @@ export default function App() {
           customTransformer?: (data: T) => T | Promise<T>
         ) => {
           try {
-            const data = await fetchCollectionFromFirestore<T>(collectionName, tenantId);
+            const data = await fetchCollectionFromFirestore<T>(collectionName, activeRunTenantId);
+            if (activeRunTenantId !== loadedTenantIdRef.current && activeRunTenantId !== tenantId) return;
             if (data !== null) {
               let finalData = data;
               if (customTransformer) {
@@ -3756,7 +3778,7 @@ export default function App() {
               }
               stateSetter(finalData);
               const strVal = JSON.stringify(finalData);
-              safeSetLocalStorage(`defib_${tenantId}_${localStorageKeySuffix}`, strVal);
+              safeSetLocalStorage(`defib_${activeRunTenantId}_${localStorageKeySuffix}`, strVal);
               loadedDataRef.current[localStorageKeySuffix] = strVal;
               loadedDataRef.current[collectionName] = strVal;
             }
@@ -3988,7 +4010,7 @@ export default function App() {
     return () => {
       if (minTimer) clearTimeout(minTimer);
     };
-  }, [tenantId]);
+  }, [tenantId, envReloadTrigger]);
 
   // Real-time tab/webapp focus sync to instantly apply changes without refresh/delay
   useEffect(() => {

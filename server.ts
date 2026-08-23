@@ -319,7 +319,17 @@ async function getTenantApiCredentials(tenantId: string, extraAliases: (string |
 
 function getCollectionNameAliases(collectionName: string): string[] {
   const aliases = [collectionName];
-  if (collectionName === 'generatedReports' || collectionName === 'generated_reports' || collectionName === 'reports') {
+  if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices' || collectionName === 'defibrillateur') {
+    aliases.push('defibrillateurs', 'defibs', 'devices', 'defibrillateur');
+  } else if (collectionName === 'clients' || collectionName === 'clientList') {
+    aliases.push('clients', 'clientList');
+  } else if (collectionName === 'variables') {
+    aliases.push('variables');
+  } else if (collectionName === 'stocks' || collectionName === 'stock') {
+    aliases.push('stocks', 'stock');
+  } else if (collectionName === 'members' || collectionName === 'users' || collectionName === 'team') {
+    aliases.push('members', 'users', 'team');
+  } else if (collectionName === 'generatedReports' || collectionName === 'generated_reports' || collectionName === 'reports') {
     aliases.push('generatedReports', 'generated_reports', 'reports');
   } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
     aliases.push('fsmTours', 'fsm_tours', 'tours');
@@ -378,7 +388,11 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         return false; // Rejects items belonging to other tenants!
       }
 
-      if (colName === 'tickets' || colName === 'support_tickets') {
+      if (colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices') {
+        if (!itemEnv && (item.id === 'df_1' || item.identifiant === 'SPO-D26-DAE' || item.numeroSerie === 'SN-G5-998124')) {
+          return false;
+        }
+      } else if (colName === 'tickets' || colName === 'support_tickets') {
         if (!itemEnv) return false;
         if (item.id === '#482910' || item.id === '#719203' || item.identifiant === 'DEF-75001' || item.identifiant === 'DEF-69002') {
           return false;

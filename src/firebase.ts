@@ -147,7 +147,17 @@ export function getTenantId(): string {
 
 export function getCollectionNameAliases(collectionName: string): string[] {
   const aliases = [collectionName];
-  if (collectionName === 'generatedReports' || collectionName === 'generated_reports' || collectionName === 'reports') {
+  if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices' || collectionName === 'defibrillateur') {
+    aliases.push('defibrillateurs', 'defibs', 'devices', 'defibrillateur');
+  } else if (collectionName === 'clients' || collectionName === 'clientList') {
+    aliases.push('clients', 'clientList');
+  } else if (collectionName === 'variables') {
+    aliases.push('variables');
+  } else if (collectionName === 'stocks' || collectionName === 'stock') {
+    aliases.push('stocks', 'stock');
+  } else if (collectionName === 'members' || collectionName === 'users' || collectionName === 'team') {
+    aliases.push('members', 'users', 'team');
+  } else if (collectionName === 'generatedReports' || collectionName === 'generated_reports' || collectionName === 'reports') {
     aliases.push('generatedReports', 'generated_reports', 'reports');
   } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
     aliases.push('fsmTours', 'fsm_tours', 'tours');
@@ -249,76 +259,24 @@ export function getFromLocalCache<T>(key: string): T | null {
 }
 
 /**
- * Force clear all cache partitions (Firestore cache, temporary local storage snapshots,
- * and session items) to ensure clean loading of the targeted tenant environment.
- * Preserves user language preferences and active tenant credentials if needed.
+ * Clears temporary session items and dismissal flags when switching environments.
+ * Strictly preserves persistent tenant offline databases (defib_* and fs_cache_*)
+ * so switching between customer tenants is instant and zero-data-loss.
  */
 export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     const keysToRemove: string[] = [];
-    const isDNum = targetTenantId ? /^d\d+$/i.test(targetTenantId) : false;
-    const numOnly = isDNum && targetTenantId ? targetTenantId.replace(/^d/i, '') : '';
 
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
 
-      // Preserve system configuration & persistent auth/language keys
+      // Clear ONLY temporary UI flags and volatile markers, never persistent tenant datasets
       if (
-        k === 'defib_lang' ||
-        k === 'defib_lang_preference' ||
-        k === 'defib_app_language' ||
-        k === 'fs_cache_registered_tenants'
+        k.startsWith('help_dismissed') ||
+        k.startsWith('defib_temp_')
       ) {
-        continue;
-      }
-      
-      // If a specific tenant is targeted (e.g. logging into D2):
-      // Clear any fs_cache_ or defib_ key that belongs to other tenants
-      if (targetTenantId) {
-        const isTargetMatch = 
-          k.startsWith(`fs_cache_${targetTenantId}_`) ||
-          k.startsWith(`defib_${targetTenantId}_`) ||
-          (numOnly && (
-            k.startsWith(`fs_cache_D${numOnly}_`) ||
-            k.startsWith(`fs_cache_d${numOnly}_`) ||
-            k.startsWith(`fs_cache_${numOnly}_`) ||
-            k.startsWith(`defib_D${numOnly}_`) ||
-            k.startsWith(`defib_d${numOnly}_`) ||
-            k.startsWith(`defib_${numOnly}_`)
-          ));
-
-        if (!isTargetMatch) {
-          if (k.startsWith('fs_cache_') || k.startsWith('defib_')) {
-            // Keep active session keys during tenant switch
-            if (
-              k !== 'defib_admin_logged_in' &&
-              k !== 'defib_admin_logged_user' &&
-              k !== 'defib_logged_user_role' &&
-              k !== 'defib_tenant_id' &&
-              k !== 'defib_active_tech_session'
-            ) {
-              keysToRemove.push(k);
-            }
-          }
-        }
-      } else {
-        // Global purge on logout: Clear all tenant data partitions and snapshots
-        if (k.startsWith('fs_cache_') || k.startsWith('defib_')) {
-          if (
-            k !== 'defib_tenant_id' &&
-            k !== 'defib_admin_logged_in' &&
-            k !== 'defib_admin_logged_user' &&
-            k !== 'defib_logged_user_role'
-          ) {
-            keysToRemove.push(k);
-          }
-        }
-      }
-      
-      // Clear generic temp flags
-      if (k.startsWith('help_dismissed') || k.startsWith('defib_temp_')) {
         keysToRemove.push(k);
       }
     }
@@ -364,7 +322,7 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
       return true;
     }
 
-    // In customer tenant mode (e.g. D1, D2, D58, etc.):
+    // In customer tenant mode (e.g. D1, D2, D19, D58, D67, etc.):
     // If the item has an explicit envId/tenantId, it MUST match this tenant
     if (itemEnv) {
       if (itemEnv === 'demo') return false;
@@ -374,7 +332,11 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
     }
 
     // Never leak demo-specific mock items into customer environments
-    if (collectionName === 'tickets' || collectionName === 'support_tickets') {
+    if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices') {
+      if (!itemEnv && (item.id === 'df_1' || item.identifiant === 'SPO-D26-DAE' || item.numeroSerie === 'SN-G5-998124')) {
+        return false;
+      }
+    } else if (collectionName === 'tickets' || collectionName === 'support_tickets') {
       if (!itemEnv) {
         return false;
       }
@@ -606,6 +568,18 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
   const activeTenantId = tenantIdOverride || getTenantId();
   const key = getCollectionKey(collectionName, activeTenantId);
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
+
+  // CRITICAL PROTECTION: Never overwrite a populated collection with an empty array []
+  // on startup, network lag, or environment transition!
+  if (Array.isArray(value) && value.length === 0 && activeTenantId && activeTenantId !== 'demo') {
+    for (const ck of candidateKeys) {
+      const cached = getFromLocalCache<any[]>(ck);
+      if (Array.isArray(cached) && cached.length > 0) {
+        console.warn(`[Protection] Blocked attempt to overwrite populated collection ${ck} (${cached.length} items) with empty array [].`);
+        return;
+      }
+    }
+  }
 
   // Guard against accidental blank placeholder overwrite of companyInfo
   if ((collectionName === 'companyInfo' || collectionName === 'company_info') && value && typeof value === 'object' && !Array.isArray(value)) {
