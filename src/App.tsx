@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getRegionsForCountry } from './utils/regions';
-import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches } from './firebase';
+import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases } from './firebase';
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
@@ -3633,49 +3633,49 @@ export default function App() {
         }
         setCommercialDocs(baseDocs);
 
-        const baseGed = getLocalTenantValue<GedDoc[]>('ged_docs', activeRunTenantId === 'demo' ? INITIAL_GED_DOCS : []);
+        const baseGed = getLocalTenantValue<GedDocument[]>('ged_docs', activeRunTenantId === 'demo' ? INITIAL_GED_DOCS : []);
         setGedDocs(baseGed);
 
-        const baseStocks = getLocalTenantValue<StockItem[]>('stocks', activeRunTenantId === 'demo' ? INITIAL_STOCKS : []);
+        const baseStocks = getLocalTenantValue<StockRecord[]>('stocks', activeRunTenantId === 'demo' ? INITIAL_STOCKS : []);
         setStocks(baseStocks);
 
-        const baseDistrib = getLocalTenantValue<DistributedStock[]>('distributed_stocks', activeRunTenantId === 'demo' ? INITIAL_DISTRIBUTED_STOCKS : []);
+        const baseDistrib = getLocalTenantValue<DistributedStockLocation[]>('distributed_stocks', activeRunTenantId === 'demo' ? INITIAL_DISTRIBUTED_STOCKS : []);
         setDistributedStocks(baseDistrib);
 
-        const baseReviews = getLocalTenantValue<CustomerReview[]>('customer_reviews', activeRunTenantId === 'demo' ? INITIAL_REVIEWS : []);
+        const baseReviews = getLocalTenantValue<any[]>('customer_reviews', activeRunTenantId === 'demo' ? INITIAL_REVIEWS : []);
         setCustomerReviews(baseReviews);
 
-        const baseReports = getLocalTenantValue<GeneratedReport[]>('generated_reports', activeRunTenantId === 'demo' ? INITIAL_REPORTS : []);
+        const baseReports = getLocalTenantValue<any[]>('generated_reports', activeRunTenantId === 'demo' ? INITIAL_REPORTS : []);
         setGeneratedReports(baseReports);
 
-        const baseTours = getLocalTenantValue<FsmTour[]>('fsm_tours', activeRunTenantId === 'demo' ? INITIAL_TOURS : []);
+        const baseTours = getLocalTenantValue<any[]>('fsm_tours', activeRunTenantId === 'demo' ? INITIAL_TOURS : []);
         setFsmTours(baseTours);
 
-        const baseExpenses = getLocalTenantValue<ExpenseItem[]>('expenses', activeRunTenantId === 'demo' ? INITIAL_EXPENSES : []);
+        const baseExpenses = getLocalTenantValue<any[]>('expenses', activeRunTenantId === 'demo' ? INITIAL_EXPENSES : []);
         setExpenses(baseExpenses);
 
         const baseOtherEquip = getLocalTenantValue<OtherEquipment[]>('other_equipments', activeRunTenantId === 'demo' ? INITIAL_OTHER_EQUIPMENTS : []);
         setOtherEquipments(baseOtherEquip);
 
-        const basePointages = getLocalTenantValue<Pointage[]>('pointages_history', []);
+        const basePointages = getLocalTenantValue<PointageLog[]>('pointages_history', []);
         setPointages(basePointages);
 
-        const basePointagesAuto = getLocalTenantValue<PointageAutoVigilanceItem[]>('pointages_auto_vigilance', []);
+        const basePointagesAuto = getLocalTenantValue<PointageAutoVigilance[]>('pointages_auto_vigilance', []);
         setPointagesAutoVigilance(basePointagesAuto);
 
         const baseAchats = getLocalTenantValue<AchatFournisseur[]>('achats_fournisseurs', []);
         setAchatsFournisseurs(baseAchats);
 
-        const baseVeilles = getLocalTenantValue<VeilleItem[]>('veilles', activeRunTenantId === 'demo' ? INITIAL_VEILLES : []);
+        const baseVeilles = getLocalTenantValue<VeilleRecord[]>('veilles', activeRunTenantId === 'demo' ? INITIAL_VEILLES : []);
         setVeilles(baseVeilles);
 
-        const baseFormations = getLocalTenantValue<Formation[]>('formations', []);
+        const baseFormations = getLocalTenantValue<FormationRecord[]>('formations', []);
         setFormations(baseFormations);
 
-        const baseStagiaires = getLocalTenantValue<Stagiaire[]>('stagiaires', []);
+        const baseStagiaires = getLocalTenantValue<StagiaireRecord[]>('stagiaires', []);
         setStagiaires(baseStagiaires);
 
-        const baseEmargements = getLocalTenantValue<Emargement[]>('emargements', []);
+        const baseEmargements = getLocalTenantValue<EmargementRecord[]>('emargements', []);
         setEmargements(baseEmargements);
 
         let cleanedNotifications: AppNotification[] = [];
