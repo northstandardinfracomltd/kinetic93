@@ -113,6 +113,50 @@ export default function SettingsModal({
   const [localCompany, setLocalCompany] = React.useState<CompanyInfo>(companyInfo);
   const envIdDisplay = shortEnvId || (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || 'D18';
   const [localMembers, setLocalMembers] = React.useState<Member[]>(members);
+
+  const isCurrentUserSuperAdmin = React.useMemo(() => {
+    if (isReadOnly || isDeveloper) return false;
+
+    let userEmail = '';
+    if (currentUser && currentUser.email) {
+      userEmail = currentUser.email.toLowerCase().trim();
+    } else {
+      try {
+        const saved = localStorage.getItem('defib_admin_logged_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.email) userEmail = parsed.email.toLowerCase().trim();
+        }
+      } catch (e) {}
+    }
+
+    const loggedUserRole = (localStorage.getItem('defib_logged_user_role') || '').toLowerCase();
+    if (loggedUserRole === 'megaadmin') return true;
+
+    const listToCheck = localMembers && localMembers.length > 0 ? localMembers : (members || []);
+    const loggedInMember = userEmail 
+      ? listToCheck.find((lm: Member) => lm.email?.toLowerCase().trim() === userEmail) 
+      : null;
+
+    if (loggedInMember) {
+      const roleStr = (loggedInMember.role || '').toLowerCase();
+      return (
+        roleStr === 'super-administrateur' ||
+        roleStr === 'propriétaire / admin' ||
+        roleStr.includes('super') ||
+        roleStr.includes('propriétaire')
+      );
+    }
+
+    if (loggedUserRole === 'admin') {
+      const firstMember = listToCheck[0];
+      if (!userEmail || (firstMember && firstMember.email?.toLowerCase().trim() === userEmail)) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [currentUser, localMembers, members, isReadOnly, isDeveloper]);
   const [isSaving, setIsSaving] = React.useState(false);
   const [copiedEmbed, setCopiedEmbed] = React.useState(false);
   const [memberToDeleteIndex, setMemberToDeleteIndex] = React.useState<number | null>(null);
@@ -1204,6 +1248,7 @@ export default function SettingsModal({
 
   // Local state change handlers
   const handleCompanyChange = (key: keyof CompanyInfo, value: string) => {
+    if (!isCurrentUserSuperAdmin) return;
     setLocalCompany(prev => ({
       ...prev,
       [key]: value
@@ -1211,6 +1256,7 @@ export default function SettingsModal({
   };
 
   const handleToggleTabVisibility = (tabLabel: string) => {
+    if (!isCurrentUserSuperAdmin) return;
     const currentHidden = localCompany.hiddenTabs || [];
     let newHidden: string[] = [];
 
@@ -2047,13 +2093,15 @@ export default function SettingsModal({
               <div className="space-y-1">
                 <label className="block text-[16px] font-bold text-black font-sans">{t("Langue et région du logiciel")}.</label>
                 <select
+                  disabled={!isCurrentUserSuperAdmin}
                   value={selectedLang || ""}
                   onChange={(e) => {
+                    if (!isCurrentUserSuperAdmin) return;
                     const val = e.target.value;
                     setSelectedLang(val);
                     setLanguage(val);
                   }}
-                  className="w-full text-black font-sans text-sm cursor-pointer"
+                  className="w-full text-black font-sans text-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                 >
                   <option value="" disabled hidden>{t("Sélectionnez une localisation")}.</option>
                   <option value="Français, France">Français, France</option>
@@ -2073,9 +2121,10 @@ export default function SettingsModal({
                 </label>
                 <input
                   type="text"
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.name}
-                  onChange={(e) => handleCompanyChange('name', e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm"
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('name', e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   placeholder={t("Entrez un nom commercial")}
                 />
               </div>
@@ -2084,9 +2133,10 @@ export default function SettingsModal({
                 <label className="block text-[16px] font-bold text-black font-sans">{t("URL source du logo")}.</label>
                 <input
                   type="text"
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.logo}
-                  onChange={(e) => handleCompanyChange('logo', e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm"
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('logo', e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   placeholder={t("Collez le lien source du logo")}
                 />
               </div>
@@ -2095,9 +2145,10 @@ export default function SettingsModal({
                 <label className="block text-[16px] font-bold text-black font-sans">{t("URL du site internet")}.</label>
                 <input
                   type="text"
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.website}
-                  onChange={(e) => handleCompanyChange('website', e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm"
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('website', e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   placeholder={t("Collez le lien du site internet")}
                 />
               </div>
@@ -2108,9 +2159,10 @@ export default function SettingsModal({
                 </label>
                 <input
                   type="email"
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.email}
-                  onChange={(e) => handleCompanyChange('email', e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-xs"
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('email', e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-xs disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   placeholder={t("Entrez l’email de l’entreprise")}
                 />
               </div>
@@ -2119,9 +2171,10 @@ export default function SettingsModal({
                 <label className="block text-[16px] font-bold text-black font-sans">{t("Téléphone de l’entreprise")}.</label>
                 <input
                   type="text"
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.phone}
-                  onChange={(e) => handleCompanyChange('phone', e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm"
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('phone', e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   placeholder={t("Entrez le téléphone de l’entreprise")}
                 />
               </div>
@@ -2133,10 +2186,11 @@ export default function SettingsModal({
                 <input
                   type="text"
                   maxLength={15}
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.nomLogiciel ?? ''}
-                  onChange={(e) => handleCompanyChange('nomLogiciel', e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15))}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white"
-                  style={{ backgroundColor: '#ffffff' }}
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('nomLogiciel', e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15))}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
                   placeholder={t("Ex: App360")}
                 />
               </div>
@@ -2145,10 +2199,11 @@ export default function SettingsModal({
                 <label className="block text-[16px] font-bold text-black font-sans">{t("Lien vers les conditions légales")}.</label>
                 <input
                   type="url"
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.conditionsLegalesLink ?? ''}
-                  onChange={(e) => handleCompanyChange('conditionsLegalesLink', e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white"
-                  style={{ backgroundColor: '#ffffff' }}
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('conditionsLegalesLink', e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
                   placeholder={t("Collez le lien vers vos conditions légales")}
                 />
               </div>
@@ -2157,10 +2212,11 @@ export default function SettingsModal({
                 <label className="block text-[16px] font-bold text-black font-sans">{t("Mentions légales pour les pièces comptables")}.</label>
                 <input
                   type="text"
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.mentionsLegalesFactures ?? ''}
-                  onChange={(e) => handleCompanyChange('mentionsLegalesFactures', e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white"
-                  style={{ backgroundColor: '#ffffff' }}
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('mentionsLegalesFactures', e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
                   placeholder={t("Saisissez les mentions légales pour vos devis et factures")}
                 />
               </div>
@@ -2169,10 +2225,11 @@ export default function SettingsModal({
                 <label className="block text-[16px] font-bold text-black font-sans">{t("Gmail Partage Localisation.")}</label>
                 <input
                   type="email"
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.gmailPartageLocalisation ?? ''}
-                  onChange={(e) => handleCompanyChange('gmailPartageLocalisation', e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white"
-                  style={{ backgroundColor: '#ffffff' }}
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('gmailPartageLocalisation', e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
                   placeholder={t("Ex: partage@gmail.com")}
                 />
               </div>
@@ -2186,10 +2243,12 @@ export default function SettingsModal({
               <div className="flex items-center space-x-6 py-1 font-sans">
                 <button
                   type="button"
+                  disabled={!isCurrentUserSuperAdmin}
                   onClick={() => {
+                    if (!isCurrentUserSuperAdmin) return;
                     setEnableSatisfactionAvis("Oui");
                   }}
-                  className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left"
+                  className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <span 
                     className="rounded-full flex items-center justify-center transition-all bg-white"
@@ -2211,10 +2270,12 @@ export default function SettingsModal({
 
                 <button
                   type="button"
+                  disabled={!isCurrentUserSuperAdmin}
                   onClick={() => {
+                    if (!isCurrentUserSuperAdmin) return;
                     setEnableSatisfactionAvis("Non");
                   }}
-                  className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left"
+                  className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <span 
                     className="rounded-full flex items-center justify-center transition-all bg-white"
@@ -2244,13 +2305,15 @@ export default function SettingsModal({
             <div className="flex items-center space-x-6 py-1 font-sans">
               <button
                 type="button"
+                disabled={!isCurrentUserSuperAdmin}
                 onClick={() => {
+                  if (!isCurrentUserSuperAdmin) return;
                   setEnableOtherEquipments("Oui");
                   localStorage.setItem(`defib_${myTenantId}_enable_other_equipments`, 'Oui');
                   onUpdateOtherEquipments?.("Oui");
                   setShowDisableOtherEquipmentsConfirmation(false);
                 }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left"
+                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
@@ -2272,7 +2335,9 @@ export default function SettingsModal({
 
               <button
                 type="button"
+                disabled={!isCurrentUserSuperAdmin}
                 onClick={() => {
+                  if (!isCurrentUserSuperAdmin) return;
                   if (enableOtherEquipments === "Oui" && (otherEquipments || []).length > 0) {
                     setShowDisableOtherEquipmentsConfirmation(true);
                   } else {
@@ -2282,7 +2347,7 @@ export default function SettingsModal({
                     setShowDisableOtherEquipmentsConfirmation(false);
                   }
                 }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left"
+                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
@@ -2326,6 +2391,7 @@ export default function SettingsModal({
                 <div className="flex gap-2.5">
                   <button
                     type="button"
+                    disabled={!isCurrentUserSuperAdmin}
                     onClick={() => {
                       setShowDisableOtherEquipmentsConfirmation(false);
                     }}
@@ -2339,13 +2405,15 @@ export default function SettingsModal({
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                       cursor: 'pointer',
                     }}
-                    className="font-bold select-none transition-all hover:opacity-90 active:scale-[0.98]"
+                    className="font-bold select-none transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {t("Annuler")}
                   </button>
                   <button
                     type="button"
+                    disabled={!isCurrentUserSuperAdmin}
                     onClick={() => {
+                      if (!isCurrentUserSuperAdmin) return;
                       setEnableOtherEquipments("Non");
                       localStorage.setItem('defib_enable_other_equipments', 'Non');
                       onUpdateOtherEquipments?.("Non");
@@ -2362,7 +2430,7 @@ export default function SettingsModal({
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                       cursor: 'pointer',
                     }}
-                    className="font-bold select-none transition-all hover:opacity-90 active:scale-[0.98]"
+                    className="font-bold select-none transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {t("Confirmer")}
                   </button>
@@ -2379,10 +2447,12 @@ export default function SettingsModal({
             <div className="flex items-center space-x-6 py-1 font-sans">
               <button
                 type="button"
+                disabled={!isCurrentUserSuperAdmin}
                 onClick={() => {
+                  if (!isCurrentUserSuperAdmin) return;
                   setEnableAutoEmails("Oui");
                 }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left"
+                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
@@ -2404,10 +2474,12 @@ export default function SettingsModal({
 
               <button
                 type="button"
+                disabled={!isCurrentUserSuperAdmin}
                 onClick={() => {
+                  if (!isCurrentUserSuperAdmin) return;
                   setEnableAutoEmails("Non");
                 }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left"
+                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
@@ -2437,10 +2509,12 @@ export default function SettingsModal({
             <div className="flex items-center space-x-6 py-1 font-sans">
               <button
                 type="button"
+                disabled={!isCurrentUserSuperAdmin}
                 onClick={() => {
+                  if (!isCurrentUserSuperAdmin) return;
                   setEnableDevisFactures("Oui");
                 }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left"
+                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
@@ -2462,10 +2536,12 @@ export default function SettingsModal({
 
               <button
                 type="button"
+                disabled={!isCurrentUserSuperAdmin}
                 onClick={() => {
+                  if (!isCurrentUserSuperAdmin) return;
                   setEnableDevisFactures("Non");
                 }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left"
+                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
@@ -2495,10 +2571,12 @@ export default function SettingsModal({
             <div className="flex items-center space-x-6 py-1 font-sans">
               <button
                 type="button"
+                disabled={!isCurrentUserSuperAdmin}
                 onClick={() => {
+                  if (!isCurrentUserSuperAdmin) return;
                   setDisableHelpsAndTutorials("Oui");
                 }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left"
+                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
@@ -2520,10 +2598,12 @@ export default function SettingsModal({
 
               <button
                 type="button"
+                disabled={!isCurrentUserSuperAdmin}
                 onClick={() => {
+                  if (!isCurrentUserSuperAdmin) return;
                   setDisableHelpsAndTutorials("Non");
                 }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left"
+                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
@@ -2581,8 +2661,12 @@ export default function SettingsModal({
                   <button
                     key={pillLabel}
                     type="button"
-                    onClick={() => handleToggleTabVisibility(pillLabel)}
-                    className="px-3.5 py-2 rounded-full text-[16px] font-semibold cursor-pointer select-none transition-all duration-200 border-0 text-white hover:brightness-110 active:scale-[0.97]"
+                    disabled={!isCurrentUserSuperAdmin}
+                    onClick={() => {
+                      if (!isCurrentUserSuperAdmin) return;
+                      handleToggleTabVisibility(pillLabel);
+                    }}
+                    className="px-3.5 py-2 rounded-full text-[16px] font-semibold cursor-pointer select-none transition-all duration-200 border-0 text-white hover:brightness-110 active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed"
                     style={{
                       backgroundColor: isHidden ? "#FA383D" : "#000000",
                     }}
@@ -2605,9 +2689,10 @@ export default function SettingsModal({
                 </label>
                 <input
                   type="text"
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.pdfHeaderImg ?? ''}
-                  onChange={(e) => handleCompanyChange('pdfHeaderImg', e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm"
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('pdfHeaderImg', e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   placeholder={t("Url source se terminant par .png")}
                 />
                 <span className="block text-[16px] text-black font-sans leading-tight mt-1 cursor-default">
@@ -2622,9 +2707,10 @@ export default function SettingsModal({
                 <input
                   type="text"
                   maxLength={300}
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.pdfPageHeaderText ?? ''}
-                  onChange={(e) => handleCompanyChange('pdfPageHeaderText', e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm"
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('pdfPageHeaderText', e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   placeholder={t("Entrez un texte max 300 caractères.")}
                 />
               </div>
@@ -2636,9 +2722,10 @@ export default function SettingsModal({
                 <input
                   type="text"
                   maxLength={1000}
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.pdfPageFooterText ?? ''}
-                  onChange={(e) => handleCompanyChange('pdfPageFooterText', e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm"
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('pdfPageFooterText', e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   placeholder={t("Entrez un texte max 1000 caractères.")}
                 />
               </div>
@@ -2650,11 +2737,12 @@ export default function SettingsModal({
                 <textarea
                   id="pdf-last-page-info-text"
                   maxLength={2500}
+                  disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.pdfLastPageInfoText ?? ''}
-                  onChange={(e) => handleCompanyChange('pdfLastPageInfoText', e.target.value)}
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('pdfLastPageInfoText', e.target.value)}
                   placeholder={t("Entrez un texte max 2500 caractères")}
                   rows={4}
-                  className="w-full p-3 border border-slate-200 rounded-lg text-sm bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 font-sans"
+                  className="w-full p-3 border border-slate-200 rounded-lg text-sm bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 font-sans disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                 />
               </div>
 
@@ -2668,9 +2756,10 @@ export default function SettingsModal({
                     <input
                       type="text"
                       maxLength={7}
+                      disabled={!isCurrentUserSuperAdmin}
                       value={localCompany.pdfHeaderBgColor ?? '#7c2882'}
-                      onChange={(e) => handleCompanyChange('pdfHeaderBgColor', e.target.value)}
-                      className="w-full text-black placeholder-[#747474] font-sans text-sm"
+                      onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('pdfHeaderBgColor', e.target.value)}
+                      className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                       placeholder="#7c2882"
                     />
                   </div>
@@ -2682,9 +2771,10 @@ export default function SettingsModal({
                     <input
                       type="text"
                       maxLength={7}
+                      disabled={!isCurrentUserSuperAdmin}
                       value={localCompany.pdfCardBorderColor ?? '#7d2882'}
-                      onChange={(e) => handleCompanyChange('pdfCardBorderColor', e.target.value)}
-                      className="w-full text-black placeholder-[#747474] font-sans text-sm"
+                      onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('pdfCardBorderColor', e.target.value)}
+                      className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                       placeholder="#7d2882"
                     />
                   </div>
@@ -2696,9 +2786,10 @@ export default function SettingsModal({
                     <input
                       type="text"
                       maxLength={7}
+                      disabled={!isCurrentUserSuperAdmin}
                       value={localCompany.pdfCardBgColor ?? '#fef2ff'}
-                      onChange={(e) => handleCompanyChange('pdfCardBgColor', e.target.value)}
-                      className="w-full text-black placeholder-[#747474] font-sans text-sm"
+                      onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('pdfCardBgColor', e.target.value)}
+                      className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                       placeholder="#fef2ff"
                     />
                   </div>
@@ -2710,9 +2801,10 @@ export default function SettingsModal({
                     <input
                       type="text"
                       maxLength={7}
+                      disabled={!isCurrentUserSuperAdmin}
                       value={localCompany.pdfLabelTextColor ?? '#9f71a2'}
-                      onChange={(e) => handleCompanyChange('pdfLabelTextColor', e.target.value)}
-                      className="w-full text-black placeholder-[#747474] font-sans text-sm"
+                      onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('pdfLabelTextColor', e.target.value)}
+                      className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                       placeholder="#9f71a2"
                     />
                   </div>
@@ -2720,7 +2812,9 @@ export default function SettingsModal({
 
                 <button
                   type="button"
+                  disabled={!isCurrentUserSuperAdmin}
                   onClick={() => {
+                    if (!isCurrentUserSuperAdmin) return;
                     handleCompanyChange('pdfHeaderBgColor', '#7c2882');
                     handleCompanyChange('pdfCardBorderColor', '#7d2882');
                     handleCompanyChange('pdfCardBgColor', '#fef2ff');
@@ -2739,7 +2833,7 @@ export default function SettingsModal({
                     width: '100%',
                     textTransform: 'none'
                   }}
-                  className="mt-2 font-sans"
+                  className="mt-2 font-sans disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {t("Réinitialiser les couleurs")}
                 </button>

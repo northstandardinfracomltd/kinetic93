@@ -184,16 +184,6 @@ export default function StocksTab({
   const [traceabilityEnabled, setTraceabilityEnabled] = useState<boolean>(false);
   const [traceabilities, setTraceabilities] = useState<StockTraceability[]>([]);
   const [selectedSituationFilter, setSelectedSituationFilter] = useState<string>('Toutes situations');
-  const [systemInfoPopup, setSystemInfoPopup] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (systemInfoPopup) {
-      const timer = setTimeout(() => {
-        setSystemInfoPopup(null);
-      }, 4500);
-      return () => clearTimeout(timer);
-    }
-  }, [systemInfoPopup]);
 
   const isDefibrillator = useMemo(() => {
     const matchedVar = variables.find(v => v.id === newDenomStr);
@@ -753,8 +743,8 @@ export default function StocksTab({
       saveStocks(updatedStocks);
     }
 
-    // Show system info popup
-    setSystemInfoPopup("Ajouté avec succès dans l’onglet Défibrillateurs.");
+    // Show native system alert dialog
+    alert("Information système : Ajouté avec succès dans l’onglet Défibrillateurs.");
   };
 
   const handleUpdateMovementStatus = (mvId: string, status: 'Préparation' | 'Expédié' | 'Terminé' | 'Annulé') => {
@@ -3466,30 +3456,6 @@ export default function StocksTab({
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* System Info Popup */}
-      {systemInfoPopup && (
-        <div 
-          className="fixed top-6 right-6 z-[9999] flex items-center gap-3 bg-neutral-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-neutral-700 animate-in fade-in slide-in-from-top-4 duration-300 font-sans"
-          role="alert"
-        >
-          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
-            <Check className="w-5 h-5" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-bold text-sm text-white">Information système</span>
-            <span className="text-xs text-slate-200">{systemInfoPopup}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSystemInfoPopup(null)}
-            className="ml-4 text-slate-400 hover:text-white transition-colors p-1"
-            title="Fermer"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
       )}
 

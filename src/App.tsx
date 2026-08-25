@@ -7664,7 +7664,7 @@ export default function App() {
 
                           {/* Indication of missions and estimated travel duration */}
                           {(() => {
-                            if (!t.techName || t.techName === 'Aucun' || t.techName.trim() === '') {
+                            if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
                               return null;
                             }
                             const mLength = t.missions ? t.missions.length : 0;
@@ -7966,7 +7966,11 @@ export default function App() {
 
                           {/* Technician skills line */}
                           {(() => {
+                            if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
+                              return null;
+                            }
                             const selectedMember = members.find(m => m.name.trim().toLowerCase() === tourTechName.trim().toLowerCase());
+                            if (!selectedMember) return null;
                             const comps = selectedMember?.competences || [];
                             const compsStr = comps.length > 0 ? comps.join(', ') : 'Aucune';
                             return (
@@ -7988,7 +7992,29 @@ export default function App() {
 
                           {/* Pause banner if tour is paused */}
                           {(() => {
-                            const isPaused = t.status !== "Terminé" && (t.isPaused || t.pauseEnabled || (typeof window !== "undefined" && localStorage.getItem("defib_pause_enabled") === "true" && (localStorage.getItem("defib_selected_tour_id") === t.id || !t.status || t.status === "À faire")));
+                            if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
+                              return null;
+                            }
+                            const isPaused = t.status !== "Terminé" && (
+                              t.isPaused || 
+                              t.pauseEnabled || 
+                              (
+                                typeof window !== "undefined" && 
+                                localStorage.getItem("defib_pause_enabled") === "true" && 
+                                (() => {
+                                  try {
+                                    const activeUserRaw = localStorage.getItem("defib_active_tech_session");
+                                    if (activeUserRaw) {
+                                      const activeUser = JSON.parse(activeUserRaw);
+                                      if (activeUser?.name && String(activeUser.name).trim().toLowerCase() === tourTechName.trim().toLowerCase()) {
+                                        return true;
+                                      }
+                                    }
+                                  } catch (_) {}
+                                  return localStorage.getItem("defib_selected_tour_id") === t.id;
+                                })()
+                              )
+                            );
                             const reason = t.pauseReason || (typeof window !== "undefined" ? localStorage.getItem("defib_pause_reason") : null) || "Nuit Hôtel";
                             if (!isPaused) return null;
                             return (

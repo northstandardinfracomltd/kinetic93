@@ -2175,55 +2175,6 @@ export default function DefibTab({
             </div>
           </div>
 
-          {/* Filters Pills Row */}
-          <div 
-            className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" 
-            id="defibrillateurs-sort-pills"
-            style={{ maxWidth: '98%', margin: '0 auto' }}
-          >
-            <button
-              type="button"
-              onClick={() => setSortFilter(prev => prev === 'recent' ? null : 'recent')}
-              style={{
-                borderRadius: '1000px',
-                padding: '8px 16px',
-                fontSize: '18px',
-                fontWeight: 100,
-                cursor: 'pointer',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: sortFilter === 'recent' ? '#fe4eba' : '#ffffff',
-                color: sortFilter === 'recent' ? '#ffffff' : '#000000',
-                border: sortFilter === 'recent' ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
-                boxShadow: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              className="transition-all"
-            >
-              {t("Ajouté récemment")}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSortFilter(prev => prev === 'closest_maintenance' ? null : 'closest_maintenance')}
-              style={{
-                borderRadius: '1000px',
-                padding: '8px 16px',
-                fontSize: '18px',
-                fontWeight: 100,
-                cursor: 'pointer',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: sortFilter === 'closest_maintenance' ? '#fe4eba' : '#ffffff',
-                color: sortFilter === 'closest_maintenance' ? '#ffffff' : '#000000',
-                border: sortFilter === 'closest_maintenance' ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
-                boxShadow: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              className="transition-all"
-            >
-              {t("Pro.Main au plus proche")}
-            </button>
-          </div>
-
             {/* Dynamic bulk Action Bar at the top of the table if at least one record checked */}
             {selectedIds.length > 0 && (
               <div 
@@ -2435,6 +2386,55 @@ export default function DefibTab({
             cacheKey="help_dismissed_defib_colors" 
             text="Bon à savoir concernant le code des couleurs des valeurs dans le tableau : Le rouge correspond à une action requise expirée (critique), l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois." 
           />
+
+          {/* Filters Pills Row (placed between div-infos and the table) */}
+          <div 
+            className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-3 pb-1" 
+            id="defibrillateurs-sort-pills"
+            style={{ maxWidth: '98%', margin: '0 auto' }}
+          >
+            <button
+              type="button"
+              onClick={() => setSortFilter(prev => prev === 'recent' ? null : 'recent')}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: sortFilter === 'recent' ? '#fe4eba' : '#ffffff',
+                color: sortFilter === 'recent' ? '#ffffff' : '#000000',
+                border: sortFilter === 'recent' ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="transition-all"
+            >
+              {t("Ajouté récemment")}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSortFilter(prev => prev === 'closest_maintenance' ? null : 'closest_maintenance')}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: sortFilter === 'closest_maintenance' ? '#fe4eba' : '#ffffff',
+                color: sortFilter === 'closest_maintenance' ? '#ffffff' : '#000000',
+                border: sortFilter === 'closest_maintenance' ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="transition-all"
+            >
+              {t("Pro.Main au plus proche")}
+            </button>
+          </div>
 
       {/* Main Table Records Sheet */}
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
