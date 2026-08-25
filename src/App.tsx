@@ -7080,7 +7080,8 @@ export default function App() {
                                           const estimatedDateValue = m.estimatedDate || '';
 
                                           return (
-                                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-transparent">
+                                            <div className="space-y-3 bg-transparent w-full">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-transparent">
                                             <div className="space-y-0.5 bg-transparent">
                                               <label className="block mb-1 fsm-label-style">Client.</label>
                                               <input
@@ -7177,6 +7178,104 @@ export default function App() {
                                                 className="w-full font-sans cursor-not-allowed"
                                                 placeholder="Non renseignée"
                                               />
+                                            </div>
+
+                                            {/* Bon de commande. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Bon de commande.</label>
+                                              <select
+                                                value={m.bonCommandeId || ''}
+                                                onChange={(e) => {
+                                                  const nextBcId = e.target.value;
+                                                  if (nextBcId && nextBcId !== 'custom') {
+                                                    const foundDoc = commercialDocs.find(doc => doc.id === nextBcId);
+                                                    const articleParts = foundDoc?.articles
+                                                      ? foundDoc.articles.map(art => art.designation).filter(Boolean)
+                                                      : [];
+                                                    const uniqueParts = Array.from(new Set([...(m.requiredParts || []), ...articleParts]));
+                                                    if (uniqueParts.length > (m.requiredParts || []).length) {
+                                                      changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId });
+                                                    } else {
+                                                      updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId });
+                                                    }
+                                                  } else if (nextBcId === 'custom') {
+                                                    updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId });
+                                                  } else {
+                                                    changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], [], { bonCommandeId: '' });
+                                                  }
+                                                }}
+                                                className="w-full font-sans focus:outline-none cursor-pointer text-slate-800"
+                                                style={{
+                                                  border: '1px solid #dedede',
+                                                  borderRadius: '13px',
+                                                  padding: '12px',
+                                                  fontSize: '16px',
+                                                  fontWeight: '100',
+                                                  color: '#000000',
+                                                  backgroundColor: '#ffffff'
+                                                }}
+                                              >
+                                                <option value="">-- Aucun --</option>
+                                                <option value="custom">Autre (Texte libre)</option>
+                                                {(() => {
+                                                  const matchedClient = (() => {
+                                                    if (m.clientId) {
+                                                      const found = clients.find(c => c.id === m.clientId);
+                                                      if (found) return found;
+                                                    }
+                                                    const matchedDefib = defibrillateurs.find(df => df.identifiant === m.defibIdentifiant);
+                                                    if (matchedDefib) {
+                                                      const found = clients.find(c => c.id === matchedDefib.clientId);
+                                                      if (found) return found;
+                                                    }
+                                                    if (m.clientName) {
+                                                      const mName = m.clientName.toLowerCase();
+                                                      const found = clients.find(c => {
+                                                        if (!c.denomination) return false;
+                                                        const cDenom = c.denomination.toLowerCase();
+                                                        return mName.includes(cDenom) || cDenom.includes(mName);
+                                                      });
+                                                      if (found) return found;
+                                                    }
+                                                    return null;
+                                                  })();
+
+                                                  const clientBcs = matchedClient
+                                                    ? commercialDocs.filter(doc => 
+                                                        doc.hasBonCommande && 
+                                                        (doc.clientId === matchedClient.id || 
+                                                         (doc.clientDenomination && matchedClient.denomination && 
+                                                          doc.clientDenomination.toLowerCase() === matchedClient.denomination.toLowerCase()))
+                                                      )
+                                                    : [];
+
+                                                  return clientBcs.map(bcDoc => (
+                                                    <option key={bcDoc.id} value={bcDoc.id}>
+                                                      {bcDoc.bonCommandeEntete || bcDoc.bonCommandeReference || bcDoc.ref}
+                                                    </option>
+                                                  ));
+                                                })()}
+                                              </select>
+                                              {m.bonCommandeId === 'custom' && (
+                                                <div className="mt-2 space-y-0.5 bg-transparent">
+                                                  <input
+                                                    type="text"
+                                                    value={m.customBonCommande || ''}
+                                                    onChange={(e) => updateFsmMission(t.id, m.id, { customBonCommande: e.target.value })}
+                                                    placeholder={translate("Saisir le bon de commande...")}
+                                                    className="w-full font-sans focus:outline-none"
+                                                    style={{
+                                                      border: '1px solid #dedede',
+                                                      borderRadius: '13px',
+                                                      padding: '12px',
+                                                      fontSize: '16px',
+                                                      fontWeight: '100',
+                                                      color: '#000000',
+                                                      backgroundColor: '#ffffff'
+                                                    }}
+                                                  />
+                                                </div>
+                                              )}
                                             </div>
 
                                             {/* Date estimée. */}
@@ -7312,9 +7411,366 @@ export default function App() {
                                                 <option value="17:00pm">17:00pm</option>
                                               </select>
                                             </div>
+                                          </div>
 
+                                          {/* Raison/Prestation. */}
+                                          <div className="pt-2 space-y-1.5 relative font-sans w-full bg-transparent">
+                                            <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
+                                              Raison/Prestation.
+                                            </label>
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full items-center bg-transparent">
+                                              {/* Dropdown Select on the left */}
+                                              <div className="md:col-span-1 w-full bg-transparent">
+                                                <select
+                                                  value=""
+                                                  onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val) {
+                                                      const current: string[] = Array.isArray(m.reasons)
+                                                        ? m.reasons
+                                                        : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
+                                                      if (!current.includes(val)) {
+                                                        const nextReasons = [...current, val];
+                                                        updateFsmMission(t.id, m.id, {
+                                                          reasons: nextReasons,
+                                                          reason: nextReasons.join(", ")
+                                                        });
+                                                      }
+                                                      e.target.value = "";
+                                                    }
+                                                  }}
+                                                  style={{
+                                                    border: "1px solid #dedede",
+                                                    borderRadius: "13px",
+                                                    padding: "12px",
+                                                    fontSize: "16px",
+                                                    fontWeight: "100",
+                                                    color: "#000000",
+                                                    backgroundColor: "#ffffff"
+                                                  }}
+                                                  className="w-full font-sans focus:outline-none cursor-pointer"
+                                                >
+                                                  <option value="">-- Sélectionner une raison / prestation --</option>
+                                                  {variables
+                                                    .filter((v: any) => v.category === "Modèle Raison Prestation")
+                                                    .map((v: any) => {
+                                                      const current: string[] = Array.isArray(m.reasons)
+                                                        ? m.reasons
+                                                        : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
+                                                      const isSelected = current.includes(v.nom);
+                                                      return (
+                                                        <option key={v.id} value={v.nom} disabled={isSelected}>
+                                                          {v.nom} {isSelected ? "(Déjà ajoutée)" : ""}
+                                                        </option>
+                                                      );
+                                                    })}
+                                                </select>
+                                              </div>
+
+                                              {/* Selected Reasons Capsules listed on the right */}
+                                              <div className="md:col-span-3 w-full bg-transparent">
+                                                {(() => {
+                                                  const currentReasons: string[] = Array.isArray(m.reasons)
+                                                    ? m.reasons
+                                                    : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
+
+                                                  return (
+                                                    <div className="flex flex-wrap gap-1.5 min-h-[42px] items-center bg-transparent">
+                                                      {currentReasons.length > 0 ? (
+                                                        currentReasons.map((reasonStr: string) => (
+                                                          <span
+                                                            key={reasonStr}
+                                                            onClick={() => {
+                                                              const nextReasons = currentReasons.filter(r => r !== reasonStr);
+                                                              updateFsmMission(t.id, m.id, {
+                                                                reasons: nextReasons,
+                                                                reason: nextReasons.join(", ")
+                                                              });
+                                                            }}
+                                                            style={{
+                                                              fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                                                            }}
+                                                            className="cursor-pointer inline-flex items-center rounded-full bg-white border border-slate-200 text-slate-800 text-[15px] px-3.5 py-1.5 font-medium hover:bg-[#8e1010] hover:border-[#8e1010] hover:text-white transition-all duration-150 select-none"
+                                                            title="Cliquez pour supprimer"
+                                                          >
+                                                            {reasonStr}
+                                                          </span>
+                                                        ))
+                                                      ) : null}
+                                                    </div>
+                                                  );
+                                                })()}
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* Info block displaying Commentaires of selected Bon de commande */}
+                                          {(() => {
+                                            const selectedBcDoc = (() => {
+                                              if (!m.bonCommandeId) return null;
+                                              return commercialDocs.find(doc => doc.id === m.bonCommandeId);
+                                            })();
+
+                                            if (selectedBcDoc && selectedBcDoc.commentaires && selectedBcDoc.commentaires.trim() !== '') {
+                                              return (
+                                                <div 
+                                                  style={{
+                                                    color: 'rgb(143 51 151)',
+                                                    backgroundColor: 'rgb(253 229 255)',
+                                                    border: 'none',
+                                                    cursor: 'default'
+                                                  }}
+                                                  className="font-semibold text-sm px-4 py-3 rounded-xl flex items-center gap-2.5 mt-2 w-full mx-0.5"
+                                                >
+                                                  <span>
+                                                    Commentaires : {selectedBcDoc.commentaires}
+                                                  </span>
+                                                </div>
+                                              );
+                                            }
+                                            return null;
+                                          })()}
+
+                                          {/* Lookup field for required components with stock items selector */}
+                                          {(() => {
+                                            if (m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) return null;
+                                            const currentMissionDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+
+                                            const tourTechName = t.techName || '';
+                                            const tourTechMember = members.find((mem: any) => mem.name && mem.name.trim().toLowerCase() === tourTechName.trim().toLowerCase());
+                                            const techLocation = tourTechMember?.locationLink || '';
+
+                                            const isLocationMatchingTechOrCentral = (loc?: string) => {
+                                              if (!loc || loc === 'Centrale des stocks' || loc === 'Stock Central' || loc === 'defaut' || loc === 'Central') {
+                                                return true;
+                                              }
+                                              if (techLocation) {
+                                                if (loc === techLocation || getLocationCustomName(loc) === getLocationCustomName(techLocation)) {
+                                                  return true;
+                                                }
+                                              }
+                                              return false;
+                                            };
+
+                                            const getTraceabilityLocation = (trace: any, stockRecord: any) => {
+                                              if (trace.emplacement) return trace.emplacement;
+                                              if (trace.movementId && Array.isArray(stockRecord.mouvements)) {
+                                                const mv = stockRecord.mouvements.find((mvItem: any) => mvItem.id === trace.movementId);
+                                                if (mv) {
+                                                  if (mv.type === 'Réapprovisionnement fournisseur') {
+                                                    return 'Centrale des stocks';
+                                                  }
+                                                  if (mv.emplacement) {
+                                                    return mv.emplacement.includes(' : ') ? mv.emplacement.split(' : ')[1] : mv.emplacement;
+                                                  }
+                                                }
+                                              }
+                                              return 'Centrale des stocks';
+                                            };
+
+                                            const stockItems: { id: string; name: string; label: string; matchedStock?: any }[] = [];
+                                            const addedLabels = new Set<string>();
+
+                                            // 1. Traceable items and central items from stocks
+                                            (stocks || []).forEach(s => {
+                                              const vObj = variables.find(v => v.id === s.denominationPieceId);
+                                              if (vObj && (vObj.category === 'Modèle Service' || vObj.category === 'Modèle Contrat' || vObj.category === 'Fournisseur')) return;
+                                              const name = vObj ? vObj.nom : (s.denom || `Pièce indéfinie`);
+
+                                              if (s.traceabilityEnabled && Array.isArray(s.traceabilities) && s.traceabilities.length > 0) {
+                                                s.traceabilities.forEach((trace: any) => {
+                                                  if (trace.situation === 'Disponible' && Number(trace.volume) === 1) {
+                                                    const traceLoc = getTraceabilityLocation(trace, s);
+                                                    if (isLocationMatchingTechOrCentral(traceLoc)) {
+                                                      const numLot = trace.lotOrSerial || '-';
+                                                      const datePer = trace.expirationDate || '-';
+                                                      const vol = trace.volume;
+                                                      const label = `${name}, ${numLot}, ${datePer}, ${vol}`;
+                                                      if (!addedLabels.has(label)) {
+                                                        stockItems.push({ id: `tr_${trace.id}`, name, label, matchedStock: s });
+                                                        addedLabels.add(label);
+                                                      }
+                                                    }
+                                                  }
+                                                });
+                                              } else {
+                                                if (Number(s.quantite) > 0) {
+                                                  const ugs = s.ugs ? ` - UGS: ${s.ugs}` : '';
+                                                  const label = `${name} (Stock Central - Qté: ${s.quantite}${ugs})`;
+                                                  if (!addedLabels.has(label)) {
+                                                    stockItems.push({ id: `st_${s.id}`, name, label, matchedStock: s });
+                                                    addedLabels.add(label);
+                                                  }
+                                                }
+                                              }
+                                            });
+
+                                            // 2. Non-traceable items from Distributed Stocks
+                                            (distributedStocks || []).forEach(ds => {
+                                              const vObj = variables.find(v => v.id === ds.denominationPieceId);
+                                              if (vObj && (vObj.category === 'Modèle Service' || vObj.category === 'Modèle Contrat' || vObj.category === 'Fournisseur')) return;
+                                              if (Number(ds.volumeDisponible) <= 0) return;
+
+                                              if (isLocationMatchingTechOrCentral(ds.locationName)) {
+                                                const name = vObj ? vObj.nom : (ds.denom || `Pièce indéfinie`);
+                                                const matchedStock = stocks.find(s => s.id === ds.stockId || s.denominationPieceId === ds.denominationPieceId);
+                                                if (!matchedStock?.traceabilityEnabled) {
+                                                  const ugs = matchedStock?.ugs || '';
+                                                  const ugsString = ugs ? ` - UGS: ${ugs}` : '';
+                                                  const label = `${name} (${getLocationCustomName(ds.locationName)} - Dispo: ${ds.volumeDisponible}${ugsString})`;
+                                                  if (!addedLabels.has(label)) {
+                                                    stockItems.push({ id: `ds_${ds.id}`, name, label, matchedStock });
+                                                    addedLabels.add(label);
+                                                  }
+                                                }
+                                              }
+                                            });
+
+                                            const recommendedItems = currentMissionDefib && currentMissionDefib.modeleId
+                                              ? stockItems.filter(item => Array.isArray(item.matchedStock?.usageRecommandeIds) && item.matchedStock.usageRecommandeIds.includes(currentMissionDefib.modeleId))
+                                              : [];
+                                            const otherItems = currentMissionDefib && currentMissionDefib.modeleId
+                                              ? stockItems.filter(item => !Array.isArray(item.matchedStock?.usageRecommandeIds) || !item.matchedStock.usageRecommandeIds.includes(currentMissionDefib.modeleId))
+                                              : stockItems;
+
+                                            return (
+                                              <div className="pt-2 space-y-2.5 relative font-sans w-full bg-transparent">
+                                                <div className="flex justify-between items-center bg-transparent">
+                                                  <span className="fsm-label-style bg-transparent" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>
+                                                    Pièces requises.
+                                                  </span>
+                                                </div>
+
+                                                {/* SELECTED PIECES BADGES */}
+                                                {m.requiredParts && m.requiredParts.length > 0 && (
+                                                  <div className="flex flex-col gap-2.5 bg-transparent">
+                                                    {m.requiredParts.map((part: string) => {
+                                                      const matchedStockItem = stockItems.find(si => si.label === part || si.name === part);
+                                                      const displayLabel = matchedStockItem ? matchedStockItem.label : part;
+                                                      const sentParts: string[] = Array.isArray(m.sentToClientParts) ? m.sentToClientParts : [];
+                                                      const isSent = sentParts.includes(part);
+
+                                                      return (
+                                                        <div key={part} className="flex flex-wrap items-center gap-3 bg-transparent py-0.5">
+                                                          {/* Toggle ON/OFF Envoyée au client */}
+                                                          <button
+                                                            type="button"
+                                                            onClick={() => togglePartSentToClient(t.id, m.id, part)}
+                                                            className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none shrink-0"
+                                                            title="Envoyée au client"
+                                                          >
+                                                            <span style={{ fontSize: '13px', fontWeight: 600, color: isSent ? '#fe4eba' : '#64748b' }}>
+                                                              Envoyée au client
+                                                            </span>
+                                                            <div
+                                                              style={{
+                                                                width: '34px',
+                                                                height: '18px',
+                                                                borderRadius: '9999px',
+                                                                backgroundColor: isSent ? '#fe4eba' : '#cbd5e1',
+                                                                position: 'relative',
+                                                                transition: 'background-color 0.2s ease',
+                                                                padding: '2px'
+                                                              }}
+                                                            >
+                                                              <div
+                                                                style={{
+                                                                  width: '14px',
+                                                                  height: '14px',
+                                                                  borderRadius: '50%',
+                                                                  backgroundColor: '#ffffff',
+                                                                  position: 'absolute',
+                                                                  top: '2px',
+                                                                  left: isSent ? '18px' : '2px',
+                                                                  transition: 'left 0.2s ease'
+                                                                }}
+                                                              />
+                                                            </div>
+                                                          </button>
+
+                                                          {/* Gélule de la pièce requise */}
+                                                          <span
+                                                            onClick={() => {
+                                                              const updatedParts = (m.requiredParts || []).filter((p: string) => p !== part);
+                                                              const updatedSentParts = sentParts.filter((p: string) => p !== part);
+                                                              changeFsmMissionParts(t.id, m.id, m.requiredParts || [], updatedParts, { sentToClientParts: updatedSentParts });
+                                                            }}
+                                                            style={{
+                                                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                                            }}
+                                                            className="cursor-pointer inline-flex items-center rounded-full bg-white border border-slate-200 text-slate-800 text-[15px] px-3.5 py-1.5 font-medium hover:bg-red-800 hover:border-red-800 hover:text-white transition-all duration-150 select-none max-w-full truncate"
+                                                            title="Cliquez pour supprimer"
+                                                          >
+                                                            {displayLabel} (x1)
+                                                          </span>
+                                                        </div>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                )}
+
+                                                {/* NATIVE SYSTEM DROPDOWN SELECTOR */}
+                                                <div className="relative bg-transparent">
+                                                  <select
+                                                    value=""
+                                                    onChange={(e) => {
+                                                      const selectedVal = e.target.value;
+                                                      const currentParts = m.requiredParts || [];
+                                                      if (selectedVal && !currentParts.includes(selectedVal)) {
+                                                        const updatedParts = [...currentParts, selectedVal];
+                                                        changeFsmMissionParts(t.id, m.id, currentParts, updatedParts);
+                                                      }
+                                                      e.target.value = ""; // Reset
+                                                    }}
+                                                    style={{
+                                                      border: '1px solid #dedede',
+                                                      borderRadius: '13px',
+                                                      padding: '12px',
+                                                      fontSize: '15px',
+                                                      fontWeight: '100',
+                                                      color: '#000000',
+                                                      backgroundColor: '#ffffff',
+                                                      width: '100%',
+                                                      cursor: 'pointer',
+                                                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
+                                                    }}
+                                                    className="font-sans focus:outline-none justify-start cursor-pointer"
+                                                  >
+                                                    <option value="" disabled>Sélection d'une pièce du stock.</option>
+                                                    {recommendedItems.length > 0 ? (
+                                                      <>
+                                                        <optgroup label="Pièces recommandées">
+                                                          {recommendedItems.map(item => (
+                                                            <option key={item.id} value={item.label}>
+                                                              {item.label}
+                                                            </option>
+                                                          ))}
+                                                        </optgroup>
+                                                        <optgroup label="Autres pièces">
+                                                          {otherItems.map(item => (
+                                                            <option key={item.id} value={item.label}>
+                                                              {item.label}
+                                                            </option>
+                                                          ))}
+                                                        </optgroup>
+                                                      </>
+                                                    ) : (
+                                                      stockItems.map(item => (
+                                                        <option key={item.id} value={item.label}>
+                                                          {item.label}
+                                                        </option>
+                                                      ))
+                                                    )}
+                                                  </select>
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
+
+                                          {/* Bottom row: Transférer & Supprimer */}
+                                          <div className="pt-2 grid grid-cols-1 md:grid-cols-4 gap-3 w-full bg-transparent items-end">
                                             {/* Transférer section */}
-                                            <div className="space-y-0.5 bg-transparent sm:col-span-2 md:col-span-2">
+                                            <div className="space-y-0.5 bg-transparent md:col-span-3">
                                               <label className="block mb-1 fsm-label-style" style={{ fontSize: '18px' }}>Transférer.</label>
                                               <div className="flex gap-2">
                                                 <select
@@ -7393,6 +7849,32 @@ export default function App() {
                                                 </button>
                                               </div>
                                             </div>
+
+                                            {/* Supprimer button */}
+                                            <div className="bg-transparent flex flex-col justify-end md:col-span-1">
+                                              <button
+                                                type="button"
+                                                onClick={() => deleteFsmMission(t.id, m.id)}
+                                                style={{
+                                                  color: '#fff',
+                                                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                                  background: 'rgb(96, 28, 104)',
+                                                  borderRadius: '13px',
+                                                  border: 'none',
+                                                  fontSize: '18px',
+                                                  fontWeight: '500',
+                                                  padding: '12px 16px',
+                                                  width: '100%',
+                                                  display: 'flex',
+                                                  justifyContent: 'center',
+                                                  alignItems: 'center'
+                                                }}
+                                                className="cursor-pointer"
+                                              >
+                                                Supprimer
+                                              </button>
+                                            </div>
+                                          </div>
                                           </div>
                                           );
                                         })()}
