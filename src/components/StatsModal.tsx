@@ -14,6 +14,7 @@ interface StatsModalProps {
   pointages?: PointageLog[];
   customerReviews?: any[];
   fsmTours?: any[];
+  generatedReports?: any[];
 }
 
 export default function StatsModal({
@@ -26,7 +27,8 @@ export default function StatsModal({
   stocks,
   pointages,
   customerReviews,
-  fsmTours
+  fsmTours,
+  generatedReports
 }: StatsModalProps) {
   if (!isPage && !isOpen) return null;
 
@@ -89,6 +91,54 @@ export default function StatsModal({
     }
   }, [fsmTours]);
 
+  const resolvedReports = useMemo(() => {
+    if (generatedReports !== undefined) return generatedReports;
+    try {
+      const saved = localStorage.getItem('defib_generated_reports') || localStorage.getItem('defib_gmao_reports');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  }, [generatedReports]);
+
+  // Helper to parse dates and timestamps in various standard and French formats
+  const parseTimestamp = (str: any): Date | null => {
+    if (!str || typeof str !== 'string') return null;
+    const s = str.trim();
+    if (!s) return null;
+
+    // DD/MM/YYYY or DD-MM-YYYY with time
+    const matchFR = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:[ ,Tà@]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/i);
+    if (matchFR) {
+      const day = parseInt(matchFR[1], 10);
+      const month = parseInt(matchFR[2], 10) - 1;
+      const year = parseInt(matchFR[3], 10);
+      const hours = matchFR[4] ? parseInt(matchFR[4], 10) : 0;
+      const minutes = matchFR[5] ? parseInt(matchFR[5], 10) : 0;
+      const seconds = matchFR[6] ? parseInt(matchFR[6], 10) : 0;
+      const d = new Date(year, month, day, hours, minutes, seconds);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    // YYYY-MM-DD with time
+    const matchISO = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[ ,Tà@]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/i);
+    if (matchISO) {
+      const year = parseInt(matchISO[1], 10);
+      const month = parseInt(matchISO[2], 10) - 1;
+      const day = parseInt(matchISO[3], 10);
+      const hours = matchISO[4] ? parseInt(matchISO[4], 10) : 0;
+      const minutes = matchISO[5] ? parseInt(matchISO[5], 10) : 0;
+      const seconds = matchISO[6] ? parseInt(matchISO[6], 10) : 0;
+      const d = new Date(year, month, day, hours, minutes, seconds);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    const standard = new Date(s);
+    if (!isNaN(standard.getTime())) return standard;
+
+    return null;
+  };
+
   // Helper to get minimum peremption date of a defibrillator
   const getEarliestPeremption = (d: Defibrillateur): string | null => {
     const dates: string[] = [];
@@ -142,65 +192,129 @@ export default function StatsModal({
     return `${totalVal.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}€`;
   }, [resolvedStocks]);
 
-  // 7. Temps moyen durée d’une maintenance
+  // 7. Temps moyen durée d’une maintenance (selon l'horadatage début et fin des rapports en modération et validés)
   const avgMaintenanceDuration = useMemo(() => {
-    const finished = resolvedPointages.filter(p => !p.isOngoing);
-    if (finished.length === 0) return "N/A";
+    const validReports = resolvedReports.filter((rep: any) => {
+      const isFormation = 
+        rep.equipmentType === 'Formation' ||
+        rep.equipmentType?.toLowerCase()?.includes('formation') ||
+        rep.defibSnapshot?.categorie === 'Formation' ||
+        rep.defibSnapshot?.categorie?.toLowerCase()?.includes('formation') ||
+        !!rep.formationId ||
+        rep.defibIdentifiant === 'Formation';
+      if (isFormation) return false;
 
-    const totalSeconds = finished.reduce((sum, p) => {
-      if (p.durationSeconds !== undefined) return sum + p.durationSeconds;
-      if (p.startDate && p.startTime && p.endDate && p.endTime) {
-        try {
-          const start = new Date(`${p.startDate}T${p.startTime}`);
-          const end = new Date(`${p.endDate}T${p.endTime}`);
-          const diff = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
-          return sum + diff;
-        } catch {
-          return sum;
+      const isEffectue = 
+        rep.missionStatus === 'Effectué' ||
+        rep.conforme === 'Conforme' ||
+        rep.conforme === 'Non Conforme' ||
+        rep.conforme === 'Intervention impossible' ||
+        !!rep.validated;
+
+      const isUpcoming = !isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture);
+      return !isUpcoming;
+    });
+
+    if (validReports.length === 0) {
+      // Fallback to pointages if no reports present
+      const finished = resolvedPointages.filter(p => !p.isOngoing);
+      if (finished.length === 0) return "N/A";
+      const totalSeconds = finished.reduce((sum, p) => {
+        if (p.durationSeconds !== undefined) return sum + p.durationSeconds;
+        if (p.startDate && p.startTime && p.endDate && p.endTime) {
+          try {
+            const start = new Date(`${p.startDate}T${p.startTime}`);
+            const end = new Date(`${p.endDate}T${p.endTime}`);
+            const diff = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
+            return sum + diff;
+          } catch {
+            return sum;
+          }
         }
-      }
-      return sum;
-    }, 0);
+        return sum;
+      }, 0);
+      const avgSeconds = totalSeconds / finished.length;
+      const hours = Math.floor(avgSeconds / 3600);
+      const minutes = Math.round((avgSeconds % 3600) / 60);
+      if (hours > 0) return `${hours}h ${minutes}min`;
+      return `${minutes} min`;
+    }
 
-    const avgSeconds = totalSeconds / finished.length;
+    let totalSeconds = 0;
+    let countedReports = 0;
+
+    validReports.forEach((rep: any) => {
+      const startStr = rep.date || rep.interventionDate || rep.horodatage || rep.startTimeStamp || rep.dateIntervention || rep.horodatageEntrant;
+      const endStr = rep.endTimeStamp || rep.horodatageCloture || rep.heureFin || rep.horodatageSortant || rep.dateCloture;
+
+      const start = parseTimestamp(startStr);
+      const end = parseTimestamp(endStr);
+
+      if (start && end) {
+        const diffMs = end.getTime() - start.getTime();
+        if (diffMs >= 0) {
+          totalSeconds += Math.floor(diffMs / 1000);
+          countedReports++;
+        }
+      } else if (typeof rep.durationSeconds === 'number' && rep.durationSeconds > 0) {
+        totalSeconds += rep.durationSeconds;
+        countedReports++;
+      }
+    });
+
+    if (countedReports === 0) return "N/A";
+
+    const avgSeconds = Math.round(totalSeconds / countedReports);
     const hours = Math.floor(avgSeconds / 3600);
     const minutes = Math.round((avgSeconds % 3600) / 60);
 
     if (hours > 0) {
-      return `${hours}h ${minutes}min`;
+      return minutes > 0 ? `${hours}h ${minutes}min` : `${hours}h`;
     }
     return `${minutes} min`;
-  }, [resolvedPointages]);
+  }, [resolvedReports, resolvedPointages]);
 
-  // 8. Satisfaction moyenne
+  // 8. Satisfaction moyenne (moyenne de toutes les Notes globales de l'onglet SATISFACTION)
   const avgSatisfaction = useMemo(() => {
     if (resolvedReviews.length === 0) return "Aucun avis";
-    const counts: Record<string, number> = {};
-    resolvedReviews.forEach((r: any) => {
-      if (r.label) {
-        const trimmed = r.label.trim();
-        counts[trimmed] = (counts[trimmed] || 0) + 1;
+
+    const validNotes: number[] = [];
+    resolvedReviews.forEach((rev: any) => {
+      const nums = [rev.qualite, rev.ponctualite, rev.politesse, rev.clartePdf, rev.explications, rev.sensibilisation].filter(
+        (v): v is number => typeof v === 'number' && !isNaN(v)
+      );
+      if (nums.length > 0) {
+        const sum = nums.reduce((a, b) => a + b, 0);
+        validNotes.push(sum / nums.length);
+      } else if (rev.label) {
+        if (rev.label === 'Excellent' || rev.label === 'Parfait') validNotes.push(4);
+        else if (rev.label === 'Moyen') validNotes.push(2.5);
+        else if (rev.label === 'Décevant') validNotes.push(1.5);
+        else if (rev.label === 'Médiocre') validNotes.push(1);
+      } else if (typeof rev.noteGlobale === 'number' && !isNaN(rev.noteGlobale)) {
+        validNotes.push(rev.noteGlobale);
+      } else if (typeof rev.note === 'number' && !isNaN(rev.note)) {
+        validNotes.push(rev.note);
       }
     });
 
-    let maxCount = -1;
-    let modeLabel = "N/A";
-    Object.entries(counts).forEach(([label, count]) => {
-      if (count > maxCount) {
-        maxCount = count;
-        modeLabel = label;
-      }
-    });
-    return modeLabel;
+    if (validNotes.length === 0) return "Aucun avis";
+
+    const totalSum = validNotes.reduce((a, b) => a + b, 0);
+    const avg = totalSum / validNotes.length;
+    const formatted = avg % 1 === 0 ? avg.toFixed(0) : avg.toFixed(1);
+    return `${formatted}/4`;
   }, [resolvedReviews]);
 
-  // 9. Tournées ouvertes
+  // 9. Tournées ouvertes (uniquement les tournées en À faire / En cours, hors tournée à trier)
   const openToursCount = useMemo(() => {
-    return resolvedFsmTours.filter((tour: any) => 
-      tour.status === 'Brouillon' || 
-      tour.status === 'À faire' || 
-      tour.status === 'En cours'
-    ).length;
+    return resolvedFsmTours.filter((tour: any) => {
+      if (!tour) return false;
+      if (tour.id === 'a-trier' || tour.isATrier) return false;
+      const titleLower = (tour.title || tour.nom || '').toLowerCase().trim();
+      if (titleLower.includes('à trier') || titleLower.includes('a trier')) return false;
+      return tour.status === 'À faire' || tour.status === 'En cours';
+    }).length;
   }, [resolvedFsmTours]);
 
   // Stats items structure for mapping

@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { t } from '../utils/translate';
 import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, StockTraceability, Member, LogisticsNotification } from '../types';
-import { getLocationCustomName } from '../utils';
+import { getLocationCustomName, generateRandomShortCode } from '../utils';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { Check, X } from 'lucide-react';
 
 const CODE39_MAP: Record<string, string> = {
   '0': '101001101101',
@@ -104,6 +105,8 @@ interface StocksTabProps {
   stocks: StockRecord[];
   variables: Variable[];
   defibrillateurs: Defibrillateur[];
+  saveDefibs?: (defibs: Defibrillateur[]) => void;
+  onAddDefib?: (defib: Omit<Defibrillateur, 'id'>) => void;
   saveStocks: (updated: StockRecord[]) => void;
   showStockForm: boolean;
   setShowStockForm: (show: boolean) => void;
@@ -126,6 +129,8 @@ export default function StocksTab({
   stocks,
   variables,
   defibrillateurs = [],
+  saveDefibs,
+  onAddDefib,
   saveStocks,
   showStockForm,
   setShowStockForm,
@@ -168,6 +173,8 @@ export default function StocksTab({
   const [newMvStatut, setNewMvStatut] = useState<'Préparation' | 'Expédié' | 'Terminé' | 'Annulé'>('Préparation');
   const [newMvBonCommande, setNewMvBonCommande] = useState<string>('');
   const [newMvCustomBonCommande, setNewMvCustomBonCommande] = useState<string>('');
+  const [newMvProvenanceSelect, setNewMvProvenanceSelect] = useState<string>('');
+  const [newMvCustomProvenance, setNewMvCustomProvenance] = useState<string>('');
   const [newMvTrackingLink, setNewMvTrackingLink] = useState<string>('');
   const [newMvEmplacement, setNewMvEmplacement] = useState<string>('');
   const [showMvForm, setShowMvForm] = useState<boolean>(false);
@@ -177,6 +184,21 @@ export default function StocksTab({
   const [traceabilityEnabled, setTraceabilityEnabled] = useState<boolean>(false);
   const [traceabilities, setTraceabilities] = useState<StockTraceability[]>([]);
   const [selectedSituationFilter, setSelectedSituationFilter] = useState<string>('Toutes situations');
+  const [systemInfoPopup, setSystemInfoPopup] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (systemInfoPopup) {
+      const timer = setTimeout(() => {
+        setSystemInfoPopup(null);
+      }, 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [systemInfoPopup]);
+
+  const isDefibrillator = useMemo(() => {
+    const matchedVar = variables.find(v => v.id === newDenomStr);
+    return matchedVar?.category === 'Modèle Défibrillateur';
+  }, [variables, newDenomStr]);
   
   // Nouveau Inventaire Form States
   const [showTraceabilityForm, setShowTraceabilityForm] = useState<boolean>(false);
@@ -430,9 +452,13 @@ export default function StocksTab({
       }
     } else if (newMvType === 'Réapprovisionnement fournisseur') {
       if (achatsFournisseurs.length > 0) {
-        setNewMvEmplacement(achatsFournisseurs[0].reference);
+        if (!newMvProvenanceSelect) {
+          setNewMvProvenanceSelect(achatsFournisseurs[0].reference);
+          setNewMvEmplacement(achatsFournisseurs[0].reference);
+        }
       } else {
-        setNewMvEmplacement('');
+        setNewMvProvenanceSelect('custom');
+        setNewMvEmplacement(newMvCustomProvenance);
       }
     } else if (newMvType === 'Expédition directe au client') {
       // Managed via Commande field / custom BC
@@ -455,9 +481,16 @@ export default function StocksTab({
       alert("La date est requise");
       return;
     }
-    if (newMvType === 'Réapprovisionnement fournisseur' && !newMvEmplacement) {
-      alert("Veuillez sélectionner un achat fournisseur (référence BL) ou en configurer un au préalable dans l'onglet des achats.");
-      return;
+    if (newMvType === 'Réapprovisionnement fournisseur') {
+      if (newMvProvenanceSelect === 'custom') {
+        if (!newMvCustomProvenance.trim()) {
+          alert("Veuillez saisir une provenance personnalisée.");
+          return;
+        }
+      } else if (!newMvProvenanceSelect && !newMvEmplacement) {
+        alert("Veuillez sélectionner un achat fournisseur (référence BL) ou choisir 'Autre'.");
+        return;
+      }
     }
     if (newMvType === 'Distribution' && !newMvEmplacement) {
       alert("Veuillez sélectionner un emplacement.");
@@ -479,7 +512,13 @@ export default function StocksTab({
       : newMvBonCommande;
 
     let locText = newMvEmplacement;
-    if (newMvType === 'Expédition directe au client') {
+    if (newMvType === 'Réapprovisionnement fournisseur') {
+      if (newMvProvenanceSelect === 'custom') {
+        locText = newMvCustomProvenance.trim();
+      } else {
+        locText = newMvProvenanceSelect || newMvEmplacement;
+      }
+    } else if (newMvType === 'Expédition directe au client') {
       if (newMvBonCommande === 'custom') {
         locText = newMvCustomBonCommande.trim();
       } else {
@@ -540,6 +579,8 @@ export default function StocksTab({
     setNewMvVolume(1);
     setNewMvBonCommande('');
     setNewMvCustomBonCommande('');
+    setNewMvProvenanceSelect('');
+    setNewMvCustomProvenance('');
     setNewMvTrackingLink('');
     setNewMvEmplacement('');
     setShowMvForm(false);
@@ -586,6 +627,134 @@ export default function StocksTab({
     setExpirationDate('');
     setSituation('Disponible');
     setShowTraceabilityForm(false);
+  };
+
+  const handleExtractDeployDefib = (trace: StockTraceability, traceIdx: number) => {
+    if (isDeveloper || isReadOnly) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
+    if (trace.volume === 0) {
+      return;
+    }
+
+    const existingIds = (defibrillateurs || []).map(df => df.identifiant);
+    const newIdentifiant = generateRandomShortCode(existingIds);
+
+    const newDefib: Defibrillateur = {
+      id: 'df_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      identifiant: newIdentifiant,
+      numeroSerie: trace.lotOrSerial ? trace.lotOrSerial.trim() : '',
+      commentaire: trace.comment ? trace.comment.trim() : '',
+      commentaireInterne: '',
+      modeleId: newDenomStr || '',
+      numeroAtlasante: '',
+      versionLogiciel: '',
+      clientId: '',
+      nomSite: '',
+      categorieEtablissement: '',
+      nomPrenomSite: '',
+      telephoneSite: '',
+      emailSite: '',
+      contrat: 'Non',
+      nomContrat: '',
+      referenceContrat: '',
+      debutContrat: '',
+      finContrat: '',
+      payeurId: '',
+      clientIdField: '',
+      modeleCoffretId: '',
+      numeroLotCoffret: '',
+      commentaireCoffret: '',
+      numVoie: '',
+      ville: '',
+      cp: '',
+      region: 'Île-de-France',
+      pays: 'France',
+      latitude: '',
+      longitude: '',
+      commentaireAdresse: '',
+      acces247: false,
+      accesSemaine: true,
+      accesWeekend: false,
+      exterieur: false,
+      horaires: '[]',
+      finGarantie: trace.expirationDate ? trace.expirationDate.trim() : '',
+      fabrication: '',
+      miseEnService: new Date().toISOString().split('T')[0],
+      derniereMaintenance: '',
+      sortieFabricant: '',
+      modeleElectrodeAId: '',
+      lotElectrodeA: '',
+      insertionElectrodeA: '',
+      peremptionElectrodeA: '',
+      livraisonElectrodeA: '',
+      situationElectrodeA: 'Vert',
+      commentaireElectrodeA: '',
+      peremptionSecoursElectrodeA: '',
+      modeleElectrodePId: '',
+      lotElectrodeP: '',
+      insertionElectrodeP: '',
+      peremptionElectrodeP: '',
+      livraisonElectrodeP: '',
+      situationElectrodeP: 'Vert',
+      commentaireElectrodeP: '',
+      peremptionSecoursElectrodeP: '',
+      modeleBatterieId: '',
+      lotBatterie: '',
+      insertionBatterie: '',
+      peremptionBatterie: '',
+      livraisonBatterie: '',
+      situationBatterie: 'Vert',
+      pourcentageBatterie: '',
+      commentaireBatterie: '',
+      loue: 'Non',
+      prete: 'Non',
+      stocke: 'Non',
+      archive: 'Non',
+      conforme: 'Oui',
+      sousTraitance: 'Non',
+      fsmAutorise: 'Non',
+      victimeSurvie: 'Non',
+      victimeSansSurvie: 'Non',
+      ageVictime: '',
+      commentaireCampagneRappel: '',
+    };
+
+    if (onAddDefib) {
+      onAddDefib(newDefib);
+    } else if (saveDefibs) {
+      saveDefibs([...(defibrillateurs || []), newDefib]);
+    }
+
+    // Update the traceability item in traceabilities state with volume = 0
+    const updatedTraceabilities = traceabilities.map((t, i) => {
+      if (t.id === trace.id || i === traceIdx) {
+        return {
+          ...t,
+          volume: 0,
+        };
+      }
+      return t;
+    });
+    setTraceabilities(updatedTraceabilities);
+
+    // If editing existing stock record, persist the change immediately
+    if (editingStockId) {
+      const updatedStocks = stocks.map(st => {
+        if (st.id === editingStockId) {
+          return {
+            ...st,
+            traceabilities: updatedTraceabilities
+          };
+        }
+        return st;
+      });
+      saveStocks(updatedStocks);
+    }
+
+    // Show system info popup
+    setSystemInfoPopup("Ajouté avec succès dans l’onglet Défibrillateurs.");
   };
 
   const handleUpdateMovementStatus = (mvId: string, status: 'Préparation' | 'Expédié' | 'Terminé' | 'Annulé') => {
@@ -661,6 +830,54 @@ export default function StocksTab({
       }
     }
   }, [variables.length, stocks.length, editingStockId, newDenomStr]);
+
+  // Grouped variables for the "Pièce ou service" select with category intercalaires / optgroups
+  const groupedStockVariables = useMemo(() => {
+    const CATEGORY_MAPPING: Record<string, { label: string; order: number }> = {
+      'Modèle Défibrillateur': { label: 'DÉFIBRILLATEURS', order: 1 },
+      'Modèle Électrode': { label: 'ÉLECTRODES', order: 2 },
+      'Modèle Batterie': { label: 'BATTERIES', order: 3 },
+      'Modèle Coffret': { label: 'COFFRETS', order: 4 },
+      'Modèle Service': { label: 'SERVICES', order: 5 },
+      'Modèle Contrat': { label: 'CONTRATS', order: 6 },
+      'Modèle Filtre Purificateur': { label: 'FILTRES PURIFICATEURS', order: 7 },
+      'Type Filtre Purificateur': { label: 'TYPES FILTRES', order: 8 },
+      'Formation': { label: 'FORMATIONS', order: 9 },
+    };
+
+    const excluded = new Set([
+      'Fournisseur',
+      'Modèle Raison Prestation',
+      'Drapeau GMAO',
+      'Drapeau post-intervention',
+    ]);
+
+    const available = variables.filter(v => 
+      !excluded.has(v.category) &&
+      !stocks.some(s => s.denominationPieceId === v.id && s.id !== editingStockId)
+    );
+
+    const groupsMap = new Map<string, { label: string; order: number; items: typeof variables }>();
+
+    available.forEach(v => {
+      const catConfig = CATEGORY_MAPPING[v.category] || {
+        label: (v.category || 'AUTRES').toUpperCase(),
+        order: 99,
+      };
+
+      if (!groupsMap.has(v.category)) {
+        groupsMap.set(v.category, {
+          label: catConfig.label,
+          order: catConfig.order,
+          items: [],
+        });
+      }
+      groupsMap.get(v.category)!.items.push(v);
+    });
+
+    return Array.from(groupsMap.values())
+      .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+  }, [variables, stocks, editingStockId]);
   
   const [newLivDate, setNewLivDate] = useState<string>('');
   const [newReapDate, setNewReapDate] = useState<string>('');
@@ -1665,17 +1882,15 @@ export default function StocksTab({
                   required
                 >
                   <option value="" disabled>Sélectionnez une pièce ou service.</option>
-                  {variables
-                    .filter(v => v.category !== 'Fournisseur' && v.category !== 'Modèle Raison Prestation' && v.category !== 'Drapeau GMAO')
-                    .map(v => {
-                      const isAlreadyUsed = stocks.some(s => s.denominationPieceId === v.id && s.id !== editingStockId);
-                      if (isAlreadyUsed) return null;
-                      return (
+                  {groupedStockVariables.map(group => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.items.map(v => (
                         <option key={v.id} value={v.id}>
-                          {v.identifiant ? `[${v.identifiant}] ` : ''}{v.nom} ({v.category})
+                          {v.identifiant ? `[${v.identifiant}] ` : ''}{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}
                         </option>
-                      );
-                    })}
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
 
@@ -2016,6 +2231,15 @@ export default function StocksTab({
                               setNewMvEmplacement('');
                               setNewMvBonCommande('');
                               setNewMvCustomBonCommande('');
+                            } else if (val === 'Réapprovisionnement fournisseur') {
+                              if (achatsFournisseurs.length > 0) {
+                                setNewMvProvenanceSelect(achatsFournisseurs[0].reference);
+                                setNewMvEmplacement(achatsFournisseurs[0].reference);
+                              } else {
+                                setNewMvProvenanceSelect('custom');
+                                setNewMvEmplacement('');
+                              }
+                              setNewMvCustomProvenance('');
                             }
                           }}
                           className="w-full bg-white text-black p-2 rounded border border-slate-200"
@@ -2120,28 +2344,46 @@ export default function StocksTab({
                         ) : newMvType === 'Réapprovisionnement fournisseur' ? (
                           <>
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Provenance *</label>
-                            {achatsFournisseurs.length === 0 ? (
-                              <div className="w-full bg-slate-100 text-slate-500 border border-slate-200 rounded p-2 text-[10px] font-sans italic" style={{ minHeight: '36px', display: 'flex', items: 'center' }}>
-                                Aucun achat fournisseur enregistré.
-                              </div>
-                            ) : (
-                              <select
-                                value={newMvEmplacement}
-                                onChange={(e) => setNewMvEmplacement(e.target.value)}
-                                className="w-full bg-white text-black p-2 rounded border border-slate-200"
+                            <select
+                              value={newMvProvenanceSelect}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewMvProvenanceSelect(val);
+                                if (val !== 'custom') {
+                                  setNewMvCustomProvenance('');
+                                  setNewMvEmplacement(val);
+                                } else {
+                                  setNewMvEmplacement(newMvCustomProvenance);
+                                }
+                              }}
+                              className="w-full bg-white text-black p-2 rounded border border-slate-200"
+                              style={{ minHeight: '36px' }}
+                              required
+                            >
+                              <option value="" disabled hidden>Sélectionnez une provenance</option>
+                              {achatsFournisseurs.map(achat => {
+                                const labelVal = `${achat.reference} - ${achat.supplierName || 'Fournisseur'}`;
+                                return (
+                                  <option key={achat.id} value={achat.reference}>
+                                    {labelVal}
+                                  </option>
+                                );
+                              })}
+                              <option value="custom">Autre</option>
+                            </select>
+                            {newMvProvenanceSelect === 'custom' && (
+                              <input
+                                type="text"
+                                value={newMvCustomProvenance}
+                                onChange={(e) => {
+                                  setNewMvCustomProvenance(e.target.value);
+                                  setNewMvEmplacement(e.target.value);
+                                }}
+                                placeholder="Saisir la provenance personnalisée..."
+                                className="w-full bg-white text-black p-2 rounded border border-slate-200 mt-1 font-sans text-xs"
                                 style={{ minHeight: '36px' }}
                                 required
-                              >
-                                <option value="" disabled hidden>Sélectionnez un achat (BL)</option>
-                                {achatsFournisseurs.map(achat => {
-                                  const labelVal = `${achat.reference} - ${achat.supplierName || 'Fournisseur'}`;
-                                  return (
-                                    <option key={achat.id} value={achat.reference}>
-                                      {labelVal}
-                                    </option>
-                                  );
-                                })}
-                              </select>
+                              />
                             )}
                           </>
                         ) : (
@@ -2742,6 +2984,11 @@ export default function StocksTab({
                                       )}
                                     </button>
                                   </th>
+                                  {isDefibrillator && (
+                                    <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>
+                                      Extraire / Déployer.
+                                    </th>
+                                  )}
                                   <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Code barre / Imprimer.</th>
                                   <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Numéro de lot ou série.</th>
                                   <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Date de péremption.</th>
@@ -2763,7 +3010,7 @@ export default function StocksTab({
                                     <React.Fragment key={locName}>
                                       {/* Intercalaire (Divider Row) */}
                                       <tr className="bg-black select-none" style={{ borderBottom: '1px solid #000000', borderTop: '1px solid #000000' }}>
-                                        <td colSpan={11} className="px-4 py-3 bg-black">
+                                        <td colSpan={isDefibrillator ? 12 : 11} className="px-4 py-3 bg-black">
                                           <div className="flex items-center gap-6 font-sans text-[15px] font-bold text-white bg-transparent">
                                             <span className="bg-transparent">
                                               Emplacement : {getLocationCustomName(locName)}
@@ -2812,6 +3059,30 @@ export default function StocksTab({
                                                 )}
                                               </button>
                                             </td>
+
+                                            {/* Extraire / Déployer button if type is defibrillator */}
+                                            {isDefibrillator && (
+                                              <td className="px-3 py-3 bg-white whitespace-nowrap">
+                                                <button
+                                                  type="button"
+                                                  disabled={trace.volume === 0}
+                                                  onClick={() => handleExtractDeployDefib(trace, idx)}
+                                                  style={{
+                                                    backgroundColor: trace.volume === 0 ? '#94a3b8' : '#000000',
+                                                    color: '#ffffff',
+                                                    padding: '8px 16px',
+                                                    fontSize: '18px',
+                                                    borderRadius: '10px',
+                                                    cursor: trace.volume === 0 ? 'not-allowed' : 'pointer',
+                                                    opacity: trace.volume === 0 ? 0.6 : 1,
+                                                  }}
+                                                  className={`font-sans font-bold transition-all border-0 ${trace.volume === 0 ? '' : 'active:scale-95 cursor-pointer hover:opacity-90'}`}
+                                                  title={trace.volume === 0 ? "Volume à 0 (Déjà extrait/déployé)" : "Extraire / Déployer dans les défibrillateurs"}
+                                                >
+                                                  Extraire/Déployer
+                                                </button>
+                                              </td>
+                                            )}
 
                                             {/* Code-barres / Imprimer */}
                                           <td className="px-3 py-3 bg-white">
@@ -3195,6 +3466,30 @@ export default function StocksTab({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* System Info Popup */}
+      {systemInfoPopup && (
+        <div 
+          className="fixed top-6 right-6 z-[9999] flex items-center gap-3 bg-neutral-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-neutral-700 animate-in fade-in slide-in-from-top-4 duration-300 font-sans"
+          role="alert"
+        >
+          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
+            <Check className="w-5 h-5" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-bold text-sm text-white">Information système</span>
+            <span className="text-xs text-slate-200">{systemInfoPopup}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSystemInfoPopup(null)}
+            className="ml-4 text-slate-400 hover:text-white transition-colors p-1"
+            title="Fermer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 

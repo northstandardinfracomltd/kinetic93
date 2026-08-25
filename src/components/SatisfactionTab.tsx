@@ -248,7 +248,56 @@ export default function SatisfactionTab({
       <HelpBubble 
         cacheKey="help_dismissed_satisfaction" 
         text="Retrouvez ici les retours de vos clients suite au lien envoyé après chaque intervention. Ces données permettent de mesurer la satisfaction globale et d'identifier d'éventuels points d'amélioration pour vos services. Chaque retour est horodaté et associé à l'évaluation donnée par le client." 
+        style={{ marginBottom: '10px' }}
       />
+
+      {/* Fixed Info Div: Satisfaction Form Preview */}
+      <div 
+        id="satisfaction-form-preview-card"
+        className="p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fadeIn transition-all"
+        style={{
+          borderColor: 'rgb(203 192 206)',
+          background: 'rgba(255, 255, 255, 0)',
+          backgroundColor: 'rgba(255, 255, 255, 0)',
+          boxShadow: 'none',
+          maxWidth: '98%',
+          margin: '0 auto 20px auto',
+        }}
+      >
+        <div className="flex flex-col md:flex-row items-center md:items-center gap-4 flex-1">
+          <div className="flex items-start gap-3 w-full">
+            <p 
+              className="font-sans leading-relaxed"
+              style={{ 
+                fontSize: '16px', 
+                fontWeight: 400, 
+                color: '#000000', 
+                cursor: 'default' 
+              }}
+            >
+              {t("Le formulaire de satisfaction comporte des champs permettant au client d'évaluer la prestation perçue, notamment par rapport au savoir-être du technicien et au résultat matériel de l'intervention. Vous pouvez consulter un aperçu du formulaire.")}
+            </p>
+          </div>
+        </div>
+        <a
+          id="btn-preview-satisfaction-form"
+          href="https://consoledefibeo.deroesch.com/satisfaction"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 inline-flex items-center justify-center text-center whitespace-nowrap"
+          style={{
+            backgroundColor: 'rgb(0, 0, 0)',
+            color: 'rgb(255, 255, 255)',
+            fontSize: '18px',
+            borderRadius: '13px',
+            padding: '10px 20px',
+            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset',
+            textDecoration: 'none',
+          }}
+        >
+          {t("Aperçu du formulaire")}
+        </a>
+      </div>
 
       {/* Main Table Content */}
       <div className="bg-white overflow-hidden mt-6 rounded-none animate-fadeIn" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

@@ -1259,6 +1259,7 @@ export default function DefibTab({
 
   const [bulkApplyRappelMensuelAuto, setBulkApplyRappelMensuelAuto] = useState(false);
   const [bulkRappelMensuelAuto, setBulkRappelMensuelAuto] = useState<'Oui' | 'Non'>('Non');
+  const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | null>(null);
 
   // --- LOOKUP INDEXES ---
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
@@ -1301,7 +1302,7 @@ export default function DefibTab({
 
   // List search & filters computation
   const filteredDefibs = useMemo(() => {
-    return defibrillateurs.filter(df => {
+    let result = defibrillateurs.filter(df => {
       const clientName = clientMap.get(df.clientId)?.denomination || '';
       const modelName = variableMap.get(df.modeleId)?.nom || '';
       const isMatchSearch =
@@ -1399,7 +1400,34 @@ export default function DefibTab({
              isMatchContrat &&
              isMatchRejected;
     });
-  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, fsmTours]);
+
+    if (sortFilter === 'recent') {
+      const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, idx]));
+      result = [...result].sort((a, b) => {
+        const idxA = indexMap.get(a.id) ?? 0;
+        const idxB = indexMap.get(b.id) ?? 0;
+        return idxB - idxA;
+      });
+    } else if (sortFilter === 'closest_maintenance') {
+      const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, idx]));
+      result = [...result].sort((a, b) => {
+        const nextA = computeProchaineMaintenance(a.derniereMaintenance);
+        const nextB = computeProchaineMaintenance(b.derniereMaintenance);
+        const dateA = parseDateHelper(nextA);
+        const dateB = parseDateHelper(nextB);
+
+        const timeA = dateA ? dateA.getTime() : Infinity;
+        const timeB = dateB ? dateB.getTime() : Infinity;
+
+        if (timeA !== timeB) {
+          return timeA - timeB;
+        }
+        return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
+      });
+    }
+
+    return result;
+  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, fsmTours, sortFilter]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -1407,7 +1435,7 @@ export default function DefibTab({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, activeFilters]);
+  }, [search, activeFilters, sortFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredDefibs.length / ITEMS_PER_PAGE));
 
@@ -2145,6 +2173,55 @@ export default function DefibTab({
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Filters Pills Row */}
+          <div 
+            className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" 
+            id="defibrillateurs-sort-pills"
+            style={{ maxWidth: '98%', margin: '0 auto' }}
+          >
+            <button
+              type="button"
+              onClick={() => setSortFilter(prev => prev === 'recent' ? null : 'recent')}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: sortFilter === 'recent' ? '#fe4eba' : '#ffffff',
+                color: sortFilter === 'recent' ? '#ffffff' : '#000000',
+                border: sortFilter === 'recent' ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="transition-all"
+            >
+              {t("Ajouté récemment")}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSortFilter(prev => prev === 'closest_maintenance' ? null : 'closest_maintenance')}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: sortFilter === 'closest_maintenance' ? '#fe4eba' : '#ffffff',
+                color: sortFilter === 'closest_maintenance' ? '#ffffff' : '#000000',
+                border: sortFilter === 'closest_maintenance' ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="transition-all"
+            >
+              {t("Pro.Main au plus proche")}
+            </button>
           </div>
 
             {/* Dynamic bulk Action Bar at the top of the table if at least one record checked */}

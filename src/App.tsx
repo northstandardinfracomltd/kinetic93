@@ -6879,7 +6879,7 @@ export default function App() {
                         }}
                         className="transition-all"
                       >
-                        {t("Missions à trier")}
+                        {t("À trier / Ordres ADV")}
                       </button>
 
                       {uniqueDates.map(dateStr => (
@@ -10474,6 +10474,7 @@ export default function App() {
                     display: inline-flex !important;
                     align-items: center !important;
                     justify-content: center !important;
+                    max-width: 145px !important;
                   }
                   #devis-tab-container-harmonized select.transformer-select option {
                     background: #ffffff !important;
@@ -10824,6 +10825,7 @@ export default function App() {
                                              outline: 'none',
                                              textAlign: 'center',
                                              textAlignLast: 'center',
+                                             maxWidth: '145px',
                                            }}
                                            className="transformer-select cursor-pointer font-sans"
                                          >
@@ -11445,6 +11447,8 @@ export default function App() {
               stocks={stocks}
               variables={variables}
               defibrillateurs={defibrillateurs}
+              saveDefibs={saveDefibs}
+              onAddDefib={handleAddDefib}
               saveStocks={saveStocks}
               showStockForm={showStockForm}
               setShowStockForm={setShowStockForm}
@@ -11573,6 +11577,7 @@ export default function App() {
               pointages={pointages}
               customerReviews={customerReviews}
               fsmTours={fsmTours}
+              generatedReports={generatedReports}
             />
           )}
 
@@ -11761,6 +11766,7 @@ export default function App() {
         pointages={pointages}
         customerReviews={customerReviews}
         fsmTours={fsmTours}
+        generatedReports={generatedReports}
       />
 
       <FeedbackDrawer companyName={companyInfo?.name} />
