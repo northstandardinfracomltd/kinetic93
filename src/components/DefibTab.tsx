@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Defibrillateur, Client, Variable, CompanyInfo } from '../types';
 import { t } from '../utils/translate';
 import MapModal from './MapModal';
@@ -934,9 +934,18 @@ export default function DefibTab({
   const [identifiant, setIdentifiant] = useState('');
   const [numeroSerie, setNumeroSerie] = useState('');
   const [commentaire, setCommentaire] = useState('');
+  const commentaireRef = useRef<HTMLTextAreaElement>(null);
   const [modeleId, setModeleId] = useState('');
   const [numeroAtlasante, setNumeroAtlasante] = useState('');
   const [versionLogiciel, setVersionLogiciel] = useState('');
+
+  // Auto-resize Section 1 Commentaire field
+  useEffect(() => {
+    if (commentaireRef.current) {
+      commentaireRef.current.style.height = 'auto';
+      commentaireRef.current.style.height = `${Math.max(38, commentaireRef.current.scrollHeight)}px`;
+    }
+  }, [commentaire, isFormOpen]);
 
   const selectedModelVar = useMemo(() => {
     if (!modeleId) return null;
@@ -1305,17 +1314,27 @@ export default function DefibTab({
     let result = defibrillateurs.filter(df => {
       const clientName = clientMap.get(df.clientId)?.denomination || '';
       const modelName = variableMap.get(df.modeleId)?.nom || '';
-      const isMatchSearch =
-        (df.identifiant || '').toLowerCase().includes(search.toLowerCase()) ||
-        (df.numeroSerie || '').toLowerCase().includes(search.toLowerCase()) ||
-        (df.numeroAtlasante || '').toLowerCase().includes(search.toLowerCase()) ||
-        (df.versionLogiciel || '').toLowerCase().includes(search.toLowerCase()) ||
-        (df.ville || '').toLowerCase().includes(search.toLowerCase()) ||
-        (clientName || '').toLowerCase().includes(search.toLowerCase()) ||
-        (modelName || '').toLowerCase().includes(search.toLowerCase()) ||
-        (df.nomPrenomSite || '').toLowerCase().includes(search.toLowerCase()) ||
-        (df.nomSite || '').toLowerCase().includes(search.toLowerCase()) ||
-        (df.categorieEtablissement || '').toLowerCase().includes(search.toLowerCase());
+      const searchLower = (search || '').toLowerCase().trim();
+      const isMatchSearch = !searchLower || (
+        (df.identifiant || '').toLowerCase().includes(searchLower) ||
+        (df.numeroSerie || '').toLowerCase().includes(searchLower) ||
+        (df.numeroAtlasante || '').toLowerCase().includes(searchLower) ||
+        (df.versionLogiciel || '').toLowerCase().includes(searchLower) ||
+        (df.ville || '').toLowerCase().includes(searchLower) ||
+        (clientName || '').toLowerCase().includes(searchLower) ||
+        (modelName || '').toLowerCase().includes(searchLower) ||
+        (df.nomPrenomSite || '').toLowerCase().includes(searchLower) ||
+        (df.nomSite || '').toLowerCase().includes(searchLower) ||
+        (df.categorieEtablissement || '').toLowerCase().includes(searchLower) ||
+        (df.commentaire || '').toLowerCase().includes(searchLower) ||
+        (df.commentaireInterne || '').toLowerCase().includes(searchLower) ||
+        (df.commentaireCoffret || '').toLowerCase().includes(searchLower) ||
+        (df.commentaireAdresse || '').toLowerCase().includes(searchLower) ||
+        (df.commentaireElectrodeA || '').toLowerCase().includes(searchLower) ||
+        (df.commentaireElectrodeP || '').toLowerCase().includes(searchLower) ||
+        (df.commentaireBatterie || '').toLowerCase().includes(searchLower) ||
+        (df.commentaireCampagneRappel || '').toLowerCase().includes(searchLower)
+      );
 
       const isMatchRegion = activeFilters.region === 'Tous' || df.region === activeFilters.region;
       const isMatchModele = activeFilters.modeleId === 'Tous' || df.modeleId === activeFilters.modeleId;
@@ -3259,12 +3278,17 @@ export default function DefibTab({
                         Commentaire.
                       </label>
                       <textarea
+                        ref={commentaireRef}
                         id="form-commentaire"
                         value={commentaire}
-                        onChange={(e) => setCommentaire(e.target.value)}
+                        onChange={(e) => {
+                          setCommentaire(e.target.value);
+                          e.target.style.height = 'auto';
+                          e.target.style.height = `${Math.max(38, e.target.scrollHeight)}px`;
+                        }}
                         placeholder="Entrez votre commentaire."
-                        rows={2}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 resize-none"
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 resize-none overflow-hidden"
+                        style={{ minHeight: '38px' }}
                       />
                     </div>
                   </div>

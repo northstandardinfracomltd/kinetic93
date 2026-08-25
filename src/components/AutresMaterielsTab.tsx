@@ -832,14 +832,24 @@ export default function AutresMaterielsTab({
 
       // 2. Search Query Filter
       if (!searchQuery) return true;
-      const lower = searchQuery.toLowerCase();
+      const lower = searchQuery.toLowerCase().trim();
       const clName = clientMap.get(item.clientId)?.denomination || '';
+      const matchesSpecifiques = item.specifiques && Object.values(item.specifiques).some(val => 
+        typeof val === 'string' && val.toLowerCase().includes(lower)
+      );
       return (
         item.categorie.toLowerCase().includes(lower) ||
         (item.identifiant || '').toLowerCase().includes(lower) ||
         clName.toLowerCase().includes(lower) ||
-        item.ville.toLowerCase().includes(lower) ||
-        (item.tournee || '').toLowerCase().includes(lower)
+        (item.ville || '').toLowerCase().includes(lower) ||
+        (item.tournee || '').toLowerCase().includes(lower) ||
+        (item.aideAcces || '').toLowerCase().includes(lower) ||
+        (item.nomPrenomSite || '').toLowerCase().includes(lower) ||
+        (item.nomContrat || '').toLowerCase().includes(lower) ||
+        (item.referenceContrat || '').toLowerCase().includes(lower) ||
+        (item.numeroVoie || '').toLowerCase().includes(lower) ||
+        (item.codePostal || '').toLowerCase().includes(lower) ||
+        Boolean(matchesSpecifiques)
       );
     });
   }, [otherEquipments, searchQuery, categoryFilter, clientMap]);
