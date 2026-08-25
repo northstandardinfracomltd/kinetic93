@@ -6919,14 +6919,11 @@ export default function App() {
                         return (
                           <div key={t.id} className="bg-white relative space-y-6 animate-fadeIn" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px', maxWidth: '98%', margin: '24px auto', backgroundColor: '#ffffff', overflow: 'hidden' }}>
                             {/* THE INTERCALAIRE TOUR HEADER */}
-                            <div className="bg-white px-5 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans" style={{ borderBottom: '1px solid rgb(218, 218, 218)', borderRadius: '17px 17px 0px 0px', backgroundColor: '#ffffff' }}>
+                            <div className="bg-white px-5 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans" style={{ borderRadius: '17px 17px 0px 0px', backgroundColor: '#ffffff' }}>
                               <div>
-                                <h3 className="text-lg font-bold text-slate-800" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                  {translate("À trier / Ordres ADV")}
-                                </h3>
-                                <p className="text-sm text-slate-500 font-sans">
-                                  {t.missions.length} {t.missions.length <= 1 ? translate("mission à affecter") : translate("missions à affecter")}
-                                </p>
+                                <span style={{ fontSize: '18px', color: '#000000' }}>
+                                  Mission(s) à affecter : {t.missions.length}.
+                                </span>
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
