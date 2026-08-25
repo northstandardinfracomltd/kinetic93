@@ -6918,6 +6918,62 @@ export default function App() {
                       if (t.id === 'a-trier') {
                         return (
                           <div key={t.id} className="bg-white relative space-y-6 animate-fadeIn" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px', maxWidth: '98%', margin: '24px auto', backgroundColor: '#ffffff', overflow: 'hidden' }}>
+                            {/* THE INTERCALAIRE TOUR HEADER */}
+                            <div className="bg-white px-5 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans" style={{ borderBottom: '1px solid rgb(218, 218, 218)', borderRadius: '17px 17px 0px 0px', backgroundColor: '#ffffff' }}>
+                              <div>
+                                <h3 className="text-lg font-bold text-slate-800" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  {translate("À trier / Ordres ADV")}
+                                </h3>
+                                <p className="text-sm text-slate-500 font-sans">
+                                  {t.missions.length} {t.missions.length <= 1 ? translate("mission à affecter") : translate("missions à affecter")}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                                {/* Enregistrer button */}
+                                <button
+                                  type="button"
+                                  disabled={!!savingTourIds[t.id]}
+                                  onClick={() => {
+                                    if (savingTourIds[t.id]) return;
+
+                                    // Disable button and lower opacity
+                                    setSavingTourIds(prev => ({ ...prev, [t.id]: true }));
+
+                                    // Save fsmTours
+                                    saveFsmTours([...fsmTours]);
+                                    alert("Les missions à trier ont été enregistrées avec succès !");
+
+                                    // Re-enable after 3 seconds
+                                    setTimeout(() => {
+                                      setSavingTourIds(prev => {
+                                        const copy = { ...prev };
+                                        delete copy[t.id];
+                                        return copy;
+                                      });
+                                    }, 3000);
+                                  }}
+                                  style={{
+                                    ...blueButtonStyle,
+                                    padding: '12px 24px',
+                                    borderRadius: '13px',
+                                    fontSize: '18px',
+                                    fontWeight: '100',
+                                    height: '50px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '100%',
+                                    opacity: savingTourIds[t.id] ? 0.7 : 1,
+                                    pointerEvents: savingTourIds[t.id] ? 'none' : 'auto'
+                                  }}
+                                  className={`${savingTourIds[t.id] ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} sm:w-auto flex-1 sm:flex-initial`}
+                                >
+                                  Enregistrer
+                                </button>
+                              </div>
+                            </div>
+
                             {/* Tour missions list */}
                             <div className="p-4 space-y-4">
                               {t.missions.length === 0 ? (

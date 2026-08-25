@@ -2389,9 +2389,9 @@ export default function DefibTab({
 
           {/* Filters Pills Row (placed between div-infos and the table) */}
           <div 
-            className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-3 pb-1" 
+            className="flex flex-wrap gap-2.5 justify-start" 
             id="defibrillateurs-sort-pills"
-            style={{ maxWidth: '98%', margin: '0 auto' }}
+            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '35px', padding: '0px' }}
           >
             <button
               type="button"
