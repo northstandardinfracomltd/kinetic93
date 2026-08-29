@@ -1200,7 +1200,7 @@ export default function DefibTab({
   const [lotElectrodeASecours, setLotElectrodeASecours] = useState('');
   const [lotPadpakA, setLotPadpakA] = useState('');
   const [peremptionPadpakA, setPeremptionPadpakA] = useState('');
-  const [hasPadpakA, setHasPadpakA] = useState<'Oui' | 'Non'>('Oui');
+  const [hasPadpakA, setHasPadpakA] = useState<'Oui' | 'Non'>('Non');
 
   // Section 7 - Électrode Pédiatrique (P)
   const [hasElectrodePSecours, setHasElectrodePSecours] = useState<'Oui' | 'Non'>('Non');
@@ -1216,7 +1216,7 @@ export default function DefibTab({
   const [lotElectrodePSecours, setLotElectrodePSecours] = useState('');
   const [lotPadpakP, setLotPadpakP] = useState('');
   const [peremptionPadpakP, setPeremptionPadpakP] = useState('');
-  const [hasPadpakP, setHasPadpakP] = useState<'Oui' | 'Non'>('Oui');
+  const [hasPadpakP, setHasPadpakP] = useState<'Oui' | 'Non'>('Non');
 
   // Section 8 - Batterie (B)
   const [hasBatterieSecours, setHasBatterieSecours] = useState<'Oui' | 'Non'>('Non');
@@ -1663,7 +1663,7 @@ export default function DefibTab({
     setLotElectrodeASecours('');
     setLotPadpakA('');
     setPeremptionPadpakA('');
-    setHasPadpakA('Oui');
+    setHasPadpakA('Non');
 
     // Electrodes Pediatric (P)
     setHasElectrodePSecours('Non');
@@ -1679,7 +1679,7 @@ export default function DefibTab({
     setLotElectrodePSecours('');
     setLotPadpakP('');
     setPeremptionPadpakP('');
-    setHasPadpakP('Oui');
+    setHasPadpakP('Non');
 
     // Battery (B)
     setHasBatterieSecours('Non');
@@ -1827,7 +1827,7 @@ export default function DefibTab({
     setLotElectrodeASecours(df.lotElectrodeASecours || '');
     setLotPadpakA(df.lotPadpakA || '');
     setPeremptionPadpakA(df.peremptionPadpakA || '');
-    setHasPadpakA(df.hasPadpakA || 'Oui');
+    setHasPadpakA(df.hasPadpakA || (df.lotPadpakA || df.peremptionPadpakA ? 'Oui' : 'Non'));
 
     setHasElectrodePSecours(df.hasElectrodePSecours || (df.modeleElectrodePSecoursId || df.lotElectrodePSecours || df.peremptionSecoursElectrodeP ? 'Oui' : 'Non'));
     setModeleElectrodePId(df.modeleElectrodePId || '');
@@ -1842,7 +1842,7 @@ export default function DefibTab({
     setLotElectrodePSecours(df.lotElectrodePSecours || '');
     setLotPadpakP(df.lotPadpakP || '');
     setPeremptionPadpakP(df.peremptionPadpakP || '');
-    setHasPadpakP(df.hasPadpakP || 'Oui');
+    setHasPadpakP(df.hasPadpakP || (df.lotPadpakP || df.peremptionPadpakP ? 'Oui' : 'Non'));
 
     setHasBatterieSecours(df.hasBatterieSecours || (df.modeleBatterieSecoursId || df.lotBatterieSecours || df.peremptionBatterieSecours ? 'Oui' : 'Non'));
     setModeleBatterieId(df.modeleBatterieId || '');
