@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Client, Defibrillateur, StockRecord, PointageLog, Variable } from '../types';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
 import { generateRandomShortCode, computeProchaineMaintenance } from '../utils';

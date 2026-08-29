@@ -1,4 +1,4 @@
-ï»¿ï»¿ï»¿ï»¿// Defibeo Web Application
+ï»¿// Defibeo Web Application
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getRegionsForCountry } from './utils/regions';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases } from './firebase';
@@ -62,6 +62,7 @@ import SatisfactionTab from './components/SatisfactionTab';
 import VeillesTab from './components/VeillesTab';
 import FormationsTab from './components/FormationsTab';
 import GmaoTab from './components/GmaoTab';
+import CommercialDocsTab from './components/CommercialDocsTab';
 import StagiairesTab from './components/StagiairesTab';
 import EmargementsTab from './components/EmargementsTab';
 import GmaoCorrectionForm from './components/GmaoCorrectionForm';
@@ -9731,251 +9732,272 @@ export default function App() {
           )}
 
           {/* ======================================= */}
+          {/* ======================================= */}
           {/* DEVIS & PROFORMA MODULE */}
           {/* ======================================= */}
-          {activeTab === 'devis' && (() => {
-            const customButtonStyle: React.CSSProperties = {
-              backgroundColor: '#000',
-              color: '#fff',
-              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
-              borderRadius: '12px',
-              fontSize: '18px',
-              padding: '9px 19px',
-              fontWeight: '100',
-              transition: 'all 0s ease-in-out',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              cursor: 'pointer',
-              border: 'none',
-            };
+          {activeTab === 'devis' && (
+            <CommercialDocsTab
+              commercialDocs={commercialDocs}
+              saveCommercialDocs={saveCommercialDocs}
+              clients={clients}
+              variables={variables}
+              stocks={stocks}
+              members={members}
+              companyInfo={companyInfo}
+              tenantId={tenantId}
+              t={t}
+              handleDownloadDoc={handleDownloadDoc}
+              handleTransformDoc={handleTransformDoc}
+              triggerPennylaneSync={triggerPennylaneSync}
+            />
+          )}
 
-            const rowActionButtonStyle: React.CSSProperties = {
-              backgroundColor: '#000',
-              color: '#fff',
-              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
-              borderRadius: '10px',
-              fontSize: '15px',
-              padding: '8px 16px',
-              fontWeight: '100',
-              transition: 'all 0s ease-in-out',
-            };
+          {/* ======================================= */}
+          {/* STOCKS CENTRALE MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'stocks' && (
+            <StocksTab
+              stocks={stocks}
+              variables={variables}
+              defibrillateurs={defibrillateurs}
+              saveDefibs={saveDefibs}
+              onAddDefib={handleAddDefib}
+              saveStocks={saveStocks}
+              showStockForm={showStockForm}
+              setShowStockForm={setShowStockForm}
+              distributedStocks={distributedStocks}
+              onNavigateToDistributedStocks={(ugs) => {
+                setDistributedStocksSearchQuery(ugs);
+                rawSetActiveTab('stocks-distribues');
+              }}
+              stockSearchQuery={stockSearchQuery}
+              setStockSearchQuery={setStockSearchQuery}
+              commercialDocs={commercialDocs}
+              achatsFournisseurs={achatsFournisseurs}
+              setActiveTab={setActiveTab}
+            />
+          )}
 
-            const thStyle: React.CSSProperties = {
-              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              fontWeight: 100,
-              letterSpacing: 'normal',
-              textTransform: 'none',
-              color: '#000000',
-              cursor: 'default',
-            };
+          {/* ======================================= */}
+          {/* STOCKS DISTRIBUES MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'stocks-distribues' && (
+            <StocksDistribuesTab
+              distributedStocks={distributedStocks}
+              saveDistributedStocks={saveDistributedStocks}
+              stocks={stocks}
+              saveStocks={saveStocks}
+              variables={variables}
+              members={members}
+              fsmTours={fsmTours}
+              searchQuery={distributedStocksSearchQuery}
+              setSearchQuery={setDistributedStocksSearchQuery}
+              onNavigateToCentraleStocks={(ugs) => {
+                setStockSearchQuery(ugs);
+                rawSetActiveTab('stocks');
+              }}
+            />
+          )}
 
-            const itemValueStyle: React.CSSProperties = {
-              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-              fontSize: '16px',
-              color: '#000000',
-              fontWeight: 100,
-            };
+          {/* ======================================= */}
+          {/* ACHATS FOURNISSEURS MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'achats-fournisseurs' && (
+            <AchatsFournisseursTab
+              achatsFournisseurs={achatsFournisseurs}
+              saveAchatsFournisseurs={saveAchatsFournisseurs}
+              variables={variables}
+            />
+          )}
 
-            const tenantCommercialDocs = commercialDocs.filter((doc) => {
-              if (tenantId !== 'demo') {
-                const dEnv = (doc.envId || doc.tenantId || '').trim().toLowerCase();
-                const cleanTenant = tenantId.trim().toLowerCase();
-                const numTenant = cleanTenant.replace(/^d/i, '');
-                if (dEnv === 'demo') return false;
-                if (dEnv && dEnv !== cleanTenant && dEnv.replace(/^d/i, '') !== numTenant) return false;
-                if (!dEnv && doc.clientDenomination && (doc.clientDenomination.includes('Medical360') || doc.clientDenomination.includes('SecoursProOuest'))) return false;
-              }
-              return true;
-            });
+          {/* ======================================= */}
+          {/* GED MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'ged' && (
+            <GedTab
+              gedDocs={gedDocs}
+              saveGedDocs={saveGedDocs}
+              isGedFormOpen={isGedFormOpen}
+              setIsGedFormOpen={setIsGedFormOpen}
+              handleConsultGed={handleConsultGed}
+            />
+          )}
 
-            const filtDocs = tenantCommercialDocs.filter((doc) => {
-              const matchType =
-                docTypeFilter === 'Tous' ||
-                (docTypeFilter === 'Bon de commande' ? (doc.type === 'Bon de commande' || !!doc.hasBonCommande) : doc.type === docTypeFilter);
-              const query = docSearchQuery.trim().toLowerCase();
-              const matchSearch =
-                !query ||
-                doc.ref.toLowerCase().includes(query) ||
-                doc.clientDenomination.toLowerCase().includes(query) ||
-                doc.items.some((item) => item.nomPiece.toLowerCase().includes(query));
-              return matchType && matchSearch;
-            });
+          {/* ======================================= */}
+          {/* SATISFACTION CLIENT MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'satisfaction' && (
+            <SatisfactionTab
+              customerReviews={customerReviews}
+              onUpdateReviews={saveReviews}
+            />
+          )}
 
-            return (
-              <div className="space-y-6 animate-fadeIn" id="devis-tab-container-harmonized">
-                <style>{`
-                  #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-devis-input),
-                  #devis-tab-container-harmonized select:not(.transformer-select),
-                  #devis-tab-container-harmonized textarea {
-                    padding: 12px !important;
-                    border: 1px solid #dedede !important;
-                    border-radius: 13px !important;
-                    font-size: 16px !important;
-                    font-weight: 100 !important;
-                    background: #ffffff !important;
-                    color: #000000 !important;
-                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-                    box-sizing: border-box !important;
-                    outline: none !important;
-                    transition: all 0s !important;
-                  }
-                  #devis-tab-container-harmonized select.transformer-select {
-                    background: #000000 !important;
-                    color: #ffffff !important;
-                    font-size: 18px !important;
-                    box-shadow: none !important;
-                    border: none !important;
-                    border-radius: 13px !important;
-                    padding: 9px 19px !important;
-                    cursor: pointer !important;
-                    appearance: none !important;
-                    -webkit-appearance: none !important;
-                    -moz-appearance: none !important;
-                    text-align: center !important;
-                    text-align-last: center !important;
-                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    max-width: 145px !important;
-                  }
-                  #devis-tab-container-harmonized select.transformer-select option {
-                    background: #ffffff !important;
-                    color: #000000 !important;
-                  }
-                  #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-devis-input),
-                  #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-devis-input),
-                  #devis-tab-container-harmonized select:not(.transformer-select):hover:not(:disabled),
-                  #devis-tab-container-harmonized select:not(.transformer-select):focus:not(:disabled),
-                  #devis-tab-container-harmonized textarea:hover:not(:disabled),
-                  #devis-tab-container-harmonized textarea:focus:not(:disabled),
-                  #devis-tab-container-harmonized #search-devis-input:hover,
-                  #devis-tab-container-harmonized #search-devis-input:focus {
-                    outline: 2.5px solid #fa53d5 !important;
-                    outline-offset: 2px !important;
-                    transition: all 0s !important;
-                  }
-                  #devis-tab-container-harmonized select {
-                    appearance: none !important;
-                    -webkit-appearance: none !important;
-                    -moz-appearance: none !important;
-                    background-image: none !important;
-                  }
-                  #devis-tab-container-harmonized select option {
-                    color: #000000 !important;
-                    background: #ffffff !important;
-                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-                  }
-                  #devis-tab-container-harmonized input[type="date"]::-webkit-calendar-picker-indicator {
-                    display: none !important;
-                    -webkit-appearance: none !important;
-                    background: none !important;
-                    width: 0 !important;
-                    height: 0 !important;
-                  }
-                   #devis-tab-container-harmonized input[type="radio"] {
-                    appearance: none !important;
-                    -webkit-appearance: none !important;
-                    width: 18px !important;
-                    height: 18px !important;
-                    border: 1px solid #dedede !important;
-                    border-radius: 50% !important;
-                    outline: none !important;
-                    background-color: #ffffff !important;
-                    cursor: pointer !important;
-                    position: relative !important;
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    transition: all 0.2s ease !important;
-                    margin-right: 6px !important;
-                  }
-                  #devis-tab-container-harmonized input[type="radio"]:hover {
-                    border-color: oklch(0.44 0.16 324.65) !important;
-                    outline: none !important;
-                  }
-                  #devis-tab-container-harmonized input[type="radio"]:checked {
-                    border-color: oklch(0.44 0.16 324.65) !important;
-                    background-color: oklch(0.44 0.16 324.65) !important;
-                    outline: none !important;
-                  }
-                  #devis-tab-container-harmonized input[type="radio"]:checked::after {
-                    content: "" !important;
-                    position: absolute !important;
-                    top: 50% !important;
-                    left: 50% !important;
-                    transform: translate(-50%, -50%) !important;
-                    width: 8px !important;
-                    height: 8px !important;
-                    background-color: #ffffff !important;
-                    border-radius: 50% !important;
-                  }
-                  #devis-tab-container-harmonized label,
-                  #devis-tab-container-harmonized .devis-label-style {
-                    letter-spacing: normal !important;
-                    text-transform: none !important;
-                    font-size: 16px !important;
-                    color: #000000 !important;
-                    font-weight: 600 !important;
-                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-                  }
-                  #devis-tab-container-harmonized input:disabled,
-                  #devis-tab-container-harmonized select:disabled {
-                    background-color: #f1f5f9 !important;
-                    color: #555555 !important;
-                    cursor: not-allowed !important;
-                    opacity: 0.82 !important;
-                  }
-                `}</style>
+          {/* ======================================= */}
+          {/* TEMPS & POINTAGE MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'temps' && (
+            <TempsTab
+              pointages={pointages}
+              members={members}
+              onUpdatePointages={savePointages}
+            />
+          )}
 
-                {!isDocFormOpen ? (
-                  <>
-                    {/* Dashboard List Header */}
-                    <div 
-                      className="bg-white space-y-4"
-                      style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
-                    >
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-                        <div>
-                          <h2 className="text-2xl font-bold tracking-tight font-gochi bg-white" style={{ color: '#000000', cursor: 'default' }} id="devis-tab-title">{t("Commandes")}</h2>
-                        </div>
+          {/* ======================================= */}
+          {/* LOCALISATIONS GPS MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'localisations' && (
+            <LocalisationsTab
+              members={members}
+            />
+          )}
 
-                        <div className="flex flex-wrap items-center gap-3 bg-white">
-                          {/* Field recherche (Search input) */}
-                          <div className="relxœì=ÉvÜÈ‘wEšîqUµ‰â"Q­ÖÒ£¸¨ùLIl%d;Èª‚…ĞXŠdÓ|ÏÏ7ßç2·9šóüüÉDdbß2Q‹¤V;»%€\##cËÈH˜3F.µQhYÄŸ>¹Ôo’áX»œ˜[{ú+ÒvMÛƒÆ,„×.Û[ØU°&Éi{k>£>Ñ63}W/+5£VÈönGğ²ß‡Ì»¾•rìƒ	µÇP®Ëzdï)ñYp˜«¡ËúõÆ,èóz²]‹êlâXóöÖÎ™>aPëËz¯[Ô÷_Ñ)€(š„”6„Ú>dëÔŞıæ›‡øßûìÛ'#Ç4ËOâ„eÚL³›ÉZõƒkÆ~#ÉFÈĞñ°ÒÙr¯ˆïX¦A~c0ü¯³®XøœfècÜ+…R.5ÓCo¡Í­o•
-!æO›y¬\â!‡e67Šèå ,~³É“
-`ÇÚÆA\vÄ“béÔ´®ŸµÎ!™Cæ¼¤¦İY'sfZ®çLáÁ§¶¯ùÌ3GkòZ#, (t#ğ z30ÊPÀÏM_Zê¶y±l4Q•İÃœ=ıUC—ÙöµEm¶¯sâõÛß’n3†AàØrš`™ú‡½ †ÅÎâV^XÎZƒk[—Ñ åeÕï÷õĞœésŞ±–››”1Qo‰’)Ì.N„›ÉN3/yºkå‰çØ&àóš„æînˆimªªhÂ5Qil&AøAğŠ]ŸhîX„¥n.Õ ÍàD`¾rÂ£a3åPŒVdëM+9³†-æ/™ïÓqãJŞ…Êê'JaåE+ ß0Ÿ²··G:Ìó¯CÁa£‡:×ËÖæğÛÇ[ë¥óÉ²à:MYQØŞ„×b£ ±Ş)È*¦}á¸Ø‰G’NˆÌÏ˜÷©Jş+:±æ­“ĞÔRÆLèÚØTÍ?ª­³–¼Ô£a5ÊÔÕÓ€—u4a÷;f¹ÏÃá0¢¦V‚L÷{v½·6¼2Ljú>3şÄåÕµºb8“{kÏÒÜÿ/€gæ˜à £ÿcø¯¿şOhC}b›ºÉlÂlM?ğu]ÇˆùL„üŒÙÈŒ×‰i.‡à5ÊšÄ‚‹ŸxŞû»)DŒŒ¨„['Û$‡÷w\˜ s=fÄb>qÍûèğo˜–éßßÁOñı}ÿ|5d<È´,héÇ‘™Bi$5?AßıÔ„!Ò?d^Ÿ¼Å,3ğúî¼û;¶â;á„B¹Ÿ 'Bà9Şàˆ}F€C{??ô0ßDèÂE&;ô>Q‚‹†aaÈï#Hú5S³QCF…?1Ó†iÖA•`ÅcëÌ³©à ˜–”#3“â«³³cÚøœá¨aÈ:CÀÁÃQè9.L­oŠ™Ha	ØÃ$’1€-á¼YÎÎ‚iˆ€Lbñj`˜İ±m¦cU€¼0kI9:†y„™Ôé”‘,Æu’Mëä °ØÀÓñ¦_çHJMhş·|½vB v.°|ö:4,'Ì¬Àk{lÁhDSêÑéı? ¨ßvRo6¾&Ç¦#ñÉà¯OÎKòõF5	áü&Ã“İ+í!YìŠÿ¥]ÂÂ$cêjÛı‚xn®5á
-E-:~ÃeâÚÎWo…^‹*±æbjì›î»ÎL
-û‡X‹µ€?‘˜ŒÃ¤Õì+ËœyÔô»óP§Ïzı)u»İık7à*o=³D`ë gdlşgm6sDÒ*å]î5TM’Š†H€Èãé&µ@¬òû³ÇÁ¤¾É[Â,ŸUµ\È5w’ÑÇÉªn‚üå/ğ}B}øp½ì©aÙ½KçVŞƒÚ/µ<ˆg7ªY*JÖ —7IO›åaa7•6+‰„ŞÍ˜r. ¸Xí´W’Ûeê[Ñ¬
-˜‚Å!5klAv²­R&+Xî(æW.1é¡çs¥Ğu¸h¡T,vÖ2&‰µu²–˜$Ö²" ´Î’Rkdç.Ú\8ÑÆÎ•Y]±fQi¡XÇö1IÕëY¦ûé[o<ìno=^'ñ_=…–¯j8—ª¦œ²!§¿µâõY§±¨Äá‘i4°òšY³¤{Ã	âmo!5¶WGokÈB£ş
-²">¹ (¶œ3Á'ƒ	Ö©*RÄVvâÌ˜7²œKmbÈhÓ@{Døš`†°ç&´)µÈŠI/R#NVÊÈ“X«Áz•tæJÉÍiØà”<Ã¶9Şo¾7²‰£©\s°¥†ìœ¤¥m=VğHJÌ!Ä?q¯µí‡kM6Ä¬­Æ|Îj,ï¨igZàÕ€‚XÔ¶Íó\ù9i«+ÍP¤Š7.ñ(kªˆ7ån˜Âx\F™•m7ğ
-8ÈW-ÈÕ lÉ~OÔJI,†9yĞßI@L„¹ë)¡ÎAÙÆÒ_ëİîn“å7üz¿ºú_²éuĞ¨Íax·º–^ÿÌp/GhUv@Mo…p»pj‘ï.V×Â!–ÒÿA¸Ô¶W770ƒ
-¹mfÖw¿ßÚ\'œ~\ cœÒ¢VÈjŒù}‚JJğËëÇ·û.µ­íjà®(}ªBOBX6(Ën0tŒëœ4€õ-@ í›Í„rJ·®ÂuV¬$Újœ¸¦@R€= 
+          {/* ======================================= */}
+          {/* TICKETS DE CAISSE MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'tickets' && (
+            <TicketsCaisseTab
+              expenses={expenses}
+              onUpdateExpenses={saveExpenses}
+              members={members}
+            />
+          )}
 
-÷Å‹Cf;SÓæ¸z[§S¯UUxhú®E¯¡Î´˜í=i¸^æƒ} ö¸»	Ô{³G~G:]À›Ê}i>Õ.xÎ¥˜T±™°õ˜Ïö;¨ôƒ3´yÉ|è R|ªP©âÔb»Pí÷¡0µßÜsyŞ-ë9¤ñ´1õ·ÿÙ´™%’‚¢'rEJ;®$Óm
-Š”¡ˆ(.™ LùDw0íL=~OòªB¤Šj‘"*s_)Uû™"…	G‰wšÈ¾»xyzdq›cÈ…ã3?èv„>±Nè:á~( Õ2‹éğ¯0³wz½Úòe,7&R7N×Ô
-J·b1ÉÙ
-&T[2Y­¦RL»QÅ’vÿó‘ÿi‚ûeødvÙò¦²EÉb1—‰A*g €xì±‘â°7£Ñ!S1@VH¡¿@ æXäJ@[ÀPFÔ…qàŞ–ğ`—r¸0³ Wé"‹Ã}J¯´KÍŸm¤ÃŸÜ³@€k«x¬ıB±;ÀáÀ¿§N-62tgäiÇçĞ©"¼9§Çå¢ë¡96Ô¶ÑˆGşõ·®bRP…ı…NˆC‡IX	®'ªúâ°ÍÙJpVñ.”’ø‚e“²³_šÁ!a¾L›ûêâV²’ª'Š®'›¢v"FÜª|´/} ¸…ç«c¾ı¯\¸ÅûQ6›>Ø;úK¾’Mí|ÓÔv¯®X¶Å¾]6¥zî#ÔsUÕã8UÙ¯Úö¼-R®^IñÁ¤ºÂùÎÒ5ĞÄ‚Ğ—úôÇiwIƒZ+-©`ÁH¸jZø3à9y
-ÜMÂ·ÃôÕ91¡¾rÑ·{V$ G–Ô%MJd·-Î	)lÁ”ìĞÕqÑÄGÇœav{Ê-nîeøA7+?FîÊTìŠúºRó°Ï&u÷|*8{_ıCçÒ¶jÄ†Õ…)ZÕ6Ö6eÀœ7g¥Û‰êU½ğõ¾¸¿³îïô	µ¤óÙ¤âE_,"a-zÒZk3Ñå3ZmD-ÛÎE_™qÁ¥HşTZÿ"÷:ò—Ô¿—½*<ìT-QBËc¶?Í>j•Ià{âô!üzn˜ŠvÅ$µAru¦ÌÓB2Yt‹!“æÙmÈ¤y62iÎ=ˆLšw;"WÅ;¥.ÌY˜º.£Ü[yÎ
-şÀ†Ì`Ñj^:?-\Gë“s¹”=Ì1‡Î•­á”úsjn~\ıÁ4‚	bÓÃ¶zJËÅ_ô^úš UdqÙŠI’İètDÌŠPGÏƒD^W©O=ù)Q”Òm”8·NÁÑ†Wã(6Ä0Z5ŠÎäKp"o7ÎØQ9œ÷)?~½'¶åQşk[#:$Õ©lqæRŒ |?“Wsš0 æ %5©=`Ššl=†y¦Ÿ^+H·èhÆ|5ÿ4…Òîë/OIxéæÈ\µ~Pu>;^ñâ E"gG_„9F|Û×uæ÷wù±îBG[#Öü¨UB® ”{P¼’ãOx¹5’Í+.WxóD˜ÙR8Xà½¨ä½ØÙNJQY’Äç"´65Ú`I;"4Á‚ÔN4h¿P[Ø?N€³Rä(ŸÄë“T“­óİÏ4ƒn‰Í'¸wƒ?ùgŒk?íV8®×9¬ãŞãµM§¦NAV$CËÑ?¯7ªª-Øùâx>ÜÎx­=Ê 2µÍ)úd¨ÁNìh;şØÅyO¦‘×Æ¿åT=¸,z]c¬|‰ÔïEïşçÎ• maW@ü­k0?0q.õ‚Åø¢ÌÇ'j¦"<!9£	4Ïbòß@ñwÎæÒ²à’€6Ğ‡iì£š¦Ê'1²±q(ş—xö‹C µ'5Èf´gmÜËH5ûöñÀSFW‹_à¹}<¾SÏ©'«'|…Éœp@kCçªzMGEâDL”Ü·¯,zCÇ2Ä¯±£OÌ~MƒZZ`¹£YYEïøÀšÁF4´™ì}Ã@Ü Äwbg$èv„¤‹gqæõ—Ó ¾— ™xàËbêÉÍîÆäÁQ2j]—tµÍşAƒ‘^.©Ê?i§Y>ñYpâÈqM¿Y°;¢–/3JB¡£Ìdum _E™<"×0°5îÌãÖ4H%ák.ÇévvÄ–fÃF@TÎãËÊŸÃÓÈGùé¾3Ç<Ùi*¬,Œ½~8œšQâÀÄÄdò=¹8Õi*£¨^KIÕˆBU‚?ºRì<X'¡#Å#™#E;y?k”††hw{gšIşÚìo÷sŒş˜6ˆuÂó>†Nñÿs¹¶İ«ò÷ÍÇ"ÃCñ‡gÈŠı&âÄÚVZI©C[Q[ÜÍb;îR“3Ã³ì
-¿œUy”Ä”i±2ë¾Ïğ‰s³„¯O’À{„ÜÒp$±>H®Æ:î™ŠJ+Ö _çqğ·1Œó¥ o¦2vr×Õvâƒ£MÑ¥Ô¢ÎÃIõ¤xqû¨™pä„ÏÚ\E¡´!cVX­ÉV³Fj£¢`œõ‘É,Ã'/< I½wFQ„cvü9 ¯m‘©ñ$}|Àª•à§µÚûªWŠy‰ú‚=ÚJ^i¸|E×“§&!Z°èY%ÑüÊÏHæ™³z;››$t]æéÔçÑ˜ôÀJ4À FbIñ
-5¾kOKÃİİàß›©’Üƒ ëº_rzoVúk‚»–«iã5 O‡¥qUrp²°/õt?ÔCĞË`%İAhÎLĞ›áuOmàfÊ‡êKŒ(ñNÍaõëîÄ“8(ŞE—ŒG»É~B·/ ¤æy™4ÍóŒ;q_2ï °¨Ûë›¶n…ó»uÖéIw$øfÏTm£'·³3íÛˆ!1şD*6©¤h÷F¢1âDÔ´â†Œd¼Íe{,²˜©Ü‹=bƒ„ïŸE{°Ë"LŸ’şàx–Osä»s5Tv•½ŒÎ<Åªîr´*"…GGMË¢d|ÄkOù?jË¤PA¨µ§Ñ¹*) uíiáÅ"•&³’Ôš¼Q©v9;u‡íîƒ¤EÆÌf,$ƒ8A®z_ÄRÏÆQYñòğôªÁéSÂp.;<»•|ÂeÚG£¢s¬ƒ/‡GDña–Î%D½'’sñ­Yó«'FÉoU¶-&XQÜ»nZ“tCM4=¥>aF„qÌŒ=h]‡€Ñ ¸Ø¢ntÍÕ¬âÿZ*Ôwé5=hOÉ{V€â,*SW•ÜcV¾WZî©MÀ1j«mº{-ØXéâoş®üíS‹kO÷wˆ‹<rál_QSŠ1µ]EëÈé<6FLøƒ\ß€|F&(lšÔÆÑ“Äz_Š&!;ûsá
-èqqÿwÛœŒZLGgUeŠC•c¶?¹b Ü¼Êşşœ¨ulÉB† Û\Ê¨(Z¡RûZ¢Hæî3úR3ö|FŒày^LNúˆs3‡²wÁ< Ò÷w¢ºäiÎÚbÿÆµ(V[ô4gm „~\Yü0oÏpë6éXô0g]XB9kKÕê[–f<¥†ºÿRèL< eóª6úïA	e.’”)ßÎü%HŒ#;À
-ğ^/—ù©T|	^ŞA®	.‹êÙÁÈ½úr4Ñ§ÅPƒaæDOQx1ÜÌÁaaŒ\!
+          {/* ======================================= */}
+          {/* VEILLES JURIDIQUES & REGLEMENTAIRES */}
+          {/* ======================================= */}
+          {activeTab === 'veilles' && (
+            <VeillesTab
+              veilles={veilles}
+              onDeleteVeille={(id) => {
+                const updated = veilles.filter(v => v.id !== id);
+                saveVeilles(updated);
+              }}
+            />
+          )}
 
-½˜œ~1(˜ŒèS¢`ln˜[ÅB(˜ƒÃçŒ‚‘‘éBÁdDŸ”
-fÍDó‘Âœj1z˜…Èç‰ŒÍ_y4Ã Ü)	/!
-|Ò=uœ¡KL”z=•s¿G0´…×û±—‘YøéÄ.Cñ¶ñâ+ Ğ‹:òLÉxF%ŞıçñTiç³µ-¼#d¼4¬E¬†OØg&“†$U$Y(eevdK}®g¤!RjÈÍ»-~Úby\O8ª;!¬]ofêªï¢âÁ¹v‡åZ¹Œ‹„ôåŠNòhgi¨íMÕ 9G¾îq=6ãÀùÑ'$ê×-¹"*a3noJÓ\ğ™Âí<â“.ªm3ˆÃ™tØí$ä«³Q9Uz¨pÆ®Œó*p~ÜD{(/‚D§ïÃ»‚/¬®–Æ×…íhH=dQÙì+9‚&Î¨Øä!^àB£ËqâS$UÈMüÉ9’ÀR¿Ê>…Óxjz"a!ŞÁCÑI°Ll+2ØWœÍ±—É‘uPêcw¦´m'Úu= ‰Ğò˜×ø1>Ã7°.ßF3£Xtå€_ëw„×ÓåõË+¶ºSyáG“¥=3nËì›uĞâVs5O·›„šH¡;Î‡f}<v¼k#¢sèQ—Ñ¼x¹ÿš/f8vBÏÆ;7C¯òûKÇ¸ÿ^ÎÄrÈ™Çğœ9Ü.ïîÎTWnÓ|à)Í= /ğo´eîs©:·ß¡1ßCŸõMu\ÇxÉC¶±g}|×êR(0<¨K>#?wo^¯nàùöı<¤j]Âö&ª›õ#“+Ÿè7ŸA ü˜zF‡7×ıê&ş|ÛSm®ÍİÙİÙYvwv¦¶;‹‰çÅëvG&^š
-ı~÷Uşİí{":ûî&E?xO0Õ·7	lnoÈU˜³z%œ–Çï)ñÑæ «©]©ßìîşÑdî s#túC±’õI÷_ûgOUìVĞùc‰ÛÑ‰[&Ğøs÷Ö6û›[²œ±›B™µæûuìz>;¶ÍH¥6¥qçƒf U„ş>„n×«ÅåíÏ—£ÁÆ7›}
-Æ¸·&EŞÜ¶ô|¨ş=Ì©Ò¥	rt‡ª²ŸØ?WT/âo+äT²´±$V¡½ïÆ) M 2@Fêœ˜êÌ±ÚVÇÈX†¨ÍwÑÿÓ)·¤¢÷ÉfRÅÔàd†°gËôÛùöÊŒ”WVéS%ƒüMÑÆ£r‹hş@)è-.:1ãùËDów‰*u‰w§Ob¡Sÿş¦8—÷wò-=©~.» ëßQo[o(ÍÜ]ª:Vµ›CÉÂw‡’Ú»«o2DıÚÄ¶•“é2êÏ„÷®‡¬ïÙÌ‰Ëh3½óauËo+œ.{ĞŞƒš»'“E—<Ğ¸İºqŠh
--îØT?¥tí%©¸ø–?ÈZÚ5‰~Z¹´2#¥=ÚÙT_ Y*ÉoÅDŠ·NLãJÙ¸.tu,÷†ğWl7haªàÅbÏ‰ÑKmÿúë+ÅÃn¡ÅŠÃuxj1H€8ÆGP‰_¥ïWå•MÛIïy®f1Oo"HŞª<kn¹¹´%ğIXRkU«ºaĞæ¯Ş"‘á·2›WÌèn÷nam/³'…+v«»ò£PQ>&Á »Eh‘¯I®×½øTû¿„±f)hŠ“TûÉ¶r/Nôº	õ‹,Æİ?õã¹Ln^DJ8O@×v‘6¸57M‹•_0¦|«Ğ˜Ÿ4Vmä2¼Ú`µêËK-^¥‚EVn“%*Q+‰<nec€O%Ï,jé¡Ås“†Oüp:¥^³I¬¤Ï=mNË·Òˆ»Z ³‰ëi[ÄÚ^QS‹ùx“¨yÛ¤ ?™9D28ÌdÎŸ¤A÷ÓÕñÈá[íâªÆª°>s¡Îº]ªë@¡N¢á7ùYb){\'›­Y¤Úè”‚×~wñvÿÌ\w)S¯0Û/boPÈƒ:UZ-ò<6ifr/œÜÍ~Ôyßú”ó.Í"É ²‘^€èŒ†’Ì±‰½¦A£÷æG:´‘š¢ÇrÁ¥qr*Íw1[ÁRYÌÏ^kíÃÚZÊá!ô‘U°”OM[›ğ¨ÛîÕû:×ï‡0Z‡@$İ7ENèé .‹?ËØtÂˆ_‚%ûç‡dÏ(]ĞÑ‰¹–CRz9k¡óæü”ø¼BŒœÃjIkâ¹ë"—¶B¼§¬O[—¥ää°ä.’e»óãzz4¯C½|á¶Õ¡¸²ªª°wàİßAáĞˆæ§ò™|+N.gTL\ óPtŞ«€Ÿ‹7½ ßånÓí*zw_ü_Ãzx^qï®ª¾Ør°9 (Ù#İ\8~XRœ{ºI-xí?8>#.”-Ñ{Vy0w´X[SsªÇaER¿|S@²
-I]j­·:<ú.³‘yE*_8*Š^3ŠN™íÍíG-‹º4 É†Ò6»$çl|tåvø¯¯nDwnµ¯n°ö[­ûÇ?¿ë}õƒò¥£C—Ñ«Wá*ßT-5r<Ò]3ˆ3* N›‹Tù)“LjcÎ8ıÂ@ªkìóÏİ˜­îeM¢Iµ½$6Zu¼‰o¯éİÖûu²µÙòzX¾d ¶§Ñ¬µ¿´6™m¨¦]Ûm¬ÕêyUsªæk ?”ÌW7<~G¶nU—JWäyÚÚ©½+¼° d
-áG,ä¾œJ–yJ›ou=}á°tods‡wŠrÏÍ— ³MàO,Çq…/’ò¶IıYÁè±çÿ+7óì™³<dÑäZsxÅï~3bÙ¾ï'ÉK!k=ØL]:·?([jë\ö.µí>ÿÎ{œvcôËQKÕê…2ßëĞ”ïû¨îö|‘¬RÜçış½êâôù®:>S}Ù‰V?£u÷Š‡ÉZÊºS5Í6ä¨€šôRĞùî|p´ÛåõñB ©ªºñ59²ƒûÿy~Ğl]«îêò¯~ˆÚY½‘-3põƒçŠ‡0©Æ¿)5³ePºÈ¥»zkŒn¥ºÚßDª5Á±‚FX4sHp"-9¶•H‡0É1&-Ş½äµñy,ìø>ãeè&*8¥sT¤fôƒ©Š![v²ŒEÛ	G;—LéšİâRzqgÃÜß1‚W›?†LÑi‰È~ß@ğö%‡†é‘ˆŸµ-Ú7Z^[š©£*[8+¶wS¬ù3k+D·s‚Â'5åwvÄék˜>š&€IÑóîchU“(®9ÊMäêLm:²b^Qoà]:í šÈÒÆ]ó³YÙ|M9^€q'ş½²+ÓÏbeç&òS®ì|G>Ã•íà²W¶šsŸ²à•„bÿ"E­ttmE-¥€P˜*•†¤İå¨ÏIusE¦i€ó")„I‰;åã*½gÌÄœE¿Õ(UÔwdÏœëû;’E_z»”6N¼)U§|+™÷µ³`8}^£BÔ‘oqRùŠÚr•_v7ğÂ¿ªR5Õ•:P‘/·‹xÛëæGº¸§–
-T“SÔ‹×¿—¯ßœU|Ÿ³f‡<PA­p´Úå!®|ÈX ƒ(±w#ş-)	B¶—Æ#+æ1ØÈz¦…ä„/ zùÅü>Æ’Ä,Øjò»˜Ë±÷ƒÊD±àÏUõâQ$¿K¹&Î%ÿ‚Q$!cö±”—ƒBöÂ›ğVp˜uK¡P|Uá+:3Ç ¤ç°\¾ı/%äÅF=}ò}È¼k^²¼!V)æ[‹{ÉüN©HIFåe2EX“ySÉr¡òËb¹¼_ÊŞMş¹˜›êø™@vP¢ü®¢o	<x§’§bÎèşß½ø"àJŒ.Ï`åëbYKğİå`443t(\ı¾ªåÓšê¿k1ıC6c–ã¢	0óPÎwÎ¨ñÚ¶®²åÌ+  ‡'ƒ‹ó“çoîÿş‘¨ivÔÖÃ$O™ÄÎCA©f’®F.U¿lYŒüé…Ãcü«¼3d¡	])”&ŠØDz@éõ¨ÅÔèn‘pµ µR»²•³ğİşÅ€¿~sşêd08zs¾ò¥#È¯6ÊĞßªÅ³_¢Òåå3'uÔ.×.P¾ü¾=ú¯l²^’îáëƒ7/^]—û¯ö_áÏŞª§lÌŒª)zÁŒòœŒya€Nô£
-ú/â<™‡2Gq\od*™ÇŠ5’Ï^|S,!äÆàx¡@¾X’Lß|¤9½89øı¬Àƒ}\~«Hà÷XP¹Ş.Ä§Šx_VvPôëã_mi¾c¿qñÎÆ£¤&œı£ÊÚšÀ]›ºÕÂåpó/cûÉÏy‡r–ÖÕùCØc``É·äËGÂ¨ó£Ó£·(‘·G'§§+Çª®Zz+>•§!*DTü(ƒøY,`¢€¯iÔ°Ş(Ş² 2FH&Lf=üÚ4¢@&UL&,êj2]ŸŠ%Ÿ¾>Ø?=ì_œ¼~µrfl9:µL_ÿUxšÍ€ÅJkc…b=À`p¼€ İx\9§Ãú#ª'{€E‘>ó½ŒÔ"6&óÎÙÌd—~,3yQGG’ü%*}™ƒ†”ì9·.Öè* ÷¼tj•øğES3:0—y´à¶UßpÃÏñYr ªd2hkŠ.Ş‹o’G/iÖTXCÛ)–k:cf3'÷œá—œòoæt4„Ö/íãäk“Ó’Ğñäw•,wœÉ™^…â(CuË|bâÕyœääã«Ìİn%M~$¾fF_«²ñ7ÄàøwµŸÉ™{»Ûxè˜;{Uöû(ı\!<¦A~Lªº~”Í[xQšC5,U›óœ©Kíë{äp£cü07@í¬İ­
-¤9Ã\¨vŞ¦g7™ñbT®°6˜ÿZÆ¥² ©Y€‡L?.Q›°6ÙüB,}˜WQxçËÖû²®ú,Z¦~äŸZõ‡’¹š›ÍÊ/Áª<ƒ\‚hGÜ¦ÔN6k«vN±ñàÅS™¯zèjóÆGC³åŒÇÌÀßÅlÌF¶ñ:˜0ïèÇĞtcšRõºn2J¥³“"«£XÖ‘µy`1ê•šì&^áS÷İûÒ~$îëÛ6ÓÇóE/„5ö]3ıR7\”àqqãV¾ÏybîÍ'³ø(ˆ9EYGcWøO9áøw,UèO 8€—Úµˆ~•{|„H} 	5†Å7«Q?•„\¥]Tür÷7ó0ç**ĞißróËh†ç¸CçJ|ègkóêÌ÷/œÈ7ÊïÑıô¬«ÄîÆ”š™§¬·7ÍZÎZ0…nèúdháU~ÄõÈçÀ3ÊgOŒ9éÇßóÖË×ãt9›³t RÎçãõœ¯ÏSãvŠ|®iÛbË2ş§ÈùZ¶ÜÌ¥¼p>.¸ÿSç|ò¼¶Ü®5Ÿ“s8	oÛÈ-}¾€ÉşÌô`Ôm<!“.õ*¾AçG¦ÇµÇ<{+¹Ib¤?bÚ0m“ü¤½ûÓ{¹{îp¬-ªØØÙäVS‡æ†£–Øz*VÇ[>¢ne'Î‡é¥y¿ÀšĞÂãÏí„>:I?¨ˆ±d{0¡†s™øH—øıU°‡@l¹”aJ¯ş`Á¾o?Ú)5‘“SóÎ^»n‰¯'ÌFGmÍc½*£ªzu¯(]ò/WÀ½×á»!î×-e)ŞE?7îe(¢<nZ€_‘Ê<"Sq¦ Å&bQ‚«‰0øÉˆîİßÙxI¤—rûÅ]x7ûym¸¶½è9òÇÇÄ%Wàº£	ÍÇÊGöKQ\ú[”%*.-bS“ûäÎàe¼ã«}db¢çÃoo×„OĞh4UfÈ®o<¤İíu’ş…AdÉ&F6şp2³NxŞÇëDüŸË})ß|,2<x†î·ß@+1ÎCñõøƒÿj[i%¥mEm=Âö¶ã.UˆÛ˜ûç‹áu¿}”¶XÜA‹ÚÍÔ¨B­-û‘îÛ€LÌ+ân£şRpZpî£+¦‡‹°»[f7ÿFğ#ø<b!J^ò¡.¼È=¦ªWÕ>TF'Â
+          {/* ======================================= */}
+          {/* IMPORT / EXPORT MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'import-export' && (
+            <ImportExportTab
+              tenantId={tenantId}
+              isFirebaseLoaded={isFirebaseLoaded}
+              defibrillateurs={defibrillateurs}
+              clients={clients}
+              stocks={stocks}
+              pointages={pointages}
+              variables={variables}
+              saveDefibs={saveDefibs}
+              saveClients={saveClients}
+              saveStocks={saveStocks}
+              saveVariables={saveVariables}
+              setActiveTab={setActiveTab}
+              dropboxActive={dropboxActive}
+              dropboxAccessToken={dropboxAccessToken}
+            />
+          )}
 
-Qœ­¤©+ôõª|³
-^§â7+÷ê»JMÛê;I©»{Ì˜XwèÑK<$'”=q\,£/>ëÛğ*ÙìM¦4œÛ_ı?   ÿÿ ’ø[y
+          {/* ======================================= */}
+          {/* FORMATIONS MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'formations' && (
+            <FormationsTab
+              formations={formations}
+              saveFormations={saveFormations}
+              variables={variables}
+              members={members}
+              clients={clients}
+              setActiveTab={setActiveTab}
+              fsmTours={fsmTours}
+              onUpdateFsmTours={saveFsmTours}
+            />
+          )}
+
+          {/* ======================================= */}
+          {/* STAGIAIRES MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'stagiaires' && (
+            <StagiairesTab
+              stagiaires={stagiaires}
+              saveStagiaires={saveStagiaires}
+            />
+          )}
+
+          {/* ======================================= */}
+          {/* EMARGEMENTS MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'emargements' && (
+            <EmargementsTab
+              emargements={emargements}
+              saveEmargements={saveEmargements}
+              formations={formations}
+              stagiaires={stagiaires}
+              members={members}
+              companyInfo={companyInfo}
+            />
+          )}
+
+          {/* ======================================= */}
+          {/* NOTIFICATIONS MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'notifications' && (
+            <NotificationsTab
+              notifications={notifications}
+              onUpdateNotifications={saveNotifications}
+            />
+          )}
+        </section>
+      </main>
+    </div>
+
+    {/* ======================================= */}
+    {/* SETTINGS MODAL */}
+    {/* ======================================= */}
+    {isSettingsOpen && (
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        companyInfo={companyInfo}
+        onUpdateCompanyInfo={(info) => {
+          setCompanyInfo(info);
+          saveCollectionToFirestore('companyInfo', info as any, tenantId);
+        }}
+        members={members}
+        onUpdateMembers={handleUpdateMembers}
+        onOpenPublicPortal={() => setIsPublicPortalOpen(true)}
+        onOpenClientPortal={() => setIsClientPortalOpen(true)}
+        onLogout={handleLogout}
+        currentUser={loggedUser}
+        enableOtherEquipments={enableOtherEquipments}
+        onUpdateOtherEquipments={setEnableOtherEquipments}
+        otherEquipments={otherEquipments}
+      />
+    )}
+
+    {/* ======================================= */}
+    {/* STATS MODAL */}
+    {/* ======================================= */}
+    {isStatsOpen && (
+      <StatsModal
+        isOpen={isStatsOpen}
+        onClose={() => setIsStatsOpen(false)}
+        defibrillateurs={defibrillateurs}
+        clients={clients}
+        variables={variables}
+        stocks={stocks}
+        pointages={pointages}
+        customerReviews={customerReviews}
+        fsmTours={fsmTours}
+        generatedReports={generatedReports}
+      />
+    )}
+
+    {/* ======================================= */}
+    {/* FEEDBACK / BUG REPORT DRAWER */}
+    {/* ======================================= */}
+    <FeedbackDrawer companyName={companyInfo.nom} />
+  </div>
+);
+}

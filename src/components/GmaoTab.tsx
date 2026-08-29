@@ -1,4 +1,5 @@
-﻿﻿import React, { useState } from 'react';
+// Defibeo GMAO & Rapports Module
+import React, { useState } from 'react';
 import { Download, Search, Filter, X, Save } from 'lucide-react';
 import { Client, Variable, Defibrillateur, Member, CompanyInfo, StockRecord, OtherEquipment } from '../types';
 import HelpBubble from './HelpBubble';

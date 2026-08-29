@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Client, Defibrillateur, CommercialDoc, CompanyInfo, Variable, OtherEquipment, PointageAutoVigilance, formatPdfHeaderText } from '../types';
 import { formatDateToFR, computeProchaineMaintenance, formatDateToMonthYear } from '../utils';
 import { t } from '../utils/translate';
