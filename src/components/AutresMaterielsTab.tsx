@@ -849,8 +849,6 @@ export default function AutresMaterielsTab({
         (item.referenceContrat || '').toLowerCase().includes(lower) ||
         (item.numeroVoie || '').toLowerCase().includes(lower) ||
         (item.codePostal || '').toLowerCase().includes(lower) ||
-        (item.commentaire || '').toLowerCase().includes(lower) ||
-        (item.commentaireInterne || '').toLowerCase().includes(lower) ||
         Boolean(matchesSpecifiques)
       );
     });

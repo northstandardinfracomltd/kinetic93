@@ -44,7 +44,6 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Statistiques": "Statistics",
     "Paramètres": "Settings",
     "Chargement de votre environnement...": "Loading your environment...",
-    "Chargement du logiciel Defibeo.": "Loading Defibeo software.",
 
     // General Buttons & Actions
     "Nouveau": "New",
@@ -642,7 +641,6 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Rapports": "Reports",
     "Sélectionnez une tournée": "Select a tour",
     "Nouveau rapport spontané": "New spontaneous report",
-    "Rapport spontané": "Spontaneous report",
     "rapport spontané": "spontaneous report",
 
     // New Report Form Section Headers
@@ -847,22 +845,12 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Résultat du test en joules de l’électrode P.": "Electrode P test result in joules.",
     "Trousse de secours présente": "First aid kit present",
     "Trousse de secours présente.": "First aid kit present.",
-    "Péremption de la trousse": "First aid kit expiration",
-    "Péremption de la trousse.": "First aid kit expiration.",
     "Kit de secours remplacé ou ajouté": "First aid kit replaced or added",
     "Kit de secours remplacé ou ajouté.": "First aid kit replaced or added.",
-    "Ciseaux présents": "Scissors present",
     "Ciseaux présents.": "Scissors present.",
     "Masque présent": "Mask present",
     "Masque présent.": "Mask present.",
-    "Péremption du masque": "Mask expiration",
-    "Serviettes présentes": "Towels present",
-    "Serviettes présentes.": "Towels present.",
-    "Péremption des serviettes": "Towels expiration",
     "pAIRES DE GANTS PRÉSENTS": "PAIRS OF GLOVES PRESENT",
-    "Paire de gants présents": "Pair of gloves present",
-    "Paire de gants présents.": "Pair of gloves present.",
-    "Paires de gants présents": "Pairs of gloves present",
     "Paires de gants présents.": "Pairs of gloves present.",
     "Rasoir": "Razor",
     "Rasoir.": "Razor.",
@@ -1349,7 +1337,6 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Une erreur est survenue lors du calcul de la tournée.": "Bei der Berechnung der Tour ist ein Fehler aufgetreten.",
     "Impossible de déterminer les coordonnées de départ du technicien.": "Startkoordinaten des Technikers konnten nicht ermittelt werden.",
     "Chargement de votre environnement...": "Lade Umgebung...",
-    "Chargement du logiciel Defibeo.": "Laden der Defibeo-Software.",
 
     // General Buttons & Actions
     "Nouveau": "Neu",
@@ -2137,7 +2124,6 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Une erreur est survenue lors du calcul de la tournée.": "Ocorreu um erro durante o cálculo da rota.",
     "Impossible de déterminer les coordonnées de départ du technicien.": "Não foi possível determinar as coordenadas de partida do técnico.",
     "Chargement de votre environnement...": "A carregar o seu ambiente...",
-    "Chargement du logiciel Defibeo.": "A carregar o software Defibeo.",
 
     // General Buttons & Actions
     "Nouveau": "Novo",
@@ -2926,7 +2912,6 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Une erreur est survenue lors du calcul de la tournée.": "Ocurreu un error al calcular la ruta.",
     "Impossible de déterminer les coordonnées de départ du technicien.": "No se pudieron determinar las coordenadas de salida del técnico.",
     "Chargement de votre environnement...": "Cargando su entorno...",
-    "Chargement du logiciel Defibeo.": "Cargando el software Defibeo.",
 
     // General Buttons & Actions
     "Nouveau": "Nuevo",

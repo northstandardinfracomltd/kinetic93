@@ -935,12 +935,17 @@ export default function DefibTab({
   const [numeroSerie, setNumeroSerie] = useState('');
   const [commentaire, setCommentaire] = useState('');
   const commentaireRef = useRef<HTMLTextAreaElement>(null);
-  const commentaireCoffretRef = useRef<HTMLTextAreaElement>(null);
-  const commentaireAdresseRef = useRef<HTMLTextAreaElement>(null);
-  const commentaireBatterieRef = useRef<HTMLTextAreaElement>(null);
   const [modeleId, setModeleId] = useState('');
   const [numeroAtlasante, setNumeroAtlasante] = useState('');
   const [versionLogiciel, setVersionLogiciel] = useState('');
+
+  // Auto-resize Section 1 Commentaire field
+  useEffect(() => {
+    if (commentaireRef.current) {
+      commentaireRef.current.style.height = 'auto';
+      commentaireRef.current.style.height = `${Math.max(38, commentaireRef.current.scrollHeight)}px`;
+    }
+  }, [commentaire, isFormOpen]);
 
   const selectedModelVar = useMemo(() => {
     if (!modeleId) return null;
@@ -975,18 +980,10 @@ export default function DefibTab({
   const [payeurId, setPayeurId] = useState('');
   const [clientIdField, setClientIdField] = useState('');
 
-  // Section 3 - Coffret & Trousse
+  // Section 3 - Coffret
   const [modeleCoffretId, setModeleCoffretId] = useState('');
   const [numeroLotCoffret, setNumeroLotCoffret] = useState('');
   const [commentaireCoffret, setCommentaireCoffret] = useState('');
-  const [peremptionTrousse, setPeremptionTrousse] = useState('');
-  const [kitCiseauxPresents, setKitCiseauxPresents] = useState<'Oui' | 'Non'>('Oui');
-  const [kitMasquePresent, setKitMasquePresent] = useState<'Oui' | 'Non'>('Oui');
-  const [kitPeremptionMasque, setKitPeremptionMasque] = useState('');
-  const [kitServiettesPresentes, setKitServiettesPresentes] = useState<'Oui' | 'Non'>('Oui');
-  const [kitPeremptionServiettes, setKitPeremptionServiettes] = useState('');
-  const [kitGantsPresents, setKitGantsPresents] = useState<'Oui' | 'Non'>('Oui');
-  const [kitRasoirPresent, setKitRasoirPresent] = useState<'Oui' | 'Non'>('Oui');
 
   // Section 4 - Accès
   const [numVoie, setNumVoie] = useState('');
@@ -1195,7 +1192,7 @@ export default function DefibTab({
   const [lotElectrodeASecours, setLotElectrodeASecours] = useState('');
   const [lotPadpakA, setLotPadpakA] = useState('');
   const [peremptionPadpakA, setPeremptionPadpakA] = useState('');
-  const [hasPadpakA, setHasPadpakA] = useState<'Oui' | 'Non'>('Non');
+  const [hasPadpakA, setHasPadpakA] = useState<'Oui' | 'Non'>('Oui');
 
   // Section 7 - Électrode Pédiatrique (P)
   const [hasElectrodePSecours, setHasElectrodePSecours] = useState<'Oui' | 'Non'>('Non');
@@ -1211,7 +1208,7 @@ export default function DefibTab({
   const [lotElectrodePSecours, setLotElectrodePSecours] = useState('');
   const [lotPadpakP, setLotPadpakP] = useState('');
   const [peremptionPadpakP, setPeremptionPadpakP] = useState('');
-  const [hasPadpakP, setHasPadpakP] = useState<'Oui' | 'Non'>('Non');
+  const [hasPadpakP, setHasPadpakP] = useState<'Oui' | 'Non'>('Oui');
 
   // Section 8 - Batterie (B)
   const [hasBatterieSecours, setHasBatterieSecours] = useState<'Oui' | 'Non'>('Non');
@@ -1227,6 +1224,7 @@ export default function DefibTab({
   const [modeleBatterieSecoursId, setModeleBatterieSecoursId] = useState('');
   const [lotBatterieSecours, setLotBatterieSecours] = useState('');
   const [peremptionBatterieSecours, setPeremptionBatterieSecours] = useState('');
+  const [peremptionTrousse, setPeremptionTrousse] = useState('');
 
   // Section 9 - Catégories
   const [loue, setLoue] = useState<'Oui' | 'Non'>('Non');
@@ -1245,25 +1243,6 @@ export default function DefibTab({
   const [rappelJournalierAuto, setRappelJournalierAuto] = useState<'Oui' | 'Non'>('Non');
 
   const [formError, setFormError] = useState('');
-
-  // Auto-resize textarea comment fields (Section 1, Section 3, Section 4, Section 8)
-  useEffect(() => {
-    const resizeField = (ref: React.RefObject<HTMLTextAreaElement | null>) => {
-      if (ref.current) {
-        ref.current.style.height = 'auto';
-        ref.current.style.height = `${Math.max(38, ref.current.scrollHeight)}px`;
-      }
-    };
-    const resizeAll = () => {
-      resizeField(commentaireRef);
-      resizeField(commentaireCoffretRef);
-      resizeField(commentaireAdresseRef);
-      resizeField(commentaireBatterieRef);
-    };
-    resizeAll();
-    const timer = setTimeout(resizeAll, 50);
-    return () => clearTimeout(timer);
-  }, [commentaire, commentaireCoffret, commentaireAdresse, commentaireBatterie, isFormOpen]);
 
   // --- BULK EDIT FIELDS ---
   const [bulkApplyModele, setBulkApplyModele] = useState(false);
@@ -1617,18 +1596,10 @@ export default function DefibTab({
     setClientSearchQuery('');
     handleClientChange('');
 
-    // Reset Coffret & Trousse
+    // Reset Coffret
     setModeleCoffretId('');
     setNumeroLotCoffret('');
     setCommentaireCoffret('');
-    setPeremptionTrousse('');
-    setKitCiseauxPresents('Oui');
-    setKitMasquePresent('Oui');
-    setKitPeremptionMasque('');
-    setKitServiettesPresentes('Oui');
-    setKitPeremptionServiettes('');
-    setKitGantsPresents('Oui');
-    setKitRasoirPresent('Oui');
 
     // Reset Accès
     setNumVoie('');
@@ -1677,7 +1648,7 @@ export default function DefibTab({
     setLotElectrodeASecours('');
     setLotPadpakA('');
     setPeremptionPadpakA('');
-    setHasPadpakA('Non');
+    setHasPadpakA('Oui');
 
     // Electrodes Pediatric (P)
     setHasElectrodePSecours('Non');
@@ -1693,7 +1664,7 @@ export default function DefibTab({
     setLotElectrodePSecours('');
     setLotPadpakP('');
     setPeremptionPadpakP('');
-    setHasPadpakP('Non');
+    setHasPadpakP('Oui');
 
     // Battery (B)
     setHasBatterieSecours('Non');
@@ -1768,14 +1739,6 @@ export default function DefibTab({
     setModeleCoffretId(df.modeleCoffretId || '');
     setNumeroLotCoffret(df.numeroLotCoffret || '');
     setCommentaireCoffret(df.commentaireCoffret || '');
-    setPeremptionTrousse(df.peremptionTrousse || '');
-    setKitCiseauxPresents(df.kitCiseauxPresents || 'Oui');
-    setKitMasquePresent(df.kitMasquePresent || 'Oui');
-    setKitPeremptionMasque(df.kitPeremptionMasque || '');
-    setKitServiettesPresentes(df.kitServiettesPresentes || 'Oui');
-    setKitPeremptionServiettes(df.kitPeremptionServiettes || '');
-    setKitGantsPresents(df.kitGantsPresents || 'Oui');
-    setKitRasoirPresent(df.kitRasoirPresent || 'Oui');
 
     setNumVoie(df.numVoie || '');
     setVille(df.ville || '');
@@ -1841,7 +1804,7 @@ export default function DefibTab({
     setLotElectrodeASecours(df.lotElectrodeASecours || '');
     setLotPadpakA(df.lotPadpakA || '');
     setPeremptionPadpakA(df.peremptionPadpakA || '');
-    setHasPadpakA(df.hasPadpakA || 'Non');
+    setHasPadpakA(df.hasPadpakA || 'Oui');
 
     setHasElectrodePSecours(df.hasElectrodePSecours || (df.modeleElectrodePSecoursId || df.lotElectrodePSecours || df.peremptionSecoursElectrodeP ? 'Oui' : 'Non'));
     setModeleElectrodePId(df.modeleElectrodePId || '');
@@ -1856,7 +1819,7 @@ export default function DefibTab({
     setLotElectrodePSecours(df.lotElectrodePSecours || '');
     setLotPadpakP(df.lotPadpakP || '');
     setPeremptionPadpakP(df.peremptionPadpakP || '');
-    setHasPadpakP(df.hasPadpakP || 'Non');
+    setHasPadpakP(df.hasPadpakP || 'Oui');
 
     setHasBatterieSecours(df.hasBatterieSecours || (df.modeleBatterieSecoursId || df.lotBatterieSecours || df.peremptionBatterieSecours ? 'Oui' : 'Non'));
     setModeleBatterieId(df.modeleBatterieId || '');
@@ -1871,6 +1834,7 @@ export default function DefibTab({
     setModeleBatterieSecoursId(df.modeleBatterieSecoursId || '');
     setLotBatterieSecours(df.lotBatterieSecours || '');
     setPeremptionBatterieSecours(df.peremptionBatterieSecours || '');
+    setPeremptionTrousse(df.peremptionTrousse || '');
 
     setLoue(df.loue || 'Non');
     setPrete(df.prete || 'Non');
@@ -1962,14 +1926,6 @@ export default function DefibTab({
       modeleCoffretId,
       numeroLotCoffret: numeroLotCoffret.trim(),
       commentaireCoffret: commentaireCoffret.trim(),
-      peremptionTrousse,
-      kitCiseauxPresents,
-      kitMasquePresent,
-      kitPeremptionMasque: kitMasquePresent === 'Oui' ? kitPeremptionMasque : '',
-      kitServiettesPresentes,
-      kitPeremptionServiettes: kitServiettesPresentes === 'Oui' ? kitPeremptionServiettes : '',
-      kitGantsPresents,
-      kitRasoirPresent,
 
       numVoie: numVoie.trim(),
       ville: ville.trim(),
@@ -2034,6 +1990,7 @@ export default function DefibTab({
       modeleBatterieSecoursId: hasBatterieSecours === 'Oui' ? modeleBatterieSecoursId : '',
       lotBatterieSecours: hasBatterieSecours === 'Oui' ? lotBatterieSecours.trim() : '',
       peremptionBatterieSecours: hasBatterieSecours === 'Oui' ? peremptionBatterieSecours : '',
+      peremptionTrousse,
 
       loue,
       prete,
@@ -3637,236 +3594,14 @@ export default function DefibTab({
                       <label htmlFor="form-comm-coffret" className="block text-[11px] font-bold text-slate-500 uppercase">
                         Commentaire.
                       </label>
-                      <textarea
-                        ref={commentaireCoffretRef}
+                      <input
+                        type="text"
                         id="form-comm-coffret"
                         value={commentaireCoffret}
-                        onChange={(e) => {
-                          setCommentaireCoffret(e.target.value);
-                          e.target.style.height = 'auto';
-                          e.target.style.height = `${Math.max(38, e.target.scrollHeight)}px`;
-                        }}
+                        onChange={(e) => setCommentaireCoffret(e.target.value)}
                         placeholder="Entrez votre commentaire."
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-750 resize-none overflow-hidden"
-                        style={{ minHeight: '38px' }}
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-750"
                       />
-                    </div>
-
-                    {/* Trousse de secours & Kit box */}
-                    <div 
-                      className="p-4 space-y-3.5 bg-slate-50/40"
-                      style={{
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '13px',
-                      }}
-                    >
-                      {/* Péremption de la trousse */}
-                      <div className="space-y-1">
-                        <label htmlFor="form-peremption-trousse" className="block text-[11px] font-bold text-slate-500 uppercase">
-                          {t("Péremption de la trousse.")}
-                        </label>
-                        <input
-                          type="date"
-                          id="form-peremption-trousse"
-                          value={peremptionTrousse}
-                          onChange={(e) => setPeremptionTrousse(e.target.value)}
-                          className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono bg-white text-slate-800"
-                        />
-                      </div>
-
-                      {/* Ciseaux présents. */}
-                      <div className="space-y-1">
-                        <span className="block text-[11px] font-bold text-slate-500 uppercase">
-                          {t("Ciseaux présents.")}
-                        </span>
-                        <div className="flex gap-4 py-1">
-                          <button
-                            type="button"
-                            onClick={() => setKitCiseauxPresents('Oui')}
-                            className="inline-flex items-center cursor-pointer gap-2 select-none"
-                            style={{ fontSize: '16px', color: '#000' }}
-                          >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitCiseauxPresents === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                              {kitCiseauxPresents === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                            </span>
-                            {t("Oui")}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setKitCiseauxPresents('Non')}
-                            className="inline-flex items-center cursor-pointer gap-2 select-none"
-                            style={{ fontSize: '16px', color: '#000' }}
-                          >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitCiseauxPresents === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                              {kitCiseauxPresents === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                            </span>
-                            {t("Non")}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Masque présent & Péremption du masque */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-                        <div className="space-y-1">
-                          <span className="block text-[11px] font-bold text-slate-500 uppercase">
-                            {t("Masque présent.")}
-                          </span>
-                          <div className="flex gap-4 py-1">
-                            <button
-                              type="button"
-                              onClick={() => setKitMasquePresent('Oui')}
-                              className="inline-flex items-center cursor-pointer gap-2 select-none"
-                              style={{ fontSize: '16px', color: '#000' }}
-                            >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitMasquePresent === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                {kitMasquePresent === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                              </span>
-                              {t("Oui")}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setKitMasquePresent('Non');
-                                setKitPeremptionMasque('');
-                              }}
-                              className="inline-flex items-center cursor-pointer gap-2 select-none"
-                              style={{ fontSize: '16px', color: '#000' }}
-                            >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitMasquePresent === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                {kitMasquePresent === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                              </span>
-                              {t("Non")}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className={`space-y-1 transition-opacity duration-200 ${kitMasquePresent !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
-                          <label htmlFor="form-peremption-masque" className="block text-[11px] font-bold text-slate-500 uppercase">
-                            {t("Péremption du masque.")}
-                          </label>
-                          <input
-                            type="date"
-                            id="form-peremption-masque"
-                            value={kitPeremptionMasque}
-                            onChange={(e) => setKitPeremptionMasque(e.target.value)}
-                            disabled={kitMasquePresent !== 'Oui'}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono bg-white text-slate-800"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Serviettes présentes & Péremption des serviettes */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-                        <div className="space-y-1">
-                          <span className="block text-[11px] font-bold text-slate-500 uppercase">
-                            {t("Serviettes présentes.")}
-                          </span>
-                          <div className="flex gap-4 py-1">
-                            <button
-                              type="button"
-                              onClick={() => setKitServiettesPresentes('Oui')}
-                              className="inline-flex items-center cursor-pointer gap-2 select-none"
-                              style={{ fontSize: '16px', color: '#000' }}
-                            >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitServiettesPresentes === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                {kitServiettesPresentes === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                              </span>
-                              {t("Oui")}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setKitServiettesPresentes('Non');
-                                setKitPeremptionServiettes('');
-                              }}
-                              className="inline-flex items-center cursor-pointer gap-2 select-none"
-                              style={{ fontSize: '16px', color: '#000' }}
-                            >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitServiettesPresentes === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                {kitServiettesPresentes === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                              </span>
-                              {t("Non")}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className={`space-y-1 transition-opacity duration-200 ${kitServiettesPresentes !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
-                          <label htmlFor="form-peremption-serviettes" className="block text-[11px] font-bold text-slate-500 uppercase">
-                            {t("Péremption des serviettes.")}
-                          </label>
-                          <input
-                            type="date"
-                            id="form-peremption-serviettes"
-                            value={kitPeremptionServiettes}
-                            onChange={(e) => setKitPeremptionServiettes(e.target.value)}
-                            disabled={kitServiettesPresentes !== 'Oui'}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono bg-white text-slate-800"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Paire de gants présents & Rasoir */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <span className="block text-[11px] font-bold text-slate-500 uppercase">
-                            {t("Paire de gants présents.")}
-                          </span>
-                          <div className="flex gap-4 py-1">
-                            <button
-                              type="button"
-                              onClick={() => setKitGantsPresents('Oui')}
-                              className="inline-flex items-center cursor-pointer gap-2 select-none"
-                              style={{ fontSize: '16px', color: '#000' }}
-                            >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitGantsPresents === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                {kitGantsPresents === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                              </span>
-                              {t("Oui")}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setKitGantsPresents('Non')}
-                              className="inline-flex items-center cursor-pointer gap-2 select-none"
-                              style={{ fontSize: '16px', color: '#000' }}
-                            >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitGantsPresents === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                {kitGantsPresents === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                              </span>
-                              {t("Non")}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1">
-                          <span className="block text-[11px] font-bold text-slate-500 uppercase">
-                            {t("Rasoir.")}
-                          </span>
-                          <div className="flex gap-4 py-1">
-                            <button
-                              type="button"
-                              onClick={() => setKitRasoirPresent('Oui')}
-                              className="inline-flex items-center cursor-pointer gap-2 select-none"
-                              style={{ fontSize: '16px', color: '#000' }}
-                            >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitRasoirPresent === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                {kitRasoirPresent === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                              </span>
-                              {t("Oui")}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setKitRasoirPresent('Non')}
-                              className="inline-flex items-center cursor-pointer gap-2 select-none"
-                              style={{ fontSize: '16px', color: '#000' }}
-                            >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitRasoirPresent === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                {kitRasoirPresent === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                              </span>
-                              {t("Non")}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
 
@@ -4020,18 +3755,13 @@ export default function DefibTab({
                       <label htmlFor="form-com-adresse" className="block text-[11px] font-bold text-slate-500 uppercase">
                         Aide d'accès.
                       </label>
-                      <textarea
-                        ref={commentaireAdresseRef}
+                      <input
+                        type="text"
                         id="form-com-adresse"
                         value={commentaireAdresse}
-                        onChange={(e) => {
-                          setCommentaireAdresse(e.target.value);
-                          e.target.style.height = 'auto';
-                          e.target.style.height = `${Math.max(38, e.target.scrollHeight)}px`;
-                        }}
+                        onChange={(e) => setCommentaireAdresse(e.target.value)}
                         placeholder="Entrez votre commentaire."
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-750 bg-white resize-none overflow-hidden"
-                        style={{ minHeight: '38px' }}
+                        className="w-full px-3 py-1 border border-slate-200 rounded-lg text-xs text-slate-750"
                       />
                     </div>
 
@@ -5158,19 +4888,25 @@ export default function DefibTab({
                     </div>
 
                     <div className="space-y-1">
+                      <label htmlFor="form-peremption-trousse" className="block text-[11px] font-bold text-slate-500 uppercase">Péremption de la trousse.</label>
+                      <input
+                        type="date"
+                        id="form-peremption-trousse"
+                        value={peremptionTrousse}
+                        onChange={(e) => setPeremptionTrousse(e.target.value)}
+                        className="w-full px-3 py-1 border border-slate-200 rounded-lg text-xs font-mono"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
                       <label htmlFor="form-bat-com" className="block text-[11px] font-bold text-slate-500 uppercase">Commentaire.</label>
-                      <textarea
-                        ref={commentaireBatterieRef}
+                      <input
+                        type="text"
                         id="form-bat-com"
                         value={commentaireBatterie}
-                        onChange={(e) => {
-                          setCommentaireBatterie(e.target.value);
-                          e.target.style.height = 'auto';
-                          e.target.style.height = `${Math.max(38, e.target.scrollHeight)}px`;
-                        }}
+                        onChange={(e) => setCommentaireBatterie(e.target.value)}
                         placeholder="Entrez votre commentaire."
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 resize-none overflow-hidden"
-                        style={{ minHeight: '38px' }}
+                        className="w-full px-3 py-1 border border-slate-200 rounded-lg text-xs"
                       />
                     </div>
                   </div>

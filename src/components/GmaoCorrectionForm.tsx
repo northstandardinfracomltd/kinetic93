@@ -105,20 +105,13 @@ const DEFAULT_DEFIB: Defibrillateur = {
   rappelMensuelAuto: 'Non',
   rappelHebdoAuto: 'Non',
   rappelJournalierAuto: 'Non',
-  hasPadpakA: 'Non',
+  hasPadpakA: 'Oui',
   lotPadpakA: '',
   peremptionPadpakA: '',
-  hasPadpakP: 'Non',
+  hasPadpakP: 'Oui',
   lotPadpakP: '',
   peremptionPadpakP: '',
   peremptionTrousse: '',
-  kitCiseauxPresents: 'Oui',
-  kitMasquePresent: 'Oui',
-  kitPeremptionMasque: '',
-  kitServiettesPresentes: 'Oui',
-  kitPeremptionServiettes: '',
-  kitGantsPresents: 'Oui',
-  kitRasoirPresent: 'Oui',
   numeroAtlasante: '',
   versionLogiciel: ''
 };
@@ -754,14 +747,6 @@ export default function GmaoCorrectionForm({
       ...(report?.conforme !== undefined ? { conforme: report.conforme } : {}),
       ...(report?.commentaire ? { commentaire: report.commentaire } : {}),
       ...(report?.commentaireInterne ? { commentaireInterne: report.commentaireInterne } : {}),
-      ...(report?.kitPeremption ? { peremptionTrousse: report.kitPeremption } : {}),
-      ...(report?.kitCiseauxPresents ? { kitCiseauxPresents: report.kitCiseauxPresents } : {}),
-      ...(report?.kitMasquePresent ? { kitMasquePresent: report.kitMasquePresent } : {}),
-      ...(report?.kitPeremptionMasque ? { kitPeremptionMasque: report.kitPeremptionMasque } : {}),
-      ...(report?.kitServiettesPresentes ? { kitServiettesPresentes: report.kitServiettesPresentes } : {}),
-      ...(report?.kitPeremptionServiettes ? { kitPeremptionServiettes: report.kitPeremptionServiettes } : {}),
-      ...(report?.kitGantsPresents ? { kitGantsPresents: report.kitGantsPresents } : {}),
-      ...(report?.kitRasoirPresent ? { kitRasoirPresent: report.kitRasoirPresent } : {}),
     };
     if (isNew && !report) {
       base.conforme = '' as any; // Par défaut à l’arrivée deselect
@@ -1088,13 +1073,13 @@ export default function GmaoCorrectionForm({
 
   // S10 (n) Vérifications kit de secours
   const [kitTrousseSecoursPresent, setKitTrousseSecoursPresent] = useState<'Oui' | 'Non'>(report?.kitTrousseSecoursPresent || 'Oui');
-  const [kitCiseauxPresents, setKitCiseauxPresents] = useState<'Oui' | 'Non'>(report?.kitCiseauxPresents || report?.defibSnapshot?.kitCiseauxPresents || origDefib?.kitCiseauxPresents || 'Oui');
-  const [kitMasquePresent, setKitMasquePresent] = useState<'Oui' | 'Non'>(report?.kitMasquePresent || report?.defibSnapshot?.kitMasquePresent || origDefib?.kitMasquePresent || 'Oui');
-  const [kitPeremptionMasque, setKitPeremptionMasque] = useState<string>(report?.kitPeremptionMasque || report?.defibSnapshot?.kitPeremptionMasque || origDefib?.kitPeremptionMasque || '');
-  const [kitServiettesPresentes, setKitServiettesPresentes] = useState<'Oui' | 'Non'>(report?.kitServiettesPresentes || report?.defibSnapshot?.kitServiettesPresentes || origDefib?.kitServiettesPresentes || 'Oui');
-  const [kitPeremptionServiettes, setKitPeremptionServiettes] = useState<string>(report?.kitPeremptionServiettes || report?.defibSnapshot?.kitPeremptionServiettes || origDefib?.kitPeremptionServiettes || '');
-  const [kitGantsPresents, setKitGantsPresents] = useState<'Oui' | 'Non'>(report?.kitGantsPresents || report?.defibSnapshot?.kitGantsPresents || origDefib?.kitGantsPresents || 'Oui');
-  const [kitRasoirPresent, setKitRasoirPresent] = useState<'Oui' | 'Non'>(report?.kitRasoirPresent || report?.defibSnapshot?.kitRasoirPresent || origDefib?.kitRasoirPresent || 'Oui');
+  const [kitCiseauxPresents, setKitCiseauxPresents] = useState<'Oui' | 'Non'>(report?.kitCiseauxPresents || 'Oui');
+  const [kitMasquePresent, setKitMasquePresent] = useState<'Oui' | 'Non'>(report?.kitMasquePresent || 'Oui');
+  const [kitPeremptionMasque, setKitPeremptionMasque] = useState<string>(report?.kitPeremptionMasque || '');
+  const [kitServiettesPresentes, setKitServiettesPresentes] = useState<'Oui' | 'Non'>(report?.kitServiettesPresentes || 'Oui');
+  const [kitPeremptionServiettes, setKitPeremptionServiettes] = useState<string>(report?.kitPeremptionServiettes || '');
+  const [kitGantsPresents, setKitGantsPresents] = useState<'Oui' | 'Non'>(report?.kitGantsPresents || 'Oui');
+  const [kitRasoirPresent, setKitRasoirPresent] = useState<'Oui' | 'Non'>(report?.kitRasoirPresent || 'Oui');
   const [kitSecoursRemplaceOuAjoute, setKitSecoursRemplaceOuAjoute] = useState<'Oui' | 'Non'>(report?.kitSecoursRemplaceOuAjoute || 'Non');
   const [selectionKitSecoursRemplace, setSelectionKitSecoursRemplace] = useState<string>(report?.selectionKitSecoursRemplace || '');
   
@@ -1191,13 +1176,13 @@ export default function GmaoCorrectionForm({
       setTechResultatJoulesElectrodeA(report.techResultatJoulesElectrodeA || '');
       setTechResultatJoulesElectrodeA2(report.techResultatJoulesElectrodeA2 || '');
       setKitTrousseSecoursPresent(report.kitTrousseSecoursPresent || 'Oui');
-      setKitCiseauxPresents(report.kitCiseauxPresents || report.defibSnapshot?.kitCiseauxPresents || origDefib?.kitCiseauxPresents || 'Oui');
-      setKitMasquePresent(report.kitMasquePresent || report.defibSnapshot?.kitMasquePresent || origDefib?.kitMasquePresent || 'Oui');
-      setKitPeremptionMasque(report.kitPeremptionMasque || report.defibSnapshot?.kitPeremptionMasque || origDefib?.kitPeremptionMasque || '');
-      setKitServiettesPresentes(report.kitServiettesPresentes || report.defibSnapshot?.kitServiettesPresentes || origDefib?.kitServiettesPresentes || 'Oui');
-      setKitPeremptionServiettes(report.kitPeremptionServiettes || report.defibSnapshot?.kitPeremptionServiettes || origDefib?.kitPeremptionServiettes || '');
-      setKitGantsPresents(report.kitGantsPresents || report.defibSnapshot?.kitGantsPresents || origDefib?.kitGantsPresents || 'Oui');
-      setKitRasoirPresent(report.kitRasoirPresent || report.defibSnapshot?.kitRasoirPresent || origDefib?.kitRasoirPresent || 'Oui');
+      setKitCiseauxPresents(report.kitCiseauxPresents || 'Oui');
+      setKitMasquePresent(report.kitMasquePresent || 'Oui');
+      setKitPeremptionMasque(report.kitPeremptionMasque || '');
+      setKitServiettesPresentes(report.kitServiettesPresentes || 'Oui');
+      setKitPeremptionServiettes(report.kitPeremptionServiettes || '');
+      setKitGantsPresents(report.kitGantsPresents || 'Oui');
+      setKitRasoirPresent(report.kitRasoirPresent || 'Oui');
       setKitSecoursRemplaceOuAjoute(report.kitSecoursRemplaceOuAjoute || 'Non');
       setSelectionKitSecoursRemplace(report.selectionKitSecoursRemplace || '');
       setCustomKitSecoursRemplace(report.customKitSecoursRemplace || '');
@@ -1509,23 +1494,9 @@ export default function GmaoCorrectionForm({
         ...defib
       });
       setKitPeremption(defib.peremptionTrousse || '');
-      setKitCiseauxPresents(defib.kitCiseauxPresents || 'Oui');
-      setKitMasquePresent(defib.kitMasquePresent || 'Oui');
-      setKitPeremptionMasque(defib.kitPeremptionMasque || '');
-      setKitServiettesPresentes(defib.kitServiettesPresentes || 'Oui');
-      setKitPeremptionServiettes(defib.kitPeremptionServiettes || '');
-      setKitGantsPresents(defib.kitGantsPresents || 'Oui');
-      setKitRasoirPresent(defib.kitRasoirPresent || 'Oui');
     } else {
       setSnapshot(DEFAULT_DEFIB);
       setKitPeremption('');
-      setKitCiseauxPresents('Oui');
-      setKitMasquePresent('Oui');
-      setKitPeremptionMasque('');
-      setKitServiettesPresentes('Oui');
-      setKitPeremptionServiettes('');
-      setKitGantsPresents('Oui');
-      setKitRasoirPresent('Oui');
     }
   };
 
@@ -1961,20 +1932,13 @@ export default function GmaoCorrectionForm({
     const todayStr = new Date().toISOString().split('T')[0];
     const maintDate = interventionDate || todayStr;
 
-    const finalSnapshot: Defibrillateur = {
+    const finalSnapshot = {
       ...snapshot,
       derniereMaintenance: maintDate,
       situationBatterie: (batterieConformeSante === 'Oui' ? 'Vert' : 'Rouge') as 'Vert' | 'Rouge',
       situationElectrodeA: (electrodeAConformeSante === 'Oui' ? 'Vert' : 'Rouge') as 'Vert' | 'Rouge',
       situationElectrodeP: (electrodePConformeSante === 'Oui' ? 'Vert' : 'Rouge') as 'Vert' | 'Rouge',
-      peremptionTrousse: kitPeremption,
-      kitCiseauxPresents,
-      kitMasquePresent,
-      kitPeremptionMasque: kitMasquePresent === 'Oui' ? kitPeremptionMasque : '',
-      kitServiettesPresentes,
-      kitPeremptionServiettes: kitServiettesPresentes === 'Oui' ? kitPeremptionServiettes : '',
-      kitGantsPresents,
-      kitRasoirPresent,
+      peremptionTrousse: kitPeremption
     };
 
     // Auto-update replacement parts details in the defibrillator snap on submit

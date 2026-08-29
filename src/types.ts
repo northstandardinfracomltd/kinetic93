@@ -149,18 +149,10 @@ export interface Defibrillateur {
   payeurId?: string;
   clientIdField?: string;
 
-  // Section 3 - Coffret & Trousse
+  // Section 3 - Coffret
   modeleCoffretId: string; // Lookup Variable category 'Modèle Coffret'
   numeroLotCoffret: string;
   commentaireCoffret: string;
-  peremptionTrousse?: string;
-  kitCiseauxPresents?: 'Oui' | 'Non';
-  kitMasquePresent?: 'Oui' | 'Non';
-  kitPeremptionMasque?: string;
-  kitServiettesPresentes?: 'Oui' | 'Non';
-  kitPeremptionServiettes?: string;
-  kitGantsPresents?: 'Oui' | 'Non';
-  kitRasoirPresent?: 'Oui' | 'Non';
 
   // Section 4 - Accès
   numVoie: string;
@@ -230,6 +222,7 @@ export interface Defibrillateur {
   modeleBatterieSecoursId?: string;
   lotBatterieSecours?: string;
   peremptionBatterieSecours?: string;
+  peremptionTrousse?: string;
 
   // Section 9 - Catégories
   loue: 'Oui' | 'Non';
@@ -567,8 +560,6 @@ export interface OtherEquipment {
   categorie: string;
   tournee?: string;
   horaires?: string;
-  commentaire?: string;
-  commentaireInterne?: string;
 
   // Section 5 - Champs techniques spécifiques
   specifiques: Record<string, any>;
