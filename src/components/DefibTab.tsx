@@ -3275,7 +3275,7 @@ export default function DefibTab({
                     {/* Commentaire simple */}
                     <div className="space-y-1">
                       <label htmlFor="form-commentaire" className="block text-[11px] font-bold text-slate-500 uppercase">
-                        Commentaire.
+                        Commentaire Général.
                       </label>
                       <textarea
                         ref={commentaireRef}
