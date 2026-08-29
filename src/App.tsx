@@ -63,6 +63,7 @@ import FormationsTab from './components/FormationsTab';
 import StagiairesTab from './components/StagiairesTab';
 import EmargementsTab from './components/EmargementsTab';
 import GmaoCorrectionForm from './components/GmaoCorrectionForm';
+import GmaoOtherEquipmentCorrectionForm from './components/GmaoOtherEquipmentCorrectionForm';
 import ImportExportTab from './components/ImportExportTab';
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions } from './utils/fsmOptimizer';
 import SatisfactionFormPage from './components/SatisfactionFormPage';
@@ -1275,6 +1276,8 @@ export default function App() {
   // Sync and manage technician generated reports in main GMAO tab
   const [generatedReports, setGeneratedReports] = useState<any[]>([]);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
+  const [isSpontaneousReportOpen, setIsSpontaneousReportOpen] = useState<boolean>(false);
+  const [selectedSpontaneousOtherEquipment, setSelectedSpontaneousOtherEquipment] = useState<any | null>(null);
   const [editReportForm, setEditReportForm] = useState<{
     title: string;
     techName: string;
@@ -9936,2401 +9939,84 @@ export default function App() {
                         </button>
                       </div>
 
-                      {/* No Actualiser button */}
-                    </div>
-                  </div>
-                </div>
 
-                <HelpBubble 
-                  cacheKey="help_dismissed_gmao_options" 
-                  imageSrc="https://civilprom.s3.eu-north-1.amazonaws.com/TERRA.svg"
-                  imageAlt="Guide Rapports PDF"
-                >
-                  <p>
-                    <strong>Aide concernant lâ€™option GÃ©rer :</strong> Pour chaque rapport, le bouton GÃ©rer ouvre un volet latÃ©ral vous permettant de consulter le commentaire du technicien, de sÃ©lectionner un ou plusieurs drapeaux de signalement et de suivi, dâ€™ajouter un commentaire interne et bien plus encore. En soi, il permet dâ€™effectuer un traitement post-rapport directement depuis le logiciel principal. Le saviez-vous ? Les drapeaux sÃ©lectionnÃ©s s'affichent en dÃ©but de ligne dans le tableau, selon la couleur configurÃ©e dans votre variable Drapeau GMAO.
-                  </p>
-                  <p>
-                    <strong>Aide concernant lâ€™option Corriger :</strong> Pour chaque rapport, le bouton Corriger ouvre un volet latÃ©ral permettant de modifier manuellement les informations renseignÃ©es par le technicien depuis le logiciel.
-                  </p>
-                  <p>
-                    <strong>Aide concernant lâ€™option Valider :</strong> Pour chaque rapport, le bouton Valider permet d'approuver dÃ©finitivement le document complÃ©tÃ© par le technicien. ConformÃ©ment Ã  la lÃ©gislation, ce fichier PDF devient alors inaltÃ©rable.
-                  </p>
-                  <p>
-                    <strong>Aide concernant lâ€™option TÃ©lÃ©charger :</strong> Pour chaque rapport, le bouton TÃ©lÃ©charger permet dâ€™exporter le document au format PDF.
-                  </p>
-                  <p>
-                    <strong>Aide concernant la navigation Ã€ venir, ModÃ©ration et ValidÃ©s :</strong> Les rapports gÃ©nÃ©rÃ©s par les techniciens depuis la webapp sâ€™affichent dans lâ€™onglet ModÃ©ration. L'onglet Ã€ venir regroupe les rapports attendus selon les maintenances prÃ©vues dans TournÃ©es & Missions. L'onglet ValidÃ©s rÃ©unit l'ensemble des rapports dÃ©finitivement clÃ´turÃ©s.
-                  </p>
-                </HelpBubble>
-
-                <div 
-                  className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
-                  style={{
-                    borderColor: 'rgb(218, 218, 218)',
-                    background: '#ffffff00',
-                    boxShadow: 'none',
-                    maxWidth: '98%',
-                    margin: '15px auto 5px auto',
-                  }}
-                >
-                  <p 
-                    className="font-sans leading-relaxed flex-1"
-                    style={{ 
-                      fontSize: '16px', 
-                      fontWeight: 400, 
-                      color: '#000000', 
-                      cursor: 'default' 
-                    }}
-                  >
-                    Uniquement un membre contrÃ´leur ou administrateur-contrÃ´leur est en capacitÃ© de modifier et valider les documents Ã©mis qui actualisent la base de donnÃ©es.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('parametres');
-                      setTimeout(() => {
-                        const el = document.getElementById('settings-section-members');
-                        if (el) {
-                          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }
-                      }, 300);
-                    }}
-                    className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 inline-flex items-center justify-center text-center whitespace-nowrap"
-                    style={{
-                      backgroundColor: '#000000',
-                      color: '#ffffff',
-                      fontSize: '18px',
-                      borderRadius: '13px',
-                      padding: '8px 20px',
-                    }}
-                  >
-                    GÃ©rer les membres
-                  </button>
-                </div>
-
-                {dropboxError && (
-                  <div className="space-y-2 mt-4 mb-4">
-                    <div className="text-red-600 font-sans font-light text-sm text-left">
-                      {dropboxError}
-                    </div>
-                    {(dropboxError.includes("Autorisation insuffisante") || dropboxError.includes("401") || dropboxError.includes("expirÃ©")) && (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 space-y-2 max-w-2xl">
-                        <p className="font-bold text-red-900">ğŸ’¡ Guide de configuration & gÃ©nÃ©ration de Token Dropbox :</p>
-                        <ol className="list-decimal list-inside space-y-1 text-[11px] text-red-700">
-                          <li>Allez sur la <a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-red-900">Console Dropbox Developer</a>.</li>
-                          <li>SÃ©lectionnez votre application Dropbox.</li>
-                          <li>Allez dans l'onglet <strong className="font-bold">Permissions</strong>.</li>
-                          <li>Cochez la case <strong className="font-bold">files.content.write</strong> (et <strong className="font-bold">files.content.read</strong>).</li>
-                          <li>Cliquez sur <strong className="font-bold">Submit</strong> en bas de la page.</li>
-                          <li>Retournez dans <strong className="font-bold">Settings</strong>, puis cliquez sur <strong className="font-bold">Generate</strong> pour obtenir un nouveau token.</li>
-                          <li>Mettez Ã  jour le token dans les rÃ©glages de l'application (bouton engrenage âš™ï¸).</li>
-                        </ol>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Main Table Records Sheet */}
-                <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
-                  <div className="overflow-x-auto">
-                    {filteredReports.length === 0 ? (
-                      <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
-                    ) : (
-                      <table className="w-full text-left font-sans border-collapse text-xs" id="gmao-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
-                        <thead>
-                          <tr className="bg-transparent">
-                            <th className="px-4 py-3.5 w-10 text-center" style={thStyle}></th>
-                            <th className="px-4 py-3.5" style={thStyle}>Horodatage.</th>
-                            <th className="px-4 py-3.5" style={thStyle}>CatÃ©gorie matÃ©riel.</th>
-                            <th className="px-4 py-3.5" style={thStyle}>SÃ©rie.</th>
-                            <th className="px-4 py-3.5" style={thStyle}>Identifiant.</th>
-                            <th className="px-4 py-3.5" style={thStyle}>Technicien.</th>
-                            <th className="px-4 py-3.5" style={thStyle}>RÃ©f. Intervention.</th>
-                            <th className="px-4 py-3.5" style={thStyle}>Origine.</th>
-                            <th className="px-4 py-3.5" style={thStyle}>PlanifiÃ©/EffectuÃ©.</th>
-                            <th className="px-4 py-3.5" style={thStyle}>Situation.</th>
-                            <th className="px-4 py-3.5 text-right w-12" style={thStyle}>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-slate-700 text-xs">
-                          {filteredReports.map((rep) => {
-                            const isConforme = (rep.defibSnapshot?.conforme || 'Oui') === 'Oui';
-                            const isEffectue = 
-                              rep.missionStatus === 'EffectuÃ©' ||
-                              rep.conforme === 'Conforme' ||
-                              rep.conforme === 'Non Conforme' ||
-                              rep.conforme === 'Intervention impossible';
-
-                            const isUpcoming = gmaoFilter === 'upcoming' || (!isEffectue && (rep.isUpcoming || rep.status === 'Ã€ venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture));
-                            const isValidated = gmaoFilter === 'validated' || !!rep.validated;
-                            const isModeration = gmaoFilter === 'moderation' || (!isUpcoming && !isValidated);
-
-                            // Button states according to specifications:
-                            // â€” Ã€ VENIR : GÃ©rer (Enabled), Corriger (Disabled), Valider (Disabled), TÃ©lÃ©charger (Disabled)
-                            // â€” MODÃ‰RATION : GÃ©rer (Enabled), Corriger (Enabled), Valider (Enabled), TÃ©lÃ©charger (Enabled)
-                            // â€” VALIDÃ‰S : GÃ©rer (Enabled), Corriger (Disabled), Valider (Disabled), TÃ©lÃ©charger (Enabled)
-                            const isGererDisabled = !isGmaoController;
-                            const isCorrigerDisabled = isUpcoming || isValidated || !isGmaoController;
-                            const isValiderDisabled = isUpcoming || isValidated || !isGmaoController;
-                            const isTelechargerDisabled = isUpcoming;
-
-                            const getBtnStyle = (isDisabled: boolean) => ({
-                              ...rowActionButtonStyle,
-                              opacity: isDisabled ? 0.35 : 1,
-                              cursor: isDisabled ? 'not-allowed' : 'pointer',
-                              backgroundColor: isDisabled ? '#cbd5e1' : '#000000',
-                              color: isDisabled ? '#64748b' : '#ffffff',
-                              boxShadow: isDisabled ? 'none' : rowActionButtonStyle.boxShadow,
-                              border: 'none',
-                            });
-                            
-                            // Retrieve category name elegantly
-                            const getCategoryName = (r: any) => {
-                              if (r.defibSnapshot?.categorie) {
-                                return r.defibSnapshot.categorie;
-                              }
-                              if (r.title && r.title.trim().toUpperCase().startsWith("RAPPORT TECHNIQUE - ")) {
-                                const raw = r.title.trim().substring(20);
-                                return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
-                              }
-                              return "DÃ©fibrillateur";
-                            };
-
-                            return (
-                              <tr key={rep.id} className="group hover:bg-[#ffecf8] transition-all cursor-pointer">
-                                {/* Conforme Status Dot Banner column & Flag Voyants */}
-                                <td className="px-3 py-5 text-center whitespace-nowrap" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                  <div className="inline-flex items-center justify-center gap-2">
-                                    {rep.drapeaux && rep.drapeaux.length > 0 && (
-                                      <div className="inline-flex items-center gap-2">
-                                        {rep.drapeaux.map((flag: any, fIdx: number) => {
-                                          const borderColor = flag.couleurHex?.trim() || '#000000';
-                                          return (
-                                            <div
-                                              key={flag.id || fIdx}
-                                              className="relative inline-flex items-center justify-center shrink-0"
-                                              style={{ width: '20px', height: '20px' }}
-                                              title={flag.nom}
-                                            >
-                                              <div
-                                                className="absolute inset-0"
-                                                style={{
-                                                  border: `3px solid ${borderColor}`,
-                                                  backgroundColor: 'transparent',
-                                                  transform: 'rotate(45deg)',
-                                                  borderRadius: '6px',
-                                                }}
-                                              />
-                                              <span
-                                                className="relative z-10 font-bold leading-none select-none"
-                                                style={{
-                                                  fontSize: '16px',
-                                                  color: '#000000',
-                                                  fontFamily: 'sans-serif',
-                                                }}
-                                              >
-                                                !
-                                              </span>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                    <span 
-                                      className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${isConforme ? 'bg-emerald-500' : 'bg-rose-500'}`} 
-                                      title={isConforme ? "Conforme" : "Non conforme"}
-                                    />
-                                  </div>
-                                </td>
-
-                                {/* Date / Horodatage */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                  {rep.date}
-                                </td>
-
-                                {/* CatÃ©gorie matÃ©riel */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                  <div 
-                                    style={{ 
-                                      display: 'inline-flex', 
-                                      alignItems: 'center', 
-                                      gap: '8px',
-                                      border: '1px solid rgb(231, 231, 231)',
-                                      borderRadius: '1000px',
-                                      padding: '4px 12px',
-                                      backgroundColor: '#ffffff',
-                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                                    }} 
-                                    className="whitespace-nowrap font-medium"
-                                  >
-                                    {getCategoryName(rep)}
-                                  </div>
-                                </td>
-
-                                {/* SÃ©rie */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                  {rep.defibSnapshot?.numeroSerie && rep.defibSnapshot.numeroSerie.trim() ? (
-                                    <div 
-                                      style={{ 
-                                        display: 'inline-flex', 
-                                        alignItems: 'center', 
-                                        gap: '8px',
-                                        border: '1px solid rgb(231, 231, 231)',
-                                        borderRadius: '1000px',
-                                        padding: '4px 12px',
-                                        backgroundColor: '#ffffff',
-                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                                      }} 
-                                      className="whitespace-nowrap font-medium"
-                                    >
-                                      {rep.defibSnapshot.numeroSerie}
-                                    </div>
-                                  ) : null}
-                                </td>
-
-                                 {/* Identifiant */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                  {rep.defibIdentifiant && rep.defibIdentifiant.trim() ? (
-                                    <div 
-                                      style={{ 
-                                        display: 'inline-flex', 
-                                        alignItems: 'center', 
-                                        gap: '8px',
-                                        border: '1px solid rgb(231, 231, 231)',
-                                        borderRadius: '1000px',
-                                        padding: '4px 12px',
-                                        backgroundColor: '#ffffff',
-                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                                      }} 
-                                      className="whitespace-nowrap font-medium"
-                                    >
-                                      {rep.defibIdentifiant}
-                                    </div>
-                                  ) : null}
-                                </td>
-
-                                {/* Technicien */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                  {rep.techName && rep.techName.trim() ? (
-                                    <div className="font-medium text-[#000000] whitespace-nowrap" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                      {rep.techName}
-                                    </div>
-                                  ) : null}
-                                </td>
-
-                                {/* RÃ©f. Intervention */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                  {rep.interventionReference && rep.interventionReference.trim() ? (
-                                    <div 
-                                      style={{ 
-                                        display: 'inline-flex', 
-                                        alignItems: 'center', 
-                                        gap: '8px',
-                                        border: '1px solid rgb(231, 231, 231)',
-                                        borderRadius: '1000px',
-                                        padding: '4px 12px',
-                                        backgroundColor: '#ffffff',
-                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                                      }} 
-                                      className="whitespace-nowrap font-medium"
-                                    >
-                                      {rep.interventionReference}
-                                    </div>
-                                  ) : null}
-                                </td>
-
-                                {/* Origine. */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                  {(() => {
-                                    const raw = (rep.origin || `${rep.tourDate || ''} ${rep.tourName || ''}`).trim();
-                                    if (!raw) return 'â€”';
-                                    return raw.length > 20 ? raw.substring(0, 20) + '...' : raw;
-                                  })()}
-                                </td>
-
-                                {/* PlanifiÃ©/EffectuÃ©. */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                  {(() => {
-                                    let matchMission: any = null;
-                                    let matchTour: any = null;
-                                    if (fsmTours && fsmTours.length > 0) {
-                                      for (const tour of fsmTours) {
-                                        if (!tour.missions) continue;
-                                        const found = tour.missions.find((m: any) => 
-                                          (rep.missionId && m.id === rep.missionId) ||
-                                          (rep.interventionReference && m.interventionReference && m.interventionReference === rep.interventionReference) ||
-                                          (rep.defibIdentifiant && m.defibIdentifiant && m.defibIdentifiant === rep.defibIdentifiant)
-                                        );
-                                        if (found) {
-                                          matchMission = found;
-                                          matchTour = tour;
-                                          break;
-                                        }
-                                      }
-                                    }
-
-                                    let dateVal = '';
-                                    let slotVal = '';
-
-                                    if (isUpcoming) {
-                                      dateVal = matchMission?.estimatedDate || rep.estimatedDate || matchTour?.startDate || matchTour?.date || rep.tourDate || rep.date || '';
-                                      slotVal = matchMission?.estimatedSlot || rep.estimatedSlot || matchMission?.creneau || '09:00';
-                                    } else {
-                                      dateVal = rep.date || matchMission?.executedAt || matchMission?.completedAt || '';
-                                      slotVal = rep.endTimeStamp || rep.time || matchMission?.endTimeStamp || '';
-                                    }
-
-                                    const formatDateTimeDisplay = (dStr: string, sStr: string) => {
-                                      const cleanD = (dStr || '').trim();
-                                      const cleanS = (sStr || '').trim();
-                                      if (!cleanD || cleanD === 'Ã€ venir') return 'â€”';
-
-                                      let dPart = '';
-                                      let tPart = '';
-
-                                      if (cleanD.includes(' ')) {
-                                        const parts = cleanD.split(/\s+/);
-                                        dPart = parts[0];
-                                        tPart = parts[1] || cleanS;
-                                      } else if (cleanD.includes('T')) {
-                                        const parts = cleanD.split('T');
-                                        dPart = parts[0];
-                                        tPart = (parts[1] || '').substring(0, 5);
-                                      } else {
-                                        dPart = cleanD;
-                                        tPart = cleanS;
-                                      }
-
-                                      let formattedDate = dPart;
-                                      if (dPart.includes('-')) {
-                                        const segs = dPart.split('-');
-                                        if (segs.length === 3) {
-                                          if (segs[0].length === 4) {
-                                            formattedDate = `${segs[2].padStart(2, '0')}/${segs[1].padStart(2, '0')}/${segs[0]}`;
-                                          } else if (segs[2].length === 4) {
-                                            formattedDate = `${segs[0].padStart(2, '0')}/${segs[1].padStart(2, '0')}/${segs[2]}`;
-                                          }
-                                        }
-                                      } else if (dPart.includes('/')) {
-                                        const segs = dPart.split('/');
-                                        if (segs.length === 3) {
-                                          if (segs[0].length === 4) {
-                                            formattedDate = `${segs[2].padStart(2, '0')}/${segs[1].padStart(2, '0')}/${segs[0]}`;
-                                          } else {
-                                            formattedDate = `${segs[0].padStart(2, '0')}/${segs[1].padStart(2, '0')}/${segs[2]}`;
-                                          }
-                                        }
-                                      }
-
-                                      let formattedTime = '00:00';
-                                      if (tPart) {
-                                        const match = tPart.match(/(\d{1,2})[:hH](\d{2})/);
-                                        if (match) {
-                                          formattedTime = `${match[1].padStart(2, '0')}:${match[2]}`;
-                                        } else if (/^\d{1,2}$/.test(tPart)) {
-                                          formattedTime = `${tPart.padStart(2, '0')}:00`;
-                                        } else {
-                                          formattedTime = tPart;
-                                        }
-                                      } else {
-                                        formattedTime = '09:00';
-                                      }
-
-                                      if (!formattedDate || formattedDate === 'Ã€ venir') return 'â€”';
-                                      return `${formattedDate} ${formattedTime}`;
-                                    };
-
-                                    return formatDateTimeDisplay(dateVal, slotVal);
-                                  })()}
-                                </td>
-
-                                {/* Situation. */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                  {(() => {
-                                    const sit = rep.missionStatus || (isUpcoming ? 'Brouillon' : 'EffectuÃ©');
-                                    const dotColor = 
-                                      sit === 'Brouillon' ? '#94a3b8' :
-                                      sit === 'Attente Client' ? '#f59e0b' :
-                                      sit === 'AcceptÃ© Client' ? '#16a34a' :
-                                      sit === 'RefusÃ© Client' ? '#dc2626' :
-                                      sit === 'Rejet mission' ? '#dc2626' :
-                                      sit === 'Ã€ faire' ? '#3b82f6' :
-                                      sit === 'En cours' ? '#ef4444' :
-                                      sit === 'EffectuÃ©' ? '#22c55e' :
-                                      sit === 'Attente' ? '#94a3b8' : '#3b82f6';
-
-                                    return (
-                                      <div 
-                                        style={{ 
-                                          display: 'inline-flex', 
-                                          alignItems: 'center', 
-                                          gap: '8px',
-                                          border: '1px solid rgb(231, 231, 231)',
-                                          borderRadius: '1000px',
-                                          padding: '4px 12px',
-                                          backgroundColor: '#ffffff',
-                                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                                        }} 
-                                        className="whitespace-nowrap font-medium"
-                                      >
-                                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: dotColor, display: 'inline-block' }} />
-                                        <span>{sit}</span>
-                                      </div>
-                                    );
-                                  })()}
-                                </td>
-
-                                {/* Actions */}
-                                <td className="px-4 py-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                  <div className="inline-flex gap-2">
-                                    <button
-                                      type="button"
-                                      disabled={isGererDisabled}
-                                      onClick={() => !isGererDisabled && setManagingReportId(rep.id)}
-                                      style={getBtnStyle(isGererDisabled)}
-                                      className={isGererDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
-                                    >
-                                      GÃ©rer
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={isCorrigerDisabled}
-                                      onClick={() => !isCorrigerDisabled && setEditingReportId(rep.id)}
-                                      style={getBtnStyle(isCorrigerDisabled)}
-                                      className={isCorrigerDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
-                                    >
-                                      Corriger
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={rep.validated || !isGmaoController}
-                                      onClick={() => {
-                                        const updatedReports = generatedReports.map(r => r.id === rep.id ? { ...r, validated: true } : r);
-                                        saveReports(updatedReports);
-
-                                        // Update "Centrale des stocks" (Volume=0, Situation=UtilisÃ©, Commentaire=Ref intervention)
-                                        const usedTraceIds = [
-                                          rep.selectionElectrodeARemplacee,
-                                          rep.selectionElectrodeASecoursRemplacee,
-                                          rep.selectionElectrodePRemplacee,
-                                          rep.selectionElectrodePSecoursRemplacee,
-                                          rep.selectionBatterieRemplacee,
-                                          rep.selectionKitSecoursRemplace
-                                        ].filter(id => id && id !== 'Autre');
-
-                                        if (usedTraceIds.length > 0) {
-                                          const updatedStocksList = stocks.map(st => {
-                                            let stChanged = false;
-                                            let decrementQty = 0;
-                                            const updatedTraces = (st.traceabilities || []).map(tr => {
-                                              if (usedTraceIds.includes(tr.id)) {
-                                                stChanged = true;
-                                                if (tr.situation === 'Disponible') {
-                                                  decrementQty++;
-                                                }
-                                                return {
-                                                  ...tr,
-                                                  volume: 0,
-                                                  situation: 'UtilisÃ©' as const,
-                                                  comment: rep.interventionReference || 'Ref: ' + (rep.id || 'sans-id')
-                                                };
-                                              }
-                                              return tr;
-                                            });
-
-                                            if (stChanged) {
-                                              return {
-                                                ...st,
-                                                quantite: Math.max(0, (st.quantite || 0) - decrementQty),
-                                                traceabilities: updatedTraces
-                                              };
-                                            }
-                                            return st;
-                                          });
-                                          saveStocks(updatedStocksList);
-                                        }
-
-                                        // Update the main equipment database and send validation email to the client
-                                        const snap = rep.defibSnapshot;
-                                        if (snap) {
-                                          const uuid = snap.id || rep.defibId;
-                                          const ident = snap.identifiant || rep.defibIdentifiant;
-
-                                          const isDefib = defibrillateurs.some(df => df.id === uuid || df.identifiant === ident);
-                                          if (isDefib) {
-                                            const updatedList = defibrillateurs.map(df => {
-                                              if (df.id === uuid || df.identifiant === ident) {
-                                                return {
-                                                  ...snap,
-                                                  derniereMaintenance: snap.derniereMaintenance || new Date().toISOString().split('T')[0]
-                                                };
-                                              }
-                                              return df;
-                                            });
-                                            saveDefibs(updatedList);
-                                          } else {
-                                            const isOther = otherEquipments.some(o => o.id === uuid || o.identifiant === ident);
-                                            if (isOther) {
-                                              const updatedList = otherEquipments.map(o => {
-                                                if (o.id === uuid || o.identifiant === ident) {
-                                                  return snap;
-                                                }
-                                                return o;
-                                              });
-                                              saveOtherEquipments(updatedList);
-                                            }
-                                          }
-
-                                          // Trigger Email 6: RAPPORT DE MAINTENANCE AU CLIENT
-                                          if (!rep.disableClientEmail) {
-                                            try {
-                                              const matchingClient = clients?.find((c: any) => c.id === snap.clientId);
-                                              const clientEmail = snap.emailSite || matchingClient?.email || matchingClient?.emailSite;
-                                              if (clientEmail && clientEmail.trim()) {
-                                                triggerEmail6RapportIntervention(
-                                                  clientEmail.trim(),
-                                                  snap.identifiant || rep.defibIdentifiant || '',
-                                                  rep.date || new Date().toLocaleString('fr-FR'),
-                                                  companyInfo.name || 'DÃ©fibeo Suite',
-                                                  companyInfo.email || ''
-                                                ).catch(e => console.error("Error triggering Email 6 during GMAO validation:", e));
-                                              }
-                                            } catch (err6) {
-                                              console.error("Error sending validation email during GMAO validation:", err6);
-                                            }
-                                          }
-                                        }
-
-                                        // Upload validated intervention report to Dropbox if active
-                                        setDropboxError(null);
-                                        if (dropboxActive && dropboxAccessToken) {
-                                          (async () => {
-                                            try {
-                                              const { generateReportPDF, uploadToDropbox } = await import('./utils/dropbox');
-                                              const pdfBytes = generateReportPDF(rep);
-                                              const ident = snap ? (snap.identifiant || rep.defibIdentifiant) : (rep.defibIdentifiant || rep.id);
-                                              const fileName = `Rapport_Intervention_${ident}_${rep.date || 'sans-date'}.pdf`;
-                                              await uploadToDropbox(dropboxAccessToken, fileName, pdfBytes);
-                                            } catch (dropboxErr: any) {
-                                              console.error("Dropbox report upload failed on validation:", dropboxErr);
-                                              let cleanMsg = "Impossible d'uploader le rapport sur Dropbox, vÃ©rifiez les identifiants.";
-                                              if (dropboxErr.message && (dropboxErr.message.includes("401") || dropboxErr.message.includes("expired") || dropboxErr.message.includes("invalid_access_token") || dropboxErr.message.includes("Unauthorized"))) {
-                                                cleanMsg = "Erreur Dropbox 401 : Le token d'accÃ¨s est invalide ou expirÃ© (les tokens temporaires Dropbox expirent au bout de 4 heures). Veuillez gÃ©nÃ©rer un nouveau token d'accÃ¨s dans votre console Dropbox Developer.";
-                                              } else
-                                              if (dropboxErr.message && dropboxErr.message.includes("missing_scope")) {
-                                                cleanMsg = "Erreur Dropbox : Autorisation insuffisante. Veuillez activer la permission 'files.content.write' dans votre console Dropbox Developer, puis gÃ©nÃ©rez un nouveau token.";
-                                              }
-                                              setDropboxError(cleanMsg);
-                                            }
-                                          })();
-                                        }
-
-                                        if (rep.disableClientEmail) {
-                                          alert("Le rapport d'intervention a Ã©tÃ© validÃ© avec succÃ¨s ! L'Ã©tat de l'Ã©quipement a Ã©tÃ© mis Ã  jour.");
-                                        } else {
-                                          alert("Le rapport d'intervention a Ã©tÃ© validÃ© avec succÃ¨s ! L'Ã©tat de l'Ã©quipement a Ã©tÃ© mis Ã  jour et un e-mail avec le rapport a Ã©tÃ© envoyÃ© au client.");
-                                        }
-                                      }}
-                                      style={getBtnStyle(isValiderDisabled)}
-                                      className={isValiderDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
-                                    >
-                                      {isValidated ? 'ValidÃ©' : 'Valider'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={isTelechargerDisabled}
-                                      onClick={() => !isTelechargerDisabled && handleDownloadReport(rep)}
-                                      style={getBtnStyle(isTelechargerDisabled)}
-                                      className={isTelechargerDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
-                                    >
-                                      TÃ©lÃ©charger
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </div>
-
-                {/* Side-bar popup for managing report moderation flags & comments */}
-                {(() => {
-                  const managingReport = generatedReports.find(r => r.id === managingReportId);
-                  if (!managingReport) return null;
-
-                  return (
-                    <div 
-                      className="fixed inset-0 z-[9999] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
-                      style={{ top: 0, left: 0, right: 0, bottom: 0, height: '100vh', width: '100vw' }}
-                      onClick={() => setManagingReportId(null)}
-                    >
-                      <div 
-                        className="relative w-full max-w-xl bg-white flex flex-col overflow-hidden animate-slideLeft h-full"
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
-                          borderLeft: '1px solid #e2e8f0',
-                        }}
-                      >
-                        {/* Drawer Body without inner padding/border div */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white font-sans">
-                          {/* Field: Commentaire du technicien. (Disabled textarea showing section 11 Commentaire interne) */}
-                          <div className="space-y-2">
-                            <label className="block text-[18px] font-medium text-[#000]">
-                              Commentaire du technicien.
-                            </label>
-                            <textarea
-                              disabled
-                              rows={3}
-                              value={managingReport.defibSnapshot?.commentaireInterne || managingReport.commentaireInterne || ''}
-                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-100 resize-y min-h-[90px] focus:outline-none cursor-not-allowed opacity-90"
-                            />
-                          </div>
-
-                          {/* Field A: Drapeau GMAO */}
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <label className="block text-[16px] font-medium text-[#000]">
-                                Drapeau GMAO
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setManagingReportId(null);
-                                  setActiveTab('variables');
-                                }}
-                                style={{ fontSize: '16px', textDecoration: 'none' }}
-                                className="text-[16px] text-blue-600 hover:text-blue-800 cursor-pointer bg-transparent border-0 p-0 font-medium font-sans no-underline hover:no-underline"
-                              >
-                                Nouvelle variable drapeau
-                              </button>
-                            </div>
-
-                            {/* Select Lookup Dropdown */}
-                            <select
-                              value=""
-                              onChange={(e) => {
-                                const valId = e.target.value;
-                                if (!valId) return;
-                                const foundVar = variables.find(v => v.id === valId && (v.category === 'Drapeau GMAO' || v.category === 'Drapeau post-intervention'));
-                                if (foundVar) {
-                                  const currentFlags = managingReport.drapeaux || [];
-                                  if (!currentFlags.some((f: any) => f.id === foundVar.id || f.nom === foundVar.nom)) {
-                                    const newFlag = {
-                                      id: foundVar.id,
-                                      nom: foundVar.nom,
-                                      couleurHex: foundVar.couleurHex || ''
-                                    };
-                                    const updatedReports = generatedReports.map(r => 
-                                      r.id === managingReport.id ? { ...r, drapeaux: [...currentFlags, newFlag] } : r
-                                    );
-                                    saveReports(updatedReports);
-                                  }
-                                }
-                              }}
-                              className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 cursor-pointer"
-                            >
-                              <option value="">-- SÃ©lectionner un drapeau GMAO --</option>
-                              {variables
-                                .filter(v => v.category === 'Drapeau GMAO' || v.category === 'Drapeau post-intervention')
-                                .map(v => (
-                                  <option key={v.id} value={v.id}>
-                                    {v.nom} {v.couleurHex ? `(${v.couleurHex})` : ''}
-                                  </option>
-                                ))}
-                            </select>
-
-                            {/* Selected Flags as Pills / GÃ©lules */}
-                            {managingReport.drapeaux && managingReport.drapeaux.length > 0 ? (
-                              <div className="flex flex-wrap gap-2.5 pt-1">
-                                {managingReport.drapeaux.map((flag: any, idx: number) => {
-                                  const hex = flag.couleurHex?.trim();
-                                  const txtColor = hex ? getContrastingTextColor(hex) : '#0f172a';
-                                  return (
-                                    <span
-                                      key={flag.id || idx}
-                                      onClick={() => {
-                                        const updatedFlags = (managingReport.drapeaux || []).filter((_: any, i: number) => i !== idx);
-                                        const updatedReports = generatedReports.map(r => 
-                                          r.id === managingReport.id ? { ...r, drapeaux: updatedFlags } : r
-                                        );
-                                        saveReports(updatedReports);
-                                      }}
-                                      className="inline-flex items-center px-4 py-2 rounded-full text-[18px] font-medium cursor-pointer transition-colors select-none hover:!bg-[#851010] hover:!text-white"
-                                      style={{
-                                        backgroundColor: hex || '#f1f5f9',
-                                        color: txtColor,
-                                        border: 'none',
-                                      }}
-                                      title="Cliquer pour supprimer"
-                                    >
-                                      {flag.nom}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          {/* Field B: Commentaire */}
-                          <div className="space-y-1.5 pt-1">
-                            <label className="block text-[16px] font-medium text-[#000]">
-                              Commentaire
-                            </label>
-                            <textarea
-                              value={
-                                managingReport.commentaire !== undefined && managingReport.commentaire !== null && managingReport.commentaire !== ''
-                                  ? managingReport.commentaire
-                                  : (!managingReport.isUpcoming ? generateReportModerationComment(managingReport, defibrillateurs) : '')
-                              }
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const updatedReports = generatedReports.map(r => 
-                                  r.id === managingReport.id ? { ...r, commentaire: val } : r
-                                );
-                                saveReports(updatedReports);
-                              }}
-                              placeholder="Entrez un commentaire."
-                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-50/50 resize-y min-h-[120px] focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
-                            />
-                          </div>
-
-                          {/* Toggle: DÃ©sactiver l'email au client. */}
-                          <div className="flex items-center justify-between pt-1">
-                            <span className="block text-[16px] font-medium text-[#000]">
-                              DÃ©sactiver lâ€™email au client.
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updatedValue = !managingReport.disableClientEmail;
-                                const updatedReports = generatedReports.map(r => 
-                                  r.id === managingReport.id ? { ...r, disableClientEmail: updatedValue } : r
-                                );
-                                saveReports(updatedReports);
-                              }}
-                              className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none shrink-0"
-                              style={{
-                                backgroundColor: managingReport.disableClientEmail ? '#fe4eba' : '#cbd5e1',
-                                cursor: 'pointer',
-                                border: 'none',
-                              }}
-                            >
-                              <span
-                                className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow-sm"
-                                style={{
-                                  transform: managingReport.disableClientEmail ? 'translateX(24px)' : 'translateX(4px)',
-                                }}
-                              />
-                            </button>
-                          </div>
-
-                          {/* Field: Situation. */}
-                          <div className="space-y-1.5 pt-2">
-                            <label className="block text-[16px] font-medium text-[#000]">
-                              Situation.
-                            </label>
-                            <select
-                              value={managingReport.missionStatus || (managingReport.isUpcoming ? 'Brouillon' : 'EffectuÃ©')}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const updatedReports = generatedReports.map(r => 
-                                  r.id === managingReport.id ? { ...r, missionStatus: val } : r
-                                );
-                                saveReports(updatedReports);
-                              }}
-                              className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 cursor-pointer font-sans"
-                            >
-                              <option value="EffectuÃ©">EffectuÃ©</option>
-                              <option value="Rejet mission">Rejet mission</option>
-                              <option value="En cours">En cours</option>
-                              <option value="Ã€ faire">Ã€ faire</option>
-                              <option value="Attente">Attente</option>
-                              <option value="Attente Client">Attente Client</option>
-                              <option value="AcceptÃ© Client">AcceptÃ© Client</option>
-                              <option value="RefusÃ© Client">RefusÃ© Client</option>
-                              <option value="Brouillon">Brouillon</option>
-                            </select>
-                          </div>
-
-                          {/* Field: Raison de rejet (visible if situation is Rejet mission or intervention impossible) */}
-                          {(managingReport.missionStatus === 'Rejet mission' || managingReport.conforme === 'Intervention impossible' || managingReport.statutMaintenance === 'IMPOSSIBLE') && (
-                            <div className="space-y-1.5 pt-2">
-                              <label className="block text-[16px] font-medium text-[#000]">
-                                Raison de rejet de mission.
-                              </label>
-                              <input
-                                type="text"
-                                maxLength={100}
-                                value={managingReport.rejectionReason || managingReport.reasonImpossible || managingReport.techCommentaireArrivee || ''}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  const updatedReports = generatedReports.map(r => 
-                                    r.id === managingReport.id ? { ...r, rejectionReason: val, reasonImpossible: val, techCommentaireArrivee: val } : r
-                                  );
-                                  saveReports(updatedReports);
-                                }}
-                                placeholder="Entrez la raison du rejet..."
-                                className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
-                              />
-                            </div>
-                          )}
-
-                          {/* Enregistrer & Fermer Buttons */}
-                          <div className="pt-2 space-y-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                saveReports(generatedReports);
-                                setManagingReportId(null);
-                              }}
-                              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[18px] font-medium transition-colors cursor-pointer border-none shadow-sm"
-                            >
-                              Enregistrer
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setManagingReportId(null)}
-                              className="w-full py-3.5 bg-black text-white rounded-xl text-[18px] font-medium hover:bg-slate-800 transition-colors cursor-pointer border-none"
-                            >
-                              Fermer
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Side-bar popup for editing report correction form (Corriger) */}
-                {(() => {
-                  if (!editingReportId) return null;
-                  const repToEdit = generatedReports.find(r => r.id === editingReportId);
-                  if (!repToEdit) return null;
-
-                  return (
-                    <div 
-                      className="fixed inset-0 z-[9999] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
-                      style={{ top: 0, left: 0, right: 0, bottom: 0, height: '100vh', width: '100vw' }}
-                      onClick={() => {
-                        setEditingReportId(null);
-                        setEditReportForm(null);
-                      }}
-                    >
-                      <div 
-                        className="relative w-full max-w-xl md:max-w-2xl bg-white flex flex-col overflow-hidden animate-slideLeft h-full"
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
-                          borderLeft: '1px solid #e2e8f0',
-                        }}
-                      >
-                        <div className="flex-1 overflow-y-auto bg-white font-sans relative">
-                          <GmaoCorrectionForm
-                            report={repToEdit}
-                            isWebapp={true}
-                            forceSmartphoneLayout={true}
-                            onSave={(updatedReport) => {
-                              const updatedReports = generatedReports.map(r => r.id === editingReportId ? updatedReport : r);
-                              saveReports(updatedReports);
-                              if (updatedReport.defibSnapshot) {
-                                handleUpdateDefib(updatedReport.defibSnapshot);
-                              }
-                              
-                              if (updatedReport.clientPinCode && updatedReport.defibSnapshot?.clientId) {
-                                const targetClientId = updatedReport.defibSnapshot.clientId;
-                                const typedPin = updatedReport.clientPinCode.trim().toUpperCase();
-                                
-                                const updatedClients = clients.map(cl => {
-                                  if (cl.id === targetClientId) {
-                                    const originalPins = cl.signaturePins || [];
-                                    const matchIndex = originalPins.findIndex(p => p.code.toUpperCase() === typedPin);
-                                    let newPins = [...originalPins];
-                                    if (matchIndex !== -1) {
-                                      newPins[matchIndex] = {
-                                        ...newPins[matchIndex],
-                                        status: 'validÃ©',
-                                        validatedAt: new Date().toISOString(),
-                                        reportTitle: updatedReport.title || 'Rapport d\'Intervention'
-                                      };
-                                    } else {
-                                      newPins.push({
-                                        code: typedPin,
-                                        createdAt: new Date().toISOString(),
-                                        status: 'validÃ©',
-                                        validatedAt: new Date().toISOString(),
-                                        reportTitle: updatedReport.title || 'Rapport d\'Intervention'
-                                      });
-                                    }
-                                    return {
-                                      ...cl,
-                                      signaturePins: newPins
-                                    };
-                                  }
-                                  return cl;
-                                });
-                                saveClients(updatedClients);
-                              }
-
-                              setEditingReportId(null);
-                              setEditReportForm(null);
-                            }}
-                            onCancel={() => {
-                              setEditingReportId(null);
-                              setEditReportForm(null);
-                            }}
-                            clients={clients}
-                            variables={variables}
-                            defibrillateurs={defibrillateurs}
-                            stocks={stocks}
-                            onUpdateStocks={saveStocks}
-                            members={members}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            );
-          })()}
-
-          {/* ======================================= */}
-          {/* CRM / SUPPORT TICKETS MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'crm' && (
-            <CrmTab
-              tickets={tickets}
-              members={members}
-              clients={clients}
-              companyInfo={companyInfo}
-              tenantId={tenantId}
-              onSaveTickets={(updatedTickets) => {
-                const stampedTickets = updatedTickets.map(t => ({
-                  ...t,
-                  envId: t.envId || tenantId,
-                  tenantId: t.tenantId || tenantId,
-                }));
-                setTickets(stampedTickets);
-                const str = JSON.stringify(stampedTickets);
-                safeSetLocalStorage(`defib_${tenantId}_support_tickets`, str);
-                loadedDataRef.current.tickets = str;
-                if (tenantId) {
-                  saveCollectionToFirestore('tickets', stampedTickets, tenantId);
-                }
-              }}
-              t={t}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* DEVIS & PROFORMA MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'devis' && (() => {
-            const customButtonStyle: React.CSSProperties = {
-              backgroundColor: '#000',
-              color: '#fff',
-              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
-              borderRadius: '12px',
-              fontSize: '18px',
-              padding: '9px 19px',
-              fontWeight: '100',
-              transition: 'all 0s ease-in-out',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              cursor: 'pointer',
-              border: 'none',
-            };
-
-            const rowActionButtonStyle: React.CSSProperties = {
-              backgroundColor: '#000',
-              color: '#fff',
-              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
-              borderRadius: '10px',
-              fontSize: '15px',
-              padding: '8px 16px',
-              fontWeight: '100',
-              transition: 'all 0s ease-in-out',
-            };
-
-            const thStyle: React.CSSProperties = {
-              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              fontWeight: 100,
-              letterSpacing: 'normal',
-              textTransform: 'none',
-              color: '#000000',
-              cursor: 'default',
-            };
-
-            const itemValueStyle: React.CSSProperties = {
-              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-              fontSize: '16px',
-              color: '#000000',
-              fontWeight: 100,
-            };
-
-            const tenantCommercialDocs = commercialDocs.filter((doc) => {
-              if (tenantId !== 'demo') {
-                const dEnv = (doc.envId || doc.tenantId || '').trim().toLowerCase();
-                const cleanTenant = tenantId.trim().toLowerCase();
-                const numTenant = cleanTenant.replace(/^d/i, '');
-                if (dEnv === 'demo') return false;
-                if (dEnv && dEnv !== cleanTenant && dEnv.replace(/^d/i, '') !== numTenant) return false;
-                if (!dEnv && doc.clientDenomination && (doc.clientDenomination.includes('Medical360') || doc.clientDenomination.includes('SecoursProOuest'))) return false;
-              }
-              return true;
-            });
-
-            const filtDocs = tenantCommercialDocs.filter((doc) => {
-              const matchType =
-                docTypeFilter === 'Tous' ||
-                (docTypeFilter === 'Bon de commande' ? (doc.type === 'Bon de commande' || !!doc.hasBonCommande) : doc.type === docTypeFilter);
-              const query = docSearchQuery.trim().toLowerCase();
-              const matchSearch =
-                !query ||
-                doc.ref.toLowerCase().includes(query) ||
-                doc.clientDenomination.toLowerCase().includes(query) ||
-                doc.items.some((item) => item.nomPiece.toLowerCase().includes(query));
-              return matchType && matchSearch;
-            });
-
-            return (
-              <div className="space-y-6 animate-fadeIn" id="devis-tab-container-harmonized">
-                <style>{`
-                  #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-devis-input),
-                  #devis-tab-container-harmonized select:not(.transformer-select),
-                  #devis-tab-container-harmonized textarea {
-                    padding: 12px !important;
-                    border: 1px solid #dedede !important;
-                    border-radius: 13px !important;
-                    font-size: 16px !important;
-                    font-weight: 100 !important;
-                    background: #ffffff !important;
-                    color: #000000 !important;
-                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-                    box-sizing: border-box !important;
-                    outline: none !important;
-                    transition: all 0s !important;
-                  }
-                  #devis-tab-container-harmonized select.transformer-select {
-                    background: #000000 !important;
-                    color: #ffffff !important;
-                    font-size: 18px !important;
-                    box-shadow: none !important;
-                    border: none !important;
-                    border-radius: 13px !important;
-                    padding: 9px 19px !important;
-                    cursor: pointer !important;
-                    appearance: none !important;
-                    -webkit-appearance: none !important;
-                    -moz-appearance: none !important;
-                    text-align: center !important;
-                    text-align-last: center !important;
-                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    max-width: 145px !important;
-                  }
-                  #devis-tab-container-harmonized select.transformer-select option {
-                    background: #ffffff !important;
-                    color: #000000 !important;
-                  }
-                  #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-devis-input),
-                  #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-devis-input),
-                  #devis-tab-container-harmonized select:not(.transformer-select):hover:not(:disabled),
-                  #devis-tab-container-harmonized select:not(.transformer-select):focus:not(:disabled),
-                  #devis-tab-container-harmonized textarea:hover:not(:disabled),
-                  #devis-tab-container-harmonized textarea:focus:not(:disabled),
-                  #devis-tab-container-harmonized #search-devis-input:hover,
-                  #devis-tab-container-harmonized #search-devis-input:focus {
-                    outline: 2.5px solid #fa53d5 !important;
-                    outline-offset: 2px !important;
-                    transition: all 0s !important;
-                  }
-                  #devis-tab-container-harmonized select {
-                    appearance: none !important;
-                    -webkit-appearance: none !important;
-                    -moz-appearance: none !important;
-                    background-image: none !important;
-                  }
-                  #devis-tab-container-harmonized select option {
-                    color: #000000 !important;
-                    background: #ffffff !important;
-                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-                  }
-                  #devis-tab-container-harmonized input[type="date"]::-webkit-calendar-picker-indicator {
-                    display: none !important;
-                    -webkit-appearance: none !important;
-                    background: none !important;
-                    width: 0 !important;
-                    height: 0 !important;
-                  }
-                   #devis-tab-container-harmonized input[type="radio"] {
-                    appearance: none !important;
-                    -webkit-appearance: none !important;
-                    width: 18px !important;
-                    height: 18px !important;
-                    border: 1px solid #dedede !important;
-                    border-radius: 50% !important;
-                    outline: none !important;
-                    background-color: #ffffff !important;
-                    cursor: pointer !important;
-                    position: relative !important;
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    transition: all 0.2s ease !important;
-                    margin-right: 6px !important;
-                  }
-                  #devis-tab-container-harmonized input[type="radio"]:hover {
-                    border-color: oklch(0.44 0.16 324.65) !important;
-                    outline: none !important;
-                  }
-                  #devis-tab-container-harmonized input[type="radio"]:checked {
-                    border-color: oklch(0.44 0.16 324.65) !important;
-                    background-color: oklch(0.44 0.16 324.65) !important;
-                    outline: none !important;
-                  }
-                  #devis-tab-container-harmonized input[type="radio"]:checked::after {
-                    content: "" !important;
-                    position: absolute !important;
-                    top: 50% !important;
-                    left: 50% !important;
-                    transform: translate(-50%, -50%) !important;
-                    width: 8px !important;
-                    height: 8px !important;
-                    background-color: #ffffff !important;
-                    border-radius: 50% !important;
-                  }
-                  #devis-tab-container-harmonized label,
-                  #devis-tab-container-harmonized .devis-label-style {
-                    letter-spacing: normal !important;
-                    text-transform: none !important;
-                    font-size: 16px !important;
-                    color: #000000 !important;
-                    font-weight: 600 !important;
-                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-                  }
-                  #devis-tab-container-harmonized input:disabled,
-                  #devis-tab-container-harmonized select:disabled {
-                    background-color: #f1f5f9 !important;
-                    color: #555555 !important;
-                    cursor: not-allowed !important;
-                    opacity: 0.82 !important;
-                  }
-                `}</style>
-
-                {!isDocFormOpen ? (
-                  <>
-                    {/* Dashboard List Header */}
-                    <div 
-                      className="bg-white space-y-4"
-                      style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
-                    >
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-                        <div>
-                          <h2 className="text-2xl font-bold tracking-tight font-gochi bg-white" style={{ color: '#000000', cursor: 'default' }} id="devis-tab-title">{t("Commandes")}</h2>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-3 bg-white">
-                          {/* Field recherche (Search input) */}
-                          <div className="relative w-full sm:w-80 bg-white">
-                            <input
-                              type="text"
-                              id="search-devis-input"
-                              value={docSearchQuery}
-                              onChange={(e) => setDocSearchQuery(e.target.value)}
-                              placeholder="Recherche."
-                              className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
-                              style={{
-                                border: '1px solid #dedede',
-                                borderRadius: '13px',
-                                padding: '9px 19px',
-                                fontSize: '18px',
-                                fontWeight: '100',
-                                color: '#000000',
-                                backgroundColor: '#ffffff',
-                                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                                outline: 'none',
-                                transition: 'all 0s',
-                              }}
-                            />
-                          </div>
-
-                          {pennylaneActive && (
-                            <button
-                              onClick={handlePennylaneGlobalSync}
-                              style={{
-                                ...customButtonStyle,
-                                backgroundColor: '#000000',
-                                color: '#ffffff',
-                              }}
-                              className="font-sans"
-                            >
-                              {t("Synchroniser")}
-                            </button>
-                          )}
-
-                          <button 
-                            onClick={startNewDoc}
-                            style={customButtonStyle}
-                            className="font-sans"
-                          >
-                            {t("Nouveau")}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {pennylaneAlertMessage && (
-                      <div 
-                        style={{
-                          color: pennylaneAlertStyle === 'error' ? '#ef4444' : '#10b981',
-                          fontSize: '18px',
-                          fontWeight: 100,
-                          textAlign: 'left',
-                          marginTop: '16px',
-                          marginBottom: '16px',
-                          fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
-                        }}
-                      >
-                        {pennylaneAlertMessage}
-                      </div>
-                    )}
-
-                    <HelpBubble 
-                      cacheKey="help_dismissed_devis" 
-                      text="Bon Ã  savoir : lorsquâ€™un technicien enregistre un rapport dâ€™intervention, il peut cocher lâ€™option dâ€™Ã©mettre une facture, alors DÃ©fibeo reprend les piÃ¨ces utilisÃ©es et gÃ©nÃ¨re une facture brouillon que vous pouvez ensuite venir ajuster. Vous avez gÃ©nÃ©rÃ© un devis et souhaitez le transformer en facture ? Cliquez sur le bouton Transformer pour la ligne en question." 
-                    />
-
-                    <HelpBubble 
-                      cacheKey="help_dismissed_devis_einvoicing" 
-                      text="Concernant le e-invoicing via le PPF ou une PDP en France et en Europe, si vous souhaitez opter pour Defibeo en tant que logiciel de facturation, vous devrez le connecter Ã  un logiciel agrÃ©Ã© comme Sage, Pennylane, Cegid ou autre avec lâ€™aide de notre API disponible gratuitement dans lâ€™onglet des paramÃ¨tres." 
-                    />
-
-                    {/* Filters Pills Row */}
-                    <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" id="devis-type-pills">
-                      {(['Tous', 'Devis', 'Facture', 'Bon de commande', 'Bon de livraison'] as const).map((filterOpt) => {
-                        let count = 0;
-                        if (filterOpt === 'Tous') {
-                          count = tenantCommercialDocs.length;
-                        } else if (filterOpt === 'Bon de commande') {
-                          count = tenantCommercialDocs.filter(d => d.type === 'Bon de commande' || d.hasBonCommande).length;
-                        } else {
-                          count = tenantCommercialDocs.filter(d => d.type === filterOpt).length;
-                        }
-                        
-                        return (
-                          <button
-                            key={filterOpt}
-                            type="button"
-                            onClick={() => setDocTypeFilter(filterOpt)}
-                            style={{
-                              borderRadius: '1000px',
-                              padding: '10px 20px',
-                              fontSize: '15px',
-                              fontWeight: 100,
-                              cursor: 'pointer',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              backgroundColor: docTypeFilter === filterOpt ? '#fa53d5' : '#ffffff',
-                              color: docTypeFilter === filterOpt ? '#ffffff' : '#000000',
-                              border: docTypeFilter === filterOpt ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
-                              boxShadow: 'none',
-                              transition: 'all 0.15s ease'
-                            }}
-                            className="transition-all"
-                          >
-                            {t(filterOpt)} ({count})
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Main Table Records Sheet */}
-                    <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
-                      <div className="overflow-x-auto">
-                        {filtDocs.length === 0 ? (
-                          <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
-                        ) : (
-                          <table className="w-full text-left font-sans border-collapse text-xs" id="devis-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
-                            <thead>
-                              <tr className="bg-transparent">
-                                <th className="px-4 py-3.5" style={thStyle}>{t("RÃ©fÃ©rence.")}</th>
-                                <th className="px-4 py-3.5" style={thStyle}>{t("Client.")}</th>
-                                <th className="px-4 py-3.5" style={thStyle}>{t("Membre attribuÃ©.")}</th>
-                                <th className="px-4 py-3.5" style={thStyle}>{t("Objet ou commentaire.")}</th>
-                                <th className="px-4 py-3.5" style={thStyle}>{t("Total HT.")}</th>
-                                <th className="px-4 py-3.5" style={thStyle}>{t("Date.")}</th>
-                                <th className="px-4 py-3.5 text-center w-28" style={thStyle}>{t("Situation.")}</th>
-                                <th className="px-4 py-3.5 text-center" style={{ ...thStyle, whiteSpace: 'nowrap' }}>{t("RÃ©f. Bon Comm.")}</th>
-                                <th className="px-4 py-3.5 text-right w-12" style={thStyle}>{t("Actions.")}</th>
-                              </tr>
-                            </thead>
-                            <tbody className="text-slate-705 text-xs">
-                              {filtDocs.map((doc) => {
-                                const clientName = doc.clientDenomination || '';
-                                const clientDisplay = clientName.length > 20 ? clientName.substring(0, 20) + '(...)' : clientName;
-                                const rowActionButton18Style: React.CSSProperties = {
-                                  ...rowActionButtonStyle,
-                                  backgroundColor: '#000000',
-                                  color: '#ffffff',
-                                  fontSize: '18px',
-                                  padding: '9px 19px',
-                                  borderRadius: '13px',
-                                  boxShadow: 'none',
-                                  border: 'none',
-                                };
-
-                                return (
-                                  <tr
-                                    key={doc.id}
-                                    className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
-                                    onClick={(e) => {
-                                      if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
-                                      startEditDoc(doc);
-                                    }}
-                                  >
-                                    {/* RÃ©fÃ©rence */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                      {doc.ref}
-                                    </td>
-
-                                    {/* Client */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                      {clientDisplay}
-                                    </td>
-
-                                    {/* Membre attribuÃ©. */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                      {doc.assignedMemberName || ''}
-                                    </td>
-
-                                    {/* Objet ou commentaire */}
-                                    <td className="px-4 py-5 max-w-sm truncate" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                      {doc.commentaire || '-'}
-                                    </td>
-
-                                    {/* Total HT */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                      {doc.totalHt.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} â‚¬
-                                    </td>
-
-                                    {/* Date */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                      {doc.dateStr}
-                                    </td>
-
-                                    {/* Situation */}
-                                    <td className="px-4 py-5 text-center whitespace-nowrap">
-                                      <span 
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          borderRadius: '1000px',
-                                          backgroundColor: '#ffffff',
-                                          border: '1px solid rgb(231, 231, 231)',
-                                          color: '#000000',
-                                          fontSize: '15px',
-                                          fontWeight: 100,
-                                          padding: '6px 18px',
-                                          whiteSpace: 'nowrap',
-                                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                                        }}
-                                      >
-                                        {t(doc.status)}
-                                      </span>
-                                    </td>
-
-                                    {/* RÃ©f. Bon Comm. */}
-                                    <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                                      {doc.hasBonCommande ? (doc.bonCommandeReference || '') : ''}
-                                    </td>
-
-                                    {/* Actions */}
-                                    <td className="px-4 py-5 text-right whitespace-nowrap bg-transparent" onClick={(e) => e.stopPropagation()}>
-                                      <div className="inline-flex items-center gap-2 bg-transparent">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDownloadDoc(doc)}
-                                          style={rowActionButton18Style}
-                                          className="cursor-pointer font-sans"
-                                        >
-                                          {t("TÃ©lÃ©charger")}
-                                        </button>
-                                         <select
-                                           value=""
-                                           onChange={(e) => {
-                                             const selectedType = e.target.value as 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison';
-                                             if (selectedType) {
-                                               handleTransformDoc(doc, selectedType);
-                                             }
-                                           }}
-                                           style={{
-                                             backgroundColor: '#000000',
-                                             color: '#ffffff',
-                                             fontSize: '18px',
-                                             padding: '9px 19px',
-                                             borderRadius: '13px',
-                                             boxShadow: 'none',
-                                             border: 'none',
-                                             appearance: 'none',
-                                             WebkitAppearance: 'none',
-                                             MozAppearance: 'none',
-                                             outline: 'none',
-                                             textAlign: 'center',
-                                             textAlignLast: 'center',
-                                             maxWidth: '145px',
-                                           }}
-                                           className="transformer-select cursor-pointer font-sans"
-                                         >
-                                           <option value="" disabled hidden style={{ backgroundColor: '#000000', color: '#ffffff' }}>
-                                             {t("Transformer")}
-                                           </option>
-                                           {(['Devis', 'Facture', 'Bon de commande', 'Bon de livraison'] as const)
-                                             .filter(tType => tType !== doc.type)
-                                             .map(tType => (
-                                               <option key={tType} value={tType} style={{ backgroundColor: '#ffffff', color: '#000000' }}>
-                                                 {tType}
-                                               </option>
-                                             ))
-                                           }
-                                         </select>
-                                        <button
-                                          type="button"
-                                          onClick={() => startEditDoc(doc)}
-                                          style={rowActionButton18Style}
-                                          className="cursor-pointer font-sans"
-                                        >
-                                          {t("Modifier")}
-                                        </button>
-                                        {pennylaneActive && doc.type === 'Facture' && doc.status === 'AcceptÃ©' && (
-                                          <button
-                                            type="button"
-                                            onClick={() => triggerPennylaneSync(doc)}
-                                            style={{
-                                              ...rowActionButton18Style,
-                                              backgroundColor: '#000000',
-                                              color: '#ffffff',
-                                              border: 'none',
-                                            }}
-                                            className="cursor-pointer font-sans shadow-md"
-                                          >
-                                            {t("Pennylane Sync")}
-                                          </button>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  /* Dynamic Form block */
-                  <div className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto" id="devis-form-overlay">
-                    
-                    {/* Header Box styled exactly like DefibTab Form Header */}
-                    <div 
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
-                      style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '20px' }}
-                      id="devis-form-header-box"
-                    >
-                      <div>
-                        <h3 className="text-2xl font-bold font-gochi" id="devis-form-modal-title" style={{ color: '#000', cursor: 'default' }}>
-                          {editingDocId ? t('Modification piÃ¨ce comptable') : t('Nouvelle piÃ¨ce comptable')}
-                        </h3>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsDocFormOpen(false);
-                            setEditingDocId(null);
-                          }}
-                          id="btn-close-devis-modal"
-                          style={{
-                            ...rowActionButtonStyle,
-                            fontSize: '18px',
-                            padding: '9px 19px',
-                          }}
-                          className="transition-colors cursor-pointer font-sans"
-                        >
-                          <span>Annuler</span>
-                        </button>
-
-                        <button
-                          type="submit"
-                          form="devis-document-form"
-                          id="btn-submit-devis-form"
-                          style={{
-                            ...rowActionButtonStyle,
-                            fontSize: '18px',
-                            padding: '9px 19px',
-                            backgroundColor: 'rgb(53, 86, 236)',
-                            color: '#ffffff',
-                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
-                          }}
-                          className="transition-all cursor-pointer font-sans"
-                        >
-                          <span>Enregistrer</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div style={{ height: '16px' }} className="bg-transparent" />
-
-                    <form 
-                      id="devis-document-form"
-                      onSubmit={handleSaveDoc} 
-                      className="space-y-6 bg-white p-5 border-none"
-                      style={{
-                        border: '1px solid rgb(218, 218, 218)',
-                        borderRadius: '18px',
-                        width: '98%',
-                        maxWidth: '98%',
-                        margin: 'auto'
-                      }}
-                    >
-                      {/* Form fields Grid */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-white">
-                        
-                        {/* Membre attribuÃ©. */}
-                        <div className="flex flex-col gap-1 bg-white col-span-1 md:col-span-3">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">Membre attribuÃ©.</label>
-                          <select
-                            value={docAssignedMemberName}
-                            onChange={(e) => setDocAssignedMemberName(e.target.value)}
-                            className="focus:outline-none"
-                          >
-                            <option value="">Aucun membre attribuÃ© (Suivi libre)</option>
-                            {members
-                              .filter(m => !(m.role === 'Technicien' || m.role === 'Maintenance Terrain' || m.role?.toLowerCase().includes('tech')))
-                              .map(m => (
-                                <option key={m.name} value={m.name}>
-                                  {m.name} ({m.role})
-                                </option>
-                              ))
-                            }
-                          </select>
-                        </div>
-
-                        {/* Document Type select */}
-                        <div className="flex flex-col gap-1 bg-white">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">Type.</label>
-                          <select
-                            value={docType}
-                            onChange={(e) => setDocType(e.target.value as 'Devis' | 'Facture' | 'Proforma' | 'Bon de commande' | 'Bon de livraison')}
-                            className="focus:outline-none"
-                            required
-                          >
-                            <option value="Devis">Devis</option>
-                            <option value="Facture">Facture</option>
-                            <option value="Bon de commande">Bon de commande</option>
-                            <option value="Bon de livraison">Bon de livraison</option>
-                          </select>
-                        </div>
-
-                        {/* Reference (Auto generated or editable) */}
-                        <div className="flex flex-col gap-1 bg-white">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">RÃ©fÃ©rence.</label>
-                          <input
-                            type="text"
-                            value={docRef}
-                            disabled
-                            className="focus:outline-none"
-                            required
-                          />
-                        </div>
-
-                        {/* Client Select */}
-                        <div className="flex flex-col gap-1 bg-white">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">Client.</label>
-                          <select
-                            value={docClientId}
-                            onChange={(e) => {
-                              const selectedId = e.target.value;
-                              setDocClientId(selectedId);
-                              const matchedClient = clients.find(c => c.id === selectedId);
-                              if (matchedClient) {
-                                if (matchedClient.payeurId) {
-                                  setDocPayeurId(matchedClient.payeurId);
-                                }
-                                if (matchedClient.clientIdField) {
-                                  setDocClientIdField(matchedClient.clientIdField);
-                                }
-                              }
-                            }}
-                            className="focus:outline-none"
-                            required
-                          >
-                            <option value="">SÃ©lection du client.</option>
-                            {clients.map(c => (
-                              <option key={c.id} value={c.id}>
-                                {c.denomination}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Date */}
-                        <div className="flex flex-col gap-1 bg-white">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Ã‰mission.")}</label>
-                          <input
-                            type="date"
-                            value={docDateStr}
-                            disabled
-                            className="focus:outline-none"
-                            required
-                          />
-                        </div>
-
-                        {/* Status selection */}
-                        <div className="flex flex-col gap-1 bg-white">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Situation.")}</label>
-                          <select
-                            value={docStatus}
-                            onChange={(e) => setDocStatus(e.target.value as any)}
-                            placeholder="QQQQ"
-                            className="focus:outline-none"
-                            required
-                          >
-                            <option value="Brouillon">{t("Brouillon")}</option>
-                            <option value="TerminÃ©">{t("TerminÃ©")}</option>
-                            <option value="AcceptÃ©">{t("AcceptÃ©")}</option>
-                            <option value="RefusÃ©">{t("RefusÃ©")}</option>
-                            <option value="AnnulÃ©">{t("AnnulÃ©")}</option>
-                            <option value="SupprimÃ©">{t("SupprimÃ©")}</option>
-                          </select>
-                        </div>
-
-                        {/* Remarque */}
-                        <div className="flex flex-col gap-1 bg-white">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Remarque.")}</label>
-                          <input
-                            type="text"
-                            value={docCommentaire}
-                            onChange={(e) => setDocCommentaire(e.target.value)}
-                            placeholder={t("Entrez une remarque.")}
-                            className="focus:outline-none w-full animate-fadeIn"
-                          />
-                        </div>
-
-                        {/* Code Taxe */}
-                        <div className="flex flex-col gap-1 bg-white">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Code Taxe.")}</label>
-                          <input
-                            type="text"
-                            value={docCodeTaxe}
-                            onChange={(e) => setDocCodeTaxe(e.target.value)}
-                            placeholder={t("Code Taxe.")}
-                            className="focus:outline-none w-full"
-                          />
-                        </div>
-
-                        {/* Payeur ID */}
-                        <div className="flex flex-col gap-1 bg-white">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Payeur ID.")}</label>
-                          <input
-                            type="text"
-                            value={docPayeurId}
-                            onChange={(e) => setDocPayeurId(e.target.value)}
-                            placeholder={t("Payeur ID.")}
-                            className="focus:outline-none w-full"
-                          />
-                        </div>
-
-                        {/* Client ID */}
-                        <div className="flex flex-col gap-1 bg-white">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Client ID.")}</label>
-                          <input
-                            type="text"
-                            value={docClientIdField}
-                            onChange={(e) => setDocClientIdField(e.target.value)}
-                            placeholder={t("Client ID.")}
-                            className="focus:outline-none w-full"
-                          />
-                        </div>
-
-                      </div>
-
-                      {/* Add spare parts (Lookup in variables) Container */}
-                      <div className="border border-slate-200 rounded-2xl p-5 bg-transparent space-y-4">
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-transparent">
-                          
-                          {/* Lookup Piece */}
-                          <div className="flex flex-col gap-1 bg-transparent md:col-span-5">
-                            <div className="flex items-center justify-between">
-                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("PiÃ¨ce ou service.")}</label>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (docClientId && docItems.length > 0) {
-                                    handleSaveDoc({ preventDefault: () => {} } as any);
-                                  } else {
-                                    setIsDocFormOpen(false);
-                                    setEditingDocId(null);
-                                  }
-                                  setActiveTab('variables', true);
-                                }}
-                                className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
-                                style={{ textDecoration: 'none' }}
-                              >
-                                Nouvelle variable
-                              </button>
-                            </div>
-                            <select
-                              value={selectedDocPieceId}
-                              onChange={(e) => {
-                                const vId = e.target.value;
-                                setSelectedDocPieceId(vId);
-                                const price = getSellingPriceForVariable(vId);
-                                setCustomDocPiecePrice(price);
-                              }}
-                              className="focus:outline-none w-full"
-                            >
-                              <option value="">{t("SÃ©lection d'une piÃ¨ce ou service.")}</option>
-                              {variables
-                                .filter(v => v.category !== 'Drapeau GMAO' && v.category !== 'Fournisseur' && v.category !== 'ModÃ¨le Raison Prestation')
-                                .map(v => {
-                                  const matchedStock = stocks.find(s => s.denominationPieceId === v.id);
-                                const ugs = matchedStock?.ugs || '';
-                                const ugsStr = ugs ? ` [UGS: ${ugs}]` : '';
-                                const marqueStr = v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : '';
-                                return (
-                                  <option key={v.id} value={v.id}>
-                                    {v.identifiant ? `[${v.identifiant}] ` : ''}[{v.category}] {v.nom}{marqueStr}{ugsStr}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                          </div>
-
-                          {/* Selling price */}
-                          <div className="flex flex-col gap-1 bg-transparent md:col-span-3">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Tarif de vente. (â‚¬)")}</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={customDocPiecePrice}
-                              onChange={(e) => setCustomDocPiecePrice(parseFloat(e.target.value) || 0)}
-                              className="focus:outline-none w-full"
-                            />
-                          </div>
-
-                          {/* Quantity */}
-                          <div className="flex flex-col gap-1 bg-transparent md:col-span-2">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("QuantitÃ©.")}</label>
-                            <input
-                              type="number"
-                              min="1"
-                              placeholder="1"
-                              value={customDocPieceQty || ''}
-                              onChange={(e) => setCustomDocPieceQty(parseInt(e.target.value) || 0)}
-                              className="focus:outline-none w-full"
-                            />
-                          </div>
-
-                          <div className="md:col-span-2">
-                            <button
-                              type="button"
-                              onClick={handleAddLineItem}
-                              style={customButtonStyle}
-                              className="font-sans w-full"
-                            >
-                              {t("Ajouter")}
-                            </button>
-                          </div>
-
-                        </div>
-
-                        {/* Added items list */}
-                        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                          {docItems.length === 0 ? (
-                            <div style={itemValueStyle} className="p-6 text-center bg-white">
-                              {t("Aucune ligne ajoutÃ©e.")}
-                            </div>
-                          ) : (
-                             <table className="w-full text-left text-xs border-collapse font-sans bg-white">
-                              <thead>
-                                <tr className="bg-transparent">
-                                  <th className="px-4 py-3" style={thStyle}>{t("UGS.")}</th>
-                                  <th className="px-4 py-3" style={thStyle}>{t("PiÃ¨ce.")}</th>
-                                  <th className="px-4 py-3 text-right" style={thStyle}>{t("UnitÃ© HT. (â‚¬)")}</th>
-                                  <th className="px-4 py-3 text-center w-24" style={thStyle}>{t("Volume.")}</th>
-                                  <th className="px-4 py-3 text-right w-32" style={thStyle}>{t("Total HT. (â‚¬)")}</th>
-                                  <th className="px-4 py-3 text-right w-24" style={thStyle}>{t("Action.")}</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100 text-slate-650 bg-white">
-                                {docItems.map((item, idx) => {
-                                  const itemUgs = item.ugs || stocks.find(s => s.denominationPieceId === item.variableId)?.ugs || 'â€”';
-                                  return (
-                                    <tr key={idx} className="bg-white font-sans">
-                                      <td className="px-4 py-3.5 font-mono text-xs" style={itemValueStyle}>{itemUgs}</td>
-                                      <td className="px-4 py-3.5" style={itemValueStyle}>{item.nomPiece}</td>
-                                      <td className="px-4 py-3.5 text-right" style={itemValueStyle}>{item.prixVenteHt.toFixed(2)}â‚¬</td>
-                                      <td className="px-4 py-3.5 text-center" style={itemValueStyle}>{item.quantite}</td>
-                                      <td className="px-4 py-3.5 text-right" style={itemValueStyle}>
-                                        {(item.prixVenteHt * item.quantite).toFixed(2)}â‚¬
-                                      </td>
-                                      <td className="px-4 py-3 text-right bg-white">
-                                        <button
-                                          type="button"
-                                          onClick={() => setDocItems(docItems.filter((_, i) => i !== idx))}
-                                          style={{
-                                            ...rowActionButtonStyle,
-                                            fontSize: '18px',
-                                            padding: '9px 19px',
-                                          }}
-                                          className="cursor-pointer font-sans"
-                                        >
-                                          {t("Supprimer")}
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
-
-                        {/* Calculated values summary */}
-                        {docItems.length > 0 && (
-                          <div className="flex justify-end pr-1 pt-2 bg-transparent">
-                            <div className="w-80 border border-slate-200 rounded-2xl p-4 bg-white space-y-2">
-                              <div className="flex justify-between items-center bg-white">
-                                <span style={itemValueStyle}>{t("Total HT. (â‚¬)")}</span>
-                                <span style={itemValueStyle}>
-                                  {docItems.reduce((acc, it) => acc + (it.prixVenteHt * it.quantite), 0).toFixed(2)}â‚¬
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center bg-white">
-                                <span style={itemValueStyle}>{t("Total TVA. (â‚¬)")}</span>
-                                <span style={itemValueStyle}>
-                                  {(docItems.reduce((acc, it) => acc + (it.prixVenteHt * it.quantite), 0) * 0.2).toFixed(2)}â‚¬
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center bg-white">
-                                <span style={{ ...itemValueStyle, fontWeight: 'bold' }}>{t("Total TTC. (â‚¬)")}</span>
-                                <span style={{ ...itemValueStyle, fontWeight: 'bold' }}>
-                                  {(docItems.reduce((acc, it) => acc + (it.prixVenteHt * it.quantite), 0) * 1.2).toFixed(2)}â‚¬
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Textarea Commentaires. */}
-                        <div className="flex flex-col gap-1 bg-white mt-4">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Commentaires.")}</label>
-                          <textarea
-                            value={docCommentaires}
-                            onChange={(e) => setDocCommentaires(e.target.value)}
-                            placeholder={t("Entrez les commentaires...")}
-                            className="focus:outline-none w-full p-3 border border-slate-200 rounded-xl min-h-[100px]"
-                          />
-                        </div>
-
-                        {/* Autre document (Url Source). */}
-                        <div className="flex flex-col gap-1 bg-white mt-4 col-span-1 md:col-span-3">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Autre document (Url Source).")}</label>
-                          <input
-                            type="url"
-                            value={docUrlSource}
-                            onChange={(e) => setDocUrlSource(e.target.value)}
-                            placeholder={t("Entrez l'URL source du document...")}
-                            className="focus:outline-none w-full"
-                          />
-                        </div>
-
-                      </div>
-
-                      {/* Section Bon de commande */}
-                      {docStatus !== 'Brouillon' && (
-                        <div className="border border-slate-200 rounded-2xl p-5 bg-transparent space-y-4 mt-6">
-                          
-                          <div className="flex flex-col gap-2 bg-transparent">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">
-                              {t("CrÃ©er un bon de commande ?")}
-                            </span>
-                            <div className="flex gap-4 mt-1 bg-transparent">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDocHasBonCommande(true);
-                                  if (!docBonCommandeReference) {
-                                    const nextRef = (editingDocId && commercialDocs.find(d => d.id === editingDocId)?.bonCommandeReference) || "";
-                                    if (nextRef) {
-                                      setDocBonCommandeReference(nextRef);
-                                    } else {
-                                      const prefix = 'BL';
-                                      const year = '2026';
-                                      const pattern = new RegExp(`^${prefix}-${year}-(\\d+)$`);
-                                      let maxNum = 0;
-                                      for (const d of commercialDocs) {
-                                        if (d.bonCommandeReference) {
-                                          const match = d.bonCommandeReference.match(pattern);
-                                          if (match) {
-                                            const num = parseInt(match[1], 10);
-                                            if (num > maxNum) {
-                                              maxNum = num;
-                                            }
-                                          }
-                                        }
-                                      }
-                                      setDocBonCommandeReference(`${prefix}-${year}-${maxNum + 1}`);
-                                    }
-                                  }
-                                }}
-                                className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
-                                style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
-                              >
-                                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docHasBonCommande === true ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                  {docHasBonCommande === true && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                                </span>
-                                {t("Oui")}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDocHasBonCommande(false)}
-                                className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
-                                style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
-                              >
-                                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docHasBonCommande === false ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                  {docHasBonCommande === false && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                                </span>
-                                {t("Non")}
-                              </button>
-                            </div>
-                          </div>
-
-                          {docHasBonCommande && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-3 bg-transparent animate-fadeIn">
-                              {/* EntÃªte BC. */}
-                              <div className="flex flex-col gap-1 bg-white col-span-1 md:col-span-3">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("EntÃªte BC.")}</label>
-                                <input
-                                  type="text"
-                                  value={docBonCommandeEntete}
-                                  onChange={(e) => setDocBonCommandeEntete(e.target.value)}
-                                  placeholder={t("Entrez l'entÃªte du bon de commande.")}
-                                  className="focus:outline-none w-full animate-fadeIn"
-                                />
-                              </div>
-
-                              {/* RÃ©fÃ©rence */}
-                              <div className="flex flex-col gap-1 bg-white">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("RÃ©fÃ©rence BC.")}</label>
-                                <input
-                                  type="text"
-                                  value={docBonCommandeReference}
-                                  disabled
-                                  className="focus:outline-none bg-slate-50 font-mono text-xs cursor-not-allowed"
-                                  placeholder={t("GÃ©nÃ©rÃ©e automatiquement...")}
-                                />
-                              </div>
-
-                              {/* Livraison Radio buttons */}
-                              <div className="flex flex-col gap-1 bg-white">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Livraison BC.")}</label>
-                                <div className="flex gap-4 mt-2 bg-transparent">
-                                  <button
-                                    type="button"
-                                    onClick={() => setDocBonCommandeLivraison('Intervention')}
-                                    className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
-                                    style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
-                                  >
-                                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docBonCommandeLivraison === 'Intervention' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                      {docBonCommandeLivraison === 'Intervention' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                                    </span>
-                                    {t("Intervention")}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDocBonCommandeLivraison('Transporteur')}
-                                    className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
-                                    style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
-                                  >
-                                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docBonCommandeLivraison === 'Transporteur' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                      {docBonCommandeLivraison === 'Transporteur' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                                    </span>
-                                    {t("Transporteur")}
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Situation */}
-                              <div className="flex flex-col gap-1 bg-white">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Situation BC.")}</label>
-                                <select
-                                  value={docBonCommandeSituation}
-                                  onChange={(e) => setDocBonCommandeSituation(e.target.value as any)}
-                                  className="focus:outline-none"
-                                  required
-                                >
-                                  <option value="Ouvert">{t("Ouvert")}</option>
-                                  <option value="EnvoyÃ© TerminÃ©">{t("EnvoyÃ© TerminÃ©")}</option>
-                                  <option value="EnvoyÃ© Logistique">{t("EnvoyÃ© Logistique")}</option>
-                                  <option value="TerminÃ©">{t("TerminÃ©")}</option>
-                                </select>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                    </form>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* ======================================= */}
-          {/* STOCKS MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'stocks' && (
-            <StocksTab
-              stocks={stocks}
-              variables={variables}
-              defibrillateurs={defibrillateurs}
-              saveDefibs={saveDefibs}
-              onAddDefib={handleAddDefib}
-              saveStocks={saveStocks}
-              showStockForm={showStockForm}
-              setShowStockForm={setShowStockForm}
-              distributedStocks={distributedStocks}
-              onNavigateToDistributedStocks={(ugs) => {
-                setDistributedStocksSearchQuery(ugs);
-                setActiveTab('stocks-distribues');
-              }}
-              stockSearchQuery={stockSearchQuery}
-              setStockSearchQuery={setStockSearchQuery}
-              commercialDocs={commercialDocs}
-              achatsFournisseurs={achatsFournisseurs}
-              setActiveTab={setActiveTab}
-              members={members}
-              saveDistributedStocks={saveDistributedStocks}
-              logisticsNotifications={logisticsNotifications}
-              saveLogisticsNotifications={saveLogisticsNotifications}
-              isDeveloper={isDeveloper}
-              isReadOnly={isDeveloper}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* STOCKS DISTRIBUÃ‰S MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'stocks-distribues' && (
-            <StocksDistribuesTab
-              distributedStocks={distributedStocks}
-              saveDistributedStocks={saveDistributedStocks}
-              stocks={stocks}
-              saveStocks={saveStocks}
-              variables={variables}
-              members={members}
-              fsmTours={fsmTours}
-              searchQuery={distributedStocksSearchQuery}
-              setSearchQuery={setDistributedStocksSearchQuery}
-              onNavigateToCentraleStocks={(ugs) => {
-                setStockSearchQuery(ugs);
-                setActiveTab('stocks');
-              }}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* ACHATS FOURNISSEURS MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'achats-fournisseurs' && (
-            <AchatsFournisseursTab
-              achatsFournisseurs={achatsFournisseurs}
-              saveAchatsFournisseurs={saveAchatsFournisseurs}
-              variables={variables}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* GED (DOCUMENT MANAGEMENT) MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'ged' && (
-            <GedTab
-              gedDocs={gedDocs}
-              saveGedDocs={saveGedDocs}
-              isGedFormOpen={isGedFormOpen}
-              setIsGedFormOpen={setIsGedFormOpen}
-              handleConsultGed={handleConsultGed}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* TICKETS CAISSE MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'tickets' && (
-            <TicketsCaisseTab
-              expenses={expenses}
-              members={members}
-              onUpdateExpenses={saveExpenses}
-            />
-          )}
-
-          {activeTab === 'temps' && (
-            <TempsTab
-              pointages={pointages}
-              members={members}
-              onUpdatePointages={(updated) => savePointages(updated)}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* RELEVÃ‰S DE VEILLE MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'veilles' && (
-            <VeillesTab
-              veilles={veilles}
-              onDeleteVeille={(id) => {
-                const updated = veilles.filter((v) => v.id !== id);
-                saveVeilles(updated);
-              }}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* LOCALISATIONS MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'localisations' && (
-            <LocalisationsTab members={members} />
-          )}
-
-          {/* ======================================= */}
-          {/* SATISFACTION (CSAT) MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'satisfaction' && (
-            <SatisfactionTab
-              customerReviews={customerReviews}
-              onUpdateReviews={(updated) => saveReviews(updated)}
-            />
-          )}
-
-          {activeTab === 'statistiques' && (
-            <StatsModal
-              isPage={true}
-              isOpen={true}
-              onClose={() => {}}
-              defibrillateurs={defibrillateurs}
-              clients={clients}
-              variables={variables}
-              stocks={stocks}
-              pointages={pointages}
-              customerReviews={customerReviews}
-              fsmTours={fsmTours}
-              generatedReports={generatedReports}
-            />
-          )}
-
-          {activeTab === 'formations' && (
-            <FormationsTab
-              formations={formations}
-              saveFormations={saveFormations}
-              variables={variables}
-              members={members}
-              clients={clients}
-              setActiveTab={setActiveTab}
-              fsmTours={fsmTours}
-              onUpdateFsmTours={saveFsmTours}
-            />
-          )}
-
-          {activeTab === 'stagiaires' && (
-            <StagiairesTab
-              stagiaires={stagiaires}
-              saveStagiaires={saveStagiaires}
-            />
-          )}
-
-          {activeTab === 'emargements' && (
-            <EmargementsTab
-              emargements={emargements}
-              saveEmargements={saveEmargements}
-              formations={formations}
-              stagiaires={stagiaires}
-              members={members}
-              companyInfo={companyInfo}
-            />
-          )}
-
-          {activeTab === 'notifications' && (
-            <NotificationsTab
-              notifications={notifications}
-              onUpdateNotifications={saveNotifications}
-            />
-          )}
-
-          {activeTab === 'parametres' && (
-            <SettingsModal
-              isPage={true}
-              isOpen={true}
-              onClose={() => {}}
-              companyInfo={companyInfo}
-              onUpdateCompanyInfo={handleUpdateCompanyInfo}
-              members={members}
-              onUpdateMembers={handleUpdateMembers}
-              onOpenPublicPortal={() => {
-                setIsPublicPortalOpen(true);
-              }}
-              onOpenClientPortal={() => {
-                setIsClientPortalOpen(true);
-              }}
-              onLogout={handleLogout}
-              currentUser={loggedUser}
-              enableOtherEquipments={enableOtherEquipments}
-              onUpdateOtherEquipments={handleUpdateOtherEquipments}
-              otherEquipments={otherEquipments}
-              onClearOtherEquipments={() => saveOtherEquipments([])}
-              onConnectorsUpdated={loadApiConnectors}
-              onUpdateLocationNames={setLocationNames}
-              isDeveloper={isDeveloper}
-              isReadOnly={isDeveloper}
-            />
-          )}
-
-          {activeTab === 'import-export' && (
-            <ImportExportTab 
-              tenantId={tenantId}
-              isFirebaseLoaded={isFirebaseLoaded}
-              defibrillateurs={defibrillateurs}
-              clients={clients}
-              stocks={stocks}
-              pointages={pointages}
-              variables={variables}
-              saveDefibs={saveDefibs}
-              saveClients={saveClients}
-              saveStocks={saveStocks}
-              saveVariables={saveVariables}
-              setActiveTab={setActiveTab}
-              dropboxActive={dropboxActive}
-              dropboxAccessToken={dropboxAccessToken}
-            />
-          )}
-
-        </section>
-      </main>
-      </div>
-
-      {/* Global popups block settings / membres */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        companyInfo={companyInfo}
-        onUpdateCompanyInfo={handleUpdateCompanyInfo}
-        members={members}
-        onUpdateMembers={handleUpdateMembers}
-        onOpenPublicPortal={() => {
-          setIsPublicPortalOpen(true);
-          setIsSettingsOpen(false);
-        }}
-        onOpenClientPortal={() => {
-          setIsClientPortalOpen(true);
-          setIsSettingsOpen(false);
-        }}
-        onLogout={handleLogout}
-        currentUser={loggedUser}
-        enableOtherEquipments={enableOtherEquipments}
-        onUpdateOtherEquipments={handleUpdateOtherEquipments}
-        otherEquipments={otherEquipments}
-        onClearOtherEquipments={() => saveOtherEquipments([])}
-        onConnectorsUpdated={loadApiConnectors}
-        onUpdateLocationNames={setLocationNames}
-        isDeveloper={isDeveloper}
-        isReadOnly={isDeveloper}
-      />
-
-      {/* Modal Avisage TournÃ©e */}
-      {avisageConfirmTour && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn">
-          <div
-            className="bg-white p-6 w-full flex flex-col gap-4 text-left"
-            style={{
-              borderRadius: '13px',
-              boxShadow: 'none',
-              textAlign: 'left',
-              maxWidth: '265px',
-            }}
-          >
-            <p
-              className="leading-relaxed"
-              style={{
-                color: '#000',
-                fontSize: '16px',
-                cursor: 'default',
-              }}
-            >
-              Envoyer un email informatif mentionnant la date et le crÃ©neau de passage prÃ©vu.
-            </p>
-            <div className="flex items-center justify-between gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setAvisageConfirmTour(null)}
-                className="font-semibold cursor-pointer outline-none transition-none"
-                style={{
-                  padding: '9px 22px',
-                  color: '#fff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                  background: 'rgb(96, 28, 104)',
-                  border: 'none',
-                  borderRadius: '13px',
-                }}
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                onClick={() => handleExecuteAvisage(avisageConfirmTour)}
-                className="font-semibold cursor-pointer outline-none transition-none"
-                style={{
-                  padding: '9px 22px',
-                  color: '#fff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                  background: 'rgb(96, 28, 104)',
-                  border: 'none',
-                  borderRadius: '13px',
-                }}
-              >
-                Envoyer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <StatsModal
-        isOpen={isStatsOpen}
-        onClose={() => setIsStatsOpen(false)}
-        defibrillateurs={defibrillateurs}
-        clients={clients}
-        variables={variables}
-        stocks={stocks}
-        pointages={pointages}
-        customerReviews={customerReviews}
-        fsmTours={fsmTours}
-        generatedReports={generatedReports}
-      />
-
-      <FeedbackDrawer companyName={companyInfo?.name} />
-    </div>
-  );
-}
+                      {/* Black button 'Rapport spontanÃ©' */}
+                      <button
+                        type="button"
+                        id="btn-spontaneous-report-main"
+          xœì}ËrI’à}¿"„ÒÀ.I‘MqIÉ(’ªâ¶^M²Ôk¦ÑH	d ÈV"•>Ä¡YÛÜæ´fks™½ìì­¹6Ç9ìR?°û	ë™ùH€zt)»‹ñôğğp÷ğ!òã:û¶5ü°{ÕY"»ÈÕ"¥OƒjÓa@Í“™ë†CİĞL¨wøKhÍ¦Ô	:NhÛKÿ¹º•CÓ
+,g|Lg®™Êux…§®7UªräKÃäu_Î¨Ó	¼VÔ½¾.ıÉ.mº{U¤1ü0öÜĞ1÷]Ûõ¶Iû»>{ÚËµ†QÙ{*Ë`N'ÖG
+ÅW·f•eg†i¤¡èÃÙY}XS|àz&õÓ
+}l~]©<”t\‡VO0ô|6Ã™k9õjgøÔ˜Zöå6iµèÈP÷¹a9íeÒŞ·Î,{æ¹Søâßõ©gZuíı‰ZãI ¸¶YÑ{ÅêmÃ÷_SºÛš¸g0owf­à²û°OŒa`ÑmhØ´û¦ß{øğ-	<`ºëtÛ&#›^+ S¿;¤òçĞ¬Ñeô‡ÙÅáµJ†ğ¨thWA§ulÌÅ‰Ï‘şö¦µT6—•A®SÖàÕÊïÈ—ìƒĞ°- 0áåÉïVŠ›ÜY1­³¢ÖJ~¯óï¢öìI8Ø”´64†úz	 åŞ™–?µ|ŸšïÆSÃ}çÎÖ~«¨¦55ÆôÄBÍ ˜ùÛ++Ãzşz†]`7é®öŒ©ñÑuŒs¿7t§+§‡ÇÇ{=ÿl\´&¬Ñ=;ØmıZ&%b|òêài¾|!xfÅK°ãëŒía³C×RÏ1œ€Ø¿şå_ù4É·7,ÌöÎŠ(K^¹¡G†ã—e™  n$ÜğÌ£$tÈ™kShÑà½aÃ×Ğ'3êMi`W¼c?´5mü2EoXPÛI@‡ÇZÔYÆ¢şí00ŠCënHfvè[6>1a8Ô/XIkìÀ&Á¶eİø!,´s3şcåÈı1’áP,?€YË„:C×£=rèß…ú–-†ÏZ¢£Œ'ämÁNÄ‡]Î\?è
+èŠL:-gj»cœ4çYÎĞšv<ƒagıØepz/¤iI³¿½ñ‰ß6F#P§èóö¶ÎÔ†¹ô€,`?hn„@Æ¨ëc0çĞ¦¸ˆ®3²Æ¡w{#JŸ¹€áÌğ,¬CxÇäÇç{/{…»®¯æÀ¶}×ó¬±¾ÅUÊ0.lS×´FŸNHm!6€ÙrFpäls:>r€3ü23j&¸X°ŠŸ>¯NšZà‰jD8Û†"À7À¹‚3²ObºÃ}†m1³oo „ùÙ÷ æV·7¬ìí¿!RAé±åÛ~ËdH	¢&¨ÀŠÀ ¤›- Ù§Û)ìœÛ€’§‡\ézò¾¿À¢œdÅ@ƒ­ÂQç|—3ˆTbÌ`MnÿBÎ¨cyËä¹k"TÙ['[z$Ò|‘xÑù1¾½÷°_d_Ze?FrƒœÓÔ!>’Î˜äpú‚0vÆ¸á¤ŞµÅÛht°£_QÖM<#¨c©Ä	~›H‡a¢CÜz0º³‰ öv
+«Å·ä÷ä9É¸U¥¾â	C¥›ØmÜÆS¤e¦Ükó‡öíH}åUÛYIxˆ"BÖ"aîfİ„qğÔì^Ø‚Éåìşé³Nüé6ûì¹çø¹­ĞàœMØ¢á »ĞîÈ0é‘“eztm:
+ŠøŒJ±ƒ/6¼ñ ³¶ºµL¢?K%¼n"§$bG©2p/N&†éW³úSãâO–LPÜØú»ÒBŞØrPºØ ‘Ä€İL¢…5
+òâ­Z´ª©ueüµÏ_Å¢®Gmã‚š|YW‹ÙîøÅÍ§Å±M”—ª
+FRÈƒ~¿´Ü0+7–Œd*“àÓÚÅ%šbºö³c½e;ë)lPÑ·À»ıÆ˜ Wg˜SØ¡@¶ ™C¯+ÿJ}Æï&Á	%ë@ÎÄ‘‡Ä$¢Í>Ã
+ˆÙ/¡…B—78)>’(ê0Ú¢C¸¹¼R8ÉàrÈÀ/¹¢NÄ§ÁûNA§„°Ø4¿]ª\€§Ö”ÂÖ©S· ïĞ´ÉnªŞ˜‡œ/zrydvÚĞêQPfÌgWŒz ™eD:Ô^ªTô Óä=×¶œÀ}mÑóÎĞ	œlİü©ëÀËí?à‹Àğ û®«”*%¿\/“õ~¿¤b‰,^¸¥ù':µP€N‹ã7²Ô–ÓÌn_l¡®PJÿxo9¶å ­®ÙÙŸÏ'PÒÔ§ KÃ‘VMOJ ¢¯?RÕ©êt”@‰~	Z$kıÒ¢DHÈ©Œã`È/Ü÷eŒ2ÕÂ•é¹38È=ÏõÈ÷ß“NQ³ÈHøÅ—ó²»F¦œáÓA÷A«„%ÌÔd˜á±Ùï“šÚxpÜñ§ÒÑ_ª‘‡®©€Ú¹zDZ;¦«ÓÚƒ#×³|Î–Z ê	ƒhk‰üã?’’Zú«•¿ny¨|Z*r¸fİu23€mô#–KlS|¹PŒx2{Ìavá“Ê[ğ»´XÆE÷¼»va—‚”1YBÂHGÜäÃ~¿õèÿıÏÿş¿×îpVŸÉådßG|:ÿ
+¿Ÿºàü;à€Aî¾D~`ı) ½ kÒ!0‰6a_`E°ÛhV«|doVWgo“QşGYAËwlëÑHÓ‰'4œª;™xt”(ÂÎÏÏ{b-™ÊDB`ùA¤òW€-÷[$@!+Øm½Ø†ó¡ƒ½Ûr\(‚ºÇ…Ö¨[¶%Ï—ÊC"š¨5	×š¦«ï2•ÚAÔûÎŠñ¨·³Ã¯™İ‰¤zú(4%0p8Áùºˆ–•ÚââT$¼a¯[Z^è)X˜Sêjßií#Óú ŸSİËÈrØC^ù€sNšDtìÔ2]İî7®½¤6XCCÕ]„ƒ©$ƒƒı |S~p\Œ©RÇ4@‰2Z‹š.wºL˜|<TôˆÉ†ÓªÜAÀ$dà…ÔÌ!	p‡+Má9Œ
+:¿ı7ògl5Œ:í“…Ç6 „§-£lGh9¨3ö@àSòëÿø×ÿûş[İbí¬¸vÙ¯'Dá=AIy(›?ZW~Gğz†œ2íä1áöÉÉ„f]d©?P~Æ=$#Û=ïN,Ó`Á©»Ó}”<[‰<–¹|Êò-ŒÉK®À‰
+™Å¹è¢dZBb¯`cëGM~»è÷lX±`BvwwIŸ<.?ı§³à’Aë•ä}X¤4u®n¦¸KIxoÏà{Ğ"+%ËI¶Ë{fJg¹§óî(”ROâüÓ6f>Nİ±Ìİ^¹tYk¹59ugÈ8G¤İ2I‘RB}â7­+]²hÑ”&@Ğ*·càe°É ±l+OOÖzj].€ğ¯÷6Èywµ/¯Q‡`r‚®í¬“¦Íç[ûÉõ\Ó8]dÃû¨‘/â:SÎ£Ú|±]œ°VÜèÆ,àYÜòi¢S_lÃÇ·7£9Bt9ÃÁ»‹îà¥gëZp«@¥ ôíÍÊ!¿W»½Y4‚XAhÌÁ3ù
+¶çZ¾Ÿ=Æ)úuÀï^Õ9[Csv‚k^æäA¼…¡È²Ç¤´j¹ÓejÌ:Îj-u"õ‘å‹!Jv	Öì™hLqâ 9Ÿ¸Ácd	ùÏ Ïµ_†V{‰]ìc•uMÒÀì ²<!Ø½`•O#}ŞUŒPm„BñYíh~*¿`·”s4 ïcbMg.ÌD ì~¼œ+ÀOÓ§l¹yË¡ø	‡E:÷$8£P#‘ªC|ãKPnwÚE?¦ÇÃLK–ÿ4B.UšX%a÷;€ÚfÁLÎ¢ßXo÷îaûñ;µæŸ»&Bv¾ıiüc«0 «{Òè–jÖee…<áv.-`Ì!r²ØRà‚ ÒùH°èşv]K¿şå_ğíõá‹£c`È„V«sè Ëd.-'÷ãË^F·Âò»ô]gò‹Ê¿<¸ıçã½Ó£—/j‘¼‹Ç¼Ê!úAe¯÷ÁN
+¥Dèó#ĞP/j0PâG@¢}¼¹ Ö–zjXUj)½å}€¨Ş¬1û;îå994{R¢`c<	v°âùbùQSÛÀİ»65vRuª*Bz½çó“™o@Öf•I>Âün›$ƒÌÕï­o ®­ÖÕnÏR•AFğ†À=Gz¥h®ˆONmŸnö»áÀÜ «¬I{P6ÀÂ†6üşÁÖ€7¤`,ÊÆ–ÈÀÙÉ¢@¼MŠ€ß‹kÕ7¯jJ*¯ˆğ©#(Ç4 1âXÀX.‰Üdƒ`_ª!í¾¨ŒœcŒ¶‰á\*pUüúÌËqQ¼=‹V_«ñÇ£p²:$ÓHÒF5€ÊoÒÒ#¬Àf¼‚øØ¸M;K½Àıy6£Ş¾áSøÆ.îü?YÁ¤Ó:Ş{õêåñ)9=ÜÿéÅÑ>$]‚Jüúq¸zÆ9À2Ó|øèŒ;ke—|E°1Î{Hœö‚N?3dòûÕ·­!í¬âÏ`¯Šçè¾u€V(Ï²mvÇİªn÷º†VŠVË42ÑƒJŠôr÷Š1`æµ,<0¡>Œ»o¾Cfp´•31N_gÖh6ğAÍ],"®üÀÈƒÙq	
+§xÑñÔ6Æäµ{ià…}™pz6fFD[Gm£æÆ4Ñ$É6àí–dŞZ&­Ø¼%Û€W«‰¤±et}ª—½hÇ³¦ TX&lEö¡¸¥ï‘šğéWİ‘5·Î@sƒåRæœQÅe2:2/¶‰¢i”N$% ØvO˜ºşD/bÁdĞèp¬§É£¸ÁÒS«á»“Şb¬¦~'¤iùĞø­”"ë„2÷€²'ŞSçÂ8‹ßÓ“IäÁ¾Wy>?ŒÒˆ8îT¯º:vò§Áz¥ m| fBÛ§>•œÊˆEz¿k¹ï_I›âú}“UØjÎTDRk×r…E«‡Zº(wl˜t\fDX3¾ô…Ìf3Qñ£•%—"åÏ@¬ØR¬ê)ÚÈñB ¹î¬‘/F3Z:øÖ§D½œybƒ6r‰ÇŸçÒ™ı	0B!¹§‹B+ˆCzıTÜÇ?
+üsô\—z~Í1
+Å6ÙvªÓGO²‹®Ş‹c’óîZoƒLØßèş—İSÆ&z÷¯$í6³ÀÓ)õ-ˆúL@Fƒ"×§ìûõûkÕA‰s-Õ|+úÜ‚†[¨84Á-5°(‘%ÅÕØY	Ì·ìƒÌıĞp²B’«Ã†ÜûÎ½×qìiCè¼%³l½Š6ĞwÈæs®æ¯0_u€İ•şv`Zæ=‘êÌæ³iù3ÛÀKìp¹í{ö1Ğµî™ghóËê•A^â¬Ê§Q¬óÊ˜-¬¯.“è:Ó”µ¸…uÕKbƒû }¼×t¦‘76VÔ)FO\SjúZ‘\Ë–,ÙÄy±)¸NU˜.EÑ>£Ad7²*‡Àâ©;·ªøíŸ«‚+l'„Sß=¡ˆHÏ’Ò¬J"MC¹eVhÊäNŸàÍMòæ$zMÈŞ¢	ß¼¤o.â·òw‡P.–ªËKùİ(ï5EiAUş@£Fú²0fPÉ‚ì·HEåéË´S6¬ûF2¥çÉüF2‹}’)m±/R"¡Lbctã.0;A£ïèbÖû„£˜pì“|û¹®EsSşğ2oOıÃOKšú1:âQg#káßNtùùv¢;Ñ‹-ŠY¸Ï¾òy‹ü†ˆfmäù‘MÛ˜Õ½Ë †ÖïïóÃÒ=vÉ‚Ö+ík’¼e\û~I]µ+<4á».E¦-í_ÿò/Š&1’	]le´†¾ˆÌl.6Ç ¯õÑš®İëõ˜¨q®ÒÁõRGA×©EEß°±øAoô©'"Ä3ĞÌD² †q°K¿:"æÈŸbeyŒè³dĞ¦b0ÊŸ‘ë‘ß`ó¶Åí©7"669Amôt·œ°Ö–6yø8FxDRÍõF–cv:ÓÄHXãÒ¾#y=™³)Z¡çJê—¥z÷£\³¥¬ßTÿ§h@…¿6\‘~iªú6Mö‡jùÑ0–`H¯ƒu$µÑ¨[Ğ±ZŒ·¡À7º4ÌATy-µ›9İ*á¤oß_Ãª­x|a-ßvƒ¤–2aJœWÔ2 ¼œ{ÔX´>3:Ús/ã%|Ì-éŞ›R}™Uˆl8ƒ º”	dJ†{rÃ^¦ëakcD@ÿá¶²Íí5¡¶O@XrføtÂ@÷Š†‰ñNiücX1`8&F^;	Œé,^kZ4˜LIÕ·EtĞ`4RDìë€ËÀÈcš'œËœI†Bú¦ezÍ{¢ÖAÔ,ŸŒ'šjé[ò·Äj1$h \Ê[5Ëñ*6ÍhÍ+Ø”†×
+¤ZóàƒO¢^µI[ÉU&z8Tgè}‹Ö 	¬ ³ò÷ş+ÇW4oÖØ›ş[õšAªæêÛxUNTÛ´ "§ƒ6õ)áÑ‘‚x›6”Ç¢I)“¡óÙë\sñtv'XÑÙ·Ë‡ª³óY	=ºMĞÃ§c?ê<B®ràH°9PÏºß5¨%·ò@¯’ƒèûûW¬Ùµ·½™ô¦ØY[†³¹½t½"~[­ø­ÿöú½)íİ¨ß»˜N¿átÖt§³xn8PyW…¼+ßwäıÍ£h#,'²<ı¾:×ÏQ‡4ú˜Ïlsê³o•Îß›W«Ëk×Ko¶'?½ÅoğY‡ñÁ±¶ô7ÀÖJáRoG?ê­µD:VşAÌóşJ/ ‘LÀpî1sXæÜïës¡:Œ€6ñUY»5dZÄ¤˜4%AWĞ4i©”iÔúu`¥SmãCjªªhYç¥é·P@ía~9®•vëÂ¯’Paß.
+ŠÁpXI©™…ƒ?FI’bÊ<&í'Z¶!”¶åˆ\ŠÔ˜wgºAäá­ª¢±¸ªWîcœ<|`¬¶`,ºíìaÒØ€û6&µá6Òş IcÃ!a¹µÕMcıÑ µc:
+ıLcæpmsm³QcÆ‹¾ªs¶tj„I¶x3 ÷µQ“fÑ#.ô|Ş=€§I3I48lgmm¸±A›cBŸ’	êQC­ÊG–¾±ÌÌeæ6˜if2³x£™ùÍfæ4œYŒéÌÏè˜Ï,Ú€FÇïšûçâTl¥ÃTl‰ˆÎ©Ußèÿ¾Ì®Dt-çws0ÆsW'T á£+ /×zÎŞ:ÖŸ…›Qçc¥ä°«y®*É§CC{~àÎ^yîÌà©Ò`JóîÑ‰yS•(ÿÔçÊ?¦ˆ²†^ä©ğƒªòO&Ñ½lÃï¿ÇdBÏÇË™”yì(eï±ã¤8~LGÊMIüÙ±Â,SIÑõ¢è}İõv0§CWµÕºUİ„<ğ¤nÔ¤ÆÍ”ş¤˜”@Ù™r±,9>es/²]5Ã¨Ü€??RECúÊÑ*·0¢hC4ÓÕ†36ì#ıŠ¬©ø×6íÉ6T"Ã"ºLâ™lLóN®Ñ´QC©ègTt×I¨.x°ü¬¬ŸYe`à€Áö‘ç½á¿E:¯1°İí/'ÊŒİŸË¶@DÄ¨¸qêã]‰l”¥n% êSóÔƒÓøÈD˜¾Ñ`LYØh*rëâ¿kÒ½c:aÒŠÚø¬
+mP&4.°ÉW‹lkaÃ{‚ú:Ï¢ó·ô+ÈŒJ¹¥·=P¾ƒ›ç±Õ‡¿÷˜Àmë 9jBeìjdŠOjûŸ°-òÌòQwÅ÷Û÷ø]/ô 0&ö'†3fáG†íkØ„FM˜tè±¬‹ĞF§¯×BjvV>³£AÏZøb`×ej¹7o—ØdO²_XH05ïø#ƒ	ªŞÜ£QAÿ~Dç¸~5Ê®Ã‚å7I-Ê?èK7ˆX¬j2X8›¯IÔ´3vNl“~“Ê1ÈŠ—61|’ÍÁ±ƒi»ÜT˜™ÌÀ7è’ü Ì”WÁc¾Yf[ı ‹kİÕÕ][±²–.f­Uİ¾GJí#  _“õş%4`q@¿çF0ÂtöOH¹¢_paØwS»qI¿§4%ÜNSKİÅ×\D­Òb	|Ïú çé9P~vrG¢NÀ&Üj0¡,Ë;¡¿„ÖlÊ“ÉKÄl8&ˆˆğG°Ø,—=¶17V²›MöÔwŒ‘Œı£H"šV1P«Ï"+Ä!È”äu ³h"­z*$í%şé†ã÷Zä#ÊÜÀÄhGDåå~Ïw§´cq0G‘|Ä&ˆ¹ZG©ñàOì»fr#{Ö¿.ñJ1A‚¹ËN >ş&ŒÆœPĞùÎ~Ä‡&Ç­I=Ç‚s/êp¾nsä*ø§ìĞsñ‘ú?:yyÂ­V—$CÚ7ı·_ìlô`òHZúÆ¤U“¨64<‹¶îK “x=îâ¿‡‰[×EÌw³Hì.`ßF;—u¯ıE{7;Ü»n“­ËÇ¦<íF;0:´aã|B9ÁÕŞ4š‹Êñùez%#¶ŞL5¸Æ_œzÖ72†as›DÙFÉó½£§‡/ö^ì’½ŸÉş³£Ã§šÇË*&tšÜÂ‚õ¤‹/wÙp{0+A µ¼sf‹üÇÂ{t˜x#dg”œ—;2µ?rÌ‰'1Œ);±$G«x\ù¥?`-İqpçdß/Jø5Ù¸ÇÖÌæ±1cw’Ì©—ï?ù‘5¬ù;î?Ò¤ÙW.u¨?s‡†MÅ¹Şyİ§ÇíFs@¿:ÀÈ#gäöœ(RO|C]r&4ŒŸ´#[[İ`!z–0#ÒpÒ¡lËğ$ñ=êy®×iâ?~ 	› +ÄÙ×Ÿï½”Ä”íÖ2©Me˜ô(ÿ5aã%ãf³C67C·p>9‰«bØû]Ò}õ’zò§ífr{“ºòÀİ {åÌÏÜ$:Æs.¨_ìĞ@Tf°í`ĞMcs“×ßc#‹_©ïŸbvw½…ïş¥3$º×eø4?©®â{5~±õêàé2pwÿS7‚ï5&Æ¹a,«©¢Co%,Û_sÖñ[‘{Ÿ™£'—•¯÷âa°@ÊÍš•%ol¥J¡Yªô2Ò-n¿›hdÙTä—{/¯wòéõîşßõ»ûW2µçzRüÖ¾î´´<LğáË–YĞNU—ã!.Ç«¢K9"šgÆ;K°9s’¿ÅÆç“A3U¼ù‚¦yIïÚk…×;Ìkò¹Yx[Gq_b¶y·ÀµÂ7/!ñC/"BËäÃo,úJøDB7¿W“3.ÿH&Ò›Â2a¶L–Üì´ôW[,uVe)z1³<j*”´ÜwÃ”w¢ŠBµŸ#&®g}Ä^ñ{ò:@'44IÂF}F	,Œîö¯>¡¸õù€)qCÂ¦y{C:¸¬,üC‘‚á]º·ÇÁ»ÜÉÀñŠ< èö@¼¦hË:¾½qxÎÚĞ!aÀ„ÌLØ¯äÌ<aqÜÍ=£¶;£>:p=ÃÂp¨rí˜¹3~ça¬j)³OÅÚm“½0 Äğ9c9~8Á7 …¤ùi[Í  /aÙNÚH¢|LºÖÜ½s¹R%ˆM-?^À¹l°$ºÒy†ãˆ`t—ìÙ’z8-%]€ˆ²0­g	A5Û)VÏ ·7èsÁö4ükœÑ!]¾Õî‘gmøÙ`ûÕ†¨ö`×Nq=ÀrûoäÏÀ©¥}½Ş§œs
+0˜vûÏ’¥¨uÎÜKì(‚®K*çß*4Ì¤·nf˜Í‘ıù¯ä´Ü0œ×|ÍYÇb´Š=~¹–‚…YÃ›Û ¥ ‡£jb8¦MÜs¹/.(§XÁ§í
+:k†zE£şüèwz{cßŞˆq-Í´×Ô–ñªËTR¬ªÄvĞôÀ5/ËZ‡ŸqµŠ.l¶dÚâuî=wM5iw`xdæÎÂq86ú‘03uM{ñ€ÀÌ©>ù>2«)öÁ¨òüŒtÏ²@‘á,ÓA§-g§×B°3ÕzºdìÍÌ£FTªô™«ò“££[L	ÄRµ’İ7áyK˜§G”mãîÀ6†Vô™ò¹ğ&ôº>H¢,şYwBÜQ)½‹½w††Vp°öÁã~G}ô9‚­2eco¤Õ~ÿlÒ^•ğûyEİ,òŞ`:©âú¥X]éqX”¤ôœçQœİóî… d.;¸ø§;tm‚¹ÆG@ÈºËÁ6¦gÙ3 ™°†Ê¯ŸÒÊ
+O±>™¦{Àï¢ÿ^Ÿ¬á?Şx`túËì½Õ­jŸBîMöŒ-¹ä™ø]£[£ªL§¥ë\NİX>FÏ81ç	*À˜C”`1×ºğE\á#"¸®U.Y¹|¸p«É²]vA wÉ¬»I¸3Ö%|JÖ½ùPÓTé1…~jQÛÜ–MÒ‰	"Tœ¢G:ñ9ˆ^`†GâOÜs$y>·Y&««©Ø	è VTûœe§Í£ÎÍkÇ6Ô–kòœ¢<ÍÂêÖìâ-)N¿ğ¶Ö¬ÕCZacªw¿š1DYM1Ï=÷w¯ÖëNBØii*ŸM²6L¦}Äß!¦êj×²:²ß)'N³îz´Z›¸ZÒ
+‰+şr„Di½ß³ÄÚcDsş~ßSßúhâ”ÓÀIÒçë?ımØ}Ìƒeh®`áÖ¤¯t$-ã’'Şgdo)Äµìrç6Hí(Î<? Á9¥Ní¶¨Ùr›ól9’I-©°ÑÔÅ&=©T) "·Ce~uj:í3Ã³.ø*w3
+B|E,\¾:t½È¼7Pï“<†ä68ğm´»	[v‚§ØvònŞ¥Å'ÜâR²ûˆôrôSˆtÄq»H <Üğ¢ùUİêÖcéT/Ú6%ÑB“ãm-ÊªHbõTDH ÌQˆ<sİ € 8¤ú¤8;ÜÁHé¬hÕÁ
+ö³qY¿úÀ%hÿri/@I6è±ë±™É)¬r$Ô×‘"¾¿6Ğ*/Ş?\\:ÃŸEâŞÆœ¡aKş*<Y$âÔÆ¯¬ÀÌõƒ®¬ l«Ø$ÄÑÉajºVaz¸323+îõf^p§#ZÃ£÷Jr«ÅÎ(1lŠ-p£ñ
+›êQÏq§éà…ò=ŸCÏ±[˜ŠªÖ¶U‰ª1‹ƒ‚<PÕŠC7´ièıD/¤úÉK;E{[m·YÅ‰”èÒ¶m“7ğBFŒåh­Şrï[¥^õÔ•î¹õÕëÏ§ºµG\3»ÖÛ˜“¤¶ÓÊ_¡5;øğK®©ôÑYM¼k'wÆ$ºè$xÔíbjáœêğ›RSfa»İ^©®í«˜×.SäÉ*ˆôâ(r}Ï¸›X·*ö‡¸>ĞËİ+<L®#y‹}QL8~†dèÿ•ÈÉcò¾s?õêzé=*š•TËªk;³FO¾³ÂYeŞä*~*>yeÙ¶OV0@‡â¥}Ÿ’“S£ƒ‰ÿ$ù%+ä¼+”˜r……Abaf`;Ï‚îª‚äR6\†EÔÿ²ãs«Lï5 …¾¢ìÀéÿÆ·ËTÉ*<ÖˆÍ/Rğ\ÄÑû&»0Ë=†€0|	rJÅïøu‰ERëV¿f(´Ô
+£ÆB-)Ul_±¹sVÀøi£UDüU§’ÁZŠèUç]´Ş©Õ¶˜>^ãºö®N|49€,ÔÏ||šC­	å«ë’ S)Iıj->«Ùq_¦eÌ°LzµwYdQŸp2Êu.ŸŞƒ“ÿÍw[«ıUàÄ;Ö>ãToptéé'Mm"Ø×ïF«£ÑCÃp55¢.rl2Õ‚j=å¬ `ÒğKˆk‰6~8›Õ¬c‘¢GÙ4€Ñ'<Á/fUÃË©¨yj/¹îvU2Oê(9Ÿ¤¯šé8WÕá»TLJ“øtÊÁ>Ö®|¹n5H°F@×ÌÆ)[×^¡˜’pû¸¢…êÛ¹ûè^*’qÚ¦üy|Õ.–*sJ/g}cS+Ôm©yÔ_”_wÁ(1 ÒÒm³±«ı
+dk£¾ö`1“&®¨±Û:—‡J“éÕÑÿ»»°Úè¯lä¯¬V×Êî¬TÄÿä®÷®ï°NİñØ\8¸½ñcƒŞ6wYJl5	~íå”Ò1ÀÌŞÉ)šì¯ù×ìtë„çÚÃ^í®Jç¦J[ôI‘˜×H–€Àd	qŞ6ø¦]ùÁn§ç÷UĞ²"ûY^™t7Éywu5½ÒâJN1C~f
+â‘£9şèÍ‡nÍ•¸†Ø‘7j‹ö§èÀàQİ‡sƒ®*ˆ	\
+ƒ*‘f}=I¤fÍjõ«JÊ¼xÊéÙ$Òsø-*¦ğH¯u¬H–=)šZwŸYVu}…`ßâeÜ™â³òxı×šv-±Å–^²wõ+X»j«ÜĞj@ÛêLj¤Ÿ9-¡æ:÷’9,@øÑ¸}ÎªTó¹Mª„òT'ß¸z~2¦àùñõ_üÅ›*#®y£pëQüQõv'ÓT*­LëQêkÃ&£´008ñ©aCQššÖ£èSÃ†Df˜Ö#ña¾fD>Ÿ¸5ñ½i£é”CĞjúEãu•sáÂÊß6ÒÖ£ø£ZSÉaUãôØ°|˜IArF”íœYÜ‡Û%AP‰å“F×K‡™°bçï:Ëä«ì“>„Šr4™Ë:È
+‰tqGÅ#)ªèc/ú·ğüÕË““£'ÏÛKÌR©zæã,îÚä3»¤ğA€²šİP· µœYX­’‹Õ8özFxj\<cWÍ»W«ı~½¶¿˜ŸÁùyL]A_ı …*ÈA»tI=½çy *šc7buæcvîê6S‰áÉ œ±<ø6dñº°:l’âç\·
+×`EjPÛ Øw!ßw ¡z¼ÿ9/EVKAò«¹[ªt¢Ç3êĞñèØòŒ"ñ=yJâ{ä	“'ëÌ]²4érìÍ³^'û}~µ¡ŒÃÙ¬"-4µo"+ @e™?aÊ
+=zó{x“\½Ç¸zQ~áŸ×¬emØ9Ö
+¥š’¾¥îT“mnÆ'@!M'Èä©^@#bC”×*^kNBĞá@gùæ[4N¥jôsÅ¥?lCœ.÷ºÄ3šòlS‘côĞõ<á/Èô‘(ÁÒY!'3X-Ã¡nˆ\<+¯ë,Í,Øi:ÃòÉ÷,_jÿòr†±ÜRÎù9Ï£?u1qò=™Ö+¹bgjá%t|=_æ•]4x$ß|´ã£]~ÂäJ«9™D^ü)à·B…£bÄì°<6ÕU#S[©t¤àêîK tw^èSs›^ûæ’ş	]Ò½Èó~ã$ZÉjr¿k-²w0]ºÎ~|Pà>ªã8RUwëGTÏz°ÀÎ»WâC]y8Ë†ôdjxÁl¬Â3ã¤™İ+L¦TWÕò_ĞsÕ¢¢c6S+	ß¾{•yQW?c6µ{•yQïs.=vŸº:<, û·ş¶†SÀƒd`®§!¹ÌMA£§V‰Fú2ƒ¨±&‹qÔä½ŠG[¢M3­)*:Oëà™šê9Tğ Äe hJÛ£uÓèEÜà.i¾ê¶È,rxÏqÏU|AR£{æÔrDÛ)EWÁ¼NqHSÜù×\Èï¥ÇqHñ¢0ã-Ö4J©ŒZ(b¹‚ÂA¤ºWóíõz)`ªX‘£×hG•ò¨D(m§•—½è=B¢*íb[Ù6ë#Â·XDø–RDx)U*Û*u2—ÃÒı¹‚†Şığ›d¹—q%³’Ô[Eçé4Ó]àDÇ±Z1J’ÒD¡®V)	²¡«¬?/7ˆB„ˆo4½êçJİ2‹<^ÏùjñºÌ®D›¶/~òC—Ó¸.4„yú„îı«ŒZáú}ğfXi®{PäiKF¹X6wÖ{®Ó˜§[*Q*i‡pø’âEqôf‡ºş±~wû§8Ú›îóïŠa+}Äò©àeªaFxÜY“I•.&ÚDÑà¹Zá•åì»&‹İ^1ŒÇIú(­`*üv~_Ô%Y&%ÕGÜ…NP¼2a¹¦S³Nê€é?ÏfÔÛ7|ª¿\c,b |¶~’š‹ñjC[Çù›çºŠ8»4u¡ó¹5¶Ãhğaõ|kìÀÖó({¥›Gn”åõ:rL@îì‡Îç<ëÙÈ°çÓk§áši4€r‰‰`@¹g9 €¥ [awU/Ä¼Ç›¤™·Aƒø(hF/–Qş]3›VLÀ÷‚íÒ¼zMòóï=Ÿs‡¾d,ÁqË^¶HSu5ÇG#[hƒ¨ûb]z³ĞŸtôVñ};Fo=Ø=ºØÅøí¢Ç¤$h” ÃVÙ: JQçíÕ'£¥B±œ˜óPÁÏ5«cK–ôÙ¹0®gŠƒÅª4‘¶¥bÙ=VãƒÖƒwoø•óËßXêo,uÅÀ¾±Ô¹çK=_1Ïô¥Vx~»èñ¥®+ø•³ÔjìpÃÛ¯Æ÷_—ÛÈäÓŞò}a÷œ
+ÎzjMŒ±æ5 ›× í«4šÒµ`ã²ÕIThÈ‰RMqI¸{%>ÌsK]•níùÔVOUÌ¹  óÁ®Ú“q)ÀšûÇÏÑûàçW¯^Ÿ’Ó£ı?ç/~~vXP¼aGF”Åƒ{ò½i;ïÁ»³ïM¡HH5ü@q‰Ù«C†:j!İC™äK¶sEbŸ²%ø•úi4Şè /Jv¬¸&Œé,.šHÀâ;“»hÏWRxKL³#¸×û€¼X4ô¢ÒÑoX!ú\]çº(¿1êNzVe£ÉcPæÿròòEÏg\¨5º¬¯ë#zBv…dÃ3Æ´óQéw÷“%z‡1Oá,{'°çı2vWĞË„nGlÓQî¿Äµò•PôŒº*–8cäÚ"|ü©ûÓtÃhi§-Ún/gV9†xÁÈ¼ÉÑd4ÿH¿KÑ¿E’ƒÃ×G'ä{òêøåÓ—ÇÏ÷îšj˜ôÌò9İ(â¥"› ï”»Ÿ²Ü¨Ûä˜BC½ı“ôƒ ^`Q¿@ºÏéj£3oNÄF?F£Ü²{ó"}‚øV€§ß_/×ğeÿ·¾/Ñ‘âA¶äï™“Ew•—fÏ2‰ÚŞÄ¶×’*ë›CBg‹cÃ´˜äˆ¥seäüG[¿‹Ì}ğóCìğaI’¼’roC(`Ø6éû„>íZN×ƒ\yÓòg¶qÉ Ç{Ë•‰vìaì7L@K	W­}c½¼ÜØ˜ÁıŞ†G§ùe¯«VDí:ã¢&LŒÜó=F¾!kˆ	²öku£Y·°ÃÍ»GÖâå&Z+ŠczjL-P¾Õf÷ÔÅ(p>´÷­3ËyîZ×§5jUÍ¦•ıÙ¦`î	¦ücğq@B4ìüäéEpšÄ±+
+8”Ğ®ó¢ı'²Új Ã ,8ecÈµ[äZË¤C®%C®©Š0¦nº•/ÁvÈ³PŞĞ2ìwÈ4ú©qZÓ22ÂƒT›tê¶‹˜Ş­yèœa:h0añ‹ÌòµÛKÉ=Ë3÷¼üEº65œSÖ ´µ¤Õ„Nã¤æze<:+ÿ`®XË8²b6ŒÏK€Ğt1ıEEà&Ø¿;yâ}Aÿ"d¸®JG÷â Î\9 Fìã›£)ş©g9C;4©ßi?§¦¬îúf† Ö¬²Â	eáÈ`ï¼çl/-U5ËIŠ²hLœ.ŠJÁ„FTH\„Ûµ¨,İE^Î(ÙÍÁjâ/OYC|±OİĞÇR¹²‚ÂOxÀ%Üb†cÒ6úf2Ôgİ– @ß»‡e&†ÿ„‡YÇĞ¸=U3Õ[EùÔ0Ã%aeO¨á'ÄJ»D‚¯Z {¼ıXàH=jR]$˜Âê-•U,À±Fí°½"§~æyaàfxeÑ!­n7Ÿ	Â°ş1„jp¶$@@YÔ°Í¬#?±Ìİ“Hº1èQ¹lª×ŞÔuà,1<‡w˜õ£«÷¢âwÕ­ÏkÛqƒÎ‘Ä>Ém½]’ß'tø8»èõw>F—·Íš(¼â©ëœ{³&{q[ŒHÄŞ7j2N¦]¬ÆŒù8Æ3ŞÃˆq^ T¥XK±ß’;9ˆóğ?Åš]O0«ë
+½q/qÆ/ » Vş<áêó÷Û»\[Gğ(‚EQÓ(â8•Ø&X^ XØ²	¸Â«Új"úÕ6a‘‚êJËÌ¹àÍ««©xÕğ½ ÕK°5µ`Š+-˜âúÊH·¥´%`1„€§ØhiÖÛ6ñ–Ôõ bD’¨®¼1›½Ã7ÅiÀ®|°‚®~Å©ûQ¿ÏÄ”ÛD«W¯Ò…c)P®wû;VÊÈ1øk×„İâJÅÁGáu†‘ÒF±±Âcá¬>Ø¨E°ÅR>V@ÜEo2m–"J+t¶E@{s±|†öˆx|Ä;QçS’»è§h¢ó°]xÜà¢FX°r|°‹jŒ´dŸÆ¼ÈZo#á%GÆÆº¹¡ÊÈtİÑÈ§@µT8×OÈÎ”LùK?4ÒÙl¬Vm(UÒqM.»	Ù_üÉİølï¢[o··£…G¯]Ç4¼î¯,=ØV¨›
+\¯h1ßp·è%[©‚`ê—1
+¸×äÖ‚´8î>ûN˜(A#¢T² A}£ÿw,%:£)šéŠ)37¢øq¼À¯õÎc½5~i¦À´{cËéŠH—õú”y©™Øcœ§(c×9²	<p?ØÃI§ß{ğ ¦µºIÖ×ô67–Š‹šcá·»œW~§|…ÚŞ6FA)Äèßjilgc 4-çU…„ñ@°*%¥Ücq±Nj.ü[¿‚æë|%Šß˜¬jSü&Â’i4‘,züwV¿Ëôú%¨Äïİ»~tñÎïİÕ?Ò¢*aºšé&JãH‘½ùY´ÌÍõ‘P:‡t5Q«äIP%”W^‡ö(3 lwá°uÏaHµ¤ñ/€eè÷¶Ö´üşzg…_^„?¿gùî=D$®¢À_;ÅæÒÌ’Ğğ'×ğLÂ¢ÎıDÌŸQ–;B1|wÓ7ºÃ{P};6â’¹Sÿ×^?"á61Y{¥>š?¡j{Kü"SãâO"8÷Ã­¿c/ÛA»¢0pá{b¯´ÆÌŠl»8½,ë]µ:›i86=5·ÙgÏ=ÇÏ©ªğ=›„xlÌºxísÏ˜Å!“+â#ïÔäÙ™¬ÉÃcÃc3¢1pm²áL„ Éá?ŒİáÄJºOV/g¤“·Bf.n™›ZëÑUĞiE—û~k	}²V›j râÅ€g Káº®M)#ˆÀÄxğé{ ®àÔÌ·’VîO·Ï»[}µÑ(¦˜RO0…“×ÖÕÕI¦ÒFÚ¹.}Š¶+RtŠ§Ú„©tCÇÑò4È´ÎvOñ!µÙ}óİïàÿŞÊo·Ù†°ÙŞS-.sqAdâºr^áÄšs½À°.ÿ(çŸ:æâ•6 ù§Î0ÿ”“rµÎkšbyK-Ùs¡)ì¼)¢+²ò"‹á\Ú†C÷˜€B*@¥4?qîøãUÔË¶;0ì“KgXïÿ¦¸­Ğ8ë§Ğ›”1q¨‰:¦”ö`„òÄğ¹UCsURUg/xQ$FÎƒà=‡s¢z`r+\]K ÕàD`¾pÃ3j„Õp¬‡âœ~ÅL²‡mêÏ©ïãÊ\Eaç‰î˜­7ı¤çzhÚşÀÃòg·Ú<ÜZ­Ü/:‡O‰¾ü #°ÇMEÚ¨ªl—K\8)´`Ï~"ò	Õ—OE,†Ã2	­nrğÀ!téSÛ­ÔyTÚfƒL.Å(SÖN^–Ñ„Ÿ¨={0áh™ti O÷z¹Ûš@Ùw¦åctWj¾cüj«¬®änm‹oÿ=]ËÜÂ”k¿„¿şå_C‡Åâu¬¡r3ÜøÁ‹bg@99—ï2±lÀå³Š!¯Il( ..±ìíÍ”¼JFÆCP,ƒ¥y;¸½aÌFïğ0•M}2³nÿ:„ÃÀ²-ÿö>Ò€ŒooœÛ¿¦›!ƒ(2Z4“3ÌX6CRóÆî‡(qÃ aŠŠÔë‘×XÄÀ¬½ïöçÆ€†½øn81 ŞG	‘l ½¸ÓÇ˜ÌúûHüĞÃr`e`§Rq…‡9>qÓP¬ü¾£ÅrÉÒ¬”§¹QáµXfÔ÷Õ`Å¾ë©Ç\ 3ô0õÈ™eà«W¯×ÆàÕÁ+œÕSv‘‡€ƒ/‡!úÆÀ®³øJ$°lˆ`"¸G,¶n¶;F„³ÑŞÙàˆÅšYx|=†®ã` ‘V-®gŒaa%™Ç
+9Í¸Lb¦i™ì›8r#D<„å2$5,èşï¸øzïÕ»Ú‚#=†A ±ÌI&¦abxíŒm–"ÍğŒéí_¡ª¯»¨\zFû|Ÿ¼üõÉ±{^­d’S“^í‡$Ç£èy`ã+3.Ñƒ½a<¦›ŞHŒƒHÜáJì«ÎîÛ Ìşó{…Où^ÀYG…ä•mñ·í·Äğ¹çÀs ïpŒ—³º0ïì!ğ™è‹Ó/V&âƒ®-q“’;Fuì­¨áB›¥—.ïR*è99!UL’YãbfCT§°èÑ%k[?‚Ò_J¨L§È!‹åoˆGZÍ«g]Íç\=½q$´WâÛëÄ·œ“j¿ÈM5û$jôj%k*uê\]‹Ê+2—øÔú4µ?¯§eöÉ	µy¿­d§#sÎMñ8s®(Ì[ZvÁ:ÒÕ4½šµ$d$o½ñ ³¶ºµL¢?Õ	yÏ‰÷¶’*'¯Èé­npveÕU€¬ÀO2
+UY*„WiÏ’Î#ˆ×Ks‰±å©@KÈB¥ü
+¼">9Åë@rL‡€>9™PZœ·—5˜a)âªlŞÏiĞİŒ“:3}nÁUé{™AXDÕK¢x0,5fÅÀUäñ)N†÷ıš„—;‡ÓYpÉÀö*Qd§8­îê&×‚~*ÉÉi·g—İµ­*b]â¡€­Y‰æ%m©ÇÄ^Æ6fpl³2~ÆıÏÎ¯Å+·¸(šâU¥+–0š×„f–m'ğ28Èv-ğÕ ìšûÑK-æ©ÉcˆÈ×ìRí„Mø(H,=v¯Lß	5xwí?§ÓÊ0 Q[ƒğöæîzz9ø3Å».U¡!‚w‡p;uÃ&?Ş],gÒZO„óîÚVqw'Vrå÷)íoŒ¶Åû\&Œ~cD~£‚R!Û¨æ÷
+ÈÁ/n@ÌN`°ºVTÆWíÊx5„eE²ì×¼Ì]ç3+´îïû1å¬½ˆO&³–EÈ?Q(
+$"›XI¼á¢\>*jğ€›ßÆ‘À±ƒèØ{Ü<œzÒ~8à‘Ì:} Şı%òiw o–ïKÊ©!)huK+>JÑc)
+?¤Ùv[(ı{(|ô/wŞ"7½²nÀ'©×ÈÆ‘)zõèN@¡”ÚY‡\ÄÃâG¢ˆ(3Â=Í€Õxóæ[m½%iQAˆ¢]!ˆª…†ÎæºWÁ{|Py[w Šì§ÓçÏm¦s\ráúÔ:m.O,c™ÛÖ,ÀeáÔÃ©Ôocş0e èêÆèšZÅÚ«X|ê|Pl‘²k¡äÙ	Ì¢#iƒŸÜ¾Ÿ~Ò9™‹©T` •ÕX4R1ÔrÆ D(Åi¯f¥)‚Ô0†Re„ı7ÔÔy' Í1à¿A(#êÂ<ğnË|ÎbİFY:Ûí;z‘,2?Ü™‹~×Ÿb`)gh¤,8¿X¸Ë@€wïâ‘<öÅî §ÿSMÛf‰aaPW³ùNÃéSÏ`¬ë5¶`ÔÖP‰G~ı§¿‹EAö7º <<»w'¸‹êóÃ6¥ÈÁYuÆ;P«ÆL~”ı’G-¦mÕ£ï¶êQ…[õ4»ÿJµ0‡Ylvyµéú*ÈÜâOı=Šüèø&î]]¶®Æ½ü$rîfìs¢Q½H¥;r]"¤Ü¼’àƒêg7KH×x"¥Z›şèÙYAÒ Ö‹&Ì(	ïš~gNÚ"
+Ñ9H^Óåâ+T‹W©wÃ	Mê‚Eèm³kB2W09½tug¨â3ÆìÀì,)C4{¹'Èy!­e‡¢¾¯Ô,ìåGİ¼#ıdŒ=¸­ş{î`‡H±¢,>Ç‹u¬:I`N«³’ëDõ‰ªƒÛzŸŞŞØ·7Ã	*µj-çåGÅŠ>[…+Â4F(œ´Z:÷ÑÒaµHœ\D¤?â!…IÚ«µÂ¼ücb_‡ŸóÆ^vªš?ñ æQ^’Jöp|^Â/§¦©‘,=:H®~(³§“Læ½b&·ÒÓäâAzŞAHOÓëˆTn&rChXY;Ô¨?±ğE{ó6óÜı8wÚs©Gvæh sÉ-<cQ@¶"¹£³ ™zõõ6Ö2,-sş3Rë$;Â;":ŠHËAX]%<åä'GQ4¸[ñ°Ó:‡ÎY³XáÓĞêÉ`D®7ÏÈP9à'ï#Â?ÜãÁò™á²n‹,ZÔœÊgê‰€İg²f®#çqñ­
+¢$'&éc >¢Kí94Y~B–´ ­1*ŒÙnş
+$…ÜíëoOHxîšÖÈºkù È?;e#æ³Å/\ÃÛé,¸½)ÈY3PmÄjZ9ä
+@¸Á+vB?fm$kÊ.XóÌÔdÇxÏËyÏÅvêq)*[’ğ8úİ©©ƒ%zD7hŒ?H5Ğß¨úÏš@>rÑ ÖY”«±:Ä§>%qmŒ f–Xp‚pWØ“7ğ1.ıi§Àp½Ì`ï/cj	†Ö"Û~ ¿[)j6£ç‹âùÄÙkTNç±×ñoø-Î[2Vÿ’};ò©]´à²Ë•`áKÔ ŠH^OÜNÛLB/€øÛ—Àa~ Ü/ó{²ù-&ìW:È•?M‚\Áç”Î³8ÂUû¨¤«»v‰¦:¬œğesÂ ©YŠ'Yå*R'b²^Í+	ß•Ã¯©k¶ÆUÑ«$œWe¼,
+ì 8¾#“<&A§ÍY !¿xæ>ï,4£ì.
+±À¶M
+T¥Ÿ¬7ˆ’QêtYC,9¬*üZ-G¤Êÿd¸jşÄ§Á‘°Ã²ÍÕr¨t(-VÇòUY¥òGäN—sŠ`bÃª&©Ä|52œÖÓ#jª+QìœÇ¶•ß@Sy²;Ò=Vzu7¦	³27öúá`jUF‰CàÉC´äbT§ªR„B¼ùnBªşQ¨ˆñGSŠõe²µ‰†›u†zü¾¬”†ŒÎÚÆtÿé÷Ö–øá(şc9„—	+»ƒbÿO•Z›]äïoñ"Y1+šûõ÷â$fy‹E#¹­Š¾â,ÆlHUÆ6fŞ~1»ò0)£±3Ë~oğ‰fñ¹>‰ïmr¾¥Â%±<HîÆ²Ó3a/”v<ìA¶Ï£ào'ÆÅ8_
+üfÂcÇş¼³îFä8Z±–Z”Y8©zŠg¯ª	GŠù,-•eJ+
+ÊÌjI1Í€¶,„®ú£ úäG@Rn‘e¡ÆXÿà	èwW1Ìmòu1T*ÁOKĞ·U¯Ñ‹#ZM^aq‡=şVÅB,By5¿ğå8»‰¯ŞF¿OÂÙŒzCÌİàì j”yŞz”›îÎ
+û½š*Õ[$q]÷rFïÕBIp×|3z1^Sú0Ó•jÄÕÇÉÌ½Ô£½p‚\+éœ„Ö™r3¼^R»¸š²©ú5J”è¦fŠ°º×™{Å;ã’±h7òOhöÅÔ€€tJ=#“&e—%ómc¨3ÌE]7(¼ì™ª]ô¤nv¦=1$ÂñUE'Wí\ñITFœ]+^ÈÔÌ·:BcİK]ÌTfÅ.AÂîÏÄì¢Óç¤?8ŸÅÓœúÛ¹*ƒ;ÊVF¯<ÙCİäè®ˆºşZ5EÉØŒ[Ø?jÛ$Ó€ Të‘øĞ¨‘P[2/æi4^•¸ÕøJ³‹ÙØ‰9lg8-2¦õ`#™Äõ*ÀPqUşkÙêr,•_^58}BëœG#³’Ï¸M+‚ã¨`”ğc=ùÛ9#D|˜…Ÿ¼İ£¿xmCÖ´åê‘™³[­»ãGQ4ºNÒRí…ïzjÃ	5"D1/0ö cv†8ŒÀø@¶Ñü5Õ²Šık®Rof\ÒĞƒş”¬g9(^‰:eMÕ[ÌÖß•æG:Àrvèw_®XÙèü¯ş]=øÛçf7ZNnoYäPàlOQRŠ0¥¡ŠÔ‘’9XlŒˆ.°/õò”3¥ 4uË¤6¥šXï‘$êüa¿–S-.nÿÃ6Ç£ÇS°”¹ŠÇÈŠ›í×ÏWœp3/ƒu¿_e¢-˜Éà`k$Œòªâ¨á\Ö’©|F„§{¾ ƒàI/Nò×¦°wJ= Ò·7¼¹ø[ÃÖ"ûÆ–ˆÕ&¾5l¤‘Ğ‹¾4^İÆ_¶u[È³¦QkÉWµö%OCİÿ­Ğ™hB‹>«täßı$J#’$Õ×S¿Ë	qè˜¡ ó"x\šS©(	^Ú@®
+.óÊÙ®IÉ©qñ·ƒ ñŒ>/†šÇĞ=yåùp3‡¹1òQËÅäèàoã}NŒÔP0ÖUÌ…‚)8|É((”LC(Ïè³RAYMÔŒ¦”PóÑC"_&2VÿÊ¢˜&aFI˜„(ğIç™ë~gÄB®×³P8÷—È~”=\Ã.…ÛéD&CñÖ ñ¢ hE-,S$Ë()¯uK=Û˜Õ5‘§˜ cÒ0X!?!`_Y´6$©"¡$ÊlÔ%4®µ¹ÎøÔ†H)!7oV™·ÅâN=n¨î†°w½3k¨Ê€±!*:Îé9Ëi™ŒóèåŞ,ÚYj»¯4#eÈ×¹"3±@àÌu`›ˆq]“ëH!¢6C!{Sò4²„—*ëYÄÇCT»fàÎ™§Æ ÓÉW{£rªŒPÁÇ.ó›8?€Ó¤»	(ÏƒD'ï¶à]ÆÖAS	»Ëö…ãv‘8zx8ˆºò«zQ±ËLàbˆä8QÆ”š&êUü±IàZ¿ŠŸ‚7Z„Á,D7xÈz"	®c[Eæá÷Šgî2²äÆØ9Sº¶ãıÎ< ‰Ğó˜µø1~…o`_¾+£ØeŸ¥õÂÚé°öëµr*7`~êq2wgÆ´sÒ½Yõ)³âÓDÍÒí*¦&µĞŒÏ‡Îzxìz—,FDûÀ3fÔÉÏ÷^2gğl§nè9˜s3ô
+îš·ÅäLÌ ‡¼ò(ú™³Èíõ#Ã{À3Õƒ+ui~ —æ.ĞøW\™ûŒ«Nİ÷	4fwèg=K—Ã1&y;{ÜÃwZI- ÂIàA;Xó1yOŞüüãÉ6¹ß¯ß¾g!õTÛâº7ŞÜYO¨\ÙzˆÏl5N8Ïl³î:÷¯¢Ÿ¯—T»ÓÉm ßÎÉ·³gj·³ø°²˜nwdaÒT÷›ûéw×o	üõ›«ıà-|ƒ¥¾¾Šas}ÅA®r8«ùX€t}ü:!^\îqº*HírñÕæîŸŒç>:7B£?d+it~ı§_Re»dşˆãvB4â®chü€Îv[ı^µ®dd¦?Ç´Ïı²ãĞğ|úÔv «6@*Õ¯;0ÿ9X¡PEè?†°Á­àònqyíËÀe1Ù(³Ùç@`8w[µÈ›º–n†ê„5UJšPîĞGö#çkEõ,şj!§’æ@Gok¸ô¾gšÏ ¨¨¤çøRKnµZÅÈX«ÍnÑÿËYoIEî«[IU;€“š\ŸElË×³í­SR^Ø¹<¦J
+ù«¬G%‹hÚ¡gô7_ñt2Ñt.Q¥!±aáò¡'õá¯ky{S¥W+Ÿ×%(Å6ês”F×Ù¥RîRÕ¹ªe%sç%¥¹‹3‚L¢6Q·q®2]DûRxï’y8x´bM‰I\DŸI>ÌÅ=¿vípºèIBë%¹'ã„¢hÔoÙ<y4›
+á§”Ò^’‚Ä—°ı×ê^ñÓÊU •—¶¹ÑWß 2•dY1‘â-Ë¼PV®sYëıÌø)Òh¨*XµHÃsd.%º‡_ÿò/Jñ°5¤xNq˜SÍ	à.ÑI|å˜øÅQú1¿*klê:n’ç¹øˆyt% y­ğ¬ºçê~P—ÀaA½¬âAš¿xD†eezj]P³³¶t{{‘#É¤Ø-Ê/\Dù”0Pììf¡E~GR£^Ê€Ouü˜«LA5(NÜìgØÊ¬ÑëÄÔOhŒ;ï€ú±RS/"%lĞU/ÒæYs“g¾ òsÆ”×
+ùYcÕ
+“á»V«¾½ÔâU*hdëu²D%j%©[YàSÉ2Ë°‡¡Í\‰™JÃ'~8^µJ,'Ï=i®&–o¡-2µ@c“™×]%³@7EM>,æVŸ¨YÛ$ c;›:uHÍ<¢0“){‚ÌóÓ•‘%Ì·ZâªÊ¦°>Ysšáv:Æp:`$>“‘¹29—I_ûˆT›RğÚ/aáN_ï}†•ë,déàFcûM¬àòiP§S¥µQ#Ïb“J‹{º?çâjtûI×}õs®{m‘špBV§À:ÃAcÉmÅ_`@¯iPi½ù‰œ6¤©)Z,.•‹Sè4ÔÌ‘Qn`!nC6õå´Ö>ì­…8¡¬‚¦|j9İ	‹º=»x{‡Æõ{!Ì–D!IçgÏ&'nèA ],‘±é¸¿¶Ï½š;£dGÀ(ø m‡¸öböBûçãgÄgbä„VÚŸÉ\ÿD˜´eâ=U`}âlÍM–bÏáš\$‹6çÇı´ÙÔ ¾~ãêÊPŒ	¹«ªp·ïİŞ@åĞˆ¦—òqıU\=ŸQ0
+ Ö!k¼Q/~)ÖôœRü”Ê¦ÛQ´îæ¶ø÷`?<)È»«jÏ¯@¨JvI'¶;€½¡eØğJÜ?˜8?3Š.$×Xz\˜˜Z´ZjFõ8-1 õä›’EˆÛRë]Ëy ±]¦#ë‚ =z¦œp”W½¤e¶×úk›šUgF 2’µzNéøğbÖyÿ÷¯øp®»÷¯°õënçïÿŞüaéş{å¤£6E“Ñ‹áï«Ö¹éğ¡™ÄePG'‘*ó2)Á$u°dô)n±Ç~î`jåe£Ié&‰»7¶Mb-½Y}»LVûšéaÙ–Ö‰UÓOZ¯64£×·¶Z½¬jIÕrôá}~ÃÜ¿ğø¬^«n•¡Ô—ÑsÚ)Í¹à<·#æ|_ÊE><k»×JOŸÉ–Üôá¼“å{®ŞŸÏ6ÿ">	|‚Ë[#å¾‚âk&Îÿ}d7ÓÇ3;òğˆ&Q›Ã~óİˆ> ãm›lÇ/9¯µŞOLÚ×ï•5µeÂ‰œcöÎ»k=œ5şMÏ{œcô×£–ªÖy¾—¡Uï£zÛóIX²Bv‹ûû}ÛuÑóåî:¶RŸ|Ûñ^¿ }÷‚…ÉZÈ¾SUÍV”(€ZmRĞf9fêíÒòx&P­¨ºò;rè·ÿ; äÉ~µv­x¨‹Oı ú¹{%›4quÇsE'|Tã_°çÿ  ÿÿì[rÛ6ğ¿§à_•™8vÜ<gìé¨íj"[®%§™|P"$sB‘
+IÉv39@âsøbÅ| X%Ëv3ÁÄ	,ŞûÀ‚‹…°Í& m"IŒîê-ÙtCe5Û|ã¡t¤#è.ÕmÚM8îÙ·•‡ Ô1æ­pŞ}Ï´ñ4H@ìß&ƒ\71Á)#Ÿ£<T£ªld±‘e¶´	ÂdtxEŒ®ÙUIéøî6 pwK,¸rˆâ¹÷uI7²!Ü#²÷³{ ,¸})´¸ÀŒHÄ/úÚí+w^nS§E60Vln¦¨]ò´•Dë×,>á`¨WgGY€ğ`š CË»‡Ğt“È¯9’&r{
+„&Ù²ÎÀŞPo`M§|@l Ù’¥‰¹æ“¡ì£©0JÀïÄOÊÖ†ÿeKù˜”-7ä	R¶ØÀû¦l3ã>ã…WîŠı‡\j½kºÔ2rA«4äõŞúœ·–gz6p8ÏƒÛyŒ¤“ìWi°\‘(ás–>›;PÒ”g«ğæîÖ’]Ñ£Ø{©£ÂMÁ :ÉµñÕ³¡;}V¢×·¹iıŠÒ|Ú”ƒ]¸ğO—«¤8Ô œôñû³–\9ğÅC³ pMÆQGƒÎ‡¡u2è^ômMúš%;™ûA.ùT¡ÕsqS@exÃoüW¤Ü	ÙaáL…qÉÔGì˜.¾(Ó“#Tø|IÔš?«PaĞv]–$x±`ïºò†Y/ògu^±ğ"IÅWK’¡®Ä 1€[Á=*¬S_b0
+jîá©³òftFaço-gq‰•H5Ã8Ñäò¯%‰nXNüA\vVÉç{'k%‰EYĞ•å*J±FˆÑ$Î„#Õ|²]Êá7ù]…v&—Nìh§i[>¬Qù›
+™Şÿ{˜]¬Åh<ƒÚh5¯ÏåÁ$>ÁÚ„	tšY¯«¹_RByšZŠwÉŠøá¶ …wNwø7`Òöß8h·7÷ş¸¸û÷¸©H#¥Œµ›Ã`»sØ¥ªYº»4aüud1ç£cö„IP`hLjøŠÂRª8bëíP¥7r|bÆwUÆÕ€×Ö2Ø­QN»óg{4´ç§½áĞ¾8ß:épö»3ø¯xÚˆKcòY“»SÔÆ¥s”ÇñÍÑk“ulw­VwĞ¹8±OGÖIû´}lÃã³mOÙŒ¸º):&.“ó!LG'}Ğşq#¼`‰B2¿Ş T„WÍ÷dp5FÍÁ×*ñ–~Bá²•dó@s:êu>Ø”;m ¿mO$•÷_H¢¥·Oê8€÷xZÉ5Å°>{jÊóÃàbw6ÚyI0û¶¶´ªáV»Dæ}‡ w„mÿ:3¨?\·+gEY­%‹qù~íX–§<FÛ}û#,º¶õÑîõû[Çª¡~	ô‘'áiHóP&Êğw‰OÂ ãë¹%¢7õ·Ì<$ósG&«gÜùµç¦LtB™NXÚÔ|ºK$÷v¿7lzƒÓ­c?œ8¾óÅ¿nû" dC´±Åe=ƒáQ»#aµ:ôuë’:OIşP]Òé©¹oL“•G®âÌYfQÆGrxÄEÒ”5xRX ålw±DW¡ë“Ğu|$‡ÏØjf,£¹´Õ¥Á¿0&ù*´eĞts(½@ú0»Iz½¤Zÿ1M§¸^Ó™‘€D0¹ç¾ ±•“³ö¤ÃFh9iå©“‹œ´áù³n-w$@ÊïÛPëÀ|ç¦~b2ê<Ê!Yÿ´ĞÍ(qæ±#ñ%t˜¦ê6d³4ÀàìY¯ÅÒûÚÍ†@gÌØKÛn»HÖ,‹Dº~,^tM·EX%Í¡–[-æ…ó…Üô‚iÈ6³—µ4÷İtC*mÌáAä=½ j/CeÍ>`Åö_ƒÎ,œÈ™“¤©I‡LV¾˜MX16kƒ(a]Eá$ƒË=)Ë>[}orFÙ¿ã—Jfj®Ê.ÁÒAFãÃëáwÕ#‚6ª§ÎÂe’u¿a¹©ÍEÍ~8›U0€Ø$—$²¿.½EÆStÑe“r‹“RW†š7¬«³ã'BU¶ò’Ôúô}„ïúA@&IÅ¼•.Œ‘ã¶^‘RÖ]XÁqÃ§ü˜ÉD)æÑvüâÍa­³C®áGÇDzÀféKiOBq .µ£Ü"}Â->¢ŒìÄtHÆPÙöuóå§Ñ"×è+*¤t²ö
+/k~Cºh›ôºşÍÂÅ8¼æétôÅ×RØ	‰ãQøä3DO°˜ˆ¦»sÇŞDk)¶5ë‡cÇ§S¸X.bkìÃUq*õ¬]&'¨l”Ï™˜I</ÎÒåİKEê1¾,B¢‘õRp=ùW.ùšÉ<3ig(çÊ†£€ù®Ö\'ÿ%_Ãš«%b­,\O
+n&ÿÌ%ß†2¯©´k,çê%\lÛ•HŸ°Õ^y1eØè†œ)Hı›ÃÓhã§^Ä´GY¼!3IğôgyíÂÎõÏÎ§÷>×›çg;cß™|Ù}½Ç¬ÍG-¡v‰+êœÀÃ-é	7lÄùª¸4C¶,ñÍ-~áÜÎ2#éß4>–)Û^:nx•ÛH#y´áâ
+ 5#€¹sı·ç&—4}ÿÍkT…´N•½H®ç#B1µw"â;×øU©×kÑ\ãPÙŒã˜õ:MwùıºDYx«vnÌÊ{y¢¸çSüJUæ©5çg
+`ÙdùÔdúH¬ItwÀ%‘.\Ê3_Ğ¸Õò…<d»e›^ôœÚãƒbd
+\v4¡ú>rĞF„È/ıU×šK‹ÈÜcöÅÊ!é`¯·‘­ğ‰.»ßß/q;£Ñt:ÕˆtÍÆNkÿõëçVñ8‘µöÀ³yúÇØÌs‹Á¾{nñmNß{Ç^ñ?Ğzÿ–Öò\à¼â©oéüî¼,
+Az™ÖõêÛÏš¤ïen3fŸÏ»×zÿ¦¨±d<¤ƒ¥ÕÜH£Öb;Òv@‘‰D*î–êßNsÉm_“É2!)v·°¸ù‰à?ü<!Fl¨•éµP½tß¡¢iCæ
+}¹*_­‚—©øÕÊ½ùW¥ªÏæ_’ŠìÁ!.`]7r®àWöøq1A_üıE@£ò½ùôQçû/ÿ  ÿÿ ş¶½–
