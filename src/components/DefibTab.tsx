@@ -984,6 +984,14 @@ export default function DefibTab({
   const [modeleCoffretId, setModeleCoffretId] = useState('');
   const [numeroLotCoffret, setNumeroLotCoffret] = useState('');
   const [commentaireCoffret, setCommentaireCoffret] = useState('');
+  const [peremptionTrousse, setPeremptionTrousse] = useState('');
+  const [kitCiseauxPresents, setKitCiseauxPresents] = useState<'Oui' | 'Non'>('Oui');
+  const [kitMasquePresent, setKitMasquePresent] = useState<'Oui' | 'Non'>('Oui');
+  const [kitPeremptionMasque, setKitPeremptionMasque] = useState('');
+  const [kitServiettesPresentes, setKitServiettesPresentes] = useState<'Oui' | 'Non'>('Oui');
+  const [kitPeremptionServiettes, setKitPeremptionServiettes] = useState('');
+  const [kitGantsPresents, setKitGantsPresents] = useState<'Oui' | 'Non'>('Oui');
+  const [kitRasoirPresent, setKitRasoirPresent] = useState<'Oui' | 'Non'>('Oui');
 
   // Section 4 - Accès
   const [numVoie, setNumVoie] = useState('');
@@ -1224,7 +1232,6 @@ export default function DefibTab({
   const [modeleBatterieSecoursId, setModeleBatterieSecoursId] = useState('');
   const [lotBatterieSecours, setLotBatterieSecours] = useState('');
   const [peremptionBatterieSecours, setPeremptionBatterieSecours] = useState('');
-  const [peremptionTrousse, setPeremptionTrousse] = useState('');
 
   // Section 9 - Catégories
   const [loue, setLoue] = useState<'Oui' | 'Non'>('Non');
@@ -1600,6 +1607,14 @@ export default function DefibTab({
     setModeleCoffretId('');
     setNumeroLotCoffret('');
     setCommentaireCoffret('');
+    setPeremptionTrousse('');
+    setKitCiseauxPresents('Oui');
+    setKitMasquePresent('Oui');
+    setKitPeremptionMasque('');
+    setKitServiettesPresentes('Oui');
+    setKitPeremptionServiettes('');
+    setKitGantsPresents('Oui');
+    setKitRasoirPresent('Oui');
 
     // Reset Accès
     setNumVoie('');
@@ -1739,6 +1754,14 @@ export default function DefibTab({
     setModeleCoffretId(df.modeleCoffretId || '');
     setNumeroLotCoffret(df.numeroLotCoffret || '');
     setCommentaireCoffret(df.commentaireCoffret || '');
+    setPeremptionTrousse(df.peremptionTrousse || '');
+    setKitCiseauxPresents(df.kitCiseauxPresents || 'Oui');
+    setKitMasquePresent(df.kitMasquePresent || 'Oui');
+    setKitPeremptionMasque(df.kitPeremptionMasque || '');
+    setKitServiettesPresentes(df.kitServiettesPresentes || 'Oui');
+    setKitPeremptionServiettes(df.kitPeremptionServiettes || '');
+    setKitGantsPresents(df.kitGantsPresents || 'Oui');
+    setKitRasoirPresent(df.kitRasoirPresent || 'Oui');
 
     setNumVoie(df.numVoie || '');
     setVille(df.ville || '');
@@ -1834,7 +1857,6 @@ export default function DefibTab({
     setModeleBatterieSecoursId(df.modeleBatterieSecoursId || '');
     setLotBatterieSecours(df.lotBatterieSecours || '');
     setPeremptionBatterieSecours(df.peremptionBatterieSecours || '');
-    setPeremptionTrousse(df.peremptionTrousse || '');
 
     setLoue(df.loue || 'Non');
     setPrete(df.prete || 'Non');
@@ -1926,6 +1948,14 @@ export default function DefibTab({
       modeleCoffretId,
       numeroLotCoffret: numeroLotCoffret.trim(),
       commentaireCoffret: commentaireCoffret.trim(),
+      peremptionTrousse,
+      kitCiseauxPresents,
+      kitMasquePresent,
+      kitPeremptionMasque: kitMasquePresent === 'Oui' ? kitPeremptionMasque : '',
+      kitServiettesPresentes,
+      kitPeremptionServiettes: kitServiettesPresentes === 'Oui' ? kitPeremptionServiettes : '',
+      kitGantsPresents,
+      kitRasoirPresent,
 
       numVoie: numVoie.trim(),
       ville: ville.trim(),
@@ -1990,7 +2020,6 @@ export default function DefibTab({
       modeleBatterieSecoursId: hasBatterieSecours === 'Oui' ? modeleBatterieSecoursId : '',
       lotBatterieSecours: hasBatterieSecours === 'Oui' ? lotBatterieSecours.trim() : '',
       peremptionBatterieSecours: hasBatterieSecours === 'Oui' ? peremptionBatterieSecours : '',
-      peremptionTrousse,
 
       loue,
       prete,
@@ -3603,6 +3632,222 @@ export default function DefibTab({
                         className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-750"
                       />
                     </div>
+
+                    {/* Trousse de secours / Kit container */}
+                    <div 
+                      className="p-4 space-y-3 bg-white mt-3"
+                      style={{
+                        border: '1px solid #dedede',
+                        borderRadius: '13px',
+                      }}
+                    >
+                      {/* Péremption de la trousse */}
+                      <div className="space-y-1">
+                        <label htmlFor="form-peremption-trousse" className="block text-[11px] font-bold text-slate-500 uppercase">
+                          {t("Péremption de la trousse.")}
+                        </label>
+                        <input
+                          type="date"
+                          id="form-peremption-trousse"
+                          value={peremptionTrousse}
+                          onChange={(e) => setPeremptionTrousse(e.target.value)}
+                          className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                        {/* Ciseaux présents. */}
+                        <div className="space-y-1">
+                          <span className="block text-[11px] font-bold text-slate-500 uppercase">
+                            {t("Ciseaux présents.")}
+                          </span>
+                          <div className="flex gap-4 py-1">
+                            <button
+                              type="button"
+                              onClick={() => setKitCiseauxPresents('Oui')}
+                              className="inline-flex items-center cursor-pointer gap-2 select-none"
+                              style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
+                            >
+                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitCiseauxPresents === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                {kitCiseauxPresents === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                              </span>
+                              Oui
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setKitCiseauxPresents('Non')}
+                              className="inline-flex items-center cursor-pointer gap-2 select-none"
+                              style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
+                            >
+                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitCiseauxPresents === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                {kitCiseauxPresents === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                              </span>
+                              Non
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Masque présent. */}
+                        <div className="space-y-1">
+                          <span className="block text-[11px] font-bold text-slate-500 uppercase">
+                            {t("Masque présent.")}
+                          </span>
+                          <div className="flex gap-4 py-1">
+                            <button
+                              type="button"
+                              onClick={() => setKitMasquePresent('Oui')}
+                              className="inline-flex items-center cursor-pointer gap-2 select-none"
+                              style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
+                            >
+                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitMasquePresent === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                {kitMasquePresent === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                              </span>
+                              Oui
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setKitMasquePresent('Non');
+                                setKitPeremptionMasque('');
+                              }}
+                              className="inline-flex items-center cursor-pointer gap-2 select-none"
+                              style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
+                            >
+                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitMasquePresent === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                {kitMasquePresent === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                              </span>
+                              Non
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Péremption du masque. */}
+                        <div className={`space-y-1 transition-opacity duration-200 ${kitMasquePresent !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
+                          <label htmlFor="form-peremption-masque" className="block text-[11px] font-bold text-slate-500 uppercase">
+                            {t("Péremption du masque.")}
+                          </label>
+                          <input
+                            type="date"
+                            id="form-peremption-masque"
+                            value={kitPeremptionMasque}
+                            onChange={(e) => setKitPeremptionMasque(e.target.value)}
+                            disabled={kitMasquePresent !== 'Oui'}
+                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono"
+                          />
+                        </div>
+
+                        {/* Serviettes présentes. */}
+                        <div className="space-y-1">
+                          <span className="block text-[11px] font-bold text-slate-500 uppercase">
+                            {t("Serviettes présentes.")}
+                          </span>
+                          <div className="flex gap-4 py-1">
+                            <button
+                              type="button"
+                              onClick={() => setKitServiettesPresentes('Oui')}
+                              className="inline-flex items-center cursor-pointer gap-2 select-none"
+                              style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
+                            >
+                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitServiettesPresentes === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                {kitServiettesPresentes === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                              </span>
+                              Oui
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setKitServiettesPresentes('Non');
+                                setKitPeremptionServiettes('');
+                              }}
+                              className="inline-flex items-center cursor-pointer gap-2 select-none"
+                              style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
+                            >
+                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitServiettesPresentes === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                {kitServiettesPresentes === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                              </span>
+                              Non
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Péremption des serviettes. */}
+                        <div className={`space-y-1 transition-opacity duration-200 ${kitServiettesPresentes !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
+                          <label htmlFor="form-peremption-serviettes" className="block text-[11px] font-bold text-slate-500 uppercase">
+                            {t("Péremption des serviettes.")}
+                          </label>
+                          <input
+                            type="date"
+                            id="form-peremption-serviettes"
+                            value={kitPeremptionServiettes}
+                            onChange={(e) => setKitPeremptionServiettes(e.target.value)}
+                            disabled={kitServiettesPresentes !== 'Oui'}
+                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono"
+                          />
+                        </div>
+
+                        {/* Paire de gants présents. */}
+                        <div className="space-y-1">
+                          <span className="block text-[11px] font-bold text-slate-500 uppercase">
+                            {t("Paire de gants présents.")}
+                          </span>
+                          <div className="flex gap-4 py-1">
+                            <button
+                              type="button"
+                              onClick={() => setKitGantsPresents('Oui')}
+                              className="inline-flex items-center cursor-pointer gap-2 select-none"
+                              style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
+                            >
+                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitGantsPresents === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                {kitGantsPresents === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                              </span>
+                              Oui
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setKitGantsPresents('Non')}
+                              className="inline-flex items-center cursor-pointer gap-2 select-none"
+                              style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
+                            >
+                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitGantsPresents === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                {kitGantsPresents === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                              </span>
+                              Non
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Rasoir. */}
+                        <div className="space-y-1">
+                          <span className="block text-[11px] font-bold text-slate-500 uppercase">
+                            {t("Rasoir.")}
+                          </span>
+                          <div className="flex gap-4 py-1">
+                            <button
+                              type="button"
+                              onClick={() => setKitRasoirPresent('Oui')}
+                              className="inline-flex items-center cursor-pointer gap-2 select-none"
+                              style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
+                            >
+                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitRasoirPresent === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                {kitRasoirPresent === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                              </span>
+                              Oui
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setKitRasoirPresent('Non')}
+                              className="inline-flex items-center cursor-pointer gap-2 select-none"
+                              style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
+                            >
+                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitRasoirPresent === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                {kitRasoirPresent === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                              </span>
+                              Non
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Section 4 - Accès */}
@@ -4885,17 +5130,6 @@ export default function DefibTab({
                           className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-semibold text-slate-850"
                         />
                       </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label htmlFor="form-peremption-trousse" className="block text-[11px] font-bold text-slate-500 uppercase">Péremption de la trousse.</label>
-                      <input
-                        type="date"
-                        id="form-peremption-trousse"
-                        value={peremptionTrousse}
-                        onChange={(e) => setPeremptionTrousse(e.target.value)}
-                        className="w-full px-3 py-1 border border-slate-200 rounded-lg text-xs font-mono"
-                      />
                     </div>
 
                     <div className="space-y-1">
