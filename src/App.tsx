@@ -1,4 +1,3 @@
-﻿// Defibeo Web Application
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getRegionsForCountry } from './utils/regions';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases } from './firebase';
@@ -61,12 +60,9 @@ import LocalisationsTab from './components/LocalisationsTab';
 import SatisfactionTab from './components/SatisfactionTab';
 import VeillesTab from './components/VeillesTab';
 import FormationsTab from './components/FormationsTab';
-import GmaoTab from './components/GmaoTab';
-import CommercialDocsTab from './components/CommercialDocsTab';
 import StagiairesTab from './components/StagiairesTab';
 import EmargementsTab from './components/EmargementsTab';
 import GmaoCorrectionForm from './components/GmaoCorrectionForm';
-import GmaoOtherEquipmentCorrectionForm from './components/GmaoOtherEquipmentCorrectionForm';
 import ImportExportTab from './components/ImportExportTab';
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions } from './utils/fsmOptimizer';
 import SatisfactionFormPage from './components/SatisfactionFormPage';
@@ -1279,8 +1275,6 @@ export default function App() {
   // Sync and manage technician generated reports in main GMAO tab
   const [generatedReports, setGeneratedReports] = useState<any[]>([]);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
-  const [isSpontaneousReportOpen, setIsSpontaneousReportOpen] = useState<boolean>(false);
-  const [selectedSpontaneousOtherEquipment, setSelectedSpontaneousOtherEquipment] = useState<any | null>(null);
   const [editReportForm, setEditReportForm] = useState<{
     title: string;
     techName: string;
@@ -9675,33 +9669,1234 @@ export default function App() {
           {/* ======================================= */}
           {/* GMAO MODULE */}
           {/* ======================================= */}
-          {activeTab === 'gmao' && (
-            <GmaoTab
-              generatedReports={generatedReports}
-              setGeneratedReports={setGeneratedReports}
-              saveReports={saveReports}
-              clients={clients}
-              saveClients={saveClients}
-              defibrillateurs={defibrillateurs}
-              saveDefibs={saveDefibs}
-              otherEquipments={otherEquipments}
-              saveOtherEquipments={saveOtherEquipments}
-              stocks={stocks}
-              saveStocks={saveStocks}
-              variables={variables}
-              members={members}
-              loggedUser={loggedUser}
-              companyInfo={companyInfo}
-              tenantId={tenantId}
-              dropboxActive={dropboxActive}
-              dropboxAccessToken={dropboxAccessToken}
-              handleDownloadReport={handleDownloadReport}
-              handleUpdateDefib={handleUpdateDefib}
-              fsmTours={fsmTours}
-              setActiveTab={setActiveTab}
-              t={t}
-            />
-          )}
+          {activeTab === 'gmao' && (() => {
+            const customButtonStyle: React.CSSProperties = {
+              backgroundColor: '#000',
+              color: '#fff',
+              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+              borderRadius: '12px',
+              fontSize: '18px',
+              padding: '9px 19px',
+              fontWeight: '100',
+              transition: 'all 0s ease-in-out',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              cursor: 'pointer',
+              border: 'none',
+            };
+
+            const rowActionButtonStyle: React.CSSProperties = {
+              backgroundColor: '#000',
+              color: '#fff',
+              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+              borderRadius: '10px',
+              fontSize: '18px',
+              padding: '9px 19px',
+              fontWeight: '100',
+              transition: 'all 0s ease-in-out',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              cursor: 'pointer',
+              border: 'none',
+            };
+
+            const thStyle: React.CSSProperties = {
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              fontWeight: 100,
+              letterSpacing: 'normal',
+              textTransform: 'none',
+              color: '#000000',
+              cursor: 'default',
+            };
+
+            const isGmaoController = (() => {
+              if (!loggedUser || !loggedUser.email) return true;
+              const m = members.find(lm => lm.email?.toLowerCase().trim() === loggedUser.email.toLowerCase().trim());
+              if (!m) return true;
+              
+              const isSuperAdmin = m.role === 'Super-Administrateur' || 
+                                   m.role === 'Propriétaire / Admin' || 
+                                   m.role?.toLowerCase().includes('super') || 
+                                   m.role?.toLowerCase().includes('propriétaire');
+              
+              const isControllerSubRole = m.adminSubRole === 'Contrôleur' || 
+                                          m.adminSubRole === 'Administrateur & Contrôleur';
+                                          
+              return !!(isSuperAdmin || isControllerSubRole);
+            })();
+
+            const filteredReports = generatedReports.filter((rep) => {
+              const isFormation = 
+                rep.equipmentType === 'Formation' ||
+                rep.equipmentType?.toLowerCase()?.includes('formation') ||
+                rep.defibSnapshot?.categorie === 'Formation' ||
+                rep.defibSnapshot?.categorie?.toLowerCase()?.includes('formation') ||
+                !!rep.formationId ||
+                rep.defibIdentifiant === 'Formation';
+              if (isFormation) return false;
+
+              const isEffectue = 
+                rep.missionStatus === 'Effectué' ||
+                rep.conforme === 'Conforme' ||
+                rep.conforme === 'Non Conforme' ||
+                rep.conforme === 'Intervention impossible';
+
+              const isUpcoming = !isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture);
+
+              if (gmaoFilter === 'upcoming') {
+                if (!isUpcoming) return false;
+              } else if (gmaoFilter === 'validated') {
+                if (!rep.validated) return false;
+              } else if (gmaoFilter === 'moderation') {
+                if (rep.validated || isUpcoming) return false;
+              }
+
+              const query = gmaoSearchQuery.toLowerCase().trim();
+              if (!query) return true;
+              
+              const titleMatch = (rep.title || '').toLowerCase().includes(query);
+              const identifiantMatch = (rep.defibIdentifiant || '').toLowerCase().includes(query);
+              const serieMatch = (rep.defibSnapshot?.numeroSerie || '').toLowerCase().includes(query);
+              const techMatch = (rep.techName || '').toLowerCase().includes(query);
+              
+              return titleMatch || identifiantMatch || serieMatch || techMatch;
+            });
+
+            return (
+              <div className="space-y-6 animate-fadeIn" id="gmao-tab-container">
+                <style>{`
+                  #gmao-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-gmao-input),
+                  #gmao-tab-container select,
+                  #gmao-tab-container textarea {
+                    padding: 12px !important;
+                    border: 1px solid #dedede !important;
+                    border-radius: 13px !important;
+                    font-size: 16px !important;
+                    font-weight: 100 !important;
+                    background: #ffffff !important;
+                    color: #000000 !important;
+                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                    box-sizing: border-box !important;
+                    outline: none !important;
+                    transition: all 0s !important;
+                  }
+                  #gmao-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-gmao-input),
+                  #gmao-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-gmao-input),
+                  #gmao-tab-container select:hover:not(:disabled),
+                  #gmao-tab-container select:focus:not(:disabled),
+                  #gmao-tab-container textarea:hover:not(:disabled),
+                  #gmao-tab-container textarea:focus:not(:disabled),
+                  #gmao-tab-container #search-gmao-input:hover,
+                  #gmao-tab-container #search-gmao-input:focus {
+                    outline: 2.5px solid #fa53d5 !important;
+                    outline-offset: 2px !important;
+                    transition: all 0s !important;
+                  }
+                  #gmao-tab-container select {
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    -moz-appearance: none !important;
+                    background-image: none !important;
+                  }
+                  #gmao-tab-container select option {
+                    color: #000000 !important;
+                    background: #ffffff !important;
+                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                  }
+                  #gmao-tab-container input[type="date"]::-webkit-calendar-picker-indicator {
+                    display: none !important;
+                    -webkit-appearance: none !important;
+                    background: none !important;
+                    width: 0 !important;
+                    height: 0 !important;
+                  }
+                  #gmao-tab-container label,
+                  #gmao-tab-container .gmao-label-style {
+                    letter-spacing: normal !important;
+                    text-transform: none !important;
+                    font-size: 16px !important;
+                    color: #000000 !important;
+                    font-weight: 600 !important;
+                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                  }
+                  #gmao-tab-container select.padding-with-dot {
+                    padding-left: 27px !important;
+                  }
+                  #gmao-tab-container input:disabled,
+                  #gmao-tab-container select:disabled {
+                    background-color: #f1f5f9 !important;
+                    color: #555555 !important;
+                    cursor: not-allowed !important;
+                    opacity: 0.82 !important;
+                  }
+                `}</style>
+
+                {/* Upper Action Block & Search metrics */}
+                <div 
+                  className="bg-white space-y-4"
+                  style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+                >
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
+                    <div>
+                      <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }} id="gmao-tab-title">GMAO</h2>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* Field recherche (Search input) */}
+                      <div className="relative w-full sm:w-64">
+                        <input
+                          type="text"
+                          id="search-gmao-input"
+                          value={gmaoSearchQuery}
+                          onChange={(e) => setGmaoSearchQuery(e.target.value)}
+                          placeholder="Recherche."
+                          className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
+                          style={{
+                            border: '1px solid #dedede',
+                            borderRadius: '13px',
+                            padding: '9px 19px',
+                            fontSize: '18px',
+                            fontWeight: '100',
+                            color: '#000000',
+                            backgroundColor: '#ffffff',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            outline: 'none',
+                            transition: 'all 0s',
+                          }}
+                        />
+                      </div>
+
+                      {/* 3-item Segmented Toggle for 'À venir' / 'Modération' / 'Validés' */}
+                      <div 
+                        className="flex items-center p-1 bg-white select-none" 
+                        style={{ 
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          borderRadius: '15px',
+                          border: '1px solid #dadada',
+                          backgroundColor: '#ffffff',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setGmaoFilter('upcoming')}
+                          style={{
+                            fontSize: '18px',
+                            borderRadius: '13px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: gmaoFilter === 'upcoming' ? '#fe4eba' : 'transparent',
+                            color: gmaoFilter === 'upcoming' ? '#ffffff' : '#000000',
+                            transition: 'none',
+                          }}
+                          className={`px-4 py-1.5 font-bold ${
+                            gmaoFilter === 'upcoming' ? 'shadow-sm' : ''
+                          }`}
+                        >
+                          {t("À venir")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGmaoFilter('moderation')}
+                          style={{
+                            fontSize: '18px',
+                            borderRadius: '13px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: gmaoFilter === 'moderation' ? '#fe4eba' : 'transparent',
+                            color: gmaoFilter === 'moderation' ? '#ffffff' : '#000000',
+                            transition: 'none',
+                          }}
+                          className={`px-4 py-1.5 font-bold ${
+                            gmaoFilter === 'moderation' ? 'shadow-sm' : ''
+                          }`}
+                        >
+                          {t("Modération")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGmaoFilter('validated')}
+                          style={{
+                            fontSize: '18px',
+                            borderRadius: '13px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: gmaoFilter === 'validated' ? '#fe4eba' : 'transparent',
+                            color: gmaoFilter === 'validated' ? '#ffffff' : '#000000',
+                            transition: 'none',
+                          }}
+                          className={`px-4 py-1.5 font-bold ${
+                            gmaoFilter === 'validated' ? 'shadow-sm' : ''
+                          }`}
+                        >
+                          {t("Validés")}
+                        </button>
+                      </div>
+
+                      {/* No Actualiser button */}
+                    </div>
+                  </div>
+                </div>
+
+                <HelpBubble 
+                  cacheKey="help_dismissed_gmao_options" 
+                  imageSrc="https://civilprom.s3.eu-north-1.amazonaws.com/TERRA.svg"
+                  imageAlt="Guide Rapports PDF"
+                >
+                  <p>
+                    <strong>Aide concernant l’option Gérer :</strong> Pour chaque rapport, le bouton Gérer ouvre un volet latéral vous permettant de consulter le commentaire du technicien, de sélectionner un ou plusieurs drapeaux de signalement et de suivi, d’ajouter un commentaire interne et bien plus encore. En soi, il permet d’effectuer un traitement post-rapport directement depuis le logiciel principal. Le saviez-vous ? Les drapeaux sélectionnés s'affichent en début de ligne dans le tableau, selon la couleur configurée dans votre variable Drapeau GMAO.
+                  </p>
+                  <p>
+                    <strong>Aide concernant l’option Corriger :</strong> Pour chaque rapport, le bouton Corriger ouvre un volet latéral permettant de modifier manuellement les informations renseignées par le technicien depuis le logiciel.
+                  </p>
+                  <p>
+                    <strong>Aide concernant l’option Valider :</strong> Pour chaque rapport, le bouton Valider permet d'approuver définitivement le document complété par le technicien. Conformément à la législation, ce fichier PDF devient alors inaltérable.
+                  </p>
+                  <p>
+                    <strong>Aide concernant l’option Télécharger :</strong> Pour chaque rapport, le bouton Télécharger permet d’exporter le document au format PDF.
+                  </p>
+                  <p>
+                    <strong>Aide concernant la navigation À venir, Modération et Validés :</strong> Les rapports générés par les techniciens depuis la webapp s’affichent dans l’onglet Modération. L'onglet À venir regroupe les rapports attendus selon les maintenances prévues dans Tournées & Missions. L'onglet Validés réunit l'ensemble des rapports définitivement clôturés.
+                  </p>
+                </HelpBubble>
+
+                <div 
+                  className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
+                  style={{
+                    borderColor: 'rgb(218, 218, 218)',
+                    background: '#ffffff00',
+                    boxShadow: 'none',
+                    maxWidth: '98%',
+                    margin: '15px auto 5px auto',
+                  }}
+                >
+                  <p 
+                    className="font-sans leading-relaxed flex-1"
+                    style={{ 
+                      fontSize: '16px', 
+                      fontWeight: 400, 
+                      color: '#000000', 
+                      cursor: 'default' 
+                    }}
+                  >
+                    Uniquement un membre contrôleur ou administrateur-contrôleur est en capacité de modifier et valider les documents émis qui actualisent la base de données.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('parametres');
+                      setTimeout(() => {
+                        const el = document.getElementById('settings-section-members');
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                      }, 300);
+                    }}
+                    className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 inline-flex items-center justify-center text-center whitespace-nowrap"
+                    style={{
+                      backgroundColor: '#000000',
+                      color: '#ffffff',
+                      fontSize: '18px',
+                      borderRadius: '13px',
+                      padding: '8px 20px',
+                    }}
+                  >
+                    Gérer les membres
+                  </button>
+                </div>
+
+                {dropboxError && (
+                  <div className="space-y-2 mt-4 mb-4">
+                    <div className="text-red-600 font-sans font-light text-sm text-left">
+                      {dropboxError}
+                    </div>
+                    {(dropboxError.includes("Autorisation insuffisante") || dropboxError.includes("401") || dropboxError.includes("expiré")) && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 space-y-2 max-w-2xl">
+                        <p className="font-bold text-red-900">💡 Guide de configuration & génération de Token Dropbox :</p>
+                        <ol className="list-decimal list-inside space-y-1 text-[11px] text-red-700">
+                          <li>Allez sur la <a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-red-900">Console Dropbox Developer</a>.</li>
+                          <li>Sélectionnez votre application Dropbox.</li>
+                          <li>Allez dans l'onglet <strong className="font-bold">Permissions</strong>.</li>
+                          <li>Cochez la case <strong className="font-bold">files.content.write</strong> (et <strong className="font-bold">files.content.read</strong>).</li>
+                          <li>Cliquez sur <strong className="font-bold">Submit</strong> en bas de la page.</li>
+                          <li>Retournez dans <strong className="font-bold">Settings</strong>, puis cliquez sur <strong className="font-bold">Generate</strong> pour obtenir un nouveau token.</li>
+                          <li>Mettez à jour le token dans les réglages de l'application (bouton engrenage ⚙️).</li>
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Main Table Records Sheet */}
+                <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
+                  <div className="overflow-x-auto">
+                    {filteredReports.length === 0 ? (
+                      <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
+                    ) : (
+                      <table className="w-full text-left font-sans border-collapse text-xs" id="gmao-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+                        <thead>
+                          <tr className="bg-transparent">
+                            <th className="px-4 py-3.5 w-10 text-center" style={thStyle}></th>
+                            <th className="px-4 py-3.5" style={thStyle}>Horodatage.</th>
+                            <th className="px-4 py-3.5" style={thStyle}>Catégorie matériel.</th>
+                            <th className="px-4 py-3.5" style={thStyle}>Série.</th>
+                            <th className="px-4 py-3.5" style={thStyle}>Identifiant.</th>
+                            <th className="px-4 py-3.5" style={thStyle}>Technicien.</th>
+                            <th className="px-4 py-3.5" style={thStyle}>Réf. Intervention.</th>
+                            <th className="px-4 py-3.5" style={thStyle}>Origine.</th>
+                            <th className="px-4 py-3.5" style={thStyle}>Planifié/Effectué.</th>
+                            <th className="px-4 py-3.5" style={thStyle}>Situation.</th>
+                            <th className="px-4 py-3.5 text-right w-12" style={thStyle}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-slate-700 text-xs">
+                          {filteredReports.map((rep) => {
+                            const isConforme = (rep.defibSnapshot?.conforme || 'Oui') === 'Oui';
+                            const isEffectue = 
+                              rep.missionStatus === 'Effectué' ||
+                              rep.conforme === 'Conforme' ||
+                              rep.conforme === 'Non Conforme' ||
+                              rep.conforme === 'Intervention impossible';
+
+                            const isUpcoming = gmaoFilter === 'upcoming' || (!isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture));
+                            const isValidated = gmaoFilter === 'validated' || !!rep.validated;
+                            const isModeration = gmaoFilter === 'moderation' || (!isUpcoming && !isValidated);
+
+                            // Button states according to specifications:
+                            // — À VENIR : Gérer (Enabled), Corriger (Disabled), Valider (Disabled), Télécharger (Disabled)
+                            // — MODÉRATION : Gérer (Enabled), Corriger (Enabled), Valider (Enabled), Télécharger (Enabled)
+                            // — VALIDÉS : Gérer (Enabled), Corriger (Disabled), Valider (Disabled), Télécharger (Enabled)
+                            const isGererDisabled = !isGmaoController;
+                            const isCorrigerDisabled = isUpcoming || isValidated || !isGmaoController;
+                            const isValiderDisabled = isUpcoming || isValidated || !isGmaoController;
+                            const isTelechargerDisabled = isUpcoming;
+
+                            const getBtnStyle = (isDisabled: boolean) => ({
+                              ...rowActionButtonStyle,
+                              opacity: isDisabled ? 0.35 : 1,
+                              cursor: isDisabled ? 'not-allowed' : 'pointer',
+                              backgroundColor: isDisabled ? '#cbd5e1' : '#000000',
+                              color: isDisabled ? '#64748b' : '#ffffff',
+                              boxShadow: isDisabled ? 'none' : rowActionButtonStyle.boxShadow,
+                              border: 'none',
+                            });
+                            
+                            // Retrieve category name elegantly
+                            const getCategoryName = (r: any) => {
+                              if (r.defibSnapshot?.categorie) {
+                                return r.defibSnapshot.categorie;
+                              }
+                              if (r.title && r.title.trim().toUpperCase().startsWith("RAPPORT TECHNIQUE - ")) {
+                                const raw = r.title.trim().substring(20);
+                                return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+                              }
+                              return "Défibrillateur";
+                            };
+
+                            return (
+                              <tr key={rep.id} className="group hover:bg-[#ffecf8] transition-all cursor-pointer">
+                                {/* Conforme Status Dot Banner column & Flag Voyants */}
+                                <td className="px-3 py-5 text-center whitespace-nowrap" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  <div className="inline-flex items-center justify-center gap-2">
+                                    {rep.drapeaux && rep.drapeaux.length > 0 && (
+                                      <div className="inline-flex items-center gap-2">
+                                        {rep.drapeaux.map((flag: any, fIdx: number) => {
+                                          const borderColor = flag.couleurHex?.trim() || '#000000';
+                                          return (
+                                            <div
+                                              key={flag.id || fIdx}
+                                              className="relative inline-flex items-center justify-center shrink-0"
+                                              style={{ width: '20px', height: '20px' }}
+                                              title={flag.nom}
+                                            >
+                                              <div
+                                                className="absolute inset-0"
+                                                style={{
+                                                  border: `3px solid ${borderColor}`,
+                                                  backgroundColor: 'transparent',
+                                                  transform: 'rotate(45deg)',
+                                                  borderRadius: '6px',
+                                                }}
+                                              />
+                                              <span
+                                                className="relative z-10 font-bold leading-none select-none"
+                                                style={{
+                                                  fontSize: '16px',
+                                                  color: '#000000',
+                                                  fontFamily: 'sans-serif',
+                                                }}
+                                              >
+                                                !
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                    <span 
+                                      className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${isConforme ? 'bg-emerald-500' : 'bg-rose-500'}`} 
+                                      title={isConforme ? "Conforme" : "Non conforme"}
+                                    />
+                                  </div>
+                                </td>
+
+                                {/* Date / Horodatage */}
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  {rep.date}
+                                </td>
+
+                                {/* Catégorie matériel */}
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  <div 
+                                    style={{ 
+                                      display: 'inline-flex', 
+                                      alignItems: 'center', 
+                                      gap: '8px',
+                                      border: '1px solid rgb(231, 231, 231)',
+                                      borderRadius: '1000px',
+                                      padding: '4px 12px',
+                                      backgroundColor: '#ffffff',
+                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                    }} 
+                                    className="whitespace-nowrap font-medium"
+                                  >
+                                    {getCategoryName(rep)}
+                                  </div>
+                                </td>
+
+                                {/* Série */}
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  {rep.defibSnapshot?.numeroSerie && rep.defibSnapshot.numeroSerie.trim() ? (
+                                    <div 
+                                      style={{ 
+                                        display: 'inline-flex', 
+                                        alignItems: 'center', 
+                                        gap: '8px',
+                                        border: '1px solid rgb(231, 231, 231)',
+                                        borderRadius: '1000px',
+                                        padding: '4px 12px',
+                                        backgroundColor: '#ffffff',
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                      }} 
+                                      className="whitespace-nowrap font-medium"
+                                    >
+                                      {rep.defibSnapshot.numeroSerie}
+                                    </div>
+                                  ) : null}
+                                </td>
+
+                                 {/* Identifiant */}
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  {rep.defibIdentifiant && rep.defibIdentifiant.trim() ? (
+                                    <div 
+                                      style={{ 
+                                        display: 'inline-flex', 
+                                        alignItems: 'center', 
+                                        gap: '8px',
+                                        border: '1px solid rgb(231, 231, 231)',
+                                        borderRadius: '1000px',
+                                        padding: '4px 12px',
+                                        backgroundColor: '#ffffff',
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                      }} 
+                                      className="whitespace-nowrap font-medium"
+                                    >
+                                      {rep.defibIdentifiant}
+                                    </div>
+                                  ) : null}
+                                </td>
+
+                                {/* Technicien */}
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  {rep.techName && rep.techName.trim() ? (
+                                    <div className="font-medium text-[#000000] whitespace-nowrap" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                      {rep.techName}
+                                    </div>
+                                  ) : null}
+                                </td>
+
+                                {/* Réf. Intervention */}
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  {rep.interventionReference && rep.interventionReference.trim() ? (
+                                    <div 
+                                      style={{ 
+                                        display: 'inline-flex', 
+                                        alignItems: 'center', 
+                                        gap: '8px',
+                                        border: '1px solid rgb(231, 231, 231)',
+                                        borderRadius: '1000px',
+                                        padding: '4px 12px',
+                                        backgroundColor: '#ffffff',
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                      }} 
+                                      className="whitespace-nowrap font-medium"
+                                    >
+                                      {rep.interventionReference}
+                                    </div>
+                                  ) : null}
+                                </td>
+
+                                {/* Origine. */}
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  {(() => {
+                                    const raw = (rep.origin || `${rep.tourDate || ''} ${rep.tourName || ''}`).trim();
+                                    if (!raw) return '—';
+                                    return raw.length > 20 ? raw.substring(0, 20) + '...' : raw;
+                                  })()}
+                                </td>
+
+                                {/* Planifié/Effectué. */}
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  {(() => {
+                                    let matchMission: any = null;
+                                    let matchTour: any = null;
+                                    if (fsmTours && fsmTours.length > 0) {
+                                      for (const tour of fsmTours) {
+                                        if (!tour.missions) continue;
+                                        const found = tour.missions.find((m: any) => 
+                                          (rep.missionId && m.id === rep.missionId) ||
+                                          (rep.interventionReference && m.interventionReference && m.interventionReference === rep.interventionReference) ||
+                                          (rep.defibIdentifiant && m.defibIdentifiant && m.defibIdentifiant === rep.defibIdentifiant)
+                                        );
+                                        if (found) {
+                                          matchMission = found;
+                                          matchTour = tour;
+                                          break;
+                                        }
+                                      }
+                                    }
+
+                                    let dateVal = '';
+                                    let slotVal = '';
+
+                                    if (isUpcoming) {
+                                      dateVal = matchMission?.estimatedDate || rep.estimatedDate || matchTour?.startDate || matchTour?.date || rep.tourDate || rep.date || '';
+                                      slotVal = matchMission?.estimatedSlot || rep.estimatedSlot || matchMission?.creneau || '09:00';
+                                    } else {
+                                      dateVal = rep.date || matchMission?.executedAt || matchMission?.completedAt || '';
+                                      slotVal = rep.endTimeStamp || rep.time || matchMission?.endTimeStamp || '';
+                                    }
+
+                                    const formatDateTimeDisplay = (dStr: string, sStr: string) => {
+                                      const cleanD = (dStr || '').trim();
+                                      const cleanS = (sStr || '').trim();
+                                      if (!cleanD || cleanD === 'À venir') return '—';
+
+                                      let dPart = '';
+                                      let tPart = '';
+
+                                      if (cleanD.includes(' ')) {
+                                        const parts = cleanD.split(/\s+/);
+                                        dPart = parts[0];
+                                        tPart = parts[1] || cleanS;
+                                      } else if (cleanD.includes('T')) {
+                                        const parts = cleanD.split('T');
+                                        dPart = parts[0];
+                                        tPart = (parts[1] || '').substring(0, 5);
+                                      } else {
+                                        dPart = cleanD;
+                                        tPart = cleanS;
+                                      }
+
+                                      let formattedDate = dPart;
+                                      if (dPart.includes('-')) {
+                                        const segs = dPart.split('-');
+                                        if (segs.length === 3) {
+                                          if (segs[0].length === 4) {
+                                            formattedDate = `${segs[2].padStart(2, '0')}/${segs[1].padStart(2, '0')}/${segs[0]}`;
+                                          } else if (segs[2].length === 4) {
+                                            formattedDate = `${segs[0].padStart(2, '0')}/${segs[1].padStart(2, '0')}/${segs[2]}`;
+                                          }
+                                        }
+                                      } else if (dPart.includes('/')) {
+                                        const segs = dPart.split('/');
+                                        if (segs.length === 3) {
+                                          if (segs[0].length === 4) {
+                                            formattedDate = `${segs[2].padStart(2, '0')}/${segs[1].padStart(2, '0')}/${segs[0]}`;
+                                          } else {
+                                            formattedDate = `${segs[0].padStart(2, '0')}/${segs[1].padStart(2, '0')}/${segs[2]}`;
+                                          }
+                                        }
+                                      }
+
+                                      let formattedTime = '00:00';
+                                      if (tPart) {
+                                        const match = tPart.match(/(\d{1,2})[:hH](\d{2})/);
+                                        if (match) {
+                                          formattedTime = `${match[1].padStart(2, '0')}:${match[2]}`;
+                                        } else if (/^\d{1,2}$/.test(tPart)) {
+                                          formattedTime = `${tPart.padStart(2, '0')}:00`;
+                                        } else {
+                                          formattedTime = tPart;
+                                        }
+                                      } else {
+                                        formattedTime = '09:00';
+                                      }
+
+                                      if (!formattedDate || formattedDate === 'À venir') return '—';
+                                      return `${formattedDate} ${formattedTime}`;
+                                    };
+
+                                    return formatDateTimeDisplay(dateVal, slotVal);
+                                  })()}
+                                </td>
+
+                                {/* Situation. */}
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  {(() => {
+                                    const sit = rep.missionStatus || (isUpcoming ? 'Brouillon' : 'Effectué');
+                                    const dotColor = 
+                                      sit === 'Brouillon' ? '#94a3b8' :
+                                      sit === 'Attente Client' ? '#f59e0b' :
+                                      sit === 'Accepté Client' ? '#16a34a' :
+                                      sit === 'Refusé Client' ? '#dc2626' :
+                                      sit === 'Rejet mission' ? '#dc2626' :
+                                      sit === 'À faire' ? '#3b82f6' :
+                                      sit === 'En cours' ? '#ef4444' :
+                                      sit === 'Effectué' ? '#22c55e' :
+                                      sit === 'Attente' ? '#94a3b8' : '#3b82f6';
+
+                                    return (
+                                      <div 
+                                        style={{ 
+                                          display: 'inline-flex', 
+                                          alignItems: 'center', 
+                                          gap: '8px',
+                                          border: '1px solid rgb(231, 231, 231)',
+                                          borderRadius: '1000px',
+                                          padding: '4px 12px',
+                                          backgroundColor: '#ffffff',
+                                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                        }} 
+                                        className="whitespace-nowrap font-medium"
+                                      >
+                                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: dotColor, display: 'inline-block' }} />
+                                        <span>{sit}</span>
+                                      </div>
+                                    );
+                                  })()}
+                                </td>
+
+                                {/* Actions */}
+                                <td className="px-4 py-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                  <div className="inline-flex gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={isGererDisabled}
+                                      onClick={() => !isGererDisabled && setManagingReportId(rep.id)}
+                                      style={getBtnStyle(isGererDisabled)}
+                                      className={isGererDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
+                                    >
+                                      Gérer
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isCorrigerDisabled}
+                                      onClick={() => !isCorrigerDisabled && setEditingReportId(rep.id)}
+                                      style={getBtnStyle(isCorrigerDisabled)}
+                                      className={isCorrigerDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
+                                    >
+                                      Corriger
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={rep.validated || !isGmaoController}
+                                      onClick={() => {
+                                        const updatedReports = generatedReports.map(r => r.id === rep.id ? { ...r, validated: true } : r);
+                                        saveReports(updatedReports);
+
+                                        // Update "Centrale des stocks" (Volume=0, Situation=Utilisé, Commentaire=Ref intervention)
+                                        const usedTraceIds = [
+                                          rep.selectionElectrodeARemplacee,
+                                          rep.selectionElectrodeASecoursRemplacee,
+                                          rep.selectionElectrodePRemplacee,
+                                          rep.selectionElectrodePSecoursRemplacee,
+                                          rep.selectionBatterieRemplacee,
+                                          rep.selectionKitSecoursRemplace
+                                        ].filter(id => id && id !== 'Autre');
+
+                                        if (usedTraceIds.length > 0) {
+                                          const updatedStocksList = stocks.map(st => {
+                                            let stChanged = false;
+                                            let decrementQty = 0;
+                                            const updatedTraces = (st.traceabilities || []).map(tr => {
+                                              if (usedTraceIds.includes(tr.id)) {
+                                                stChanged = true;
+                                                if (tr.situation === 'Disponible') {
+                                                  decrementQty++;
+                                                }
+                                                return {
+                                                  ...tr,
+                                                  volume: 0,
+                                                  situation: 'Utilisé' as const,
+                                                  comment: rep.interventionReference || 'Ref: ' + (rep.id || 'sans-id')
+                                                };
+                                              }
+                                              return tr;
+                                            });
+
+                                            if (stChanged) {
+                                              return {
+                                                ...st,
+                                                quantite: Math.max(0, (st.quantite || 0) - decrementQty),
+                                                traceabilities: updatedTraces
+                                              };
+                                            }
+                                            return st;
+                                          });
+                                          saveStocks(updatedStocksList);
+                                        }
+
+                                        // Update the main equipment database and send validation email to the client
+                                        const snap = rep.defibSnapshot;
+                                        if (snap) {
+                                          const uuid = snap.id || rep.defibId;
+                                          const ident = snap.identifiant || rep.defibIdentifiant;
+
+                                          const isDefib = defibrillateurs.some(df => df.id === uuid || df.identifiant === ident);
+                                          if (isDefib) {
+                                            const updatedList = defibrillateurs.map(df => {
+                                              if (df.id === uuid || df.identifiant === ident) {
+                                                return {
+                                                  ...snap,
+                                                  derniereMaintenance: snap.derniereMaintenance || new Date().toISOString().split('T')[0]
+                                                };
+                                              }
+                                              return df;
+                                            });
+                                            saveDefibs(updatedList);
+                                          } else {
+                                            const isOther = otherEquipments.some(o => o.id === uuid || o.identifiant === ident);
+                                            if (isOther) {
+                                              const updatedList = otherEquipments.map(o => {
+                                                if (o.id === uuid || o.identifiant === ident) {
+                                                  return snap;
+                                                }
+                                                return o;
+                                              });
+                                              saveOtherEquipments(updatedList);
+                                            }
+                                          }
+
+                                          // Trigger Email 6: RAPPORT DE MAINTENANCE AU CLIENT
+                                          if (!rep.disableClientEmail) {
+                                            try {
+                                              const matchingClient = clients?.find((c: any) => c.id === snap.clientId);
+                                              const clientEmail = snap.emailSite || matchingClient?.email || matchingClient?.emailSite;
+                                              if (clientEmail && clientEmail.trim()) {
+                                                triggerEmail6RapportIntervention(
+                                                  clientEmail.trim(),
+                                                  snap.identifiant || rep.defibIdentifiant || '',
+                                                  rep.date || new Date().toLocaleString('fr-FR'),
+                                                  companyInfo.name || 'Défibeo Suite',
+                                                  companyInfo.email || ''
+                                                ).catch(e => console.error("Error triggering Email 6 during GMAO validation:", e));
+                                              }
+                                            } catch (err6) {
+                                              console.error("Error sending validation email during GMAO validation:", err6);
+                                            }
+                                          }
+                                        }
+
+                                        // Upload validated intervention report to Dropbox if active
+                                        setDropboxError(null);
+                                        if (dropboxActive && dropboxAccessToken) {
+                                          (async () => {
+                                            try {
+                                              const { generateReportPDF, uploadToDropbox } = await import('./utils/dropbox');
+                                              const pdfBytes = generateReportPDF(rep);
+                                              const ident = snap ? (snap.identifiant || rep.defibIdentifiant) : (rep.defibIdentifiant || rep.id);
+                                              const fileName = `Rapport_Intervention_${ident}_${rep.date || 'sans-date'}.pdf`;
+                                              await uploadToDropbox(dropboxAccessToken, fileName, pdfBytes);
+                                            } catch (dropboxErr: any) {
+                                              console.error("Dropbox report upload failed on validation:", dropboxErr);
+                                              let cleanMsg = "Impossible d'uploader le rapport sur Dropbox, vérifiez les identifiants.";
+                                              if (dropboxErr.message && (dropboxErr.message.includes("401") || dropboxErr.message.includes("expired") || dropboxErr.message.includes("invalid_access_token") || dropboxErr.message.includes("Unauthorized"))) {
+                                                cleanMsg = "Erreur Dropbox 401 : Le token d'accès est invalide ou expiré (les tokens temporaires Dropbox expirent au bout de 4 heures). Veuillez générer un nouveau token d'accès dans votre console Dropbox Developer.";
+                                              } else
+                                              if (dropboxErr.message && dropboxErr.message.includes("missing_scope")) {
+                                                cleanMsg = "Erreur Dropbox : Autorisation insuffisante. Veuillez activer la permission 'files.content.write' dans votre console Dropbox Developer, puis générez un nouveau token.";
+                                              }
+                                              setDropboxError(cleanMsg);
+                                            }
+                                          })();
+                                        }
+
+                                        if (rep.disableClientEmail) {
+                                          alert("Le rapport d'intervention a été validé avec succès ! L'état de l'équipement a été mis à jour.");
+                                        } else {
+                                          alert("Le rapport d'intervention a été validé avec succès ! L'état de l'équipement a été mis à jour et un e-mail avec le rapport a été envoyé au client.");
+                                        }
+                                      }}
+                                      style={getBtnStyle(isValiderDisabled)}
+                                      className={isValiderDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
+                                    >
+                                      {isValidated ? 'Validé' : 'Valider'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isTelechargerDisabled}
+                                      onClick={() => !isTelechargerDisabled && handleDownloadReport(rep)}
+                                      style={getBtnStyle(isTelechargerDisabled)}
+                                      className={isTelechargerDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
+                                    >
+                                      Télécharger
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+
+                {/* Side-bar popup for managing report moderation flags & comments */}
+                {(() => {
+                  const managingReport = generatedReports.find(r => r.id === managingReportId);
+                  if (!managingReport) return null;
+
+                  return (
+                    <div 
+                      className="fixed inset-0 z-[9999] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+                      style={{ top: 0, left: 0, right: 0, bottom: 0, height: '100vh', width: '100vw' }}
+                      onClick={() => setManagingReportId(null)}
+                    >
+                      <div 
+                        className="relative w-full max-w-xl bg-white flex flex-col overflow-hidden animate-slideLeft h-full"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
+                          borderLeft: '1px solid #e2e8f0',
+                        }}
+                      >
+                        {/* Drawer Body without inner padding/border div */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white font-sans">
+                          {/* Field: Commentaire du technicien. (Disabled textarea showing section 11 Commentaire interne) */}
+                          <div className="space-y-2">
+                            <label className="block text-[18px] font-medium text-[#000]">
+                              Commentaire du technicien.
+                            </label>
+                            <textarea
+                              disabled
+                              rows={3}
+                              value={managingReport.defibSnapshot?.commentaireInterne || managingReport.commentaireInterne || ''}
+                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-100 resize-y min-h-[90px] focus:outline-none cursor-not-allowed opacity-90"
+                            />
+                          </div>
+
+                          {/* Field A: Drapeau GMAO */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-[16px] font-medium text-[#000]">
+                                Drapeau GMAO
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setManagingReportId(null);
+                                  setActiveTab('variables');
+                                }}
+                                style={{ fontSize: '16px', textDecoration: 'none' }}
+                                className="text-[16px] text-blue-600 hover:text-blue-800 cursor-pointer bg-transparent border-0 p-0 font-medium font-sans no-underline hover:no-underline"
+                              >
+                                Nouvelle variable drapeau
+                              </button>
+                            </div>
+
+                            {/* Select Lookup Dropdown */}
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                const valId = e.target.value;
+                                if (!valId) return;
+                                const foundVar = variables.find(v => v.id === valId && (v.category === 'Drapeau GMAO' || v.category === 'Drapeau post-intervention'));
+                                if (foundVar) {
+                                  const currentFlags = managingReport.drapeaux || [];
+                                  if (!currentFlags.some((f: any) => f.id === foundVar.id || f.nom === foundVar.nom)) {
+                                    const newFlag = {
+                                      id: foundVar.id,
+                                      nom: foundVar.nom,
+                                      couleurHex: foundVar.couleurHex || ''
+                                    };
+                                    const updatedReports = generatedReports.map(r => 
+                                      r.id === managingReport.id ? { ...r, drapeaux: [...currentFlags, newFlag] } : r
+                                    );
+                                    saveReports(updatedReports);
+                                  }
+                                }
+                              }}
+                              className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 cursor-pointer"
+                            >
+                              <option value="">-- Sélectionner un drapeau GMAO --</option>
+                              {variables
+                                .filter(v => v.category === 'Drapeau GMAO' || v.category === 'Drapeau post-intervention')
+                                .map(v => (
+                                  <option key={v.id} value={v.id}>
+                                    {v.nom} {v.couleurHex ? `(${v.couleurHex})` : ''}
+                                  </option>
+                                ))}
+                            </select>
+
+                            {/* Selected Flags as Pills / Gélules */}
+                            {managingReport.drapeaux && managingReport.drapeaux.length > 0 ? (
+                              <div className="flex flex-wrap gap-2.5 pt-1">
+                                {managingReport.drapeaux.map((flag: any, idx: number) => {
+                                  const hex = flag.couleurHex?.trim();
+                                  const txtColor = hex ? getContrastingTextColor(hex) : '#0f172a';
+                                  return (
+                                    <span
+                                      key={flag.id || idx}
+                                      onClick={() => {
+                                        const updatedFlags = (managingReport.drapeaux || []).filter((_: any, i: number) => i !== idx);
+                                        const updatedReports = generatedReports.map(r => 
+                                          r.id === managingReport.id ? { ...r, drapeaux: updatedFlags } : r
+                                        );
+                                        saveReports(updatedReports);
+                                      }}
+                                      className="inline-flex items-center px-4 py-2 rounded-full text-[18px] font-medium cursor-pointer transition-colors select-none hover:!bg-[#851010] hover:!text-white"
+                                      style={{
+                                        backgroundColor: hex || '#f1f5f9',
+                                        color: txtColor,
+                                        border: 'none',
+                                      }}
+                                      title="Cliquer pour supprimer"
+                                    >
+                                      {flag.nom}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          {/* Field B: Commentaire */}
+                          <div className="space-y-1.5 pt-1">
+                            <label className="block text-[16px] font-medium text-[#000]">
+                              Commentaire
+                            </label>
+                            <textarea
+                              value={
+                                managingReport.commentaire !== undefined && managingReport.commentaire !== null && managingReport.commentaire !== ''
+                                  ? managingReport.commentaire
+                                  : (!managingReport.isUpcoming ? generateReportModerationComment(managingReport, defibrillateurs) : '')
+                              }
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updatedReports = generatedReports.map(r => 
+                                  r.id === managingReport.id ? { ...r, commentaire: val } : r
+                                );
+                                saveReports(updatedReports);
+                              }}
+                              placeholder="Entrez un commentaire."
+                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-50/50 resize-y min-h-[120px] focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
+                            />
+                          </div>
+
+                          {/* Toggle: Désactiver l'email au client. */}
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="block text-[16px] font-medium text-[#000]">
+                              Désactiver l’email au client.
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedValue = !managingReport.disableClientEmail;
+                                const updatedReports = generatedReports.map(r => 
+                                  r.id === managingReport.id ? { ...r, disableClientEmail: updatedValue } : r
+                                );
+                                saveReports(updatedReports);
+                              }}
+                              className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none shrink-0"
+                              style={{
+                                backgroundColor: managingReport.disableClientEmail ? '#fe4eba' : '#cbd5e1',
+                                cursor: 'pointer',
+                                border: 'none',
+                              }}
+                            >
+                              <span
+                                className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow-sm"
+                                style={{
+                                  transform: managingReport.disableClientEmail ? 'translateX(24px)' : 'translateX(4px)',
+                                }}
+                              />
+                            </button>
+                          </div>
+
+                          {/* Field: Situation. */}
+                          <div className="space-y-1.5 pt-2">
+                            <label className="block text-[16px] font-medium text-[#000]">
+                              Situation.
+                            </label>
+                            <select
+                              value={managingReport.missionStatus || (managingReport.isUpcoming ? 'Brouillon' : 'Effectué')}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updatedReports = generatedReports.map(r => 
+                                  r.id === managingReport.id ? { ...r, missionStatus: val } : r
+                                );
+                                saveReports(updatedReports);
+                              }}
+                              className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 cursor-pointer font-sans"
+                            >
+                              <option value="Effectué">Effectué</option>
+                              <option value="Rejet mission">Rejet mission</option>
+                              <option value="En cours">En cours</option>
+                              <option value="À faire">À faire</option>
+                              <option value="Attente">Attente</option>
+                              <option value="Attente Client">Attente Client</option>
+                              <option value="Accepté Client">Accepté Client</option>
+                              <option value="Refusé Client">Refusé Client</option>
+                              <option value="Brouillon">Brouillon</option>
+                            </select>
+                          </div>
+
+                          {/* Field: Raison de rejet (visible if situation is Rejet mission or intervention impossible) */}
+                          {(managingReport.missionStatus === 'Rejet mission' || managingReport.conforme === 'Intervention impossible' || managingReport.statutMaintenance === 'IMPOSSIBLE') && (
+                            <div className="space-y-1.5 pt-2">
+                              <label className="block text-[16px] font-medium text-[#000]">
+                                Raison de rejet de mission.
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={100}
+                                value={managingReport.rejectionReason || managingReport.reasonImpossible || managingReport.techCommentaireArrivee || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const updatedReports = generatedReports.map(r => 
+                                    r.id === managingReport.id ? { ...r, rejectionReason: val, reasonImpossible: val, techCommentaireArrivee: val } : r
+                                  );
+                                  saveReports(updatedReports);
+                                }}
+                                placeholder="Entrez la raison du rejet..."
+                                className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
+                              />
+                            </div>
+                          )}
+
+                          {/* Enregistrer & Fermer Buttons */}
+                          <div className="pt-2 space-y-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                saveReports(generatedReports);
+                                setManagingReportId(null);
+                              }}
+                              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[18px] font-medium transition-colors cursor-pointer border-none shadow-sm"
+                            >
+                              Enregistrer
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setManagingReportId(null)}
+                              className="w-full py-3.5 bg-black text-white rounded-xl text-[18px] font-medium hover:bg-slate-800 transition-colors cursor-pointer border-none"
+                            >
+                              Fermer
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Side-bar popup for editing report correction form (Corriger) */}
+                {(() => {
+                  if (!editingReportId) return null;
+                  const repToEdit = generatedReports.find(r => r.id === editingReportId);
+                  if (!repToEdit) return null;
+
+                  return (
+                    <div 
+                      className="fixed inset-0 z-[9999] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+                      style={{ top: 0, left: 0, right: 0, bottom: 0, height: '100vh', width: '100vw' }}
+                      onClick={() => {
+                        setEditingReportId(null);
+                        setEditReportForm(null);
+                      }}
+                    >
+                      <div 
+                        className="relative w-full max-w-xl md:max-w-2xl bg-white flex flex-col overflow-hidden animate-slideLeft h-full"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
+                          borderLeft: '1px solid #e2e8f0',
+                        }}
+                      >
+                        <div className="flex-1 overflow-y-auto bg-white font-sans relative">
+                          <GmaoCorrectionForm
+                            report={repToEdit}
+                            isWebapp={true}
+                            forceSmartphoneLayout={true}
+                            onSave={(updatedReport) => {
+                              const updatedReports = generatedReports.map(r => r.id === editingReportId ? updatedReport : r);
+                              saveReports(updatedReports);
+                              if (updatedReport.defibSnapshot) {
+                                handleUpdateDefib(updatedReport.defibSnapshot);
+                              }
+                              
+                              if (updatedReport.clientPinCode && updatedReport.defibSnapshot?.clientId) {
+                                const targetClientId = updatedReport.defibSnapshot.clientId;
+                                const typedPin = updatedReport.clientPinCode.trim().toUpperCase();
+                                
+                                const updatedClients = clients.map(cl => {
+                                  if (cl.id === targetClientId) {
+                                    const originalPins = cl.signaturePins || [];
+                                    const matchIndex = originalPins.findIndex(p => p.code.toUpperCase() === typedPin);
+                                    let newPins = [...originalPins];
+                                    if (matchIndex !== -1) {
+                                      newPins[matchIndex] = {
+                                        ...newPins[matchIndex],
+                                        status: 'validé',
+                                        validatedAt: new Date().toISOString(),
+                                        reportTitle: updatedReport.title || 'Rapport d\'Intervention'
+                                      };
+                                    } else {
+                                      newPins.push({
+                                        code: typedPin,
+                                        createdAt: new Date().toISOString(),
+                                        status: 'validé',
+                                        validatedAt: new Date().toISOString(),
+                                        reportTitle: updatedReport.title || 'Rapport d\'Intervention'
+                                      });
+                                    }
+                                    return {
+                                      ...cl,
+                                      signaturePins: newPins
+                                    };
+                                  }
+                                  return cl;
+                                });
+                                saveClients(updatedClients);
+                              }
+
+                              setEditingReportId(null);
+                              setEditReportForm(null);
+                            }}
+                            onCancel={() => {
+                              setEditingReportId(null);
+                              setEditReportForm(null);
+                            }}
+                            clients={clients}
+                            variables={variables}
+                            defibrillateurs={defibrillateurs}
+                            stocks={stocks}
+                            onUpdateStocks={saveStocks}
+                            members={members}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            );
+          })()}
 
           {/* ======================================= */}
           {/* CRM / SUPPORT TICKETS MODULE */}
@@ -9732,28 +10927,1081 @@ export default function App() {
           )}
 
           {/* ======================================= */}
-          {/* ======================================= */}
           {/* DEVIS & PROFORMA MODULE */}
           {/* ======================================= */}
-          {activeTab === 'devis' && (
-            <CommercialDocsTab
-              commercialDocs={commercialDocs}
-              saveCommercialDocs={saveCommercialDocs}
-              clients={clients}
-              variables={variables}
-              stocks={stocks}
-              members={members}
-              companyInfo={companyInfo}
-              tenantId={tenantId}
-              t={t}
-              handleDownloadDoc={handleDownloadDoc}
-              handleTransformDoc={handleTransformDoc}
-              triggerPennylaneSync={triggerPennylaneSync}
-            />
-          )}
+          {activeTab === 'devis' && (() => {
+            const customButtonStyle: React.CSSProperties = {
+              backgroundColor: '#000',
+              color: '#fff',
+              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+              borderRadius: '12px',
+              fontSize: '18px',
+              padding: '9px 19px',
+              fontWeight: '100',
+              transition: 'all 0s ease-in-out',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              cursor: 'pointer',
+              border: 'none',
+            };
+
+            const rowActionButtonStyle: React.CSSProperties = {
+              backgroundColor: '#000',
+              color: '#fff',
+              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+              borderRadius: '10px',
+              fontSize: '15px',
+              padding: '8px 16px',
+              fontWeight: '100',
+              transition: 'all 0s ease-in-out',
+            };
+
+            const thStyle: React.CSSProperties = {
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              fontWeight: 100,
+              letterSpacing: 'normal',
+              textTransform: 'none',
+              color: '#000000',
+              cursor: 'default',
+            };
+
+            const itemValueStyle: React.CSSProperties = {
+              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              fontSize: '16px',
+              color: '#000000',
+              fontWeight: 100,
+            };
+
+            const tenantCommercialDocs = commercialDocs.filter((doc) => {
+              if (tenantId !== 'demo') {
+                const dEnv = (doc.envId || doc.tenantId || '').trim().toLowerCase();
+                const cleanTenant = tenantId.trim().toLowerCase();
+                const numTenant = cleanTenant.replace(/^d/i, '');
+                if (dEnv === 'demo') return false;
+                if (dEnv && dEnv !== cleanTenant && dEnv.replace(/^d/i, '') !== numTenant) return false;
+                if (!dEnv && doc.clientDenomination && (doc.clientDenomination.includes('Medical360') || doc.clientDenomination.includes('SecoursProOuest'))) return false;
+              }
+              return true;
+            });
+
+            const filtDocs = tenantCommercialDocs.filter((doc) => {
+              const matchType =
+                docTypeFilter === 'Tous' ||
+                (docTypeFilter === 'Bon de commande' ? (doc.type === 'Bon de commande' || !!doc.hasBonCommande) : doc.type === docTypeFilter);
+              const query = docSearchQuery.trim().toLowerCase();
+              const matchSearch =
+                !query ||
+                doc.ref.toLowerCase().includes(query) ||
+                doc.clientDenomination.toLowerCase().includes(query) ||
+                doc.items.some((item) => item.nomPiece.toLowerCase().includes(query));
+              return matchType && matchSearch;
+            });
+
+            return (
+              <div className="space-y-6 animate-fadeIn" id="devis-tab-container-harmonized">
+                <style>{`
+                  #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-devis-input),
+                  #devis-tab-container-harmonized select:not(.transformer-select),
+                  #devis-tab-container-harmonized textarea {
+                    padding: 12px !important;
+                    border: 1px solid #dedede !important;
+                    border-radius: 13px !important;
+                    font-size: 16px !important;
+                    font-weight: 100 !important;
+                    background: #ffffff !important;
+                    color: #000000 !important;
+                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                    box-sizing: border-box !important;
+                    outline: none !important;
+                    transition: all 0s !important;
+                  }
+                  #devis-tab-container-harmonized select.transformer-select {
+                    background: #000000 !important;
+                    color: #ffffff !important;
+                    font-size: 18px !important;
+                    box-shadow: none !important;
+                    border: none !important;
+                    border-radius: 13px !important;
+                    padding: 9px 19px !important;
+                    cursor: pointer !important;
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    -moz-appearance: none !important;
+                    text-align: center !important;
+                    text-align-last: center !important;
+                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    max-width: 145px !important;
+                  }
+                  #devis-tab-container-harmonized select.transformer-select option {
+                    background: #ffffff !important;
+                    color: #000000 !important;
+                  }
+                  #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-devis-input),
+                  #devis-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-devis-input),
+                  #devis-tab-container-harmonized select:not(.transformer-select):hover:not(:disabled),
+                  #devis-tab-container-harmonized select:not(.transformer-select):focus:not(:disabled),
+                  #devis-tab-container-harmonized textarea:hover:not(:disabled),
+                  #devis-tab-container-harmonized textarea:focus:not(:disabled),
+                  #devis-tab-container-harmonized #search-devis-input:hover,
+                  #devis-tab-container-harmonized #search-devis-input:focus {
+                    outline: 2.5px solid #fa53d5 !important;
+                    outline-offset: 2px !important;
+                    transition: all 0s !important;
+                  }
+                  #devis-tab-container-harmonized select {
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    -moz-appearance: none !important;
+                    background-image: none !important;
+                  }
+                  #devis-tab-container-harmonized select option {
+                    color: #000000 !important;
+                    background: #ffffff !important;
+                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                  }
+                  #devis-tab-container-harmonized input[type="date"]::-webkit-calendar-picker-indicator {
+                    display: none !important;
+                    -webkit-appearance: none !important;
+                    background: none !important;
+                    width: 0 !important;
+                    height: 0 !important;
+                  }
+                   #devis-tab-container-harmonized input[type="radio"] {
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    width: 18px !important;
+                    height: 18px !important;
+                    border: 1px solid #dedede !important;
+                    border-radius: 50% !important;
+                    outline: none !important;
+                    background-color: #ffffff !important;
+                    cursor: pointer !important;
+                    position: relative !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    transition: all 0.2s ease !important;
+                    margin-right: 6px !important;
+                  }
+                  #devis-tab-container-harmonized input[type="radio"]:hover {
+                    border-color: oklch(0.44 0.16 324.65) !important;
+                    outline: none !important;
+                  }
+                  #devis-tab-container-harmonized input[type="radio"]:checked {
+                    border-color: oklch(0.44 0.16 324.65) !important;
+                    background-color: oklch(0.44 0.16 324.65) !important;
+                    outline: none !important;
+                  }
+                  #devis-tab-container-harmonized input[type="radio"]:checked::after {
+                    content: "" !important;
+                    position: absolute !important;
+                    top: 50% !important;
+                    left: 50% !important;
+                    transform: translate(-50%, -50%) !important;
+                    width: 8px !important;
+                    height: 8px !important;
+                    background-color: #ffffff !important;
+                    border-radius: 50% !important;
+                  }
+                  #devis-tab-container-harmonized label,
+                  #devis-tab-container-harmonized .devis-label-style {
+                    letter-spacing: normal !important;
+                    text-transform: none !important;
+                    font-size: 16px !important;
+                    color: #000000 !important;
+                    font-weight: 600 !important;
+                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                  }
+                  #devis-tab-container-harmonized input:disabled,
+                  #devis-tab-container-harmonized select:disabled {
+                    background-color: #f1f5f9 !important;
+                    color: #555555 !important;
+                    cursor: not-allowed !important;
+                    opacity: 0.82 !important;
+                  }
+                `}</style>
+
+                {!isDocFormOpen ? (
+                  <>
+                    {/* Dashboard List Header */}
+                    <div 
+                      className="bg-white space-y-4"
+                      style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
+                        <div>
+                          <h2 className="text-2xl font-bold tracking-tight font-gochi bg-white" style={{ color: '#000000', cursor: 'default' }} id="devis-tab-title">{t("Commandes")}</h2>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 bg-white">
+                          {/* Field recherche (Search input) */}
+                          <div className="relative w-full sm:w-80 bg-white">
+                            <input
+                              type="text"
+                              id="search-devis-input"
+                              value={docSearchQuery}
+                              onChange={(e) => setDocSearchQuery(e.target.value)}
+                              placeholder="Recherche."
+                              className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
+                              style={{
+                                border: '1px solid #dedede',
+                                borderRadius: '13px',
+                                padding: '9px 19px',
+                                fontSize: '18px',
+                                fontWeight: '100',
+                                color: '#000000',
+                                backgroundColor: '#ffffff',
+                                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                outline: 'none',
+                                transition: 'all 0s',
+                              }}
+                            />
+                          </div>
+
+                          {pennylaneActive && (
+                            <button
+                              onClick={handlePennylaneGlobalSync}
+                              style={{
+                                ...customButtonStyle,
+                                backgroundColor: '#000000',
+                                color: '#ffffff',
+                              }}
+                              className="font-sans"
+                            >
+                              {t("Synchroniser")}
+                            </button>
+                          )}
+
+                          <button 
+                            onClick={startNewDoc}
+                            style={customButtonStyle}
+                            className="font-sans"
+                          >
+                            {t("Nouveau")}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {pennylaneAlertMessage && (
+                      <div 
+                        style={{
+                          color: pennylaneAlertStyle === 'error' ? '#ef4444' : '#10b981',
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          textAlign: 'left',
+                          marginTop: '16px',
+                          marginBottom: '16px',
+                          fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
+                        }}
+                      >
+                        {pennylaneAlertMessage}
+                      </div>
+                    )}
+
+                    <HelpBubble 
+                      cacheKey="help_dismissed_devis" 
+                      text="Bon à savoir : lorsqu’un technicien enregistre un rapport d’intervention, il peut cocher l’option d’émettre une facture, alors Défibeo reprend les pièces utilisées et génère une facture brouillon que vous pouvez ensuite venir ajuster. Vous avez généré un devis et souhaitez le transformer en facture ? Cliquez sur le bouton Transformer pour la ligne en question." 
+                    />
+
+                    <HelpBubble 
+                      cacheKey="help_dismissed_devis_einvoicing" 
+                      text="Concernant le e-invoicing via le PPF ou une PDP en France et en Europe, si vous souhaitez opter pour Defibeo en tant que logiciel de facturation, vous devrez le connecter à un logiciel agréé comme Sage, Pennylane, Cegid ou autre avec l’aide de notre API disponible gratuitement dans l’onglet des paramètres." 
+                    />
+
+                    {/* Filters Pills Row */}
+                    <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" id="devis-type-pills">
+                      {(['Tous', 'Devis', 'Facture', 'Bon de commande', 'Bon de livraison'] as const).map((filterOpt) => {
+                        let count = 0;
+                        if (filterOpt === 'Tous') {
+                          count = tenantCommercialDocs.length;
+                        } else if (filterOpt === 'Bon de commande') {
+                          count = tenantCommercialDocs.filter(d => d.type === 'Bon de commande' || d.hasBonCommande).length;
+                        } else {
+                          count = tenantCommercialDocs.filter(d => d.type === filterOpt).length;
+                        }
+                        
+                        return (
+                          <button
+                            key={filterOpt}
+                            type="button"
+                            onClick={() => setDocTypeFilter(filterOpt)}
+                            style={{
+                              borderRadius: '1000px',
+                              padding: '10px 20px',
+                              fontSize: '15px',
+                              fontWeight: 100,
+                              cursor: 'pointer',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              backgroundColor: docTypeFilter === filterOpt ? '#fa53d5' : '#ffffff',
+                              color: docTypeFilter === filterOpt ? '#ffffff' : '#000000',
+                              border: docTypeFilter === filterOpt ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
+                              boxShadow: 'none',
+                              transition: 'all 0.15s ease'
+                            }}
+                            className="transition-all"
+                          >
+                            {t(filterOpt)} ({count})
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Main Table Records Sheet */}
+                    <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
+                      <div className="overflow-x-auto">
+                        {filtDocs.length === 0 ? (
+                          <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
+                        ) : (
+                          <table className="w-full text-left font-sans border-collapse text-xs" id="devis-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+                            <thead>
+                              <tr className="bg-transparent">
+                                <th className="px-4 py-3.5" style={thStyle}>{t("Référence.")}</th>
+                                <th className="px-4 py-3.5" style={thStyle}>{t("Client.")}</th>
+                                <th className="px-4 py-3.5" style={thStyle}>{t("Membre attribué.")}</th>
+                                <th className="px-4 py-3.5" style={thStyle}>{t("Objet ou commentaire.")}</th>
+                                <th className="px-4 py-3.5" style={thStyle}>{t("Total HT.")}</th>
+                                <th className="px-4 py-3.5" style={thStyle}>{t("Date.")}</th>
+                                <th className="px-4 py-3.5 text-center w-28" style={thStyle}>{t("Situation.")}</th>
+                                <th className="px-4 py-3.5 text-center" style={{ ...thStyle, whiteSpace: 'nowrap' }}>{t("Réf. Bon Comm.")}</th>
+                                <th className="px-4 py-3.5 text-right w-12" style={thStyle}>{t("Actions.")}</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-slate-705 text-xs">
+                              {filtDocs.map((doc) => {
+                                const clientName = doc.clientDenomination || '';
+                                const clientDisplay = clientName.length > 20 ? clientName.substring(0, 20) + '(...)' : clientName;
+                                const rowActionButton18Style: React.CSSProperties = {
+                                  ...rowActionButtonStyle,
+                                  backgroundColor: '#000000',
+                                  color: '#ffffff',
+                                  fontSize: '18px',
+                                  padding: '9px 19px',
+                                  borderRadius: '13px',
+                                  boxShadow: 'none',
+                                  border: 'none',
+                                };
+
+                                return (
+                                  <tr
+                                    key={doc.id}
+                                    className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
+                                    onClick={(e) => {
+                                      if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
+                                      startEditDoc(doc);
+                                    }}
+                                  >
+                                    {/* Référence */}
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                      {doc.ref}
+                                    </td>
+
+                                    {/* Client */}
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                      {clientDisplay}
+                                    </td>
+
+                                    {/* Membre attribué. */}
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                      {doc.assignedMemberName || ''}
+                                    </td>
+
+                                    {/* Objet ou commentaire */}
+                                    <td className="px-4 py-5 max-w-sm truncate" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                      {doc.commentaire || '-'}
+                                    </td>
+
+                                    {/* Total HT */}
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                      {doc.totalHt.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
+                                    </td>
+
+                                    {/* Date */}
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                      {doc.dateStr}
+                                    </td>
+
+                                    {/* Situation */}
+                                    <td className="px-4 py-5 text-center whitespace-nowrap">
+                                      <span 
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          borderRadius: '1000px',
+                                          backgroundColor: '#ffffff',
+                                          border: '1px solid rgb(231, 231, 231)',
+                                          color: '#000000',
+                                          fontSize: '15px',
+                                          fontWeight: 100,
+                                          padding: '6px 18px',
+                                          whiteSpace: 'nowrap',
+                                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                        }}
+                                      >
+                                        {t(doc.status)}
+                                      </span>
+                                    </td>
+
+                                    {/* Réf. Bon Comm. */}
+                                    <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                      {doc.hasBonCommande ? (doc.bonCommandeReference || '') : ''}
+                                    </td>
+
+                                    {/* Actions */}
+                                    <td className="px-4 py-5 text-right whitespace-nowrap bg-transparent" onClick={(e) => e.stopPropagation()}>
+                                      <div className="inline-flex items-center gap-2 bg-transparent">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDownloadDoc(doc)}
+                                          style={rowActionButton18Style}
+                                          className="cursor-pointer font-sans"
+                                        >
+                                          {t("Télécharger")}
+                                        </button>
+                                         <select
+                                           value=""
+                                           onChange={(e) => {
+                                             const selectedType = e.target.value as 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison';
+                                             if (selectedType) {
+                                               handleTransformDoc(doc, selectedType);
+                                             }
+                                           }}
+                                           style={{
+                                             backgroundColor: '#000000',
+                                             color: '#ffffff',
+                                             fontSize: '18px',
+                                             padding: '9px 19px',
+                                             borderRadius: '13px',
+                                             boxShadow: 'none',
+                                             border: 'none',
+                                             appearance: 'none',
+                                             WebkitAppearance: 'none',
+                                             MozAppearance: 'none',
+                                             outline: 'none',
+                                             textAlign: 'center',
+                                             textAlignLast: 'center',
+                                             maxWidth: '145px',
+                                           }}
+                                           className="transformer-select cursor-pointer font-sans"
+                                         >
+                                           <option value="" disabled hidden style={{ backgroundColor: '#000000', color: '#ffffff' }}>
+                                             {t("Transformer")}
+                                           </option>
+                                           {(['Devis', 'Facture', 'Bon de commande', 'Bon de livraison'] as const)
+                                             .filter(tType => tType !== doc.type)
+                                             .map(tType => (
+                                               <option key={tType} value={tType} style={{ backgroundColor: '#ffffff', color: '#000000' }}>
+                                                 {tType}
+                                               </option>
+                                             ))
+                                           }
+                                         </select>
+                                        <button
+                                          type="button"
+                                          onClick={() => startEditDoc(doc)}
+                                          style={rowActionButton18Style}
+                                          className="cursor-pointer font-sans"
+                                        >
+                                          {t("Modifier")}
+                                        </button>
+                                        {pennylaneActive && doc.type === 'Facture' && doc.status === 'Accepté' && (
+                                          <button
+                                            type="button"
+                                            onClick={() => triggerPennylaneSync(doc)}
+                                            style={{
+                                              ...rowActionButton18Style,
+                                              backgroundColor: '#000000',
+                                              color: '#ffffff',
+                                              border: 'none',
+                                            }}
+                                            className="cursor-pointer font-sans shadow-md"
+                                          >
+                                            {t("Pennylane Sync")}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  /* Dynamic Form block */
+                  <div className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto" id="devis-form-overlay">
+                    
+                    {/* Header Box styled exactly like DefibTab Form Header */}
+                    <div 
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
+                      style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '20px' }}
+                      id="devis-form-header-box"
+                    >
+                      <div>
+                        <h3 className="text-2xl font-bold font-gochi" id="devis-form-modal-title" style={{ color: '#000', cursor: 'default' }}>
+                          {editingDocId ? t('Modification pièce comptable') : t('Nouvelle pièce comptable')}
+                        </h3>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsDocFormOpen(false);
+                            setEditingDocId(null);
+                          }}
+                          id="btn-close-devis-modal"
+                          style={{
+                            ...rowActionButtonStyle,
+                            fontSize: '18px',
+                            padding: '9px 19px',
+                          }}
+                          className="transition-colors cursor-pointer font-sans"
+                        >
+                          <span>Annuler</span>
+                        </button>
+
+                        <button
+                          type="submit"
+                          form="devis-document-form"
+                          id="btn-submit-devis-form"
+                          style={{
+                            ...rowActionButtonStyle,
+                            fontSize: '18px',
+                            padding: '9px 19px',
+                            backgroundColor: 'rgb(53, 86, 236)',
+                            color: '#ffffff',
+                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                          }}
+                          className="transition-all cursor-pointer font-sans"
+                        >
+                          <span>Enregistrer</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ height: '16px' }} className="bg-transparent" />
+
+                    <form 
+                      id="devis-document-form"
+                      onSubmit={handleSaveDoc} 
+                      className="space-y-6 bg-white p-5 border-none"
+                      style={{
+                        border: '1px solid rgb(218, 218, 218)',
+                        borderRadius: '18px',
+                        width: '98%',
+                        maxWidth: '98%',
+                        margin: 'auto'
+                      }}
+                    >
+                      {/* Form fields Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-white">
+                        
+                        {/* Membre attribué. */}
+                        <div className="flex flex-col gap-1 bg-white col-span-1 md:col-span-3">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">Membre attribué.</label>
+                          <select
+                            value={docAssignedMemberName}
+                            onChange={(e) => setDocAssignedMemberName(e.target.value)}
+                            className="focus:outline-none"
+                          >
+                            <option value="">Aucun membre attribué (Suivi libre)</option>
+                            {members
+                              .filter(m => !(m.role === 'Technicien' || m.role === 'Maintenance Terrain' || m.role?.toLowerCase().includes('tech')))
+                              .map(m => (
+                                <option key={m.name} value={m.name}>
+                                  {m.name} ({m.role})
+                                </option>
+                              ))
+                            }
+                          </select>
+                        </div>
+
+                        {/* Document Type select */}
+                        <div className="flex flex-col gap-1 bg-white">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">Type.</label>
+                          <select
+                            value={docType}
+                            onChange={(e) => setDocType(e.target.value as 'Devis' | 'Facture' | 'Proforma' | 'Bon de commande' | 'Bon de livraison')}
+                            className="focus:outline-none"
+                            required
+                          >
+                            <option value="Devis">Devis</option>
+                            <option value="Facture">Facture</option>
+                            <option value="Bon de commande">Bon de commande</option>
+                            <option value="Bon de livraison">Bon de livraison</option>
+                          </select>
+                        </div>
+
+                        {/* Reference (Auto generated or editable) */}
+                        <div className="flex flex-col gap-1 bg-white">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">Référence.</label>
+                          <input
+                            type="text"
+                            value={docRef}
+                            disabled
+                            className="focus:outline-none"
+                            required
+                          />
+                        </div>
+
+                        {/* Client Select */}
+                        <div className="flex flex-col gap-1 bg-white">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">Client.</label>
+                          <select
+                            value={docClientId}
+                            onChange={(e) => {
+                              const selectedId = e.target.value;
+                              setDocClientId(selectedId);
+                              const matchedClient = clients.find(c => c.id === selectedId);
+                              if (matchedClient) {
+                                if (matchedClient.payeurId) {
+                                  setDocPayeurId(matchedClient.payeurId);
+                                }
+                                if (matchedClient.clientIdField) {
+                                  setDocClientIdField(matchedClient.clientIdField);
+                                }
+                              }
+                            }}
+                            className="focus:outline-none"
+                            required
+                          >
+                            <option value="">Sélection du client.</option>
+                            {clients.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.denomination}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Date */}
+                        <div className="flex flex-col gap-1 bg-white">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Émission.")}</label>
+                          <input
+                            type="date"
+                            value={docDateStr}
+                            disabled
+                            className="focus:outline-none"
+                            required
+                          />
+                        </div>
+
+                        {/* Status selection */}
+                        <div className="flex flex-col gap-1 bg-white">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Situation.")}</label>
+                          <select
+                            value={docStatus}
+                            onChange={(e) => setDocStatus(e.target.value as any)}
+                            placeholder="QQQQ"
+                            className="focus:outline-none"
+                            required
+                          >
+                            <option value="Brouillon">{t("Brouillon")}</option>
+                            <option value="Terminé">{t("Terminé")}</option>
+                            <option value="Accepté">{t("Accepté")}</option>
+                            <option value="Refusé">{t("Refusé")}</option>
+                            <option value="Annulé">{t("Annulé")}</option>
+                            <option value="Supprimé">{t("Supprimé")}</option>
+                          </select>
+                        </div>
+
+                        {/* Remarque */}
+                        <div className="flex flex-col gap-1 bg-white">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Remarque.")}</label>
+                          <input
+                            type="text"
+                            value={docCommentaire}
+                            onChange={(e) => setDocCommentaire(e.target.value)}
+                            placeholder={t("Entrez une remarque.")}
+                            className="focus:outline-none w-full animate-fadeIn"
+                          />
+                        </div>
+
+                        {/* Code Taxe */}
+                        <div className="flex flex-col gap-1 bg-white">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Code Taxe.")}</label>
+                          <input
+                            type="text"
+                            value={docCodeTaxe}
+                            onChange={(e) => setDocCodeTaxe(e.target.value)}
+                            placeholder={t("Code Taxe.")}
+                            className="focus:outline-none w-full"
+                          />
+                        </div>
+
+                        {/* Payeur ID */}
+                        <div className="flex flex-col gap-1 bg-white">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Payeur ID.")}</label>
+                          <input
+                            type="text"
+                            value={docPayeurId}
+                            onChange={(e) => setDocPayeurId(e.target.value)}
+                            placeholder={t("Payeur ID.")}
+                            className="focus:outline-none w-full"
+                          />
+                        </div>
+
+                        {/* Client ID */}
+                        <div className="flex flex-col gap-1 bg-white">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Client ID.")}</label>
+                          <input
+                            type="text"
+                            value={docClientIdField}
+                            onChange={(e) => setDocClientIdField(e.target.value)}
+                            placeholder={t("Client ID.")}
+                            className="focus:outline-none w-full"
+                          />
+                        </div>
+
+                      </div>
+
+                      {/* Add spare parts (Lookup in variables) Container */}
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-transparent space-y-4">
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-transparent">
+                          
+                          {/* Lookup Piece */}
+                          <div className="flex flex-col gap-1 bg-transparent md:col-span-5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Pièce ou service.")}</label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (docClientId && docItems.length > 0) {
+                                    handleSaveDoc({ preventDefault: () => {} } as any);
+                                  } else {
+                                    setIsDocFormOpen(false);
+                                    setEditingDocId(null);
+                                  }
+                                  setActiveTab('variables', true);
+                                }}
+                                className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                style={{ textDecoration: 'none' }}
+                              >
+                                Nouvelle variable
+                              </button>
+                            </div>
+                            <select
+                              value={selectedDocPieceId}
+                              onChange={(e) => {
+                                const vId = e.target.value;
+                                setSelectedDocPieceId(vId);
+                                const price = getSellingPriceForVariable(vId);
+                                setCustomDocPiecePrice(price);
+                              }}
+                              className="focus:outline-none w-full"
+                            >
+                              <option value="">{t("Sélection d'une pièce ou service.")}</option>
+                              {variables
+                                .filter(v => v.category !== 'Drapeau GMAO' && v.category !== 'Fournisseur' && v.category !== 'Modèle Raison Prestation')
+                                .map(v => {
+                                  const matchedStock = stocks.find(s => s.denominationPieceId === v.id);
+                                const ugs = matchedStock?.ugs || '';
+                                const ugsStr = ugs ? ` [UGS: ${ugs}]` : '';
+                                const marqueStr = v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : '';
+                                return (
+                                  <option key={v.id} value={v.id}>
+                                    {v.identifiant ? `[${v.identifiant}] ` : ''}[{v.category}] {v.nom}{marqueStr}{ugsStr}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+
+                          {/* Selling price */}
+                          <div className="flex flex-col gap-1 bg-transparent md:col-span-3">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Tarif de vente. (€)")}</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={customDocPiecePrice}
+                              onChange={(e) => setCustomDocPiecePrice(parseFloat(e.target.value) || 0)}
+                              className="focus:outline-none w-full"
+                            />
+                          </div>
+
+                          {/* Quantity */}
+                          <div className="flex flex-col gap-1 bg-transparent md:col-span-2">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Quantité.")}</label>
+                            <input
+                              type="number"
+                              min="1"
+                              placeholder="1"
+                              value={customDocPieceQty || ''}
+                              onChange={(e) => setCustomDocPieceQty(parseInt(e.target.value) || 0)}
+                              className="focus:outline-none w-full"
+                            />
+                          </div>
+
+                          <div className="md:col-span-2">
+                            <button
+                              type="button"
+                              onClick={handleAddLineItem}
+                              style={customButtonStyle}
+                              className="font-sans w-full"
+                            >
+                              {t("Ajouter")}
+                            </button>
+                          </div>
+
+                        </div>
+
+                        {/* Added items list */}
+                        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                          {docItems.length === 0 ? (
+                            <div style={itemValueStyle} className="p-6 text-center bg-white">
+                              {t("Aucune ligne ajoutée.")}
+                            </div>
+                          ) : (
+                             <table className="w-full text-left text-xs border-collapse font-sans bg-white">
+                              <thead>
+                                <tr className="bg-transparent">
+                                  <th className="px-4 py-3" style={thStyle}>{t("UGS.")}</th>
+                                  <th className="px-4 py-3" style={thStyle}>{t("Pièce.")}</th>
+                                  <th className="px-4 py-3 text-right" style={thStyle}>{t("Unité HT. (€)")}</th>
+                                  <th className="px-4 py-3 text-center w-24" style={thStyle}>{t("Volume.")}</th>
+                                  <th className="px-4 py-3 text-right w-32" style={thStyle}>{t("Total HT. (€)")}</th>
+                                  <th className="px-4 py-3 text-right w-24" style={thStyle}>{t("Action.")}</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 text-slate-650 bg-white">
+                                {docItems.map((item, idx) => {
+                                  const itemUgs = item.ugs || stocks.find(s => s.denominationPieceId === item.variableId)?.ugs || '—';
+                                  return (
+                                    <tr key={idx} className="bg-white font-sans">
+                                      <td className="px-4 py-3.5 font-mono text-xs" style={itemValueStyle}>{itemUgs}</td>
+                                      <td className="px-4 py-3.5" style={itemValueStyle}>{item.nomPiece}</td>
+                                      <td className="px-4 py-3.5 text-right" style={itemValueStyle}>{item.prixVenteHt.toFixed(2)}€</td>
+                                      <td className="px-4 py-3.5 text-center" style={itemValueStyle}>{item.quantite}</td>
+                                      <td className="px-4 py-3.5 text-right" style={itemValueStyle}>
+                                        {(item.prixVenteHt * item.quantite).toFixed(2)}€
+                                      </td>
+                                      <td className="px-4 py-3 text-right bg-white">
+                                        <button
+                                          type="button"
+                                          onClick={() => setDocItems(docItems.filter((_, i) => i !== idx))}
+                                          style={{
+                                            ...rowActionButtonStyle,
+                                            fontSize: '18px',
+                                            padding: '9px 19px',
+                                          }}
+                                          className="cursor-pointer font-sans"
+                                        >
+                                          {t("Supprimer")}
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+
+                        {/* Calculated values summary */}
+                        {docItems.length > 0 && (
+                          <div className="flex justify-end pr-1 pt-2 bg-transparent">
+                            <div className="w-80 border border-slate-200 rounded-2xl p-4 bg-white space-y-2">
+                              <div className="flex justify-between items-center bg-white">
+                                <span style={itemValueStyle}>{t("Total HT. (€)")}</span>
+                                <span style={itemValueStyle}>
+                                  {docItems.reduce((acc, it) => acc + (it.prixVenteHt * it.quantite), 0).toFixed(2)}€
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center bg-white">
+                                <span style={itemValueStyle}>{t("Total TVA. (€)")}</span>
+                                <span style={itemValueStyle}>
+                                  {(docItems.reduce((acc, it) => acc + (it.prixVenteHt * it.quantite), 0) * 0.2).toFixed(2)}€
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center bg-white">
+                                <span style={{ ...itemValueStyle, fontWeight: 'bold' }}>{t("Total TTC. (€)")}</span>
+                                <span style={{ ...itemValueStyle, fontWeight: 'bold' }}>
+                                  {(docItems.reduce((acc, it) => acc + (it.prixVenteHt * it.quantite), 0) * 1.2).toFixed(2)}€
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Textarea Commentaires. */}
+                        <div className="flex flex-col gap-1 bg-white mt-4">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Commentaires.")}</label>
+                          <textarea
+                            value={docCommentaires}
+                            onChange={(e) => setDocCommentaires(e.target.value)}
+                            placeholder={t("Entrez les commentaires...")}
+                            className="focus:outline-none w-full p-3 border border-slate-200 rounded-xl min-h-[100px]"
+                          />
+                        </div>
+
+                        {/* Autre document (Url Source). */}
+                        <div className="flex flex-col gap-1 bg-white mt-4 col-span-1 md:col-span-3">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Autre document (Url Source).")}</label>
+                          <input
+                            type="url"
+                            value={docUrlSource}
+                            onChange={(e) => setDocUrlSource(e.target.value)}
+                            placeholder={t("Entrez l'URL source du document...")}
+                            className="focus:outline-none w-full"
+                          />
+                        </div>
+
+                      </div>
+
+                      {/* Section Bon de commande */}
+                      {docStatus !== 'Brouillon' && (
+                        <div className="border border-slate-200 rounded-2xl p-5 bg-transparent space-y-4 mt-6">
+                          
+                          <div className="flex flex-col gap-2 bg-transparent">
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">
+                              {t("Créer un bon de commande ?")}
+                            </span>
+                            <div className="flex gap-4 mt-1 bg-transparent">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDocHasBonCommande(true);
+                                  if (!docBonCommandeReference) {
+                                    const nextRef = (editingDocId && commercialDocs.find(d => d.id === editingDocId)?.bonCommandeReference) || "";
+                                    if (nextRef) {
+                                      setDocBonCommandeReference(nextRef);
+                                    } else {
+                                      const prefix = 'BL';
+                                      const year = '2026';
+                                      const pattern = new RegExp(`^${prefix}-${year}-(\\d+)$`);
+                                      let maxNum = 0;
+                                      for (const d of commercialDocs) {
+                                        if (d.bonCommandeReference) {
+                                          const match = d.bonCommandeReference.match(pattern);
+                                          if (match) {
+                                            const num = parseInt(match[1], 10);
+                                            if (num > maxNum) {
+                                              maxNum = num;
+                                            }
+                                          }
+                                        }
+                                      }
+                                      setDocBonCommandeReference(`${prefix}-${year}-${maxNum + 1}`);
+                                    }
+                                  }
+                                }}
+                                className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
+                                style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
+                              >
+                                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docHasBonCommande === true ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                  {docHasBonCommande === true && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                </span>
+                                {t("Oui")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDocHasBonCommande(false)}
+                                className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
+                                style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
+                              >
+                                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docHasBonCommande === false ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                  {docHasBonCommande === false && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                </span>
+                                {t("Non")}
+                              </button>
+                            </div>
+                          </div>
+
+                          {docHasBonCommande && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-3 bg-transparent animate-fadeIn">
+                              {/* Entête BC. */}
+                              <div className="flex flex-col gap-1 bg-white col-span-1 md:col-span-3">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Entête BC.")}</label>
+                                <input
+                                  type="text"
+                                  value={docBonCommandeEntete}
+                                  onChange={(e) => setDocBonCommandeEntete(e.target.value)}
+                                  placeholder={t("Entrez l'entête du bon de commande.")}
+                                  className="focus:outline-none w-full animate-fadeIn"
+                                />
+                              </div>
+
+                              {/* Référence */}
+                              <div className="flex flex-col gap-1 bg-white">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Référence BC.")}</label>
+                                <input
+                                  type="text"
+                                  value={docBonCommandeReference}
+                                  disabled
+                                  className="focus:outline-none bg-slate-50 font-mono text-xs cursor-not-allowed"
+                                  placeholder={t("Générée automatiquement...")}
+                                />
+                              </div>
+
+                              {/* Livraison Radio buttons */}
+                              <div className="flex flex-col gap-1 bg-white">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Livraison BC.")}</label>
+                                <div className="flex gap-4 mt-2 bg-transparent">
+                                  <button
+                                    type="button"
+                                    onClick={() => setDocBonCommandeLivraison('Intervention')}
+                                    className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
+                                    style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
+                                  >
+                                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docBonCommandeLivraison === 'Intervention' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                      {docBonCommandeLivraison === 'Intervention' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                    </span>
+                                    {t("Intervention")}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDocBonCommandeLivraison('Transporteur')}
+                                    className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
+                                    style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
+                                  >
+                                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docBonCommandeLivraison === 'Transporteur' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
+                                      {docBonCommandeLivraison === 'Transporteur' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                    </span>
+                                    {t("Transporteur")}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Situation */}
+                              <div className="flex flex-col gap-1 bg-white">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider devis-label-style">{t("Situation BC.")}</label>
+                                <select
+                                  value={docBonCommandeSituation}
+                                  onChange={(e) => setDocBonCommandeSituation(e.target.value as any)}
+                                  className="focus:outline-none"
+                                  required
+                                >
+                                  <option value="Ouvert">{t("Ouvert")}</option>
+                                  <option value="Envoyé Terminé">{t("Envoyé Terminé")}</option>
+                                  <option value="Envoyé Logistique">{t("Envoyé Logistique")}</option>
+                                  <option value="Terminé">{t("Terminé")}</option>
+                                </select>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                    </form>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ======================================= */}
-          {/* STOCKS CENTRALE MODULE */}
+          {/* STOCKS MODULE */}
           {/* ======================================= */}
           {activeTab === 'stocks' && (
             <StocksTab
@@ -9768,18 +12016,24 @@ export default function App() {
               distributedStocks={distributedStocks}
               onNavigateToDistributedStocks={(ugs) => {
                 setDistributedStocksSearchQuery(ugs);
-                rawSetActiveTab('stocks-distribues');
+                setActiveTab('stocks-distribues');
               }}
               stockSearchQuery={stockSearchQuery}
               setStockSearchQuery={setStockSearchQuery}
               commercialDocs={commercialDocs}
               achatsFournisseurs={achatsFournisseurs}
               setActiveTab={setActiveTab}
+              members={members}
+              saveDistributedStocks={saveDistributedStocks}
+              logisticsNotifications={logisticsNotifications}
+              saveLogisticsNotifications={saveLogisticsNotifications}
+              isDeveloper={isDeveloper}
+              isReadOnly={isDeveloper}
             />
           )}
 
           {/* ======================================= */}
-          {/* STOCKS DISTRIBUES MODULE */}
+          {/* STOCKS DISTRIBUÉS MODULE */}
           {/* ======================================= */}
           {activeTab === 'stocks-distribues' && (
             <StocksDistribuesTab
@@ -9794,7 +12048,7 @@ export default function App() {
               setSearchQuery={setDistributedStocksSearchQuery}
               onNavigateToCentraleStocks={(ugs) => {
                 setStockSearchQuery(ugs);
-                rawSetActiveTab('stocks');
+                setActiveTab('stocks');
               }}
             />
           )}
@@ -9811,7 +12065,7 @@ export default function App() {
           )}
 
           {/* ======================================= */}
-          {/* GED MODULE */}
+          {/* GED (DOCUMENT MANAGEMENT) MODULE */}
           {/* ======================================= */}
           {activeTab === 'ged' && (
             <GedTab
@@ -9824,64 +12078,138 @@ export default function App() {
           )}
 
           {/* ======================================= */}
-          {/* SATISFACTION CLIENT MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'satisfaction' && (
-            <SatisfactionTab
-              customerReviews={customerReviews}
-              onUpdateReviews={saveReviews}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* TEMPS & POINTAGE MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'temps' && (
-            <TempsTab
-              pointages={pointages}
-              members={members}
-              onUpdatePointages={savePointages}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* LOCALISATIONS GPS MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'localisations' && (
-            <LocalisationsTab
-              members={members}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* TICKETS DE CAISSE MODULE */}
+          {/* TICKETS CAISSE MODULE */}
           {/* ======================================= */}
           {activeTab === 'tickets' && (
             <TicketsCaisseTab
               expenses={expenses}
-              onUpdateExpenses={saveExpenses}
               members={members}
+              onUpdateExpenses={saveExpenses}
+            />
+          )}
+
+          {activeTab === 'temps' && (
+            <TempsTab
+              pointages={pointages}
+              members={members}
+              onUpdatePointages={(updated) => savePointages(updated)}
             />
           )}
 
           {/* ======================================= */}
-          {/* VEILLES JURIDIQUES & REGLEMENTAIRES */}
+          {/* RELEVÉS DE VEILLE MODULE */}
           {/* ======================================= */}
           {activeTab === 'veilles' && (
             <VeillesTab
               veilles={veilles}
               onDeleteVeille={(id) => {
-                const updated = veilles.filter(v => v.id !== id);
+                const updated = veilles.filter((v) => v.id !== id);
                 saveVeilles(updated);
               }}
             />
           )}
 
           {/* ======================================= */}
-          {/* IMPORT / EXPORT MODULE */}
+          {/* LOCALISATIONS MODULE */}
           {/* ======================================= */}
+          {activeTab === 'localisations' && (
+            <LocalisationsTab members={members} />
+          )}
+
+          {/* ======================================= */}
+          {/* SATISFACTION (CSAT) MODULE */}
+          {/* ======================================= */}
+          {activeTab === 'satisfaction' && (
+            <SatisfactionTab
+              customerReviews={customerReviews}
+              onUpdateReviews={(updated) => saveReviews(updated)}
+            />
+          )}
+
+          {activeTab === 'statistiques' && (
+            <StatsModal
+              isPage={true}
+              isOpen={true}
+              onClose={() => {}}
+              defibrillateurs={defibrillateurs}
+              clients={clients}
+              variables={variables}
+              stocks={stocks}
+              pointages={pointages}
+              customerReviews={customerReviews}
+              fsmTours={fsmTours}
+              generatedReports={generatedReports}
+            />
+          )}
+
+          {activeTab === 'formations' && (
+            <FormationsTab
+              formations={formations}
+              saveFormations={saveFormations}
+              variables={variables}
+              members={members}
+              clients={clients}
+              setActiveTab={setActiveTab}
+              fsmTours={fsmTours}
+              onUpdateFsmTours={saveFsmTours}
+            />
+          )}
+
+          {activeTab === 'stagiaires' && (
+            <StagiairesTab
+              stagiaires={stagiaires}
+              saveStagiaires={saveStagiaires}
+            />
+          )}
+
+          {activeTab === 'emargements' && (
+            <EmargementsTab
+              emargements={emargements}
+              saveEmargements={saveEmargements}
+              formations={formations}
+              stagiaires={stagiaires}
+              members={members}
+              companyInfo={companyInfo}
+            />
+          )}
+
+          {activeTab === 'notifications' && (
+            <NotificationsTab
+              notifications={notifications}
+              onUpdateNotifications={saveNotifications}
+            />
+          )}
+
+          {activeTab === 'parametres' && (
+            <SettingsModal
+              isPage={true}
+              isOpen={true}
+              onClose={() => {}}
+              companyInfo={companyInfo}
+              onUpdateCompanyInfo={handleUpdateCompanyInfo}
+              members={members}
+              onUpdateMembers={handleUpdateMembers}
+              onOpenPublicPortal={() => {
+                setIsPublicPortalOpen(true);
+              }}
+              onOpenClientPortal={() => {
+                setIsClientPortalOpen(true);
+              }}
+              onLogout={handleLogout}
+              currentUser={loggedUser}
+              enableOtherEquipments={enableOtherEquipments}
+              onUpdateOtherEquipments={handleUpdateOtherEquipments}
+              otherEquipments={otherEquipments}
+              onClearOtherEquipments={() => saveOtherEquipments([])}
+              onConnectorsUpdated={loadApiConnectors}
+              onUpdateLocationNames={setLocationNames}
+              isDeveloper={isDeveloper}
+              isReadOnly={isDeveloper}
+            />
+          )}
+
           {activeTab === 'import-export' && (
-            <ImportExportTab
+            <ImportExportTab 
               tenantId={tenantId}
               isFirebaseLoaded={isFirebaseLoaded}
               defibrillateurs={defibrillateurs}
@@ -9899,87 +12227,96 @@ export default function App() {
             />
           )}
 
-          {/* ======================================= */}
-          {/* FORMATIONS MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'formations' && (
-            <FormationsTab
-              formations={formations}
-              saveFormations={saveFormations}
-              variables={variables}
-              members={members}
-              clients={clients}
-              setActiveTab={setActiveTab}
-              fsmTours={fsmTours}
-              onUpdateFsmTours={saveFsmTours}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* STAGIAIRES MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'stagiaires' && (
-            <StagiairesTab
-              stagiaires={stagiaires}
-              saveStagiaires={saveStagiaires}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* EMARGEMENTS MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'emargements' && (
-            <EmargementsTab
-              emargements={emargements}
-              saveEmargements={saveEmargements}
-              formations={formations}
-              stagiaires={stagiaires}
-              members={members}
-              companyInfo={companyInfo}
-            />
-          )}
-
-          {/* ======================================= */}
-          {/* NOTIFICATIONS MODULE */}
-          {/* ======================================= */}
-          {activeTab === 'notifications' && (
-            <NotificationsTab
-              notifications={notifications}
-              onUpdateNotifications={saveNotifications}
-            />
-          )}
         </section>
       </main>
-    </div>
+      </div>
 
-    {/* ======================================= */}
-    {/* SETTINGS MODAL */}
-    {/* ======================================= */}
-    {isSettingsOpen && (
+      {/* Global popups block settings / membres */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         companyInfo={companyInfo}
-        onUpdateCompanyInfo={(info) => {
-          setCompanyInfo(info);
-          saveCollectionToFirestore('companyInfo', info as any, tenantId);
-        }}
+        onUpdateCompanyInfo={handleUpdateCompanyInfo}
         members={members}
         onUpdateMembers={handleUpdateMembers}
-        onOpenPublicPortal={() => setIsPublicPortalOpen(true)}
-        onOpenClientPortal={() => setIsClientPortalOpen(true)}
+        onOpenPublicPortal={() => {
+          setIsPublicPortalOpen(true);
+          setIsSettingsOpen(false);
+        }}
+        onOpenClientPortal={() => {
+          setIsClientPortalOpen(true);
+          setIsSettingsOpen(false);
+        }}
         onLogout={handleLogout}
         currentUser={loggedUser}
         enableOtherEquipments={enableOtherEquipments}
-        onUpdateOtherEquipments={setEnableOtherEquipments}
+        onUpdateOtherEquipments={handleUpdateOtherEquipments}
         otherEquipments={otherEquipments}
+        onClearOtherEquipments={() => saveOtherEquipments([])}
+        onConnectorsUpdated={loadApiConnectors}
+        onUpdateLocationNames={setLocationNames}
+        isDeveloper={isDeveloper}
+        isReadOnly={isDeveloper}
       />
-    )}
 
-    {/* ======================================= */}
-    {/* STATS MODAL */}
-    {/* ======================================= */}
-    {isStatsOpen && (
+      {/* Modal Avisage Tournée */}
+      {avisageConfirmTour && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn">
+          <div
+            className="bg-white p-6 w-full flex flex-col gap-4 text-left"
+            style={{
+              borderRadius: '13px',
+              boxShadow: 'none',
+              textAlign: 'left',
+              maxWidth: '265px',
+            }}
+          >
+            <p
+              className="leading-relaxed"
+              style={{
+                color: '#000',
+                fontSize: '16px',
+                cursor: 'default',
+              }}
+            >
+              Envoyer un email informatif mentionnant la date et le créneau de passage prévu.
+            </p>
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setAvisageConfirmTour(null)}
+                className="font-semibold cursor-pointer outline-none transition-none"
+                style={{
+                  padding: '9px 22px',
+                  color: '#fff',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  background: 'rgb(96, 28, 104)',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExecuteAvisage(avisageConfirmTour)}
+                className="font-semibold cursor-pointer outline-none transition-none"
+                style={{
+                  padding: '9px 22px',
+                  color: '#fff',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  background: 'rgb(96, 28, 104)',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
+              >
+                Envoyer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <StatsModal
         isOpen={isStatsOpen}
         onClose={() => setIsStatsOpen(false)}
@@ -9992,12 +12329,8 @@ export default function App() {
         fsmTours={fsmTours}
         generatedReports={generatedReports}
       />
-    )}
 
-    {/* ======================================= */}
-    {/* FEEDBACK / BUG REPORT DRAWER */}
-    {/* ======================================= */}
-    <FeedbackDrawer companyName={companyInfo.nom} />
-  </div>
-);
+      <FeedbackDrawer companyName={companyInfo?.name} />
+    </div>
+  );
 }
