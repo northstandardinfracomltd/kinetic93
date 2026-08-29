@@ -1,6 +1,6 @@
 {
   "name": "Remix D3F1830",
-  "description": "Logiciel de gestion et suivi des défibrillateurs, clients, et modèles avec export, édition en masse et gestion des rapports.",
+  "description": "Logiciel de gestion et suivi des défibrillateurs, clients, modèles, tournées et gestion des rapports d'intervention.",
   "requestFramePermissions": [
     "camera"
   ],

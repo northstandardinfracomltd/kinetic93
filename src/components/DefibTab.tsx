@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Defibrillateur, Client, Variable, CompanyInfo } from '../types';
 import { t } from '../utils/translate';
 import MapModal from './MapModal';
