@@ -44,6 +44,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Statistiques": "Statistics",
     "Paramètres": "Settings",
     "Chargement de votre environnement...": "Loading your environment...",
+    "Chargement du logiciel Defibeo.": "Loading Defibeo software.",
 
     // General Buttons & Actions
     "Nouveau": "New",
@@ -1348,6 +1349,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Une erreur est survenue lors du calcul de la tournée.": "Bei der Berechnung der Tour ist ein Fehler aufgetreten.",
     "Impossible de déterminer les coordonnées de départ du technicien.": "Startkoordinaten des Technikers konnten nicht ermittelt werden.",
     "Chargement de votre environnement...": "Lade Umgebung...",
+    "Chargement du logiciel Defibeo.": "Laden der Defibeo-Software.",
 
     // General Buttons & Actions
     "Nouveau": "Neu",
@@ -2135,6 +2137,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Une erreur est survenue lors du calcul de la tournée.": "Ocorreu um erro durante o cálculo da rota.",
     "Impossible de déterminer les coordonnées de départ du technicien.": "Não foi possível determinar as coordenadas de partida do técnico.",
     "Chargement de votre environnement...": "A carregar o seu ambiente...",
+    "Chargement du logiciel Defibeo.": "A carregar o software Defibeo.",
 
     // General Buttons & Actions
     "Nouveau": "Novo",
@@ -2923,6 +2926,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Une erreur est survenue lors du calcul de la tournée.": "Ocurreu un error al calcular la ruta.",
     "Impossible de déterminer les coordonnées de départ du technicien.": "No se pudieron determinar las coordenadas de salida del técnico.",
     "Chargement de votre environnement...": "Cargando su entorno...",
+    "Chargement du logiciel Defibeo.": "Cargando el software Defibeo.",
 
     // General Buttons & Actions
     "Nouveau": "Nuevo",
