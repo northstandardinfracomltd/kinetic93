@@ -642,6 +642,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Sélectionnez une tournée": "Select a tour",
     "Nouveau rapport spontané": "New spontaneous report",
     "rapport spontané": "spontaneous report",
+    "Rapport Spontané": "Spontaneous report",
+    "Rapport spontané": "Spontaneous report",
 
     // New Report Form Section Headers
     "Configuration": "Configuration",
