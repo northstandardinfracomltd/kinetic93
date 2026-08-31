@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence } from '../types';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
+import { getActiveTenantCountry, getHolidaysForYear, SupportedCountry } from '../utils/holidays';
 
 export interface SpontaneousEvent {
   id: string;
@@ -95,6 +96,33 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(today.getMonth());
+
+  // Detect active tenant country (France, Belgique, Luxembourg, Monaco, Suisse, Royaume-Uni, Espagne, Portugal)
+  const [activeCountry, setActiveCountry] = useState<SupportedCountry>(() =>
+    getActiveTenantCountry(companyInfo)
+  );
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setActiveCountry(getActiveTenantCountry(companyInfo));
+    };
+    handleUpdate();
+    window.addEventListener('defib_lang_changed', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('defib_lang_changed', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, [companyInfo]);
+
+  // Compute public holidays for current viewed year (& adjacent boundaries)
+  const holidaysMap = useMemo(() => {
+    return {
+      ...getHolidaysForYear(selectedYear - 1, activeCountry),
+      ...getHolidaysForYear(selectedYear, activeCountry),
+      ...getHolidaysForYear(selectedYear + 1, activeCountry),
+    };
+  }, [selectedYear, activeCountry]);
 
   // Mini Form Spontaneous Event states
   const [isSpontaneousFormOpen, setIsSpontaneousFormOpen] = useState<boolean>(false);
@@ -946,6 +974,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                   // Active ongoing tours for this day
                   const dayActiveTours = activeToursByDate[isoDate] || [];
 
+                  // Holiday for this day (if any)
+                  const holidayName = holidaysMap[isoDate];
+
                   return (
                     <div
                       key={isoDate}
@@ -957,10 +988,10 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           : { border: "1px solid rgb(201, 190, 205)", borderRadius: "14px" }
                       }
                     >
-                      {/* Day Circle */}
-                      <div className="flex items-center">
+                      {/* Day Circle & Jour férié */}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div
-                          className="w-12 h-12 flex items-center justify-center font-bold text-[18px]"
+                          className="w-12 h-12 flex items-center justify-center font-bold text-[18px] shrink-0"
                           style={
                             isToday
                               ? { borderRadius: "25px", background: "#FD4EBB", color: "rgb(255, 255, 255)" }
@@ -969,6 +1000,18 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         >
                           {dayNum}
                         </div>
+
+                        {holidayName && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0 select-none"
+                              title={`Jour férié : ${holidayName}`}
+                            >
+                              <span className="shrink-0 whitespace-nowrap">Jour férié :&nbsp;</span>
+                              <span className="truncate whitespace-nowrap">{holidayName}</span>
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Tournée(s) en cours ce jour (sans border/padding/background, texte en rose) */}
