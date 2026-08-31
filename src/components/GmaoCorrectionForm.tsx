@@ -780,7 +780,7 @@ export default function GmaoCorrectionForm({
         if (activeTech && activeTech.name) return activeTech.name;
       }
     } catch (e) {}
-    return isNew ? 'Admin' : 'Technicien connecté';
+    return 'Technicien connecté';
   });
   const [interventionDate, setInterventionDate] = useState(() => {
     if (report?.date) return report.date;
@@ -1258,7 +1258,7 @@ export default function GmaoCorrectionForm({
         datePart = `${day}${month}${year}`;
       }
       const expectedDefault = `${snapshot.identifiant}_${datePart}`;
-      if (!interventionReference && !isNew && !report?.isSpontaneous) {
+      if (!interventionReference) {
         setInterventionReference(expectedDefault);
       }
     }
@@ -1486,44 +1486,9 @@ export default function GmaoCorrectionForm({
     setAiDetectedModel(null);
     if (val.startsWith('OTHER:')) {
       const otherId = val.substring(6);
-      const matchedOther = (otherEquipments || []).find(o => o.id === otherId);
-      if (matchedOther) {
-        if (onSelectOtherEquipment) {
-          onSelectOtherEquipment(matchedOther);
-        } else {
-          setSelectedDefibId(val);
-          setSnapshot({
-            ...DEFAULT_DEFIB,
-            id: matchedOther.id,
-            identifiant: matchedOther.identifiant,
-            numeroSerie: matchedOther.numeroSerie || '',
-            modeleId: matchedOther.modeleId || '',
-            marque: matchedOther.marque || 'Standard',
-            status: matchedOther.status || 'Actif',
-            clientId: matchedOther.clientId || '',
-            nomPrenomSite: matchedOther.nomPrenomSite || '',
-            telephoneSite: matchedOther.telephoneSite || '',
-            emailSite: matchedOther.emailSite || '',
-            numVoie: matchedOther.numVoie || '',
-            ville: matchedOther.ville || '',
-            cp: matchedOther.cp || '',
-            region: matchedOther.region || '',
-            pays: matchedOther.pays || '',
-            latitude: matchedOther.latitude,
-            longitude: matchedOther.longitude,
-            commentaireAdresse: matchedOther.commentaireAdresse || '',
-            contrat: matchedOther.contrat || 'Non',
-            nomContrat: matchedOther.nomContrat || '',
-            referenceContrat: matchedOther.referenceContrat || '',
-            debutContrat: matchedOther.debutContrat || '',
-            finContrat: matchedOther.finContrat || '',
-            acces247: matchedOther.acces247 || 'Oui',
-            accesSemaine: matchedOther.accesSemaine || '',
-            accesWeekend: matchedOther.accesWeekend || '',
-            exterieur: matchedOther.exterieur || 'Non',
-            conforme: 'Oui' as const,
-          });
-        }
+      const matchedOther = otherEquipments.find(o => o.id === otherId);
+      if (matchedOther && onSelectOtherEquipment) {
+        onSelectOtherEquipment(matchedOther);
       }
       return;
     }

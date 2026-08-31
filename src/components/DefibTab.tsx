@@ -3641,6 +3641,21 @@ export default function DefibTab({
                         borderRadius: '13px',
                       }}
                     >
+                      <div className="mb-2 bg-transparent">
+                        <span 
+                          className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                          style={{
+                            backgroundColor: 'oklch(0.44 0.16 324.65)',
+                            borderRadius: '1000px',
+                            cursor: 'default',
+                            fontWeight: 100,
+                            textTransform: 'none',
+                          }}
+                        >
+                          {t("Trousse de secours")}
+                        </span>
+                      </div>
+
                       {/* Péremption de la trousse */}
                       <div className="space-y-1">
                         <label htmlFor="form-peremption-trousse" className="block text-[11px] font-bold text-slate-500 uppercase">

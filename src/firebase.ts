@@ -48,13 +48,13 @@ const PROD_FIREBASE_CONFIG = {
 };
 
 const firebaseConfigOverride = {
-  apiKey: (import.meta as any).env?.VITE_FIREBASE_API_KEY || PROD_FIREBASE_CONFIG.apiKey,
-  authDomain: (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN || PROD_FIREBASE_CONFIG.authDomain,
-  projectId: (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID || PROD_FIREBASE_CONFIG.projectId,
-  storageBucket: (import.meta as any).env?.VITE_FIREBASE_STORAGE_BUCKET || PROD_FIREBASE_CONFIG.storageBucket,
-  messagingSenderId: (import.meta as any).env?.VITE_FIREBASE_MESSAGING_SENDER_ID || PROD_FIREBASE_CONFIG.messagingSenderId,
-  appId: (import.meta as any).env?.VITE_FIREBASE_APP_ID || PROD_FIREBASE_CONFIG.appId,
-  measurementId: (import.meta as any).env?.VITE_FIREBASE_MEASUREMENT_ID || PROD_FIREBASE_CONFIG.measurementId
+  apiKey: (import.meta as any).env?.VITE_FIREBASE_API_KEY || firebaseConfig.apiKey || PROD_FIREBASE_CONFIG.apiKey,
+  authDomain: (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain || PROD_FIREBASE_CONFIG.authDomain,
+  projectId: (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId || PROD_FIREBASE_CONFIG.projectId,
+  storageBucket: (import.meta as any).env?.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket || PROD_FIREBASE_CONFIG.storageBucket,
+  messagingSenderId: (import.meta as any).env?.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId || PROD_FIREBASE_CONFIG.messagingSenderId,
+  appId: (import.meta as any).env?.VITE_FIREBASE_APP_ID || firebaseConfig.appId || PROD_FIREBASE_CONFIG.appId,
+  measurementId: (import.meta as any).env?.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfig.measurementId || PROD_FIREBASE_CONFIG.measurementId
 };
 
 const app = initializeApp(firebaseConfigOverride);
