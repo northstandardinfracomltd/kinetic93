@@ -1,4 +1,5 @@
 // FSM Routing and Schedule Optimizer
+import { isHolidayDate, SupportedCountry } from './holidays';
 
 export interface Coordinate {
   lat: number;
@@ -395,7 +396,8 @@ export function scheduleMissions(
   missions: any[],
   tourStartDate: string,
   equipmentDetails: Record<string, any>,
-  tech?: any
+  tech?: any,
+  country?: SupportedCountry
 ): any[] {
   if (!missions || missions.length === 0) return [];
 
@@ -455,6 +457,15 @@ export function scheduleMissions(
         let assignedStartMinutes = 0;
         let daysChecked = 0;
         while (true) {
+          const isCurrentHoliday = isHolidayDate(currentCursorDate, country).isHoliday;
+          if (isCurrentHoliday) {
+            currentCursorDate = addDays(currentCursorDate, 1);
+            currentCursorMinutes = 0;
+            daysChecked++;
+            if (daysChecked > 365) break;
+            continue;
+          }
+
           let intervals = getOverlappingIntervals(currentCursorDate, eq, tech);
           if (intervals.length === 0 || daysChecked > 30) {
             intervals = [{ start: 480, end: 1080 }];
@@ -468,7 +479,7 @@ export function scheduleMissions(
               break;
             }
           }
-          if (found || daysChecked > 31) break;
+          if (found || daysChecked > 365) break;
           currentCursorDate = addDays(currentCursorDate, 1);
           currentCursorMinutes = 0;
           daysChecked++;
@@ -509,33 +520,36 @@ export function scheduleMissions(
         let candidateDate = new Date(currentCursorDate);
         let foundForward = false;
 
-        while (daysChecked <= 30) {
+        while (daysChecked <= 60) {
           const candDateStr = formatDate(candidateDate);
           if (candDateStr > nextForcedDateStr) break;
 
-          let intervals = getOverlappingIntervals(candidateDate, eq, tech);
-          if (intervals.length === 0) {
-            intervals = [{ start: 480, end: 1080 }];
-          }
+          const isCandHoliday = isHolidayDate(candidateDate, country).isHoliday;
+          if (!isCandHoliday) {
+            let intervals = getOverlappingIntervals(candidateDate, eq, tech);
+            if (intervals.length === 0) {
+              intervals = [{ start: 480, end: 1080 }];
+            }
 
-          for (const interval of intervals) {
-            const candStart = (candDateStr === formatDate(currentCursorDate))
-              ? Math.max(currentCursorMinutes, interval.start)
-              : interval.start;
+            for (const interval of intervals) {
+              const candStart = (candDateStr === formatDate(currentCursorDate))
+                ? Math.max(currentCursorMinutes, interval.start)
+                : interval.start;
 
-            const candEnd = candStart + duration;
+              const candEnd = candStart + duration;
 
-            if (candDateStr < nextForcedDateStr) {
-              if (candEnd <= interval.end) {
-                candidateStartMins = candStart;
-                foundForward = true;
-                break;
-              }
-            } else if (candDateStr === nextForcedDateStr) {
-              if (candEnd <= Math.min(interval.end, nextForcedStartMins)) {
-                candidateStartMins = candStart;
-                foundForward = true;
-                break;
+              if (candDateStr < nextForcedDateStr) {
+                if (candEnd <= interval.end) {
+                  candidateStartMins = candStart;
+                  foundForward = true;
+                  break;
+                }
+              } else if (candDateStr === nextForcedDateStr) {
+                if (candEnd <= Math.min(interval.end, nextForcedStartMins)) {
+                  candidateStartMins = candStart;
+                  foundForward = true;
+                  break;
+                }
               }
             }
           }
@@ -573,7 +587,7 @@ export function scheduleMissions(
             const durK = getMissionDurationInMinutes(mK.reason || '');
 
             let startMinsK = limitMins - durK;
-            if (startMinsK < 480) {
+            while (startMinsK < 480 || isHolidayDate(limitDateObj, country).isHoliday) {
               limitDateObj = addDays(limitDateObj, -1);
               limitMins = 1080;
               startMinsK = limitMins - durK;

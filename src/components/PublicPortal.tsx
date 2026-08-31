@@ -77,6 +77,7 @@ import {
 import { auth } from "../firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions } from "../utils/fsmOptimizer";
+import { getActiveTenantCountry } from "../utils/holidays";
 import { PlanningTab } from "./PlanningTab";
 import HelpBubble from "./HelpBubble";
 import TopBarProgress from "./TopBarProgress";
@@ -1025,11 +1026,13 @@ export default function PublicPortal({
         preference as any
       );
 
+      const activeCountry = getActiveTenantCountry(companyInfo);
       const scheduledMissions = scheduleMissions(
         sortedMissions,
         tour.startDate,
         equipmentDetails,
-        tech
+        tech,
+        activeCountry
       );
 
       const updatedToursList = activeToursSource.map((t: any) => {
@@ -10721,3349 +10724,80 @@ export default function PublicPortal({
                                     appearance: "none",
                                     WebkitAppearance: "none",
                                     MozAppearance: "none",
-                                    backgroundImage: "none",
-                                  }}
-                                >
-                                  <option value="Pr√©paration">Pr√©paration</option>
-                                  <option value="Exp√©di√©">Exp√©di√©</option>
-                                  <option value="Termin√©">Termin√©</option>
-                                  <option value="Annul√©">Annul√©</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 pt-3 bg-transparent font-sans">
-                              <button
-                                type="button"
-                                onClick={() => setShowRapatriementForm(false)}
-                                className="flex-1 py-3 text-white hover:opacity-95 transition-all text-center cursor-pointer border-0"
-                                style={{
-                                  backgroundColor: "#000000",
-                                  borderRadius: "13px",
-                                  fontSize: "18px",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                Annuler
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleConfirmRapatriement}
-                                className="flex-1 py-3 text-white hover:opacity-90 transition-opacity cursor-pointer border-0"
-                                style={{
-                                  backgroundColor: "#fe4eba",
-                                  borderRadius: "13px",
-                                  fontSize: "18px",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                Confirmer
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              )}
-
-              {/* ----------------- TAB 3: TEMPS ----------------- */}
-              {activeTab === "temps" && (
-                <div
-                  className="space-y-6 pb-16 animate-fadeIn"
-                  id="tab-temps-screen"
-                >
-                  <HelpBubble
-                    cacheKey="help_webapp_temps_improvement"
-                    text="Cette page est en cours d'am√©lioration. Un peu de patience : votre onglet sera bient√¥t encore plus intuitif et agr√©able √† utiliser !"
-                  />
-
-                  <style>{`
-                    #tab-temps-screen input[type="date"]::-webkit-calendar-picker-indicator,
-                    #tab-temps-screen input[type="time"]::-webkit-calendar-picker-indicator {
-                      display: none !important;
-                      -webkit-appearance: none !important;
-                      background: none !important;
-                      width: 0 !important;
-                      height: 0 !important;
-                      margin: 0 !important;
-                    }
-                  `}</style>
-
-                  {/* Digital Clock Section */}
-                  <div
-                    style={{ backgroundColor: "#000", color: "#fff" }}
-                    className="p-5 rounded-2xl text-center space-y-2"
-                  >
-                    <span
-                      style={{
-                        fontSize: "18px",
-                        color: "#fff",
-                        fontFamily: "var(--font-sans), sans-serif",
-                      }}
-                      className="font-normal block"
-                    >
-                      {t("Date et heure.")}
-                    </span>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        color: "#fff",
-                        fontFamily: "var(--font-sans), sans-serif",
-                      }}
-                      className="font-bold"
-                    >
-                      {currentTime.toLocaleDateString(
-                        getLanguage() === "English" ? "en-US" : 
-                        getLanguage() === "Deutsch" ? "de-DE" : 
-                        getLanguage() === "Portugu√™s" ? "pt-PT" : 
-                        getLanguage() === "Espa√±ol" ? "es-ES" : "fr-FR"
-                      )}{" "}
-                      -{" "}
-                      {currentTime.toLocaleTimeString(
-                        getLanguage() === "English" ? "en-US" : 
-                        getLanguage() === "Deutsch" ? "de-DE" : 
-                        getLanguage() === "Portugu√™s" ? "pt-PT" : 
-                        getLanguage() === "Espa√±ol" ? "es-ES" : "fr-FR"
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Period control button */}
-                  {(() => {
-                    const activePointage = pointages.find(
-                      (p) =>
-                        p.isOngoing && p.techName === authenticatedUser?.name,
-                    );
-                    const isTracking = !!activePointage;
-
-                    return (
-                      <div className="space-y-4">
-                        <button
-                          type="button"
-                          onClick={handleTogglePointage}
-                          style={{
-                            backgroundColor: isTracking ? "#dc2626" : "rgb(39, 78, 255)",
-                            color: "#fff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                            borderRadius: "13px",
-                            padding: "14px 20px",
-                            border: "none",
-                            boxShadow: isTracking
-                              ? "none"
-                              : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                            cursor: "pointer",
-                            width: "100%",
-                          }}
-                          className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-                        >
-                          {isTracking ? (
-                            <span>{t("Terminer le pointage")}</span>
-                          ) : (
-                            <span>{t("D√©marrer la p√©riode")}</span>
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Pointages registered log list */}
-                  <div className="space-y-4">
-                    {pointages
-                      .filter((p) => p.techName === authenticatedUser?.name)
-                      .map((p) => {
-                        const liveHHMM =
-                          String(currentTime.getHours()).padStart(2, "0") +
-                          ":" +
-                          String(currentTime.getMinutes()).padStart(2, "0");
-                        const startTime = p.startTime || "00:00";
-                        const endTime = p.isOngoing
-                          ? p.endTime || liveHHMM
-                          : p.endTime || "00:00";
-
-                        const sMins = timeToMins(startTime);
-                        const eMins = timeToMins(endTime);
-                        const ampMins = Math.max(0, eMins - sMins);
-                        const ampFormatted = minsToHHMM(ampMins);
-
-                        const trajetMatinMins = timeToMins(p.trajetMatin);
-                        const trajetSoirMins = timeToMins(p.trajetSoir);
-                        const trajetJourneeMins = trajetMatinMins + trajetSoirMins;
-                        const trajetJourneeFormatted = minsToHHMM(trajetJourneeMins);
-
-                        const repasMins = timeToMins(p.tempsRepas);
-
-                        const cttAmpMins = Math.max(
-                          0,
-                          ampMins - repasMins - trajetJourneeMins,
-                        );
-                        const cttAmpFormatted = minsToHHMM(cttAmpMins);
-
-                        const isExpanded = !!expandedPointageIds[p.id];
-
-                        return (
-                          <div
-                            key={p.id}
-                            className="p-4 sm:p-5 rounded-[16px] space-y-4 bg-white shadow-xs"
-                            style={{
-                              border: "1px solid rgb(201, 190, 205)",
-                            }}
-                            id={`pointage-card-${p.id}`}
-                          >
-                            {/* Card Header Badge / Gelule */}
-                            <div className="flex items-center justify-between pb-1">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  style={{
-                                    color: "#fff",
-                                    background: "#000",
-                                    border: "none",
-                                    fontSize: "18px",
-                                    padding: "8px 16px",
-                                    borderRadius: "9999px",
-                                  }}
-                                  className="font-bold inline-block"
-                                >
-                                  {p.isOngoing ? t("Pointage en cours") : t("Pointage termin√©")}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Main Fields Grid */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                              {/* Date Journ√©e. (Always visible) */}
-                              <div className="space-y-1">
-                                <label
-                                  style={{ fontSize: "16px", color: "#000000" }}
-                                  className="block font-bold"
-                                >
-                                  {t("Date Journ√©e.")}
-                                </label>
-                                <input
-                                  type="date"
-                                  value={getIsoDate(p.startDate)}
-                                  style={{
-                                    fontSize: "18px",
-                                    padding: "14px",
-                                    borderRadius: "13px",
-                                    border: "1px solid rgb(201, 191, 205)",
-                                    outline: "none",
-                                    color: "rgb(0, 0, 0)",
-                                    backgroundColor: "#ffffff",
-                                  }}
-                                  className="w-full"
-                                  onChange={(e) =>
-                                    handleEditPointageField(p.id, {
-                                      startDate: getFrenchDate(e.target.value),
-                                    })
-                                  }
-                                />
-                              </div>
-
-                              {isExpanded && (
-                                <>
-                                  {/* D√©but Journ√©e. */}
-                                  <div className="space-y-1">
-                                    <label
-                                      style={{ fontSize: "16px", color: "#000000" }}
-                                      className="block font-bold"
-                                    >
-                                      {t("D√©but Journ√©e.")}
-                                    </label>
-                                    <input
-                                      type="time"
-                                      value={p.startTime}
-                                      style={{
-                                        fontSize: "18px",
-                                        padding: "14px",
-                                        borderRadius: "13px",
-                                        border: "1px solid rgb(201, 191, 205)",
-                                        outline: "none",
-                                        color: "rgb(0, 0, 0)",
-                                        backgroundColor: "#ffffff",
-                                      }}
-                                      className="w-full"
-                                      onChange={(e) =>
-                                        handleEditPointageField(p.id, {
-                                          startTime: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-
-                                  {/* Fin Journ√©e. */}
-                                  <div className="space-y-1">
-                                    <label
-                                      style={{ fontSize: "16px", color: "#000000" }}
-                                      className="block font-bold"
-                                    >
-                                      {t("Fin Journ√©e.")}
-                                    </label>
-                                    <input
-                                      type="time"
-                                      value={endTime}
-                                      style={{
-                                        fontSize: "18px",
-                                        padding: "14px",
-                                        borderRadius: "13px",
-                                        border: "1px solid rgb(201, 191, 205)",
-                                        outline: "none",
-                                        color: "rgb(0, 0, 0)",
-                                        backgroundColor: "#ffffff",
-                                      }}
-                                      className="w-full"
-                                      onChange={(e) =>
-                                        handleEditPointageField(p.id, {
-                                          endTime: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-
-                                  {/* Amplitude Journ√©e. (Disabled) */}
-                                  <div className="space-y-1">
-                                    <label
-                                      style={{ fontSize: "16px", color: "#000000" }}
-                                      className="block font-bold"
-                                    >
-                                      {t("Amplitude Journ√©e.")}
-                                    </label>
-                                    <input
-                                      type="text"
-                                      disabled
-                                      readOnly
-                                      value={ampFormatted}
-                                      style={{
-                                        fontSize: "18px",
-                                        padding: "14px",
-                                        borderRadius: "13px",
-                                        border: "1px solid rgb(201, 191, 205)",
-                                        outline: "none",
-                                        color: "rgb(0, 0, 0)",
-                                        backgroundColor: "#e2d9e6",
-                                      }}
-                                      className="w-full cursor-not-allowed"
-                                    />
-                                  </div>
-
-                                  {/* Commentaire Journ√©e. */}
-                                  <div className="space-y-1 sm:col-span-2 lg:col-span-2">
-                                    <label
-                                      style={{ fontSize: "16px", color: "#000000" }}
-                                      className="block font-bold"
-                                    >
-                                      {t("Commentaire Journ√©e.")}
-                                    </label>
-                                    <input
-                                      type="text"
-                                      maxLength={100}
-                                      placeholder={t("Entrez un commentaire.")}
-                                      value={p.comment || ""}
-                                      style={{
-                                        fontSize: "18px",
-                                        padding: "14px",
-                                        borderRadius: "13px",
-                                        border: "1px solid rgb(201, 191, 205)",
-                                        outline: "none",
-                                        color: "rgb(0, 0, 0)",
-                                        backgroundColor: "#ffffff",
-                                      }}
-                                      className="w-full"
-                                      onChange={(e) =>
-                                        handleEditPointageField(p.id, {
-                                          comment: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                </>
-                              )}
-                            </div>
-
-                            {/* Full-width Toggle Button: D√©rouler / R√©duire */}
-                            <button
-                              type="button"
-                              onClick={() => togglePointageExpanded(p.id)}
-                              style={{
-                                color: "#fff",
-                                boxShadow:
-                                  "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                                backgroundColor: "rgb(39, 78, 255)",
-                                borderRadius: "13px",
-                                padding: "10px 18px",
-                                fontSize: "18px",
-                                fontWeight: 700,
-                                border: "none",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: "6px",
-                                width: "100%",
-                              }}
-                              className="w-full shrink-0 select-none transition-all active:scale-[0.99]"
-                            >
-                              {isExpanded ? t("R√©duire") : t("D√©rouler")}
-                            </button>
-
-                            {/* Expanded Details */}
-                            {isExpanded && (
-                              <div className="space-y-4 pt-1">
-                                {/* Section Title : ¬´ Trajet ¬ª */}
-                                <div className="space-y-3 pt-1">
-                                  <h4
-                                    style={{ fontSize: "18px", color: "#000000" }}
-                                    className="font-bold"
-                                  >
-                                    {t("Trajet")}
-                                  </h4>
-                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    {/* Temps Trajet Matin. */}
-                                    <div className="space-y-1">
-                                      <label
-                                        style={{ fontSize: "16px", color: "#000000" }}
-                                        className="block font-bold"
-                                      >
-                                        {t("Temps Trajet Matin.")}
-                                      </label>
-                                      <input
-                                        type="text"
-                                        placeholder="00:00"
-                                        value={p.trajetMatin ?? "00:00"}
-                                        style={{
-                                          fontSize: "18px",
-                                          padding: "14px",
-                                          borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
-                                          outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#ffffff",
-                                        }}
-                                        className="w-full"
-                                        onChange={(e) =>
-                                          handleEditPointageField(p.id, {
-                                            trajetMatin: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-
-                                    {/* Temps Trajet Soir. */}
-                                    <div className="space-y-1">
-                                      <label
-                                        style={{ fontSize: "16px", color: "#000000" }}
-                                        className="block font-bold"
-                                      >
-                                        {t("Temps Trajet Soir.")}
-                                      </label>
-                                      <input
-                                        type="text"
-                                        placeholder="00:00"
-                                        value={p.trajetSoir ?? "00:00"}
-                                        style={{
-                                          fontSize: "18px",
-                                          padding: "14px",
-                                          borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
-                                          outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#ffffff",
-                                        }}
-                                        className="w-full"
-                                        onChange={(e) =>
-                                          handleEditPointageField(p.id, {
-                                            trajetSoir: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-
-                                    {/* Temps Trajet Journ√©e. (Disabled) */}
-                                    <div className="space-y-1">
-                                      <label
-                                        style={{ fontSize: "16px", color: "#000000" }}
-                                        className="block font-bold"
-                                      >
-                                        {t("Temps Trajet Journ√©e.")}
-                                      </label>
-                                      <input
-                                        type="text"
-                                        disabled
-                                        readOnly
-                                        value={trajetJourneeFormatted}
-                                        style={{
-                                          fontSize: "18px",
-                                          padding: "14px",
-                                          borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
-                                          outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#e2d9e6",
-                                        }}
-                                        className="w-full cursor-not-allowed"
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Section Title : ¬´ Repas ¬ª */}
-                                <div className="space-y-3 pt-1">
-                                  <h4
-                                    style={{ fontSize: "18px", color: "#000000" }}
-                                    className="font-bold"
-                                  >
-                                    {t("Repas")}
-                                  </h4>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {/* Temps de repas. */}
-                                    <div className="space-y-1">
-                                      <label
-                                        style={{ fontSize: "16px", color: "#000000" }}
-                                        className="block font-bold"
-                                      >
-                                        {t("Temps de repas.")}
-                                      </label>
-                                      <input
-                                        type="text"
-                                        placeholder="00:00"
-                                        value={p.tempsRepas ?? "00:00"}
-                                        style={{
-                                          fontSize: "18px",
-                                          padding: "14px",
-                                          borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
-                                          outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#ffffff",
-                                        }}
-                                        className="w-full"
-                                        onChange={(e) =>
-                                          handleEditPointageField(p.id, {
-                                            tempsRepas: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Title : ¬´ CTT ¬ª */}
-                                <div className="space-y-3 pt-1">
-                                  <h4
-                                    style={{ fontSize: "18px", color: "#000000" }}
-                                    className="font-bold"
-                                  >
-                                    {t("CTT")}
-                                  </h4>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {/* Amplitude Journ√©e. (Disabled under CTT) */}
-                                    <div className="space-y-1">
-                                      <label
-                                        style={{ fontSize: "16px", color: "#000000" }}
-                                        className="block font-bold"
-                                      >
-                                        {t("Amplitude Journ√©e.")}
-                                      </label>
-                                      <input
-                                        type="text"
-                                        disabled
-                                        readOnly
-                                        value={cttAmpFormatted}
-                                        style={{
-                                          fontSize: "18px",
-                                          padding: "14px",
-                                          borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
-                                          outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#e2d9e6",
-                                        }}
-                                        className="w-full cursor-not-allowed"
-                                      />
-                                    </div>
-
-                                    {/* Temps Administratif/Autres. */}
-                                    <div className="space-y-1">
-                                      <label
-                                        style={{ fontSize: "16px", color: "#000000" }}
-                                        className="block font-bold"
-                                      >
-                                        {t("Temps Administratif/Autres.")}
-                                      </label>
-                                      <input
-                                        type="text"
-                                        placeholder="00:00"
-                                        value={p.tempsAdmin ?? "00:00"}
-                                        style={{
-                                          fontSize: "18px",
-                                          padding: "14px",
-                                          borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
-                                          outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#ffffff",
-                                        }}
-                                        className="w-full"
-                                        onChange={(e) =>
-                                          handleEditPointageField(p.id, {
-                                            tempsAdmin: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Card Buttons: Supprimer & Enregistrer */}
-                                <div className="flex items-center gap-3 pt-3 w-full">
-                                  <button
-                                    type="button"
-                                    disabled={p.isOngoing}
-                                    onClick={() => {
-                                      if (
-                                        window.confirm(
-                                          "√ätes-vous s√ªr de vouloir supprimer ce pointage ?"
-                                        )
-                                      ) {
-                                        if (
-                                          window.confirm(
-                                            "Confirmation d√©finitive : √ätes-vous vraiment s√ªr de vouloir supprimer ce pointage ?"
-                                          )
-                                        ) {
-                                          handleDeletePointage(p.id);
-                                        }
-                                      }
-                                    }}
-                                    style={{
-                                      backgroundColor: p.isOngoing ? "#9ca3af" : "#dc2626",
-                                      color: "#ffffff",
-                                      fontSize: "18px",
-                                      fontWeight: "bold",
-                                      borderRadius: "13px",
-                                      padding: "12px 18px",
-                                      border: "none",
-                                      cursor: p.isOngoing ? "not-allowed" : "pointer",
-                                      opacity: p.isOngoing ? 0.5 : 1,
-                                      flex: 1,
-                                    }}
-                                    className="transition-all font-bold"
-                                  >
-                                    Supprimer
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      alert("Pointage enregistr√© avec succ√®s.")
-                                    }
-                                    style={{
-                                      backgroundColor: "#000000",
-                                      color: "#ffffff",
-                                      fontSize: "18px",
-                                      fontWeight: "bold",
-                                      borderRadius: "13px",
-                                      padding: "12px 18px",
-                                      border: "none",
-                                      cursor: "pointer",
-                                      flex: 1,
-                                    }}
-                                    className="hover:opacity-90 transition-all font-bold"
-                                  >
-                                    Enregistrer
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-
-              {/* ----------------- TAB 4: FRAIS ----------------- */}
-              {activeTab === "frais" && !isFraisHidden && (
-                <div
-                  className="space-y-6 pb-16 animate-fadeIn"
-                  id="tab-frais-screen"
-                >
-                  <style>{`
-                    #tab-frais-screen input,
-                    #tab-frais-screen label,
-                    #tab-frais-screen input::placeholder {
-                      font-family: var(--font-sans), "Civilprom", "DefibeoMain", sans-serif !important;
-                    }
-                  `}</style>
-
-                  {/* Ticket addition Form */}
-                  <form
-                    onSubmit={handleSaveExpense}
-                    className="space-y-5 bg-white p-0 rounded-2xl"
-                    id="auth-main-card"
-                    style={{
-                      border: "none",
-                      padding: "0px",
-                      boxShadow: "none",
-                    }}
-                  >
-                    <div className="space-y-4">
-                      {/* Title */}
-                      <div className="space-y-1.5">
-                        <label
-                          style={{ fontSize: "18px" }}
-                          className="block font-bold text-black select-none"
-                        >
-                          Objet.
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          maxLength={15}
-                          value={expenseTitle}
-                          onChange={(e) => setExpenseTitle(e.target.value)}
-                          placeholder="Entrez une raison."
-                          style={{
-                            fontSize: "18px",
-                            padding: "14px",
-                            borderRadius: "13px",
-                            border: "1px solid rgb(201, 191, 205)",
-                            outline: "none",
-                            color: "rgb(0, 0, 0)",
-                          }}
-                          className="w-full bg-white"
-                        />
-                      </div>
-
-                      {/* Amounts Grid */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <label
-                            style={{ fontSize: "18px" }}
-                            className="block font-bold text-black select-none"
-                          >
-                            Total TTC. (‚Ç¨) *
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            required
-                            value={expenseTtc}
-                            onChange={(e) => handleTtcChange(e.target.value)}
-                            placeholder="0.00"
-                            style={{
-                              fontSize: "18px",
-                              padding: "14px",
-                              borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
-                              outline: "none",
-                              color: "rgb(0, 0, 0)",
-                            }}
-                            className="w-full bg-white text-black font-bold"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label
-                            style={{ fontSize: "18px" }}
-                            className="block font-bold text-black select-none"
-                          >
-                            Total HT. (‚Ç¨)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={expenseHt}
-                            onChange={(e) => handleHtChange(e.target.value)}
-                            placeholder="0.00"
-                            style={{
-                              fontSize: "18px",
-                              padding: "14px",
-                              borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
-                              outline: "none",
-                              color: "rgb(0, 0, 0)",
-                            }}
-                            className="w-full bg-white text-black"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <label
-                            style={{ fontSize: "18px" }}
-                            className="block font-bold text-black select-none"
-                          >
-                            Total TVA. (‚Ç¨)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={expenseTva}
-                            onChange={(e) => setExpenseTva(e.target.value)}
-                            placeholder="0.00"
-                            style={{
-                              fontSize: "18px",
-                              padding: "14px",
-                              borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
-                              outline: "none",
-                              color: "rgb(0, 0, 0)",
-                            }}
-                            className="w-full bg-white text-black"
-                          />
-                        </div>
-
-                        {/* Date */}
-                        <div className="space-y-1.5">
-                          <label
-                            style={{ fontSize: "18px" }}
-                            className="block font-bold text-black select-none"
-                          >
-                            Date du paiement.
-                          </label>
-                          <input
-                            type="text"
-                            value={expenseDate}
-                            onChange={(e) => setExpenseDate(e.target.value)}
-                            placeholder={new Date().toISOString().split("T")[0]}
-                            style={{
-                              fontSize: "18px",
-                              padding: "14px",
-                              borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
-                              outline: "none",
-                              color: "rgb(0, 0, 0)",
-                            }}
-                            className="w-full bg-white"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Photo select */}
-                      <div className="space-y-1.5">
-                        <label
-                          style={{ fontSize: "18px" }}
-                          className="block font-bold text-black select-none"
-                        >
-                          Photographie ou fichier.
-                        </label>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              expensePhotoInputRef.current?.click()
-                            }
-                            style={{
-                              backgroundColor: "#000000",
-                              color: "#fff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                              borderRadius: "12px",
-                              padding: "9px 18px",
-                              border: "none",
-                              boxShadow:
-                                "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset",
-                              cursor: "pointer",
-                            }}
-                            className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold"
-                          >
-                            <span>S√©lectionner</span>
-                          </button>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            ref={expensePhotoInputRef}
-                            onChange={(e) =>
-                              triggerPhotoRead(e, setExpensePhotoUrl)
-                            }
-                            className="hidden"
-                          />
-                          {expensePhotoUrl && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setExpensePhotoUrl("")}
-                                style={{
-                                  backgroundColor: "#dc2626",
-                                  color: "#fff",
-                                  fontSize: "18px",
-                                  fontWeight: "bold",
-                                  borderRadius: "12px",
-                                  padding: "9px 18px",
-                                  border: "none",
-                                  boxShadow:
-                                    "inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f",
-                                  cursor: "pointer",
-                                }}
-                                className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold"
-                              >
-                                Supprimer
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      style={{
-                        backgroundColor: "rgb(53, 86, 236)",
-                        color: "#fff",
-                        fontSize: "18px",
-                        fontWeight: "bold",
-                        borderRadius: "12px",
-                        padding: "14px 20px",
-                        border: "none",
-                        boxShadow:
-                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                        cursor: "pointer",
-                        width: "100%",
-                      }}
-                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold"
-                    >
-                      <span>Enregistrer</span>
-                    </button>
-
-                    {expenseSuccessMessage && (
-                      <div
-                        style={{
-                          border: "none",
-                          borderRadius: "13px",
-                          fontSize: "18px",
-                          backgroundColor: "#fde5ff",
-                          color: "#a354aa",
-                          padding: "14px",
-                          textAlign: "center",
-                          fontWeight: "normal",
-                          marginTop: "12px",
-                          fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
-                        }}
-                        className="animate-fadeIn"
-                      >
-                        {expenseSuccessMessage}
-                      </div>
-                    )}
-                  </form>
-                </div>
-              )}
-
-              {/* ----------------- TAB: VEILLE ----------------- */}
-              {activeTab === "veille" && (
-                <div
-                  className="space-y-6 pb-16 animate-fadeIn"
-                  id="tab-veille-screen"
-                >
-                  <HelpBubble
-                    cacheKey="help_webapp_veille_improvement"
-                    text="Cette page est en cours d'am√©lioration. Un peu de patience : votre onglet sera bient√¥t encore plus intuitif et agr√©able √† utiliser !"
-                  />
-
-                  <style>{`
-                    #tab-veille-screen input,
-                    #tab-veille-screen textarea,
-                    #tab-veille-screen label,
-                    #tab-veille-screen input::placeholder,
-                    #tab-veille-screen textarea::placeholder {
-                      font-family: var(--font-sans), "Civilprom", "DefibeoMain", sans-serif !important;
-                    }
-                    #tab-veille-screen input::placeholder,
-                    #tab-veille-screen textarea::placeholder {
-                      font-size: 18px !important;
-                    }
-                    #tab-veille-screen input[type="date"]::-webkit-calendar-picker-indicator {
-                      display: none !important;
-                      -webkit-appearance: none !important;
-                    }
-                  `}</style>
-
-                  <form
-                    onSubmit={handleAddVeille}
-                    className="space-y-5"
-                    style={{
-                      border: "none",
-                      padding: "0",
-                      background: "transparent",
-                      boxShadow: "none",
-                    }}
-                    id="veille-main-card"
-                  >
-                    {/* Commune */}
-                    <div className="space-y-2">
-                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
-                        Commune ou Entreprise.
-                      </label>
-                      <input
-                        type="text"
-                        value={veilleCommune}
-                        onChange={(e) => setVeilleCommune(e.target.value)}
-                        placeholder="Entrez une d√©nomination."
-                        required
-                        style={{
-                          fontSize: "18px",
-                          padding: "14px",
-                          borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
-                          outline: "none",
-                          color: "rgb(0, 0, 0)",
-                          backgroundColor: "transparent",
-                        }}
-                        className="w-full text-black"
-                      />
-                    </div>
-
-                    {/* Volume */}
-                    <div className="space-y-2">
-                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
-                        Volume (Chiffre).
-                      </label>
-                      <input
-                        type="number"
-                        value={veilleVolume}
-                        onChange={(e) => setVeilleVolume(e.target.value)}
-                        placeholder="Entrez un volume."
-                        required
-                        style={{
-                          fontSize: "18px",
-                          padding: "14px",
-                          borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
-                          outline: "none",
-                          color: "rgb(0, 0, 0)",
-                          backgroundColor: "transparent",
-                        }}
-                        className="w-full text-black"
-                      />
-                    </div>
-
-                    {/* Mainteneur Actuel */}
-                    <div className="space-y-2">
-                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
-                        Mainteneur actuel.
-                      </label>
-                      <input
-                        type="text"
-                        value={veilleMainteneur}
-                        onChange={(e) => setVeilleMainteneur(e.target.value)}
-                        placeholder="Entrez un mainteneur actuel."
-                        required
-                        style={{
-                          fontSize: "18px",
-                          padding: "14px",
-                          borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
-                          outline: "none",
-                          color: "rgb(0, 0, 0)",
-                          backgroundColor: "transparent",
-                        }}
-                        className="w-full text-black"
-                      />
-                    </div>
-
-                    {/* Prochaine maintenance */}
-                    <div className="space-y-2">
-                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
-                        Prochaine maintenance.
-                      </label>
-                      <input
-                        type="date"
-                        value={veilleProchaine}
-                        onChange={(e) => setVeilleProchaine(e.target.value)}
-                        placeholder="jj/mm/aaaa"
-                        required
-                        style={{
-                          fontSize: "18px",
-                          padding: "14px",
-                          borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
-                          outline: "none",
-                          color: "rgb(0, 0, 0)",
-                          backgroundColor: "transparent",
-                        }}
-                        className="w-full text-black"
-                      />
-                    </div>
-
-                    {/* Contact Nom/Pr√©nom */}
-                    <div className="space-y-2">
-                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
-                        Contact Nom/Pr√©nom.
-                      </label>
-                      <input
-                        type="text"
-                        value={veilleContactNom}
-                        onChange={(e) => setVeilleContactNom(e.target.value)}
-                        placeholder="Entrez un nom et pr√©nom."
-                        required
-                        style={{
-                          fontSize: "18px",
-                          padding: "14px",
-                          borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
-                          outline: "none",
-                          color: "rgb(0, 0, 0)",
-                          backgroundColor: "transparent",
-                        }}
-                        className="w-full text-black"
-                      />
-                    </div>
-
-                    {/* Contact Email */}
-                    <div className="space-y-2">
-                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
-                        Contact Email.
-                      </label>
-                      <input
-                        type="email"
-                        value={veilleContactEmail}
-                        onChange={(e) => setVeilleContactEmail(e.target.value)}
-                        placeholder="Entrez un email."
-                        required
-                        style={{
-                          fontSize: "18px",
-                          padding: "14px",
-                          borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
-                          outline: "none",
-                          color: "rgb(0, 0, 0)",
-                          backgroundColor: "transparent",
-                        }}
-                        className="w-full text-black"
-                      />
-                    </div>
-
-                    {/* Contact T√©l√©phone */}
-                    <div className="space-y-2">
-                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
-                        Contact T√©l√©phone.
-                      </label>
-                      <input
-                        type="tel"
-                        value={veilleContactTel}
-                        onChange={(e) => setVeilleContactTel(e.target.value)}
-                        placeholder="Entrez un t√©l√©phone."
-                        required
-                        style={{
-                          fontSize: "18px",
-                          padding: "14px",
-                          borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
-                          outline: "none",
-                          color: "rgb(0, 0, 0)",
-                          backgroundColor: "transparent",
-                        }}
-                        className="w-full text-black"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      style={{
-                        backgroundColor: "rgb(53, 86, 236)",
-                        color: "#fff",
-                        fontSize: "18px",
-                        fontWeight: "bold",
-                        borderRadius: "12px",
-                        padding: "14px 20px",
-                        border: "none",
-                        boxShadow:
-                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                        cursor: "pointer",
-                        width: "100%",
-                      }}
-                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold mt-4"
-                    >
-                      <span>Enregistrer</span>
-                    </button>
-
-                    {veilleSuccessMessage && (
-                      <div
-                        style={{
-                          border: "none",
-                          borderRadius: "13px",
-                          fontSize: "18px",
-                          backgroundColor: "#fde5ff",
-                          color: "#a354aa",
-                          padding: "14px",
-                          textAlign: "center",
-                          fontWeight: "normal",
-                          marginTop: "12px",
-                          fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
-                        }}
-                        className="animate-fadeIn"
-                      >
-                        {veilleSuccessMessage}
-                      </div>
-                    )}
-                  </form>
-                </div>
-              )}
-
-              {/* ----------------- TAB 5: LOCALISATION ----------------- */}
-              {activeTab === "localisation" && (
-                <div
-                  className="space-y-6 pb-16 animate-fadeIn"
-                  id="tab-localisation-screen"
-                >
-                  {/* Nom du logiciel / Entreprise - Credit Card Banner Header (Recto / Verso) */}
-                  <div
-                    className="select-none"
-                    style={{
-                      width: "100%",
-                      maxWidth: "340px",
-                      aspectRatio: "85.6 / 53.98",
-                      margin: "15px auto 25px",
-                      perspective: "1000px",
-                      cursor: "pointer",
-                      touchAction: "manipulation",
-                    }}
-                    onClick={() => setIsSettingsCardFlipped((prev) => !prev)}
-                    title="Toucher pour retourner la carte"
-                  >
-                    <div
-                      style={{
-                        position: "relative",
-                        width: "100%",
-                        height: "100%",
-                        transformStyle: "preserve-3d",
-                        transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-                        transform: isSettingsCardFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-                      }}
-                    >
-                      {/* RECTO (Front of the card) */}
-                      <div
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
-                          borderRadius: "16px",
-                          overflow: "hidden",
-                          backfaceVisibility: "hidden",
-                          WebkitBackfaceVisibility: "hidden",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: "16px",
-                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.1)",
-                        }}
-                      >
-                        {/* Encoche sur le flan gauche avec filtre plus sombre pour contraster */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: "-10px",
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            width: "28px",
-                            height: "36px",
-                            backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
-                            filter: "brightness(0.72)",
-                            borderRadius: "0px 25px 25px 0px",
-                            zIndex: 10,
-                          }}
-                        />
-
-                        {/* Logo Top Right */}
-                        <img
-                          src="https://datacenter64000pau.s3.eu-north-1.amazonaws.com/Defibeo_2026_Logo2.svg"
-                          alt="Logo"
-                          style={{
-                            position: "absolute",
-                            top: "2px",
-                            right: "16px",
-                            height: "46px",
-                            width: "auto",
-                            objectFit: "contain",
-                          }}
-                        />
-
-                        {/* Technicien Bottom Left */}
-                        {authenticatedUser?.name && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              bottom: "12px",
-                              left: "18px",
-                              color: "rgba(255, 255, 255, 0.95)",
-                              fontSize: "15px",
-                              fontWeight: "600",
-                              fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
-                            }}
-                          >
-                            {authenticatedUser.name}
-                          </div>
-                        )}
-
-                        {/* Nom du logiciel / Entreprise au centre */}
-                        <div
-                          style={{
-                            color: "rgb(255, 255, 255)",
-                            fontSize: "20px",
-                            textAlign: "center",
-                            fontFamily: 'var(--font-sans), "DefibeoMain", "Civilprom", sans-serif',
-                            fontWeight: "bold",
-                          }}
-                          className="tracking-wide w-full px-6"
-                        >
-                          {((companyInfo.nomLogiciel || companyInfo.name || "Defibeo")).length > 25
-                            ? (companyInfo.nomLogiciel || companyInfo.name || "Defibeo").substring(0, 25) + "..."
-                            : (companyInfo.nomLogiciel || companyInfo.name || "Defibeo")}
-                        </div>
-                      </div>
-
-                      {/* VERSO (Back of the card) */}
-                      <div
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
-                          borderRadius: "16px",
-                          overflow: "hidden",
-                          backfaceVisibility: "hidden",
-                          WebkitBackfaceVisibility: "hidden",
-                          transform: "rotateY(180deg)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: "20px",
-                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.1)",
-                        }}
-                      >
-                        {/* Encoche sur le flan oppos√© au verso pour continuit√© g√©om√©trique */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            right: "-10px",
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            width: "28px",
-                            height: "36px",
-                            backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
-                            filter: "brightness(0.72)",
-                            borderRadius: "25px 0px 0px 25px",
-                            zIndex: 10,
-                          }}
-                        />
-
-                        {/* Logo Defibeo Centr√© au verso */}
-                        <img
-                          src="https://datacenter64000pau.s3.eu-north-1.amazonaws.com/Defibeo_2026_Logo2.svg"
-                          alt="Defibeo Logo"
-                          style={{
-                            maxHeight: "60px",
-                            maxWidth: "60%",
-                            width: "auto",
-                            height: "auto",
-                            objectFit: "contain",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <style>{`
-                    #tab-localisation-screen input,
-                    #tab-localisation-screen select,
-                    #tab-localisation-screen label,
-                    #tab-localisation-screen input::placeholder {
-                      font-family: var(--font-sans), "Civilprom", "DefibeoMain", sans-serif !important;
-                    }
-                    #tab-localisation-screen input::placeholder {
-                      font-size: 18px !important;
-                      color: #9ca3af !important;
-                    }
-                  `}</style>
-                  <form
-                    onSubmit={handleSaveLocalisation}
-                    className="space-y-5"
-                    style={{
-                      border: "none",
-                      padding: "0",
-                      background: "transparent",
-                      boxShadow: "none",
-                    }}
-                    id="auth-main-card"
-                  >
-                    <div className="space-y-4">
-                      {/* Toggle Masquer le pointage */}
-                      <div className="space-y-1.5" style={{ marginTop: "24px" }}>
-                        <div
-                          className="bg-white border px-4 py-[25px]"
-                          style={{
-                            borderColor: "rgb(201, 190, 205)",
-                            borderRadius: "14px",
-                          }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-[18px] font-bold text-black font-sans select-none">
-                              {t("Masquer le pointage.")}
-                            </span>
-                            <div className="flex items-center gap-3">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newVal = !hidePointage;
-                                  setHidePointage(newVal);
-                                  try {
-                                    const envId = localStorage.getItem("defib_tenant_id") || "demo";
-                                    localStorage.setItem("defib_hide_pointage", newVal ? "true" : "false");
-                                    localStorage.setItem(`defib_${envId}_tech_hide_pointage`, newVal ? "true" : "false");
-                                    if (authenticatedUser?.name) {
-                                      localStorage.setItem(`defib_${envId}_tech_hide_pointage_${authenticatedUser.name}`, newVal ? "true" : "false");
-                                    }
-                                  } catch (e) {}
-                                }}
-                                className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
-                                style={{
-                                  backgroundColor: hidePointage
-                                    ? "#fe4eba"
-                                    : "#cbd5e1",
-                                }}
-                              >
-                                <span
-                                  className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
-                                  style={{
-                                    transform: hidePointage
-                                      ? "translateX(20px)"
-                                      : "translateX(0px)",
-                                  }}
-                                />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Live map link replaced by toggle */}
-                      {!companyInfo?.hiddenTabs?.includes("Localisation") && !companyInfo?.hiddenTabs?.includes("Localisation (Webapp)") && !companyInfo?.hiddenTabs?.includes("Localisations") && (
-                        <div className="space-y-1.5" style={{ marginTop: "24px" }}>
-                          <div
-                            className="bg-white border px-4 py-[25px]"
-                            style={{
-                              borderColor: "rgb(201, 190, 205)",
-                              borderRadius: "14px",
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[18px] font-bold text-black font-sans select-none">
-                                Activer la localisation.
-                              </span>
-                              <div className="flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const newVal = gpsSharingLink === "Partag√©" ? "Non partag√©" : "Partag√©";
-                                    setGpsSharingLink(newVal);
-                                  }}
-                                  className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
-                                  style={{
-                                    backgroundColor: gpsSharingLink === "Partag√©"
-                                      ? "rgb(254, 78, 187)"
-                                      : "#cbd5e1",
-                                  }}
-                                >
-                                  <span
-                                    className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
-                                    style={{
-                                      transform: gpsSharingLink === "Partag√©"
-                                        ? "translateX(20px)"
-                                        : "translateX(0px)",
-                                    }}
-                                  />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          <div style={{ marginTop: "12px" }}>
-                            <a
-                              href="https://defibeo.com/school/"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                fontSize: "18px",
-                                color: "#3556ec",
-                                textDecoration: "underline",
-                                fontWeight: "bold",
-                              }}
-                              className="font-sans block hover:opacity-85 text-blue-600 cursor-pointer"
-                            >
-                              Vous devez partager avec {companyInfo?.gmailPartageLocalisation || "(Manquant)"}, consultez l‚Äôaide.
-                            </a>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Mon adresse structured fields */}
-                      <div className="space-y-4" style={{ marginTop: "32px" }}>
-                        {/* Num√©ro et voie */}
-                        <div className="space-y-1" style={{ marginTop: "24px" }}>
-                          <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Num√©ro et voie.</label>
-                          <input
-                            type="text"
-                            required
-                            value={techStartStreet}
-                            onChange={(e) => setTechStartStreet(e.target.value)}
-                            placeholder="Ex: 15 Rue de la Paix"
-                            style={{
-                              fontSize: "18px",
-                              padding: "14px",
-                              borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
-                              outline: "none",
-                              color: "rgb(0, 0, 0)",
-                            }}
-                            className="w-full bg-white focus:border-indigo-500 font-sans"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {/* Ville */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Ville.</label>
-                            <input
-                              type="text"
-                              required
-                              value={techStartCity}
-                              onChange={(e) => setTechStartCity(e.target.value)}
-                              placeholder="Ex: Paris"
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                              }}
-                              className="w-full bg-white focus:border-indigo-500 font-sans"
-                            />
-                          </div>
-
-                          {/* Code postal */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Code postal.</label>
-                            <input
-                              type="text"
-                              required
-                              value={techStartZip}
-                              onChange={(e) => setTechStartZip(e.target.value)}
-                              placeholder="Ex: 75002"
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                              }}
-                              className="w-full bg-white focus:border-indigo-500 font-sans"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {/* R√©gion */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">R√©gion.</label>
-                            <select
-                              required
-                              value={techStartRegion}
-                              onChange={(e) => setTechStartRegion(e.target.value)}
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                                appearance: "none",
-                                WebkitAppearance: "none",
-                                MozAppearance: "none",
-                              }}
-                              className="w-full bg-white focus:border-indigo-500 appearance-none"
-                            >
-                              <option value="">Choisir une r√©gion</option>
-                              {getRegionsForCountry(techStartCountry || 'France').map((r) => (
-                                <option key={r} value={r}>{r}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Pays */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Pays.</label>
-                            <select
-                              required
-                              value={techStartCountry}
-                              onChange={(e) => setTechStartCountry(e.target.value)}
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                                appearance: "none",
-                                WebkitAppearance: "none",
-                                MozAppearance: "none",
-                              }}
-                              className="w-full bg-white focus:border-indigo-500 appearance-none"
-                            >
-                              {["France", "Espagne", "Portugal", "Suisse", "Luxembourg", "Belgique", "Allemagne", "Pays-Bas", "Royaume-Uni", "Irlande", "Su√®de", "Pologne", "Tch√©quie", "Autriche"].map((c) => (
-                                <option key={c} value={c}>{c}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {/* Latitude */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Latitude.</label>
-                            <input
-                              type="text"
-                              readOnly
-                              required
-                              value={(techStartLat && techStartLat.toLowerCase() !== 'null' && techStartLat.toLowerCase() !== 'undefined' && techStartLat.toLowerCase() !== 'nan') ? techStartLat : ''}
-                              placeholder="Rempli automatiquement"
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                                backgroundColor: "#f3f4f6",
-                                cursor: "not-allowed",
-                              }}
-                              className="w-full"
-                            />
-                          </div>
-
-                          {/* Longitude */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Longitude.</label>
-                            <input
-                              type="text"
-                              readOnly
-                              required
-                              value={(techStartLng && techStartLng.toLowerCase() !== 'null' && techStartLng.toLowerCase() !== 'undefined' && techStartLng.toLowerCase() !== 'nan') ? techStartLng : ''}
-                              placeholder="Rempli automatiquement"
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                                backgroundColor: "#f3f4f6",
-                                cursor: "not-allowed",
-                              }}
-                              className="w-full"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Route Optimization selector */}
-                      <div className="space-y-1.5">
-                        <label
-                          style={{ fontSize: "18px", color: "#000000" }}
-                          className="block font-bold text-black select-none"
-                        >
-                          Strat√©gie des d√©placements. *
-                        </label>
-                        <select
-                          value={routeOptimization}
-                          onChange={(e) => setRouteOptimization(e.target.value)}
-                          style={{
-                            fontSize: "18px",
-                            padding: "14px",
-                            borderRadius: "13px",
-                            border: "1px solid rgb(201, 191, 205)",
-                            outline: "none",
-                            color: "rgb(0, 0, 0)",
-                            appearance: "none",
-                            WebkitAppearance: "none",
-                            MozAppearance: "none",
-                          }}
-                          className="w-full bg-white font-semibold cursor-pointer focus:border-indigo-500"
-                        >
-                          <option value="Aller au plus proche d'abord">
-                            Se rendre d'abord au plus proche.
-                          </option>
-                          <option value="Aller au plus loin d'abord">
-                            Se rendre d'abord au plus √©loign√©.
-                          </option>
-                        </select>
-                      </div>
-
-                      {/* Navigation App selector */}
-                      <div className="space-y-1.5">
-                        <label
-                          style={{ fontSize: "18px", color: "#000000" }}
-                          className="block font-bold text-black select-none"
-                        >
-                          Application de navigation par d√©faut. *
-                        </label>
-                        <select
-                          value={defaultNavApp}
-                          onChange={(e) => setDefaultNavApp(e.target.value)}
-                          style={{
-                            fontSize: "18px",
-                            padding: "14px",
-                            borderRadius: "13px",
-                            border: "1px solid rgb(201, 191, 205)",
-                            outline: "none",
-                            color: "rgb(0, 0, 0)",
-                            appearance: "none",
-                            WebkitAppearance: "none",
-                            MozAppearance: "none",
-                          }}
-                          className="w-full bg-white font-semibold cursor-pointer focus:border-indigo-500"
-                        >
-                          <option value="apple-maps">
-                            Apple Maps
-                          </option>
-                          <option value="google-maps">
-                            Google Maps
-                          </option>
-                          <option value="waze">
-                            Waze
-                          </option>
-                        </select>
-                      </div>
-
-                      {/* Signature Section */}
-                      <div className="space-y-3 text-left">
-                        <label
-                          style={{ fontSize: "18px", color: "#000000" }}
-                          className="block font-bold text-black select-none"
-                        >
-                          Signature.
-                        </label>
-                        <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
-                          Dessinez votre signature ci-dessous. Elle sera automatiquement appos√©e sur tous vos rapports de maintenance valid√©s.
-                        </p>
-
-                        <div 
-                          className="p-3 bg-white relative" 
-                          style={{ 
-                            border: "1px solid #c9bfcd", 
-                            borderRadius: "13px", 
-                            maxWidth: "400px" 
-                          }}
-                        >
-                          <canvas
-                            ref={sigCanvasRef}
-                            width={380}
-                            height={150}
-                            className="w-full h-[150px] bg-white cursor-crosshair touch-none"
-                            onMouseDown={startSigDrawing}
-                            onMouseMove={drawSig}
-                            onMouseUp={stopSigDrawing}
-                            onMouseLeave={stopSigDrawing}
-                            onTouchStart={startSigDrawing}
-                            onTouchMove={drawSig}
-                            onTouchEnd={stopSigDrawing}
-                            style={{ borderRadius: "6px" }}
-                          />
-                          <div className="flex justify-between items-center mt-2">
-                            <button
-                              type="button"
-                              onClick={clearSig}
-                              className="text-[16px] text-red-500 font-bold hover:underline cursor-pointer font-sans bg-transparent border-none"
-                            >
-                              Effacer
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      style={{
-                        backgroundColor: "rgb(53, 86, 236)",
-                        color: "#fff",
-                        fontSize: "18px",
-                        fontWeight: "bold",
-                        borderRadius: "12px",
-                        padding: "14px 20px",
-                        border: "none",
-                        boxShadow:
-                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                        cursor: "pointer",
-                        width: "100%",
-                      }}
-                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <span>Enregistrer</span>
-                    </button>
-
-                    {/* Section: Choix du th√®me pour la session technicien */}
-                    <div className="pt-5 space-y-3 text-left" id="webapp-section-software-theme">
-                      <h3 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
-                        {t("Apparence du logiciel pour votre session.")}
-                      </h3>
-                      <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
-                        {t("Th√®me du logiciel (conforme accessibilit√© ISO/IEC 40500).")}
-                      </p>
-
-                      <div className="flex flex-col gap-2.5 pt-1">
-                        {APP_THEMES.map((theme) => {
-                          const isSelected = currentTechTheme.id === theme.id;
-                          return (
-                            <div
-                              key={theme.id}
-                              onClick={() => handleThemeSelect(theme.id)}
-                              style={{
-                                border: "1px solid #c9bfcd",
-                                borderRadius: "13px",
-                              }}
-                              className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
-                              id={`webapp-theme-card-${theme.id}`}
-                            >
-                              <span 
-                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                                style={{
-                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
-                                  width: '20px',
-                                  height: '20px',
-                                  minWidth: '20px',
-                                  minHeight: '20px',
-                                  backgroundColor: '#ffffff'
-                                }}
-                              >
-                                {isSelected && (
-                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
-                                )}
-                              </span>
-                              <span
-                                className="font-medium text-black cursor-pointer select-none font-sans"
-                                style={{ fontSize: "18px", color: "#000000" }}
-                              >
-                                {t(theme.name)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Section: Choix du favicon pour la session technicien */}
-                    <div className="pt-5 space-y-3 text-left" id="webapp-section-software-favicon">
-                      <h3 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
-                        {t("Choix du favicon du logiciel.")}
-                      </h3>
-                      <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
-                        {t("Il s‚Äôagit de l‚Äôic√¥ne montr√© dans l‚Äôonglet de votre navigateur.")}
-                      </p>
-
-                      <div className="flex flex-col gap-2.5 pt-1">
-                        {APP_FAVICONS.map((fav) => {
-                          const isSelected = currentTechFavicon.id === fav.id;
-                          return (
-                            <div
-                              key={fav.id}
-                              onClick={() => handleFaviconSelect(fav.id)}
-                              style={{
-                                border: "1px solid #c9bfcd",
-                                borderRadius: "13px",
-                              }}
-                              className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
-                              id={`webapp-favicon-card-${fav.id}`}
-                            >
-                              <span 
-                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                                style={{
-                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
-                                  width: '20px',
-                                  height: '20px',
-                                  minWidth: '20px',
-                                  minHeight: '20px',
-                                  backgroundColor: '#ffffff'
-                                }}
-                              >
-                                {isSelected && (
-                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
-                                )}
-                              </span>
-                              <img
-                                src={fav.url}
-                                alt={fav.name}
-                                className="w-5 h-5 object-contain shrink-0"
-                                referrerPolicy="no-referrer"
-                              />
-                              <span
-                                className="font-medium text-black cursor-pointer select-none font-sans"
-                                style={{ fontSize: "18px", color: "#000000" }}
-                              >
-                                {t(fav.name)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Illustration Add to Home Screen at the bottom touching bottom border */}
-                    <div 
-                      className="mt-6 bg-white overflow-hidden text-left flex flex-col justify-between"
-                      style={{
-                        border: "1px solid #c9bfcd",
-                        borderRadius: "13px",
-                      }}
-                      id="webapp-add-to-home-screen-card"
-                    >
-                      <div className="p-5 pb-2 space-y-1">
-                        <h4 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
-                          {t("Ajouter √† l'√©cran d'accueil.")}
-                        </h4>
-                        <p className="font-sans leading-relaxed" style={{ fontSize: "16px", color: "#000000" }}>
-                          {t("Sur iPhone ou iPad, depuis Safari (iOS 26), touchez l‚Äôic√¥ne Partager (le carr√© avec une fl√®che vers le haut), faites d√©filer le menu vers le bas puis s√©lectionnez Sur l‚Äô√©cran d‚Äôaccueil (carr√© avec un ¬´ + ¬ª). V√©rifiez ensuite que l‚Äôoption Ouvrir en tant qu‚Äôapp web est bien activ√©e, puis appuyez sur Ajouter en haut √† droite.")}
-                        </p>
-                      </div>
-                      <div className="w-full flex justify-center items-end pt-2">
-                        <img
-                          src="https://civilprom.s3.eu-north-1.amazonaws.com/Illustration+Add+To+Home+Screen.svg"
-                          alt="Illustration Add To Home Screen"
-                          className="w-full h-auto block select-none pointer-events-none"
-                          style={{ marginBottom: 0, display: "block" }}
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Google Calendar integration section */}
-                    <div className="pt-5 space-y-4">
-                      <h3 className="text-lg font-bold text-slate-800">
-                        Int√©gration Google Calendar
-                      </h3>
-
-                      {syncStatusMsg && (
-                        <p
-                          style={{
-                            fontSize: "18px",
-                            color: "rgb(254, 78, 187)",
-                            textAlign: "center"
-                          }}
-                        >
-                          {syncStatusMsg.text}
-                        </p>
-                      )}
-
-                      {showDomainHelp && (
-                        <div
-                          className="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-[12px] space-y-2"
-                          id="domain-authorization-guide"
-                        >
-                          <p className="font-bold text-sm">
-                            üí° Action requise sur votre projet Firebase :
-                          </p>
-                          <p className="text-xs leading-relaxed">
-                            Pour des raisons de s√©curit√©, Google demande √† ce
-                            que le nom de domaine de la webapp soit rajout√© aux
-                            domaines autoris√©s de votre projet Firebase.
-                          </p>
-                          <ol className="text-xs list-decimal pl-4 space-y-1.5 font-medium">
-                            <li>
-                              Ouvrez la console Firebase :{" "}
-                              <a
-                                href="https://console.firebase.google.com"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-indigo-600 underline font-semibold hover:text-indigo-800"
-                              >
-                                console.firebase.google.com
-                              </a>
-                            </li>
-                            <li>
-                              Allez dans <strong>Authentication</strong> &gt;
-                              onglet <strong>Param√®tres</strong> &gt; section{" "}
-                              <strong>Domaines autoris√©s</strong>
-                            </li>
-                            <li>
-                              Cliquez sur le bouton{" "}
-                              <strong>Ajouter un domaine</strong>
-                            </li>
-                            <li>
-                              Saisissez l'adresse suivante :{" "}
-                              <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-amber-900 font-bold select-all">
-                                {window.location.hostname}
-                              </code>
-                            </li>
-                          </ol>
-                          <p className="text-xs text-amber-700 pt-1 font-semibold">
-                            Une fois l'adresse ajout√©e, recliquez sur
-                            "Synchroniser Google Calendar" !
-                          </p>
-                          <div className="mt-3 pt-2 border-t border-amber-200 flex flex-col gap-1.5" id="simulate-google-cal-sync-container-1">
-                            <p className="text-[11px] text-amber-700 font-sans">
-                              Pour vos tests en mode aper√ßu, vous pouvez √©galement simuler la synchronisation imm√©diatement :
-                            </p>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const mockToken = "mock_token_" + Date.now();
-                                const email = authenticatedUser?.email || "tech.demo@gmail.com";
-                                setGoogleAccessToken(mockToken);
-                                setSyncedGoogleEmail(email);
-                                const techName = authenticatedUser?.name || "common";
-                                localStorage.setItem(`defib_google_cal_email_${techName}`, email);
-                                try {
-                                  const syncResult = await performGoogleCalendarSync(mockToken);
-                                  const calendarId = syncResult.calendarId || "mock_calendar_id";
-                                  if (authenticatedUser) {
-                                    const updatedMembers = members.map((m) => {
-                                      if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
-                                        return {
-                                          ...m,
-                                          googleCalEmail: email,
-                                          googleCalId: calendarId,
-                                        };
-                                      }
-                                      return m;
-                                    });
-                                    onUpdateMembers(updatedMembers);
-                                    const updatedUser = {
-                                      ...authenticatedUser,
-                                      googleCalEmail: email,
-                                      googleCalId: calendarId,
-                                    };
-                                    setAuthenticatedUser(updatedUser);
-                                    localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
-                                  }
-                                  setSyncStatusMsg({
-                                    type: "success",
-                                    text: `Agenda Google synchronis√© avec succ√®s (Mode Simulation) ! ${syncResult.count} mission(s) synchronis√©e(s).`,
-                                  });
-                                  setShowDomainHelp(false);
-                                  setShowOperationHelp(false);
-                                } catch (err: any) {
-                                  alert("Erreur lors de la simulation : " + err.message);
-                                }
-                              }}
-                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-[8px] font-sans text-xs font-bold transition-all w-fit shadow-sm cursor-pointer select-none"
-                            >
-                              üöÄ Simuler la synchronisation Google Calendar
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {showOperationHelp && (
-                        <div
-                          className="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-[12px] space-y-2"
-                          id="sign-in-method-guide"
-                        >
-                          <p className="font-bold text-sm">
-                            üí° Activer l'authentification Google sur votre
-                            console Firebase :
-                          </p>
-                          <p className="text-xs leading-relaxed">
-                            L'authentification Google n'est pas encore activ√©e
-                            en tant que fournisseur d'identit√© sur votre base de
-                            donn√©es Firebase.
-                          </p>
-                          <ol className="text-xs list-decimal pl-4 space-y-1.5 font-medium">
-                            <li>
-                              Ouvrez la console Firebase :{" "}
-                              <a
-                                href="https://console.firebase.google.com"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-indigo-600 underline font-semibold hover:text-indigo-800"
-                              >
-                                console.firebase.google.com
-                              </a>
-                            </li>
-                            <li>
-                              Allez dans la section{" "}
-                              <strong>Authentication</strong> dans la barre
-                              lat√©rale gauche.
-                            </li>
-                            <li>
-                              Allez dans l'onglet{" "}
-                              <strong>Sign-in method</strong> (ou Mode de
-                              connexion).
-                            </li>
-                            <li>
-                              Cliquez sur le bouton{" "}
-                              <strong>
-                                Ajouter un fournisseur de connexion
-                              </strong>{" "}
-                              (Add provider).
-                            </li>
-                            <li>
-                              S√©lectionnez <strong>Google</strong> dans la
-                              liste.
-                            </li>
-                            <li>
-                              Basculez l'interrupteur sur{" "}
-                              <strong>Activer</strong> (Enable), renseignez
-                              l'e-mail d'assistance utilisateur du projet, puis
-                              cliquez sur <strong>Enregistrer</strong>.
-                            </li>
-                          </ol>
-                          <p className="text-xs text-amber-700 pt-1 font-semibold">
-                            Une fois la m√©thode Google activ√©e, vous pourrez
-                            synchroniser votre Google Calendar en un clic !
-                          </p>
-                          <div className="mt-3 pt-2 border-t border-amber-200 flex flex-col gap-1.5" id="simulate-google-cal-sync-container-2">
-                            <p className="text-[11px] text-amber-700 font-sans">
-                              Pour vos tests en mode aper√ßu, vous pouvez √©galement simuler la synchronisation imm√©diatement :
-                            </p>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const mockToken = "mock_token_" + Date.now();
-                                const email = authenticatedUser?.email || "tech.demo@gmail.com";
-                                setGoogleAccessToken(mockToken);
-                                setSyncedGoogleEmail(email);
-                                const techName = authenticatedUser?.name || "common";
-                                localStorage.setItem(`defib_google_cal_email_${techName}`, email);
-                                try {
-                                  const syncResult = await performGoogleCalendarSync(mockToken);
-                                  const calendarId = syncResult.calendarId || "mock_calendar_id";
-                                  if (authenticatedUser) {
-                                    const updatedMembers = members.map((m) => {
-                                      if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
-                                        return {
-                                          ...m,
-                                          googleCalEmail: email,
-                                          googleCalId: calendarId,
-                                        };
-                                      }
-                                      return m;
-                                    });
-                                    onUpdateMembers(updatedMembers);
-                                    const updatedUser = {
-                                      ...authenticatedUser,
-                                      googleCalEmail: email,
-                                      googleCalId: calendarId,
-                                    };
-                                    setAuthenticatedUser(updatedUser);
-                                    localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
-                                  }
-                                  setSyncStatusMsg({
-                                    type: "success",
-                                    text: `Agenda Google synchronis√© avec succ√®s (Mode Simulation) ! ${syncResult.count} mission(s) synchronis√©e(s).`,
-                                  });
-                                  setShowDomainHelp(false);
-                                  setShowOperationHelp(false);
-                                } catch (err: any) {
-                                  alert("Erreur lors de la simulation : " + err.message);
-                                }
-                              }}
-                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-[8px] font-sans text-xs font-bold transition-all w-fit shadow-sm cursor-pointer select-none"
-                            >
-                              üöÄ Simuler la synchronisation Google Calendar
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {showCalendarApiHelp && (
-                        <div
-                          className="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-[12px] space-y-3"
-                          id="google-calendar-api-guide"
-                        >
-                          <p className="font-bold text-sm">
-                            üí° Activer l'API Google Calendar sur votre projet :
-                          </p>
-                          <p className="text-xs leading-relaxed">
-                            L'API Google Calendar n'est pas encore activ√©e sur votre projet Google Cloud pour le projet num√©ro <strong>{disabledProjectNumber}</strong>.
-                          </p>
-                          <div className="pt-1">
-                            <a
-                              href={`https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=${disabledProjectNumber}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl shadow hover:bg-indigo-700 transition-colors cursor-pointer w-full text-center"
-                            >
-                              üîó Cliquer ici pour activer l'API Google Calendar
-                            </a>
-                          </div>
-                          <ol className="text-xs list-decimal pl-4 space-y-1.5 font-medium">
-                            <li>
-                              Cliquez sur le bouton ci-dessus pour ouvrir la page d'activation de la Console Google Cloud.
-                            </li>
-                            <li>
-                              Assurez-vous d'√™tre connect√© avec le compte Google propri√©taire de l'application.
-                            </li>
-                            <li>
-                              Cliquez sur le bouton bleu <strong>Activer</strong> (ou Enable).
-                            </li>
-                            <li>
-                              Attendez quelques minutes que l'activation se propage, puis r√©essayez la synchronisation !
-                            </li>
-                          </ol>
-                        </div>
-                      )}
-
-                      {!syncedGoogleEmail ? (
-                        <button
-                          type="button"
-                          onClick={handleGoogleCalendarSync}
-                          disabled={isSyncingGoogleCal}
-                          style={{
-                            backgroundColor: "#000000",
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                            borderRadius: "12px",
-                            padding: "14px 20px",
-                            border: "none",
-                            boxShadow:
-                              "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset",
-                            cursor: "pointer",
-                            width: "100%",
-                          }}
-                          className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-                        >
-                          {isSyncingGoogleCal ? (
-                            <span>Synchronisation en cours...</span>
-                          ) : (
-                            <span>Synchroniser</span>
-                          )}
-                        </button>
-                      ) : (
-                        <div className="space-y-3">
-                          <p
-                            style={{
-                              fontSize: "18px",
-                              color: "rgb(254, 78, 187)",
-                              textAlign: "center"
-                            }}
-                          >
-                            Compte synchronis√© ({syncedGoogleEmail})
-                          </p>
-
-                          <button
-                            type="button"
-                            onClick={handleGoogleCalendarSync}
-                            disabled={isSyncingGoogleCal}
-                            style={{
-                              backgroundColor: "#000000",
-                              color: "#ffffff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                              borderRadius: "12px",
-                              padding: "14px 20px",
-                              border: "none",
-                              cursor: "pointer",
-                              width: "100%",
-                            }}
-                            className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-                          >
-                            {isSyncingGoogleCal ? (
-                              <span>Synchronisation en cours...</span>
-                            ) : (
-                              <span>Forcer la synchronisation</span>
-                            )}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={handleDeactivateGoogleCalendar}
-                            style={{
-                              backgroundColor: "#dc2626",
-                              color: "#ffffff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                              borderRadius: "12px",
-                              padding: "14px 20px",
-                              border: "none",
-                              cursor: "pointer",
-                              width: "100%",
-                            }}
-                            className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-                          >
-                            <span>D√©sactiver Google Calendar</span>
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Quitter la session button */}
-                      <button
-                        type="button"
-                        onClick={handleLogout}
-                        style={{
-                          backgroundColor: "#dc2626",
-                          color: "#ffffff",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderRadius: "12px",
-                          padding: "14px 20px",
-                          border: "none",
-                          cursor: "pointer",
-                          width: "100%",
-                        }}
-                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-4"
-                      >
-                        <span>Quitter la session</span>
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          /* ----------------- IF TECHNICIAN IS NOT LOGGED IN STATE (PUBLIC VIEWPORTS) ----------------- */
-          <div
-            className="flex-1 flex flex-col justify-between overflow-y-auto no-scrollbar"
-            id="public-unauthenticated-layout"
-          >
-            {/* Main Content screens wrapper */}
-            <main className="flex-1 px-4 py-8 flex flex-col justify-center relative">
-              {/* LANDING SCREEN */}
-              {currentScreen === "landing" && (
-                <div
-                  className="space-y-8 text-center animate-fadeIn"
-                  id="landing-screen"
-                >
-                  <div className="space-y-4 pt-10">
-                    <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-tight uppercase pt-6">
-                      {companyInfo.name || "D√©fibeo Solutions"}
-                    </h1>
-                    <div className="space-y-1">
-                      <h2 className="text-[11px] font-extrabold text-indigo-600 uppercase tracking-widest">
-                        Rallier le portail
-                      </h2>
-                    </div>
-                  </div>
-
-                  <p className="text-slate-500 text-[11px] leading-relaxed max-w-xs mx-auto">
-                    Signalez un incident sur un d√©fibrillateur DAE de proximit√©
-                    ou retournez √† la page de connexion de l'administration.
-                  </p>
-
-                  <div className="space-y-3.5 pt-2">
-                    {/* BUTTON 1: SIGNALEMENT */}
-                    <div
-                      className={`w-full bg-slate-50 border p-5 rounded-2xl text-left transition-all duration-200 relative ${
-                        isInlineReportOpen
-                          ? "border-indigo-500 bg-white ring-1 ring-indigo-500/10 shadow-xs"
-                          : "border-slate-200 hover:bg-slate-100/80 hover:border-indigo-500/35 cursor-pointer"
-                      }`}
-                      onClick={() => {
-                        if (!isInlineReportOpen) {
-                          setIsInlineReportOpen(true);
-                          setInlineReportSuccess(false);
-                        }
-                      }}
-                      id="card-portal-report"
-                    >
-                      <div className="space-y-0.5 select-none">
-                        <div className="text-[12px] font-black text-slate-800 uppercase tracking-tight flex justify-between items-center">
-                          <span>Signalement Incident</span>
-                          {isInlineReportOpen && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setIsInlineReportOpen(false);
-                                setInlineReportSuccess(false);
-                              }}
-                              className="text-[9px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer border-0 bg-transparent uppercase tracking-wider font-sans"
-                            >
-                              R√©duire
-                            </button>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-500 leading-normal font-sans">
-                          Bo√Ætier DAE vandalis√©, utilis√© ou voyant rouge
-                          suspect.
-                        </p>
-                      </div>
-
-                      {isInlineReportOpen && (
-                        <div
-                          className="mt-4 pt-4 border-t border-slate-100 space-y-3.5"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {inlineReportSuccess ? (
-                            <div className="py-2 text-center space-y-2">
-                              <p className="text-emerald-600 font-extrabold text-xs animate-fadeIn uppercase tracking-wider">
-                                Message envoy√© avec succ√®s
-                              </p>
-                              <p className="text-[10px] text-slate-555 leading-relaxed">
-                                Merci pour votre signalement citoyen !
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setIsInlineReportOpen(false);
-                                  setInlineReportSuccess(false);
-                                }}
-                                className="mt-1 px-3 py-1 bg-slate-100 hover:bg-slate-205 text-slate-700 font-extrabold text-[9px] rounded-lg cursor-pointer border border-slate-200 transition-colors uppercase tracking-wider"
-                              >
-                                Fermer
-                              </button>
-                            </div>
-                          ) : (
-                            <form
-                              onSubmit={handleInlineTicketSubmit}
-                              className="space-y-3 font-sans text-slate-700 text-[10px]"
-                            >
-                              <div className="space-y-3">
-                                {/* ID DAE */}
-                                <div className="space-y-0.5">
-                                  <label className="text-[8.5px] font-extrabold text-slate-500 uppercase">
-                                    Identifiant du DAE incident√© *
-                                  </label>
-                                  <input
-                                    type="text"
-                                    required
-                                    value={ticketForm.identifiant}
-                                    onChange={(e) =>
-                                      setTicketForm({
-                                        ...ticketForm,
-                                        identifiant: e.target.value,
-                                      })
-                                    }
-                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-900 font-bold uppercase focus:bg-white focus:outline-hidden"
-                                    placeholder="Ex: PAR-102"
-                                  />
-                                </div>
-
-                                {/* Objet */}
-                                <div className="space-y-0.5">
-                                  <label className="text-[8.5px] font-extrabold text-slate-500 uppercase">
-                                    Objet du Ticket *
-                                  </label>
-                                  <select
-                                    value={ticketForm.objet}
-                                    onChange={(e) =>
-                                      setTicketForm({
-                                        ...ticketForm,
-                                        objet: e.target.value as any,
-                                      })
-                                    }
-                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-205 rounded-lg text-[11px] text-slate-800 cursor-pointer focus:bg-white focus:outline-hidden"
-                                  >
-                                    <option value="D√©fibrillateur utilis√©">
-                                      D√©fibrillateur utilis√©
-                                    </option>
-                                    <option value="D√©fibrillateur endommag√©">
-                                      D√©fibrillateur endommag√©
-                                    </option>
-                                    <option value="D√©fibrillateur hors service">
-                                      D√©fibrillateur hors service
-                                    </option>
-                                    <option value="Autre">Autre</option>
-                                  </select>
-                                </div>
-
-                                {/* Email */}
-                                <div className="space-y-0.5">
-                                  <label className="text-[8.5px] font-extrabold text-slate-500 uppercase">
-                                    Votre Email pour suivi *
-                                  </label>
-                                  <input
-                                    type="email"
-                                    required
-                                    value={ticketForm.email}
-                                    onChange={(e) =>
-                                      setTicketForm({
-                                        ...ticketForm,
-                                        email: e.target.value,
-                                      })
-                                    }
-                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-900 focus:bg-white focus:outline-hidden"
-                                    placeholder="dupont@gmail.com"
-                                  />
-                                </div>
-
-                                {/* Message */}
-                                <div className="space-y-0.5">
-                                  <label className="text-[8.5px] font-extrabold text-slate-500 uppercase">
-                                    Message & Constat visuel *
-                                  </label>
-                                  <textarea
-                                    required
-                                    rows={3}
-                                    value={ticketForm.message}
-                                    onChange={(e) =>
-                                      setTicketForm({
-                                        ...ticketForm,
-                                        message: e.target.value,
-                                      })
-                                    }
-                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-202 rounded-lg text-[11px] text-slate-900 leading-normal focus:bg-white focus:outline-hidden"
-                                    placeholder="Ex: Le voyant clignote rouge ou le coffret ..."
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="flex justify-end gap-2 pt-1.5 border-t border-slate-100">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setIsInlineReportOpen(false);
-                                  }}
-                                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold rounded-lg cursor-pointer transition-colors"
-                                >
-                                  Annuler
-                                </button>
-                                <button
-                                  type="submit"
-                                  className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-600 text-white font-extrabold rounded-lg cursor-pointer transition-all inline-flex items-center gap-1 shadow-xs border border-indigo-500"
-                                >
-                                  Envoyer le Signalement
-                                </button>
-                              </div>
-                            </form>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="pt-2">
-                    <a
-                      href={
-                        companyInfo.website
-                          ? companyInfo.website.startsWith("http")
-                            ? companyInfo.website
-                            : `https://${companyInfo.website}`
-                          : "#"
-                      }
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer border border-slate-200 shadow-xs"
-                      id="btn-return-to-site"
-                      onClick={(e) => {
-                        if (!companyInfo.website) {
-                          e.preventDefault();
-                          onClose();
-                        }
-                      }}
-                    >
-                      Retour au site
-                    </a>
-                  </div>
-
-                  <div className="text-center pt-2">
-                    <p className="text-[10px] text-slate-400">
-                      Une solution du logiciel{" "}
-                      <a
-                        href="https://defibeo.com/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-indigo-600 hover:underline font-bold"
-                      >
-                        D√©fibeo
-                      </a>
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* SUCCESS FORM */}
-              {currentScreen === "success-ticket" && (
-                <div className="bg-white border border-slate-200 p-6 rounded-2.5xl text-center space-y-4 animate-scaleUp shadow-lg">
-                  <div className="w-12 h-12 bg-emerald-50 text-emerald-600 border border-emerald-250 rounded-full mx-auto flex items-center justify-center">
-                    <CheckCircle className="w-6 h-6" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <h2 className="text-sm font-black text-slate-900 uppercase">
-                      Alerte Transmise !
-                    </h2>
-                    <span className="inline-block px-2 py-0.5 bg-slate-100 rounded text-[9px] font-mono text-indigo-700 font-bold border border-slate-205">
-                      ID TICKET : {createdTicketId}
-                    </span>
-                    <p className="text-[10px] text-slate-600 leading-normal pt-2">
-                      Nos techniciens d'assistance ont re√ßu votre rapport
-                      d'incident sur le terminal {ticketForm.identifiant}. Merci
-                      pour votre vigilance citoyenne !
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => setCurrentScreen("landing")}
-                    className="w-full py-2 bg-slate-150 hover:bg-slate-200 font-bold text-[10px] rounded-lg cursor-pointer text-slate-800 border border-slate-250 transition-colors"
-                  >
-                    Retourner √† l'Accueil
-                  </button>
-                </div>
-              )}
-
-              {/* PIN MAINTENANCE CODE SCREEN */}
-              {currentScreen === "mainteneur" && (
-                <div
-                  className="bg-white border border-slate-200 p-5 rounded-2.5xl space-y-4 max-w-sm mx-auto animate-scaleUp shadow-xl"
-                  id="mainteneur-screen"
-                >
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentScreen("landing")}
-                      className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 cursor-pointer"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-                    <div>
-                      <h2 className="text-xs font-black text-slate-900 uppercase tracking-tight">
-                        Acc√®s D√©verrouillage
-                      </h2>
-                      <p className="text-[10px] text-slate-500 font-sans">
-                        Saisissez votre code PIN individuel √† 4 chiffres
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    {/* Visual PIN Inputs */}
-                    <div className="flex justify-center gap-2">
-                      {pinDigits.map((digit, index) => (
-                        <input
-                          key={index}
-                          ref={pinRefs[index]}
-                          type="password"
-                          maxLength={1}
-                          pattern="[0-9]*"
-                          inputMode="numeric"
-                          value={digit}
-                          onChange={(e) =>
-                            handlePinDigitChange(index, e.target.value)
-                          }
-                          onKeyDown={(e) => handlePinBackspace(index, e)}
-                          className="w-10 h-12 text-center text-xl font-mono font-bold text-indigo-600 bg-slate-50 border border-slate-250 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:bg-white transition-all"
-                        />
-                      ))}
-                    </div>
-
-                    {pinError && (
-                      <div className="p-2 bg-rose-50 text-rose-800 border border-rose-150 rounded-lg text-center text-[9px] font-bold">
-                        {pinError}
-                      </div>
-                    )}
-
-                    {/* Fast Keypad dial */}
-                    <div
-                      className="grid grid-cols-3 gap-2 max-w-[210px] mx-auto pt-1"
-                      id="fast-keypad"
-                    >
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                        <button
-                          key={num}
-                          type="button"
-                          onClick={() => handlePinDialClick(num)}
-                          className="h-10 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-[13px] font-bold cursor-pointer transition-colors flex items-center justify-center text-slate-800 active:bg-slate-300"
-                        >
-                          {num}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={handlePinClear}
-                        className="h-10 bg-rose-50 hover:bg-rose-100 border border-rose-150 rounded-lg text-[8px] font-bold text-rose-700 uppercase tracking-widest cursor-pointer flex items-center justify-center active:bg-rose-200"
-                      >
-                        Effacer
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handlePinDialClick(0)}
-                        className="h-10 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-[13px] font-bold cursor-pointer flex items-center justify-center text-slate-800 active:bg-slate-300"
-                      >
-                        0
-                      </button>
-                      <div className="text-slate-400 text-[8px] flex items-center justify-center font-mono uppercase font-black tracking-wide select-none">
-                        S√âCURIS√â
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </main>
-
-            {/* Public footer omitted */}
-          </div>
-        )}
-
-        {printingReport && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-9999 overflow-y-auto p-4 flex flex-col items-center animate-fadeIn print:bg-white print:p-0 print:absolute print:inset-0"
-            id="print-overlay"
-          >
-            {/* Dynamic styles injected just for standard print layouts */}
-            <style
-              dangerouslySetInnerHTML={{
-                __html: `
-              @media print {
-                header, footer, nav, button, .no-print {
-                  display: none !important;
-                }
-                body, html, #root {
-                  background-color: white !important;
-                  color: black !important;
-                }
-                #print-page-sheet {
-                  box-shadow: none !important;
-                  border: none !important;
-                  padding: 0 !important;
-                  margin: 0 !important;
-                  width: 100% !important;
-                  max-width: 100% !important;
-                }
-              }
-            `,
-              }}
-            />
-
-            {/* Top control bar */}
-            <div className="w-full max-w-4xl bg-slate-800 text-white rounded-t-xl p-3 flex justify-between items-center shadow-lg border-b border-slate-700 no-print">
-              <div className="flex items-center gap-2">
-                <Printer className="w-4 h-4 text-emerald-400" />
-                <span className="text-xs font-black uppercase tracking-wider font-mono">
-                  Aper√ßu avant Impression du Rapport (Pr√™t pour Impression /
-                  PDF)
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black rounded-lg cursor-pointer flex items-center gap-1 transition-colors uppercase tracking-wider shadow-xs"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Imprimer ce Rapport</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPrintingReport(null)}
-                  className="p-1 text-slate-400 hover:text-white rounded-full hover:bg-slate-700 cursor-pointer transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Centered structured printable A4 Content */}
-            <div
-              id="print-page-sheet"
-              className="w-full max-w-4xl bg-white text-slate-850 p-8 md:p-12 shadow-2xl rounded-b-xl space-y-6 font-sans text-xs border-x border-b border-slate-200 min-h-[1100px]"
-            >
-              {/* Document Header block */}
-              <div className="border-b-2 border-slate-800 pb-4 flex justify-between items-start">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <Heart className="w-5 h-5 text-rose-600 fill-rose-50" />
-                    <span className="text-sm font-black uppercase tracking-tight text-slate-950">
-                      {companyInfo.name}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-mono tracking-wide">
-                    {companyInfo.website} | T√©l : {companyInfo.phone}
-                  </p>
-                  <p className="text-[10px] text-slate-500 font-mono">
-                    {companyInfo.email}
-                  </p>
-                </div>
-                <div className="text-right space-y-1">
-                  <span className="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider">
-                    DOCUMENT OFFICIEL
-                  </span>
-                  <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">
-                    {printingReport.title}
-                  </h2>
-                  <p className="text-[10px] font-mono text-slate-500">
-                    R√âF√âRENCE :{" "}
-                    <span className="font-bold text-slate-800">
-                      {printingReport.id}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Intervention metadata banner */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4 font-sans text-[10.5px]">
-                <div>
-                  <span className="text-[8px] font-black text-indigo-700 uppercase tracking-wider block font-mono">
-                    üìÖ HORODATE INTERVENTION
-                  </span>
-                  <p className="font-bold text-slate-850 mt-0.5">
-                    {printingReport.date}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[8px] font-black text-indigo-700 uppercase tracking-wider block font-mono">
-                    üë§ REPR√âSENTANT TECHNIQUE
-                  </span>
-                  <p className="font-bold text-slate-850 mt-0.5">
-                    {printingReport.techName}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[8px] font-black text-indigo-700 uppercase tracking-wider block font-mono">
-                    üìç TYPE DE SITE / TOURN√âE
-                  </span>
-                  <p className="font-bold text-slate-850 mt-0.5">
-                    {printingReport.siteMission}
-                  </p>
-                </div>
-              </div>
-
-              {(() => {
-                const snapshot =
-                  printingReport.defibSnapshot ||
-                  defibrillateurs.find(
-                    (d) =>
-                      d.id === printingReport.defibId ||
-                      d.identifiant === printingReport.defibIdentifiant,
-                  ) ||
-                  defibrillateurs[0];
-                if (!snapshot)
-                  return (
-                    <p className="text-slate-400 text-center font-mono py-12">
-                      D√©tails d'√©quipements non-disponibles pour ce mat√©riel.
-                    </p>
-                  );
-
-                const clientObj = clients.find(
-                  (c) => c.id === snapshot.clientId,
-                );
-                const defMod = variables.find(
-                  (v) => v.id === snapshot.modeleId,
-                );
-                const cofMod = variables.find(
-                  (v) => v.id === snapshot.modeleCoffretId,
-                );
-                const elAMod = variables.find(
-                  (v) => v.id === snapshot.modeleElectrodeAId,
-                );
-                const elPMod = variables.find(
-                  (v) => v.id === snapshot.modeleElectrodePId,
-                );
-                const batMod = variables.find(
-                  (v) => v.id === snapshot.modeleBatterieId,
-                );
-
-                return (
-                  <div className="space-y-6">
-                    {/* 1. SECTION MAT√âRIEL */}
-                    <div className="space-y-2">
-                      <h3 className="text-[11px] font-black text-slate-900 uppercase border-b border-slate-300 pb-1 flex items-center justify-between">
-                        <span>1. SECTION SYST√àME D√âFIBRILLATEUR</span>
-                        <span className="text-[9px] font-mono font-bold text-slate-500">
-                          ID CENTRAL : {snapshot.identifiant}
-                        </span>
-                      </h3>
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Identifiant court
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {snapshot.identifiant}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Num√©ro de S√©rie
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {snapshot.numeroSerie}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            D√©signation / Marque
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {defMod ? defMod.nom : snapshot.modeleId}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Constructeur
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {defMod ? defMod.marque : "-"}
-                          </span>
-                        </div>
-                      </div>
-                      {snapshot.commentaire && (
-                        <div className="bg-slate-50 p-2.5 rounded-lg text-slate-700 italic leading-relaxed">
-                          Note technique relative √† l'unit√© :{" "}
-                          {snapshot.commentaire}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 2. SECTION CLIENT */}
-                    <div className="space-y-2">
-                      <h3 className="text-[11px] font-black text-slate-900 uppercase border-b border-slate-300 pb-1">
-                        2. EXPLOITANT & SITE DESIGNATION
-                      </h3>
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Client exploitant
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {clientObj
-                              ? clientObj.denomination
-                              : "Non rattach√©"}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Responsable Local
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {snapshot.nomPrenomSite || "-"}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            T√©l√©phone direct
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {snapshot.telephoneSite || "-"}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Courriel de Liaison
-                          </span>
-                          <span className="font-bold text-slate-850 break-all">
-                            {snapshot.emailSite || "-"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            R√©gime contractuel
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {snapshot.contrat === "Oui"
-                              ? "‚úì SOUS CONTRAT"
-                              : "HORS CONTRAT"}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Abonnement
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {snapshot.nomContrat || "-"}
-                          </span>
-                        </div>
-                        <div className="bg-slate-55 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            R√©f√©rence Administrative
-                          </span>
-                          <span className="font-bold text-slate-850 font-mono">
-                            {snapshot.referenceContrat || "-"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 3. COFFRET */}
-                    <div className="space-y-2">
-                      <h3 className="text-[11px] font-black text-slate-900 uppercase border-b border-slate-300 pb-1">
-                        3. COFFRET MURAL ET ALARMES
-                      </h3>
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Mod√®le Coffret mural
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {cofMod ? cofMod.nom : snapshot.modeleCoffretId}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Num√©ro de Lot mural
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {snapshot.numeroLotCoffret || "-"}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50 p-2 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Remarques audit coffret
-                          </span>
-                          <span className="font-bold text-slate-850">
-                            {snapshot.commentaireCoffret ||
-                              "Examen visuel approuv√©"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 4. ACC√àS */}
-                    <div className="space-y-2">
-                      <h3 className="text-[11px] font-black text-slate-900 uppercase border-b border-slate-300 pb-1">
-                        4. CONDITIONS D'ACC√àS DU PUBLIC & GPS
-                      </h3>
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
-                        <div className="bg-slate-50 p-3 rounded-lg lg:col-span-2">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Adresse physique rattach√©e
-                          </span>
-                          <span className="font-bold text-slate-950 font-sans">
-                            {snapshot.numVoie}, {snapshot.cp} {snapshot.ville}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50 p-3 rounded-lg">
-                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
-                            Coordonn√©es cartographiques (Lat/Lng)
-                          </span>
-                          <span className="font-bold text-indigo-800 font-mono">
-                            {snapshot.latitude}, {snapshot.longitude}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-center text-[9px] font-mono">
-                        <div
-                          className={`p-1.5 rounded-lg border font-bold ${snapshot.acces247 ? "bg-emerald-50 text-emerald-700 border-emerald-250" : "bg-slate-50 text-slate-400 border-slate-200"}`}
-                        >
-                          OUVERT 24H/7J : {snapshot.acces247 ? "OUI" : "NON"}
-                        </div>
-                        <div
-                          className={`p-1.5 rounded-lg border font-bold ${snapshot.accesSemaine ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-400 border-slate-200"}`}
-                        >
-                          ACC√àS SEMAINE :{" "}
-                          {snapshot.accesSemaine ? "OUI" : "NON"}
-                        </div>
-                        <div
-                          className={`p-1.5 rounded-lg border font-bold ${snapshot.accesWeekend ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-400 border-slate-200"}`}
-                        >
-                          ACC√àS WEEKEND :{" "}
-                          {snapshot.accesWeekend ? "OUI" : "NON"}
-                        </div>
-                        <div
-                          className={`p-1.5 rounded-lg border font-bold ${snapshot.exterieur ? "bg-orange-50 text-orange-700 border-orange-200" : "bg-slate-50 text-slate-400 border-slate-200"}`}
-                        >
-                          BORNE EXT√âRIEURE :{" "}
-                          {snapshot.exterieur ? "OUI" : "NON"}
-                        </div>
-                      </div>
-
-                      {snapshot.horaires &&
-                        (() => {
-                          try {
-                            const parsedSchs = JSON.parse(snapshot.horaires);
-                            if (
-                              Array.isArray(parsedSchs) &&
-                              parsedSchs.length > 0 &&
-                              parsedSchs.some(
-                                (s: any) => s.days && s.days.length > 0,
-                              )
-                            ) {
-                              return (
-                                <div className="bg-slate-50 p-3 rounded-lg mt-2 text-xs border border-slate-150">
-                                  <span className="text-[8px] text-slate-500 font-mono uppercase block mb-1">
-                                    üìÖ Horaires d'ouverture
-                                  </span>
-                                  <div className="space-y-1 font-sans text-slate-700">
-                                    {parsedSchs.map((sch: any, idx: number) => {
-                                      if (!sch.days || sch.days.length === 0)
-                                        return null;
-                                      const dayShorts = sch.days
-                                        .map((d: string) => d.substring(0, 3))
-                                        .join(", ");
-                                      return (
-                                        <div
-                                          key={idx}
-                                          className="flex flex-col sm:flex-row sm:justify-between border-b border-dashed border-slate-200 last:border-b-0 pb-1 last:pb-0"
-                                        >
-                                          <span className="font-semibold text-slate-800">
-                                            {dayShorts} :
-                                          </span>
-                                          <span>
-                                            {sch.fermetureMidi ? (
-                                              <span className="font-mono text-indigo-700">
-                                                {sch.openMorning} -{" "}
-                                                {sch.closeMorning} /{" "}
-                                                {sch.openAfternoon} -{" "}
-                                                {sch.closeAfternoon}
-                                              </span>
-                                            ) : (
-                                              <span className="font-mono text-emerald-700">
-                                                {sch.openContinuous} -{" "}
-                                                {sch.closeContinuous}
-                                              </span>
-                                            )}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            }
-                          } catch (e) {}
-                          return null;
-                        })()}
-                    </div>
-
-                    {/* 5, 6, 7 & 8: CONSUMABLES */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Cartouches electrodes */}
-                      <div className="space-y-2 border border-slate-200 rounded-xl p-3.5 bg-slate-50/60">
-                        <h4 className="text-[9px] font-extrabold text-slate-800 uppercase font-mono border-b border-slate-200 pb-1 block">
-                          üîç √âLECTRODES & √âPUISEMENT PADS
-                        </h4>
-
-                        <div className="space-y-2">
-                          <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-[10px]">
-                            <span className="text-[7.5px] font-black text-slate-500 uppercase font-mono block">
-                              JEU D'√âLECTRODES ADULTE
-                            </span>
-                            <p className="font-bold text-slate-850 mt-0.5">
-                              {elAMod
-                                ? elAMod.nom
-                                : snapshot.modeleElectrodeAId}
-                            </p>
-                            <div className="grid grid-cols-2 gap-1 text-[8px] text-slate-500 font-mono mt-1.5 pt-1.5 border-t border-slate-100">
-                              <div>
-                                LOT :{" "}
-                                <span className="font-bold text-slate-700">
-                                  {snapshot.lotElectrodeA || "-"}
-                                </span>
-                              </div>
-                              <div>
-                                P√âREMPTION :{" "}
-                                <span
-                                  className={`font-bold ${snapshot.situationElectrodeA === "Rouge" ? "text-rose-600" : "text-emerald-700"}`}
-                                >
-                                  {snapshot.peremptionElectrodeA || "-"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-[10px]">
-                            <span className="text-[7.5px] font-black text-slate-500 uppercase font-mono block">
-                              JEU P√âDIATRIQUE (ENFANTS)
-                            </span>
-                            <p className="font-bold text-slate-850 mt-0.5">
-                              {elPMod
-                                ? elPMod.nom
-                                : snapshot.modeleElectrodePId ||
-                                  "Non sp√©cifi√© / Absent"}
-                            </p>
-                            <div className="grid grid-cols-2 gap-1 text-[8px] text-slate-500 font-mono mt-1.5 pt-1.5 border-t border-slate-100">
-                              <div>
-                                LOT :{" "}
-                                <span className="font-bold text-slate-700">
-                                  {snapshot.lotElectrodeP || "-"}
-                                </span>
-                              </div>
-                              <div>
-                                P√âREMPTION :{" "}
-                                <span
-                                  className={`font-bold ${snapshot.situationElectrodeP === "Rouge" ? "text-rose-600" : "text-emerald-700"}`}
-                                >
-                                  {snapshot.peremptionElectrodeP || "-"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Batteries */}
-                      <div className="space-y-2 border border-slate-200 rounded-xl p-3.5 bg-slate-50/60">
-                        <h4 className="text-[9px] font-extrabold text-slate-800 uppercase font-mono border-b border-slate-200 pb-1 block">
-                          üîå CELLULE ALIMENTATION / PILES
-                        </h4>
-
-                        <div className="space-y-2">
-                          <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-[10px]">
-                            <span className="text-[7.5px] font-black text-slate-500 uppercase font-mono block">
-                              BLOC BATTERIE PRINCIPAL
-                            </span>
-                            <p className="font-bold text-slate-850">
-                              {batMod ? batMod.nom : snapshot.modeleBatterieId}
-                            </p>
-                            <div className="grid grid-cols-2 gap-1 text-[8px] text-slate-500 font-mono mt-1.5 pt-1.5 border-t border-slate-100">
-                              <div>
-                                LOT BLOC :{" "}
-                                <span className="font-bold text-slate-700">
-                                  {snapshot.lotBatterie || "-"}
-                                </span>
-                              </div>
-                              <div>
-                                √âCH√âANCE :{" "}
-                                <span
-                                  className={`font-bold ${snapshot.situationBatterie === "Rouge" ? "text-rose-600" : "text-emerald-700"}`}
-                                >
-                                  {snapshot.peremptionBatterie || "-"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between text-[10px]">
-                            <div>
-                              <span className="text-[7.5px] text-slate-500 font-mono block uppercase font-bold">
-                                Capacit√© nominale audit√©e
-                              </span>
-                              <span className="text-xs font-black text-slate-850 font-mono">
-                                {snapshot.pourcentageBatterie}%
-                              </span>
-                            </div>
-                            <div className="w-20 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-250">
-                              <div
-                                className={`h-full rounded-full transition-all ${
-                                  parseInt(snapshot.pourcentageBatterie) < 25
-                                    ? "bg-rose-500"
-                                    : parseInt(snapshot.pourcentageBatterie) <
-                                        60
-                                      ? "bg-amber-500"
-                                      : "bg-emerald-500"
-                                }`}
-                                style={{
-                                  width: `${snapshot.pourcentageBatterie}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Overall audit conclusion and conformite */}
-                    <div className="border border-slate-200 rounded-xl p-4 flex items-center justify-between bg-slate-50 shadow-xs">
-                      <div className="space-y-0.5">
-                        <span className="text-[8px] font-black text-indigo-750 uppercase tracking-widest block font-mono">
-                          D√âCISION DE CONFORMIT√â FINALE
-                        </span>
-                        <p className="text-[10px] text-slate-600">
-                          L'appareil de secours a √©t√© audit√© sur l'ensemble de
-                          ses 9 √©tapes de conformit√©.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 font-mono text-[10px] font-bold">
-                        <span
-                          className={`px-4 py-2 rounded-lg border flex items-center gap-2 uppercase tracking-wide font-black ${
-                            snapshot.conforme === "Oui"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-300 shadow-xs"
-                              : "bg-rose-55 text-rose-700 border-rose-250"
-                          }`}
-                        >
-                          {snapshot.conforme === "Oui" ? (
-                            <>
-                              <CheckCircle className="w-4 h-4 text-emerald-600" />
-                              <span>OP√âRATIONNEL (CONFORME)</span>
-                            </>
-                          ) : (
-                            <>
-                              <AlertTriangle className="w-4 h-4 text-rose-600 animate-pulse" />
-                              <span>HORS SERVICE (NON CONFORME)</span>
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Technical Signature section */}
-                    <div className="pt-6 border-t border-dashed border-slate-300 grid grid-cols-2 gap-8 text-[11px] font-mono text-slate-600">
-                      <div className="space-y-1">
-                        <span className="text-[8px] text-slate-400 font-bold block uppercase tracking-wider">
-                          üóìÔ∏è GARANTIES DU REPR√âSENTANT
-                        </span>
-                        <p>
-                          Fabrication d'origine :{" "}
-                          <span className="font-bold text-slate-700">
-                            {snapshot.fabrication || "-"}
-                          </span>
-                        </p>
-                        <p>
-                          √âch√©ance Garantie :{" "}
-                          <span className="font-bold text-slate-700">
-                            {snapshot.finGarantie || "-"}
-                          </span>
-                        </p>
-                        <p>
-                          Visite de Contr√¥le Actuelle :{" "}
-                          <span className="font-bold text-indigo-700">
-                            {snapshot.derniereMaintenance || "-"}
-                          </span>
-                        </p>
-                      </div>
-                      <div className="text-right space-y-1">
-                        <span className="text-[8px] text-slate-400 font-bold block uppercase tracking-wider">
-                          ‚úçÔ∏è SIGNATURE REPR√âSENTANT & CACHET
-                        </span>
-                        <div className="pt-2 h-14 flex items-center justify-end">
-                          {printingReport.photoUrl ? (
-                            <div className="border border-slate-200 rounded overflow-hidden h-full max-w-[120px] bg-white p-0.5 shadow-xs">
-                              <img
-                                src={printingReport.photoUrl}
-                                className="h-full w-auto object-contain mx-auto"
-                                alt="Preuve d'intervention"
-                                referrerPolicy="no-referrer"
-                              />
-                            </div>
-                          ) : (
-                            <div className="h-full w-32 border border-slate-200 bg-white rounded flex items-center justify-center font-mono text-[8px] uppercase tracking-wider text-slate-400 border-dashed">
-                              Visuel Non Fourni
-                            </div>
-                          )}
-                        </div>
-                        <p className="font-bold text-slate-800 text-[10px] mt-2 font-mono uppercase">
-                          {printingReport.techName}
-                        </p>
-                        <p className="text-[8px] text-slate-500 font-bold font-sans">
-                          Agent Technique Certifi√©
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Return footer */}
-              <div className="border-t border-slate-200 pt-4 text-center text-[9px] text-slate-400 font-mono no-print">
-                <p className="uppercase tracking-wider">
-                  Ce constat de conformit√© de l'appareil de secours fait foi de
-                  l'√©valuation physique r√©alis√©e.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* System-like Confirm Modal for Tour recalculation */}
-        {showConfirmRecalculate && (
-          <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex items-center justify-center z-[99999] p-4 font-sans text-black select-none">
-            <div className="bg-white border border-neutral-300 shadow-xl rounded-[14px] max-w-md w-full p-6 space-y-5 animate-scaleUp">
-              <p className="text-[18px] text-black leading-relaxed font-bold">
-                {t("√ätes-vous certains de vouloir poursuivre? Cela va √©craser les dates et cr√©neaux pr√©vus par l'administrateur.")}
-              </p>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmRecalculate(false)}
-                  className="px-5 py-2.5 bg-black hover:bg-neutral-900 text-white font-bold text-[18px] rounded-[13px] transition-all shadow-sm"
-                >
-                  {t("Non")}
-                </button>
-                <button
-                  type="button"
-                  onClick={executeTourRecalculation}
-                  className="px-5 py-2.5 bg-black hover:bg-neutral-900 text-white font-bold text-[18px] rounded-[13px] transition-all shadow-sm"
-                >
-                  {t("Oui")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+              xúÏ}[sIñﬁªE
+›nÇ›*Œñ∏bÀEµ∏´M≤’∂R¢*T´nS^ö£à?˙—·á˝≤„'wépƒºÌ€‡üÏ/ÿü‡s2´ÄPï §D5r¶ª	 3++/ﬂπÊ9ÑTï6µ?t„0úCüvŸia¿˜ˇMeÌëÚÒ£≤“›<
+£‘rFΩåÌ6é‚˛uDcäﬂ5~(z¥"jN—È¡E‘øv‹˛u„á¡ü3tw bﬂ∞∑‚Ø:€ÇÃ√æÚ?Ùªz¥í0èŸ©™Ê£«=ìW ´»Î@b{4I^QﬁÒÿqSÊ'ñÕÇî≈§K#kÉD)¸´›µ“ò	,¸F:aêZ	|n(€Œ“4î/ü^F0Qπ°¨˚ûkÿΩj.ì›H¬“ì^x~L#ö∆.Ûaàœ¬ÿov®ó∞eıæõkçDó“)ªH≠ÛÃ	ÈÖg,ﬁ	#jªÈ•ıpãŸpqa-Íy¢j>mv'alE°À?∂√ÿa±µ™~´$ΩÙÿÓ’ï∆¶ûÛ˝–c8Á_≠Ú¢u‘≈êé©„f	4]€à.¥⁄·≤ü∏ø!¨¨=0hÛ3sªΩZµCœ—h•Ñ"ıa‚ßè≈ £$v‹'ﬁ≈=8€Éé˚Â]|[wµºuÛo?’ñÌ∞M÷¶ã-+Jæ˛s⁄¥J*°®Põívµ?-ìÁ—õÏ≥≤	<{Ïõ´ïoâ5^»Èﬁ≤±CN^ùT¸¸Ì ¯ÛÆ®ù∫gÏî∂…ÓÓ.i µãí˘Ê“ú¨‚UJ®°Õ¨KkõDmkmõ–¿ıi ¨uÿaÂ˘wù›FJ€Æïÿ1cı™f—sÊEO≤v€cïSoSª«˛é]Ó6zPÒ›9ú´(z«üÛŒı£@ •˙D#ZÏ6ˆY
+p€HXí;\ Œı˚◊û
+æ≠E~
+Hƒ2‚`Â‘eÅÕ`yœ¬4f i]è•@êcJ⁄S⁄ˇˆdá[‰e	Ä… {:j—.∞ÉﬁàÙˇD≤‘ı\hGÓUçq•íôyƒ·Áá´˜ïoı’¯L√√£,}+@⁄Åïj¸≤≥c¡T}pÅxSèHs«µi∆’g_ﬁyÍ˙zùì:‰t‹$ÚË%‡ﬂ…=X¬0Niê˛MM˝‚I∞ÍlXÌ¶C`÷nrÓ:ioá¨jTÌÂ@™S◊ßq◊tÍVÅ”˚è¿AÛQµWAû∫]7•Ÿ˜B˚9^˜Iò¿Rs¸á$ØÜk‹ácS–∑NßQGJ8Y[Ñ˜√k˝bîô,0fΩÍT‘†0¥©cUîÙZü^éºe}5Ïı]ˆr„å∆MÀHÀ˜	˛«ÇcÔ÷˜QKZÀºv œ´€∆’≠∫:rwï6Oïz,ãY´QCˇ`ã¡Ï÷L|›ñ˘¬Áù≥HfÛ'
+íßÄì≠4|"@‚ú Át'âqQ∫,}AÉnD
+E?§·@r‹§◊ èIÉ÷O'†F&<eYöÿ¢áYOL;8§ ∫YˇﬁÃGß¶}¿∂Íˇø–ØëX¸5ùÿzv\«Ü/ºjêF›*Y≤+ ?,¿hÃÿ‡zµRß#8ç°Á;H„`å3˘5‘È™)4’Ä] 'x›#îÈêß€%Q˛g“Í R∑∆Õ{Æù∫®Â&ØÉ.t’Eæ9j•ÃÓ!i§Y⁄ÉmÖÃs~|y‹
+‡∑jàYÆ¶ÌbÙnrÅ≈«Ïí{˜F_Êo™U[1K≥8®‡ÂE◊x¥uS¢≈RK˛∫2ˇò¥vÅU.^H&=j…ÿÃHi˛`CÂÿÎ€Î€|K«›vs„·}Ú˝É˚d}kkY!›j“,f¬∂©òmÆà®„¿`ÂÕËÇ¨Ø*[àgË©Õ€·≈Iè:·yy≤≤˚„ºgE5±J¥	À√◊(ˇ◊jk}ô¿Kêµ¸7HXzü∫∞ö‚ˇ#µ÷£ã…ﬂWà
+õ‚^°πµøn√ì6∂≈Øﬂ√?¯_kmÿ…ƒÄ÷Úgm„Û÷ã!©∂W7¡KÊ
+'Eı\⁄h¨≠Æ˛[iU©¶t'Tb]v§Ç÷€’÷√áøåkx'’„øf	≤óemy%ó.äLs5rXÎâ/Œ›ˇÄ´0V¿ìAÄ.†ÿVá*
+jctÚ¥RYåO°$Í_#â“|J˝b®4XS%Õ¯∏‹úTa·dµ†z@∫nK≈‚Ö]LK*˛L(≈’Ä¥÷ºP\û‹ƒUìj.◊uÊ”®Ë©û*2Í¡æ~˛¸ÂK≤+Y™úÈ+ÛÑ¿!=GÌOsyπ0zí“8mÆﬂ'ç’∆2˘N“Wcß!˝Ω˙Y/› KYÂ”Íî≈&X˚Aß5¸Ù«?BÛ’ê»U=∞¿¥07íWxıä6îbä%-vF[∆•z5òñÜÖÍ§”?4Ôßú6Ÿ8Ç≤)ı£ºÒKöˆ`ª]4WÔÁZbT:}†é¶∞•°#@™‰4ƒijÊΩ/+_¯Wÿ4uÉ…wÅ#4¸Y9Q˜$t„˙ûWÕé˛éF¿3<6ŒÔ∆g‘gÕ§M<W=}1ãh≈BÏÒ£‰UwbßÈﬁ‰nêlıUÅ.6ñUú59ßı](◊Gå∑fá/£~q79∏ 
+Á>Ó›c˘áÇö:…[@ÁIG
+qãDe$ vπ{Öí€óF¥âõ$Òw J≈∑k¿û˝2–%n¢9_Œ¿Zâú#’4Û∏g‰<ì–sŒYÆØÆ›'kB÷Wï‚Ü¬êÊ:ªWÔjkŸ4v¨Ø≈¸ºó5î€ êMÿáÆ»sF·»ÍÄ¿ºB~d^ÃU5è0,jOäÇUl≥Ùmh/RªNh9h¨+˚ëkÑÀ≈¿ök$•li»ïÂzÌ§≤¢Lc¯-KåP†Ÿ÷n8&ú>Ñ¢ŸV√Ô™ZÂ
+¢ñ¸ø%—wóãé/”UYªÛò ˇ?PÊ¿JÂ“¬{J√—F-5àZsqp¬S˝í∫yÊ2œI»è1‡ëÈYÓb#¸ó˚=±÷Zá◊â◊-}‹.S …mQhn‡4ØÕZ§πÁù”ÀÑúπâ€ˆÿ≤r†ıBäY†≠G€Ã3ÄÑëÛƒè≈ rœ#„ùÃ7.Qò Ek¶ú¡‹ÍmL>!«Õº„(Yô5jÁ¡+êÑìáﬂÃE¸[c¸Üÿ=+8¢:m:`‘v‹QqkZ‹DQ¬,E¨4#!≈«ßÛÇˇ◊}^ï≥/7BŒ≠NÊy:˚,ˆ{4Ë¬Fi2©öø\Ñ¬˙¿q”Ù9¢6ëÌ∫/—@åñ¡vﬁAÛÀ3ê˛ÌﬂÈ¨ø¿W-~ñı&¯cùrd§í≤Œä&-RzIZ®t&öËV êLÙØ€YZ"j∫¿˚üÅ6ˆ∫ÙÀ‹iñYËΩ˜ÃÈ≈ÿ$ÎP,⁄TÉW÷•XJnDö-r
+R“ÄÈŒ¥Â¿2ı¿2¡2=∂û%¡25¡2E·Ô1U¡2ÕÒ”ß.X¶¢0XÊCe∞N¿•-˙3≠E^xE≠zJ2ÉEè‘`A¬õU∏I™02√wò$‰Zˇ9mΩ ørêÔˇ/ôÏ˘ëÁ¶ô3¢QzÍ&Ë\ÔËËí¯#‘¡Ä:TL˘gC#ÿEÕEè…‚‰õD≥zÃ®Û:.Õ(PŸº C£≠øH2ƒ÷ùál˚»Pqs1SÙ“
+œôÊQøﬁ}ºbE›òÕè3G{¨èÖvan~Z‡ÚXA\Æ\ÖªàÃ>Ωx¡Çn⁄€ΩZ[]’ùÍ»Éç”ÉôeÒ.N«Aê∆Ï7í°ın01⁄ÛQR+ÂÕπ˚RÌµÇÒ≤ Ò;‚Y¢bÏ‚‹IYB]MUGÅ∫F˘g∞ÊwÍ&‚y¬›Åw–⁄{–c1Y!«˝k'CWöÏµÇ3òÑf/íé\’(=|˜(qT›iÜó46¿}ôÄœ∆z^rS:!(—>MzTÀúŒïoÀ|ø*ı≤,øé>!1ºîÅepIù˚¶i4†û€—Ö⁄'6çVπ˜‹>Ã «^˝ñ]Au=/.Ì[&XîƒnRRIz±|∞VâàÚdÒ´ˆcóL*Ó°»±JÈiT2LsÆU7Æ‚™X¬·ù%æû¯îªÈ%J74ü◊ﬁŒ¿XU:⁄*dq˚ˇ‘M=å_Ò◊"ß‹ô¸ıüµÑ∂∫QlËé∫ËmjQ˘J°Ï¡LBô˛Ó—¢«tÒÎI|6ı$çG+ΩM≠	3ÚŒ”u«À«õ‚=„ã}¿˙u¯Ÿ’ßÜÇ˙âÍ≥Î˙‚zæO&Á\_<5ÿEˆiÑˆQ<øÁ£›v lónîê«èã˚B˙kh,wœ"yœ {œ*}œ_˛ûAüYüán áœ âœ ãœS'Â´W”À‰RπÆ\Æ)ôõ®ò+(^0[®[%P| ÙipøqAû4⁄/»”∞¸…ûìﬂ!uö¡eA¨Üebelˇ¸	ñ°áä±è Ä¨U_√_Pµ∫ˆ_0U3Ù_ôç™MÌ√b
+„s´®KjÙ¨<ÙƒBÕ*+˙jV>ôüRÀ:ÂË¸LÉ√DLêÖ<{;,¬`æÔ2o0avg!Ãj¥ˇÇ…˛Bòïï·9π”¬Ï‹*öpA%ÓgˇÙt¡˚»ä>ÔSyß9ÈµÇ±ªb‹.≠…M≥D3\Ê˘Ÿ¢[SôåE€[0MuÌø`¶ÈÀ‘ïJØ{éÔníbä§Œ ^ñ∆l!…ﬁí$[9˜wæÁ'’Ú©YHµÌø`Ä^Hµ≤2<'©∂TMK™Â1s≈›8z'Y≈Æ2À7‰ ¡ˆ1q¿4íÆ4qæ”¥^Z3q+≥‰≠X
+>{∑7Uo}«ÆÈÓY∑£\Æ(Án‡ÑÁ-[‰’oGH£ˇ_RñXgañê§ˇœ1jã·Éá?…`ôÌaﬁ	ÚXˇ‡ÎïeÉìl4/≥ÃÃMûßï'√$Nˇ∫‹^€ ;§4mg1u˘ÖŸπœü˛öÕaÅ´Oô«“¡u7qÕ≠>Ï˙x—Ö7Ωzö§»ê[ô í£aè_=¥ÈÌlIEÊ$]j`OIvßÂû¶IV, ,åSâ_[◊øıV~Æ)wT\O[™≤ Hå.Øâí'ÔwµµΩ≠i/ê+ÌÍÊÍ”ÒTDÛ◊¶h∑#°ó4ù◊ΩQ˙;JD5◊äz,lû≥*˝kBœò m€˝?£©∑ú∑ÇPy|ÅCÂÚÈp»in#&rö›<hîò¸π¬Üñ§¢QI™R¥ØÂx>VˆZ”€ÃŸÌ7w»≥„Ω√È≤€wÄŸÌÔπ…3¸‹u‹~æ{>≥|˜Í‘ÓÂNEˆıÍ≥5Yô+¸t+ÛûwvJJπZûöü±Nûty2Árcﬂ=sΩ(˝∆}Ãz€q€,ƒçr>Ê }~äôÁSÇx…4⁄‘eøÎ¿oïèÉì¨ÌªiëƒÙÊ¡EƒÇ§&ºh≈ÓŸfä¨’r‚Ûjd¬=Ñ	Ú,fäg¸©Æß†∞zh?§'≤\°•Ãü≤Ó*Aº>u∏Yj⁄°WAΩ~•÷Æ–⁄í•ºUŸj}¥péYD∆˚6ú∞ÂË”%”|›˛ï•≠˙∑S©˚ï
+~=ï~Ã˛Äqd6ÿrÑØ-ŸÃÅ|≈I„´.´>ÆYÖ9MJm«3.»˙±EÇâ1Ç-Ÿh±ºfÏ¶ëô¿úØúá)¿H˘o¨Ó◊=`πµ¥@⁄˙e™’2Àı¿¬{†;UÊUR¯‘¨+Ωf¶C1-õËîH6W,Sq€ßaJ=rz∫ﬂ"Õ˘œˇgô|+Âjï∆L¶@∏ Û€ ﬂ(&êEªç’÷ÍöºûN¿\jÀ◊`ÊÚƒÍ©-æ7Åπq£kKes’îÁM•iC;Ë4¢Û|ÏùÜ6Œ)Ïö˙'pÏ 'PKÍïX⁄T÷∞66=?Õ°È”(Ê<OßÇúÁÈqîm~à3ŒH\W7…_ΩŸ˚R@ÏÙå¢XI><£ì¥YÄÿÃ“ Ì≠Ã#ËwéF|~úv¥À–}§^ë5_8R{®éÇésjî©J˚©3W;ÁÛ‘\n•··…Îì4Ü√üº≈—lú6ñﬂÆ˛"ÔpDü-›>Ö¿t‘”0?√ï˙h·s”çi‘sÏ“qm¯+ûE…^ÂÔâˇ≤Œ·1ûürÏ◊2—˜.1Ú*…·êœ–!bÌ1Î¥Ï,éaÏè[6v‘î˚ëÃß¶˜1ä;o
+áÊN!„à∏n∫u}@Ã|?ÇÌWá⁄ü>–~uO#±ˆ<÷è≥øæ6Uú}C◊}0·ªR}¬üe¬C<_|‘R˝…è˜#Ã≥Ù√Iˇ⁄Al?Z·ﬂIπ2µüã6[÷q=E∫Oj€,JwÆOªlÂ[ïæ3‡‡F ÀåïSÏ`«∫]Û3Í4Ÿ˝Û«ø˛)ˆfA≈Úﬁ·.-SÚ@˙ŸË®‘ÒÁï©€u}Õ¸«.LŒg≥°sÁÕ¿±Ç¶¯BÊ3ôŒÒp:ß√ihñ)ËÃq&~ÜF…]ÄÊp¯&´Ésæq?ˇÒ˝´’¯ø˛eN<ä/◊6ÒKN7’Äæˇû⁄ﬂﬂ'Eø:ë;ìÆÈ≠ËÆí~èü›¿¢vd‘ı™÷sçîÁgíú}…HÚSıoRê–ñp_±∫iT"QuRürf!…Ü“Ñ}–1Å3Ä’Ä¯.≠≠ã&ZÚ≈&Ü2Ä≠º?µ∏Ùâ—®ˆTs.µ‰†-„[©}
+È$V3I^¬?xoB¬(’∏ã¢¡ÅËSLSö	ìQuï⁄a[
+vf <tckìRi]m!™sˆ0{÷éV˙´¥
+0>ã'≠Ô”∏Îßa§√aÁœr/Á•i›úóÍü aJ«MÌ}é•ûdVoÎZΩ_=ô¨πÄN‘Ûø∞Cﬁæxq0’ÖÄ3Êz Oﬁæˇøx∞ŸÄÁÃãûdÌ∂«*g›¶vè˝ª‹ÖäÔŒYõF—;Ò†wÆ€ÔåP™7ß›∆>K—ùﬂKR¬0I.‚,QÑ~7å˘%ﬂ˘) Àoﬂ∞¿∆Àæg! +»e]òdÿ”î¥·ß¥ˇÏ…·∑»À UiÄﬂ!Ë}ﬂç˚◊xeúÙˇD≤‘ı\hGÓUçq•ç5ÆEåÃµÚ^ƒhmú3™›@uì¢b0#W)åGˆπ_ƒ¯ﬁ;·Ù…€úﬂ‡≠`Î8Ûç_vv,8s‹‘Bˆ&phlEx≈$∂‹¿qmöÜı√‰ç‰9UÉ$§xúpFÅÅ≤ôfSÛ´2˙w_ˆÁü#˝õ/∑sq•˛⁄ Ä°Åjúç(⁄)n‰ûã ˇ|IØÓTSU_$Ù}ºlPgé´3∆≠◊ZãÑ!Œ0⁄•,ÆU=Q>Ãø7≈ ˆu&3Ö¡L°/÷1·ÁÊ{± ˘ÿÍ˘¨*„˝õrS}Û}›ßÑæ[?p•Î∏Ü@a¬ˆ0Â¶“«Ï¶{≥Ω±…~Rﬁ—¡]v=7Ú´ùåj¥\2eb≈õ–À¸;
+˘ÿõ˚=∑”âŸÚM¢Ñ Ôp'ƒ¿¶Å	—rVî ªY†√Ú2%: sü≤Äe1Ÿ≥”Œıùä“kP˛ü	?1◊4X1l=3^¯¥Äétà2%t≈°›Ém≈äÕÖÚÁ›Ñè WπI·™=åm4û@~˝u≈˜W(î\,‡Bî)·bñHy˙+G1óqÔ&XTº»g¬m‰#ÉÅMß¿(ZœÃm‡⁄≤îD˘Ï,∞cÅ¢Ãà@ûÔ®Ñ2Ú
+7â`|L3@o?3hÅ/∞bÅyô+N˚◊^ˇ:ÍÖw◊N2Ò"7Àg¢∆)õ3†ıÃàëñffÅ‹e
+‹X8Ì.úvNª∑Ë¥K¸‘⁄¸ÑûªÇê-wéªÉŒø «›™]˝π˚Ìí≠Ú‚ı˛ﬁã√ìΩ”√◊Ø¶Úﬂûözn¬=f>Åo˘ÒFæº8+ØB„öxa◊µ]-VJ^Qƒ"˚¿π∫iûQä‚M[ÚúQÙul3;°˛‰°.n-rïﬂ\AÅpZD«ß?Áı66e\M"Õ1Œ&‘}∞’⁄Üw‹⁄h=| È;é`»)Õ`Z÷∑$èà`∆!H–¯∞e„—¶æiòŸΩ=~!j˚∞¢Ã{“»?pÚFÎar¬“Ä5¡}Ãs£à9Õf≥3^Âˇ´∫∑#Ô6Nqp∞k¢0ãA$J1ù/|Ù(±i\må™è»=-ÖÇ[@Óó·‘ú…à°÷∂"§WPE=Œ¨ àù‡0q=c¿}∆¨˚;‰q
+Å˚ 6n;Å≠—vm´Õ~sY‹\mm
+)©µ“òåùÙ≤C‹™ï≈¸=qò¯¸«Ê⁄ÉUáuóyü‚;Òç!w'ãó~|∞˙ö4ü≈@ÙHÿ!iè·∂pd	∂geâJ{Å∂AñÕR9cƒô‰ò`'8r Ïﬁiè˘Ïqãs3‰èÚ◊JŒÎ¿ïØ≠J∞Iæl[¡R ˚‹Ò∏áp~_5êü7n‚∂]è'^“i˜3˜ˇ~2eÎÅª93#≠JëS;D÷^è]ÀTˆ@eΩ6%ÊQ5ªelqqõKõ\ﬁ u\“í≠i-S&·∞‡¨vHJ¿QèÅÃC“•Æ"KR«ı“‚äK˙m¸1◊Ü©àií*?Jèïfò”£E‡E:∏H÷ö\\«írñzK
+µºﬁ‰lzª,h©äêU ˇ∫:í¿ ¸7T[ÊF—ÅeÁ^;∆¿}E¯~]’nWP/Ä¨ã¯óz5~;û>Iäã˘£˙:ï(∏›_Ñ›êÄEéÒµ‰[◊ıª≤≠€ªç^öF…Œ äCS* a{Ÿ/öµíçÀÄ	ç”ûµ÷¢>˝-Ëyk‚Ø‰2◊ªı’ıÌw8§ıVr÷ï"†^∫€¿ö3gb0?M‚à®£gƒ„¢ﬁªÉ}æ©Æ[‰ÉU√ˆØ¿?s9B£bﬁïSå6û≤ EúÄ<	”§û :“uÖÈm`ì‡≠)Ê¸Ã⁄„V ã*çCµÉΩòØ<ûg|7•ñwµB¶îÙÒJ≈á±À∫"ôxTÆ?–πlkƒLªi=
+i$y†ê…˝ƒ∑”,Ÿ–&•ß©Ñ{öÑ¿X˜uV+õrFvéí™wåBìè≈P•ßﬁ/£[dd˚hÔ≥PH∫Q%Å£±? ≥jÿ≤<Ò6â.¨ÌÈI^5õ@Ê"\ù∞Ñ˛ãbÀ 32Ú‚2(˘‹4ñó[OñD~ÄïN≈c2˝SZI÷ND<ŸU‹:À‰;“hµ§âé≠”?q∂∏=i˜Õ¡Ò	Hª(5-Ñ›ÍÆø@a∑,èå+WÓ§ê¨‰œLH#8òK8#g®±ä≈nêπ)¸“Ì_á~ˇPÊŸÕEsÓÆ‡◊bÚßìÈòÚÚg!&Á§ãÏ#WWﬁÈwKj.^c.“≥O/ûEÂBï¨D€ ≥c Ë¿≠≈’?®£÷˛Pıã:˙MÖçRß™ç∞6RE√©‹âj3èÒDßt_=¥Èù93Ú‰èfôé_î^Ù•>Ëã:[Û\ì á›.^/i‹g√∏=ù¶K„0Ùz.;◊¨oälÚúzRı ÂéXf®7ItiΩEˇÀÃ¥HÙZˆøÃ=gWµíÉåKE*'	]ê∆@ØJQÈU◊fÈ9˙öhk—]†Ì[Dö_™Ûb¿s$CÜ*¨ÔU⁄lTl∂ñ*˙∂:rºŒú®ìa~n#πNq‡+íîÏ¸ı».π,; g¨ÙÀ%aÈÛRì¶ËiYßi_j±$Œ#'r'i„¢vYäÇn≥· 9}«ØLßÔ\ß±Ã≈á˘aCg0d¥€d¥[úïw≈Fjùœ◊cÏåqüàı÷–zÒögΩœ˙˙äøËGxª7˙‰˜≥?¯ãfç5cYs5¶>¸V£¯û√ã©„íCœµ{ØÇ\©ò≈:/âÄ·¬õáÜûµMŒ≠µ5íÙb7¯`≠Ê^\VÓ√E8·gNû`âªµ^¸Q‚ .ŒúÈJàìâËó÷˙Í*a4aÙ0K6m ˘KùAîYîQCkµ£À/€dm…}˛rA∑_ªÌl±5•ÌGc›‘Å·9≠“Åœ·˙Á+j±3XÆÑì™b+àªV=kˆ¬÷P”2∂¯œëpÊŒJ‡wTÏØññævÕuf—`ÅG‘A∆ãKƒ)ŒuHˇ°â
+¬eΩuÊ+]j [™W\Î¨J£Ûc—çÚ/µƒ)+Ãh4xÅ„”à¿Œ˙@b∆Â:á¥/I*¯Ïzû˙Í^…–Ò∏%Ä·î∂ì«-7∞ΩÃaI≥Qñ°Äà~Û1mEö?ÛXøÀ”5OD≥zª˙Mà∂˙πà˙˘¬fÃÖÑô⁄ÛnOX né˜@.´Ody=˘ 5§Ö˘…˙É©Ã0ï‘0!7t£‰§Gë^Ω@X‚ó!éh$£›@r
+p!|±S˙UèΩ.Û«ëgòHƒ·ãbÂi˝;']M}@xylﬁ'ﬂ? ‰zΩ	†œÌi-Ø˙|ÈÛ|wãÎ3‹#úﬂ<ˆ¡LÃ‡‘Ï†ÊôW≤Ñ∫L°[8;ÁòììJá{˘)XhOo—√ÑC3ü0Qp^b˜¬–[Q≠ú§∞€xD9êÊ)«@ª€¬0bx(·È,ée—oE—ﬁ“Ê9Î∑L7∂∂∂ô≠—yêßÃŒsQ@S<ﬁ1BÄFcÛy ç]f7<QF#ó©l¸S∆¨Ì’qÇ&_’yxf@◊ ÀÈ>,0øóp5"t1ÿé¿îÛ◊ﬁ5_“‡“Â∆«˚úÂ»º:Ù˛ÂÔˇ©TŒ£=Z°7%¶’ª[ÚX∂0|Íƒ,I ÷”8≥”,≠„2œI¶∞yl÷à5 3œ]?3øáÌ,t’Ó,ï¢’,Ç’‹#’åΩQKôÃ⁄ ü´< e,yú‘Åû $¶'iÃXjñƒyﬁ”—Ù#’`çVÉ^'[‰8cò%Ñù#Í^ÃET5≈XÉª˘XL€ÃüãAå,∆qjL20üè±ãB0»ÖLË“≠-Ä‚OôpWÆÄöDànsãˇBQ&±@:ÚwÜ◊5ƒ[Ó	ãÒ§»$√&œ3w¸·£’A-‹—GMÏôDü}†ˆ*ÆAä>ÿÅˆT†PyW∫-±‹ ggà;”!œº∞«}¶¬3nrÆ§æT8Tƒÿ√åoaí“˙húyüzî∆|ó0‰?π—LÌgFêÔaw≠/dÅ y—A≈œ∑ÃË˜Øª(›ﬁ∞ «´	T¬r3¯sÃ∫µ^ù√"Ö —Ö)
+-§(∑É'Ñî≥HÍ>J‹…⁄õ¢ÂÀ7Ûf7z√◊ñD¿*äRF\ç&éQÿé^Ë&nÃ3˚≈‚T?ZïîïpXƒŸIûÖÒ~òi|ŸJ‚‘ÿ-=„„_Zn˘4j6c~e7‰G˚Å]Ó^≈ã≥¸˛—Â≤⁄Ωì√”Ï\ÁΩî©ÒxGüÇ„`?¯Œ7…lRhæÛ æ R˘2¸ÍmCÄ)ﬁ: ¸Ë¸œ£0N≥.%çìÃM˛ÌãÏÇ˘Ì0ãª¯È	Û∫xuˇﬁÛ<ÊXOhÇáó4ÛôıS‡‚«√ÿ£Å√D∑˝?;˘√º0ozj˜˙◊pÙEßYªvè5~@oOÙˆ Ëm z˚S Ω‚Á[^–‘M3ÁÓ(Bã"=u^ﬁÂ\È’ê´ÅwC7ƒÚÁVæœYºO÷\&˜vw…R »∞§Sç¬ _G´v@É•eÚx§Ÿ!KKF:ìcÊGûÀ„ê˙∞TÄ>^,[–Àœå^V≈√ﬁËlv∂uYDÖ¬Éü√NöØÅ†~7Æ }›;Ü~≈àøH¯∫£8t5·Ø∫b¸’t;0ú¸-‡oÚëw˛¶˙Y}‰âë◊¿8˚Óo¬sJpø°,º´Ï
+Öd®Â$ØjÆíéÍa∑ÏÒØèE∂4'iLS‘Ö°OLBú˛5«Dâ§Eæï¨ôÔ’™îB≈ÖÀW^=Ÿ¨T)Gé«;0—éhAùÃAú9ºÕ⁄å`m
+H3’~Lß˘0÷zË∏Im⁄‚òÔÚ„7vÁ°F2›q”Y£Ê"∆ÿE<ÑuÛ@^Œ≈ß)òΩåO‡ƒÉ˙c›»Gu‘“ëz073è≥›tÉ˛ılCUÈB‘Ê=sªÇ∞¿~[óë"[]ò-ÔπÛå√yåhå¥¶åÈÌP`ΩiÊ•∞î0(S
+Û¥‹xA]‘•≤‹9ÍÛË1ÀßQ¢¿h<«Ω(JÊK4∫aÿ’¡èºÊ·ú˛¶∫!˚3T˘ƒËË ≈+@.yR£)hœÜÄvs˛{¢AÉ©´Á"‘T&™~ÌÌ ◊æèq	ÿ “"øì?™GﬁI‚Â)ÙdoÒî%	t˙91Hy2ÿ∂kÅ‹ñÑHkËAû∞òéÎ{11ﬁ´õ‚µ§≥0!1~ßxGâ`(49»fx4\ Œâl∆"ïiHoÂ#ÿñ ‰°í5,Ñ)˚ ~ÿÓÿ,è9…î7) ‹‰ÈÀd’ßçDf”‡å ¿ùù›+ÿ˚ºÍ1Î»u<<dÁÓ’∆ÉUy=Øs˜jmKQqí∆ı¨∑–
+„9ßov&Iè∫±H’¶a-Éó∞qŸ”<Ä∑‰Ç‹Ó”òû7§∫Uƒ[æœêÑ–P´≈O>)åÙÇQ|íYKûé+zçﬂé75z;ﬁ‚ pÃ98zcgd[‹Äì¥ïk´DåÀ·ßí¥yßZ±"L‚DbDÿ0Ö IMQ "wl„I‡«Ãz˘rö'Ó•ÓÕNÚÅÉk¨›ëH
+9k8ª∑≈ACπ«ÚY’∏	>eØ‰ßÍﬂ9√ÎÎ.rÜ/rÜœ)g8˙ ;[˘¯[Ié≤À”∫¢;Ô¶ÙI{˝?˚yj?èº2àHÈ0ÀUù¥4Nz¢‘⁄"Uè|ŒczÅ®nã‡“a'=∂Råƒ_Kèı6&xé¯√ÜBï‰≤{⁄lÄ∞éî¯¯r∂#>9π ÊGˆ—Jo£ˆu>±,ÑØx*º¸~M;0bÉçé)∑E>í˛59<yΩrx∞O6WÅﬁ.K_∫^¶©dQ_Ë›∆è≈zkã¿Óëπ`\ÌΩ;}~Ú‡D∏Ú}£8%¬LarZîÑÜœ—Ò#”§˘Y@®òÅ‹(ïë‡à_,®·”\éØ%¬ïÛ°ã∑jÕœìY&j66s:0
+JRç¿?∞è∆Xøí
+d F©òUÄ´´˜9^ÒπÂaŒ≠Øá+ˆ^>\Ω‡t â,G+«|Ríö1“Tä%"èÕ7òkæWJáÏ1YÇ#=‹:"RÎz‡å|/bt)Úûâí”ˆ%‰©¥â2Ù[¯n≥ÈS†Õs„M∞√K»€BYR6ûCh⁄´“B)ÚOe"ò‚x≤∑˘ˇR¢∆≈ä=ƒY.~D*¶:Kâgö1µ‚≤çSUü~˘em™Y4Ôõbôõ
+ã∆j‰ÅGËû«Ñ*ÉåIB*~î0S	Ø’<máûπ6J?Sõ‡≥ak'f¶ƒ˝›aVˆ–#	ÜÚÍ∫)Jªvˇ/p ˝PdÆr∞C¸>∫„µüõ”YrÆˆŸﬁõ√˝◊ØræVhFÆˆôX„ÇØÖoì´èõäßÕûsµ¢£O;û6ÅÇ´ÕWl¡”ÀÇß]¥ü7O+O∂(
+¶\‰ß;ã=u4[Lô»k´Râã2bØ‹‚aäEæA+O5hp2ã∞≠GpÑÏKåËjÈFrU'e¯ùsˇ≈ä~ôºˇ°ÁôàsˇR«!iHûá>#'"y!MyZÏvò¶°/¨Ân–->ÁÈ§≤Ä⁄Z‡ß÷ˆê)§Û`ÎCâÅårà„	¶∂≠M√÷ò∞3µ€∞$ Q«±“–Í¡ÃÁi#k3Jl„¢@J‘∂÷âŒΩGΩÕ[ì®rS¡Øxu"&˝?o©mÇ^ÿ∂ù1W&Tq±jSÍ/U)yå¢q—BGüÊ‘ºNµ¯•Ò:' *ªG=ƒ≥0Éø®s§•(srB;4vI”}}B÷∑óÔãsî«QŒÆ£"Fs”„YËy⁄`◊åÒb:^ˇœË|èIÑ1•^èf)t”°p`¯µôéÎâd{>≤Aµ6M@“øˆÑàç^\8R|r1Á(äY'Õ—'ìø˛˘é¸ıüó[‰Mˇ:v;.4gAí·A≈‘‹\2.çØ≥≥ÿç	ûX§+vEv8a mµQk¿ÌÄ˝kv_å~œ.°Kt+∂‘¬◊√m·ƒ!<H±¢)Ã˘ìgÂºƒEè1ŒÇ©fÅÉ¬®ÃÛ√$Å≥]d¢ïÊm.£ÛwÄŒﬂùÜﬂ!:'–Y+âÛ¬üé º¨}ïK:˜Â¡ÃÀ$º"ÉNñŒ<òıNNv–ˇ⁄qì»£óËYÄQPÒ©ür1◊“—‹Exüz∞Q(lòçn\‹î{ÕJUfı©]«t`ÇNv«Yy‚Î`X˝∆=^>⁄±7ëj∂j~ºJ.˚$•iñºL∫ädRë∆6ëÚTf7 ˇ£πQ‰Ìp2˜<∑ã˘0»ˆ˜î~ñ£◊¬gN}í¯I/<¢√ÌsÊEÍD_zYõ»¡Qø∞µ*∂û¯[Ø‡so1Ò=¶R)D∆∑Ë…ÚÀ`œKCå"◊‰@,ÍÖq~Ô“ÍfÆ3•õvÀP:Aæ¬€Ô_ˇ·ø˛/û≈
+NøÓüWg°(êˇï•‰ô´ø»úê$K:9L>∏ãIæF>ÿ#TÈ„e€ò∫Ip˜k`@:CáÖ˚≈Òwòè—àê
+€Ú§Éú`$ q Íãï)B‹Ó∏j7ÖÁ!ÅGﬁ"ªêvòwëp?ÚÿÖ¡%CµÛÿl /Á…'dà™Ÿtì‘ròÌ˙‘#ë˚∫t}éîd[e∏W%^"«ÑL Â˙Ë&q∏IÆ§°8U…d∆”…‰èiuäŸW`ê’PKﬁfâe¶O-3È∫ö_<¬)C’—{K¬·¨\˚ÅÏöí(jÒ_2aJeÄ4˜	øˆ°ÿ ;ÔΩ˛&l4èÄ«ÉÓ{√ø<¬d˛5˘¶õ™2µÂ&û¢'êH®ﬂˇ3ú∫d¥õÇ°—⁄£y√ßìáz–ÈÕœ”æáóQÑúÅr ëŸ·D¢ûnqÙ'Ä‘g†biê÷&sœ@Ã“E
+cûè&–TxUt¡±-∫¥V·?9MŒ°.¬218‚5û ‘ì_ÂÍNfxﬁ¬è<øc/LRUÈ£˝lÛ¸h%îßß©§¨•ˇÁ)µ÷FqGÒ⁄?qú9w∏n98fˆpWJªiú WÿÉÕåE<Œü7»Ωh‡ò‰·ßh2KKY'y∂I;-7F#[ñ∏~∆≈ç¸j•M=9⁄B£ç˚ME6'‚Ì⁄⁄‡Ê¬p1Üj)’÷;Œß∏úIö†~¡«”@#˜ˇwv~¬∞aÜô≤@ÇyÂ∑÷¯Àà¥§…`˛Öà‰˙~ˇ⁄q·MyMGß\ÇΩ,Bq‰D7≠®∞ä˚ uüÜ`övI?ºKÒ”ª˘é<ÖWn·yS#ÎßËçaz1Ë©"ÂΩ¯	”å°[I8ŒﬂÒldúQ? 3íÚ}∂«}n˘òõÉ—kå:¿ì≈—Õ>ª…G•˝z8r‹™’oàË∆_^êT„ùx‹†ê¥ÀZ0æCÿbÕ˜<‡;q®ﬁAÖw|êÔææ*ˇÒ˝}¢;på≠c¬/àËòa⁄7|≈s
+å<úÙuìV¿N§—‰∞Û—	c¯¥VÈ{úAæãÔﬁπéV÷Z∑CöÀ≤lî`7ãl¯í!$0D_¸%|M|ÉÑΩb8>ﬂ≠4v˝ÊÚX‰5t6ôn}}›¡í{®Ë7 §’j˘zô>EÈ˚Åü£±ßÍ‡–Ÿ)m˝.>Íe2ÜäöıÚYÛı˙˝®µÎù‚õ*ﬂSÕ—-¶Ÿ…»Óƒ}[Swuae'∂ôÓ,œ¥ 3≠∞ÊÍhÓçø\≥4OöÛ[	ƒƒ‚2”;ﬂwπgd„>˘€ì◊ØZ ∏A◊Ì\é<R/G∂Fùúb4ÑMΩ%Gﬁaá4íåJÕ¸Ω»oÌê˜{]\•ÇÎrBÖë;Ìˇ9!Õó»Tùfdô‹#__ïÉ«$æÀ'¨ô,èt∆‡ã÷{≠d”Z≥â35¢Èlv®ó0ì∂ØÅ–ÒW1j˛6vj˜Hì≈Ò°¡•L√aà”f„ é ®<'9W°%É≈TÃ¿ÉAø-ñ6¶Œp5L|Ï@N‹@)Ö≈Å âZ°}|ÖÏ9Á÷Û¿
+Öí˜≤ÒC{l!eï‘≠£.jÁVÿça^ÓzíŸÓˇÎ?¸œø;∑ö›◊≥ààr”wîö˝ë={Gï˚^Û´˚,ÌÖŒg†÷?√m±TêÃNS¨ÄƒB”Ø0;çkx?≠‡EÌ˚Kh≠è(J v≥ÅÕ^⁄ﬂ–Ïè*‡öPaÖñÜ%X=x
+*˛á6>éºG'xj≤–ıÛG,t˝]°ÎÁ7råUuñÅ¢À6ç l1ÜÎçÅí.Õq<o‡ΩóÑâ¬‰≠O5!Çöﬂ∫fÑ≥¨
+‚#`»“ﬁ¬€Œl©PÓÛí)c®ŸEï˚=ñŒ∏öËr≈·–Å¯6fdƒ◊≠òA‹&6ΩjªÅ∏ç=˛Ñ&vÊqÁm„,¬õU∏åN∏`VJõ¸ †mè-£µ!HˆõÍïó0$¢Î°+&HjI É≤e©Î!;ÃwJñ[·ÖüR~nËbú£·8ƒw≥ÕÚß∂ÔP‚˜Ø`X¡F=˚†´|Úì≤ôG0J„ne¿fexÈ¬µÔñŸG0kaˆ©.≥œxYò}fyYò}ä≤0˚åT\ò}fyYò}füÖŸá,Ã>wÀÏSåq/r?_√œÜ 3˘ÀX4r?Îœﬁ—·Ñ0>q«„ì€t™FYkœô—‘3'è˝4¯-»@¯ç√ÅÁ Ås“ˆòsÑø€È´◊ˇ£ñ>«P=°àƒõ®4y‹8rı~‹:‚∞3ÊÖrˆCuˇ
+lºˇµ2ÿäø&aê◊¿y-Dø3óù?éƒÏ~]3'ä¿0¶Êñiç-•u¥´XZ!w◊—?|	¿:ÇA…@S˚±”[∑ Å/áÚ!π»ª‡Ùb˝¸b^2éˆ˘ΩSﬁ´˙⁄ùËˇ∑ˇû+Ÿc‚⁄ÆÿÊTvŒ¿/µ˝(„=|zÀd•≈°»Ïëk.I(.wïåÄ·◊Ùa∆πµ‡˚˝‹¨Y∆ê€∞¡cˆõ≈µyŒRˇŒ∏!√N^/‘á~î6ä›˛uJ›X\U[¢√daü  C 92â.?ÃHÆŒøçyMSÿ¸0Dßˇ$’(√h¸æ_y˝1°∞/Ú[˝1öÌz)Ï›„lïLo=´¢ZÍ^2Æ$èeîRu´´∂®lE ∑IÂöåt‘f£7A]‡ÃúÆ"'päP⁄Æúm@ûp ãŸ›mìƒ¸åí`1K@0|Ü^R7≠DX™ìLüä†∫ßëlEˆ;˝LÎkÜô∞d#¿¢ïë ãn≤ØÀL qkìﬁ¯ü<∫RË¡"rúå·*¢§:iµZÍHTÀd«!ÚÃ	yØ≤`rY>†⁄¨rRˆGZB;ú°iñ˘iLòÜòPÏy9Åﬂ¸–à^Øy5A?.´§8ŸÔN}ÛÊLîrzZ©ΩM¶•ó¶”|CöRÕiËÊ4î”åvì‚°‘á~b¢:Õ”ëπêBR<ËY€ïäV≠«»÷Gë∂'ØtìhÙîÂÚ–.›≤8ˆ˙ˆ˙ˆYœY À¨»"éÓ”˛uR®»∆îcÍ√´6çL+µØ|K˛}Ê¶)…Q û&KQ¨@=CÄa7Ã$¡∫4Œ˙tÁ‹‰åõúo≥≥mzÆMœ¥˛y6:ÀöÁXrÜoÂ¸b —Õ∫≠(9W¸hN˘ôïü◊⁄≥˙hΩ√&©l0FŒ'Íå}1Œd¿¡∑∆9|FNˆüø:‹?‹{EO»´◊ß‰≈Î<xJ_ëì”Ω”“<˙È…ã√}ÚÊ‡Á£◊«ß'À=}ªR ∏µt,È ∫À‚„_äÿôAà~Cœk”1˘m†Q÷X±≤`ƒU«ÚË%¿Kπ˙Ëî"æƒò·˚!&“Nâ"úêsL≥]¢˘:HTºKaÎyPÛV˘∂$À_Y»ãΩWO_˝HNˆè^U ÒUûl#è1çp`°QmªÆ±YW®îmEÑÆèû…Í∞√J4«IœüùG^û¨UπﬂkTõ‹çº.⁄Ê£ﬁ⁄Ñπg˝¬ÀÌg<N˙h‘N˚.E,XÑ≈ß◊÷∆Kd–ÌZe»ö?hpyt¬°wÍS‹f!9	Ω)©πhh•∑VÛ:5ìPoÆ}‘[ØÛÙÊs üc:4$ñØÉﬁu0% ﬂ,I%:†c¿XWF∆\Û‘ıjAØ∑nxua+l˘b=∑
+£i˛∆cÊ}LÂnù£˘œø‡XQÛfx•â‚më, .à}?ôàN∆5v=O\÷x∫wÄÆ(/\oaVˆfËÙà∑Å–˛OC;_ÈRPn's|7pãx¬UÜ®:µP≠Od˘©ª!ÄÄÚ‰ß””◊Ø»⁄99¸Ò’ﬁãÉóØN•·tkñy¯¯´˜ÁÉD≈‚-7Ω0_„·F†£ﬁN&¶AxΩ‰êHæÆgÚ‹‰ê[ﬁèn«◊ì…£èëÔ‚Æ5˘)¿Ì3ìèáÄ◊¸?√ﬂW÷Vœ©i6ÖùAÁ‚Ì◊À˛\‚+`äVæ… ∆xZù∫«’˚?å%1íÃ[á4ÔMNû‹«›7'ö4”8ì;–a≥R£·=©t¨{GiÙû@à#ì ÄÃÒø8S«ØÏ''·«z»·i} »ïD©ãAâü^p@e˛VÆ∞)o¸éÕaoj1Ûjr{®3Ÿ‹‡ú¶:∑Æ(¨ï§atƒ-ËMtnŸTÔm]g’)∑∏(&Æ£b7=n¶±∞‰õ‘)}âƒ~Ã(GÉyíÈ¥é'àu3 ®º é˚◊NÊ*nEÎ¯~J-cr∑–™õq´ÉõqC∆¢`&D‚?ÕãrO¬˛ˇMëCB>·ÿ`Í°-Ë~~·≥ç¨¡Yxâ°Ä$ve3ëdIàSÔú¢Œ’P«øöûm}Wî¨ë˝ÿú∏˙8 Ç§ƒ©h˘r‰Gø‚`Oﬁù<¨j#Ò∏%˙ÔïE£a<’)®ÿÇÄŒ1ı~V´¯v‡aGEØ⁄£™9ˆ•p{',Äù8vA5t’-L›∂µeËå+Ü¬œ6)ë6€M√K¶Úá“{-2fF»∏≥aôç,ÕHò4H”¯—Á˙qπÅî˘ﬁqVx}u´ºæØŸıÇ“¢É◊≠&cdÇÒûÙÇ≠=-äTÔ…g,Ü≥´‹sjí¶·‹™·eÇJC%KuíµAv-TÌbáú¬÷d©¯≈Ä#f"ªë2\ŸÃ∆=LÁµ"
+œÕˆîìÂzKÜ˙Q h<=BiõMz"ø}Äô9´U3CŒc∞YµE»°#‚N!S·d¸5†˚∑:√]·„’z37à≤Tk\ÒÂ‘‡àÖÁ˙àô£U˘åz€ΩJ˘∂}ªæÂßAÔf* 2úÄ.+8≠FTOO’º:à•’jG´∑ÙZ;¿âª-˛˙∫ùH›éJ’¥jM&±Ã_ÒÓÛ+m„
+†	Ä.A˙Dl
+Qk40˛æ;°ù%;≠ç¯f)ø!2Ím∂‰p÷ÉŒYº€8∏ÿ!G{«@™§∂›¢h§Uï3‡√Ç∏Ù∫çÇæ8XØÄ$NÀ‹ÅH(d¶L˚E¡°qÄ ÂÜÀ;ä[8Ò`Rπ1'à–[ÁGy∂F±√r––\Pà˝öGÜê∫Ù≥"F3ó°≥¿	}üvg¸∞ã€~Ÿ˛o⁄∫Ä5˘ÂNn˛ˆ2êi?ˇòtÙhE@·|©í∏∂Û≈Q•7\q ^ék0Ûè˚…πd ‰Vÿd˛§/âÚ±<Ñ Ôã5æ	6ÿ…"8k•Ëa∑œ∫…/wä˚ÜﬂÏMiJŒ‹$É«œypú4fÍ¯∆Xå∞$œì›´Ω≥0	<y¥ï/	zÚW˙B¿g]|&,c7%íø`Ö≠Ã∆k\°àÇ”Â	·˘%ÙN'¡oæH•U…PY9b…«‰Áy,àT,Nù±L]t≠¶ˆäiåÔX¶2¿cô’⁄°aÆêbíX+V«u⁄u‘{®≤™∑ZLX'‘K°{AÄëó4ˆ∏é-Ç◊4‹X	7Ël¨—Eÿ,-B·†∏µ:ﬂ§*D ê<kÕ7:ô’∆j·1xáﬁ^ck<Ù‘öœr†ÒU∏RñtÊ∂zHVÁa>,”zY‘¥õ∆ıs2tQù}Ω6dëUT˚&e_ﬁs÷Üù"ıW’¿£qö¸Ï¶Ω&O—êˆ N§-v» ‘“◊Wç?æó4«€,µŒÑ5ﬂÎÖP2ù4e»$ƒÜÇßπ<ÕÖ•fÇŸì1ïj›ùJ¡ñ∆–C”≠ÙEo≈vX"6™ïÜ.c]m}BÃ=;+6à‹µìµ¢òù¡Ñ?eöy©úb„hBù;7ÔÕ: 9ÊN‘Ñf§ˆÑ‘å“áî≤è^t‹Z6%∑OÚõhÒ¬ÆkªÃì%$êÑaÕN√#™≤ê«Q´ßO∫q—™èıˇ  ˇˇÏ][oIv~œØ®h7∂à∫K∂;MRcŒP$CRﬁYÉùŸ{‹ÏÊv7ei4~\`Ω» &@^òó âÚúáºÛüÏ»¸ÑúS’˜Æ[K¥$;Íõ"˚R]ßÍ‹œwdŸí∂3lcÊöœ–8¡›ƒ)™∞Õñ;LêÚ#êG¢
+´‹7Ë≠Ë÷jç~üÏwzöu9!zlÖôõíÚú\{q¶Ùà¯Õ¥≤õ§ÿØÓúŸ‹‘¥Ì8âå÷–N#>eüpóm~Ô*õdåˇ¿Ä¢îµ«2ù¬ñfÙÀÊN‚ﬁ¢Ã<,ÀPVÌâ∂dmlﬂ÷,ohõŸaÓ¬(wó¯ü>gPUﬂjo¸â Õ˚©ñœ®ä¯µ&†–ôX ò¯ŸlíÚÃÎÊ»Ÿ#€ÖÒ†G ÍKüëûQì˙|Çq“Ø>2òRA‹N¯zÕ:4k_5†ì\¿¶¿Z<ÊØiéD:£8Q]ã%Ô.OHõv∏édŒéüm€‚b⁄Æ9ˇèYòà≈Ä`ß
+n5zò©&ÇE
+kybÅÆODy+´,«Qp√TÊ„©ubŸtLaﬁ£#^+2Ê«˚EbˆÂr¡bØ•Y‹r\v(08N™3\ã;\M.ß∫ÖTñò|Ÿ 1wôÓpÚy"âøPzayóGÀªVá√ô…≠Ül%‰L∑Ÿ&’f{–hW€µ©uÍçrÂ†XûÄ8üyWÆ’B;9!îVä‹1‚˘It∆Ç°∂úº¡µÍJ˘vøPÎì∫@Æªr‡–:~®ºáVT‚Q≤Ó	$È©Á:-, ÀÏQ¨&”L}ëˇTQﬂ.q‰gd.ïüπ2)âì¥ `ıAsÑ©Ñ…√–æ∞ÍB,VK‘çËäÙÀ«>qﬂá‹|à†ˇ∏…Q ûZ#å_Ÿ&√±Ö>nQZæ0ó}ÆñxÔJ
+I_[˛§éºâo_ZD*táklDxﬁ‘rÍ ıÇ∞iÃ?Ø‡åôgt˚I WT—¯∑Ê˘Ûz'ôô˙ë`=ÛÿCœ˛Fv:säN·ïﬂßîyÅ9∂LÁ$?øÿê›qj ÚÑÛ|ÈÕzÂÈ7+≈«7∆^`»Õ@ˇ∂Ü≤≥√`ùRŸ JEÂXvy7§ªpôN€J.^&Ûñ…áÛïy^wﬂ9±c$~ÊK‡t«OîB^eçúuf‰§M(∆úÏîVú”IRØ2“∂ì·„ºÄYT+‘+ÁÇmYÔîòƒ¬ÿ◊#πØñøÛa4Äôz≤¢±ÇÁñ©yûÎõ±…Hˇ(*hÙÎçù¢∞K”"W)a∂ÒpÖ^±/[ÑñÑÃoﬂpjå»»2ƒπRZÙK'û5"¯Í¢~e+Ç™°ä”õM&k"ÌâB¯K\ã«0∂ [:∂rö¿≈õç≤πB∂V»ˆ
+ŸY!ª+‰1Ö¬}˙„ª¿NTÏV7¢¸n§fü% üó≥†$°ø–Î¬Ÿ‚ÊWÈ`˙©;[ŸJ]U P_î3lBD§xt[≤Ëî¥$RJ%ÿ¨pz?
+6∑&ΩêC—àÒƒÙd\Fü˘§˙Ó$\üû˝XÜ¶R»NVë8°)Ω˘¶ò§bÇ6éèAÙâb¡*r.òh¬}π.Ÿï∑µ'?‚ìk˝™Ñ‚Ö2$ÄÙ≤UΩV¢◊§kmC,Ω®5°0˙Ûµ√^˛+/wUˆã÷◊T4t!‰tÍ]°a∫.ŒÑ;A|∑QNöÁ‘Rz¡≈‘Éµì√íVÚJëÃBò"äÛ^I≠q∞u◊v◊)Ä·»sß@ÉôWôå»˜ïßp–∞≠T],CÈ\·8m¢A≤?ßxˆ…8¢A™Ëápl`5¸πÇC±çs9êZ˝‹1&0¡≥—á◊≈^>ﬁ∏a÷=Çﬁ’ë·çÿ3	g+⁄íœËrD°Yª‹∑œ˚XÌÏòﬁ´¡Aã˘ªﬂçÉâΩGÚ±Ú¿÷/F¯‚ec&Œ[	◊«
+qå”ïsÖ¨:nEt!E…û¬€Ï‹*‰Ø≠	≈¶qÇb‡¥»	è‹—˘
+¡Øê_ylÓêÀJà\…»*{Vr…ˆvπa˝ä·¨*˛ÿ4√rœ*Ã£ßÒÓ	•∆©1“Â∫‚ƒ	òñ£>/ƒ¨D»JÂœ*∫gÁ'.˚w°Cc..æ∆·Rwä‡aÅ˚˚»‡ Çu,∆FÌáÌ≥2◊~cAjﬂN±í[:îÑ#Å{îïº®E£ !ÆÓë}÷ıòîŒºÊ6XÎ€Ÿ$∆·y6o!:∆Ò9 1pPDre^ïıA'∆)Ê´6'S/ƒœÕHèÖâ»r◊õˇW¿¬8©3÷8∑Î÷˜ã^~0å+˚Æ1…BÌO•˜Â4æwñãdï.>T/3ZŒ4≈L‚Õô’õˆƒ¶®(éâˇÙA#dŸ=\ùÖªlUûuﬁÖÀƒö‡µf¥åD!QI§iQ$]†õQv¿∂∂m%mqvÖ UY&DyVNø\¨Ò‘à‹qÁÙÎ,ê¸˘M&g≥Ò\e»∞ktuÅû„ﬁlÃ#›ÿ8ÉT∑clY'œ=6—∏¡õeÔOmóPÏ`»Ó	ôå@˝€ÿåV5"4F‘8™§Çxªú¶≥!◊?»¥¿&ñSc%¡z$?ªT[tá3
+ËÛäÍ]Ñe.}kÖôpËgLè•›Ù(Rë˘bçÊoÚxa©å=ûª!¨NzoÏúöÚ5PÄ(À∂#Ü8,«uŸÙ!Ï`:Ó∂#Ni+‡‡ñÕ·õy•¢m,K%Õ£E1+^Í,˘ÅÊó6MII˝<É2 {!QBEÈ!ÎRX≠…Ö»:Ê˘	<Ji≈äÊ."Êzœxdr±ËtûQÜ≥Û¬'%ëÃÍù⁄!≈´ÌÏÔ7kÕFã;9¬«â9Âù◊ä:Á‹´ÅÿÇuƒè6ãR.%+^RÇëÙÊˆÁzÃŸßôàÃÖñ|"ImÕø≤U:ôK5ÛSﬁ	Y,&1£N=1cdòJË–ë%äs©°¥Mr!õ•˘Œv^j-i}©@‹îÿÜOx†≤©<=°˛ D™ä˝ÚÛO Ø:ΩNë˛1˘®˜ˆ]≥”.∑„§m√cMdHÍvÛ(´œö%LÒ.Mˆø¸;È5∫∞g˚0…U‡o¨˚¬?6n}∫1≤-ÔüÚîˇÙ#¸∂€ òL◊Ñ5æFù√^{˛·ˆß5ìã˙Æ7Î~π,°ƒNÓ†8∆‘ªyŒs¡Â6#÷Ù£~¯ÅÁ5”∞*˛Í1Pë?^IÚJF Yh:#oÕˇŸ—Ö	Fû¯Ò9º
+ÓGZÔˆf˝õ¢7êVÂDs Àvae@Çò∫∞ˇA‰)q–ì"N•™”V›6m}˘˚ô5•µá>∫_+Ë≤vÎ=ı‘Q54¡éÊóûe⁄|,bÅB¸ËÔäπlumû◊9˙é<?ãóƒÚê.‘aD˙hWŸÖÕQëTú∫$ˆ\ ’Å∑!ßÜg°.yÏ)}Ïi·±wd⁄f©«›E=∂∆*ﬁK=›¥´zz£~|¨ñ@w—Ëñ¿ë,h /iû%"·;…∂πD]gP√›X%˝F50rPÄj÷èv∆•ü˙ŸxK⁄KFaÒ]@[Ã˝≤!	AáæYW*zSØﬂˇm0ˇ„àn∞qö/{ÕVî‘√û™ØÅÃ†¶ˆ©Ï,v4Î§ö[Ø⁄BOBºp¥PIUƒ∆[∫) 9ìdìÿ')ìdõy˝•¯82ª“œ∫∫˜Ñ@ß˙pRã	U8¯E˜{¨ 2|5˙*Íô¡w;Jí^=4UCÉOÜ^ÌŸ‘ı©>q«ËE•›>2¯{z™&RÄ}ÍPY#Ü˜˚Ÿ°Y®…ΩU∫U«ù ◊-(i˜d$Ñ·ça
+ÃìªIΩ	]YàSQñ¬ÎQJ2Èè	∫4ÜÀ3’=Q$`µà^õD3≠¿¿å≥20⁄.çﬁaa*ŒU‹çñŒlE'sÚJ^Û£ÄºuÿÕDâ´µö™æswHÅïPﬁ©Òu∑’iRø›ÊL™7hs=ÅøîM’Ω^«;j‘≤'ÊŸ‘v-LØ∫\+ˆZHO£Ë>—ô´†∫XÒç"Tqpø6»YLLc8û_~<N¯)≠ÖûâÓ(ü¶L¥‹°!j8™3)Egt']â‹«Ï
+l˚EÿßD8©œ/iùå@ Hë˙oÉrhàtx˜îÀ50•—ŸãvZÀ2,_ ∫H:r‰ô∆[Z»®KDöqîˇ(÷YaΩıY	Îﬁ¸Úƒöò,5Ÿ3ÛÆ±h62ˆYÍÃ,~„≤Ùó?ˇD˙ù√>©u–£7P]≤˚Ußóú~œG‡®a´k™Â-…ÏZ∏&nëÌÔ‹1r¡F>û_Ç.34I5’ï¸ÙÜ\> x}t$Ñ§∏t8‡"ß∫`Mhˆn≠sÿﬂÔ5>{7ı2áÄ’Vµw–Ë/ﬁ‘˝¨•ÁÅ;öˇ'ò6a`óLfﬁ]1q¬®ıã0|Õw±∆È{âG2éñ{ßàôãq¿Ë¢wo¯ƒGœdéhü≥ëD˝ÓSû€ÑÜ
+˝t©qw¢ñ#∆t
+≥~˙1}L◊ï€´§Z´Õˇÿˇ$Â6J vΩâ^‡>©?_¨~H∫á/[Õy@æË~
+Bs+ÕÄ{√m+∏<ÌŒo¬Ãa•I¶„süÖF"ÍM(ÆOwÙﬂ»p·◊Æeæ_IÔÎÈ˚‘_ßñÕØ–}ÅkqÂ≠;ƒïk.Ï9∞$Åû>^‡ûx∆tlQFΩ‹2Çµñs"Cª>©√ú„'≈;—ëP„t¡lî%∂Ì:'Ï€ªË∞‚Gó§\ä)ë@`·ëÂ‚[ÜÉô‚6a1FBì_'Ûh òˆÊˆct⁄H0©ìñ-i0Í%Ù€§~.µ6_˛±Ù˛[1πdÀ°s¯∫—êÕÌWkèøÃdá•«ﬂ9l“µ;mâ\÷ÿ◊m¢˚ËnuÃp≤cT∫Bb~∂gÓ¶f:îØ˝¢ÂJ´ûÿ!~¡ªOçﬂòÊ[l$uÁ©ÒõF„´Fª^ö©º”‘ÄŸ√ú±ôí¬ıì&ûÿœ)¬oní/;=ÿçØY÷aØ‘ﬁ»º‡H!Ô†ñ<wféO<>HX»íÅwÆh]∆ÚƒßÜÁõ£˛pÏìÁ‰À~ßΩJøY.åG—ç´=Y’ÛåÛUÀßˇ/'~${Uv$'Ø⁄4ñ¸=Y/uôÔNL’ ab˝=ÏŒpVG∆9í!¸îz≤™◊°ºíº-“ òÙQ¬~ôë6ShÛ√–Îu]Ä˙K&r2}∞íÃhWåÇozà,°3V•ü)B=»ó≤∆	mö√øH-Bä%Í«të≠kt∂G¿,:2Ω≠£ ™·ò-–~ —Áhâb‘o]Øœ&·rCXΩ¶Öqmëqﬁ˛ Ôà∆†˝‘—z°B,∞fpF´˛Ïà˝ΩºæB∂ÈøƒÍwÆÂ,/≠ê%ÕŒã%∂Yt(Ñi˛`€#)æv˛»Ciƒv˛dè~ˆ‹w¯9èÈë˜÷åléä’‹p˚`/Ü	ÀTËóI£Õ_tË-~vMMﬂúXe
+Ó˘«EºﬂìΩ2c“Êô∑(98‹«¶7¡ÖfX#î	˝ÂñznaˆxMjJN]<BÏyu‡zÏ∫˜§¢Rë$7bã¥¯Nk◊∏©zå¿ÔÆÎ,`P…Ω Œ~ÈuÇ~o·TNYı◊!3ç-gÊŒ¸LjÍf71´eRˆZMê„ëË	ò˜Z#÷|≤÷iäÅ…ÜÛûç`8&ÿS‡BﬁBCYxˇà~ßÑÑËÎ‰y≤áaÑ˛·Aıe´°ë„ìl2|1™bò°øu6É∂iF≈∑‚&í»å§ V∂O˘⁄ÆlÉ?oÀ*9Õ∏5p≤9pL˘äæå*j?ı/?ˇÎèd˛°’®zù:–Ë¸’=lˆ´®[≠ã¢<4Œ≥-È'^>⁄≈ª*¸Õ◊¶à(ìBR∞YÅÙò‚‹l;"JhÑ˘≤qHÍ”Û]≠∂<‹éÙ<´·"∞<í„Çﬂ+9⁄ã∞Jì,î'í0“u˘r6+Ïü†
+ÑXôfÓÑu∂øvÉ{Y©‰hujèVxC≠¿ûÆrëéÈ	%4Ú*¬—hIg-ëß7S]Ñ;Ë“
+¨23¶1i*◊SÍ[¡å÷¬§&ä¶Âˆ‹ŸâπÑÓ≈‘!u4t>ô4: ëÿê9ôÊv„Tû"˜õ“3>{ÆÀ∑ﬁ¨zåEñÌ˝j{–óªFnÖÔwu˘~˜˙|ø+√>J¥¬ÃüŒ/á÷±5ø$k§z‰õN†XÂ˜bÉ‹åÿËﬁã=±—Ω´b„(®+6ÆÙ≥"T&bÑâtor0ˇâ‘≠÷a´A™≠&É¥$Xo∑ŸÊÀﬂÖWP^∂:5Ú≤:4zÕÈˆöÌZ≥[Â·ßßyQ∫ÅZ)q»^ÑÄd¸å˙bÏˇ≥L¶§º}¡„ÓäÂ˘á⁄´˘á™‚9sﬂÖKÂxñÓñLæ=‚›	CNâ∑WÜóÎ¨W)øÚñëo:'ÔË5§Eæa(∂…*7‰©ﬂt∞z§÷ht≈"F<Rã÷ùyH$„$ÊˇÔˇfØ†≥Vm£6s›≥≠Y@pƒ˝Á¬^≈Ç«Z‚@9Ii64fc»(€¯ì∑†i(M'Xñ‡yF6w¥¢[,Ì/Ï»°ô8∞ß=
+Ì¿›Æ®è$º&€ËòÑ©ä©>LÍu¯;ÌÍ«Î◊W<¬Ókﬂ˛Z±u
+˝’8#SLÿ2õ7auI~;ßH;.asÜˆåv3ú˛yÏzî#∫1DÕVjiìŒ«KhÈV(Dˆç‹˚v ˘YÛ^=$yv‘Akˆ—∂´70\ªﬂÈ4ÛdøŸÆ∂ƒ°)eôáNcô]Öz€zhLÅ·òÖuÒMƒKıâAÊó(>C©I¸ôGÏá¶„õ\…ƒ®ˇSºﬁòb.¢ô,Æ˘%'úΩ¨–l)U±"Ëgóoëíi'W*Tzq&=¸ñ¸Ù<SΩßàF&XdÈu©^iDúi≥§IπÍ,mîtπÀ{)ÒóÓUï∫/keΩ#ïWMmøêÃã2«ÏôRI©çÕ·€öÂaCdÙ$Nﬂ…]Aﬂ…‹-È~Ô†Gï˙Ç⁄çYF„ëû^'˚]ùs•~Î™mz¡¿≥ÁDÚﬁqK≤®«tf˚¶ˆPÃú~£˜∫	ÊÎr!!8Wá€æ≤P|Œ°aì>Œùyî◊R ]]Å;*ª/Ö˜(◊©Û$‚}ôÚ<]qQÆÈ]xç^"¸vd˙Q_BﬁÙ”jˇ≈é_~˛∑ü˛˜˛ô|QÌU€ÉfÉñTg⁄Á\C‹ ºoy@`J——C◊≥N∞^LÈzYîè*·u«©Å,√AÚ÷Úô¿ZkaÉæ0¿¨€ôÀâ´ÛÒ⁄¬ﬁ=®QT¢˘c≥Oäãf/`b¥3úìôÅΩ‰X¶gÿ;’°î˙®3TJëcrD£ax˘3öø¸˘G‰3 ÀÊ≤=∫êZµˆ™qnS‰˛õ _7dïÈ»ùc˘^RSXÓ°g´ï°r∂_¡4N∑ù}≥±πˆâå<óÿRm˙≈£±&'jÁÅ7|.z_µÎ!ıÆ·ÿﬂUåY‡˜Ë;€ÑÑ]C&gÙkµø√∞ÉÁK]œúùxh•:™Ø•hfûÈu]€û?_r‹JÙïÍ‚Î˙*44∆‹“àßkK√ç)≠Òí.4∞Jmkaõ7~≠,Sïî´Î5É¬¡Ñò}∞ÖÎö3xı™dçËb6 Í9Ö•∏Ç¨©_4p©,Q˜H_H&•zÇÿﬂÉËævMVZ∞$∑ÊˇP®'`y˝π/—Ë±™Äc◊Ùèr„©4… à≠"ÍOÿ—’ lÉRö◊_4C≥RÚ∞f≤:G#»πzOõÎ\:6¨ ∆eÒ›Hˆ√˘Â©a≥b
+ºTI€ÚÁóf—áƒ!¥∏ªã4—ê\˝s8R≈∂ﬁRçÌÿÚ&Àg`≥bè∞ûgÇI7úŸF¡êª Î]xU/>´–9¢‡Ω≤ŒÄZéo '©ˇgm{á¡ˇ#œù¬73èÜöT<Û{Xx|C8Õfô_…ßµ«uÚ,BfÃÚt«ú¡±3n°$Ûfcõr%*ˆ'#vüüÇ©t;±á¿áI2ßÖE∆ır&ÖΩHÆaÜ‘Øw,/Õˇò~Â‘ù˘d|D9ıT¬∂ky¥ø°?≥N=Û,p€ ßËz∞'<Ç±œ¨OÃÄa]:¶1;#S¯t
+˜ÉıéÎ>J5gﬁÍRA÷,œïô“Ì®øÖõüóÃÛÏh\DÓ‡|ä§?Û◊©ÅbÒˆ˘CLÄµ◊Á.ﬁÂc√ˆMÆ@K+™g@TtÅ≤‹,Fü1jÑ{g¥`ûFíã≠™út	ú¨£-JÔlD/\o˛§¯N<FÖd°^§“ÇMŒGôTÛÃŒ˘E/Õ.>·iDjâiº/.|â˚˛Ø˛  ˇˇ "ïÖ
