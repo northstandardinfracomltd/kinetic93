@@ -12,7 +12,7 @@ export type SupportedCountry =
  * Meeus/Jones/Butcher algorithm to compute Easter Sunday in the Gregorian calendar.
  * Returns 1-indexed month (3 = March, 4 = April) and day.
  */
-export function getEasterSunday(year: number): { year: number; month: number; day: number } {
+export function getEasterSunday(year: number): { month: number; day: number } {
   const a = year % 19;
   const b = Math.floor(year / 100);
   const c = year % 100;
@@ -27,7 +27,7 @@ export function getEasterSunday(year: number): { year: number; month: number; da
   const m = Math.floor((a + 11 * h + 22 * L) / 451);
   const month = Math.floor((h + L - 7 * m + 114) / 31);
   const day = ((h + L - 7 * m + 114) % 31) + 1;
-  return { year, month, day };
+  return { month, day };
 }
 
 function addDaysToDate(year: number, month: number, day: number, daysToAdd: number): { year: number; month: number; day: number } {

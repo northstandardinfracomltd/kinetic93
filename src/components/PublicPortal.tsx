@@ -2891,49 +2891,11 @@ export default function PublicPortal({
       : snapshot.nomPrenomSite || "Non rattach√©";
 
     // Resolving Model names from Variable list
-    const targetDefib = (defibrillateurs || []).find((d: any) => 
-      (snapshot.id && d.id === snapshot.id) || 
-      (snapshot.identifiant && d.identifiant === snapshot.identifiant) ||
-      (report.defibIdentifiant && d.identifiant === report.defibIdentifiant) ||
-      (report.defibId && d.id === report.defibId)
-    );
-    const targetModeleId = snapshot.modeleId || report.modeleId || targetDefib?.modeleId;
-    const defibModel = (variables || []).find((v: any) => v.id === targetModeleId && v.category === 'Mod√®le D√©fibrillateur') || (variables || []).find((v: any) => v.id === targetModeleId);
-    const selectedModelVar = defibModel;
-
-    const isVisibleNumeroAtlasante = selectedModelVar ? (selectedModelVar.visibiliteNumeroAtlasante !== 'Non') : true;
-    const isVisibleVersionLogiciel = selectedModelVar ? (selectedModelVar.visibiliteVersionLogiciel !== 'Non') : true;
-    const isVisibleFactureBrouillon = selectedModelVar ? (selectedModelVar.visibiliteFactureBrouillon !== 'Non') : true;
-    const isVisiblePadPakAdulte = selectedModelVar ? (selectedModelVar.visibilitePadPakAdulte !== 'Non') : true;
-    const isVisibleLotPadPakA = selectedModelVar ? (selectedModelVar.visibiliteLotPadPakA !== 'Non') : true;
-    const isVisiblePeremptionPadPakA = selectedModelVar ? (selectedModelVar.visibilitePeremptionPadPakA !== 'Non') : true;
-    const isVisibleLotP = selectedModelVar ? (selectedModelVar.visibiliteLotP !== 'Non') : true;
-    const isVisiblePadPakPediatrique = selectedModelVar ? (selectedModelVar.visibilitePadPakPediatrique !== 'Non') : true;
-    const isVisibleLotPadPakP = selectedModelVar ? (selectedModelVar.visibiliteLotPadPakP !== 'Non') : true;
-    const isVisiblePeremptionPadPakP = selectedModelVar ? (selectedModelVar.visibilitePeremptionPadPakP !== 'Non') : true;
-    const isVisibleFabricationBatterie = selectedModelVar ? (selectedModelVar.visibiliteFabricationBatterie !== 'Non') : true;
-    const isVisibleInsertionBatterie = selectedModelVar ? (selectedModelVar.visibiliteInsertionBatterie !== 'Non') : true;
-    const isVisiblePeremptionBatterie = selectedModelVar ? (selectedModelVar.visibilitePeremptionBatterie !== 'Non') : true;
-    const isVisiblePourcentageBatterie = selectedModelVar ? (selectedModelVar.visibilitePourcentageBatterie !== 'Non') : true;
-    const isVisibleGantsPresents = selectedModelVar ? (selectedModelVar.visibiliteGantsPresents !== 'Non') : true;
-    const isVisiblePeremptionServiettes = selectedModelVar ? (selectedModelVar.visibilitePeremptionServiettes !== 'Non') : true;
-    const isVisibleServiettesPresentes = selectedModelVar ? (selectedModelVar.visibiliteServiettesPresentes !== 'Non') : true;
-    const isVisiblePeremptionMasque = selectedModelVar ? (selectedModelVar.visibilitePeremptionMasque !== 'Non') : true;
-    const isVisibleMasquePresent = selectedModelVar ? (selectedModelVar.visibiliteMasquePresent !== 'Non') : true;
-    const isVisibleCiseauxPresents = selectedModelVar ? (selectedModelVar.visibiliteCiseauxPresents !== 'Non') : true;
-    const isVisiblePeremptionTrousse = selectedModelVar ? (selectedModelVar.visibilitePeremptionTrousse !== 'Non') : true;
-    const isVisibleRasoir = selectedModelVar ? (selectedModelVar.visibiliteRasoir !== 'Non') : true;
-    const isVisibleBranchementElectrodes = selectedModelVar ? (selectedModelVar.visibiliteBranchementElectrodes !== 'Non') : true;
-    const isVisibleGuidesVocaux = selectedModelVar ? (selectedModelVar.visibiliteGuidesVocaux !== 'Non') : true;
-    const isVisibleMessageNumeriqueConforme = selectedModelVar ? (selectedModelVar.visibiliteMessageNumeriqueConforme !== 'Non') : true;
-    const isVisibleEquipeMessageNumerique = selectedModelVar ? (selectedModelVar.visibiliteEquipeMessageNumerique !== 'Non') : true;
-    const isVisibleVoyantConforme = selectedModelVar ? (selectedModelVar.visibiliteVoyantConforme !== 'Non') : true;
-    const isVisibleNettoyage = selectedModelVar ? (selectedModelVar.visibiliteNettoyage !== 'Non') : true;
-    const isVisiblePiecesJointes = selectedModelVar ? (selectedModelVar.visibilitePiecesJointes !== 'Non') : true;
-
+    const defibModel = variables.find((v) => v.id === snapshot.modeleId);
     const defibModelName = defibModel
       ? (defibModel.marque && defibModel.marque !== "Standard" ? `${defibModel.marque} ${defibModel.nom}` : defibModel.nom)
       : snapshot.modeleId || "Non sp√©cifi√©";
+    const isVisiblePiecesJointes = defibModel ? (defibModel.visibilitePiecesJointes !== 'Non') : true;
 
     const coffretModel = variables.find(
       (v) => v.id === snapshot.modeleCoffretId,
@@ -3203,19 +3165,14 @@ export default function PublicPortal({
                   <div class="pdf-line"><span class="pdf-label">Contact :</span> <span class="pdf-bold">${snapshot.nomPrenomSite || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">T√©l√©phone du contact :</span> <span class="pdf-bold">${snapshot.telephoneSite || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Email du contact :</span> <span class="pdf-bold">${snapshot.emailSite || ""}</span></div>
-                  <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Type mat√©riel :</span> <span class="pdf-bold">${snapshot.categorie || 'D√©fibrillateur'}</span></div>
-                  ${isVisibleNumeroAtlasante && (snapshot.numeroAtlasante || report.numeroAtlasante) ? `<div class="pdf-line"><span class="pdf-label">Num√©ro Atlasant√© :</span> <span class="pdf-bold">${snapshot.numeroAtlasante || report.numeroAtlasante || ''}</span></div>` : ''}
-                  ${isVisibleVersionLogiciel ? `<div class="pdf-line"><span class="pdf-label">Version du logiciel :</span> <span class="pdf-bold">${snapshot.versionLogiciel || report.versionLogiciel || '‚Äî'}</span></div>` : ''}
                   <div class="pdf-line"><span class="pdf-label">Identifiant :</span> <span class="pdf-bold">${snapshot.identifiant || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">S√©rie :</span> <span class="pdf-bold">${snapshot.numeroSerie || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Mod√®le :</span> <span class="pdf-bold">${snapshot.modeleId ? defibModelName : ""}</span></div>
                   <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Contrat :</span> <span class="pdf-bold">${snapshot.contrat || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">R√©f√©rence du contrat :</span> <span class="pdf-bold">${snapshot.referenceContrat || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Cat√©gorie du contrat :</span> <span class="pdf-bold">${snapshot.nomContrat || ""}</span></div>
-                  ${isVisibleFactureBrouillon ? `
                   <div class="pdf-line"><span class="pdf-label">Facture :</span> <span class="pdf-bold">${report.emettreFactureBrouillon || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Service factur√© :</span> <span class="pdf-bold">${report.serviceEmettreId ? getServiceLabel(report.serviceEmettreId) : ""}</span></div>
-                  ` : ''}
                   <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Voie :</span> <span class="pdf-bold">${snapshot.numVoie || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Ville :</span> <span class="pdf-bold">${snapshot.ville || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Code Postal :</span> <span class="pdf-bold">${snapshot.cp || ""}</span></div>
@@ -3259,12 +3216,12 @@ export default function PublicPortal({
                 <div class="pdf-card-body" style="gap: 3px;">
                   <div class="pdf-line"><span class="pdf-label">Conforme √† mon arriv√©e :</span> <span class="pdf-bold">${report.techConformeArrivee || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Commentaire sur l‚Äô√©tat √† mon arriv√©e :</span> <span class="pdf-bold">${report.techCommentaireArrivee || ""}</span></div>
-                  ${isVisibleNettoyage ? `<div class="pdf-line"><span class="pdf-label">Nettoyage :</span> <span class="pdf-bold">${report.techNettoyage || ""}</span></div>` : ''}
-                  ${isVisibleVoyantConforme ? `<div class="pdf-line"><span class="pdf-label">Voyant conforme :</span> <span class="pdf-bold">${report.techVoyantConforme || ""}</span></div>` : ''}
-                  ${isVisibleEquipeMessageNumerique ? `<div class="pdf-line"><span class="pdf-label">√âquip√© d‚Äôun message num√©rique :</span> <span class="pdf-bold">${report.techEquipeMessageNumerique || ""}</span></div>` : ''}
-                  ${isVisibleEquipeMessageNumerique && isVisibleMessageNumeriqueConforme ? `<div class="pdf-line"><span class="pdf-label">Message num√©rique conforme :</span> <span class="pdf-bold">${report.techMessageNumeroConforme || ""}</span></div>` : ''}
-                  ${isVisibleGuidesVocaux ? `<div class="pdf-line"><span class="pdf-label">Guides vocaux conformes :</span> <span class="pdf-bold">${report.techGuidesVocauxConformes || ""}</span></div>` : ''}
-                  ${isVisibleBranchementElectrodes ? `<div class="pdf-line"><span class="pdf-label">Branchement conforme des √©lectrodes :</span> <span class="pdf-bold">${report.techBranchementElectrodesConforme || ""}</span></div>` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Nettoyage :</span> <span class="pdf-bold">${report.techNettoyage || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Voyant conforme :</span> <span class="pdf-bold">${report.techVoyantConforme || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">√âquip√© d‚Äôun message num√©rique :</span> <span class="pdf-bold">${report.techEquipeMessageNumerique || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Message num√©rique conforme :</span> <span class="pdf-bold">${report.techMessageNumeroConforme || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Guides vocaux conformes :</span> <span class="pdf-bold">${report.techGuidesVocauxConformes || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Branchement conforme des √©lectrodes :</span> <span class="pdf-bold">${report.techBranchementElectrodesConforme || ""}</span></div>
                 </div>
               </div>
             </div>
@@ -3278,23 +3235,17 @@ export default function PublicPortal({
 
             <div class="pdf-grid">
               <!-- SECTION 4 -->
-              ${isVisiblePadPakAdulte ? `
               <div class="pdf-card">
                 <div class="pdf-card-header">4 ‚Äî √âlectrode Adulte ou Mixte (A).</div>
                 <div class="pdf-card-body">
                   <div class="pdf-line"><span class="pdf-label">Mod√®le d'√©lectrode A :</span> <span class="pdf-bold">${electrodeAModelName || ""}</span></div>
-                  ${isVisibleLotPadPakA && snapshot.lotElectrodeA ? `<div class="pdf-line"><span class="pdf-label">Lot A :</span> <span class="pdf-bold">${snapshot.lotElectrodeA || ""}</span></div>` : ''}
-                  ${snapshot.insertionElectrodeA ? `<div class="pdf-line"><span class="pdf-label">Insertion :</span> <span class="pdf-bold">${snapshot.insertionElectrodeA || ""}</span></div>` : ''}
-                  ${isVisiblePeremptionPadPakA && snapshot.peremptionElectrodeA ? `<div class="pdf-line"><span class="pdf-label">P√©remption :</span> <span class="pdf-bold">${snapshot.peremptionElectrodeA || ""}</span></div>` : ''}
-                  ${snapshot.hasPadpakA === 'Oui' ? `
-                    <div class="pdf-line"><span class="pdf-label">PadPak :</span> <span class="pdf-bold">Oui</span></div>
-                    ${isVisibleLotPadPakA && snapshot.lotPadpakA ? `<div class="pdf-line"><span class="pdf-label">Lot PadPak A :</span> <span class="pdf-bold">${snapshot.lotPadpakA || ""}</span></div>` : ''}
-                    ${isVisiblePeremptionPadPakA && snapshot.peremptionPadpakA ? `<div class="pdf-line"><span class="pdf-label">P√©remption PadPak A :</span> <span class="pdf-bold">${snapshot.peremptionPadpakA || ""}</span></div>` : ''}
-                  ` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Lot A :</span> <span class="pdf-bold">${snapshot.lotElectrodeA || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Insertion :</span> <span class="pdf-bold">${snapshot.insertionElectrodeA || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">P√©remption :</span> <span class="pdf-bold">${snapshot.peremptionElectrodeA || ""}</span></div>
                   
                   <div class="pdf-line"><span class="pdf-label">Mod√®le √©lectrode secours :</span> <span class="pdf-bold">${electrodeASecoursModelName || "Aucun"}</span></div>
-                  ${isVisibleLotPadPakA && snapshot.lotElectrodeASecours ? `<div class="pdf-line"><span class="pdf-label">Lot de secours :</span> <span class="pdf-bold">${snapshot.lotElectrodeASecours || ""}</span></div>` : ''}
-                  ${isVisiblePeremptionPadPakA && snapshot.peremptionSecoursElectrodeA ? `<div class="pdf-line"><span class="pdf-label">P√©remption de secours :</span> <span class="pdf-bold">${snapshot.peremptionSecoursElectrodeA || ""}</span></div>` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Lot de secours :</span> <span class="pdf-bold">${snapshot.lotElectrodeASecours || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">P√©remption de secours :</span> <span class="pdf-bold">${snapshot.peremptionSecoursElectrodeA || ""}</span></div>
                   
                   <div class="pdf-line"><span class="pdf-label">√âlectrode A remplac√©e :</span> <span class="pdf-bold">${report.electrodeARemplacee || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">S√©lection de l'√©lectrode remplac√©e :</span> <span class="pdf-bold">${selElectrodeA || ""}</span></div>
@@ -3306,26 +3257,18 @@ export default function PublicPortal({
                   <div class="pdf-line"><span class="pdf-label">Commentaire concernant l‚Äô√©lectrode A :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireElectrodeA || ""}</span></div>
                 </div>
               </div>
-              ` : ''}
 
               <!-- SECTION 5 -->
-              ${isVisiblePadPakPediatrique ? `
               <div class="pdf-card">
                 <div class="pdf-card-header">5 ‚Äî √âlectrode P√©diatrique (P).</div>
                 <div class="pdf-card-body">
                   <div class="pdf-line"><span class="pdf-label">Mod√®le d'√©lectrode P :</span> <span class="pdf-bold">${electrodePModelName || ""}</span></div>
-                  ${isVisibleLotPadPakP && isVisibleLotP && snapshot.lotElectrodeP ? `<div class="pdf-line"><span class="pdf-label">Lot P :</span> <span class="pdf-bold">${snapshot.lotElectrodeP || ""}</span></div>` : ''}
-                  ${snapshot.insertionElectrodeP ? `<div class="pdf-line"><span class="pdf-label">Insertion :</span> <span class="pdf-bold">${snapshot.insertionElectrodeP || ""}</span></div>` : ''}
-                  ${isVisiblePeremptionPadPakP && snapshot.peremptionElectrodeP ? `<div class="pdf-line"><span class="pdf-label">P√©remption :</span> <span class="pdf-bold">${snapshot.peremptionElectrodeP || ""}</span></div>` : ''}
-                  ${snapshot.hasPadpakP === 'Oui' ? `
-                    <div class="pdf-line"><span class="pdf-label">PadPak :</span> <span class="pdf-bold">Oui</span></div>
-                    ${isVisibleLotPadPakP && snapshot.lotPadpakP ? `<div class="pdf-line"><span class="pdf-label">Lot PadPak P :</span> <span class="pdf-bold">${snapshot.lotPadpakP || ""}</span></div>` : ''}
-                    ${isVisiblePeremptionPadPakP && snapshot.peremptionPadpakP ? `<div class="pdf-line"><span class="pdf-label">P√©remption PadPak P :</span> <span class="pdf-bold">${snapshot.peremptionPadpakP || ""}</span></div>` : ''}
-                  ` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Lot P :</span> <span class="pdf-bold">${snapshot.lotElectrodeP || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">P√©remption :</span> <span class="pdf-bold">${snapshot.peremptionElectrodeP || ""}</span></div>
                   
                   <div class="pdf-line"><span class="pdf-label">Mod√®le √©lectrode secours :</span> <span class="pdf-bold">${electrodePSecoursModelName || "Aucun"}</span></div>
-                  ${isVisibleLotPadPakP && isVisibleLotP && snapshot.lotElectrodePSecours ? `<div class="pdf-line"><span class="pdf-label">Lot de secours :</span> <span class="pdf-bold">${snapshot.lotElectrodePSecours || ""}</span></div>` : ''}
-                  ${isVisiblePeremptionPadPakP && snapshot.peremptionSecoursElectrodeP ? `<div class="pdf-line"><span class="pdf-label">P√©remption de secours :</span> <span class="pdf-bold">${snapshot.peremptionSecoursElectrodeP || ""}</span></div>` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Lot de secours :</span> <span class="pdf-bold">${snapshot.lotElectrodePSecours || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">P√©remption de secours :</span> <span class="pdf-bold">${snapshot.peremptionSecoursElectrodeP || ""}</span></div>
                   
                   <div class="pdf-line"><span class="pdf-label">√âlectrode P remplac√©e :</span> <span class="pdf-bold">${report.electrodePRemplacee || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">S√©lection de l'√©lectrode remplac√©e :</span> <span class="pdf-bold">${selElectrodeP || ""}</span></div>
@@ -3337,7 +3280,6 @@ export default function PublicPortal({
                   <div class="pdf-line"><span class="pdf-label">Commentaire concernant l‚Äô√©lectrode P :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireElectrodeP || ""}</span></div>
                 </div>
               </div>
-              ` : ''}
             </div>
 
             ${renderFooter(3, totalPages)}
@@ -3353,11 +3295,11 @@ export default function PublicPortal({
                 <div class="pdf-card-header">6 ‚Äî Batterie (B).</div>
                 <div class="pdf-card-body">
                   <div class="pdf-line"><span class="pdf-label">Mod√®le de batterie :</span> <span class="pdf-bold">${batterieModelName || ""}</span></div>
-                  ${isVisiblePourcentageBatterie ? `<div class="pdf-line"><span class="pdf-label">Pourcentage de charge :</span> <span class="pdf-bold">${snapshot.pourcentageBatterie ? snapshot.pourcentageBatterie + "%" : ""}</span></div>` : ''}
-                  ${snapshot.lotBatterie ? `<div class="pdf-line"><span class="pdf-label">Lot B :</span> <span class="pdf-bold">${snapshot.lotBatterie || ""}</span></div>` : ''}
-                  ${isVisibleFabricationBatterie && snapshot.fabricationBatterie ? `<div class="pdf-line"><span class="pdf-label">Fabrication :</span> <span class="pdf-bold">${snapshot.fabricationBatterie || ""}</span></div>` : ''}
-                  ${isVisibleInsertionBatterie && snapshot.insertionBatterie ? `<div class="pdf-line"><span class="pdf-label">Insertion :</span> <span class="pdf-bold">${snapshot.insertionBatterie || ""}</span></div>` : ''}
-                  ${isVisiblePeremptionBatterie ? `<div class="pdf-line"><span class="pdf-label">P√©remption :</span> <span class="pdf-bold">${snapshot.peremptionBatterie || ""}</span></div>` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Pourcentage de charge :</span> <span class="pdf-bold">${snapshot.pourcentageBatterie ? snapshot.pourcentageBatterie + "%" : ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Lot B :</span> <span class="pdf-bold">${snapshot.lotBatterie || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">P√©remption :</span> <span class="pdf-bold">${snapshot.peremptionBatterie || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Fabrication :</span> <span class="pdf-bold">${snapshot.fabricationBatterie || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Insertion :</span> <span class="pdf-bold">${snapshot.insertionBatterie || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Batterie remplac√©e :</span> <span class="pdf-bold">${report.batterieRemplacee || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">S√©lection de la batterie remplac√©e :</span> <span class="pdf-bold">${selBatterie || ""}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Batterie conforme et fonctionnelle :</span> <span class="pdf-bold">${report.batterieConformeSante || ""}</span></div>
@@ -3369,19 +3311,16 @@ export default function PublicPortal({
               <div class="pdf-card">
                 <div class="pdf-card-header">7 ‚Äî V√©rifications du kit de secours.</div>
                 <div class="pdf-card-body" style="gap: 3px;">
-                  ${isVisiblePeremptionTrousse ? `
-                    <div class="pdf-line"><span class="pdf-label">Trousse de secours pr√©sente :</span> <span class="pdf-bold">${report.kitTrousseSecoursPresent || ""}</span></div>
-                    ${snapshot.peremptionTrousse || report.peremptionTrousse ? `<div class="pdf-line"><span class="pdf-label">P√©remption de la trousse :</span> <span class="pdf-bold">${snapshot.peremptionTrousse || report.peremptionTrousse || ''}</span></div>` : ''}
-                    <div class="pdf-line"><span class="pdf-label">Kit de secours remplac√© ou ajout√© :</span> <span class="pdf-bold">${report.kitSecoursRemplaceOuAjoute || ""}</span></div>
-                    <div class="pdf-line"><span class="pdf-label">S√©lection d‚Äôun kit de secours :</span> <span class="pdf-bold">${selKitSecours || ""}</span></div>
-                  ` : ''}
-                  ${isVisibleCiseauxPresents ? `<div class="pdf-line"><span class="pdf-label">Ciseaux pr√©sents :</span> <span class="pdf-bold">${report.kitCiseauxPresents || ""}</span></div>` : ''}
-                  ${isVisibleMasquePresent ? `<div class="pdf-line"><span class="pdf-label">Masque pr√©sent :</span> <span class="pdf-bold">${report.kitMasquePresent || ""}</span></div>` : ''}
-                  ${isVisibleMasquePresent && isVisiblePeremptionMasque ? `<div class="pdf-line"><span class="pdf-label">P√©remption du masque :</span> <span class="pdf-bold">${report.kitPeremptionMasque || snapshot.kitPeremptionMasque || ''}</span></div>` : ''}
-                  ${isVisibleServiettesPresentes ? `<div class="pdf-line"><span class="pdf-label">Serviettes pr√©sentes :</span> <span class="pdf-bold">${report.kitServiettesPresentes || ""}</span></div>` : ''}
-                  ${isVisibleServiettesPresentes && isVisiblePeremptionServiettes ? `<div class="pdf-line"><span class="pdf-label">P√©remption des serviettes :</span> <span class="pdf-bold">${report.kitPeremptionServiettes || snapshot.kitPeremptionServiettes || ''}</span></div>` : ''}
-                  ${isVisibleGantsPresents ? `<div class="pdf-line"><span class="pdf-label">Paires de gants pr√©sents :</span> <span class="pdf-bold">${report.kitGantsPresents || ""}</span></div>` : ''}
-                  ${isVisibleRasoir ? `<div class="pdf-line"><span class="pdf-label">Rasoir :</span> <span class="pdf-bold">${report.kitRasoirPresent || ""}</span></div>` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Trousse de secours pr√©sente :</span> <span class="pdf-bold">${report.kitTrousseSecoursPresent || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Kit de secours remplac√© ou ajout√© :</span> <span class="pdf-bold">${report.kitSecoursRemplaceOuAjoute || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">S√©lection d‚Äôun kit de secours :</span> <span class="pdf-bold">${selKitSecours || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Ciseaux pr√©sents :</span> <span class="pdf-bold">${report.kitCiseauxPresents || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Masque pr√©sent :</span> <span class="pdf-bold">${report.kitMasquePresent || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">P√©remption du masque :</span> <span class="pdf-bold">${report.kitPeremptionMasque || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Serviettes pr√©sentes :</span> <span class="pdf-bold">${report.kitServiettesPresentes || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">P√©remption des serviettes :</span> <span class="pdf-bold">${report.kitPeremptionServiettes || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Paires de gants pr√©sents :</span> <span class="pdf-bold">${report.kitGantsPresents || ""}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Rasoir :</span> <span class="pdf-bold">${report.kitRasoirPresent || ""}</span></div>
                 </div>
               </div>
             </div>
@@ -10642,87 +10581,3489 @@ export default function PublicPortal({
                               width: "100%",
                             }}
                             className="font-sans hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center"
-        xúÏ}[sIñﬁ˚˛ä∫=ªŒñ∏bk)äjqó∫òd´m+R¢*T´nS^ƒQƒÜ˝ËpÑ√~ŸÒìáªG8bﬁÊmOˆÏO9ôU@°Pï §D5r¶ª	†2+/'øs…ìÁR.?˛ÕƒWÖr§	âX§ëœ"…£ó;ií~}sómÁÙ«ø©˝˝r˘;rDCöDÛòüê8Ì¥∫A‰ëÔñ?’◊ä˚¡Y±⁄S¨Òªﬂë¶¨≥–bπ4é_PèÌ4¬÷
-âCj±÷EkÉt?i≈‘èI¬ŒìV«•÷“ÈµíæiÑ}ÎëÕ¢ñ¯åƒ}jg¸ÔÜ|6ÀÔÌEéM_-+p„÷*È—:0˛.Eõì≠v]vN_ÿ*orµΩi⁄(4Î“sã¶CÃÛúN‡⁄Â∂Iú\∏lÁÚí?vÏ|d€§±∫û7»ßOÍ’]Ñ¨≠Ó‡2Ô°∆H?Lç˜&^1ÃÜ∆”ß‘M·Ò"ÒÈT≥ùòv\fk<Zò˚≥V7u]úÈÿ•	k≠Æ¨dDò”¢¯~æÁÎ$>n¬GæVUÎ§—É|%5%YGé®Ì§1Æ¯:¨¯=≠ö!µm«Ôa•ïú¨nh◊,Sò^≠>sz˝ÍlËæÈS=ÂeYπQò=ı’mÁ◊Åõzs›–1sô•≥£≈Ωåƒ≈-*:£^MBØO˝To≤%≤£3Rÿ0,9*øL∆ääÂEÍuX‘dÌÑF=ñ¥yÁó»˛@VÙ»zIáêß≈ù≥æì0R&è¡n˜ß'qøE]˜öê…–!\`õﬂX{ì≠jn¯ﬂ84È–Óe≥âTNÙVƒ
-¸8!N|Åÿ¥k%Œ)#;ƒ£â’gˆqXéòì˛®ù‡¥„∏Nr±Ôs÷G="]Í∆ÏoﬁÂC˚„Ô)OÒBá≈ö{ÔQES•ñ⁄]«M`6Éy≈Èíf“ÜíR‹#‰ŒŒi<q‚0òê∆ ÿ bõÃä(.KàïF‘áÅSî¥ô¬˛‰ÚàIKÿ«;£¶ñåò/R6âœO°'ÕäıÇÙî˜,FX{Ûv	&’∑õﬁ)Œ®w⁄ÜçΩ≥ÉÉÒ‹ÅΩd21åQ/F$Ú¸¥81¶£#„ì\Ÿf€Ò-7µY‹lÿøK#ö*=á@PŸCoVﬂ¬+ü3∑ÆOÛlFò≈·√	ÃÏfı˘˙∂›¿‚¥çlCøÁüñ⁄.Û{I_≥∆6iNº˙Q˚î≥Ÿ—~‚,Sìnê^|Úp*h”D6'ÉêÔÊL»X˘Ù„ √eÒ›èz/◊[±µ†·HÔÕ[Ω¶As&MD*≠˛-¸∆Ë√øˇ^†¯Œvò∆}]Ü'Âªÿπt>Âì„hIäyÅ«ı_òOπfM∫–Î@F	8O:Õ~Zj.©~∏,h|°OTóCá˘B‚É(ait[lE=ô X:˛á“FäØ,ks“8ÛÍ√¢≥hß±∏.ãàãÀe3ßŒ©£3YÍGNcçÀ§q,å!5Â	M>£m”Ü∑OáWÿÔ¬)|’5·”Z–í?ı’AÀqBì4˘BÏ¨¢37Ñ‚e%Ã 4&‘ø¯|FQ–ô„ jÖÅ„',Z‡ñõ¬Bh2
-€À¬wÒ√YΩzø∞Œ'Ÿù≤ˆÛ‡„¥U;@?Ω(H}˚¿£=£ s2è4Ø¢¡`7Î4~,~2—πKçÓüáÉ+€\5~˛9Cs',Ú[Àˇö°±]ﬂO]l+˚Cø)Cï]„˘3Uºê»ã[C∞·¸kùÑ	¸´‰∫0toP;óÂ‡Öh)V£¿ΩÎX ÌπÄ¸∏¬Ö£…-·∆í“,¥VIxÉÊê,–πúL!µú‰¢ı`≥tX%Õ¶m≤Û£ıı®ê{¥œAA¿øY·Ek´O⁄E‡ΩoPÁózπ,¨Æ•Ñ"ıf‚ªOÍmÑEÌqî=wΩT¢ãÌ≤Ω¿Ô:ëW§‚k ›ï"Èfﬂ~.íÌ≤÷°í%[ˇ9≠íK(®ÖMIΩ⁄üñ»6Å˝ËN∂YYﬁ]˙˚ZÂBNvìımr≤ˇ¸’q≈œì>óîü˙û–?Åµ „Fµ´Ú«ä°6\ÓÓ∑E¬Nku«Cá©.µŸAÂ˛wlPÂhß≈ﬂ€ä≠à±äÁ™f·3ÊÜè”N«eïSoQ´œ˛Å]Ï4˙‡ª3ÿWa¯éøÁù„ÖQvZΩ£-v{,∏Al$,NÛâ .˚.ıWÆπ≠M~ˆI»R4«R9ÑTXﬁ” â@ZœãbQ“Åüí¡ü±%+ÄﬂB7ç	 L
-ÿ”%ÌÅ8àá˘dGí&éÎ@=rß™èÀï¬ÃC??^æØ’7Âô&‹Œı¶`≈zªΩ›:„≤zÀ¢.Ûm
- ê‡Á¯∂c—$à™˜æºÒ4J≠∆kO—l']z€›CÔ¿QBÎtÛ75Õ™#`÷ÆrÊÿIõ¨h<ö´]:œz†y;æŒ≥U‡Ù˛H–ú ™h‰â”sÍí=7 5˚dm‹´]Ék∂ˇàÂ’»`ç{∞mr˛÷Ì6Í8√òÎ&·Ì0ªµv>.LÊ≥Vµ+jPÍ‘â*J~≠œ/«FYˇ6¯îzé¥‹8•Q≥’jK˜˛ß€ﬁ©o£ñµel“ôV∑É´[tuÏÓ2i6–bå®‘giƒ⁄ç˛$≥[3Òu$Ûïœ{ΩÖªvæ3Wê¿…vê∏ « ˘˙ΩzOÅK©ﬂKÅI°Íá<|Xé˜‰i0øıÛ1:≈ò4Ñ•Ilâl÷z≤o⁄¿+@™¥ó˛9ÊmÄ¬¸Íƒ¥ç} ´¡ˇ\1å∏µœá—ËF≠ßGub¯“ßÀi‘≠RKˆcÂ‡á≈-Äô\oñAÓÙ
-vc`£ßN c\»Ø·NrGK·Ï#d›W®”°L∑C¬ÏœX8Ã’™JËa€â_˙=h™ársÿNò’G0‡”H”§dÖ¬≥|y‘ˆ·∑jà©Ò¢)∫Ö¢´Ù¸ŒùÒ¡¸mµi+Û§©YŸ‚5ºÆ#±b©5]ùø§Ìü=ïÛ…¥G-{B)ÃÙ7∂µ∂µ∂≈I:ÍuöÎÓëÓﬂ#kõõK
-ÌVìﬂ`1S∂M’ls@·àa#<'k+ √Û≥y'8?Ê◊∂äì≠–›e-+´Dõ∞<|ç≤≠¥◊ñ?,…˛q¸ò%˜VS¸Ï©µ|Ú˜ï˚‚ÅÒ†ππøn¡õ÷∑ƒØ?¿?¯ﬂ÷Í®ëâ≠fÔ⁄¬˜≠Â]Rë77¡ Ûc-˘„ô∂—X]Y˘w“G•Fò¬∆ü0â	tŸéë∂ﬁ¨¥<x[∂Nö«McPd/ä÷ÚJ)]ô)Êrl≥ ˝$πtˇ#
-¨‚∞ù£ÿ⁄AlïI®¢†5F˜%OW†ïE¯J¬¡≤(Õ∑‘/Ü Ç%11UÚ·Y«VsÆÏ°Áƒ∞TÃ&n–# ¥$ÂœÑS\YkÕàÜ~ˇúπjrÕ∫SÁ∂G√º•zÆ ÿ®t˝ÏŸÛÁdG≤Tô–Wî	ABzÜ÷üÊ“R`Ù8°Q“\ªG+ç%ÚΩ§≠∆vC˙{ıªû;~ö∞ ∑’˚ƒä∆¯0∂ÉN{ÙÈÄÍ+€†ë´Z`æ=¨?n$CxœÂu‡-˘Kjlè◊ˆK54òÙ◊Fs“IÄö√Ò)ÁÖMVŒ∫†¨JΩ0´¸ú&} ∑ÛÊ Ω¨¡ñËïNxG iºÌ uNú¶f÷˙ír¯Ä¿øi–ƒÒ'«∂?+{#û=ú®æ%¸U≥°øÁwŸá3\ÍÁ˜•◊µY3iÔUO_ƒBZAAà=^·ØÍF¨$Ÿù§	©KØÊÑ’*tÆ59ßıM(◊GÙ∑fGÉQ‹â˜œÅ√Ÿºç;wXˆ!Á&v¸–¬~+iH°é`ëòåD·W EÚÛ•1k‚âΩÌ¢QÒ∫…º-Ñ'zeqŒcπD™yÃW·MÑíÂ⁄ Í=≤˙  dmE©n(“{ÁÚ}Œm[çÏ÷∑b~ﬁÀ* œ PLÿÉ¶»3FÒ6¸cjÉ¬ºL~bn
-¬ï,vµ'E.*vXrÜgx^4]LÜ	ç5BâE∏Xå\«Ù¬ºO2cπ^=≠,/”¸5∆˚®–Ë{óïî”PÊÁ≠ZmrUÀ˘ø%±wã÷˝›¢uÁ˘h> è®=HrÔ)Ω[I
-≠A<5'‹’œ©„ìßsÌò¸ÑëRL˜ÚDxÄ÷—«5‚ˆ
-◊ÖÀîrGÚ≥(<n‡<op≈⁄§πÎû—ãòú:1ﬁ>\Rv¥^IQ#KÓal 	ìNó# »<èå)ô.Q!ã	ÁG9√π’#Ã/‚ÆhBq¿Ô.d™˛≠—CÏûúußwñK´Z“D^Ç4A¨4c!9Å„[Ax¡ˇÎæØ Ÿâóka	¬ó\áŒ¶ÚìÎ}€Ir–Áà⁄D±Îûˆ=‡!9o„ÒÀS–˛≠~’-Ω	˛4ó¸9›π,hä∏aY≥ZPÜlbp’Iì£PÛﬁ˛ºÅ◊◊ÂXÊŒ#∞Ã¬'∞Ë^ÂŒåúcì¨√1∞hs˛∞.Á¿Rp#“¨ëqêÇLw¶ç8ñÈ∏ñ©8ñÈπ»®ˆ|8	ñ©∏	ñ8
-«L\À4€Oüª`ôä√`ôó¡2‹€dú∑Ëœ¥{·j=ßd3XÙXdOA±YpÖÎ‰
-c3|ãYBfı_∞ÉÒ⁄va˝ÕÃ`◊√p`©=fQzíâ’±%ÒW.∏Éw®òÚ/ÜGh¬bIKƒ®˝“w/Ã8PÒ,x¡Ü∆kïlà≠Ÿÿ÷∞°¸Ê¢$Ë•ú1Õ≠~ ºxx≈ä:õüdéÁ∞>-<7«£O\.ƒÂ U∏ç»Ï—ÛC÷rÁrueEw™ã¡”p:ˆ˝$bIäßw√â—ûèÇY)´Œ›ójØîÀƒo1à/tâäæã]p+u	ıc™g®°{(ˇ÷º≈ù∫â∏Asw‡m<Ì ƒÄèÀ‰hpeßà‚ #{≠‡&°J·Eí±´˘Aß%éj#†°;ÕËÚÅ|’ó	¯lL†ó·%1•”0Çr+=ÆeŒÁä∑e~X—HÊ`Í4ex)Àí:˜M”®@]ßÁ†‘Nlµ2Ôπ=òéΩ˙5{4Ñ«ıº∏¥oô`Q2ªIM%ÓGéˇ≥DÒ(O"ÔSÈíI≈=9V)=ç
-”‹ü+G’‹çkà∏*ëptgCâÔ√7>a n∫±¡èœkog`¨*kv2ø˝‚$.∆Ø¯ÎøêÓáL˛˙-•≠ÆÎ∫ΩÄ&˙Z\æR)ª?ìR¶á{ºË	]¸züM=M„·rCk¬åºÛt›Ò≤>Qú†g|N‹°_WÅü›|j®®_ì™>ª≤ÆØÆgt29Á˙Í©ë¬n®≤O£¥ó¢óã{>⁄uá v·F	Êπ…⁄—_CcΩ{Õ{›{VÌ{˛˙˜¯Ã:¯<¥p=|M|]|û⁄8)^Ωö^'7– ıÛﬁhiÊ&&Ê
-ÖÃÍFüÚﬁo\∞'ç˙ˆ4*øAˆÑ˚‰7»ùfpEY0´QôÅYü~âÀ–C≈ÿGe»÷™Ø·/∏Z]˝Øò´˙ØÃ∆’¶ˆa1ÖÒπ=®ÀjÏ¨<Ùƒ¬Ã*+˙fV>ôü” :ÂËlC°¡f"&»BüΩa8ﬂ∑Y6òè2;á≥Pf5Í≈l°Ã  hü‹jevnöHAÈgÔ‰d!˚»äæÏSy´%ÈµÇ±ª"$óÖ’‰∫E¢.Û|âb—çôLJ—ˆBS]˝ØXh˙:m%Ü⁄ÎÆÌ9æ'ò"©ªºõ&[h≤7§…VŒ˝mÜÔ˘iµ|jZ≠F˝Ø†Z≠¨åˆ…B´-<¶•’Úòπ‚ÓlΩ„41ïzD~Gˆ}lL£ÈJìgî¶5hÕƒ≠XÃí∑b…ÂÏùb‹TΩı-]1“•Yß´\./géogmK‰’ØGHc_∑NÉ4&Ò‡/Zã·Éã?Òpô≠Qﬁ	ÚH„Înï%Éùl4/≥ÃÃMñßï'√$ˆ‡™“^€ €§0mßu¯ÖŸπœü˛öÕaé´OòÀí·u7qÕ≠>ÏzπË¬õﬁsö¨»PZô`í„aèﬂ<∞Ë:ÌÚlIyÊ$]n`M…vßïû¶IV, ,ÇSA^[”øıV|Ø©tî_O+-UQ$Fó◊D…í ï€]ioBk´⁄ã ÏJ˚qsÛi9—¸≠©Cﬁ≠%HË%MÁœ^+ˇg¢ökE]ç6œDï¡°ßÃÄ∂¨¡üPÖ‘[ŒA®°>æ¿°b˘|8då4◊å9ÕÆ4
-B˛\aCKS—xHjR‘Øïx>U∂Z”⁄ÃŸÌ7∂…”£›ÉÈ≤€wAŸÌÔ8ÒS¸Ã±mÊﬂ|æ{ﬁ≥|˜Í‘Ó≈FEˆıÍΩ5˘07¯È>Ã[ﬁﬁ.Âjejæ«∫Y“Â…úÀç=Á‘q√(˜0Îm◊È∞ 3T4ä˘òØ)˜˘	fûO‚%W\–¶.˚]~´|u‡ßœIÚ$¶«¿0˜œCÊ«5·E+®gsî}(l≠üW#“&»ky0S<„Oıs
-´áˆ#~"ÀZ»¸)kÆƒÎSáõ•¶y‘€Wjœ⁄õ≤î∑™≥ÑZ_Ìú•”ëÒæ;ÏC1:¬t…4_v~eIª~t*sø“¿Øg“èÿÔ1ŒÇÏ∂·kS6sy _±”¯™À/[VaNì˝B›r∆Y[cg√`bå B~[6Z"Øô∏itL`.WŒ„(¿»¯olÓ◊›`Ÿiié¥ıÀTkeñ€ÅÖ˜
-@w¢Ã´§©YSzÕLábZg¢S"Ÿ\±L%mü	u………^õ4ˇı?ˇü%ÚùT™Ufj`
-ÑÛSØ˙çbY∏”XiØ¨ ü”@√	òK,˘L¿\ñX=±ƒ˜&0W>tm´Œ\5ıySm⁄t’y>ÁùÜgúSúkÍÔ¿ÿw†ñ÷+9iSùÜ-∞	∞ÈŸIM∑ò∆1ÁY2‰<Kà£¨Û€@úŸpF˙„Bæ∫N˘ÍıÓ◊b'ß‘≈
-˙·)]Äò§ŒƒfñÜioeAøq4‚Ûcß@—C˜ëzC÷|·HÌ°:2ÿœ©Q¶*Ìß>Ã\˙ÏåœSs©ù«/èì6?|äÒG≥q“Xz≥ÚVﬁ‡àæX ∫y
-ÅÈU?HÇl/LÍ„ÖœM/¢aﬂa@9§ÎXW4ãëΩ ﬂˇ’:É◊Tx~ ±_√ÀDﬂªƒ»´$ÉC>CàµG¨€∂“(Çæ?j[ÿPSÓG2úöﬁ_ƒ(Óº)ö;ÖîqÕtË˙Äò˘~€Øµ?}†˝Íñ∆bÌÁx¨gmu™8˚ÜÆ/˙`¬w•"˙Ñ?ÀÑáx&>ˇ®e˙ìoÔáògÈ«„¡ï+Çÿ¯,z∏ÃøìJej?m±¨Î∏ätü‘≤XòÏ4èˆÿÚw*3|w(¡çAñô(ß†«z=Ò1j7ŸΩÇ«ø˛9rgA≈"Ìpóñ)e`˝lºWÍ¯Û ‘Ì∫>èf˛é•ìÛŸlË‹y3C¨‡)æ–Ü˘L¶s<úŒÈpÉe
->3zùâü°Qr‡9æ… ê¡‡úØﬂÀæ@|ˇfÂ>˛oùô1è¸À’¸íÛ¡5‡á~†÷˜HﬁÓêOdŒ§´z+:Ö´§Üﬂ„¡7∞®uΩ™ı\#Â˘ô${_G3í¸T˝õ‰¥≈‹W¨nïHTù‘ßòYHBPö£:&Pc0„6Pﬂ•OÎ¢âÜ|µâ°†G+ÔO-.}f4™›’\J-8hÀ‰VEjü\D:NA‘å„ÁﬁõêJ5Æƒ¢hH ˙”‘Äf"dT]•∂Ÿ¶Bú]ﬂ‹†T˙¨ÅµÕ9ªò=k[+˝’Z˘ü≈ï>Ô—®Á¯'A®#a„O3/Áª”∫9ﬂ≠ÉD(l7µ˜9ñzñYM÷µvøz6Ys! ù®Á#`õºﬁ?8<‹üÍB¿)s\–'oﬁˇ_ºÿÏ¿3ÊÜè”N«eï≥nQ´œ˛Å] Ó¬ÉÔŒXáÜ·;Ò¢wé‰w P™	∑”Ncè%ËÖŒoÅ≈	aò$±ÔRî~'à¯%ﬂ6˘Ÿ'!KÒoﬂ0ﬂ¬Àæß +Ëe=Ñd†iJ:S2¯3∂d[Ë¶1∞™$¿ÔÙæÔEÉ+º2N$i‚∏‘#w™˙∏\â∆◊"∆ÊZy/b¸iú1™]Auì¢¢3cW)å{ˆ•_ƒ¯∆s˛ÜÏmŒ#x#ƒzˆ|„Ìˆvˆ‹'i°x„€4jÖx≈$j9æÌX4	Íª9Ã…s ™:IH˛&ÿ·åÇ e1Õ™ÊWeÙÔæÏ⁄ˆk>G˙7_nÊ‚J˝µï°@èqA4§xNq-˜\¯gT$Ω∫SÕUy|ë¿Û≤A›q\›a‹ZÌië8à3åv)ãkU/_‰ùR¬ÔMÑÄ}›ëô‚¿La/÷9¬œéÔ≈Çd}´ó≥™Ô_´Íﬂ◊› ±W~‡9æ`±ıW∫ék(&bøÅPn™}Ã~toplo|d?©ÔË`ÑÆ∏ûÚ´ùåj¨\2cb≈Î¿MΩ[
-Yﬂõ{}ß€çÿ“u¢Ñ Ôp'D«¶Å	QsVî õY†√≤2%:†pü0ü•Ÿµíˆı≠ä¬0(∆"Oå˙5Våjœåﬁƒ-†c¢L	Ø¢¿ÍY±ú∏PˇºùQ9îÎÑn*–Éêaﬂ¶AêaÂ)‰◊_ó=oôBY¿≈.Dô.ˆ`âÅıêÅ∑¸*‚:ÓÌãäÅ|!“F÷3ËÿtåºˆÃ“Æ-KHòÕŒ;ÿ! åÿ±Ï˘ñj(cC∏Nº`¯3¿‡}ö2x˝ôAÉw|Å¨» åXq2∏rWa?∏ΩÁ$π^9√5Nÿ,òµgFå§03‹X‡Ü(S‡∆¬iw·¥ªp⁄ΩAß]‚%≠çœËπ+Ÿ¬qw·∏;l¸+p‹≠¢Í/›oólnì√ó{ªá«ª'/_LÂø25uùò{Ã|/ﬁ‚Îç|yqV^∆5qÉûc9†Z,º¢HãÏÅ‰Í$YF)ä7m…3F—◊±yƒ¨$ÄÁ_3`uπpkë´8rU¬i1èûˇí=∑æ!ì
-hBoép6·Ÿ˚õÌ-„Êz˚¡}I€∏Ÿ±õ¿Ni
-”≤∂)yE3Ü/AÜ∆ª-Îè6˜MÇ‘ÍÔÚ—¥Ù¶Æ†I#ˇ¿…≠Ò1K ÷È‡©ÎÑ!≥õÕ0bß¸ë;¸ØÍ÷ålº”8¡Œ’ÑAÅJî`:_¯ËRb—®˙0™>"˜¥Bpi•_ÜSs*cÜZdEH?Á
-äÁ∏∞Ç vå›ƒıå ˜)k≠Àƒﬂëåì+4ÿàq[1êF«±Zˆ—aQs•Ω!¥§ˆhc2q~ÿ 6q™VÛ˜DA‡Ûõ´˜Wl÷[‚9|ÚÔƒ7Ü“ù,^˙—˛ﬁ…K“|”#Aó$}ÜdaÀlœ*hÅv@óMπ`ƒÖ‰mò`'8r¬¨˛IüyÏQõK3‰˙◊*jŒk ïØÆH∞IπlK!R†¯‹uπápv_’Ò.∞ü◊NÏtó'^“©˜˜ˇ~<eÌ°ª93#}î¢§vÄ¢Ωû∏ñ	˛hÏÅáıÍÑG’Ï∞≈≈mÆmr}+≥UpMK∂¶µBôD¬ÇΩ≤Ô[ )âG]:ıIè"∏ä,I]«MÚ+.q‡uoƒ\¶"¢q¢H¸(›Vöa
-L∑ÅÅtqëZ´ruK¬EÍM)‘ÚÁF '`”Âÿ’Çö™Y9Ø©#	¡]E2◊äÑ/;◊:ˆ»È8¬k™z%\Aª ä.‚_Í’¯x‡€<}í%˙Gıu*Qê‹É^@@ç"G8,9È:^OF∫ëµ”Ë'Io//€4°∂6P¸¢i;^o≥Ñ–(È∑V€‘£üû≈∞&ﬁr¶sΩ[[Y€zá]Zk«ß=Y Í&;|rÊLÊªIluÙå(\‘¥;§Ûı≥˘ˆA9XÒh–˘ƒ‡ßGh4Ã;ré1!·.ÛQ≈Ò…„ I@Î9–ë‘%¶∑"¡[SÃ˛ÑµGm4U,Üj{1_y‹œ86£ñwµB¶ÏÒF≈±ã∂"ôzT|~hsŸ“àôv›v,“H(Ú@!ìÙƒ…iñlhÜé¬€T =M	B`§é˚:+Ñèr∆(G…’F£∞‰c14È©ÈeúD∆»Gõ^ÃB!ÈFïâ∆˙ ¬j¿ñeâ∑Ixﬁ⁄ö.ê‰e≥	l.§˛≈Åﬂ⁄~‡Ê$¬»ÿOà(†ds”XZjª<Y˘VT:è»Ùoi«i'ÒdWêtñ»˜§—nKPZß„lq{$⁄ÓÎ˝£c–vQkZ(ª’MÖ nQ)Wn•í¨‰/LIBÿòK8%ßh±©≈éü:	¸“\ﬁ‡
-PÊ˜Èı3EsÈ.ó◊jÚÁVìsÌò‰˙Ú°&g¨ãÏ°TW§Ù€•5Á√òãˆÏ—Ûg#BπPÖS¢-Âﬁ1Ptá‡∆ï‚Í‘—k®˙E˝¶‚åRß™é8+4¨§äÜS€π[’f˝7àN3TËæy`—u:sf‰…Õ2Üø˙RÙEù≠yÆIêÉ^dØÁ4iäãa¸ =ù¶K„0Úz.:◊¨màlÚúzZı0ÂéXfT®7Hx—zÉ,˛ÌÃºH¥ZÙøÃ<gW¥íÉîµ"ïáìÑ/Hc†W•Ä®Ù™Î∞‰}M4ÇµèŸ.–Öˆ"Õ€ÍºCÀê°
-Î{ô4ƒ÷VEﬂVGé◊ôu2ﬁŒMÑ ◊â!rEúüùΩ¶.Ÿ!w@ÅeØ≤´˝bâYÚ¨P•)ZZ“©öDZ]Ã;…¸”˙»ô‹qD∏®=ñ†¢€lÿ»NﬂÒ+”…;«n,qµ¿f^––Èo6ogÂ]NH¿≠≥˘zÑÄù2Ó—•nÃZØy◊{ÒÆo/˘@?¡X¨˛¯õﬂœ˛fê/ö5ßKö´1u˜·∑√˜¶éKœxØ’'x‰R]¡,÷yÓHﬁlhqhË∑∂»Ykuïƒ˝»Ò?¥V2/ÆVÊ√E8„gvñ`â{k-ˇ£ ]úπ–;—/[k++Ñ—òµÄ°i∞ic»nX¥‘˘Dô%Ò@5¥VÎ∫¸≤÷ë‹Á/t˚µ:ˆ&[Uû˝h¨õ:0<ÁU:9ZˇlE[Ïñ+Ê¨*'q◊™ﬂ⁄ZÿYZJãüÀ1ÓZ1¸éÜ˝ï¬“◊ÆπŒ,,ò9»xqâÿ≈ôÈ?4—@∏§∑Œ|•UyMıäkÌUit~,∫Q˛•'q f<48DàÒhHÄ≤>êàqΩŒ&ùí9ª^¶æºS8Ëx‘¿pB;Ò£∂„[nj≥∏Ÿ(ÍP¿D˜;bZã4·±~ó¶´ãjıÁÍ◊°hú’œE=–œ6õä`Æ$Ãt†=oU·ÊîÇ·∆`Kq‰¢˘Dñ◊ìwPC[òüæ†Ø1òÍSizC/åè˚˘’!¬øÒäF¿2Wd/ ¬·€Ö_ıƒ;ê2{áâ¶°¡æ*QŒê◊Oàs“’‘Ñó«∆=Ú√}@Æ˚?ò» ˙“û÷Ú™˜óæÃwª§>CZì¸ÊA3	ÉSãÉö{^)Í
-Öb·Ïíc∆N*EÓÂßq†>Uå¢è	G«|‚àÇü·≈V?‹e’ â@
-;çw¿î}iûr, ¥;?BÜwÄ¸ ﬁŒ¢H˝Vmí6œY7ºe∫æππ≈,ç(É<aVñã™‚ˆé4*õ'»SvQ‹ Dç]¶æøôÀO)km≠îö|T˚·uê_X¸òÒ}X`~/·rLËa∞Å)c«7‹z◊|N˝ﬂß‘OñüÓqë#uh–˝◊¸¥Rπåˆpô^óöVÔn…cŸB˜©±8XO¢‘J“T¥Æ√\;û‚Ãc£F≠YWÓyÓ˙ôzÉ´(¿8hßÅ£vg©T≠fQ¨Ê©¶4¢∂2ôµA>Wyî;, 0.X≤85h=HLéìà±ƒ,â+ º'„ËG™¡2≠ΩN6…Q 0K(;Ø®s>U’cÓÊc1D0™3K|,1j∞«©1…¿|VÖbê)ò–•¥6¬áà?e¬]πj!zÃ-˛Uô∏⁄ë∑=˙∏¶°ﬁrOXå E&6)dûπ„Ô≠Íh·é>Úhbœ$˙Ï∑WIRÙ¡Ã∞ß}ÄÀ;R≤ƒrçíù!ÓLá<Û¬cÙô
-Ã§…πbêB˘R·Pc3æqBÎ£qfÌ}1ËQËÛm¬êˇ‰Ñ3A‘üA~ ÍZ[ »A≤¢É äüoX–9\ıPªΩ-`ïıW®ƒ¡Àı‡œÎ’zuéäÇD¶(¥¿ìº‹ûRÃ"©˚*q'kwäöœÉèÊ’ÆÙF√ñD¿ ã“Ñ‹å&∂Qƒé~‡ƒNƒ3˚EbW?\)*a≥àΩ?¢Ω ıìË¢9“.ƒh±ª˚î˜ˇÓR€£a≥Ò-(ª!?ﬁŸÏbÁ2˙îÔ˝Ë”èèn/ó‘Óùûfó:_—ôè7Ù≈ 8vˆÄÔåHf”B3 [ ¯¿ÂÎÀ7¶xWh£ÁÛ?_Qíˆ0Ë(ißNÛo”sÊuÇ4Í·ß«ÃÌ·’U¸{◊uô7¨`–zLc¸˚(∏†©«Z?˚~<à\Í€L4;¯ìùΩÃ≤™'Vp[_4ö&ëcıY„≠ zk†∑Ü@o–[üË?ﬂ∞rpH'IÌ€cÕ;¸ôÏ‘~ÈªsÂW#©∆Ünà≈œÌ$8ŒX¥Gc÷\"wvv»]ê·ÆŒÉx(‹µµûˆ©wâ<{élìªwçl&GÃ]á«!ı`© <ºX∂‡ó_ø¨äáΩﬁ›ËnÈº2è
-Î	?JöØÅ‡~◊n =¸ﬁ-Cøº«_%¸˘ΩqúÚ{öW˝`¸’4;–ù¸-‡oÚï∑˛¶˙Y}‰âëó 8{ŒG·9%§ﬂ@ﬁUvÖB“Uérí°öÅ´§°zÿ-z¸+√≈cë-Õq—maË{p≈ÒQ"nìÔ$k¶¿{µ)%7q·ÚWO6+U∆ë£r&÷-®3É9#à3á∑y@õ¨Mi¶÷èÈ,∆V›7iÌ¿≥8Ê9|˚ïÓ<‘òB¶€é%õ5Z."å]ƒCXá‰eﬂ•¯6Ö∞wÃ@ÒÌh¯|©ô„®éB⁄SÊfÊ~Æ†ôû?∏ö≠´*[àö¡º†ßNO0†∑s+≤’ÖŸrÒû;ø¿¡à?ö«êF»k∫ òﬁó—õ¶nK	ù2Â0Oäï‹e¡]*À≠„.0è.ky4åç˚£ÖÒ|ôF/zz=¯â?y]8£U7dÅG>3:>HÒ
-∞Kû‘h
-ﬁ≥.†√úˇñx–pÍÍ•5ó	´áΩU9Ï{óÄ#-Ú;˘„v¥—ù$˛WñBO6ä',é°—è‰4¿ ÂÒê,ßz[§†≠Ì£yÃ"Z∂˜ bbºW6¡kIßAL"¸:Jé¡Ph<rê≈pk8¿úcŸåÖ™£!ΩïÅ,á@8ÃC%´<\S6ˆçı†”µlXsñ)ØRîπ¡”ó…ü6ôE˝S*?4tvw.Å4ˆ¯£G¨+∑Òêù;óÎ˜W‰œâxù;ó´õä'y\øıjaºÇ·"g¸ÕäÇ8ÓS'©⁄4Nãˇ9.{ú˘0J~!»È=âËHC™[EºÊÛ‡A®µj¸‚õÇ–Eáå‚õÃjÚ§p‹–k<:^’htº∆æoõur∏ıJ{dK‹Äì‘ï[´DîÇeååIZ¯¨Q≠X&q"Ü1",ÑBÂ$èß(ë;∂p'ø#fèº|9œ˜Rá˜f'Â¿·5÷ﬁX$ÖL4ú›€bøã°‹#˘¨j‹üÉ±WÚSıoãú·ıœ.rÜ/rÜœ)g8˙†8[˘˙Ié∫À“∫¢;Ô9¶ÙI˙É?yYj?óÇ≤2®H…(ÀUù∂Tf=a“⁄$U
-è|∆czÅ™nâ‡“A79n%âøñ=ÏØO»˛ÒG7<ï*…e˜§Ÿ e9»Ò≈lG|r2ÂAÃè$Ï√Â˛zÌp>≥.ÑC<^_”
-|åÿ¬Ä–1Â∂»G2∏"«/óˆ˜»∆
-€%È†ÎuöJˇÖﬁm|[¨µ7	PèÃ„r˜’´w'œˆüÔóAN7 ÄS"Ã&ßEMòa¯◊rà6®7ô&…>»BEÙF_·®®åGÑˇb˛BüÊb|-Æúw]å™ô74?Ofô®YŸÃÈ¿((Iu4ˇ ïDøÇ	d®F©ÑUÄ´À˜^ÒπÂaŒ[ﬂéVÏΩºªz¡ÈîYå(Vå˘§d5%÷Tà%"èÕ7òkF+ÖMˆà‹Ö-="©ı.z‡å}/bt)ÚûâíÒˆª(SiU»eË◊ˇ”∑@ùg∆/öáÔ¢lÂÆ≤ÚB”^Jë2/¡À!»ﬁdK¸∂¿çÛ{Ä≥2Z¸à\L#tñœ4c(j≈e+sUè~yEk™Y4Ôõbôõ	ã∆jÁÏÅGËû«Ñ*ÉåIB*~íS)Ø’2móû:î~.°6Î¿#÷NÃLA˙ª≈¢ÏÅKbÂ’sî˛v¨¡üaCzÅ»\ecÉ¯}‡˜\∆ür|vúŒ“Ë≥KµOw_ÏΩ|ë…µ∞B3JµO≈Ár-4xìR≠x›T2m÷ÒL™-d⁄˘À¥‰Rm∂bôvT2ÌB¶˝≤eZy≤EQ0Â"ﬂ›i‰™£Ÿb D˛¥*ï∏(cÁïõ<L±»7ÿ RÏÃ<lÎ+ÿB÷FtmÈFrU'e¯çKˇ˘ä~ù≤ˇÅÎõà2ˇR€&I@û#«"y!MxZÏNê$Å'NÀøóŒ“/HuıiÅó¥∂F¸(O!ù[id\B,'4ò˙lm±∆Dú©%√ÇDmªï≠>Ã|ñ6≤63†‰¨£¨z§Ñù÷—π¢˜∞øqcUvT+^ùà»‡èƒΩ;∏≤@>A/lÀJô#S™∏Zµ!ıó™Tã\FÒp±Öé>ÁÃÆNµ˙•1úcPïùW}ƒ≥ Öø®}¥•0ubrLª4rH”yyL÷∂ñÓâ}î≈QŒÆWyåÊ¶À≥–Û¥¡Æ„≈t›¡ü–˘ìcJΩ>Mh¶Ka√k3]«…ˆ<Êß√«:4&ºÒ‡ *6zqaOÒÕ˘ú£(fù4«ﬂL˛˙/‰{Ú◊ø,µ…Î¡U‰t®Œ¸8≈çä©ππf(\_¶ßë‹±‘O‡Wl6	P8a†mu–j¿œWÏûË¸û^@ìËñì<Ö√C≤∞£ ^§ Öpä„¸…ΩrVê¢KÇ≥™ôo£2*Û¸0I‡lÂôh•yõãË¸=†Û˜'¡˜àŒﬂt÷J‚<Å'c/´_ÂRÖŒ}Y0Û"ØH√†ì•3f˝ò≥ìmÙø∂ù8tÈz‡K\|*¡gÜ\Ãµ|4sﬁ£.
-¢ÅŸËE˘}@π◊¨‘dVü⁄µd|≤WvdÂâZ˜√Í	˜¿«KxYoK#ëZ∂j~ºå/|Î8°I?è{ädR°ôHe*≥EèˇÒ‹(Úz8ôªÆ”√¸dÙ=•üÂ¯ƒµÒùSAü$<~‹ŒûËp˚åπ°:—ó<Ñ≠î‡®◊ÿ\§'>ÈÂrbÊ-&æ«T*π ¯=Yﬁi^b•&õ ±®DŸΩÀV/uÏ)›¥+DÜ¬Úﬁ~ˇˆOˇıÒ,V∞{¯uˇX∏:C)Ä¸Ø,!OùD=¯EÊÑ$Y“…nÚŒùO 5ÚŒæBì>^∂ç®>wøÒ ¥3tX∏óoõyçπ∞%O:»≈ F|P‡y±2yà{!›ÇTÌ$>d([§Á“≥&bÓG9–πxdv.Õ¶¸rû|2Aá®öM'NZ6≥è∫$tÅÆ◊ÁHA∑UÜªpTÍ%JL(Rnè`GDrŸ •¬©J&SN'ìΩ¶›ÕgO\ÅAQC≠yõ%ñô>µÃ§ÎjvÒ§å<T«Ô-	á≥‚”˜e◊îDQ´ˇí	S§πO¯µÅhPﬁ{˝(ŒhÇå¯ΩwG	~yÑ…ÏkÚª^¢ ‘ñÒ‰-ÅFBΩ¡ü`◊≈„Õ‰ççfüLnÍa£◊?O{.^FzÍE Df›œïPâ2x∫¡ﬁRcú9Ääª√¥6©s
-jñ.RXÛ|<Å¶‡¬´∞©¬sém·Ek˛ìÒ‰Í?(2Ûc^„ô@]˘ı!Q.œ`ggmÃÒ»Û;ˆÉ8—1ï>\∆ﬁœ6œóyzöJŒZ¯8OIkuw√˛ô„Ëπ£uÀò (¿≥FT)m¶qRaàã®,ü7»ùx`IÛ<2K
-Y'e∂…sZ~çbYÏx)W7≤´ïu[(—Êm§7€ú\à7´´√õ£≈ô•T§˜J8ü‚r∆IåˆwY4¯ﬂÈ=¯	√)f 5ÊïﬂZ„ÉiI„·¸…Òº¡ïÌ¿H˘ì2âNπ◊zYÑbœânZQq*ÓÅ÷}|Äi⁄!¸.¡OÔ‰{ÚÜ‹ˆÉ≥¶F÷O—√Ùb–RE {Ò¶C∑í6Hú¡ﬂÒld\Qø 3ír:€Â>∑ºœÕaÔ5z‡Œb∂hfﬂ›‰Ω“ˆIµzÑàn|Ä0 @Rç1Ò∏«¿!ièµ°@bÕ˜<‡;±©ﬁ¡Ôx'ﬂ}{ôø˛”˚{D∑„)ZÁW	Ëàa⁄7‚Aˆ˙:ãIÀa'“hÚÛXYËÑ1z[ª=Œ 'ƒ¸ªwé≠ïµ÷ÈíÊƒ≤,%ÿMC+>g<1t—	_œ aØËé«â¢ùDé◊\*E^CgìâÓ÷?Ø;,ôáä~B⁄Ì∂ßóÈSî^N|mzú™Å{ª@˙M|“Àdj>óÕöß◊Ó'-™Gt˛ôUFSÕq”ldå:ëNÄ4uWVvÇÃtgy¶UûiÖ5W@s∑<∏faû4Á∑àà≈e¶wæÔ2œ»∆=Ú˜«/_¥A'p¸û”Ω{•^élçg2é5¥6ıñeám“àSŒ(5Û˜¢ºµMﬁÔˆpïr©s$	ÂáDÿË‡O1i>G°ÍXHÄ0#K‰˘ˆ≤Ë<˛Ò>aÕxi¨1_¥ﬂk%õ÷öMú©1Kg≥K›òô‘}	åé≈®˙' ÏƒÍì&ã¢mB˝=òÜÕ%Õ∆~1‘QyNrnBãá3ä©òAÉv€,#¶NwOò¯ÿÅû∏éZ"*ãC≠2¬˙2¸
-≈s.≠gÅr#Ô}„GÁ±πñU0∑éª®ùµ∫ nåÚr◊{êÃv˜¯ﬂ˛È˛£†‹jq_ÔDDîÎæ£¨∞Ïè—Ï-5ÓcxÃØÓ±§ÿ_ÄYˇ…‚nŒ2ªyL±sKø‚ÿ©l·˝º« áµ„ÒÔ‚i}HQS∂ÇàœÏ•Ìçé˝—‰R¨§·.¨ºˇ£3>∂ºE;}xkº∞ıÛW,l˝[nÎÁ7råMu'yì)@ƒb◊#$=ö*‚x^√∏Ôä#
-ìQnB7ç∫§Ñã¨
-‚Ñ·≥sio`¥3üT(Èºpî1‘l4P%ΩgÔ“ÈW]é¬(8>›ƒè˘∫Â”"ò€—´»ƒM–¯c[©Àx∏l•!ﬁ¨B*0⁄·BX)˘æO;.[¬”?f∞ÿG’êÔbHD«EWL–‘‚ÑeK«EqòSJöù¬'>•˛0"Ëºü„·8ƒw≥ÕÚÁ>ﬂ°ƒ\!¿∞\åy:ÊÁÄÆÚ…èã«<BP*ªïÅòï‚•«∫]«> ÄYãcüÍ≤8ˆ)ó≈±œ‚ÿG^«>yY˚å=∏8ˆY˚»À‚ÿgqÏ≥8ˆ!ãcü€uÏì˜q7tæ‹Éüu’¡œH}‰Éi—–˘bNv_L(„w<>˚ôNU/kœs&˚üWuÉ‘Œb?ÛSP~£`h√π¥aüt\fø¬ﬂ≠‰EäÎˇIÀûchûPƒ ‚UTñ<~8r˘æ|:b≥SÊ!Jˆ#sˇ2^åˇZí‚Øq‡gO‡è¸)DøSáù=
-≈Ï|[3'ä¿0¶«-”∂f‘ÒÒ\••rw˝√7ê¨!h
-`_⁄]@∫9úªîèÿE÷Á#ËÁÛ‚2⁄g˜Ny´Íkw:†ˇﬂ˛{fdèàc9ÇÃ©lü+Ä_zˆ£å˜˘O&+OÚÃôÂí‚r7p…~Mflò[æﬂÀé5ãrßC–«à}lqkû}wœg¸ √JrY/‘^ò;6åú¡UBùH\UªKG…¬>◊)‰H%∂¸ %ô9ˇ&Ê5IÄ¯°ã–O˛â1™Qä—¯}ø‚˙«bBÅ.≤[˝€«ÙBúwó≈*ô›zVCˇ¥2‘ù∏l$èdî“t´k∂ölE ∑I„öåu‰‹f£7¡≥ )ò9/\EN‡<°¥^1€Ä<· ≥ª€&â¯åí`1K@0zá^R7≠DX™ìLüä†∫•±lyˆ;˝Lk´Üô∞d#¿¢ïë ãn≤ØkÀL qkìﬁ¯ü‹∫RË¡"rópï”V∑€mu$™%≤m¯yÊÑ¨UY∞πÇ,ÔPmV9©¯#-°Œ–4À¸¥&LCL(h^Œ‡˜Ñ<4f◊k^Np¡OK*-Nˆª∆ß˛ÒÊLúrz^©M&”ÚKSéiNê¶\sæ9Á4„ù∆¨√Äy(Ì°üôÅ®vÛ4Ld.lDáë‰/zDV•°UÎ5≤ıQ§Ì…∫N4z¬2}®ÑK◊Ö,∂µ∂µ∂µ@≈{»2+≤à≠˚dpÁ&≤íqLΩy’G#”jÌÀﬂëü:I¬∆rà∑…R+ê@JpÙÇT¨KcØO∑œMˆ∏…˛6€€¶˚⁄tOÎÔg£Ω¨πè%{¯Fˆ/¶›®#E…æ‚[srã»˜¨|ø÷Ó’áÀË6˘KeÖ;üx¶ÙEY»Äçﬂ*rîúÏÔ={q∞w∞˚Çì/O»·Àü~⁄B^ê„ì›ì}“|ıÛ„√É=Ú˙`ˇóW/èNéó*Z˙nπÿïÚii)È ∫À‚è‚_àÿô~Ä~◊Ì–í~ág†a⁄Xi•˛ò´NÀ• /≈««ß±9∆ﬂ0ëvBD·òúaöÌäÕ—A¢b,˘Yœ˝öQed9Lñ]^YÏ»·Óã'/~"«{G˚˚/*ê¯2K∂ë≈òF∏Ü0
-à–®>ªÆ9≥Æ0	‹/ûÍ;z&w©Õ*—'={wyyÚ©JzØ1Ilp7Ú∫hõ˚´«=kÁnv~∆„§èGÌD¿∞>`Áƒ‚·â∞¯î‚⁄Zxâ^∫Ukπƒ„Í_¯›`‰ù˙√wX@é7EDäk.<\ÓØ÷ßfÍèkˆ◊Í<Ω˘¿Áàéã◊¡ÜcN	¿7ãâË0÷Åë1◊<u‹Z–ÎØ^]Dÿä≥|±ûõ˘°i6‚“Ò>¶roù·ÒüwŒ±¢fdx•â‚më‘'®}6ﬂ©àN∆5r\W\÷x≤ªè\aú;ﬁ¬¨l1H—Èo°3¸GÁ|ÖKAŸ9ôÌ9æì«Æ:à™3’⁄Dñü∫(è>9y˘Ç¨nì„Éü^ÏÓ?ﬂq"ß[≥Ã£◊_æ?&™»'wh¡∏È˘Ò5nŒQ˙˜∂S1¬Î%ÉDÚmΩêÁƒ¸‰˝à!9æôL}Ñrw≠…víœ0L>:^Ûˇå~_^]…=ßŒ•Ÿ∂áçã—Ø˝πƒW -ﬂ~[Ó…Úz9≠N›ÎÍ˝JIå$Û÷%Õ;ìì'˜±C˜Õâ*Õ$JÂtX≠PÈXxO*Î∆(ç˛œqdrèŸ"˛Á{
-„¯˝‰$2b©Öû÷ÜÄ\…î*∞X0§±¯ÈπTîoÂ{aë∆Ôÿd¶V3/'…Cù…ÊÔ‡4’πuEaÌ8	¬W¸ù£âŒ-õj⁄÷uVùíƒE1q‘Ù`DL•∞‰C‘)|âÃæ‰î°á?é¡<…tR'D∫eT^GÉ+;u∑¢u|?•'cr∑–™õq+√õq#¡"&D‚?ÕãrèÉ¡ˇMPBB9·ƒ`Í‚Y–ΩÏ¬Á‡
-EÉ”‡C; KÏ…f"N„ßﬁ9Eù´°N~5›€˙.Æ®Y£¯±1qıq»IAR—ÚÂ»∂~≈∆û2*º3πY’áƒe'JÙﬂ+™F£x,™]PAÇÄŒumæW´‰vêa«UØ⁄≠™9ˆπp{'ÃJ,]@Pu]uSwÉmn:„äéGπá°≥ç¨Õrí‡Ç©¸°ÙÜ†≈∆ÃôÅt6*≥±•ìk*o}nÔóHQÓ-ã¬k+õEj¯°ÜÍßÀU∑WÕ∆»Ñ‡=È[ª[T”‰S¡ﬁU“úö•i8∑jxô†—P)Rß–]sSª†ê Mñà_$íQ&‚“çî—  `JÈ·ˇ  ˇˇÏ][oIv~œØ®h'∂º©ª∆V¨ı“$5Ê%2$ÂôÖ1ÿií-±«Õnn_di4~∞2Ç	êóÊ%@¢<Á!Ô¸'˚≤?!ÁTıΩ´™´%Íb≠˚¡ñ®fwUù™s?ﬂ	'w•¨v—ﬁl*ñ≈ëå‚WÅ!†2Ã’Üz>˘ÕSÏÃ…wÕƒöG¥Yï^EHkÃpßP©˚té°∏˚ØUÜªJ«´43√ö˘û“∏{ƒ…3GºhØG+›|™ôææw·—mªªæjƒÀ†Vô
-N¿âjJ_¢LuΩU±tØjµèVΩ71≠]–ÅXmCïN_ı!“¥£ƒmJwÂõXœﬂ`x˜AI[÷îc–	ñû√¶`w•ÅÒcˆ}lè|w7Ú⁄∞_mﬂ£ı¨√°⁄fõÅÆO‡·∫≥∑‘<€%›ZDï4∂^
-mUÂ
-x|!_Í± Ë¡±%6-`HÏ¥,ú1áÃô∂Ü}PlÇN(À àÜv√˘G '∂¯ƒ”ºscA,BçŒœÉnçlá1†8\ö˝äGÜ—‘≥ F≥ê°Î÷ÿûNµìk>~ƒÌÇjøãÖ#UÜïü@Ú!7?Öö6Ì“oËeÙ|ï±¬≈J%V∂Û‡§“kÍ8`ì£ûÏ¸c‹πñL@nEM¶ozHíO T˛∫T„õPÉ«˛ŒZ=Ïˆu·–7˘‡¯N8±G¥≤◊”<rj∏>º~—ú«©9z1æ1^•xâcøs˜.6’ŒBûÒh+âıSz ÃgCë˘‰"c7eí∑ı0V6¬2.õ°‡ú–Ü¥˝¯ÿ√à∑XN•tSIge*íèÕœ,èG,S‡.™—ä≤Òä´ﬂÒ∫R ØÎF;¬2 &I¥b-Î”IÔÿe%éZ‰¢≈§Pa5ÀB‰%Ö=Æã†wñ‹X.®l¨4∂D∑◊r¯&<àîX<+≠7&ô	±Z(oúÌï°qú©µr51¯ R)	:£û'eò«◊U≥,ﬂªJÍg∫H_B1®"·LíπºÔÙ!Ïô©ˇÇw?0<ÕÒ‹Øo≤LF,…;˜!“oÏíjÈ≥Œóﬂ'˘:V≥ì	ü´A(ïÖN∫"dÚÜPß9g:ÕÉR+√≥ÛòJ¬tßÿRÜ{(F†sF1[qËYÜçZÒÏ
-íQt∑∫ ¶ôùú"OÌ‘´3G?ÖoË«öozrâç£±:waŸõ"F“£I‘DÛâÑ £‘YJ2áG∆^T“Z∂$
-Ç€ªAe FEL˚ƒ∫)kH ÅaKwß°à™∫Mq‘ƒÚI≠<"ö§Ì;òôÊ3¥ N4±D
-+,D´%¬§¸‰ë®¬*Û	z+˙Gız≥ﬂ'˚ùﬁÅb]NÄ[aÊ¶§<'”^ú)="~3´Ïƒ)ˆ’Ì3ìõö∂%ë—∫£Y»ßÃÓ∂Õ„]e}ÉLPò≤‚X&Sÿ“√ˇ≤±ª∑(3 2
-´ˆDG≤>—GoÎÜ32ıÙ0w`î;K|ãOù3Uﬂjo‹© Õ˚ôíœ®Ü¯µ:†–ô ò¯ŸlíÚÃÎÊ»Ÿ°i√x–#ˆ•OIœ∞I}6¡8ÓWü å© n'ú^´A≠˙WÕË$p(∞è˘kZcëŒ(NTWb…;yáÖÑÀrH;\å&2gÀM∑m±1mWüˇß‰b1 ÿ©ÇGçß™â`ì¬^û†ÎQﬁJïÂ8
-ò»|<5Nìé)»{¥ƒ{E∆¸xëò}ôF∞ÿÎI∑ï
-L éì*¿¡ˆ‚6WìÀ®nï%&_:@Ã›¶€ú<AûH‚oî^PﬁÂ–ÚÆ«µ—»◊π’pbÉ≠ÑúÈ∂…A≠u8h÷ÎMRÔ4öÂ A±<’qÓ;WÆUB€!Vä‹1‰˘It∆Ç°∂œ‡Zu•|ª_®ıI] ◊=ph?T÷C+*Ò(Y˜íÙ‘±≠6Â•Œ(VNh¶æ»ZPﬂ.q‰gd.ïüô2)âì¥∆`ıAsÑ•Ñ≈√–æ∞ÍB,VK‘ç®äÙ5√≈>q?‹|Ñ†ˇx»Q ûcå_Ÿ"£âÅ>nQZæ0ó}ÆñËÏJ
-I_Æ“Gﬁ¬Ä∑+-"∫√"ºofXêz^–4få?Ø‡äÈgÙ¯I Wä¢ÒoıÛΩ˙$ôô˙ë`=˝ÿ}CÔ˛Vv;säŒ` ÔÄS ºÜ¿€∫u‚Mˆ.÷eOúià<aÌ-ΩY´<˚ˆ◊R¸wú1ˆí CŒ˝€…ÓÇutIe(ïcŸÂ›ÄjÏãÀtŸV2Ò2ô∑L>úØÙÛÜ˝Œä#—;_†;8z£Ú*m‰¨1#'iB1Êd&¥‚åNí∞x#m€)>ŒòÖAµ\Ωr&ÿñˆNâI,å}=ë˚j˘'Œ@ò©#+ÀynôöÁÿÆôåÙóºÇF?^ﬂŒª$-2UêfWËe˚≤EhI»¸ˆ5◊#∞g⁄òåMú+•T@øt‚cÇˇ†.ÍV6C®™8ΩŸ`≤&‘û(Ñøƒµxc´º•c+ß	\ºY_!+dsÖl≠êÌ≤≥B>ßP∏œæe|ÿIª-åQ~*fü% üó”†$°°#VÖ≥≈√_§É©ßÓl¶+uãÅ≈E√&@DäF∑)ãNIK"•ƒ(õ.Ôç`ÉqÎ`“K– 9ODO∆e‘ôO¢ÔNÃıÈ›üÀ–TrŸ…E$éiJæ!&©ò†Õ„c}¢Xp9L4·π\ìú ª:ì7x≈‰Zª*°x°å	 πmã¶Î5…ZõÿKnjE(å˛¸C˝®◊Çˇ À›"˚EÈ„*∫2:ıÆPå0òÆç+aOﬂmúëÊYµÑ^p1s`Ô¿‚∞§ï¨R$<3¶à‚ºW{l›’ù5
-`8vÏ–¿w*”1˘°ÚÆ∂ïJ£ã•(ù)ß£ç5HˆÎ^œ~“Ü4H˛!Xˇ\¡°ò⁄πH≠qniSX`äŸË¬t±óÃ∑ ¨∫C–ª:÷ú1{'a‡ly[Ú9}@Ü»c4+‡îªÊy´ù-›y58hÛ†!ˇ˚â75wI6V˛[l˝¢/œm¢√¬9+¡˛X!ñv∫†bÆê™eWD_§(Ÿ3òÕ.¡£B˛÷òRlÀÀNÛúphèœWéxÖ¸ ÅwsﬂÉ\V‰JFVŸª"êKv∂ÀÎWågUq'∫.ñ}Va=Öπ«pî
-∑FHók7N¡¿4¨‚˚ÃJÑ¨,|‚YEıÓÏ¬•œuhÃƒ≈W9\j`œ<Ãs‡|5a.X«bl‘~ÿ:K s=Â7§ˆÌ+πã@á‚∞a(pái…ãQx0r‚ÍŸÁ]áIÈ‘4∑¿ZﬂJ« 1œ≥ys—1éœQéÅÉ"í+Ûj¨:—N1_µ5ù9~Óÿ'=&"À]g˛ﬂ„$ÓXÂ<Æ€ÿœ{E¯¡0ÆÏª∆"µø"Ω/£ÒΩ3,ÿ$U∫	¯P-º\Ãdh9’3é7ßvo“õ†¢86$J¸Sçêe˜puÓ∂-Ú¨3.‹&∆ø´á€HïDöER–∫)elk”,§-ÆÆ§*ÕÑ(œ Ë˜üÁk<"w‹5˝&M§ ˝Eã…9l<W2Ï:›]†Á∏û„è<§ágê⁄VÑ-À„‰ô◊∆W,x≥S.‡˝â„àÅmŸ=%”1®Î·ÆFÑ∆ê√J"à∑√i:p˝3Å@ljXï	V¨Â@≤´KµE{‰S@üWTÔ",s!Ô[ÀÂ»#@?cr(Ìf√PEÊã5öø…„Ö•2B‘xÓ∫∞:È9ÃÿÒ8;4·k† QÜiÜ˛qXé+Í“È)Bÿ¡d‹m[ú“ñ√¡-õ√!6ÛJE€XñJíGãbVº‘YÚ#Ã/Möíí¯Ûl (oB¢Ñä“CV§∞Zì;
-ëuÃÛ8î“;öªâòÎ=Âë…ƒ¢ìyF)ŒŒüîD2ktÍGØ∂≥øﬂ™∑ömÓ‚w'Ê<Ã:;ÆuŒ∏™û·ôÇ}ƒè6ã7R&%+⁄RÇëÙÊˆÁzMÃŸßôÊàÃÖñ|*ImÕNŸ(ùÃ•æõ˘Å)
-ÔÑ,ìòQßûÍû6÷<L%t	®»è≈π‘P⁄"ôêÕ:ä“lg++5Åñ¥æT nJ√ß<PŸDûûPe"µà˝ÂóüˇëºÍÙ:D˙«‰£ﬁk8w≠Œaπ'mi"SOR∑õ›`@Yu÷,aä˜i±ˇı?HØŸÖ3€áEÆc›˛·®yÁÀç˘êáÒ˛1/˘œ?ë¡Ô∫MÇ…t-ÿ„´d–9ÍŒ?‹˝í£fr`Pˇ¿ıV]¿/óE îÿ…‘Kõπ€#{<\Ê0bÌA?¸¬è?Ú¸†zV≈≠˘Ò„Â±$ØdíÖ¶3ÚF–Ûﬂ~1∆»?!∫áW¡˝Dino÷æÕ{iUN∏¶ºlV$à©˚DAû\=)‚T™m’m“ﬂóç≠=t—˝ZAóµmCÙ‘SG’H;“õ_:ÜnÚ±à
-ÒìøœÁN∞›52x_g¯=Ÿ~oâÂ›®£êÙ·*VŸ[„<©8uIÏΩ@™CN5«@+\Ú⁄S˙⁄”‹kßˆX7ıRØŸãzmùUºózªn÷Ùˆ&F˝¯±Vr ›E†[j CÕ[– ^“<CD˛‹gíc-r-à∫Œ†Üª^%˝f50rPÄj÷èr∆e1>ıÛ…¶¥óLÅuƒwm2˜À∫$¯bd]®ËMLøˇª˛`˛«›`„¥^ˆZÌ6(©GΩ¢æ2ÉVò⁄Wdg±´’ u–‹zµ6z¢ç£ÑJZ‘Al≤©öê1I6àyí0I∂ò◊_äè#≥ã0!-ˆ¨˜ûËtBNb3°
-W ~ëƒΩ≈´≤_Öæäjf∞ƒ∆Æí§/ZQCÉèÜ^á˛‘ı©>qœËE•Ì>2¯OÙ"TM§ ˚‘°≤J4Á˛=°Y†…ΩT∫™eOÅÎÊî¥Od$Ñ·ça
-Ãì˚IΩ)›YàSQñ¬´QJ2Èc&0≤ßhiÜ£˜DëlÄjΩ6éfûÜge:`⁄4záÖ©∏VQw4Z~Ë[ÿäNÊ‰ïLÛF@^Ñ:ÏF¨ƒ’€≠¢æs˜HÅïPÊ‘¸¶€Ó¥®ﬂÓs&5ö¥πû¿_ ñÍì^«ªÍ‘≤'˙ŸÃ¥LØ∫\+ÚZHo£Ë>·ùU– m¨¯FZ5‡~á g01µ—d~ysúc⁄=›Q.Môh€#M‘pTeQnDg¥ß]â‹«Ï
-l{É"Ïc"Ü‘Áó4àN∆ e§H˝wA94D:ºOîK_u0•—ŸãvZ€–W ∫H:2ttÌ--dT%"Mè∏ ˇ(÷ÎiaΩ˘†Ñuo~ybLuñö¨ç<_øo,öçåÖ}ñ:æQÑﬂ¯Ç,˝˘O?ì~Á®OÍÙËäæ≤˚Ußﬂ˛âè¿Ub´ÎTÀ;íŸı`O‹!€ﬂæg‰ÇÉ|<ø]f§ìZ¢+˘È-π|
-„ı·í‚“·Äoâú≈kB≥w≥
-Ãaø◊|ˆnb2GÄjÌZÔ†Ÿ_º©˚†•ÁÅ=ûˇò6A`óL}Áæò8A‘˙EæÊªX£ÄÙ'âGRé∂}Øàôâq¿Ë¬˜…âÆûŒ—.—¸±·Ö˝Óû€òÜ˙ÈRÛ^nÖ-G¥ŸV˝Ù&}L◊ï[UR´◊ÁÏ? IπÖíÚ∞—B/pü4këÓ—Àv´Në/∫É–‹LF3‡Ÿÿ
-nèÇvÁ∑afå±éR'≥…πÀB#°ı6◊g€jàox•∏k€–ﬂØ$œıÏ}‚∑S√‰W®N‡Z\yÛqÂ∫g,I†ßKFö„Ÿ'é6õîQ/∑5oµmù»ƒÆOÍ Á¯©BÒNx≈îƒ8ùÁè”ƒ6mÎÑ}zV¸ËíÉ´`I$Xx≈Cπ¯é·`&∏MPå”‰≥x5”ﬁÿ˙ù6LÍ∏eKåz	˝6…çüI≠Õñ,ΩˇNL.ŸvËΩnˆdcÎ’ÍÁ_¶≤√í„ÔµËà;áπ¨pÆol°˚ËnµÙ`±#T∫\b~∂WÓ∂V:êØ˝&¢ÂJ´ûÿ%û‡˝ß∆◊∫˛I›{j|›l~’<lî¶FbÇ˜ö∞zò3Ê;)l1i¢Ö~Mê"¯‰6IÒ≤”ÉÛ–¸ÜeıJùç‘@
-yµ¯ΩX(0s\ÚËëE¬Bñ¯ÚúÛÇ÷e,O|¶9Æ>Óè&.Ÿ#_ˆ;áU˙…rn<›»∞⁄£¿ ´9év^5\˙ˇr¸‚'≤©≤+æπjR–XÚ≤VÍkÆ=’ãÎÓbÔpÜ˚PkÁHÜ‡ßƒõãz ;!…€“‡%≠åI^%Ïó©j3π6_ΩZ—®ød*7!ì+…O≈¯1Ò∫É»*c-TÉ£;E®ŸR÷(°Mq¯âMH±D›—Ñn≤båœv	òEC›)—j0¨¨Mÿ˝ÒG˛nQå˙≠©ıŸƒ+ÿnk¢÷¥0™-“Œ˚¿<‰·îﬂ ZÔ"Tà÷Æ¿∏Í˙Cˆ˚Ú⁄
-Ÿ|¢>âÍ˜∂a-/≠ê%≈Œã%éYx”Ï≈∂«R|ÌÏïÖ“à‡Ì‹È.˝Ÿ±ﬂ·œYLè¨∑f¨π}úØÊÜ«{ªlHP¶B?Ñü⁄¸Öó⁄Êgﬂ‘tı©Q¶‡û]D{=Ÿ-3&eŒêöE…¡·°8÷ù)n4˝¿†L®o∑ƒ{s´«kRSrÈ¢bœ´€±‡‘Ω'ï"IÚ†∂Hãû¥zç'·êj«¸n€÷?´ÏÍóﬁ'(‡wNÂÑU2c–ÿ∞|€w∞®âá›∆™ñyIŸ(5AéF¢&`ﬁ+çXÒÕJ∑L6ú˜d§y£	¡ûÚÜ
- ¬˚'|ª‚@HÄæNëßªFË‘^∂õÍq9>…√'£∫ Ü˙[˝—¥M=,æ7˘êDf‘ U6”} Wwd¸˘dKV…©G≠Å3êÕÄc WƒeT)(ˆSˇÂó˚âÃ?¥õıAØ” =Çﬂ∫G≠~ìbukQîá∆y∂$˝ƒÀGªxﬂä≥µ)" $êá
-ÿ¨¿˙ú‚‹l€"J(Ñ˘≤yDèìÎ]kµ<‹é‰:3¬E`yƒ◊+æ/‰h/Ç*}L≤(º9óÑë¨Àó≥Yaø†ËÜ¢¿@Äï©`ÊNYg˚k7∏óuêäØvgPÏ—
-®ÿSU.í1/¶ÑB^E0%È¨$Ú‘V™ãê`]ZÅUf≈÷"ÈAÂzJ]√Ûi-Lb°hZnœˆOÙ%t/¶†©£1ßÛ…|†·Uét¿ÜÙÈ,3∞[ß`·-rø)Ω„¡s}ÿæçVm–C`,≤‹<‹Ø˙r◊»ù˝Æ*ﬂÔ^üÔweÿG…ãVòπ≥˘Â»86Êódï‘ÜÆnyª¸ìÿ ∑#6∫üƒÜöÿËﬁW±qTW˙sA®LƒÈìY»π¿,¸gRo∂€GÌ&©µ[h“íp`Ω›V[ò/ˇ…(ºÇz≤›©ìóµ¡†Ÿk5I∑◊:¨∑∫5>prô•+Ÿã êåüQCå˝5ÀdJ ªÃ!1ÓØXû®øö®@<ßûªp©≠“˝í…wGº{a»‚Ìï·Â*˚U ÔÖºÖÂ@dõŒ…;∫ÜW]©Gëo Ü©≥ yÍ7¨©⁄]±àØƒ¶µ}â§ùD¸ˇ˝ﬂ-`
-*{5◊6j#”m1›öG‘.ËU,Ëq¨$
-)…Ü&l©•; R‡4•eyÀ2<!œ…∆∂Rtã•˝9vïG°∏€ıë‰èW√dıì U1—á©¯ã*¸ùvı„ıÎÀ_A˜µÔ>+8:π˛júëLÿ2õ]∑auI˛$vNë<fT¬fçLüv”¨1˛zl;Sî#™1D≈V≈“&ôè7–R≠PÌπ˜Ì*@Ú€≤ÊΩjHÚÏjÄ.÷Í£m◊hb∏vø”;hÊ»~Î∞÷á¶
-À<TÀÏ®∑Ì«⁄énPXWGºTóhd~â‚3êöƒıb>÷-Wü"‡“X&F]∞¯ü·˜µÊ"ÍÒÊö_Úq¬ŸdÖfK©äA?ªlãîTc8πRQ§ß“√œ`ÀœŒS’´Qä∏`dÇMñ‹ó¬+âhÇ+≠óÅ4)WÉ•çí.wÈk7!˛íΩ™œe≠¨∑•„™©Ìíu)Ã1{^®§‘'˙Ëm›pFp RzßÔ‰é†ÔdÊëÙºw–£J}AáÕ6YFÛâö^'˚{qŒUÒ¨k¶Óx«–¨…º£ñdaè·ôo∫∫ÚPÃú~≥˜∫ÊÎÚ!BB.pÆ∑}e·;†¯ú#Õ$}
-úÎ;î◊R ]UÅ;Û*;9/Öœ(◊©Û4‰}Î©Ú<UqQÆÈ]µD¯≠–Ù£æÑ¨Èß‘˛ã]˘Âﬂ˛øˇ˝ÚE≠W;¥ö¥§:’>Á‚Vˆ‚}mË Å)E«èm«8¡z±B◊À¢|T1Ø;NdíYÀWd˛k≠5Ñ˙BcÃ3Óf=+z˝ùÆ«k{˜†BDQâÊˇÉÕ>).öπÄÖQŒpéWŒíeËé~†aÔTãRÍFW®î"«‰àB/¬‡Î∑Ãh˛¸ßüêœ0(_,õK˜ËzDÍµ˙´Ê5∏Mû˚oÄ|]óYT∫%wée{IÕ`ÿGéY¨ï≥˝ré†I≤ÌÏõıçµ†OdËπƒvê≈¶_4czRÏ<pF{¢˘ªs∆˛Æ¢˘ûMÏ·˜ ∂+ßÜLœË«≈˛ÕÙˆñ∫éÓüxl$:ó¢ô9∫”µMctæ∑dŸï£¢/_◊W°†1f∂F¥\õ‚nD˘pøà∑tÆÅU‚X€ºÒkeô™T∏ª^3(LàŸ[ÿ2ÆπÇWØJVà.¶Ø¨~ëSPXä+»ö˙Öó
-¡uètBj0)µƒ˛D@˜u∞Ch≤“Ç%ë∏ı0ˇπzñ◊ü˘çÄ´
-8∂mO≠Ò(7ûJìº–– £nÑ›¿6(•y˝ES4+%Î:´s‘ºå´5πŒ•cÕ`\ﬂçd>û_ûj&ã &¿{@ï4w~©Á}HBã€±?H…’?wÅ#UL„-’ÿégä∞|6+v» [‡9:òt#ﬂ‘rÜ‹hXÔÇoı¢ªrù#rﬁ+„ÿ°aπ∫W°|í˙V∑∂…˛;ˆ>Òj*‚ô?¿Ü¿Î[¬i6À¸J.≠›®X∂ïe¬0cöß[∫{ƒLπÖ‚8Ãõı- ï®ÿüéI–}~vl®“mGI?öÂ6◊À36ëL√©_Ô¬[^öˇìßªïS€w…¯àrÍ©ÑL€phC◊7N˝lpS#ßË9p&Ç±œ¨Ktèå`_Z∫Êüë¸t
-œÉ˝é˚>J’}ß∫îº=Àse&t;j√o‚·Á%Û<˙û«E‰ˆŒgHA˙gû¬`[uP,ﬁÓ]0ƒÿ{}ÓÊ]>÷LWÁ
-¥§¢zDE(ÀÕbÙô†F∏øÜÊY(πÿÆ H∑Ä¿Ò>⁄§ÙNGÙÇ˝ÊNÛs‚1*$;ı<%êlqndQı3}‰{:Úã^í]|ƒÀà‘Àx5^ú˚<˙$Ó˚ø˘   ˇˇ ùÍ	
+                          >
+                            Tout retourner
+                          </button>
+                        </div>
+
+                        {/* Rapatriement sub-form */}
+                        {showRapatriementForm && (
+                          <div className="p-0 space-y-4 font-sans text-black bg-transparent border-none shadow-none">
+                            <div className="grid grid-cols-1 gap-4 bg-transparent">
+                              <div className="flex flex-col gap-1.5 bg-transparent">
+                                <label className="text-black font-semibold bg-transparent" style={{ fontSize: "16px" }}>
+                                  Type.
+                                </label>
+                                <input
+                                  type="text"
+                                  value="Rapatriement"
+                                  disabled
+                                  className="w-full bg-slate-100 border border-slate-200 text-slate-500 font-bold bg-transparent"
+                                  style={{
+                                    borderRadius: "13px",
+                                    padding: "10px 14px",
+                                    fontSize: "16px",
+                                    height: "44px",
+                                  }}
+                                />
+                              </div>
+
+                              <div className="flex flex-col gap-1.5 bg-transparent">
+                                <label className="text-black font-semibold bg-transparent" style={{ fontSize: "16px" }}>
+                                  Volume.
+                                </label>
+                                <select
+                                  value={rapatrimentVolume}
+                                  onChange={(e) =>
+                                    setRapatrimentVolume(
+                                      Number(e.target.value) || 0,
+                                    )
+                                  }
+                                  className="w-full bg-white text-black font-medium transition-all"
+                                  style={{
+                                    border: "1px solid #cbd5e1",
+                                    borderRadius: "13px",
+                                    padding: "10px 14px",
+                                    fontSize: "16px",
+                                    height: "44px",
+                                  }}
+                                >
+                                  {(() => {
+                                    const isTraceActive = matchedStockRecord?.traceabilityEnabled ?? false;
+                                    const n = isTraceActive && matchedStockRecord?.traceabilities
+                                      ? matchedStockRecord.traceabilities.filter((t) => {
+                                          if (t.situation !== "Disponible") return false;
+                                          let currentLoc = t.emplacement;
+                                          if (!currentLoc) {
+                                            const matchedMv = (matchedStockRecord.mouvements || []).find(mv => mv.id === t.movementId);
+                                            if (matchedMv && matchedMv.emplacement) {
+                                              currentLoc = matchedMv.emplacement.includes(" : ") ? matchedMv.emplacement.split(" : ")[1] : matchedMv.emplacement;
+                                            }
+                                          }
+                                          return currentLoc === selectedTechStock.locationName;
+                                        }).length
+                                      : (selectedTechStock?.volumeDisponible || 0);
+                                    if (n <= 0) {
+                                      return <option value={0}>0</option>;
+                                    }
+                                    const opts = [];
+                                    for (let i = 1; i <= n; i++) {
+                                      opts.push(
+                                        <option key={i} value={i}>
+                                          {i}
+                                        </option>
+                                      );
+                                    }
+                                    return opts;
+                                  })()}
+                                </select>
+                              </div>
+
+                              <div className="flex flex-col gap-1.5 bg-transparent">
+                                <label className="text-black font-semibold bg-transparent" style={{ fontSize: "16px" }}>
+                                  Lien transporteur.
+                                </label>
+                                <input
+                                  type="text"
+                                  value={rapatrimentTrackingLink}
+                                  onChange={(e) =>
+                                    setRapatrimentTrackingLink(e.target.value)
+                                  }
+                                  placeholder="Coller lien de suivi"
+                                  className="w-full bg-white text-black font-semibold"
+                                  style={{
+                                    border: "1px solid #cbd5e1",
+                                    borderRadius: "13px",
+                                    padding: "10px 14px",
+                                    fontSize: "16px",
+                                    height: "44px",
+                                  }}
+                                />
+                              </div>
+
+                              <div className="flex flex-col gap-1.5 bg-transparent">
+                                <label className="text-black font-semibold bg-transparent" style={{ fontSize: "16px" }}>
+                                  Date.
+                                </label>
+                                <input
+                                  type="date"
+                                  value={rapatrimentDate}
+                                  onChange={(e) =>
+                                    setRapatrimentDate(e.target.value)
+                                  }
+                                  className="w-full bg-white text-black font-semibold"
+                                  style={{
+                                    border: "1px solid #cbd5e1",
+                                    borderRadius: "13px",
+                                    padding: "10px 14px",
+                                    fontSize: "16px",
+                                    height: "44px",
+                                  }}
+                                />
+                              </div>
+
+                              <div className="flex flex-col gap-1.5 bg-transparent">
+                                <label className="text-black font-semibold bg-transparent" style={{ fontSize: "16px" }}>
+                                  Statut.
+                                </label>
+                                <select
+                                  value={rapatrimentStatut}
+                                  onChange={(e) =>
+                                    setRapatrimentStatut(e.target.value as any)
+                                  }
+                                  className="w-full bg-white text-black font-medium cursor-pointer"
+                                  style={{
+                                    border: "1px solid #cbd5e1",
+                                    borderRadius: "13px",
+                                    padding: "10px 14px",
+                                    fontSize: "16px",
+                                    height: "44px",
+                                    appearance: "none",
+                                    WebkitAppearance: "none",
+                                    MozAppearance: "none",
+                                    backgroundImage: "none",
+                                  }}
+                                >
+                                  <option value="Pr√©paration">Pr√©paration</option>
+                                  <option value="Exp√©di√©">Exp√©di√©</option>
+                                  <option value="Termin√©">Termin√©</option>
+                                  <option value="Annul√©">Annul√©</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 pt-3 bg-transparent font-sans">
+                              <button
+                                type="button"
+                                onClick={() => setShowRapatriementForm(false)}
+                                className="flex-1 py-3 text-white hover:opacity-95 transition-all text-center cursor-pointer border-0"
+                                style={{
+                                  backgroundColor: "#000000",
+                                  borderRadius: "13px",
+                                  fontSize: "18px",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                Annuler
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleConfirmRapatriement}
+                                className="flex-1 py-3 text-white hover:opacity-90 transition-opacity cursor-pointer border-0"
+                                style={{
+                                  backgroundColor: "#fe4eba",
+                                  borderRadius: "13px",
+                                  fontSize: "18px",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                Confirmer
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              {/* ----------------- TAB 3: TEMPS ----------------- */}
+              {activeTab === "temps" && (
+                <div
+                  className="space-y-6 pb-16 animate-fadeIn"
+                  id="tab-temps-screen"
+                >
+                  <HelpBubble
+                    cacheKey="help_webapp_temps_improvement"
+                    text="Cette page est en cours d'am√©lioration. Un peu de patience : votre onglet sera bient√¥t encore plus intuitif et agr√©able √† utiliser !"
+                  />
+
+                  <style>{`
+                    #tab-temps-screen input[type="date"]::-webkit-calendar-picker-indicator,
+                    #tab-temps-screen input[type="time"]::-webkit-calendar-picker-indicator {
+                      display: none !important;
+                      -webkit-appearance: none !important;
+                      background: none !important;
+                      width: 0 !important;
+                      height: 0 !important;
+                      margin: 0 !important;
+                    }
+                  `}</style>
+
+                  {/* Digital Clock Section */}
+                  <div
+                    style={{ backgroundColor: "#000", color: "#fff" }}
+                    className="p-5 rounded-2xl text-center space-y-2"
+                  >
+                    <span
+                      style={{
+                        fontSize: "18px",
+                        color: "#fff",
+                        fontFamily: "var(--font-sans), sans-serif",
+                      }}
+                      className="font-normal block"
+                    >
+                      {t("Date et heure.")}
+                    </span>
+                    <div
+                      style={{
+                        fontSize: "18px",
+                        color: "#fff",
+                        fontFamily: "var(--font-sans), sans-serif",
+                      }}
+                      className="font-bold"
+                    >
+                      {currentTime.toLocaleDateString(
+                        getLanguage() === "English" ? "en-US" : 
+                        getLanguage() === "Deutsch" ? "de-DE" : 
+                        getLanguage() === "Portugu√™s" ? "pt-PT" : 
+                        getLanguage() === "Espa√±ol" ? "es-ES" : "fr-FR"
+                      )}{" "}
+                      -{" "}
+                      {currentTime.toLocaleTimeString(
+                        getLanguage() === "English" ? "en-US" : 
+                        getLanguage() === "Deutsch" ? "de-DE" : 
+                        getLanguage() === "Portugu√™s" ? "pt-PT" : 
+                        getLanguage() === "Espa√±ol" ? "es-ES" : "fr-FR"
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Period control button */}
+                  {(() => {
+                    const activePointage = pointages.find(
+                      (p) =>
+                        p.isOngoing && p.techName === authenticatedUser?.name,
+                    );
+                    const isTracking = !!activePointage;
+
+                    return (
+                      <div className="space-y-4">
+                        <button
+                          type="button"
+                          onClick={handleTogglePointage}
+                          style={{
+                            backgroundColor: isTracking ? "#dc2626" : "rgb(39, 78, 255)",
+                            color: "#fff",
+                            fontSize: "18px",
+                            fontWeight: "bold",
+                            borderRadius: "13px",
+                            padding: "14px 20px",
+                            border: "none",
+                            boxShadow: isTracking
+                              ? "none"
+                              : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                            cursor: "pointer",
+                            width: "100%",
+                          }}
+                          className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                        >
+                          {isTracking ? (
+                            <span>{t("Terminer le pointage")}</span>
+                          ) : (
+                            <span>{t("D√©marrer la p√©riode")}</span>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Pointages registered log list */}
+                  <div className="space-y-4">
+                    {pointages
+                      .filter((p) => p.techName === authenticatedUser?.name)
+                      .map((p) => {
+                        const liveHHMM =
+                          String(currentTime.getHours()).padStart(2, "0") +
+                          ":" +
+                          String(currentTime.getMinutes()).padStart(2, "0");
+                        const startTime = p.startTime || "00:00";
+                        const endTime = p.isOngoing
+                          ? p.endTime || liveHHMM
+                          : p.endTime || "00:00";
+
+                        const sMins = timeToMins(startTime);
+                        const eMins = timeToMins(endTime);
+                        const ampMins = Math.max(0, eMins - sMins);
+                        const ampFormatted = minsToHHMM(ampMins);
+
+                        const trajetMatinMins = timeToMins(p.trajetMatin);
+                        const trajetSoirMins = timeToMins(p.trajetSoir);
+                        const trajetJourneeMins = trajetMatinMins + trajetSoirMins;
+                        const trajetJourneeFormatted = minsToHHMM(trajetJourneeMins);
+
+                        const repasMins = timeToMins(p.tempsRepas);
+
+                        const cttAmpMins = Math.max(
+                          0,
+                          ampMins - repasMins - trajetJourneeMins,
+                        );
+                        const cttAmpFormatted = minsToHHMM(cttAmpMins);
+
+                        const isExpanded = !!expandedPointageIds[p.id];
+
+                        return (
+                          <div
+                            key={p.id}
+                            className="p-4 sm:p-5 rounded-[16px] space-y-4 bg-white shadow-xs"
+                            style={{
+                              border: "1px solid rgb(201, 190, 205)",
+                            }}
+                            id={`pointage-card-${p.id}`}
+                          >
+                            {/* Card Header Badge / Gelule */}
+                            <div className="flex items-center justify-between pb-1">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  style={{
+                                    color: "#fff",
+                                    background: "#000",
+                                    border: "none",
+                                    fontSize: "18px",
+                                    padding: "8px 16px",
+                                    borderRadius: "9999px",
+                                  }}
+                                  className="font-bold inline-block"
+                                >
+                                  {p.isOngoing ? t("Pointage en cours") : t("Pointage termin√©")}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Main Fields Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {/* Date Journ√©e. (Always visible) */}
+                              <div className="space-y-1">
+                                <label
+                                  style={{ fontSize: "16px", color: "#000000" }}
+                                  className="block font-bold"
+                                >
+                                  {t("Date Journ√©e.")}
+                                </label>
+                                <input
+                                  type="date"
+                                  value={getIsoDate(p.startDate)}
+                                  style={{
+                                    fontSize: "18px",
+                                    padding: "14px",
+                                    borderRadius: "13px",
+                                    border: "1px solid rgb(201, 191, 205)",
+                                    outline: "none",
+                                    color: "rgb(0, 0, 0)",
+                                    backgroundColor: "#ffffff",
+                                  }}
+                                  className="w-full"
+                                  onChange={(e) =>
+                                    handleEditPointageField(p.id, {
+                                      startDate: getFrenchDate(e.target.value),
+                                    })
+                                  }
+                                />
+                              </div>
+
+                              {isExpanded && (
+                                <>
+                                  {/* D√©but Journ√©e. */}
+                                  <div className="space-y-1">
+                                    <label
+                                      style={{ fontSize: "16px", color: "#000000" }}
+                                      className="block font-bold"
+                                    >
+                                      {t("D√©but Journ√©e.")}
+                                    </label>
+                                    <input
+                                      type="time"
+                                      value={p.startTime}
+                                      style={{
+                                        fontSize: "18px",
+                                        padding: "14px",
+                                        borderRadius: "13px",
+                                        border: "1px solid rgb(201, 191, 205)",
+                                        outline: "none",
+                                        color: "rgb(0, 0, 0)",
+                                        backgroundColor: "#ffffff",
+                                      }}
+                                      className="w-full"
+                                      onChange={(e) =>
+                                        handleEditPointageField(p.id, {
+                                          startTime: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+
+                                  {/* Fin Journ√©e. */}
+                                  <div className="space-y-1">
+                                    <label
+                                      style={{ fontSize: "16px", color: "#000000" }}
+                                      className="block font-bold"
+                                    >
+                                      {t("Fin Journ√©e.")}
+                                    </label>
+                                    <input
+                                      type="time"
+                                      value={endTime}
+                                      style={{
+                                        fontSize: "18px",
+                                        padding: "14px",
+                                        borderRadius: "13px",
+                                        border: "1px solid rgb(201, 191, 205)",
+                                        outline: "none",
+                                        color: "rgb(0, 0, 0)",
+                                        backgroundColor: "#ffffff",
+                                      }}
+                                      className="w-full"
+                                      onChange={(e) =>
+                                        handleEditPointageField(p.id, {
+                                          endTime: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+
+                                  {/* Amplitude Journ√©e. (Disabled) */}
+                                  <div className="space-y-1">
+                                    <label
+                                      style={{ fontSize: "16px", color: "#000000" }}
+                                      className="block font-bold"
+                                    >
+                                      {t("Amplitude Journ√©e.")}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      disabled
+                                      readOnly
+                                      value={ampFormatted}
+                                      style={{
+                                        fontSize: "18px",
+                                        padding: "14px",
+                                        borderRadius: "13px",
+                                        border: "1px solid rgb(201, 191, 205)",
+                                        outline: "none",
+                                        color: "rgb(0, 0, 0)",
+                                        backgroundColor: "#e2d9e6",
+                                      }}
+                                      className="w-full cursor-not-allowed"
+                                    />
+                                  </div>
+
+                                  {/* Commentaire Journ√©e. */}
+                                  <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+                                    <label
+                                      style={{ fontSize: "16px", color: "#000000" }}
+                                      className="block font-bold"
+                                    >
+                                      {t("Commentaire Journ√©e.")}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      maxLength={100}
+                                      placeholder={t("Entrez un commentaire.")}
+                                      value={p.comment || ""}
+                                      style={{
+                                        fontSize: "18px",
+                                        padding: "14px",
+                                        borderRadius: "13px",
+                                        border: "1px solid rgb(201, 191, 205)",
+                                        outline: "none",
+                                        color: "rgb(0, 0, 0)",
+                                        backgroundColor: "#ffffff",
+                                      }}
+                                      className="w-full"
+                                      onChange={(e) =>
+                                        handleEditPointageField(p.id, {
+                                          comment: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                </>
+                              )}
+                            </div>
+
+                            {/* Full-width Toggle Button: D√©rouler / R√©duire */}
+                            <button
+                              type="button"
+                              onClick={() => togglePointageExpanded(p.id)}
+                              style={{
+                                color: "#fff",
+                                boxShadow:
+                                  "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                backgroundColor: "rgb(39, 78, 255)",
+                                borderRadius: "13px",
+                                padding: "10px 18px",
+                                fontSize: "18px",
+                                fontWeight: 700,
+                                border: "none",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "6px",
+                                width: "100%",
+                              }}
+                              className="w-full shrink-0 select-none transition-all active:scale-[0.99]"
+                            >
+                              {isExpanded ? t("R√©duire") : t("D√©rouler")}
+                            </button>
+
+                            {/* Expanded Details */}
+                            {isExpanded && (
+                              <div className="space-y-4 pt-1">
+                                {/* Section Title : ¬´ Trajet ¬ª */}
+                                <div className="space-y-3 pt-1">
+                                  <h4
+                                    style={{ fontSize: "18px", color: "#000000" }}
+                                    className="font-bold"
+                                  >
+                                    {t("Trajet")}
+                                  </h4>
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    {/* Temps Trajet Matin. */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Temps Trajet Matin.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        placeholder="00:00"
+                                        value={p.trajetMatin ?? "00:00"}
+                                        style={{
+                                          fontSize: "18px",
+                                          padding: "14px",
+                                          borderRadius: "13px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
+                                          backgroundColor: "#ffffff",
+                                        }}
+                                        className="w-full"
+                                        onChange={(e) =>
+                                          handleEditPointageField(p.id, {
+                                            trajetMatin: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+
+                                    {/* Temps Trajet Soir. */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Temps Trajet Soir.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        placeholder="00:00"
+                                        value={p.trajetSoir ?? "00:00"}
+                                        style={{
+                                          fontSize: "18px",
+                                          padding: "14px",
+                                          borderRadius: "13px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
+                                          backgroundColor: "#ffffff",
+                                        }}
+                                        className="w-full"
+                                        onChange={(e) =>
+                                          handleEditPointageField(p.id, {
+                                            trajetSoir: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+
+                                    {/* Temps Trajet Journ√©e. (Disabled) */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Temps Trajet Journ√©e.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        disabled
+                                        readOnly
+                                        value={trajetJourneeFormatted}
+                                        style={{
+                                          fontSize: "18px",
+                                          padding: "14px",
+                                          borderRadius: "13px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
+                                          backgroundColor: "#e2d9e6",
+                                        }}
+                                        className="w-full cursor-not-allowed"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Section Title : ¬´ Repas ¬ª */}
+                                <div className="space-y-3 pt-1">
+                                  <h4
+                                    style={{ fontSize: "18px", color: "#000000" }}
+                                    className="font-bold"
+                                  >
+                                    {t("Repas")}
+                                  </h4>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {/* Temps de repas. */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Temps de repas.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        placeholder="00:00"
+                                        value={p.tempsRepas ?? "00:00"}
+                                        style={{
+                                          fontSize: "18px",
+                                          padding: "14px",
+                                          borderRadius: "13px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
+                                          backgroundColor: "#ffffff",
+                                        }}
+                                        className="w-full"
+                                        onChange={(e) =>
+                                          handleEditPointageField(p.id, {
+                                            tempsRepas: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Title : ¬´ CTT ¬ª */}
+                                <div className="space-y-3 pt-1">
+                                  <h4
+                                    style={{ fontSize: "18px", color: "#000000" }}
+                                    className="font-bold"
+                                  >
+                                    {t("CTT")}
+                                  </h4>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {/* Amplitude Journ√©e. (Disabled under CTT) */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Amplitude Journ√©e.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        disabled
+                                        readOnly
+                                        value={cttAmpFormatted}
+                                        style={{
+                                          fontSize: "18px",
+                                          padding: "14px",
+                                          borderRadius: "13px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
+                                          backgroundColor: "#e2d9e6",
+                                        }}
+                                        className="w-full cursor-not-allowed"
+                                      />
+                                    </div>
+
+                                    {/* Temps Administratif/Autres. */}
+                                    <div className="space-y-1">
+                                      <label
+                                        style={{ fontSize: "16px", color: "#000000" }}
+                                        className="block font-bold"
+                                      >
+                                        {t("Temps Administratif/Autres.")}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        placeholder="00:00"
+                                        value={p.tempsAdmin ?? "00:00"}
+                                        style={{
+                                          fontSize: "18px",
+                                          padding: "14px",
+                                          borderRadius: "13px",
+                                          border: "1px solid rgb(201, 191, 205)",
+                                          outline: "none",
+                                          color: "rgb(0, 0, 0)",
+                                          backgroundColor: "#ffffff",
+                                        }}
+                                        className="w-full"
+                                        onChange={(e) =>
+                                          handleEditPointageField(p.id, {
+                                            tempsAdmin: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Card Buttons: Supprimer & Enregistrer */}
+                                <div className="flex items-center gap-3 pt-3 w-full">
+                                  <button
+                                    type="button"
+                                    disabled={p.isOngoing}
+                                    onClick={() => {
+                                      if (
+                                        window.confirm(
+                                          "√ätes-vous s√ªr de vouloir supprimer ce pointage ?"
+                                        )
+                                      ) {
+                                        if (
+                                          window.confirm(
+                                            "Confirmation d√©finitive : √ätes-vous vraiment s√ªr de vouloir supprimer ce pointage ?"
+                                          )
+                                        ) {
+                                          handleDeletePointage(p.id);
+                                        }
+                                      }
+                                    }}
+                                    style={{
+                                      backgroundColor: p.isOngoing ? "#9ca3af" : "#dc2626",
+                                      color: "#ffffff",
+                                      fontSize: "18px",
+                                      fontWeight: "bold",
+                                      borderRadius: "13px",
+                                      padding: "12px 18px",
+                                      border: "none",
+                                      cursor: p.isOngoing ? "not-allowed" : "pointer",
+                                      opacity: p.isOngoing ? 0.5 : 1,
+                                      flex: 1,
+                                    }}
+                                    className="transition-all font-bold"
+                                  >
+                                    Supprimer
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      alert("Pointage enregistr√© avec succ√®s.")
+                                    }
+                                    style={{
+                                      backgroundColor: "#000000",
+                                      color: "#ffffff",
+                                      fontSize: "18px",
+                                      fontWeight: "bold",
+                                      borderRadius: "13px",
+                                      padding: "12px 18px",
+                                      border: "none",
+                                      cursor: "pointer",
+                                      flex: 1,
+                                    }}
+                                    className="hover:opacity-90 transition-all font-bold"
+                                  >
+                                    Enregistrer
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* ----------------- TAB 4: FRAIS ----------------- */}
+              {activeTab === "frais" && !isFraisHidden && (
+                <div
+                  className="space-y-6 pb-16 animate-fadeIn"
+                  id="tab-frais-screen"
+                >
+                  <style>{`
+                    #tab-frais-screen input,
+                    #tab-frais-screen label,
+                    #tab-frais-screen input::placeholder {
+                      font-family: var(--font-sans), "Civilprom", "DefibeoMain", sans-serif !important;
+                    }
+                  `}</style>
+
+                  {/* Ticket addition Form */}
+                  <form
+                    onSubmit={handleSaveExpense}
+                    className="space-y-5 bg-white p-0 rounded-2xl"
+                    id="auth-main-card"
+                    style={{
+                      border: "none",
+                      padding: "0px",
+                      boxShadow: "none",
+                    }}
+                  >
+                    <div className="space-y-4">
+                      {/* Title */}
+                      <div className="space-y-1.5">
+                        <label
+                          style={{ fontSize: "18px" }}
+                          className="block font-bold text-black select-none"
+                        >
+                          Objet.
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={15}
+                          value={expenseTitle}
+                          onChange={(e) => setExpenseTitle(e.target.value)}
+                          placeholder="Entrez une raison."
+                          style={{
+                            fontSize: "18px",
+                            padding: "14px",
+                            borderRadius: "13px",
+                            border: "1px solid rgb(201, 191, 205)",
+                            outline: "none",
+                            color: "rgb(0, 0, 0)",
+                          }}
+                          className="w-full bg-white"
+                        />
+                      </div>
+
+                      {/* Amounts Grid */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label
+                            style={{ fontSize: "18px" }}
+                            className="block font-bold text-black select-none"
+                          >
+                            Total TTC. (‚Ç¨) *
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            value={expenseTtc}
+                            onChange={(e) => handleTtcChange(e.target.value)}
+                            placeholder="0.00"
+                            style={{
+                              fontSize: "18px",
+                              padding: "14px",
+                              borderRadius: "13px",
+                              border: "1px solid rgb(201, 191, 205)",
+                              outline: "none",
+                              color: "rgb(0, 0, 0)",
+                            }}
+                            className="w-full bg-white text-black font-bold"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label
+                            style={{ fontSize: "18px" }}
+                            className="block font-bold text-black select-none"
+                          >
+                            Total HT. (‚Ç¨)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={expenseHt}
+                            onChange={(e) => handleHtChange(e.target.value)}
+                            placeholder="0.00"
+                            style={{
+                              fontSize: "18px",
+                              padding: "14px",
+                              borderRadius: "13px",
+                              border: "1px solid rgb(201, 191, 205)",
+                              outline: "none",
+                              color: "rgb(0, 0, 0)",
+                            }}
+                            className="w-full bg-white text-black"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label
+                            style={{ fontSize: "18px" }}
+                            className="block font-bold text-black select-none"
+                          >
+                            Total TVA. (‚Ç¨)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={expenseTva}
+                            onChange={(e) => setExpenseTva(e.target.value)}
+                            placeholder="0.00"
+                            style={{
+                              fontSize: "18px",
+                              padding: "14px",
+                              borderRadius: "13px",
+                              border: "1px solid rgb(201, 191, 205)",
+                              outline: "none",
+                              color: "rgb(0, 0, 0)",
+                            }}
+                            className="w-full bg-white text-black"
+                          />
+                        </div>
+
+                        {/* Date */}
+                        <div className="space-y-1.5">
+                          <label
+                            style={{ fontSize: "18px" }}
+                            className="block font-bold text-black select-none"
+                          >
+                            Date du paiement.
+                          </label>
+                          <input
+                            type="text"
+                            value={expenseDate}
+                            onChange={(e) => setExpenseDate(e.target.value)}
+                            placeholder={new Date().toISOString().split("T")[0]}
+                            style={{
+                              fontSize: "18px",
+                              padding: "14px",
+                              borderRadius: "13px",
+                              border: "1px solid rgb(201, 191, 205)",
+                              outline: "none",
+                              color: "rgb(0, 0, 0)",
+                            }}
+                            className="w-full bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Photo select */}
+                      <div className="space-y-1.5">
+                        <label
+                          style={{ fontSize: "18px" }}
+                          className="block font-bold text-black select-none"
+                        >
+                          Photographie ou fichier.
+                        </label>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              expensePhotoInputRef.current?.click()
+                            }
+                            style={{
+                              backgroundColor: "#000000",
+                              color: "#fff",
+                              fontSize: "18px",
+                              fontWeight: "bold",
+                              borderRadius: "12px",
+                              padding: "9px 18px",
+                              border: "none",
+                              boxShadow:
+                                "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset",
+                              cursor: "pointer",
+                            }}
+                            className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold"
+                          >
+                            <span>S√©lectionner</span>
+                          </button>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            ref={expensePhotoInputRef}
+                            onChange={(e) =>
+                              triggerPhotoRead(e, setExpensePhotoUrl)
+                            }
+                            className="hidden"
+                          />
+                          {expensePhotoUrl && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setExpensePhotoUrl("")}
+                                style={{
+                                  backgroundColor: "#dc2626",
+                                  color: "#fff",
+                                  fontSize: "18px",
+                                  fontWeight: "bold",
+                                  borderRadius: "12px",
+                                  padding: "9px 18px",
+                                  border: "none",
+                                  boxShadow:
+                                    "inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f",
+                                  cursor: "pointer",
+                                }}
+                                className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold"
+                              >
+                                Supprimer
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      style={{
+                        backgroundColor: "rgb(53, 86, 236)",
+                        color: "#fff",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                        borderRadius: "12px",
+                        padding: "14px 20px",
+                        border: "none",
+                        boxShadow:
+                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                        cursor: "pointer",
+                        width: "100%",
+                      }}
+                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold"
+                    >
+                      <span>Enregistrer</span>
+                    </button>
+
+                    {expenseSuccessMessage && (
+                      <div
+                        style={{
+                          border: "none",
+                          borderRadius: "13px",
+                          fontSize: "18px",
+                          backgroundColor: "#fde5ff",
+                          color: "#a354aa",
+                          padding: "14px",
+                          textAlign: "center",
+                          fontWeight: "normal",
+                          marginTop: "12px",
+                          fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
+                        }}
+                        className="animate-fadeIn"
+                      >
+                        {expenseSuccessMessage}
+                      </div>
+                    )}
+                  </form>
+                </div>
+              )}
+
+              {/* ----------------- TAB: VEILLE ----------------- */}
+              {activeTab === "veille" && (
+                <div
+                  className="space-y-6 pb-16 animate-fadeIn"
+                  id="tab-veille-screen"
+                >
+                  <HelpBubble
+                    cacheKey="help_webapp_veille_improvement"
+                    text="Cette page est en cours d'am√©lioration. Un peu de patience : votre onglet sera bient√¥t encore plus intuitif et agr√©able √† utiliser !"
+                  />
+
+                  <style>{`
+                    #tab-veille-screen input,
+                    #tab-veille-screen textarea,
+                    #tab-veille-screen label,
+                    #tab-veille-screen input::placeholder,
+                    #tab-veille-screen textarea::placeholder {
+                      font-family: var(--font-sans), "Civilprom", "DefibeoMain", sans-serif !important;
+                    }
+                    #tab-veille-screen input::placeholder,
+                    #tab-veille-screen textarea::placeholder {
+                      font-size: 18px !important;
+                    }
+                    #tab-veille-screen input[type="date"]::-webkit-calendar-picker-indicator {
+                      display: none !important;
+                      -webkit-appearance: none !important;
+                    }
+                  `}</style>
+
+                  <form
+                    onSubmit={handleAddVeille}
+                    className="space-y-5"
+                    style={{
+                      border: "none",
+                      padding: "0",
+                      background: "transparent",
+                      boxShadow: "none",
+                    }}
+                    id="veille-main-card"
+                  >
+                    {/* Commune */}
+                    <div className="space-y-2">
+                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
+                        Commune ou Entreprise.
+                      </label>
+                      <input
+                        type="text"
+                        value={veilleCommune}
+                        onChange={(e) => setVeilleCommune(e.target.value)}
+                        placeholder="Entrez une d√©nomination."
+                        required
+                        style={{
+                          fontSize: "18px",
+                          padding: "14px",
+                          borderRadius: "13px",
+                          border: "1px solid rgb(201, 191, 205)",
+                          outline: "none",
+                          color: "rgb(0, 0, 0)",
+                          backgroundColor: "transparent",
+                        }}
+                        className="w-full text-black"
+                      />
+                    </div>
+
+                    {/* Volume */}
+                    <div className="space-y-2">
+                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
+                        Volume (Chiffre).
+                      </label>
+                      <input
+                        type="number"
+                        value={veilleVolume}
+                        onChange={(e) => setVeilleVolume(e.target.value)}
+                        placeholder="Entrez un volume."
+                        required
+                        style={{
+                          fontSize: "18px",
+                          padding: "14px",
+                          borderRadius: "13px",
+                          border: "1px solid rgb(201, 191, 205)",
+                          outline: "none",
+                          color: "rgb(0, 0, 0)",
+                          backgroundColor: "transparent",
+                        }}
+                        className="w-full text-black"
+                      />
+                    </div>
+
+                    {/* Mainteneur Actuel */}
+                    <div className="space-y-2">
+                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
+                        Mainteneur actuel.
+                      </label>
+                      <input
+                        type="text"
+                        value={veilleMainteneur}
+                        onChange={(e) => setVeilleMainteneur(e.target.value)}
+                        placeholder="Entrez un mainteneur actuel."
+                        required
+                        style={{
+                          fontSize: "18px",
+                          padding: "14px",
+                          borderRadius: "13px",
+                          border: "1px solid rgb(201, 191, 205)",
+                          outline: "none",
+                          color: "rgb(0, 0, 0)",
+                          backgroundColor: "transparent",
+                        }}
+                        className="w-full text-black"
+                      />
+                    </div>
+
+                    {/* Prochaine maintenance */}
+                    <div className="space-y-2">
+                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
+                        Prochaine maintenance.
+                      </label>
+                      <input
+                        type="date"
+                        value={veilleProchaine}
+                        onChange={(e) => setVeilleProchaine(e.target.value)}
+                        placeholder="jj/mm/aaaa"
+                        required
+                        style={{
+                          fontSize: "18px",
+                          padding: "14px",
+                          borderRadius: "13px",
+                          border: "1px solid rgb(201, 191, 205)",
+                          outline: "none",
+                          color: "rgb(0, 0, 0)",
+                          backgroundColor: "transparent",
+                        }}
+                        className="w-full text-black"
+                      />
+                    </div>
+
+                    {/* Contact Nom/Pr√©nom */}
+                    <div className="space-y-2">
+                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
+                        Contact Nom/Pr√©nom.
+                      </label>
+                      <input
+                        type="text"
+                        value={veilleContactNom}
+                        onChange={(e) => setVeilleContactNom(e.target.value)}
+                        placeholder="Entrez un nom et pr√©nom."
+                        required
+                        style={{
+                          fontSize: "18px",
+                          padding: "14px",
+                          borderRadius: "13px",
+                          border: "1px solid rgb(201, 191, 205)",
+                          outline: "none",
+                          color: "rgb(0, 0, 0)",
+                          backgroundColor: "transparent",
+                        }}
+                        className="w-full text-black"
+                      />
+                    </div>
+
+                    {/* Contact Email */}
+                    <div className="space-y-2">
+                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
+                        Contact Email.
+                      </label>
+                      <input
+                        type="email"
+                        value={veilleContactEmail}
+                        onChange={(e) => setVeilleContactEmail(e.target.value)}
+                        placeholder="Entrez un email."
+                        required
+                        style={{
+                          fontSize: "18px",
+                          padding: "14px",
+                          borderRadius: "13px",
+                          border: "1px solid rgb(201, 191, 205)",
+                          outline: "none",
+                          color: "rgb(0, 0, 0)",
+                          backgroundColor: "transparent",
+                        }}
+                        className="w-full text-black"
+                      />
+                    </div>
+
+                    {/* Contact T√©l√©phone */}
+                    <div className="space-y-2">
+                      <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
+                        Contact T√©l√©phone.
+                      </label>
+                      <input
+                        type="tel"
+                        value={veilleContactTel}
+                        onChange={(e) => setVeilleContactTel(e.target.value)}
+                        placeholder="Entrez un t√©l√©phone."
+                        required
+                        style={{
+                          fontSize: "18px",
+                          padding: "14px",
+                          borderRadius: "13px",
+                          border: "1px solid rgb(201, 191, 205)",
+                          outline: "none",
+                          color: "rgb(0, 0, 0)",
+                          backgroundColor: "transparent",
+                        }}
+                        className="w-full text-black"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      style={{
+                        backgroundColor: "rgb(53, 86, 236)",
+                        color: "#fff",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                        borderRadius: "12px",
+                        padding: "14px 20px",
+                        border: "none",
+                        boxShadow:
+                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                        cursor: "pointer",
+                        width: "100%",
+                      }}
+                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold mt-4"
+                    >
+                      <span>Enregistrer</span>
+                    </button>
+
+                    {veilleSuccessMessage && (
+                      <div
+                        style={{
+                          border: "none",
+                          borderRadius: "13px",
+                          fontSize: "18px",
+                          backgroundColor: "#fde5ff",
+                          color: "#a354aa",
+                          padding: "14px",
+                          textAlign: "center",
+                          fontWeight: "normal",
+                          marginTop: "12px",
+                          fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
+                        }}
+                        className="animate-fadeIn"
+                      >
+                        {veilleSuccessMessage}
+                      </div>
+                    )}
+                  </form>
+                </div>
+              )}
+
+              {/* ----------------- TAB 5: LOCALISATION ----------------- */}
+              {activeTab === "localisation" && (
+                <div
+                  className="space-y-6 pb-16 animate-fadeIn"
+                  id="tab-localisation-screen"
+                >
+                  {/* Nom du logiciel / Entreprise - Credit Card Banner Header (Recto / Verso) */}
+                  <div
+                    className="select-none"
+                    style={{
+                      width: "100%",
+                      maxWidth: "340px",
+                      aspectRatio: "85.6 / 53.98",
+                      margin: "15px auto 25px",
+                      perspective: "1000px",
+                      cursor: "pointer",
+                      touchAction: "manipulation",
+                    }}
+                    onClick={() => setIsSettingsCardFlipped((prev) => !prev)}
+                    title="Toucher pour retourner la carte"
+                  >
+                    <div
+                      style={{
+                        position: "relative",
+                        width: "100%",
+                        height: "100%",
+                        transformStyle: "preserve-3d",
+                        transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+                        transform: isSettingsCardFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+                      }}
+                    >
+                      {/* RECTO (Front of the card) */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
+                          borderRadius: "16px",
+                          overflow: "hidden",
+                          backfaceVisibility: "hidden",
+                          WebkitBackfaceVisibility: "hidden",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "16px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.1)",
+                        }}
+                      >
+                        {/* Encoche sur le flan gauche avec filtre plus sombre pour contraster */}
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: "-10px",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            width: "28px",
+                            height: "36px",
+                            backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
+                            filter: "brightness(0.72)",
+                            borderRadius: "0px 25px 25px 0px",
+                            zIndex: 10,
+                          }}
+                        />
+
+                        {/* Logo Top Right */}
+                        <img
+                          src="https://datacenter64000pau.s3.eu-north-1.amazonaws.com/Defibeo_2026_Logo2.svg"
+                          alt="Logo"
+                          style={{
+                            position: "absolute",
+                            top: "2px",
+                            right: "16px",
+                            height: "46px",
+                            width: "auto",
+                            objectFit: "contain",
+                          }}
+                        />
+
+                        {/* Technicien Bottom Left */}
+                        {authenticatedUser?.name && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              bottom: "12px",
+                              left: "18px",
+                              color: "rgba(255, 255, 255, 0.95)",
+                              fontSize: "15px",
+                              fontWeight: "600",
+                              fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
+                            }}
+                          >
+                            {authenticatedUser.name}
+                          </div>
+                        )}
+
+                        {/* Nom du logiciel / Entreprise au centre */}
+                        <div
+                          style={{
+                            color: "rgb(255, 255, 255)",
+                            fontSize: "20px",
+                            textAlign: "center",
+                            fontFamily: 'var(--font-sans), "DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: "bold",
+                          }}
+                          className="tracking-wide w-full px-6"
+                        >
+                          {((companyInfo.nomLogiciel || companyInfo.name || "Defibeo")).length > 25
+                            ? (companyInfo.nomLogiciel || companyInfo.name || "Defibeo").substring(0, 25) + "..."
+                            : (companyInfo.nomLogiciel || companyInfo.name || "Defibeo")}
+                        </div>
+                      </div>
+
+                      {/* VERSO (Back of the card) */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
+                          borderRadius: "16px",
+                          overflow: "hidden",
+                          backfaceVisibility: "hidden",
+                          WebkitBackfaceVisibility: "hidden",
+                          transform: "rotateY(180deg)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "20px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.1)",
+                        }}
+                      >
+                        {/* Encoche sur le flan oppos√© au verso pour continuit√© g√©om√©trique */}
+                        <div
+                          style={{
+                            position: "absolute",
+                            right: "-10px",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            width: "28px",
+                            height: "36px",
+                            backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
+                            filter: "brightness(0.72)",
+                            borderRadius: "25px 0px 0px 25px",
+                            zIndex: 10,
+                          }}
+                        />
+
+                        {/* Logo Defibeo Centr√© au verso */}
+                        <img
+                          src="https://datacenter64000pau.s3.eu-north-1.amazonaws.com/Defibeo_2026_Logo2.svg"
+                          alt="Defibeo Logo"
+                          style={{
+                            maxHeight: "60px",
+                            maxWidth: "60%",
+                            width: "auto",
+                            height: "auto",
+                            objectFit: "contain",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <style>{`
+                    #tab-localisation-screen input,
+                    #tab-localisation-screen select,
+                    #tab-localisation-screen label,
+                    #tab-localisation-screen input::placeholder {
+                      font-family: var(--font-sans), "Civilprom", "DefibeoMain", sans-serif !important;
+                    }
+                    #tab-localisation-screen input::placeholder {
+                      font-size: 18px !important;
+                      color: #9ca3af !important;
+                    }
+                  `}</style>
+                  <form
+                    onSubmit={handleSaveLocalisation}
+                    className="space-y-5"
+                    style={{
+                      border: "none",
+                      padding: "0",
+                      background: "transparent",
+                      boxShadow: "none",
+                    }}
+                    id="auth-main-card"
+                  >
+                    <div className="space-y-4">
+                      {/* Toggle Masquer le pointage */}
+                      <div className="space-y-1.5" style={{ marginTop: "24px" }}>
+                        <div
+                          className="bg-white border px-4 py-[25px]"
+                          style={{
+                            borderColor: "rgb(201, 190, 205)",
+                            borderRadius: "14px",
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[18px] font-bold text-black font-sans select-none">
+                              {t("Masquer le pointage.")}
+                            </span>
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newVal = !hidePointage;
+                                  setHidePointage(newVal);
+                                  try {
+                                    const envId = localStorage.getItem("defib_tenant_id") || "demo";
+                                    localStorage.setItem("defib_hide_pointage", newVal ? "true" : "false");
+                                    localStorage.setItem(`defib_${envId}_tech_hide_pointage`, newVal ? "true" : "false");
+                                    if (authenticatedUser?.name) {
+                                      localStorage.setItem(`defib_${envId}_tech_hide_pointage_${authenticatedUser.name}`, newVal ? "true" : "false");
+                                    }
+                                  } catch (e) {}
+                                }}
+                                className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                                style={{
+                                  backgroundColor: hidePointage
+                                    ? "#fe4eba"
+                                    : "#cbd5e1",
+                                }}
+                              >
+                                <span
+                                  className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
+                                  style={{
+                                    transform: hidePointage
+                                      ? "translateX(20px)"
+                                      : "translateX(0px)",
+                                  }}
+                                />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Live map link replaced by toggle */}
+                      {!companyInfo?.hiddenTabs?.includes("Localisation") && !companyInfo?.hiddenTabs?.includes("Localisation (Webapp)") && !companyInfo?.hiddenTabs?.includes("Localisations") && (
+                        <div className="space-y-1.5" style={{ marginTop: "24px" }}>
+                          <div
+                            className="bg-white border px-4 py-[25px]"
+                            style={{
+                              borderColor: "rgb(201, 190, 205)",
+                              borderRadius: "14px",
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[18px] font-bold text-black font-sans select-none">
+                                Activer la localisation.
+                              </span>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newVal = gpsSharingLink === "Partag√©" ? "Non partag√©" : "Partag√©";
+                                    setGpsSharingLink(newVal);
+                                  }}
+                                  className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                                  style={{
+                                    backgroundColor: gpsSharingLink === "Partag√©"
+                                      ? "rgb(254, 78, 187)"
+                                      : "#cbd5e1",
+                                  }}
+                                >
+                                  <span
+                                    className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
+                                    style={{
+                                      transform: gpsSharingLink === "Partag√©"
+                                        ? "translateX(20px)"
+                                        : "translateX(0px)",
+                                    }}
+                                  />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ marginTop: "12px" }}>
+                            <a
+                              href="https://defibeo.com/school/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                fontSize: "18px",
+                                color: "#3556ec",
+                                textDecoration: "underline",
+                                fontWeight: "bold",
+                              }}
+                              className="font-sans block hover:opacity-85 text-blue-600 cursor-pointer"
+                            >
+                              Vous devez partager avec {companyInfo?.gmailPartageLocalisation || "(Manquant)"}, consultez l‚Äôaide.
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Mon adresse structured fields */}
+                      <div className="space-y-4" style={{ marginTop: "32px" }}>
+                        {/* Num√©ro et voie */}
+                        <div className="space-y-1" style={{ marginTop: "24px" }}>
+                          <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Num√©ro et voie.</label>
+                          <input
+                            type="text"
+                            required
+                            value={techStartStreet}
+                            onChange={(e) => setTechStartStreet(e.target.value)}
+                            placeholder="Ex: 15 Rue de la Paix"
+                            style={{
+                              fontSize: "18px",
+                              padding: "14px",
+                              borderRadius: "13px",
+                              border: "1px solid rgb(201, 191, 205)",
+                              outline: "none",
+                              color: "rgb(0, 0, 0)",
+                            }}
+                            className="w-full bg-white focus:border-indigo-500 font-sans"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Ville */}
+                          <div className="space-y-1">
+                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Ville.</label>
+                            <input
+                              type="text"
+                              required
+                              value={techStartCity}
+                              onChange={(e) => setTechStartCity(e.target.value)}
+                              placeholder="Ex: Paris"
+                              style={{
+                                fontSize: "18px",
+                                padding: "14px",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
+                                outline: "none",
+                                color: "rgb(0, 0, 0)",
+                              }}
+                              className="w-full bg-white focus:border-indigo-500 font-sans"
+                            />
+                          </div>
+
+                          {/* Code postal */}
+                          <div className="space-y-1">
+                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Code postal.</label>
+                            <input
+                              type="text"
+                              required
+                              value={techStartZip}
+                              onChange={(e) => setTechStartZip(e.target.value)}
+                              placeholder="Ex: 75002"
+                              style={{
+                                fontSize: "18px",
+                                padding: "14px",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
+                                outline: "none",
+                                color: "rgb(0, 0, 0)",
+                              }}
+                              className="w-full bg-white focus:border-indigo-500 font-sans"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* R√©gion */}
+                          <div className="space-y-1">
+                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">R√©gion.</label>
+                            <select
+                              required
+                              value={techStartRegion}
+                              onChange={(e) => setTechStartRegion(e.target.value)}
+                              style={{
+                                fontSize: "18px",
+                                padding: "14px",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
+                                outline: "none",
+                                color: "rgb(0, 0, 0)",
+                                appearance: "none",
+                                WebkitAppearance: "none",
+                                MozAppearance: "none",
+                              }}
+                              className="w-full bg-white focus:border-indigo-500 appearance-none"
+                            >
+                              <option value="">Choisir une r√©gion</option>
+                              {getRegionsForCountry(techStartCountry || 'France').map((r) => (
+                                <option key={r} value={r}>{r}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Pays */}
+                          <div className="space-y-1">
+                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Pays.</label>
+                            <select
+                              required
+                              value={techStartCountry}
+                              onChange={(e) => setTechStartCountry(e.target.value)}
+                              style={{
+                                fontSize: "18px",
+                                padding: "14px",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
+                                outline: "none",
+                                color: "rgb(0, 0, 0)",
+                                appearance: "none",
+                                WebkitAppearance: "none",
+                                MozAppearance: "none",
+                              }}
+                              className="w-full bg-white focus:border-indigo-500 appearance-none"
+                            >
+                              {["France", "Espagne", "Portugal", "Suisse", "Luxembourg", "Belgique", "Allemagne", "Pays-Bas", "Royaume-Uni", "Irlande", "Su√®de", "Pologne", "Tch√©quie", "Autriche"].map((c) => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Latitude */}
+                          <div className="space-y-1">
+                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Latitude.</label>
+                            <input
+                              type="text"
+                              readOnly
+                              required
+                              value={(techStartLat && techStartLat.toLowerCase() !== 'null' && techStartLat.toLowerCase() !== 'undefined' && techStartLat.toLowerCase() !== 'nan') ? techStartLat : ''}
+                              placeholder="Rempli automatiquement"
+                              style={{
+                                fontSize: "18px",
+                                padding: "14px",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
+                                outline: "none",
+                                color: "rgb(0, 0, 0)",
+                                backgroundColor: "#f3f4f6",
+                                cursor: "not-allowed",
+                              }}
+                              className="w-full"
+                            />
+                          </div>
+
+                          {/* Longitude */}
+                          <div className="space-y-1">
+                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Longitude.</label>
+                            <input
+                              type="text"
+                              readOnly
+                              required
+                              value={(techStartLng && techStartLng.toLowerCase() !== 'null' && techStartLng.toLowerCase() !== 'undefined' && techStartLng.toLowerCase() !== 'nan') ? techStartLng : ''}
+                              placeholder="Rempli automatiquement"
+                              style={{
+                                fontSize: "18px",
+                                padding: "14px",
+                                borderRadius: "13px",
+                                border: "1px solid rgb(201, 191, 205)",
+                                outline: "none",
+                                color: "rgb(0, 0, 0)",
+                                backgroundColor: "#f3f4f6",
+                                cursor: "not-allowed",
+                              }}
+                              className="w-full"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Route Optimization selector */}
+                      <div className="space-y-1.5">
+                        <label
+                          style={{ fontSize: "18px", color: "#000000" }}
+                          className="block font-bold text-black select-none"
+                        >
+                          Strat√©gie des d√©placements. *
+                        </label>
+                        <select
+                          value={routeOptimization}
+                          onChange={(e) => setRouteOptimization(e.target.value)}
+                          style={{
+                            fontSize: "18px",
+                            padding: "14px",
+                            borderRadius: "13px",
+                            border: "1px solid rgb(201, 191, 205)",
+                            outline: "none",
+                            color: "rgb(0, 0, 0)",
+                            appearance: "none",
+                            WebkitAppearance: "none",
+                            MozAppearance: "none",
+                          }}
+                          className="w-full bg-white font-semibold cursor-pointer focus:border-indigo-500"
+                        >
+                          <option value="Aller au plus proche d'abord">
+                            Se rendre d'abord au plus proche.
+                          </option>
+                          <option value="Aller au plus loin d'abord">
+                            Se rendre d'abord au plus √©loign√©.
+                          </option>
+                        </select>
+                      </div>
+
+                      {/* Navigation App selector */}
+                      <div className="space-y-1.5">
+                        <label
+                          style={{ fontSize: "18px", color: "#000000" }}
+                          className="block font-bold text-black select-none"
+                        >
+                          Application de navigation par d√©faut. *
+                        </label>
+                        <select
+                          value={defaultNavApp}
+                          onChange={(e) => setDefaultNavApp(e.target.value)}
+                          style={{
+                            fontSize: "18px",
+                            padding: "14px",
+                            borderRadius: "13px",
+                            border: "1px solid rgb(201, 191, 205)",
+                            outline: "none",
+                            color: "rgb(0, 0, 0)",
+                            appearance: "none",
+                            WebkitAppearance: "none",
+                            MozAppearance: "none",
+                          }}
+                          className="w-full bg-white font-semibold cursor-pointer focus:border-indigo-500"
+                        >
+                          <option value="apple-maps">
+                            Apple Maps
+                          </option>
+                          <option value="google-maps">
+                            Google Maps
+                          </option>
+                          <option value="waze">
+                            Waze
+                          </option>
+                        </select>
+                      </div>
+
+                      {/* Signature Section */}
+                      <div className="space-y-3 text-left">
+                        <label
+                          style={{ fontSize: "18px", color: "#000000" }}
+                          className="block font-bold text-black select-none"
+                        >
+                          Signature.
+                        </label>
+                        <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
+                          Dessinez votre signature ci-dessous. Elle sera automatiquement appos√©e sur tous vos rapports de maintenance valid√©s.
+                        </p>
+
+                        <div 
+                          className="p-3 bg-white relative" 
+                          style={{ 
+                            border: "1px solid #c9bfcd", 
+                            borderRadius: "13px", 
+                            maxWidth: "400px" 
+                          }}
+                        >
+                          <canvas
+                            ref={sigCanvasRef}
+                            width={380}
+                            height={150}
+                            className="w-full h-[150px] bg-white cursor-crosshair touch-none"
+                            onMouseDown={startSigDrawing}
+                            onMouseMove={drawSig}
+                            onMouseUp={stopSigDrawing}
+                            onMouseLeave={stopSigDrawing}
+                            onTouchStart={startSigDrawing}
+                            onTouchMove={drawSig}
+                            onTouchEnd={stopSigDrawing}
+                            style={{ borderRadius: "6px" }}
+                          />
+                          <div className="flex justify-between items-center mt-2">
+                            <button
+                              type="button"
+                              onClick={clearSig}
+                              className="text-[16px] text-red-500 font-bold hover:underline cursor-pointer font-sans bg-transparent border-none"
+                            >
+                              Effacer
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      style={{
+                        backgroundColor: "rgb(53, 86, 236)",
+                        color: "#fff",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                        borderRadius: "12px",
+                        padding: "14px 20px",
+                        border: "none",
+                        boxShadow:
+                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                        cursor: "pointer",
+                        width: "100%",
+                      }}
+                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <span>Enregistrer</span>
+                    </button>
+
+                    {/* Section: Choix du th√®me pour la session technicien */}
+                    <div className="pt-5 space-y-3 text-left" id="webapp-section-software-theme">
+                      <h3 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
+                        {t("Apparence du logiciel pour votre session.")}
+                      </h3>
+                      <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
+                        {t("Th√®me du logiciel (conforme accessibilit√© ISO/IEC 40500).")}
+                      </p>
+
+                      <div className="flex flex-col gap-2.5 pt-1">
+                        {APP_THEMES.map((theme) => {
+                          const isSelected = currentTechTheme.id === theme.id;
+                          return (
+                            <div
+                              key={theme.id}
+                              onClick={() => handleThemeSelect(theme.id)}
+                              style={{
+                                border: "1px solid #c9bfcd",
+                                borderRadius: "13px",
+                              }}
+                              className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
+                              id={`webapp-theme-card-${theme.id}`}
+                            >
+                              <span 
+                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                style={{
+                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                  width: '20px',
+                                  height: '20px',
+                                  minWidth: '20px',
+                                  minHeight: '20px',
+                                  backgroundColor: '#ffffff'
+                                }}
+                              >
+                                {isSelected && (
+                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                                )}
+                              </span>
+                              <span
+                                className="font-medium text-black cursor-pointer select-none font-sans"
+                                style={{ fontSize: "18px", color: "#000000" }}
+                              >
+                                {t(theme.name)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Section: Choix du favicon pour la session technicien */}
+                    <div className="pt-5 space-y-3 text-left" id="webapp-section-software-favicon">
+                      <h3 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
+                        {t("Choix du favicon du logiciel.")}
+                      </h3>
+                      <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
+                        {t("Il s‚Äôagit de l‚Äôic√¥ne montr√© dans l‚Äôonglet de votre navigateur.")}
+                      </p>
+
+                      <div className="flex flex-col gap-2.5 pt-1">
+                        {APP_FAVICONS.map((fav) => {
+                          const isSelected = currentTechFavicon.id === fav.id;
+                          return (
+                            <div
+                              key={fav.id}
+                              onClick={() => handleFaviconSelect(fav.id)}
+                              style={{
+                                border: "1px solid #c9bfcd",
+                                borderRadius: "13px",
+                              }}
+                              className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
+                              id={`webapp-favicon-card-${fav.id}`}
+                            >
+                              <span 
+                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                style={{
+                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                  width: '20px',
+                                  height: '20px',
+                                  minWidth: '20px',
+                                  minHeight: '20px',
+                                  backgroundColor: '#ffffff'
+                                }}
+                              >
+                                {isSelected && (
+                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                                )}
+                              </span>
+                              <img
+                                src={fav.url}
+                                alt={fav.name}
+                                className="w-5 h-5 object-contain shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                              <span
+                                className="font-medium text-black cursor-pointer select-none font-sans"
+                                style={{ fontSize: "18px", color: "#000000" }}
+                              >
+                                {t(fav.name)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Illustration Add to Home Screen at the bottom touching bottom border */}
+                    <div 
+                      className="mt-6 bg-white overflow-hidden text-left flex flex-col justify-between"
+                      style={{
+                        border: "1px solid #c9bfcd",
+                        borderRadius: "13px",
+                      }}
+                      id="webapp-add-to-home-screen-card"
+                    >
+                      <div className="p-5 pb-2 space-y-1">
+                        <h4 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
+                          {t("Ajouter √† l'√©cran d'accueil.")}
+                        </h4>
+                        <p className="font-sans leading-relaxed" style={{ fontSize: "16px", color: "#000000" }}>
+                          {t("Sur iPhone ou iPad, depuis Safari (iOS 26), touchez l‚Äôic√¥ne Partager (le carr√© avec une fl√®che vers le haut), faites d√©filer le menu vers le bas puis s√©lectionnez Sur l‚Äô√©cran d‚Äôaccueil (carr√© avec un ¬´ + ¬ª). V√©rifiez ensuite que l‚Äôoption Ouvrir en tant qu‚Äôapp web est bien activ√©e, puis appuyez sur Ajouter en haut √† droite.")}
+                        </p>
+                      </div>
+                      <div className="w-full flex justify-center items-end pt-2">
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/Illustration+Add+To+Home+Screen.svg"
+                          alt="Illustration Add To Home Screen"
+                          className="w-full h-auto block select-none pointer-events-none"
+                          style={{ marginBottom: 0, display: "block" }}
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Google Calendar integration section */}
+                    <div className="pt-5 space-y-4">
+                      <h3 className="text-lg font-bold text-slate-800">
+                        Int√©gration Google Calendar
+                      </h3>
+
+                      {syncStatusMsg && (
+                        <p
+                          style={{
+                            fontSize: "18px",
+                            color: "rgb(254, 78, 187)",
+                            textAlign: "center"
+                          }}
+                        >
+                          {syncStatusMsg.text}
+                        </p>
+                      )}
+
+                      {showDomainHelp && (
+                        <div
+                          className="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-[12px] space-y-2"
+                          id="domain-authorization-guide"
+                        >
+                          <p className="font-bold text-sm">
+                            üí° Action requise sur votre projet Firebase :
+                          </p>
+                          <p className="text-xs leading-relaxed">
+                            Pour des raisons de s√©curit√©, Google demande √† ce
+                            que le nom de domaine de la webapp soit rajout√© aux
+                            domaines autoris√©s de votre projet Firebase.
+                          </p>
+                          <ol className="text-xs list-decimal pl-4 space-y-1.5 font-medium">
+                            <li>
+                              Ouvrez la console Firebase :{" "}
+                              <a
+                                href="https://console.firebase.google.com"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-indigo-600 underline font-semibold hover:text-indigo-800"
+                              >
+                                console.firebase.google.com
+                              </a>
+                            </li>
+                            <li>
+                              Allez dans <strong>Authentication</strong> &gt;
+                              onglet <strong>Param√®tres</strong> &gt; section{" "}
+                              <strong>Domaines autoris√©s</strong>
+                            </li>
+                            <li>
+                              Cliquez sur le bouton{" "}
+                              <strong>Ajouter un domaine</strong>
+                            </li>
+                            <li>
+                              Saisissez l'adresse suivante :{" "}
+                              <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-amber-900 font-bold select-all">
+                                {window.location.hostname}
+                              </code>
+                            </li>
+                          </ol>
+                          <p className="text-xs text-amber-700 pt-1 font-semibold">
+                            Une fois l'adresse ajout√©e, recliquez sur
+                            "Synchroniser Google Calendar" !
+                          </p>
+                          <div className="mt-3 pt-2 border-t border-amber-200 flex flex-col gap-1.5" id="simulate-google-cal-sync-container-1">
+                            <p className="text-[11px] text-amber-700 font-sans">
+                              Pour vos tests en mode aper√ßu, vous pouvez √©galement simuler la synchronisation imm√©diatement :
+                            </p>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const mockToken = "mock_token_" + Date.now();
+                                const email = authenticatedUser?.email || "tech.demo@gmail.com";
+                                setGoogleAccessToken(mockToken);
+                                setSyncedGoogleEmail(email);
+                                const techName = authenticatedUser?.name || "common";
+                                localStorage.setItem(`defib_google_cal_email_${techName}`, email);
+                                try {
+                                  const syncResult = await performGoogleCalendarSync(mockToken);
+                                  const calendarId = syncResult.calendarId || "mock_calendar_id";
+                                  if (authenticatedUser) {
+                                    const updatedMembers = members.map((m) => {
+                                      if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
+                                        return {
+                                          ...m,
+                                          googleCalEmail: email,
+                                          googleCalId: calendarId,
+                                        };
+                                      }
+                                      return m;
+                                    });
+                                    onUpdateMembers(updatedMembers);
+                                    const updatedUser = {
+                                      ...authenticatedUser,
+                                      googleCalEmail: email,
+                                      googleCalId: calendarId,
+                                    };
+                                    setAuthenticatedUser(updatedUser);
+                                    localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
+                                  }
+                                  setSyncStatusMsg({
+                                    type: "success",
+                                    text: `Agenda Google synchronis√© avec succ√®s (Mode Simulation) ! ${syncResult.count} mission(s) synchronis√©e(s).`,
+                                  });
+                                  setShowDomainHelp(false);
+                                  setShowOperationHelp(false);
+                                } catch (err: any) {
+                                  alert("Erreur lors de la simulation : " + err.message);
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-[8px] font-sans text-xs font-bold transition-all w-fit shadow-sm cursor-pointer select-none"
+                            >
+                              üöÄ Simuler la synchronisation Google Calendar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {showOperationHelp && (
+                        <div
+                          className="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-[12px] space-y-2"
+                          id="sign-in-method-guide"
+                        >
+                          <p className="font-bold text-sm">
+                            üí° Activer l'authentification Google sur votre
+                            console Firebase :
+                          </p>
+                          <p className="text-xs leading-relaxed">
+                            L'authentification Google n'est pas encore activ√©e
+                            en tant que fournisseur d'identit√© sur votre base de
+                            donn√©es Firebase.
+                          </p>
+                          <ol className="text-xs list-decimal pl-4 space-y-1.5 font-medium">
+                            <li>
+                              Ouvrez la console Firebase :{" "}
+                              <a
+                                href="https://console.firebase.google.com"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-indigo-600 underline font-semibold hover:text-indigo-800"
+                              >
+                                console.firebase.google.com
+                              </a>
+                            </li>
+                            <li>
+                              Allez dans la section{" "}
+                              <strong>Authentication</strong> dans la barre
+                              lat√©rale gauche.
+                            </li>
+                            <li>
+                              Allez dans l'onglet{" "}
+                              <strong>Sign-in method</strong> (ou Mode de
+                              connexion).
+                            </li>
+                            <li>
+                              Cliquez sur le bouton{" "}
+                              <strong>
+                                Ajouter un fournisseur de connexion
+                              </strong>{" "}
+                              (Add provider).
+                            </li>
+                            <li>
+                              S√©lectionnez <strong>Google</strong> dans la
+                              liste.
+                            </li>
+                            <li>
+                              Basculez l'interrupteur sur{" "}
+                              <strong>Activer</strong> (Enable), renseignez
+                              l'e-mail d'assistance utilisateur du projet, puis
+                              cliquez sur <strong>Enregistrer</strong>.
+                            </li>
+                          </ol>
+                          <p className="text-xs text-amber-700 pt-1 font-semibold">
+                            Une fois la m√©thode Google activ√©e, vous pourrez
+                            synchroniser votre Google Calendar en un clic !
+                          </p>
+                          <div className="mt-3 pt-2 border-t border-amber-200 flex flex-col gap-1.5" id="simulate-google-cal-sync-container-2">
+                            <p className="text-[11px] text-amber-700 font-sans">
+                              Pour vos tests en mode aper√ßu, vous pouvez √©galement simuler la synchronisation imm√©diatement :
+                            </p>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const mockToken = "mock_token_" + Date.now();
+                                const email = authenticatedUser?.email || "tech.demo@gmail.com";
+                                setGoogleAccessToken(mockToken);
+                                setSyncedGoogleEmail(email);
+                                const techName = authenticatedUser?.name || "common";
+                                localStorage.setItem(`defib_google_cal_email_${techName}`, email);
+                                try {
+                                  const syncResult = await performGoogleCalendarSync(mockToken);
+                                  const calendarId = syncResult.calendarId || "mock_calendar_id";
+                                  if (authenticatedUser) {
+                                    const updatedMembers = members.map((m) => {
+                                      if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
+                                        return {
+                                          ...m,
+                                          googleCalEmail: email,
+                                          googleCalId: calendarId,
+                                        };
+                                      }
+                                      return m;
+                                    });
+                                    onUpdateMembers(updatedMembers);
+                                    const updatedUser = {
+                                      ...authenticatedUser,
+                                      googleCalEmail: email,
+                                      googleCalId: calendarId,
+                                    };
+                                    setAuthenticatedUser(updatedUser);
+                                    localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
+                                  }
+                                  setSyncStatusMsg({
+                                    type: "success",
+                                    text: `Agenda Google synchronis√© avec succ√®s (Mode Simulation) ! ${syncResult.count} mission(s) synchronis√©e(s).`,
+                                  });
+                                  setShowDomainHelp(false);
+                                  setShowOperationHelp(false);
+                                } catch (err: any) {
+                                  alert("Erreur lors de la simulation : " + err.message);
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-[8px] font-sans text-xs font-bold transition-all w-fit shadow-sm cursor-pointer select-none"
+                            >
+                              üöÄ Simuler la synchronisation Google Calendar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {showCalendarApiHelp && (
+                        <div
+                          className="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-[12px] space-y-3"
+                          id="google-calendar-api-guide"
+                        >
+                          <p className="font-bold text-sm">
+                            üí° Activer l'API Google Calendar sur votre projet :
+                          </p>
+                          <p className="text-xs leading-relaxed">
+                            L'API Google Calendar n'est pas encore activ√©e sur votre projet Google Cloud pour le projet num√©ro <strong>{disabledProjectNumber}</strong>.
+                          </p>
+                          <div className="pt-1">
+                            <a
+                              href={`https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=${disabledProjectNumber}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl shadow hover:bg-indigo-700 transition-colors cursor-pointer w-full text-center"
+                            >
+                              üîó Cliquer ici pour activer l'API Google Calendar
+                            </a>
+                          </div>
+                          <ol className="text-xs list-decimal pl-4 space-y-1.5 font-medium">
+                            <li>
+                              Cliquez sur le bouton ci-dessus pour ouvrir la page d'activation de la Console Google Cloud.
+                            </li>
+                            <li>
+                              Assurez-vous d'√™tre connect√© avec le compte Google propri√©taire de l'application.
+                            </li>
+                            <li>
+                              Cliquez sur le bouton bleu <strong>Activer</strong> (ou Enable).
+                            </li>
+                            <li>
+                              Attendez quelques minutes que l'activation se propage, puis r√©essayez la synchronisation !
+                            </li>
+                          </ol>
+                        </div>
+                      )}
+
+                      {!syncedGoogleEmail ? (
+                        <button
+                          type="button"
+                          onClick={handleGoogleCalendarSync}
+                          disabled={isSyncingGoogleCal}
+                          style={{
+                            backgroundColor: "#000000",
+                            color: "#ffffff",
+                            fontSize: "18px",
+                            fontWeight: "bold",
+                            borderRadius: "12px",
+                            padding: "14px 20px",
+                            border: "none",
+                            boxShadow:
+                              "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset",
+                            cursor: "pointer",
+                            width: "100%",
+                          }}
+                          className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                        >
+                          {isSyncingGoogleCal ? (
+                            <span>Synchronisation en cours...</span>
+                          ) : (
+                            <span>Synchroniser</span>
+                          )}
+                        </button>
+                      ) : (
+                        <div className="space-y-3">
+                          <p
+                            style={{
+                              fontSize: "18px",
+                              color: "rgb(254, 78, 187)",
+                              textAlign: "center"
+                            }}
+                          >
+                            Compte synchronis√© ({syncedGoogleEmail})
+                          </p>
+
+                          <button
+                            type="button"
+                            onClick={handleGoogleCalendarSync}
+                            disabled={isSyncingGoogleCal}
+                            style={{
+                              backgroundColor: "#000000",
+                              color: "#ffffff",
+                              fontSize: "18px",
+                              fontWeight: "bold",
+                              borderRadius: "12px",
+                              padding: "14px 20px",
+                              border: "none",
+                              cursor: "pointer",
+                              width: "100%",
+                            }}
+                            className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                          >
+                            {isSyncingGoogleCal ? (
+                              <span>Synchronisation en cours...</span>
+                            ) : (
+                              <span>Forcer la synchronisation</span>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleDeactivateGoogleCalendar}
+                            style={{
+                              backgroundColor: "#dc2626",
+                              color: "#ffffff",
+                              fontSize: "18px",
+                              fontWeight: "bold",
+                              borderRadius: "12px",
+                              padding: "14px 20px",
+                              border: "none",
+                              cursor: "pointer",
+                              width: "100%",
+                            }}
+                            className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                          >
+                            <span>D√©sactiver Google Calendar</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Quitter la session button */}
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        style={{
+                          backgroundColor: "#dc2626",
+                          color: "#ffffff",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderRadius: "12px",
+                          padding: "14px 20px",
+                          border: "none",
+                          cursor: "pointer",
+                          width: "100%",
+                        }}
+                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-4"
+                      >
+                        <span>Quitter la session</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* ----------------- IF TECHNICIAN IS NOT LOGGED IN STATE (PUBLIC VIEWPORTS) ----------------- */
+          <div
+            className="flex-1 flex flex-col justify-between overflow-y-auto no-scrollbar"
+            id="public-unauthenticated-layout"
+          >
+            {/* Main Content screens wrapper */}
+            <main className="flex-1 px-4 py-8 flex flex-col justify-center relative">
+              {/* LANDING SCREEN */}
+              {currentScreen === "landing" && (
+                <div
+                  className="space-y-8 text-center animate-fadeIn"
+                  id="landing-screen"
+                >
+                  <div className="space-y-4 pt-10">
+                    <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-tight uppercase pt-6">
+                      {companyInfo.name || "D√©fibeo Solutions"}
+                    </h1>
+                    <div className="space-y-1">
+                      <h2 className="text-[11px] font-extrabold text-indigo-600 uppercase tracking-widest">
+                        Rallier le portail
+                      </h2>
+                    </div>
+                  </div>
+
+                  <p className="text-slate-500 text-[11px] leading-relaxed max-w-xs mx-auto">
+                    Signalez un incident sur un d√©fibrillateur DAE de proximit√©
+                    ou retournez √† la page de connexion de l'administration.
+                  </p>
+
+                  <div className="space-y-3.5 pt-2">
+                    {/* BUTTON 1: SIGNALEMENT */}
+                    <div
+                      className={`w-full bg-slate-50 border p-5 rounded-2xl text-left transition-all duration-200 relative ${
+                        isInlineReportOpen
+                          ? "border-indigo-500 bg-white ring-1 ring-indigo-500/10 shadow-xs"
+                          : "border-slate-200 hover:bg-slate-100/80 hover:border-indigo-500/35 cursor-pointer"
+                      }`}
+                      onClick={() => {
+                        if (!isInlineReportOpen) {
+                          setIsInlineReportOpen(true);
+                          setInlineReportSuccess(false);
+                        }
+                      }}
+                      id="card-portal-report"
+                    >
+                      <div className="space-y-0.5 select-none">
+                        <div className="text-[12px] font-black text-slate-800 uppercase tracking-tight flex justify-between items-center">
+                          <span>Signalement Incident</span>
+                          {isInlineReportOpen && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsInlineReportOpen(false);
+                                setInlineReportSuccess(false);
+                              }}
+                              className="text-[9px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer border-0 bg-transparent uppercase tracking-wider font-sans"
+                            >
+                              R√©duire
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-normal font-sans">
+                          Bo√Ætier DAE vandalis√©, utilis√© ou voyant rouge
+                          suspect.
+                        </p>
+                      </div>
+
+                      {isInlineReportOpen && (
+                        <div
+                          className="mt-4 pt-4 border-t border-slate-100 space-y-3.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {inlineReportSuccess ? (
+                            <div className="py-2 text-center space-y-2">
+                              <p className="text-emerald-600 font-extrabold text-xs animate-fadeIn uppercase tracking-wider">
+                                Message envoy√© avec succ√®s
+                              </p>
+                              <p className="text-[10px] text-slate-555 leading-relaxed">
+                                Merci pour votre signalement citoyen !
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsInlineReportOpen(false);
+                                  setInlineReportSuccess(false);
+                                }}
+                                className="mt-1 px-3 py-1 bg-slate-100 hover:bg-slate-205 text-slate-700 font-extrabold text-[9px] rounded-lg cursor-pointer border border-slate-200 transition-colors uppercase tracking-wider"
+                              >
+                                Fermer
+                              </button>
+                            </div>
+                          ) : (
+                            <form
+                              onSubmit={handleInlineTicketSubmit}
+                              className="space-y-3 font-sans text-slate-700 text-[10px]"
+                            >
+                              <div className="space-y-3">
+                                {/* ID DAE */}
+                                <div className="space-y-0.5">
+                                  <label className="text-[8.5px] font-extrabold text-slate-500 uppercase">
+                                    Identifiant du DAE incident√© *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={ticketForm.identifiant}
+                                    onChange={(e) =>
+                                      setTicketForm({
+                                        ...ticketForm,
+                                        identifiant: e.target.value,
+                                      })
+                                    }
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-900 font-bold uppercase focus:bg-white focus:outline-hidden"
+                                    placeholder="Ex: PAR-102"
+                                  />
+                                </div>
+
+                                {/* Objet */}
+                                <div className="space-y-0.5">
+                                  <label className="text-[8.5px] font-extrabold text-slate-500 uppercase">
+                                    Objet du Ticket *
+                                  </label>
+                                  <select
+                                    value={ticketForm.objet}
+                                    onChange={(e) =>
+                                      setTicketForm({
+                                        ...ticketForm,
+                                        objet: e.target.value as any,
+                                      })
+                                    }
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-205 rounded-lg text-[11px] text-slate-800 cursor-pointer focus:bg-white focus:outline-hidden"
+                                  >
+                                    <option value="D√©fibrillateur utilis√©">
+                                      D√©fibrillateur utilis√©
+                                    </option>
+                                    <option value="D√©fibrillateur endommag√©">
+                                      D√©fibrillateur endommag√©
+                                    </option>
+                                    <option value="D√©fibrillateur hors service">
+                                      D√©fibrillateur hors service
+                                    </option>
+                                    <option value="Autre">Autre</option>
+                                  </select>
+                                </div>
+
+                                {/* Email */}
+                                <div className="space-y-0.5">
+                                  <label className="text-[8.5px] font-extrabold text-slate-500 uppercase">
+                                    Votre Email pour suivi *
+                                  </label>
+                                  <input
+                                    type="email"
+                                    required
+                                    value={ticketForm.email}
+                                    onChange={(e) =>
+                                      setTicketForm({
+                                        ...ticketForm,
+                                        email: e.target.value,
+                                      })
+                                    }
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-900 focus:bg-white focus:outline-hidden"
+                                    placeholder="dupont@gmail.com"
+                                  />
+                                </div>
+
+                                {/* Message */}
+                                <div className="space-y-0.5">
+                                  <label className="text-[8.5px] font-extrabold text-slate-500 uppercase">
+                                    Message & Constat visuel *
+                                  </label>
+                                  <textarea
+                                    required
+                                    rows={3}
+                                    value={ticketForm.message}
+                                    onChange={(e) =>
+                                      setTicketForm({
+                                        ...ticketForm,
+                                        message: e.target.value,
+                                      })
+                                    }
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-202 rounded-lg text-[11px] text-slate-900 leading-normal focus:bg-white focus:outline-hidden"
+                                    placeholder="Ex: Le voyant clignote rouge ou le coffret ..."
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex justify-end gap-2 pt-1.5 border-t border-slate-100">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsInlineReportOpen(false);
+                                  }}
+                                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold rounded-lg cursor-pointer transition-colors"
+                                >
+                                  Annuler
+                                </button>
+                                <button
+                                  type="submit"
+                                  className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-600 text-white font-extrabold rounded-lg cursor-pointer transition-all inline-flex items-center gap-1 shadow-xs border border-indigo-500"
+                                >
+                                  Envoyer le Signalement
+                                </button>
+                              </div>
+                            </form>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <a
+                      href={
+                        companyInfo.website
+                          ? companyInfo.website.startsWith("http")
+                            ? companyInfo.website
+                            : `https://${companyInfo.website}`
+                          : "#"
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer border border-slate-200 shadow-xs"
+                      id="btn-return-to-site"
+                      onClick={(e) => {
+                        if (!companyInfo.website) {
+                          e.preventDefault();
+                          onClose();
+                        }
+                      }}
+                    >
+                      Retour au site
+                    </a>
+                  </div>
+
+                  <div className="text-center pt-2">
+                    <p className="text-[10px] text-slate-400">
+                      Une solution du logiciel{" "}
+                      <a
+                        href="https://defibeo.com/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:underline font-bold"
+                      >
+                        D√©fibeo
+                      </a>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* SUCCESS FORM */}
+              {currentScreen === "success-ticket" && (
+                <div className="bg-white border border-slate-200 p-6 rounded-2.5xl text-center space-y-4 animate-scaleUp shadow-lg">
+                  <div className="w-12 h-12 bg-emerald-50 text-emerald-600 border border-emerald-250 rounded-full mx-auto flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <h2 className="text-sm font-black text-slate-900 uppercase">
+                      Alerte Transmise !
+                    </h2>
+                    <span className="inline-block px-2 py-0.5 bg-slate-100 rounded text-[9px] font-mono text-indigo-700 font-bold border border-slate-205">
+                      ID TICKET : {createdTicketId}
+                    </span>
+                    <p className="text-[10px] text-slate-600 leading-normal pt-2">
+                      Nos techniciens d'assistance ont re√ßu votre rapport
+                      d'incident sur le terminal {ticketForm.identifiant}. Merci
+                      pour votre vigilance citoyenne !
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentScreen("landing")}
+                    className="w-full py-2 bg-slate-150 hover:bg-slate-200 font-bold text-[10px] rounded-lg cursor-pointer text-slate-800 border border-slate-250 transition-colors"
+                  >
+                    Retourner √† l'Accueil
+                  </button>
+                </div>
+              )}
+
+              {/* PIN MAINTENANCE CODE SCREEN */}
+              {currentScreen === "mainteneur" && (
+                <div
+                  className="bg-white border border-slate-200 p-5 rounded-2.5xl space-y-4 max-w-sm mx-auto animate-scaleUp shadow-xl"
+                  id="mainteneur-screen"
+                >
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentScreen("landing")}
+                      className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 cursor-pointer"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <div>
+                      <h2 className="text-xs font-black text-slate-900 uppercase tracking-tight">
+                        Acc√®s D√©verrouillage
+                      </h2>
+                      <p className="text-[10px] text-slate-500 font-sans">
+                        Saisissez votre code PIN individuel √† 4 chiffres
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Visual PIN Inputs */}
+                    <div className="flex justify-center gap-2">
+                      {pinDigits.map((digit, index) => (
+                        <input
+                          key={index}
+                          ref={pinRefs[index]}
+                          type="password"
+                          maxLength={1}
+                          pattern="[0-9]*"
+                          inputMode="numeric"
+                          value={digit}
+                          onChange={(e) =>
+                            handlePinDigitChange(index, e.target.value)
+                          }
+                          onKeyDown={(e) => handlePinBackspace(index, e)}
+                          className="w-10 h-12 text-center text-xl font-mono font-bold text-indigo-600 bg-slate-50 border border-slate-250 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:bg-white transition-all"
+                        />
+                      ))}
+                    </div>
+
+                    {pinError && (
+                      <div className="p-2 bg-rose-50 text-rose-800 border border-rose-150 rounded-lg text-center text-[9px] font-bold">
+                        {pinError}
+                      </div>
+                    )}
+
+                    {/* Fast Keypad dial */}
+                    <div
+                      className="grid grid-cols-3 gap-2 max-w-[210px] mx-auto pt-1"
+                      id="fast-keypad"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => handlePinDialClick(num)}
+                          className="h-10 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-[13px] font-bold cursor-pointer transition-colors flex items-center justify-center text-slate-800 active:bg-slate-300"
+                        >
+                          {num}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={handlePinClear}
+                        className="h-10 bg-rose-50 hover:bg-rose-100 border border-rose-150 rounded-lg text-[8px] font-bold text-rose-700 uppercase tracking-widest cursor-pointer flex items-center justify-center active:bg-rose-200"
+                      >
+                        Effacer
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePinDialClick(0)}
+                        className="h-10 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-[13px] font-bold cursor-pointer flex items-center justify-center text-slate-800 active:bg-slate-300"
+                      >
+                        0
+                      </button>
+                      <div className="text-slate-400 text-[8px] flex items-center justify-center font-mono uppercase font-black tracking-wide select-none">
+                        S√âCURIS√â
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </main>
+
+            {/* Public footer omitted */}
+          </div>
+        )}
+
+        {printingReport && (
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-9999 overflow-y-auto p-4 flex flex-col items-center animate-fadeIn print:bg-white print:p-0 print:absolute print:inset-0"
+            id="print-overlay"
+          >
+            {/* Dynamic styles injected just for standard print layouts */}
+            <style
+              dangerouslySetInnerHTML={{
+                __html: `
+              @media print {
+                header, footer, nav, button, .no-print {
+                  display: none !important;
+                }
+                body, html, #root {
+                  background-color: white !important;
+                  color: black !important;
+                }
+                #print-page-sheet {
+                  box-shadow: none !important;
+                  border: none !important;
+                  padding: 0 !important;
+                  margin: 0 !important;
+                  width: 100% !important;
+                  max-width: 100% !important;
+                }
+              }
+            `,
+              }}
+            />
+
+            {/* Top control bar */}
+            <div className="w-full max-w-4xl bg-slate-800 text-white rounded-t-xl p-3 flex justify-between items-center shadow-lg border-b border-slate-700 no-print">
+              <div className="flex items-center gap-2">
+                <Printer className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-black uppercase tracking-wider font-mono">
+                  Aper√ßu avant Impression du Rapport (Pr√™t pour Impression /
+                  PDF)
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black rounded-lg cursor-pointer flex items-center gap-1 transition-colors uppercase tracking-wider shadow-xs"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Imprimer ce Rapport</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintingReport(null)}
+                  className="p-1 text-slate-400 hover:text-white rounded-full hover:bg-slate-700 cursor-pointer transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Centered structured printable A4 Content */}
+            <div
+              id="print-page-sheet"
+              className="w-full max-w-4xl bg-white text-slate-850 p-8 md:p-12 shadow-2xl rounded-b-xl space-y-6 font-sans text-xs border-x border-b border-slate-200 min-h-[1100px]"
+            >
+              {/* Document Header block */}
+              <div className="border-b-2 border-slate-800 pb-4 flex justify-between items-start">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <Heart className="w-5 h-5 text-rose-600 fill-rose-50" />
+                    <span className="text-sm font-black uppercase tracking-tight text-slate-950">
+                      {companyInfo.name}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-mono tracking-wide">
+                    {companyInfo.website} | T√©l : {companyInfo.phone}
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    {companyInfo.email}
+                  </p>
+                </div>
+                <div className="text-right space-y-1">
+                  <span className="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider">
+                    DOCUMENT OFFICIEL
+                  </span>
+                  <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                    {printingReport.title}
+                  </h2>
+                  <p className="text-[10px] font-mono text-slate-500">
+                    R√âF√âRENCE :{" "}
+                    <span className="font-bold text-slate-800">
+                      {printingReport.id}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Intervention metadata banner */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4 font-sans text-[10.5px]">
+                <div>
+                  <span className="text-[8px] font-black text-indigo-700 uppercase tracking-wider block font-mono">
+                    üìÖ HORODATE INTERVENTION
+                  </span>
+                  <p className="font-bold text-slate-850 mt-0.5">
+                    {printingReport.date}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[8px] font-black text-indigo-700 uppercase tracking-wider block font-mono">
+                    üë§ REPR√âSENTANT TECHNIQUE
+                  </span>
+                  <p className="font-bold text-slate-850 mt-0.5">
+                    {printingReport.techName}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[8px] font-black text-indigo-700 uppercase tracking-wider block font-mono">
+                    üìç TYPE DE SITE / TOURN√âE
+                  </span>
+                  <p className="font-bold text-slate-850 mt-0.5">
+                    {printingReport.siteMission}
+                  </p>
+                </div>
+              </div>
+
+              {(() => {
+                const snapshot =
+                  printingReport.defibSnapshot ||
+                  defibrillateurs.find(
+                    (d) =>
+                      d.id === printingReport.defibId ||
+                      d.identifiant === printingReport.defibIdentifiant,
+                  ) ||
+                  defibrillateurs[0];
+                if (!snapshot)
+                  return (
+                    <p className="text-slate-400 text-center font-mono py-12">
+                      D√©tails d'√©quipements non-disponibles pour ce mat√©riel.
+                    </p>
+                  );
+
+                const clientObj = clients.find(
+                  (c) => c.id === snapshot.clientId,
+                );
+                const defMod = variables.find(
+                  (v) => v.id === snapshot.modeleId,
+                );
+                const cofMod = variables.find(
+                  (v) => v.id === snapshot.modeleCoffretId,
+                );
+                const elAMod = variables.find(
+                  (v) => v.id === snapshot.modeleElectrodeAId,
+                );
+                const elPMod = variables.find(
+                  (v) => v.id === snapshot.modeleElectrodePId,
+                );
+                const batMod = variables.find(
+                  (v) => v.id === snapshot.modeleBatterieId,
+                );
+
+                return (
+                  <div className="space-y-6">
+                    {/* 1. SECTION MAT√âRIEL */}
+                    <div className="space-y-2">
+                      <h3 className="text-[11px] font-black text-slate-900 uppercase border-b border-slate-300 pb-1 flex items-center justify-between">
+                        <span>1. SECTION SYST√àME D√âFIBRILLATEUR</span>
+                        <span className="text-[9px] font-mono font-bold text-slate-500">
+                          ID CENTRAL : {snapshot.identifiant}
+                        </span>
+                      </h3>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Identifiant court
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {snapshot.identifiant}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Num√©ro de S√©rie
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {snapshot.numeroSerie}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            D√©signation / Marque
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {defMod ? defMod.nom : snapshot.modeleId}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Constructeur
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {defMod ? defMod.marque : "-"}
+                          </span>
+                        </div>
+                      </div>
+                      {snapshot.commentaire && (
+                        <div className="bg-slate-50 p-2.5 rounded-lg text-slate-700 italic leading-relaxed">
+                          Note technique relative √† l'unit√© :{" "}
+                          {snapshot.commentaire}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. SECTION CLIENT */}
+                    <div className="space-y-2">
+                      <h3 className="text-[11px] font-black text-slate-900 uppercase border-b border-slate-300 pb-1">
+                        2. EXPLOITANT & SITE DESIGNATION
+                      </h3>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Client exploitant
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {clientObj
+                              ? clientObj.denomination
+                              : "Non rattach√©"}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Responsable Local
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {snapshot.nomPrenomSite || "-"}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            T√©l√©phone direct
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {snapshot.telephoneSite || "-"}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Courriel de Liaison
+                          </span>
+                          <span className="font-bold text-slate-850 break-all">
+                            {snapshot.emailSite || "-"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            R√©gime contractuel
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {snapshot.contrat === "Oui"
+                              ? "‚úì SOUS CONTRAT"
+                              : "HORS CONTRAT"}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Abonnement
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {snapshot.nomContrat || "-"}
+                          </span>
+                        </div>
+                        <div className="bg-slate-55 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            R√©f√©rence Administrative
+                          </span>
+                          <span className="font-bold text-slate-850 font-mono">
+                            {snapshot.referenceContrat || "-"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. COFFRET */}
+                    <div className="space-y-2">
+                      <h3 className="text-[11px] font-black text-slate-900 uppercase border-b border-slate-300 pb-1">
+                        3. COFFRET MURAL ET ALARMES
+                      </h3>
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Mod√®le Coffret mural
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {cofMod ? cofMod.nom : snapshot.modeleCoffretId}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Num√©ro de Lot mural
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {snapshot.numeroLotCoffret || "-"}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Remarques audit coffret
+                          </span>
+                          <span className="font-bold text-slate-850">
+                            {snapshot.commentaireCoffret ||
+                              "Examen visuel approuv√©"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4. ACC√àS */}
+                    <div className="space-y-2">
+                      <h3 className="text-[11px] font-black text-slate-900 uppercase border-b border-slate-300 pb-1">
+                        4. CONDITIONS D'ACC√àS DU PUBLIC & GPS
+                      </h3>
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
+                        <div className="bg-slate-50 p-3 rounded-lg lg:col-span-2">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Adresse physique rattach√©e
+                          </span>
+                          <span className="font-bold text-slate-950 font-sans">
+                            {snapshot.numVoie}, {snapshot.cp} {snapshot.ville}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 p-3 rounded-lg">
+                          <span className="text-[8px] text-slate-500 font-mono uppercase block">
+                            Coordonn√©es cartographiques (Lat/Lng)
+                          </span>
+                          <span className="font-bold text-indigo-800 font-mono">
+                            {snapshot.latitude}, {snapshot.longitude}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-center text-[9px] font-mono">
+                        <div
+                          className={`p-1.5 rounded-lg border font-bold ${snapshot.acces247 ? "bg-emerald-50 text-emerald-700 border-emerald-250" : "bg-slate-50 text-slate-400 border-slate-200"}`}
+                        >
+                          OUVERT 24H/7J : {snapshot.acces247 ? "OUI" : "NON"}
+                        </div>
+                        <div
+                          className={`p-1.5 rounded-lg border font-bold ${snapshot.accesSemaine ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-400 border-slate-200"}`}
+                        >
+                          ACC√àS SEMAINE :{" "}
+                          {snapshot.accesSemaine ? "OUI" : "NON"}
+                        </div>
+                        <div
+                          className={`p-1.5 rounded-lg border font-bold ${snapshot.accesWeekend ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-400 border-slate-200"}`}
+                        >
+                          ACC√àS WEEKEND :{" "}
+                          {snapshot.accesWeekend ? "OUI" : "NON"}
+                        </div>
+                        <div
+                          className={`p-1.5 rounded-lg border font-bold ${snapshot.exterieur ? "bg-orange-50 text-orange-700 border-orange-200" : "bg-slate-50 text-slate-400 border-slate-200"}`}
+                        >
+                          BORNE EXT√âRIEURE :{" "}
+                          {snapshot.exterieur ? "OUI" : "NON"}
+                        </div>
+                      </div>
+
+                      {snapshot.horaires &&
+                        (() => {
+                          try {
+                            const parsedSchs = JSON.parse(snapshot.horaires);
+                            if (
+                              Array.isArray(parsedSchs) &&
+                              parsedSchs.length > 0 &&
+                              parsedSchs.some(
+                                (s: any) => s.days && s.days.length > 0,
+                              )
+                            ) {
+                              return (
+                                <div className="bg-slate-50 p-3 rounded-lg mt-2 text-xs border border-slate-150">
+                                  <span className="text-[8px] text-slate-500 font-mono uppercase block mb-1">
+                                    üìÖ Horaires d'ouverture
+                                  </span>
+                                  <div className="space-y-1 font-sans text-slate-700">
+                                    {parsedSchs.map((sch: any, idx: number) => {
+                                      if (!sch.days || sch.days.length === 0)
+                                        return null;
+                                      const dayShorts = sch.days
+                                        .map((d: string) => d.substring(0, 3))
+                                        .join(", ");
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className="flex flex-col sm:flex-row sm:justify-between border-b border-dashed border-slate-200 last:border-b-0 pb-1 last:pb-0"
+                                        >
+                                          <span className="font-semibold text-slate-800">
+                                            {dayShorts} :
+                                          </span>
+                                          <span>
+                                            {sch.fermetureMidi ? (
+                                              <span className="font-mono text-indigo-700">
+                                                {sch.openMorning} -{" "}
+                                                {sch.closeMorning} /{" "}
+                                                {sch.openAfternoon} -{" "}
+                                                {sch.closeAfternoon}
+                                              </span>
+                                            ) : (
+                                              <span className="font-mono text-emerald-700">
+                                                {sch.openContinuous} -{" "}
+                                                {sch.closeContinuous}
+                                              </span>
+                                            )}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            }
+                          } catch (e) {}
+                          return null;
+                        })()}
+                    </div>
+
+                    {/* 5, 6, 7 & 8: CONSUMABLES */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Cartouches electrodes */}
+                      <div className="space-y-2 border border-slate-200 rounded-xl p-3.5 bg-slate-50/60">
+                        <h4 className="text-[9px] font-extrabold text-slate-800 uppercase font-mono border-b border-slate-200 pb-1 block">
+                          üîç √âLECTRODES & √âPUISEMENT PADS
+                        </h4>
+
+                        <div className="space-y-2">
+                          <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-[10px]">
+                            <span className="text-[7.5px] font-black text-slate-500 uppercase font-mono block">
+                              JEU D'√âLECTRODES ADULTE
+                            </span>
+                            <p className="font-bold text-slate-850 mt-0.5">
+                              {elAMod
+                                ? elAMod.nom
+                                : snapshot.modeleElectrodeAId}
+                            </p>
+                            <div className="grid grid-cols-2 gap-1 text-[8px] text-slate-500 font-mono mt-1.5 pt-1.5 border-t border-slate-100">
+                              <div>
+                                LOT :{" "}
+                                <span className="font-bold text-slate-700">
+                                  {snapshot.lotElectrodeA || "-"}
+                                </span>
+                              </div>
+                              <div>
+                                P√âREMPTION :{" "}
+                                <span
+                                  className={`font-bold ${snapshot.situationElectrodeA === "Rouge" ? "text-rose-600" : "text-emerald-700"}`}
+                                >
+                                  {snapshot.peremptionElectrodeA || "-"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-[10px]">
+                            <span className="text-[7.5px] font-black text-slate-500 uppercase font-mono block">
+                              JEU P√âDIATRIQUE (ENFANTS)
+                            </span>
+                            <p className="font-bold text-slate-850 mt-0.5">
+                              {elPMod
+                                ? elPMod.nom
+                                : snapshot.modeleElectrodePId ||
+                                  "Non sp√©cifi√© / Absent"}
+                            </p>
+                            <div className="grid grid-cols-2 gap-1 text-[8px] text-slate-500 font-mono mt-1.5 pt-1.5 border-t border-slate-100">
+                              <div>
+                                LOT :{" "}
+                                <span className="font-bold text-slate-700">
+                                  {snapshot.lotElectrodeP || "-"}
+                                </span>
+                              </div>
+                              <div>
+                                P√âREMPTION :{" "}
+                                <span
+                                  className={`font-bold ${snapshot.situationElectrodeP === "Rouge" ? "text-rose-600" : "text-emerald-700"}`}
+                                >
+                                  {snapshot.peremptionElectrodeP || "-"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Batteries */}
+                      <div className="space-y-2 border border-slate-200 rounded-xl p-3.5 bg-slate-50/60">
+                        <h4 className="text-[9px] font-extrabold text-slate-800 uppercase font-mono border-b border-slate-200 pb-1 block">
+                          üîå CELLULE ALIMENTATION / PILES
+                        </h4>
+
+                        <div className="space-y-2">
+                          <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-[10px]">
+                            <span className="text-[7.5px] font-black text-slate-500 uppercase font-mono block">
+                              BLOC BATTERIE PRINCIPAL
+                            </span>
+                            <p className="font-bold text-slate-850">
+                              {batMod ? batMod.nom : snapshot.modeleBatterieId}
+                            </p>
+                            <div className="grid grid-cols-2 gap-1 text-[8px] text-slate-500 font-mono mt-1.5 pt-1.5 border-t border-slate-100">
+                              <div>
+                                LOT BLOC :{" "}
+                                <span className="font-bold text-slate-700">
+                                  {snapshot.lotBatterie || "-"}
+                                </span>
+                              </div>
+                              <div>
+                                √âCH√âANCE :{" "}
+                                <span
+                                  className={`font-bold ${snapshot.situationBatterie === "Rouge" ? "text-rose-600" : "text-emerald-700"}`}
+                                >
+                                  {snapshot.peremptionBatterie || "-"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between text-[10px]">
+                            <div>
+                              <span className="text-[7.5px] text-slate-500 font-mono block uppercase font-bold">
+                                Capacit√© nominale audit√©e
+                              </span>
+                              <span className="text-xs font-black text-slate-850 font-mono">
+                                {snapshot.pourcentageBatterie}%
+                              </span>
+                            </div>
+                            <div className="w-20 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-250">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  parseInt(snapshot.pourcentageBatterie) < 25
+                                    ? "bg-rose-500"
+                                    : parseInt(snapshot.pourcentageBatterie) <
+                                        60
+                                      ? "bg-amber-500"
+                                      : "bg-emerald-500"
+                                }`}
+                                style={{
+                                  width: `${snapshot.pourcentageBatterie}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Overall audit conclusion and conformite */}
+                    <div className="border border-slate-200 rounded-xl p-4 flex items-center justify-between bg-slate-50 shadow-xs">
+                      <div className="space-y-0.5">
+                        <span className="text-[8px] font-black text-indigo-750 uppercase tracking-widest block font-mono">
+                          D√âCISION DE CONFORMIT√â FINALE
+                        </span>
+                        <p className="text-[10px] text-slate-600">
+                          L'appareil de secours a √©t√© audit√© sur l'ensemble de
+                          ses 9 √©tapes de conformit√©.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 font-mono text-[10px] font-bold">
+                        <span
+                          className={`px-4 py-2 rounded-lg border flex items-center gap-2 uppercase tracking-wide font-black ${
+                            snapshot.conforme === "Oui"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-300 shadow-xs"
+                              : "bg-rose-55 text-rose-700 border-rose-250"
+                          }`}
+                        >
+                          {snapshot.conforme === "Oui" ? (
+                            <>
+                              <CheckCircle className="w-4 h-4 text-emerald-600" />
+                              <span>OP√âRATIONNEL (CONFORME)</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="w-4 h-4 text-rose-600 animate-pulse" />
+                              <span>HORS SERVICE (NON CONFORME)</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Technical Signature section */}
+                    <div className="pt-6 border-t border-dashed border-slate-300 grid grid-cols-2 gap-8 text-[11px] font-mono text-slate-600">
+                      <div className="space-y-1">
+                        <span className="text-[8px] text-slate-400 font-bold block uppercase tracking-wider">
+                          üóìÔ∏è GARANTIES DU REPR√âSENTANT
+                        </span>
+                        <p>
+                          Fabrication d'origine :{" "}
+                          <span className="font-bold text-slate-700">
+                            {snapshot.fabrication || "-"}
+                          </span>
+                        </p>
+                        <p>
+                          √âch√©ance Garantie :{" "}
+                          <span className="font-bold text-slate-700">
+                            {snapshot.finGarantie || "-"}
+                          </span>
+                        </p>
+                        <p>
+                          Visite de Contr√¥le Actuelle :{" "}
+                          <span className="font-bold text-indigo-700">
+                            {snapshot.derniereMaintenance || "-"}
+                          </span>
+                        </p>
+                      </div>
+                      <div className="text-right space-y-1">
+                        <span className="text-[8px] text-slate-400 font-bold block uppercase tracking-wider">
+                          ‚úçÔ∏è SIGNATURE REPR√âSENTANT & CACHET
+                        </span>
+                        <div className="pt-2 h-14 flex items-center justify-end">
+                          {printingReport.photoUrl ? (
+                            <div className="border border-slate-200 rounded overflow-hidden h-full max-w-[120px] bg-white p-0.5 shadow-xs">
+                              <img
+                                src={printingReport.photoUrl}
+                                className="h-full w-auto object-contain mx-auto"
+                                alt="Preuve d'intervention"
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                          ) : (
+                            <div className="h-full w-32 border border-slate-200 bg-white rounded flex items-center justify-center font-mono text-[8px] uppercase tracking-wider text-slate-400 border-dashed">
+                              Visuel Non Fourni
+                            </div>
+                          )}
+                        </div>
+                        <p className="font-bold text-slate-800 text-[10px] mt-2 font-mono uppercase">
+                          {printingReport.techName}
+                        </p>
+                        <p className="text-[8px] text-slate-500 font-bold font-sans">
+                          Agent Technique Certifi√©
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Return footer */}
+              <div className="border-t border-slate-200 pt-4 text-center text-[9px] text-slate-400 font-mono no-print">
+                <p className="uppercase tracking-wider">
+                  Ce constat de conformit√© de l'appareil de secours fait foi de
+                  l'√©valuation physique r√©alis√©e.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* System-like Confirm Modal for Tour recalculation */}
+        {showConfirmRecalculate && (
+          <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex items-center justify-center z-[99999] p-4 font-sans text-black select-none">
+            <div className="bg-white border border-neutral-300 shadow-xl rounded-[14px] max-w-md w-full p-6 space-y-5 animate-scaleUp">
+              <p className="text-[18px] text-black leading-relaxed font-bold">
+                {t("√ätes-vous certains de vouloir poursuivre? Cela va √©craser les dates et cr√©neaux pr√©vus par l'administrateur.")}
+              </p>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmRecalculate(false)}
+                  className="px-5 py-2.5 bg-black hover:bg-neutral-900 text-white font-bold text-[18px] rounded-[13px] transition-all shadow-sm"
+                >
+                  {t("Non")}
+                </button>
+                <button
+                  type="button"
+                  onClick={executeTourRecalculation}
+                  className="px-5 py-2.5 bg-black hover:bg-neutral-900 text-white font-bold text-[18px] rounded-[13px] transition-all shadow-sm"
+                >
+                  {t("Oui")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
