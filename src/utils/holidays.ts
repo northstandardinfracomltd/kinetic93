@@ -12,7 +12,7 @@ export type SupportedCountry =
  * Meeus/Jones/Butcher algorithm to compute Easter Sunday in the Gregorian calendar.
  * Returns 1-indexed month (3 = March, 4 = April) and day.
  */
-export function getEasterSunday(year: number): { month: number; day: number } {
+export function getEasterSunday(year: number): { year: number; month: number; day: number } {
   const a = year % 19;
   const b = Math.floor(year / 100);
   const c = year % 100;
@@ -27,7 +27,7 @@ export function getEasterSunday(year: number): { month: number; day: number } {
   const m = Math.floor((a + 11 * h + 22 * L) / 451);
   const month = Math.floor((h + L - 7 * m + 114) / 31);
   const day = ((h + L - 7 * m + 114) % 31) + 1;
-  return { month, day };
+  return { year, month, day };
 }
 
 function addDaysToDate(year: number, month: number, day: number, daysToAdd: number): { year: number; month: number; day: number } {
@@ -63,7 +63,7 @@ function getLastMondayOfMonth(year: number, month: number): number {
 /**
  * Detects the active tenant/environment country from localStorage, companyInfo, or language setting.
  */
-export function getActiveTenantCountry(companyInfo?: any): SupportedCountry {
+export function getActiveTenantCountry(companyInfo?: { pays?: string; country?: string } | null): SupportedCountry {
   if (typeof window !== 'undefined') {
     const rawLang = localStorage.getItem('defib_lang') || '';
     const rawLower = rawLang.toLowerCase().trim();
@@ -214,7 +214,7 @@ export function getHolidaysForYear(year: number, country: SupportedCountry): Rec
       // 13 jours fériés nationaux obligatoires
       holidays[formatDateKey(year, 1, 1)] = "Jour de l'An (Ano Novo)";
       holidays[formatDateKey(goodFriday.year, goodFriday.month, goodFriday.day)] = "Vendredi saint (Sexta-feira Santa)";
-      holidays[formatDateKey(year, easterSunday.month, easterSunday.day)] = "Dimanche de Pâques (Páscoa)";
+      holidays[formatDateKey(easterSunday.year, easterSunday.month, easterSunday.day)] = "Dimanche de Pâques (Páscoa)";
       holidays[formatDateKey(year, 4, 25)] = "Fête de la Liberté (Dia da Liberdade)";
       holidays[formatDateKey(year, 5, 1)] = "Fête du Travail (Dia do Trabalhador)";
       holidays[formatDateKey(corpusChristi.year, corpusChristi.month, corpusChristi.day)] = "Fête-Dieu (Corpo de Deus)";
@@ -232,57 +232,4 @@ export function getHolidaysForYear(year: number, country: SupportedCountry): Rec
   }
 
   return holidays;
-}
-
-/**
- * Checks if a given date string or Date object is a public holiday in the specified (or detected) tenant country.
- */
-export function isHolidayDate(
-  dateStrOrObj: string | Date | null | undefined,
-  country?: SupportedCountry,
-  companyInfo?: any
-): { isHoliday: boolean; holidayName?: string } {
-  if (!dateStrOrObj) return { isHoliday: false };
-  let dateStr = '';
-  let year = 0;
-
-  if (typeof dateStrOrObj === 'string') {
-    const trimmed = dateStrOrObj.trim();
-    if (!trimmed || trimmed === 'A trier' || trimmed === 'À venir') return { isHoliday: false };
-    if (trimmed.includes('/')) {
-      const parts = trimmed.split('/');
-      if (parts.length === 3) {
-        // DD/MM/YYYY
-        dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-        year = parseInt(parts[2], 10);
-      }
-    } else if (trimmed.includes('-')) {
-      const parts = trimmed.split('-');
-      if (parts.length === 3) {
-        if (parts[0].length === 4) {
-          // YYYY-MM-DD
-          dateStr = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-          year = parseInt(parts[0], 10);
-        } else if (parts[2].length === 4) {
-          // DD-MM-YYYY
-          dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-          year = parseInt(parts[2], 10);
-        }
-      }
-    }
-  } else if (dateStrOrObj instanceof Date && !isNaN(dateStrOrObj.getTime())) {
-    year = dateStrOrObj.getFullYear();
-    const m = String(dateStrOrObj.getMonth() + 1).padStart(2, '0');
-    const d = String(dateStrOrObj.getDate()).padStart(2, '0');
-    dateStr = `${year}-${m}-${d}`;
-  }
-
-  if (!dateStr || isNaN(year) || year <= 0) return { isHoliday: false };
-
-  const targetCountry = country || getActiveTenantCountry(companyInfo);
-  const holidays = getHolidaysForYear(year, targetCountry);
-  if (holidays[dateStr]) {
-    return { isHoliday: true, holidayName: holidays[dateStr] };
-  }
-  return { isHoliday: false };
 }
