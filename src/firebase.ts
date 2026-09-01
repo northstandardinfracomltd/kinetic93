@@ -147,34 +147,34 @@ export function getTenantId(): string {
 
 export function getCollectionNameAliases(collectionName: string): string[] {
   const aliases = [collectionName];
-  if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices' || collectionName === 'defibrillateur') {
-    aliases.push('defibrillateurs', 'defibs', 'devices', 'defibrillateur');
-  } else if (collectionName === 'clients' || collectionName === 'clientList') {
-    aliases.push('clients', 'clientList');
-  } else if (collectionName === 'variables') {
-    aliases.push('variables');
-  } else if (collectionName === 'stocks' || collectionName === 'stock') {
-    aliases.push('stocks', 'stock');
-  } else if (collectionName === 'members' || collectionName === 'users' || collectionName === 'team') {
-    aliases.push('members', 'users', 'team');
+  if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices' || collectionName === 'defibrillateur' || collectionName === 'dae') {
+    aliases.push('defibrillateurs', 'defibs', 'devices', 'defibrillateur', 'dae');
+  } else if (collectionName === 'clients' || collectionName === 'clientList' || collectionName === 'client_list' || collectionName === 'customerList' || collectionName === 'customers') {
+    aliases.push('clients', 'clientList', 'client_list', 'customerList', 'customers');
+  } else if (collectionName === 'variables' || collectionName === 'variableList' || collectionName === 'vars') {
+    aliases.push('variables', 'variableList', 'vars');
+  } else if (collectionName === 'stocks' || collectionName === 'stock' || collectionName === 'stockItems') {
+    aliases.push('stocks', 'stock', 'stockItems');
+  } else if (collectionName === 'members' || collectionName === 'users' || collectionName === 'team' || collectionName === 'staff') {
+    aliases.push('members', 'users', 'team', 'staff');
   } else if (collectionName === 'generatedReports' || collectionName === 'generated_reports' || collectionName === 'reports') {
     aliases.push('generatedReports', 'generated_reports', 'reports');
   } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
     aliases.push('fsmTours', 'fsm_tours', 'tours');
   } else if (collectionName === 'tickets' || collectionName === 'support_tickets') {
     aliases.push('tickets', 'support_tickets');
-  } else if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
-    aliases.push('commercialDocs', 'commercial_docs');
+  } else if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs' || collectionName === 'devis' || collectionName === 'factures') {
+    aliases.push('commercialDocs', 'commercial_docs', 'devis', 'factures');
   } else if (collectionName === 'gedDocs' || collectionName === 'ged_docs') {
     aliases.push('gedDocs', 'ged_docs');
-  } else if (collectionName === 'customerReviews' || collectionName === 'customer_reviews') {
-    aliases.push('customerReviews', 'customer_reviews');
+  } else if (collectionName === 'customerReviews' || collectionName === 'customer_reviews' || collectionName === 'avis') {
+    aliases.push('customerReviews', 'customer_reviews', 'avis');
   } else if (collectionName === 'pointages' || collectionName === 'pointages_history') {
     aliases.push('pointages', 'pointages_history');
   } else if (collectionName === 'pointagesAutoVigilance' || collectionName === 'pointages_auto_vigilance') {
     aliases.push('pointagesAutoVigilance', 'pointages_auto_vigilance');
-  } else if (collectionName === 'otherEquipments' || collectionName === 'other_equipments') {
-    aliases.push('otherEquipments', 'other_equipments');
+  } else if (collectionName === 'otherEquipments' || collectionName === 'other_equipments' || collectionName === 'equipments') {
+    aliases.push('otherEquipments', 'other_equipments', 'equipments');
   } else if (collectionName === 'distributed_stocks' || collectionName === 'distributedStocks') {
     aliases.push('distributed_stocks', 'distributedStocks');
   } else if (collectionName === 'achats_fournisseurs' || collectionName === 'achatsFournisseurs') {
@@ -207,22 +207,136 @@ export function getCollectionKeyCandidates(collectionName: string, tenantId: str
     return Array.from(new Set(list));
   }
 
-  // Strict tenant candidate keys: prefix with this exact tenantId and its normalized variations
-  const candidates: string[] = [];
+  const tenantPrefixes = new Set<string>();
+  tenantPrefixes.add(activeTenant);
+
   const isDNum = /^d\d+$/i.test(activeTenant);
   const isNum = /^\d+$/.test(activeTenant);
   const numOnly = isDNum || isNum ? activeTenant.replace(/^d/i, '') : '';
 
-  for (const c of colAliases) {
-    candidates.push(`${activeTenant}_${c}`);
-    if (numOnly) {
-      candidates.push(`D${numOnly}_${c}`);
-      candidates.push(`d${numOnly}_${c}`);
-      candidates.push(`${numOnly}_${c}`);
+  if (numOnly) {
+    tenantPrefixes.add(`D${numOnly}`);
+    tenantPrefixes.add(`d${numOnly}`);
+    tenantPrefixes.add(`${numOnly}`);
+  }
+
+  // Also check if this tenant has an alias in registered_tenants cache
+  try {
+    const regTenants = getFromLocalCache<Tenant[]>('registered_tenants');
+    if (Array.isArray(regTenants)) {
+      const match = regTenants.find(t => 
+        t.id?.toLowerCase() === activeTenant.toLowerCase() ||
+        t.shortEnvId?.toLowerCase() === activeTenant.toLowerCase() ||
+        (numOnly && (t.id?.replace(/^d/i, '') === numOnly || t.shortEnvId?.replace(/^d/i, '') === numOnly))
+      );
+      if (match) {
+        if (match.id) {
+          tenantPrefixes.add(match.id);
+          const mNum = match.id.replace(/^d/i, '');
+          if (mNum) {
+            tenantPrefixes.add(`D${mNum}`);
+            tenantPrefixes.add(`d${mNum}`);
+            tenantPrefixes.add(mNum);
+          }
+        }
+        if (match.shortEnvId) {
+          tenantPrefixes.add(match.shortEnvId);
+          const sNum = match.shortEnvId.replace(/^d/i, '');
+          if (sNum) {
+            tenantPrefixes.add(`D${sNum}`);
+            tenantPrefixes.add(`d${sNum}`);
+            tenantPrefixes.add(sNum);
+          }
+        }
+      }
+    }
+  } catch (_) {}
+
+  const candidates: string[] = [];
+  for (const prefix of tenantPrefixes) {
+    for (const c of colAliases) {
+      candidates.push(`${prefix}_${c}`);
     }
   }
 
   return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+export function mergeCollectionItems<T>(collectionName: string, items: any[]): any[] {
+  if (!Array.isArray(items) || items.length === 0) return items;
+
+  const map = new Map<string, any>();
+  const isClient = collectionName === 'clients' || collectionName === 'clientList' || collectionName === 'client_list' || collectionName === 'customerList' || collectionName === 'customers';
+  const isDefib = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices' || collectionName === 'defibrillateur' || collectionName === 'dae';
+  const isVariable = collectionName === 'variables' || collectionName === 'variableList' || collectionName === 'vars';
+  const isMember = collectionName === 'members' || collectionName === 'users' || collectionName === 'team' || collectionName === 'staff';
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+
+    let key = '';
+    if (item.id && String(item.id).trim()) {
+      key = `id_${String(item.id).trim()}`;
+    } else if (isClient) {
+      if (item.clientCode && String(item.clientCode).trim()) {
+        key = `code_${String(item.clientCode).trim().toLowerCase()}`;
+      } else if (item.email && String(item.email).trim()) {
+        key = `email_${String(item.email).trim().toLowerCase()}`;
+      } else {
+        const nom = (item.nomEtablissement || item.denomination || item.nomPrenomSite || '').trim().toLowerCase();
+        const site = (item.site || item.nomSite || item.adresse || '').trim().toLowerCase();
+        if (nom) {
+          key = `name_${nom}_${site}`;
+        }
+      }
+    } else if (isDefib) {
+      if (item.numeroSerie && String(item.numeroSerie).trim()) {
+        key = `sn_${String(item.numeroSerie).trim().toUpperCase()}`;
+      } else if (item.identifiant && String(item.identifiant).trim()) {
+        key = `id_${String(item.identifiant).trim().toUpperCase()}`;
+      }
+    } else if (isVariable) {
+      if (item.type && item.valeur) {
+        key = `var_${String(item.type).trim()}_${String(item.valeur).trim()}`;
+      }
+    } else if (isMember) {
+      if (item.email && String(item.email).trim()) {
+        key = `m_email_${String(item.email).trim().toLowerCase()}`;
+      } else if (item.name && String(item.name).trim()) {
+        key = `m_name_${String(item.name).trim().toLowerCase()}`;
+      }
+    }
+
+    if (!key) {
+      try {
+        key = `raw_${JSON.stringify(item)}`;
+      } catch (_) {
+        key = `item_${Math.random()}`;
+      }
+    }
+
+    if (map.has(key)) {
+      const existing = map.get(key);
+      const merged = { ...existing };
+      for (const [prop, val] of Object.entries(item)) {
+        if (val !== undefined && val !== null && val !== '') {
+          const current = merged[prop];
+          if (current === undefined || current === null || current === '') {
+            merged[prop] = val;
+          } else if (Array.isArray(val) && Array.isArray(current)) {
+            if (val.length > current.length) {
+              merged[prop] = val;
+            }
+          }
+        }
+      }
+      map.set(key, merged);
+    } else {
+      map.set(key, { ...item });
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 export function saveToLocalCache(key: string, value: any): void {
@@ -383,104 +497,149 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
   const activeTenantId = tenantId || getTenantId();
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
 
-  // If completely offline in browser, immediately check cached versions (prefer non-empty)
+  // If completely offline in browser, immediately check cached versions (aggregate arrays)
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const offlineItems: any[] = [];
+    let foundObject: any = null;
     for (const ck of candidateKeys) {
-      const cachedVal = getFromLocalCache<T>(ck);
-      if (cachedVal !== null && (!Array.isArray(cachedVal) || cachedVal.length > 0)) {
-        return filterCollectionForTenant(cachedVal, collectionName, activeTenantId);
+      const cachedVal = getFromLocalCache<any>(ck);
+      if (cachedVal !== null) {
+        if (Array.isArray(cachedVal)) {
+          offlineItems.push(...cachedVal);
+        } else if (typeof cachedVal === 'object' && !foundObject) {
+          foundObject = cachedVal;
+        }
       }
     }
-    for (const ck of candidateKeys) {
-      const cachedVal = getFromLocalCache<T>(ck);
-      if (cachedVal !== null) return filterCollectionForTenant(cachedVal, collectionName, activeTenantId);
+    if (offlineItems.length > 0) {
+      const merged = mergeCollectionItems(collectionName, offlineItems);
+      return filterCollectionForTenant(merged as unknown as T, collectionName, activeTenantId);
+    }
+    if (foundObject) {
+      return filterCollectionForTenant(foundObject as T, collectionName, activeTenantId);
     }
     return null;
   }
 
-  // 1. Primary Strategy: Try direct Firestore query with chunk reconstruction across candidate keys
-  for (const key of candidateKeys) {
-    try {
-      const docRef = doc(db, 'appData', key);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Firestore fetch timeout')), 10000)
-      );
-      const serverSnap = await Promise.race([
-        getDoc(docRef),
-        timeoutPromise
-      ]);
+  // 1. Primary Strategy: Try direct Firestore query aggregating ALL candidate keys concurrently
+  try {
+    const fetchPromises = candidateKeys.map(async (key) => {
+      try {
+        const docRef = doc(db, 'appData', key);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Firestore fetch timeout')), 10000)
+        );
+        const serverSnap = await Promise.race([
+          getDoc(docRef),
+          timeoutPromise
+        ]);
 
-      if (serverSnap && serverSnap.exists()) {
-        const payload = serverSnap.data();
-        
-        // Check if explicitly chunked OR if chunk_0 exists
-        let isChunked = payload._chunked && typeof payload.chunksCount === 'number';
-        let chunksCount = payload.chunksCount || 0;
+        if (serverSnap && serverSnap.exists()) {
+          const payload = serverSnap.data();
+          let isChunked = payload._chunked && typeof payload.chunksCount === 'number';
+          let chunksCount = payload.chunksCount || 0;
 
-        if (!isChunked) {
-          // Verify if chunk_0 exists anyway as auto-recovery
-          try {
-            const c0Ref = doc(db, 'appData', `${key}_chunk_0`);
-            const c0Snap = await Promise.race([
-              getDoc(c0Ref),
-              new Promise<any>((resolve) => setTimeout(() => resolve(null), 3000))
-            ]);
-            if (c0Snap && c0Snap.exists()) {
-              isChunked = true;
-              chunksCount = 30; // Scan up to 30 chunks
-            }
-          } catch (_) {}
-        }
-
-        if (isChunked) {
-          const chunkPromises = [];
-          for (let i = 0; i < (chunksCount || 30); i++) {
-            const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
-            chunkPromises.push(
-              Promise.race([
-                getDoc(chunkRef),
-                new Promise<any>((resolve) => setTimeout(() => resolve(null), 10000))
-              ])
-            );
+          if (!isChunked) {
+            try {
+              const c0Ref = doc(db, 'appData', `${key}_chunk_0`);
+              const c0Snap = await Promise.race([
+                getDoc(c0Ref),
+                new Promise<any>((resolve) => setTimeout(() => resolve(null), 3000))
+              ]);
+              if (c0Snap && c0Snap.exists()) {
+                isChunked = true;
+                chunksCount = 30;
+              }
+            } catch (_) {}
           }
-          const chunkSnaps = await Promise.all(chunkPromises);
-          let combined: any[] = [];
-          for (let idx = 0; idx < chunkSnaps.length; idx++) {
-            const snap = chunkSnaps[idx];
-            if (snap && snap.exists && snap.exists()) {
-              const data = snap.data();
-              if (Array.isArray(data.value)) {
-                combined.push(...data.value);
+
+          if (isChunked) {
+            const chunkPromises = [];
+            for (let i = 0; i < (chunksCount || 30); i++) {
+              const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
+              chunkPromises.push(
+                Promise.race([
+                  getDoc(chunkRef),
+                  new Promise<any>((resolve) => setTimeout(() => resolve(null), 10000))
+                ])
+              );
+            }
+            const chunkSnaps = await Promise.all(chunkPromises);
+            let combined: any[] = [];
+            for (let idx = 0; idx < chunkSnaps.length; idx++) {
+              const snap = chunkSnaps[idx];
+              if (snap && snap.exists && snap.exists()) {
+                const data = snap.data();
+                if (Array.isArray(data.value)) {
+                  combined.push(...data.value);
+                }
               }
             }
-          }
-          if (combined.length > 0) {
-            const val = filterCollectionForTenant(combined as unknown as T, collectionName, activeTenantId);
-            for (const ck of candidateKeys) {
-              saveToLocalCache(ck, val);
+            return { type: 'array', items: combined, key };
+          } else if (payload.value !== undefined) {
+            if (Array.isArray(payload.value)) {
+              return { type: 'array', items: payload.value, key };
+            } else if (payload.value !== null && typeof payload.value === 'object') {
+              return { type: 'object', data: payload.value, key };
+            } else {
+              return { type: 'primitive', data: payload.value, key };
             }
-            return val;
           }
-        } else if (payload.value !== undefined) {
-          const val = payload.value as T;
-          // If array or object, sanitize for tenant and return it!
-          if (!Array.isArray(val) || val.length > 0) {
-            const sanitizedVal = filterCollectionForTenant(val, collectionName, activeTenantId);
-            for (const ck of candidateKeys) {
-              saveToLocalCache(ck, sanitizedVal);
-            }
-            return sanitizedVal;
-          }
-          // If empty array, it is a valid initialized empty collection for this tenant!
-          for (const ck of candidateKeys) {
-            saveToLocalCache(ck, val);
-          }
-          return val;
+        }
+      } catch (keyErr) {
+        console.log(`[Firestore Server-First] Direct fetch for ${key} notice:`, keyErr);
+      }
+      return null;
+    });
+
+    const results = await Promise.allSettled(fetchPromises);
+    const aggregatedItems: any[] = [];
+    let mergedObject: Record<string, any> | null = null;
+    let primitiveResult: any = null;
+    let foundAnyValidKey = false;
+
+    for (const res of results) {
+      if (res.status === 'fulfilled' && res.value) {
+        foundAnyValidKey = true;
+        const val = res.value;
+        if (val.type === 'array' && Array.isArray(val.items)) {
+          aggregatedItems.push(...val.items);
+        } else if (val.type === 'object' && val.data) {
+          mergedObject = mergedObject ? { ...val.data, ...mergedObject } : { ...val.data };
+        } else if (val.type === 'primitive' && primitiveResult === null) {
+          primitiveResult = val.data;
         }
       }
-    } catch (error) {
-      console.log(`[Firestore Server-First] Direct Firestore fetch for ${key} had issue:`, error);
     }
+
+    if (aggregatedItems.length > 0) {
+      const merged = mergeCollectionItems(collectionName, aggregatedItems);
+      const sanitizedVal = filterCollectionForTenant(merged as unknown as T, collectionName, activeTenantId);
+      for (const ck of candidateKeys) {
+        saveToLocalCache(ck, sanitizedVal);
+      }
+      return sanitizedVal;
+    } else if (mergedObject) {
+      const sanitizedVal = filterCollectionForTenant(mergedObject as unknown as T, collectionName, activeTenantId);
+      for (const ck of candidateKeys) {
+        saveToLocalCache(ck, sanitizedVal);
+      }
+      return sanitizedVal;
+    } else if (primitiveResult !== null) {
+      for (const ck of candidateKeys) {
+        saveToLocalCache(ck, primitiveResult);
+      }
+      return primitiveResult;
+    } else if (foundAnyValidKey) {
+      // Empty array explicitly initialized
+      const emptyArr: any[] = [];
+      for (const ck of candidateKeys) {
+        saveToLocalCache(ck, emptyArr);
+      }
+      return emptyArr as unknown as T;
+    }
+  } catch (error) {
+    console.log(`[Firestore Server-First] Direct Firestore aggregate had issue:`, error);
   }
 
   // 2. Secondary Strategy: High-availability backend server relay (/api/sync-collection)
@@ -504,18 +663,25 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
     }
   }
 
-  // 3. Tertiary Strategy: Local storage cache across candidate keys (prefer non-empty)
+  // 3. Tertiary Strategy: Local storage cache across candidate keys (aggregate arrays)
+  const localItems: any[] = [];
+  let localObj: any = null;
   for (const ck of candidateKeys) {
-    const localVal = getFromLocalCache<T>(ck);
-    if (localVal !== null && (!Array.isArray(localVal) || localVal.length > 0)) {
-      return filterCollectionForTenant(localVal, collectionName, activeTenantId);
+    const localVal = getFromLocalCache<any>(ck);
+    if (localVal !== null) {
+      if (Array.isArray(localVal)) {
+        localItems.push(...localVal);
+      } else if (typeof localVal === 'object' && !localObj) {
+        localObj = localVal;
+      }
     }
   }
-  for (const ck of candidateKeys) {
-    const localVal = getFromLocalCache<T>(ck);
-    if (localVal !== null) {
-      return filterCollectionForTenant(localVal, collectionName, activeTenantId);
-    }
+  if (localItems.length > 0) {
+    const merged = mergeCollectionItems(collectionName, localItems);
+    return filterCollectionForTenant(merged as unknown as T, collectionName, activeTenantId);
+  }
+  if (localObj) {
+    return filterCollectionForTenant(localObj as T, collectionName, activeTenantId);
   }
 
   return null;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getRegionsForCountry } from './utils/regions';
-import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases } from './firebase';
+import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems } from './firebase';
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
@@ -3533,24 +3533,32 @@ export default function App() {
             }
           }
         }
-        for (const k of candidateKeys) {
+        const uniqueCandidateKeys = Array.from(new Set(candidateKeys.filter(Boolean)));
+        const aggregatedLocal: any[] = [];
+        let singleObj: any = null;
+
+        for (const k of uniqueCandidateKeys) {
           const raw = localStorage.getItem(k);
           if (raw) {
             try {
               const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed) && parsed.length > 0) return parsed as T;
-              if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) return parsed as T;
+              if (Array.isArray(parsed)) {
+                aggregatedLocal.push(...parsed);
+              } else if (parsed && typeof parsed === 'object' && !singleObj) {
+                singleObj = parsed;
+              }
             } catch (_) {}
           }
         }
-        for (const k of candidateKeys) {
-          const raw = localStorage.getItem(k);
-          if (raw) {
-            try {
-              return JSON.parse(raw) as T;
-            } catch (_) {}
-          }
+
+        if (aggregatedLocal.length > 0) {
+          const merged = mergeCollectionItems(suffix, aggregatedLocal);
+          return merged as unknown as T;
         }
+        if (singleObj) {
+          return singleObj as T;
+        }
+
         return fallback;
       };
 

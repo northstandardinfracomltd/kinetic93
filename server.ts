@@ -319,34 +319,34 @@ async function getTenantApiCredentials(tenantId: string, extraAliases: (string |
 
 function getCollectionNameAliases(collectionName: string): string[] {
   const aliases = [collectionName];
-  if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices' || collectionName === 'defibrillateur') {
-    aliases.push('defibrillateurs', 'defibs', 'devices', 'defibrillateur');
-  } else if (collectionName === 'clients' || collectionName === 'clientList') {
-    aliases.push('clients', 'clientList');
-  } else if (collectionName === 'variables') {
-    aliases.push('variables');
-  } else if (collectionName === 'stocks' || collectionName === 'stock') {
-    aliases.push('stocks', 'stock');
-  } else if (collectionName === 'members' || collectionName === 'users' || collectionName === 'team') {
-    aliases.push('members', 'users', 'team');
+  if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices' || collectionName === 'defibrillateur' || collectionName === 'dae') {
+    aliases.push('defibrillateurs', 'defibs', 'devices', 'defibrillateur', 'dae');
+  } else if (collectionName === 'clients' || collectionName === 'clientList' || collectionName === 'client_list' || collectionName === 'customerList' || collectionName === 'customers') {
+    aliases.push('clients', 'clientList', 'client_list', 'customerList', 'customers');
+  } else if (collectionName === 'variables' || collectionName === 'variableList' || collectionName === 'vars') {
+    aliases.push('variables', 'variableList', 'vars');
+  } else if (collectionName === 'stocks' || collectionName === 'stock' || collectionName === 'stockItems') {
+    aliases.push('stocks', 'stock', 'stockItems');
+  } else if (collectionName === 'members' || collectionName === 'users' || collectionName === 'team' || collectionName === 'staff') {
+    aliases.push('members', 'users', 'team', 'staff');
   } else if (collectionName === 'generatedReports' || collectionName === 'generated_reports' || collectionName === 'reports') {
     aliases.push('generatedReports', 'generated_reports', 'reports');
   } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
     aliases.push('fsmTours', 'fsm_tours', 'tours');
   } else if (collectionName === 'tickets' || collectionName === 'support_tickets') {
     aliases.push('tickets', 'support_tickets');
-  } else if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
-    aliases.push('commercialDocs', 'commercial_docs');
+  } else if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs' || collectionName === 'devis' || collectionName === 'factures') {
+    aliases.push('commercialDocs', 'commercial_docs', 'devis', 'factures');
   } else if (collectionName === 'gedDocs' || collectionName === 'ged_docs') {
     aliases.push('gedDocs', 'ged_docs');
-  } else if (collectionName === 'customerReviews' || collectionName === 'customer_reviews') {
-    aliases.push('customerReviews', 'customer_reviews');
+  } else if (collectionName === 'customerReviews' || collectionName === 'customer_reviews' || collectionName === 'avis') {
+    aliases.push('customerReviews', 'customer_reviews', 'avis');
   } else if (collectionName === 'pointages' || collectionName === 'pointages_history') {
     aliases.push('pointages', 'pointages_history');
   } else if (collectionName === 'pointagesAutoVigilance' || collectionName === 'pointages_auto_vigilance') {
     aliases.push('pointagesAutoVigilance', 'pointages_auto_vigilance');
-  } else if (collectionName === 'otherEquipments' || collectionName === 'other_equipments') {
-    aliases.push('otherEquipments', 'other_equipments');
+  } else if (collectionName === 'otherEquipments' || collectionName === 'other_equipments' || collectionName === 'equipments') {
+    aliases.push('otherEquipments', 'other_equipments', 'equipments');
   } else if (collectionName === 'distributed_stocks' || collectionName === 'distributedStocks') {
     aliases.push('distributed_stocks', 'distributedStocks');
   } else if (collectionName === 'achats_fournisseurs' || collectionName === 'achatsFournisseurs') {
@@ -357,6 +357,83 @@ function getCollectionNameAliases(collectionName: string): string[] {
     aliases.push('notifications', 'app_notifications');
   }
   return Array.from(new Set(aliases));
+}
+
+function mergeServerCollectionItems(colName: string, items: any[]): any[] {
+  if (!Array.isArray(items) || items.length === 0) return items;
+
+  const map = new Map<string, any>();
+  const isClient = colName === 'clients' || colName === 'clientList' || colName === 'client_list' || colName === 'customerList' || colName === 'customers';
+  const isDefib = colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices' || colName === 'defibrillateur' || colName === 'dae';
+  const isVariable = colName === 'variables' || colName === 'variableList' || colName === 'vars';
+  const isMember = colName === 'members' || colName === 'users' || colName === 'team' || colName === 'staff';
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+
+    let key = '';
+    if (item.id && String(item.id).trim()) {
+      key = `id_${String(item.id).trim()}`;
+    } else if (isClient) {
+      if (item.clientCode && String(item.clientCode).trim()) {
+        key = `code_${String(item.clientCode).trim().toLowerCase()}`;
+      } else if (item.email && String(item.email).trim()) {
+        key = `email_${String(item.email).trim().toLowerCase()}`;
+      } else {
+        const nom = (item.nomEtablissement || item.denomination || item.nomPrenomSite || '').trim().toLowerCase();
+        const site = (item.site || item.nomSite || item.adresse || '').trim().toLowerCase();
+        if (nom) {
+          key = `name_${nom}_${site}`;
+        }
+      }
+    } else if (isDefib) {
+      if (item.numeroSerie && String(item.numeroSerie).trim()) {
+        key = `sn_${String(item.numeroSerie).trim().toUpperCase()}`;
+      } else if (item.identifiant && String(item.identifiant).trim()) {
+        key = `id_${String(item.identifiant).trim().toUpperCase()}`;
+      }
+    } else if (isVariable) {
+      if (item.type && item.valeur) {
+        key = `var_${String(item.type).trim()}_${String(item.valeur).trim()}`;
+      }
+    } else if (isMember) {
+      if (item.email && String(item.email).trim()) {
+        key = `m_email_${String(item.email).trim().toLowerCase()}`;
+      } else if (item.name && String(item.name).trim()) {
+        key = `m_name_${String(item.name).trim().toLowerCase()}`;
+      }
+    }
+
+    if (!key) {
+      try {
+        key = `raw_${JSON.stringify(item)}`;
+      } catch (_) {
+        key = `item_${Math.random()}`;
+      }
+    }
+
+    if (map.has(key)) {
+      const existing = map.get(key);
+      const merged = { ...existing };
+      for (const [prop, val] of Object.entries(item)) {
+        if (val !== undefined && val !== null && val !== '') {
+          const current = merged[prop];
+          if (current === undefined || current === null || current === '') {
+            merged[prop] = val;
+          } else if (Array.isArray(val) && Array.isArray(current)) {
+            if (val.length > current.length) {
+              merged[prop] = val;
+            }
+          }
+        }
+      }
+      map.set(key, merged);
+    } else {
+      map.set(key, { ...item });
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 // Helper function to read a collection from Firestore with support for chunked documents, multiple aliases and memory caching
@@ -460,18 +537,13 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   // Deduplicate keys
   const collectionKeys = Array.from(new Set(rawKeys.filter(Boolean)));
 
-  // 1. Check memory store first for populated list
-  for (const collectionKey of collectionKeys) {
-    if (serverMemoryStore.has(collectionKey)) {
-      const memItems = serverMemoryStore.get(collectionKey);
-      if (Array.isArray(memItems) && memItems.length > 0) {
-        return sanitizeForTenant(memItems);
-      }
-    }
-  }
+  // 1. Query Firestore aggregating ALL candidate keys concurrently
+  const aggregatedItems: any[] = [];
+  let mergedObject: Record<string, any> | null = null;
+  let primitiveResult: any = null;
+  let foundAnyValidKey = false;
 
-  // 2. Query Firestore with chunk auto-discovery across candidate keys
-  for (const collectionKey of collectionKeys) {
+  const fetchPromises = collectionKeys.map(async (collectionKey) => {
     try {
       const docRef = doc(db, 'appData', collectionKey);
       const snap = await withTimeout(getDoc(docRef), 10000, null);
@@ -481,7 +553,6 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         let chunksCount = payload.chunksCount || 0;
 
         if (!isChunked) {
-          // Auto-discovery of chunk_0
           try {
             const c0Ref = doc(db, 'appData', `${collectionKey}_chunk_0`);
             const c0Snap = await withTimeout(getDoc(c0Ref), 3000, null);
@@ -508,62 +579,140 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
               }
             }
           }
-          if (combined.length > 0) {
-            const sanitized = sanitizeForTenant(combined);
-            for (const ck of collectionKeys) {
-              serverMemoryStore.set(ck, sanitized);
-            }
-            persistServerStoreToDisk();
-            return sanitized;
-          }
+          return { type: 'array', items: combined, key: collectionKey };
         } else if (payload.value !== undefined && payload.value !== null) {
-          if (!Array.isArray(payload.value) || payload.value.length > 0) {
-            const sanitized = sanitizeForTenant(payload.value);
-            for (const ck of collectionKeys) {
-              serverMemoryStore.set(ck, sanitized);
-            }
-            persistServerStoreToDisk();
-            return sanitized;
+          if (Array.isArray(payload.value)) {
+            return { type: 'array', items: payload.value, key: collectionKey };
+          } else if (typeof payload.value === 'object') {
+            return { type: 'object', data: payload.value, key: collectionKey };
+          } else {
+            return { type: 'primitive', data: payload.value, key: collectionKey };
           }
         }
       }
     } catch (err) {
       // Graceful fallback
     }
-  }
+    return null;
+  });
 
-  // 3. Fallback to in-memory store (prefer non-empty)
-  for (const collectionKey of collectionKeys) {
-    if (serverMemoryStore.has(collectionKey)) {
-      const val = serverMemoryStore.get(collectionKey);
-      if (val !== undefined && val !== null && (!Array.isArray(val) || val.length > 0)) {
-        return sanitizeForTenant(val);
+  const results = await Promise.allSettled(fetchPromises);
+  for (const res of results) {
+    if (res.status === 'fulfilled' && res.value) {
+      foundAnyValidKey = true;
+      const val = res.value;
+      if (val.type === 'array' && Array.isArray(val.items)) {
+        aggregatedItems.push(...val.items);
+      } else if (val.type === 'object' && val.data) {
+        mergedObject = mergedObject ? { ...val.data, ...mergedObject } : { ...val.data };
+      } else if (val.type === 'primitive' && primitiveResult === null) {
+        primitiveResult = val.data;
       }
     }
   }
+
+  if (aggregatedItems.length > 0) {
+    const merged = mergeServerCollectionItems(colName, aggregatedItems);
+    const sanitized = sanitizeForTenant(merged);
+    for (const ck of collectionKeys) {
+      serverMemoryStore.set(ck, sanitized);
+    }
+    persistServerStoreToDisk();
+    return sanitized;
+  } else if (mergedObject) {
+    for (const ck of collectionKeys) {
+      serverMemoryStore.set(ck, mergedObject);
+    }
+    persistServerStoreToDisk();
+    return mergedObject as any;
+  } else if (primitiveResult !== null) {
+    for (const ck of collectionKeys) {
+      serverMemoryStore.set(ck, primitiveResult);
+    }
+    return primitiveResult;
+  } else if (foundAnyValidKey) {
+    const emptyArr: any[] = [];
+    for (const ck of collectionKeys) {
+      serverMemoryStore.set(ck, emptyArr);
+    }
+    return emptyArr;
+  }
+
+  // 2. Fallback to in-memory store (aggregate arrays)
+  const memAggregated: any[] = [];
+  let memObj: any = null;
   for (const collectionKey of collectionKeys) {
     if (serverMemoryStore.has(collectionKey)) {
-      return sanitizeForTenant(serverMemoryStore.get(collectionKey));
+      const val = serverMemoryStore.get(collectionKey);
+      if (val !== undefined && val !== null) {
+        if (Array.isArray(val)) {
+          memAggregated.push(...val);
+        } else if (typeof val === 'object' && !memObj) {
+          memObj = val;
+        }
+      }
     }
   }
+
+  if (memAggregated.length > 0) {
+    const merged = mergeServerCollectionItems(colName, memAggregated);
+    return sanitizeForTenant(merged);
+  }
+  if (memObj) {
+    return memObj;
+  }
+
   return [];
 }
 
-// Helper function to persist collection to Firestore and in-memory store
+// Helper function to persist collection to Firestore and in-memory store across all candidate keys
 async function saveServerCollection(colName: string, tenantId: string, items: any, extraAliases: (string | undefined | null)[] = []): Promise<void> {
-  const collectionKey = tenantId === 'demo' ? colName : `${tenantId}_${colName}`;
-  serverMemoryStore.set(collectionKey, items);
-  for (const a of extraAliases) {
-    if (a && typeof a === 'string' && a.trim() && a !== tenantId) {
-      serverMemoryStore.set(`${a.trim()}_${colName}`, items);
+  const colAliases = getCollectionNameAliases(colName);
+  const activeTenant = (tenantId || 'demo').trim();
+  const isDNum = /^d\d+$/i.test(activeTenant);
+  const isNum = /^\d+$/.test(activeTenant);
+  const numOnly = isDNum || isNum ? activeTenant.replace(/^d/i, '') : '';
+  const targetKeys: string[] = [];
+
+  if (activeTenant === 'demo') {
+    for (const c of colAliases) {
+      targetKeys.push(c, `demo_${c}`);
+    }
+  } else {
+    for (const c of colAliases) {
+      targetKeys.push(`${activeTenant}_${c}`);
+      if (numOnly) {
+        targetKeys.push(`D${numOnly}_${c}`, `d${numOnly}_${c}`, `${numOnly}_${c}`);
+      }
     }
   }
+
+  for (const alias of extraAliases) {
+    if (alias && typeof alias === 'string' && alias.trim() && alias !== activeTenant) {
+      const a = alias.trim();
+      const isADNum = /^d\d+$/i.test(a);
+      const isANum = /^\d+$/.test(a);
+      const aNum = isADNum || isANum ? a.replace(/^d/i, '') : '';
+      for (const c of colAliases) {
+        targetKeys.push(`${a}_${c}`);
+        if (aNum) {
+          targetKeys.push(`D${aNum}_${c}`, `d${aNum}_${c}`, `${aNum}_${c}`);
+        }
+      }
+    }
+  }
+
+  const uniqueKeys = Array.from(new Set(targetKeys.filter(Boolean)));
+  for (const k of uniqueKeys) {
+    serverMemoryStore.set(k, items);
+  }
   persistServerStoreToDisk();
-  try {
-    const docRef = doc(db, 'appData', collectionKey);
-    withTimeout(setDoc(docRef, { value: items }), 4000, null).catch(() => {});
-  } catch (err) {
-    // Keep in memory if network offline
+
+  for (const k of uniqueKeys) {
+    try {
+      const docRef = doc(db, 'appData', k);
+      withTimeout(setDoc(docRef, { value: items }), 4000, null).catch(() => {});
+    } catch (_) {}
   }
 }
 
