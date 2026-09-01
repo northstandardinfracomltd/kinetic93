@@ -265,46 +265,123 @@ interface ImportExportTabProps {
   dropboxAccessToken?: string;
 }
 
-// Helper function to robustly parse CSV
-function parseCSV(text: string): { headers: string[], rows: string[][] } {
-  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
-  if (lines.length === 0) {
-    return { headers: [], rows: [] };
+// Helper function to robustly build the exact invalid file message
+export function buildInvalidFileMessage(reasons: {
+  hasLineBreaksInCells?: boolean;
+  hasInvalidValues?: boolean;
+  hasInvalidIdentifiers?: boolean;
+}): string {
+  const parts: string[] = [];
+  if (reasons.hasLineBreaksInCells) {
+    parts.push("une ou plusieurs colonnes contiennent des retours à la ligne à l'intérieur des cellules.");
+  }
+  if (reasons.hasInvalidValues) {
+    parts.push("une ou plusieurs colonnes contiennent des valeurs invalides.");
+  }
+  if (reasons.hasInvalidIdentifiers) {
+    parts.push("une ou plusieurs colonnes contiennent des identifiants de données invalides.");
+  }
+
+  if (parts.length === 0) {
+    parts.push("une ou plusieurs colonnes contiennent des valeurs invalides.");
+  }
+
+  const formattedReasons = parts.map((part, index) => {
+    if (index === 0) return part;
+    return part.charAt(0).toUpperCase() + part.slice(1);
+  }).join(' ');
+
+  return `Fichier invalide : ${formattedReasons}`;
+}
+
+// Helper function to robustly parse CSV and detect newlines/breaks inside cells
+export interface CSVParseResult {
+  headers: string[];
+  rows: string[][];
+  hasLineBreaksInCells: boolean;
+}
+
+export function parseCSV(text: string): CSVParseResult {
+  let hasLineBreaksInCells = false;
+  if (!text || !text.trim()) {
+    return { headers: [], rows: [], hasLineBreaksInCells: false };
   }
   
   // Detect separator (semicolon or comma)
-  const firstLine = lines[0];
-  const semicolonCount = (firstLine.match(/;/g) || []).length;
-  const commaCount = (firstLine.match(/,/g) || []).length;
+  const firstLineCandidate = text.split(/\r?\n/)[0] || '';
+  const semicolonCount = (firstLineCandidate.match(/;/g) || []).length;
+  const commaCount = (firstLineCandidate.match(/,/g) || []).length;
   const sep = semicolonCount >= commaCount ? ';' : ',';
-  
-  const parseRow = (rowText: string): string[] => {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    for (let i = 0; i < rowText.length; i++) {
-      const char = rowText[i];
-      if (char === '"') {
-        if (inQuotes && rowText[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (char === sep && !inQuotes) {
-        result.push(current.trim());
-        current = '';
+
+  const allRows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentCell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentCell += '"';
+        i++; // skip escaped quote
       } else {
-        current += char;
+        inQuotes = !inQuotes;
+      }
+    } else if (char === sep && !inQuotes) {
+      if (currentCell.includes('\n') || currentCell.includes('\r')) {
+        hasLineBreaksInCells = true;
+      }
+      currentRow.push(currentCell.trim());
+      currentCell = '';
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') {
+        i++; // skip \n
+      }
+      if (currentCell.includes('\n') || currentCell.includes('\r')) {
+        hasLineBreaksInCells = true;
+      }
+      currentRow.push(currentCell.trim());
+      currentCell = '';
+      if (currentRow.some(c => c.length > 0)) {
+        allRows.push(currentRow);
+      }
+      currentRow = [];
+    } else {
+      if (inQuotes && (char === '\n' || char === '\r')) {
+        hasLineBreaksInCells = true;
+      }
+      currentCell += char;
+    }
+  }
+
+  if (currentCell.length > 0 || currentRow.length > 0) {
+    if (currentCell.includes('\n') || currentCell.includes('\r')) {
+      hasLineBreaksInCells = true;
+    }
+    currentRow.push(currentCell.trim());
+    if (currentRow.some(c => c.length > 0)) {
+      allRows.push(currentRow);
+    }
+  }
+
+  if (inQuotes) {
+    hasLineBreaksInCells = true;
+  }
+
+  const headers = allRows.length > 0 ? allRows[0] : [];
+  const rows = allRows.length > 1 ? allRows.slice(1) : [];
+
+  for (const r of allRows) {
+    for (const c of r) {
+      if (c.includes('\n') || c.includes('\r')) {
+        hasLineBreaksInCells = true;
       }
     }
-    result.push(current.trim());
-    return result;
-  };
-  
-  const headers = parseRow(lines[0]);
-  const rows = lines.slice(1).map(parseRow);
-  return { headers, rows };
+  }
+
+  return { headers, rows, hasLineBreaksInCells };
 }
 
 // Validation & Parsing Helpers
@@ -312,13 +389,19 @@ const validateAndParseDefibs = (
   csvText: string,
   currentVars: Variable[],
   existingDefibs: Defibrillateur[]
-): { success: boolean; data: Defibrillateur[]; errors: string[] } => {
-  const { headers, rows } = parseCSV(csvText);
-  const errorsSet = new Set<string>();
+): { success: boolean; data: Defibrillateur[]; errorMessage?: string } => {
+  let hasLineBreaksInCells = false;
+  let hasInvalidValues = false;
+  let hasInvalidIdentifiers = false;
 
-  // Erreur T : Size limit 5 Mo (5 * 1024 * 1024 bytes)
+  // Size limit 5 Mo (5 * 1024 * 1024 bytes)
   if (new Blob([csvText]).size > 5 * 1024 * 1024) {
-    errorsSet.add("Erreur T");
+    hasInvalidValues = true;
+  }
+
+  const { headers, rows, hasLineBreaksInCells: csvHasLineBreaks } = parseCSV(csvText);
+  if (csvHasLineBreaks) {
+    hasLineBreaksInCells = true;
   }
 
   const expected = [
@@ -399,17 +482,17 @@ const validateAndParseDefibs = (
   ];
 
   if (rows.length < 1) {
-    return { success: false, data: [], errors: ["Fichier vide ou sans données."] };
+    hasInvalidValues = true;
   }
 
   const normalizeStr = (s: string) => (s || '').replace(/^\uFEFF/, '').replace(/\s+/g, ' ').trim();
 
   if (headers.length !== expected.length) {
-    return { success: false, data: [], errors: ["Nombre de colonnes incorrect dans l'en-tête du fichier."] };
+    hasInvalidValues = true;
   } else {
     const hMatch = headers.every((h, i) => normalizeStr(h) === normalizeStr(expected[i]));
     if (!hMatch) {
-      return { success: false, data: [], errors: ["Les entêtes du fichier CSV ne correspondent pas au format attendu."] };
+      hasInvalidValues = true;
     }
   }
 
@@ -453,7 +536,14 @@ const validateAndParseDefibs = (
   for (let idx = 0; idx < rows.length; idx++) {
     const row = rows[idx];
     if (row.length !== expected.length) {
+      hasInvalidValues = true;
       continue;
+    }
+
+    for (const cell of row) {
+      if (cell.includes('\n') || cell.includes('\r')) {
+        hasLineBreaksInCells = true;
+      }
     }
 
     const identifiant = row[0] ? row[0].trim() : "";
@@ -533,107 +623,104 @@ const validateAndParseDefibs = (
     const sousTraitance = row[72] ? row[72].trim() : "";
     const fsmAutorise = row[73] ? row[73].trim() : "";
 
-    // Erreur A : Identifiant must be empty
+    // Erreur A : Identifiant must be empty on import
     if (identifiant !== "") {
-      errorsSet.add("Erreur A");
+      hasInvalidIdentifiers = true;
     }
 
     // Erreur B : Série is mandatory
     if (serie === "") {
-      errorsSet.add("Erreur B");
+      hasInvalidValues = true;
     }
 
     // Resolve Defibrillator Model
     let matchingVar = findVar(modelVal, 'Modèle Défibrillateur');
     if (modelVal !== "") {
       if (!matchingVar) {
-        errorsSet.add("Erreur P");
-        if (!modelVal.startsWith("v_")) {
-          errorsSet.add("Erreur C");
-        }
+        hasInvalidIdentifiers = true;
       }
     } else {
       matchingVar = (currentVars || []).find(v => v.category === 'Modèle Défibrillateur');
       if (!matchingVar) {
-        errorsSet.add("Erreur P");
+        hasInvalidIdentifiers = true;
       }
     }
 
     // Client. (Identifiant unique) starts with "c_" or "cl_" (if provided)
     if (clientVal !== "" && !clientVal.startsWith("c_") && !clientVal.startsWith("cl_")) {
-      errorsSet.add("Erreur D");
+      hasInvalidIdentifiers = true;
     }
 
     // Resolve Coffret
     const coffretVar = findVar(modeleCoffretId, 'Modèle Coffret');
     const finalCoffretId = coffretVar ? coffretVar.id : modeleCoffretId;
     if (modeleCoffretId !== "" && !coffretVar && !modeleCoffretId.startsWith("v_")) {
-      errorsSet.add("Erreur E");
+      hasInvalidIdentifiers = true;
     }
 
     // Resolve Electrode Adulte
     const elecAVar = findVar(modeleElectrodeAId, 'Modèle Électrode');
     const finalElectrodeAId = elecAVar ? elecAVar.id : modeleElectrodeAId;
     if (modeleElectrodeAId !== "" && !elecAVar && !modeleElectrodeAId.startsWith("v_")) {
-      errorsSet.add("Erreur F");
+      hasInvalidIdentifiers = true;
     }
 
     // Resolve Electrode Adulte Secours
     const elecASecVar = findVar(modeleElectrodeASecoursId, 'Modèle Électrode');
     const finalElectrodeASecoursId = elecASecVar ? elecASecVar.id : modeleElectrodeASecoursId;
     if (modeleElectrodeASecoursId !== "" && !elecASecVar && !modeleElectrodeASecoursId.startsWith("v_")) {
-      errorsSet.add("Erreur G");
+      hasInvalidIdentifiers = true;
     }
 
-    // Erreur H : Section 6 — Électrode Adulte ou Mixte : Statut
+    // Section 6 — Électrode Adulte ou Mixte : Statut
     if (situationElectrodeAVal !== "" && !["Conforme", "Attention", "Alerte"].includes(situationElectrodeAVal)) {
-      errorsSet.add("Erreur H");
+      hasInvalidValues = true;
     }
 
     // Resolve Electrode Pédiatrique
     const elecPVar = findVar(modeleElectrodePId, 'Modèle Électrode');
     const finalElectrodePId = elecPVar ? elecPVar.id : modeleElectrodePId;
     if (modeleElectrodePId !== "" && !elecPVar && !modeleElectrodePId.startsWith("v_")) {
-      errorsSet.add("Erreur I");
+      hasInvalidIdentifiers = true;
     }
 
     // Resolve Electrode Pédiatrique Secours
     const elecPSecVar = findVar(modeleElectrodePSecoursId, 'Modèle Électrode');
     const finalElectrodePSecoursId = elecPSecVar ? elecPSecVar.id : modeleElectrodePSecoursId;
     if (modeleElectrodePSecoursId !== "" && !elecPSecVar && !modeleElectrodePSecoursId.startsWith("v_")) {
-      errorsSet.add("Erreur J");
+      hasInvalidIdentifiers = true;
     }
 
-    // Erreur K : Section 7 — Électrode Pédiatrique : Statut
+    // Section 7 — Électrode Pédiatrique : Statut
     if (situationElectrodePVal !== "" && !["Conforme", "Attention", "Alerte"].includes(situationElectrodePVal)) {
-      errorsSet.add("Erreur K");
+      hasInvalidValues = true;
     }
 
     // Resolve Batterie
     const batVar = findVar(modeleBatterieId, 'Modèle Batterie');
     const finalBatterieId = batVar ? batVar.id : modeleBatterieId;
     if (modeleBatterieId !== "" && !batVar && !modeleBatterieId.startsWith("v_")) {
-      errorsSet.add("Erreur L");
+      hasInvalidIdentifiers = true;
     }
 
-    // Erreur M : Section 8 — Batterie : Statut
+    // Section 8 — Batterie : Statut
     if (situationBatterieVal !== "" && !["Conforme", "Attention", "Alerte"].includes(situationBatterieVal)) {
-      errorsSet.add("Erreur M");
+      hasInvalidValues = true;
     }
 
-    // Erreur N : Section 8 — Batterie : Pourcentage constaté
+    // Section 8 — Batterie : Pourcentage constaté
     if (pourcentageBatterie !== "" && isNaN(Number(pourcentageBatterie))) {
-      errorsSet.add("Erreur N");
+      hasInvalidValues = true;
     }
 
-    // Erreur O : Section 9 categories
+    // Section 9 categories
     const catVals = [loue, prete, stocke, archive, conforme, sousTraitance, fsmAutorise];
     const invalidCat = catVals.some(v => v !== "" && v !== "Oui" && v !== "Non");
     if (invalidCat) {
-      errorsSet.add("Erreur O");
+      hasInvalidValues = true;
     }
 
-    if (errorsSet.size > 0) {
+    if (hasLineBreaksInCells || hasInvalidValues || hasInvalidIdentifiers) {
       continue;
     }
 
@@ -726,25 +813,37 @@ const validateAndParseDefibs = (
     });
   }
 
-  if (errorsSet.size > 0) {
-    const sortedErrors = Array.from(errorsSet).sort();
+  if (hasLineBreaksInCells || hasInvalidValues || hasInvalidIdentifiers || parsedItems.length === 0) {
     return {
       success: false,
       data: [],
-      errors: sortedErrors
+      errorMessage: buildInvalidFileMessage({ hasLineBreaksInCells, hasInvalidValues: hasInvalidValues || parsedItems.length === 0, hasInvalidIdentifiers })
     };
   }
 
   return {
     success: true,
-    data: parsedItems,
-    errors: []
+    data: parsedItems
   };
 };
 
-const validateAndParseClients = (csvText: string): Client[] | null => {
-  const { headers, rows } = parseCSV(csvText);
-  if (rows.length < 1) return null;
+const validateAndParseClients = (csvText: string): { success: boolean; data: Client[]; errorMessage?: string } => {
+  let hasLineBreaksInCells = false;
+  let hasInvalidValues = false;
+  let hasInvalidIdentifiers = false;
+
+  const { headers, rows, hasLineBreaksInCells: csvHasLineBreaks } = parseCSV(csvText);
+  if (csvHasLineBreaks) {
+    hasLineBreaksInCells = true;
+  }
+
+  if (rows.length < 1) {
+    return {
+      success: false,
+      data: [],
+      errorMessage: buildInvalidFileMessage({ hasLineBreaksInCells, hasInvalidValues: true, hasInvalidIdentifiers })
+    };
+  }
 
   const normHeaders = headers.map(h => h.replace(/^\uFEFF/, '').trim().toLowerCase());
 
@@ -765,8 +864,17 @@ const validateAndParseClients = (csvText: string): Client[] | null => {
     const row = rows[idx];
     if (row.length === 0) continue;
 
+    for (const cell of row) {
+      if (cell.includes('\n') || cell.includes('\r')) {
+        hasLineBreaksInCells = true;
+      }
+    }
+
     const denomination = row[denomIdx] ? row[denomIdx].trim() : '';
-    if (!denomination) continue;
+    if (!denomination) {
+      hasInvalidValues = true;
+      continue;
+    }
 
     const siret = siretIdx !== -1 && row[siretIdx] ? row[siretIdx].trim() : '';
     const email = emailIdx !== -1 && row[emailIdx] ? row[emailIdx].trim() : '';
@@ -795,13 +903,34 @@ const validateAndParseClients = (csvText: string): Client[] | null => {
     });
   }
 
-  if (parsedItems.length === 0) return null;
-  return parsedItems;
+  if (hasLineBreaksInCells || hasInvalidValues || hasInvalidIdentifiers || parsedItems.length === 0) {
+    return {
+      success: false,
+      data: [],
+      errorMessage: buildInvalidFileMessage({ hasLineBreaksInCells, hasInvalidValues: hasInvalidValues || parsedItems.length === 0, hasInvalidIdentifiers })
+    };
+  }
+
+  return { success: true, data: parsedItems };
 };
 
-const validateAndParseVariables = (csvText: string, targetCategory: any): Variable[] | null => {
-  const { headers, rows } = parseCSV(csvText);
-  if (rows.length < 1) return null;
+const validateAndParseVariables = (csvText: string, targetCategory: any): { success: boolean; data: Variable[]; errorMessage?: string } => {
+  let hasLineBreaksInCells = false;
+  let hasInvalidValues = false;
+  let hasInvalidIdentifiers = false;
+
+  const { headers, rows, hasLineBreaksInCells: csvHasLineBreaks } = parseCSV(csvText);
+  if (csvHasLineBreaks) {
+    hasLineBreaksInCells = true;
+  }
+
+  if (rows.length < 1) {
+    return {
+      success: false,
+      data: [],
+      errorMessage: buildInvalidFileMessage({ hasLineBreaksInCells, hasInvalidValues: true, hasInvalidIdentifiers })
+    };
+  }
 
   const normHeaders = headers.map(h => h.replace(/^\uFEFF/, '').trim().toLowerCase());
 
@@ -818,8 +947,17 @@ const validateAndParseVariables = (csvText: string, targetCategory: any): Variab
     const row = rows[idx];
     if (row.length === 0) continue;
 
+    for (const cell of row) {
+      if (cell.includes('\n') || cell.includes('\r')) {
+        hasLineBreaksInCells = true;
+      }
+    }
+
     const nom = row[nomIdx] ? row[nomIdx].trim() : '';
-    if (!nom) continue;
+    if (!nom) {
+      hasInvalidValues = true;
+      continue;
+    }
 
     const marque = marqueIdx !== -1 && row[marqueIdx] ? row[marqueIdx].trim() : '';
     const description = descIdx !== -1 && row[descIdx] ? row[descIdx].trim() : '';
@@ -837,21 +975,46 @@ const validateAndParseVariables = (csvText: string, targetCategory: any): Variab
     });
   }
 
-  if (parsedItems.length === 0) return null;
-  return parsedItems;
+  if (hasLineBreaksInCells || hasInvalidValues || hasInvalidIdentifiers || parsedItems.length === 0) {
+    return {
+      success: false,
+      data: [],
+      errorMessage: buildInvalidFileMessage({ hasLineBreaksInCells, hasInvalidValues: hasInvalidValues || parsedItems.length === 0, hasInvalidIdentifiers })
+    };
+  }
+
+  return { success: true, data: parsedItems };
 };
 
-const validateAndParseStocks = (csvText: string, currentVars: Variable[]): StockRecord[] | null => {
-  const { headers, rows } = parseCSV(csvText);
-  if (rows.length < 5) return null;
+const validateAndParseStocks = (csvText: string, currentVars: Variable[]): { success: boolean; data: StockRecord[]; errorMessage?: string } => {
+  let hasLineBreaksInCells = false;
+  let hasInvalidValues = false;
+  let hasInvalidIdentifiers = false;
+
+  const { headers, rows, hasLineBreaksInCells: csvHasLineBreaks } = parseCSV(csvText);
+  if (csvHasLineBreaks) {
+    hasLineBreaksInCells = true;
+  }
+
+  if (rows.length < 1) {
+    return {
+      success: false,
+      data: [],
+      errorMessage: buildInvalidFileMessage({ hasLineBreaksInCells, hasInvalidValues: true, hasInvalidIdentifiers })
+    };
+  }
 
   const expected = [
     'Pièce ou service.', 'Quantité disponible.', 'Quantité réservée.', 'Quantité totale.',
     'Stockage.', 'Tarif fournisseur.', 'Marge.', 'Tarif de vente.'
   ];
-  if (headers.length !== expected.length) return null;
+  if (headers.length !== expected.length) {
+    hasInvalidValues = true;
+  }
   const hMatch = headers.every((h, i) => h.replace(/^\uFEFF/, '').trim() === expected[i]);
-  if (!hMatch) return null;
+  if (!hMatch) {
+    hasInvalidValues = true;
+  }
 
   const validStockages = [
     'Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J',
@@ -862,7 +1025,16 @@ const validateAndParseStocks = (csvText: string, currentVars: Variable[]): Stock
   const parsedItems: StockRecord[] = [];
   for (let idx = 0; idx < rows.length; idx++) {
     const row = rows[idx];
-    if (row.length !== expected.length) return null;
+    if (row.length !== expected.length) {
+      hasInvalidValues = true;
+      continue;
+    }
+
+    for (const cell of row) {
+      if (cell.includes('\n') || cell.includes('\r')) {
+        hasLineBreaksInCells = true;
+      }
+    }
 
     const pieceNom = row[0];
     const qtyDispStr = row[1];
@@ -880,9 +1052,13 @@ const validateAndParseStocks = (csvText: string, currentVars: Variable[]): Stock
       v.nom === pieceNom || 
       (v.nom && v.nom.trim().toLowerCase().replace(/\s+/g, ' ') === normPiece.replace(/\s+/g, ' '))
     );
-    if (!matchingVar) return null;
+    if (!matchingVar) {
+      hasInvalidIdentifiers = true;
+    }
 
-    if (!validStockages.includes(stockage)) return null;
+    if (!validStockages.includes(stockage)) {
+      hasInvalidValues = true;
+    }
 
     const parseNum = (val: string): number | null => {
       if (!val) return null;
@@ -892,31 +1068,41 @@ const validateAndParseStocks = (csvText: string, currentVars: Variable[]): Stock
 
     const quantiteDisp = parseNum(qtyDispStr);
     const quantiteRes = parseNum(qtyResStr);
-    const qtyTot = parseNum(qtyTotStr); // Must be a valid numeric
+    const qtyTot = parseNum(qtyTotStr);
 
     const cost = parseNum(costStr);
     const margin = parseNum(marginStr);
     const price = parseNum(priceStr);
 
     if (quantiteDisp === null || quantiteRes === null || qtyTot === null || cost === null || margin === null || price === null) {
-      return null;
+      hasInvalidValues = true;
     }
 
-    parsedItems.push({
-      id: 'st_' + Date.now() + '_' + idx + '_' + Math.floor(Math.random() * 1000),
-      denominationPieceId: matchingVar.id,
-      quantite: quantiteDisp,
-      quantiteReservee: quantiteRes,
-      livraisonDate: new Date().toISOString().split('T')[0],
-      reapprovisionnementDate: '',
-      valeurAchat: cost,
-      marge: margin,
-      prixVenteHt: price,
-      stockage: stockage
-    });
+    if (matchingVar && quantiteDisp !== null && quantiteRes !== null && cost !== null && margin !== null && price !== null) {
+      parsedItems.push({
+        id: 'st_' + Date.now() + '_' + idx + '_' + Math.floor(Math.random() * 1000),
+        denominationPieceId: matchingVar.id,
+        quantite: quantiteDisp,
+        quantiteReservee: quantiteRes,
+        livraisonDate: new Date().toISOString().split('T')[0],
+        reapprovisionnementDate: '',
+        valeurAchat: cost,
+        marge: margin,
+        prixVenteHt: price,
+        stockage: stockage
+      });
+    }
   }
 
-  return parsedItems;
+  if (hasLineBreaksInCells || hasInvalidValues || hasInvalidIdentifiers || parsedItems.length === 0) {
+    return {
+      success: false,
+      data: [],
+      errorMessage: buildInvalidFileMessage({ hasLineBreaksInCells, hasInvalidValues: hasInvalidValues || parsedItems.length === 0, hasInvalidIdentifiers })
+    };
+  }
+
+  return { success: true, data: parsedItems };
 };
 
 export default function ImportExportTab({ 
@@ -1107,12 +1293,12 @@ export default function ImportExportTab({
 
     if (formType === 'Importation.') {
       if (!uploadedCsvContent) {
-        setValidationError('Fichier invalide, veuillez vérifier votre CSV et essayer à nouveau.');
+        setValidationError('Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
         return;
       }
 
       if (new Blob([uploadedCsvContent]).size > 5 * 1024 * 1024) {
-        setValidationError(`Votre fichier contient une ou plusieurs erreurs : Erreur T. Vous trouverez sur notre aide en ligne (https://defibeo.com/school/) les solutions correspondantes pour résoudre ces anomalies. (Le fichier dépasse la taille maximale autorisée de 5 Mo).`);
+        setValidationError('Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
         return;
       }
 
@@ -1120,24 +1306,27 @@ export default function ImportExportTab({
       if (formCategorie === 'Défibrillateurs.') {
         const valResult = validateAndParseDefibs(uploadedCsvContent, variables, defibrillateurs);
         if (!valResult.success) {
-          const errorListStr = valResult.errors.join(', ');
-          setValidationError(`Votre fichier contient une ou plusieurs erreurs : ${errorListStr}. Vous trouverez sur notre aide en ligne (https://defibeo.com/school/) les solutions correspondantes pour résoudre ces anomalies. Pour obtenir un tableau d'exemple d'importation, téléchargez un fichier d'exportation comme exemple pour récupérer les entêtes.`);
+          setValidationError(valResult.errorMessage || 'Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
           return;
         }
         parsedData = valResult.data;
         setImportSuccessMessage("Votre fichier est valide, en cours d’importation.");
       } else if (formCategorie === 'Clients.') {
-        parsedData = validateAndParseClients(uploadedCsvContent);
-        if (!parsedData) {
-          setValidationError('Fichier invalide, veuillez vérifier votre CSV et essayer à nouveau.');
+        const valResult = validateAndParseClients(uploadedCsvContent);
+        if (!valResult.success) {
+          setValidationError(valResult.errorMessage || 'Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
           return;
         }
+        parsedData = valResult.data;
+        setImportSuccessMessage("Votre fichier est valide, en cours d’importation.");
       } else if (formCategorie === 'Stocks.') {
-        parsedData = validateAndParseStocks(uploadedCsvContent, variables);
-        if (!parsedData) {
-          setValidationError('Fichier invalide, veuillez vérifier votre CSV et essayer à nouveau.');
+        const valResult = validateAndParseStocks(uploadedCsvContent, variables);
+        if (!valResult.success) {
+          setValidationError(valResult.errorMessage || 'Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
           return;
         }
+        parsedData = valResult.data;
+        setImportSuccessMessage("Votre fichier est valide, en cours d’importation.");
       } else if (formCategorie.startsWith('Variable — ')) {
         const categoryMap: Record<string, string> = {
           'Variable — Modèle Défibrillateur.': 'Modèle Défibrillateur',
@@ -1147,11 +1336,13 @@ export default function ImportExportTab({
           'Variable — Modèle Coffret.': 'Modèle Coffret',
         };
         const targetCategory = categoryMap[formCategorie];
-        parsedData = validateAndParseVariables(uploadedCsvContent, targetCategory);
-        if (!parsedData) {
-          setValidationError('Fichier invalide, veuillez vérifier votre CSV et essayer à nouveau.');
+        const valResult = validateAndParseVariables(uploadedCsvContent, targetCategory);
+        if (!valResult.success) {
+          setValidationError(valResult.errorMessage || 'Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
           return;
         }
+        parsedData = valResult.data;
+        setImportSuccessMessage("Votre fichier est valide, en cours d’importation.");
       }
 
       setValidationError(null);
@@ -1702,13 +1893,13 @@ export default function ImportExportTab({
                               return;
                             }
                             if (file.size > 5 * 1024 * 1024) {
-                              setValidationError(`Votre fichier contient une ou plusieurs erreurs : Erreur T. Vous trouverez sur notre aide en ligne (https://defibeo.com/school/) les solutions correspondantes pour résoudre ces anomalies. (Le fichier dépasse la taille maximale autorisée de 5 Mo).`);
-                              alert(t("Le fichier est trop lourd : il dépasse la taille maximale autorisée de 5 Mo."));
+                              setValidationError('Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
                               setSelectedFileName('');
                               setUploadedCsvContent('');
                               return;
                             }
                             setSelectedFileName(file.name);
+                            setValidationError(null);
                             const reader = new FileReader();
                             reader.onload = (evt) => {
                               const text = evt.target?.result;
@@ -1737,13 +1928,13 @@ export default function ImportExportTab({
                                   return;
                                 }
                                 if (file.size > 5 * 1024 * 1024) {
-                                  setValidationError(`Votre fichier contient une ou plusieurs erreurs : Erreur T. Vous trouverez sur notre aide en ligne (https://defibeo.com/school/) les solutions correspondantes pour résoudre ces anomalies. (Le fichier dépasse la taille maximale autorisée de 5 Mo).`);
-                                  alert(t("Le fichier est trop lourd : il dépasse la taille maximale autorisée de 5 Mo."));
+                                  setValidationError('Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
                                   setSelectedFileName('');
                                   setUploadedCsvContent('');
                                   return;
                                 }
                                 setSelectedFileName(file.name);
+                                setValidationError(null);
                                 const reader = new FileReader();
                                 reader.onload = (evt) => {
                                   const text = evt.target?.result;
