@@ -517,7 +517,7 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  // Settings for CTT Model (0 to 4 parameters)
+  // Settings for CTT Model (0 to 5 parameters)
   const [cttSettings, setCttSettings] = useState<CttModelSetting[]>(() => {
     try {
       const tid = (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
@@ -525,7 +525,11 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.slice(0, 4);
+          return parsed.slice(0, 5).map((s) => ({
+            ...s,
+            setting2: s.setting2 || (!s.setting2 && !s.setting3),
+            setting3: s.setting2 ? false : s.setting3,
+          }));
         }
       }
     } catch (e) {
@@ -545,13 +549,21 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
           try {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && isMounted) {
-              setCttSettings(parsed.slice(0, 4));
+              setCttSettings(parsed.slice(0, 5).map((s) => ({
+                ...s,
+                setting2: s.setting2 || (!s.setting2 && !s.setting3),
+                setting3: s.setting2 ? false : s.setting3,
+              })));
             }
           } catch (_) {}
         }
         const remote = await fetchCollectionFromFirestore<CttModelSetting[]>('ctt_model_settings');
         if (isMounted && remote && Array.isArray(remote)) {
-          const sanitized = remote.slice(0, 4);
+          const sanitized = remote.slice(0, 5).map((s) => ({
+            ...s,
+            setting2: s.setting2 || (!s.setting2 && !s.setting3),
+            setting3: s.setting2 ? false : s.setting3,
+          }));
           setCttSettings(sanitized);
           localStorage.setItem(`defib_${tid}_ctt_model_settings`, JSON.stringify(sanitized));
           localStorage.setItem('ctt_model_settings', JSON.stringify(sanitized));
@@ -574,8 +586,48 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
   const [isSettingsPaneOpen, setIsSettingsPaneOpen] = useState(false);
   const [draftSettings, setDraftSettings] = useState<CttModelSetting[]>([]);
 
+  // Conflict detection: 2 rules with same column, same operation (Retirer or Ajouter) sharing at least 1 day
+  const findCttConflicts = (settings: CttModelSetting[]) => {
+    const conflicts: {
+      ruleIndexA: number;
+      ruleIndexB: number;
+      days: string[];
+      column: string;
+      operation: string;
+    }[] = [];
+    for (let i = 0; i < settings.length; i++) {
+      for (let j = i + 1; j < settings.length; j++) {
+        const a = settings[i];
+        const b = settings[j];
+        if (a.setting4 === b.setting4) {
+          const sameOp = (a.setting2 && b.setting2) || (a.setting3 && b.setting3);
+          if (sameOp) {
+            const commonDays = (a.setting1 || []).filter((d) => (b.setting1 || []).includes(d));
+            if (commonDays.length > 0) {
+              conflicts.push({
+                ruleIndexA: i,
+                ruleIndexB: j,
+                days: commonDays,
+                column: a.setting4,
+                operation: a.setting2 ? t("Retirer") : t("Ajouter"),
+              });
+            }
+          }
+        }
+      }
+    }
+    return conflicts;
+  };
+
+  const draftConflicts = findCttConflicts(draftSettings);
+
   const openSettingsPane = () => {
-    setDraftSettings(JSON.parse(JSON.stringify(cttSettings)));
+    const cloned = JSON.parse(JSON.stringify(cttSettings)).map((s: CttModelSetting) => ({
+      ...s,
+      setting2: s.setting2 || (!s.setting2 && !s.setting3),
+      setting3: s.setting2 ? false : s.setting3,
+    }));
+    setDraftSettings(cloned);
     setIsSettingsPaneOpen(true);
   };
 
@@ -584,9 +636,14 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
   };
 
   const handleSaveSettings = () => {
-    const sanitized = draftSettings.slice(0, 4).map((s) => ({
+    if (draftConflicts.length > 0) {
+      return;
+    }
+    const sanitized = draftSettings.slice(0, 5).map((s) => ({
       ...s,
       setting0: (s.setting0 || '').slice(0, 30),
+      setting2: s.setting2 || (!s.setting2 && !s.setting3),
+      setting3: s.setting2 ? false : s.setting3,
       setting5: Math.min(500, Math.max(1, typeof s.setting5 === 'number' && !isNaN(s.setting5) && s.setting5 >= 1 ? s.setting5 : 1)),
     }));
     setCttSettings(sanitized);
@@ -605,13 +662,13 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
   };
 
   const handleAddParam = () => {
-    if (draftSettings.length >= 4) return;
+    if (draftSettings.length >= 5) return;
     const newParam: CttModelSetting = {
       id: `ctt_param_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       setting0: '',
       setting1: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'],
-      setting2: false,
-      setting3: false,
+      setting2: true, // ON par défaut
+      setting3: false, // OFF par défaut
       setting4: 'Temps Trajet Matin',
       setting5: 30,
     };
@@ -1039,199 +1096,276 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
             <div className="w-screen max-w-md sm:max-w-xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto">
               {/* Parameters List */}
               <div className="space-y-5 flex-1 pt-2 pb-2">
-                {draftSettings.map((param, idx) => (
-                  <div
-                    key={param.id}
-                    className="space-y-4 p-4 relative"
-                    style={{
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '13px',
-                      backgroundColor: '#ffffff',
-                    }}
-                  >
-                    {/* Parameter Header */}
-                    <div className="flex items-center justify-between">
-                      <span
-                        className="text-base font-bold text-black"
-                        style={{ fontFamily: '"Gochi", cursive, sans-serif' }}
-                      >
-                        PARAMÈTRES #{idx + 1} {param.setting0 ? `— ${param.setting0}` : ''}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteParam(idx)}
-                        style={{
-                          borderRadius: '13px',
-                          fontSize: '16px',
-                          backgroundColor: 'rgb(185, 28, 28)',
-                          boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
-                          color: 'rgb(255, 255, 255)',
-                          padding: '6px 16px',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontWeight: 'bold',
-                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        }}
-                        className="hover:opacity-90 active:scale-95 transition-all shrink-0"
-                      >
-                        {t("Supprimer")}
-                      </button>
-                    </div>
-
-                    {/* SETTING0: Titre du paramètre */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 font-sans mb-1">
-                        {t("Titre du paramètre.")}
-                      </label>
-                      <input
-                        type="text"
-                        maxLength={30}
-                        value={param.setting0}
-                        onChange={(e) => handleUpdateParam(idx, { setting0: e.target.value })}
-                        placeholder={t("Nom ou repère (max 30 car.)")}
-                      />
-                      <div className="text-right text-[11px] text-slate-400 mt-1 font-sans">
-                        {param.setting0.length}/30
+                {draftSettings.map((param, idx) => {
+                  const ruleConflicts = draftConflicts.filter(
+                    (c) => c.ruleIndexA === idx || c.ruleIndexB === idx
+                  );
+                  return (
+                    <div
+                      key={param.id}
+                      className="space-y-4 p-4 relative"
+                      style={{
+                        border: '1px solid rgb(203 193 205)',
+                        borderRadius: '13px',
+                        backgroundColor: '#ffffff',
+                      }}
+                    >
+                      {/* Parameter Header */}
+                      <div className="flex items-center justify-between">
+                        <span
+                          className="text-base font-bold text-black"
+                          style={{ fontFamily: '"Gochi", cursive, sans-serif' }}
+                        >
+                          {`Paramètre ${idx + 1}`}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteParam(idx)}
+                          style={{
+                            borderRadius: '13px',
+                            fontSize: '16px',
+                            backgroundColor: 'rgb(185, 28, 28)',
+                            boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                            color: 'rgb(255, 255, 255)',
+                            padding: '6px 16px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          }}
+                          className="hover:opacity-90 active:scale-95 transition-all shrink-0"
+                        >
+                          {t("Supprimer")}
+                        </button>
                       </div>
-                    </div>
 
-                    {/* SETTING1: Appliquer aux jours */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 font-sans mb-1">
-                        {t("Appliquer aux jours.")}
-                      </label>
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {WEEK_DAYS.map((dayLabel) => {
-                          const isSelected = (param.setting1 || []).includes(dayLabel);
-                          return (
-                            <button
-                              key={dayLabel}
-                              type="button"
-                              onClick={() => handleToggleDay(idx, dayLabel)}
-                              style={{
-                                borderRadius: '100px',
-                                fontSize: '15px',
-                                borderColor: isSelected ? '#000000' : '#d7d7d7',
+                      {/* Conflict Alert Banner if any */}
+                      {ruleConflicts.length > 0 && (
+                        <div className="space-y-1">
+                          {ruleConflicts.map((c, cIdx) => {
+                            const otherIdx = c.ruleIndexA === idx ? c.ruleIndexB + 1 : c.ruleIndexA + 1;
+                            return (
+                              <div
+                                key={cIdx}
+                                className="px-3 py-2 text-xs font-semibold rounded-lg bg-red-50 text-red-700 border border-red-200 font-sans"
+                              >
+                                ⚠️ {t("Conflit avec Paramètre")} {otherIdx} : {c.days.join(', ')} ({c.column} — {c.operation})
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* SETTING0: Titre du paramètre */}
+                      <div>
+                        <label
+                          className="block mb-1 font-sans font-bold"
+                          style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                        >
+                          {t("Titre du paramètre.")}
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={30}
+                          value={param.setting0}
+                          onChange={(e) => handleUpdateParam(idx, { setting0: e.target.value })}
+                          placeholder={t("Nom ou repère (max 30 car.)")}
+                        />
+                        <div className="text-right text-[11px] text-slate-400 mt-1 font-sans">
+                          {param.setting0.length}/30
+                        </div>
+                      </div>
+
+                      {/* SETTING1: Appliquer aux jours */}
+                      <div>
+                        <label
+                          className="block mb-1 font-sans font-bold"
+                          style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                        >
+                          {t("Appliquer aux jours.")}
+                        </label>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {WEEK_DAYS.map((dayLabel) => {
+                            const isSelected = (param.setting1 || []).includes(dayLabel);
+                            return (
+                              <button
+                                key={dayLabel}
+                                type="button"
+                                onClick={() => handleToggleDay(idx, dayLabel)}
+                                style={{
+                                  borderRadius: '100px',
+                                  fontSize: '15px',
+                                  borderColor: isSelected ? '#000000' : '#d7d7d7',
+                                }}
+                                className={`px-3.5 py-1.5 font-semibold border transition-all select-none font-sans cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-black text-white shadow-sm'
+                                    : 'bg-white text-black hover:border-black'
+                                }`}
+                              >
+                                {dayLabel}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* SETTING2 & SETTING3: Toggles (Retirer / Ajouter) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        {/* SETTING2: Retirer du temps effectif */}
+                        <div
+                          className="flex items-center justify-between"
+                          style={{
+                            padding: '20px 25px',
+                            borderRadius: '13px',
+                            border: '1px solid #cac0cd',
+                            backgroundColor: '#ffffff',
+                          }}
+                        >
+                          <span
+                            className="select-none font-semibold"
+                            style={{
+                              color: '#000',
+                              fontSize: '18px',
+                              paddingRight: '20px',
+                              cursor: 'default',
+                            }}
+                          >
+                            {t("Retirer du temps effectif.")}
+                          </span>
+                          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={param.setting2}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  handleUpdateParam(idx, { setting2: true, setting3: false });
+                                } else {
+                                  handleUpdateParam(idx, { setting2: false, setting3: true });
+                                }
                               }}
-                              className={`px-3.5 py-1.5 font-semibold border transition-all select-none font-sans cursor-pointer ${
-                                isSelected
-                                  ? 'bg-black text-white shadow-sm'
-                                  : 'bg-white text-black hover:border-black'
-                              }`}
-                            >
-                              {dayLabel}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                          </label>
+                        </div>
 
-                    {/* SETTING2 & SETTING3: Toggles (Retirer / Ajouter) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                      {/* SETTING2: Retirer du temps effectif */}
-                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-slate-50/50">
-                        <span className="text-xs font-semibold text-black select-none pr-2">
-                          {t("Retirer du temps effectif.")}
-                        </span>
-                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                          <input
-                            type="checkbox"
-                            checked={param.setting2}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              handleUpdateParam(idx, {
-                                setting2: checked,
-                                setting3: checked ? false : param.setting3,
-                              });
+                        {/* SETTING3: Ajouter au temps effectif */}
+                        <div
+                          className="flex items-center justify-between"
+                          style={{
+                            padding: '20px 25px',
+                            borderRadius: '13px',
+                            border: '1px solid #cac0cd',
+                            backgroundColor: '#ffffff',
+                          }}
+                        >
+                          <span
+                            className="select-none font-semibold"
+                            style={{
+                              color: '#000',
+                              fontSize: '18px',
+                              paddingRight: '20px',
+                              cursor: 'default',
                             }}
-                            className="sr-only peer"
-                          />
-                          <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                          >
+                            {t("Ajouter au temps effectif.")}
+                          </span>
+                          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={param.setting3}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  handleUpdateParam(idx, { setting3: true, setting2: false });
+                                } else {
+                                  handleUpdateParam(idx, { setting3: false, setting2: true });
+                                }
+                              }}
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* SETTING4: Colonne attribuée */}
+                      <div>
+                        <label
+                          className="block mb-1 font-sans font-bold"
+                          style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                        >
+                          {t("Colonne attribuée.")}
                         </label>
+                        <select
+                          value={param.setting4}
+                          onChange={(e) =>
+                            handleUpdateParam(idx, { setting4: e.target.value as CttColumnTarget })
+                          }
+                        >
+                          <option value="Temps Trajet Matin">Temps Trajet Matin</option>
+                          <option value="Temps Trajet Soir">Temps Trajet Soir</option>
+                          <option value="Temps Repas">Temps Repas</option>
+                        </select>
                       </div>
 
-                      {/* SETTING3: Ajouter au temps effectif */}
-                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-slate-50/50">
-                        <span className="text-xs font-semibold text-black select-none pr-2">
-                          {t("Ajouter au temps effectif.")}
-                        </span>
-                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                          <input
-                            type="checkbox"
-                            checked={param.setting3}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              handleUpdateParam(idx, {
-                                setting3: checked,
-                                setting2: checked ? false : param.setting2,
-                              });
-                            }}
-                            className="sr-only peer"
-                          />
-                          <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                      {/* SETTING5: Valeur (Mins) */}
+                      <div>
+                        <label
+                          className="block mb-1 font-sans font-bold"
+                          style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                        >
+                          {t("Valeur (Mins).")}
                         </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={3}
+                          value={param.setting5 === 0 ? '' : param.setting5}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/\D/g, '');
+                            if (raw === '') {
+                              handleUpdateParam(idx, { setting5: 0 });
+                              return;
+                            }
+                            const num = parseInt(raw, 10);
+                            const clamped = Math.min(500, Math.max(1, num));
+                            handleUpdateParam(idx, { setting5: clamped });
+                          }}
+                          onBlur={() => {
+                            if (!param.setting5 || param.setting5 < 1) {
+                              handleUpdateParam(idx, { setting5: 1 });
+                            }
+                          }}
+                          placeholder="1 à 500"
+                        />
                       </div>
                     </div>
-
-                    {/* SETTING4: Colonne attribuée */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 font-sans mb-1">
-                        {t("Colonne attribuée.")}
-                      </label>
-                      <select
-                        value={param.setting4}
-                        onChange={(e) =>
-                          handleUpdateParam(idx, { setting4: e.target.value as CttColumnTarget })
-                        }
-                      >
-                        <option value="Temps Trajet Matin">Temps Trajet Matin</option>
-                        <option value="Temps Trajet Soir">Temps Trajet Soir</option>
-                        <option value="Temps Repas">Temps Repas</option>
-                      </select>
-                    </div>
-
-                    {/* SETTING5: Valeur (Mins) */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 font-sans mb-1">
-                        {t("Valeur (Mins).")}
-                      </label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        maxLength={3}
-                        value={param.setting5 === 0 ? '' : param.setting5}
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(/\D/g, '');
-                          if (raw === '') {
-                            handleUpdateParam(idx, { setting5: 0 });
-                            return;
-                          }
-                          const num = parseInt(raw, 10);
-                          const clamped = Math.min(500, Math.max(1, num));
-                          handleUpdateParam(idx, { setting5: clamped });
-                        }}
-                        onBlur={() => {
-                          if (!param.setting5 || param.setting5 < 1) {
-                            handleUpdateParam(idx, { setting5: 1 });
-                          }
-                        }}
-                        placeholder="1 à 500"
-                      />
-                      <div className="text-right text-[11px] text-slate-400 mt-1 font-sans">
-                        {t("Min: 1 min — Max: 500 mins (chiffres uniquement)")}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Bottom Actions: Ajouter un paramètre, Enregistrer & Fermer */}
               <div className="pt-4 space-y-2 mt-auto shrink-0">
+                {draftConflicts.length > 0 && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-sans space-y-1">
+                    <div className="font-bold">⚠️ {t("Conflit de règles détecté :")}</div>
+                    {draftConflicts.map((c, i) => (
+                      <div key={i}>
+                        • {t("Paramètre")} {c.ruleIndexA + 1} &amp; {t("Paramètre")} {c.ruleIndexB + 1} : {c.days.join(', ')} ({c.column} — {c.operation})
+                      </div>
+                    ))}
+                    <div className="text-[11px] text-red-600">
+                      {t("Deux règles ne peuvent pas cibler la même colonne pour le même jour avec la même action.")}
+                    </div>
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={handleAddParam}
-                  disabled={draftSettings.length >= 4}
+                  disabled={draftSettings.length >= 5}
                   style={{
                     backgroundColor: '#000000',
                     color: '#ffffff',
@@ -1241,20 +1375,21 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
                     fontWeight: 'bold',
                     border: 'none',
                     width: '100%',
-                    cursor: draftSettings.length >= 4 ? 'not-allowed' : 'pointer',
-                    opacity: draftSettings.length >= 4 ? 0.4 : 1,
+                    cursor: draftSettings.length >= 5 ? 'not-allowed' : 'pointer',
+                    opacity: draftSettings.length >= 5 ? 0.4 : 1,
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
-                  className={draftSettings.length >= 4 ? '' : 'hover:bg-zinc-800 transition-colors'}
+                  className={draftSettings.length >= 5 ? '' : 'hover:bg-zinc-800 transition-colors'}
                 >
-                  + {t("Ajouter un paramètre")} ({draftSettings.length}/4)
+                  {t("Ajouter un paramètre")} ({draftSettings.length}/5)
                 </button>
 
                 <button
                   type="button"
                   onClick={handleSaveSettings}
+                  disabled={draftConflicts.length > 0}
                   style={{
-                    backgroundColor: '#3556ec',
+                    backgroundColor: draftConflicts.length > 0 ? '#94a3b8' : '#3556ec',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',
@@ -1262,10 +1397,10 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
                     fontWeight: 'bold',
                     border: 'none',
                     width: '100%',
-                    cursor: 'pointer',
+                    cursor: draftConflicts.length > 0 ? 'not-allowed' : 'pointer',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
-                  className="hover:bg-[#2b48cc] transition-colors"
+                  className={draftConflicts.length > 0 ? '' : 'hover:bg-[#2b48cc] transition-colors'}
                 >
                   {t("Enregistrer")}
                 </button>
