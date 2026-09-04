@@ -413,6 +413,18 @@ export interface PointageLog {
   tempsAdmin?: string;
 }
 
+export type CttColumnTarget = 'Temps Trajet Matin' | 'Temps Trajet Soir' | 'Temps Repas';
+
+export interface CttModelSetting {
+  id: string;
+  setting0: string; // Titre du paramètre (max 30 chars)
+  setting1: string[]; // Appliquer aux jours: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+  setting2: boolean; // Retirer du temps effectif (toggle pink)
+  setting3: boolean; // Ajouter au temps effectif (toggle pink)
+  setting4: CttColumnTarget; // Colonne attribuée (dropdown)
+  setting5: number; // Valeur (Mins), 1-500
+}
+
 export interface StockMovement {
   id: string;
   type: 'Réapprovisionnement fournisseur' | 'Distribution' | 'Rapatriement' | 'Expédition directe au client' | 'Annulation';

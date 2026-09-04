@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { PointageLog, Member } from '../types';
+import { PointageLog, Member, CttModelSetting, CttColumnTarget } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { t } from '../utils/translate';
+
+const WEEK_DAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 interface TempsTabProps {
   pointages: PointageLog[];
@@ -145,7 +147,8 @@ function generateMonthlyCSV(
   year: number,
   monthIndex: number,
   pointages: PointageLog[],
-  members: Member[] = []
+  members: Member[] = [],
+  settings: CttModelSetting[] = []
 ): string {
   const monthLabel = `${FRENCH_MONTH_NAMES[monthIndex]} ${year}`;
   const holidays = getFrenchHolidaysSet(year);
@@ -190,9 +193,14 @@ function generateMonthlyCSV(
     pointage?: PointageLog;
     workedCTTSec: number;
     adminSec: number;
+    adjustedTmSec?: number;
+    adjustedTsSec?: number;
+    adjustedRepasSec?: number;
   }
 
   const workingDays: DayInfo[] = [];
+
+  const DAY_KEYS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateObj = new Date(year, monthIndex, day);
@@ -203,6 +211,7 @@ function generateMonthlyCSV(
     const dd = String(day).padStart(2, '0');
     const dateIso = `${year}-${mm}-${dd}`;
     const displayDate = `${day}/${monthIndex + 1}/${year}`;
+    const currentDayLabel = DAY_KEYS[dayOfWeek];
 
     // Compute Monday ISO for week grouping
     const mon = new Date(dateObj);
@@ -265,9 +274,42 @@ function generateMonthlyCSV(
 
     if (pt) {
       const amplitudeSec = calculateAmplitudeSeconds(pt.startTime, pt.endTime);
-      const repasSec = parseTimeToSeconds(pt.tempsRepas);
-      const tmSec = parseTimeToSeconds(pt.trajetMatin);
-      const tsSec = parseTimeToSeconds(pt.trajetSoir);
+      let repasSec = parseTimeToSeconds(pt.tempsRepas);
+      let tmSec = parseTimeToSeconds(pt.trajetMatin);
+      let tsSec = parseTimeToSeconds(pt.trajetSoir);
+
+      // Apply CTT model settings if matching day of the week
+      if (settings && settings.length > 0) {
+        settings.forEach((s) => {
+          if (!s.setting1 || !s.setting1.includes(currentDayLabel)) return;
+          const mins = Math.min(500, Math.max(1, typeof s.setting5 === 'number' && !isNaN(s.setting5) ? s.setting5 : parseInt(String(s.setting5), 10) || 0));
+          const deltaSec = mins * 60;
+          if (deltaSec <= 0) return;
+
+          if (s.setting4 === 'Temps Trajet Matin') {
+            if (s.setting2) {
+              // Retirer du temps effectif
+              tmSec = Math.max(0, tmSec - deltaSec);
+            } else if (s.setting3) {
+              // Ajouter au temps effectif
+              tmSec = tmSec + deltaSec;
+            }
+          } else if (s.setting4 === 'Temps Trajet Soir') {
+            if (s.setting2) {
+              tsSec = Math.max(0, tsSec - deltaSec);
+            } else if (s.setting3) {
+              tsSec = tsSec + deltaSec;
+            }
+          } else if (s.setting4 === 'Temps Repas') {
+            if (s.setting2) {
+              repasSec = Math.max(0, repasSec - deltaSec);
+            } else if (s.setting3) {
+              repasSec = repasSec + deltaSec;
+            }
+          }
+        });
+      }
+
       const workedCTTSec = Math.max(0, amplitudeSec - repasSec - tmSec - tsSec);
       const adminSec = parseTimeToSeconds(pt.tempsAdmin);
 
@@ -281,6 +323,9 @@ function generateMonthlyCSV(
         pointage: pt,
         workedCTTSec,
         adminSec,
+        adjustedTmSec: tmSec,
+        adjustedTsSec: tsSec,
+        adjustedRepasSec: repasSec,
       });
       continue;
     }
@@ -367,9 +412,16 @@ function generateMonthlyCSV(
       const pt = wd.pointage;
       const amplitudeSec = calculateAmplitudeSeconds(pt.startTime, pt.endTime);
       const ampFormatted = amplitudeSec > 0 ? secondsToHMMSS(amplitudeSec) : '';
-      const tmFormatted = formatDurationField(pt.trajetMatin);
-      const tsFormatted = formatDurationField(pt.trajetSoir);
-      const repasFormatted = formatDurationField(pt.tempsRepas);
+      
+      const tmFormatted = wd.adjustedTmSec !== undefined
+        ? (wd.adjustedTmSec > 0 ? secondsToHMMSS(wd.adjustedTmSec) : (pt.trajetMatin ? '0:00:00' : ''))
+        : formatDurationField(pt.trajetMatin);
+      const tsFormatted = wd.adjustedTsSec !== undefined
+        ? (wd.adjustedTsSec > 0 ? secondsToHMMSS(wd.adjustedTsSec) : (pt.trajetSoir ? '0:00:00' : ''))
+        : formatDurationField(pt.trajetSoir);
+      const repasFormatted = wd.adjustedRepasSec !== undefined
+        ? (wd.adjustedRepasSec > 0 ? secondsToHMMSS(wd.adjustedRepasSec) : (pt.tempsRepas ? '0:00:00' : ''))
+        : formatDurationField(pt.tempsRepas);
       const workedCTTFormatted = wd.workedCTTSec > 0 ? secondsToHMMSS(wd.workedCTTSec) : '';
       const adminFormatted = formatDurationField(pt.tempsAdmin);
 
@@ -463,6 +515,86 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
   const [selectedTechFilter, setSelectedTechFilter] = useState<string>('Tous');
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  // Settings for CTT Model (0 to 4 parameters)
+  const [cttSettings, setCttSettings] = useState<CttModelSetting[]>(() => {
+    try {
+      const saved = localStorage.getItem('ctt_model_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.slice(0, 4);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load ctt_model_settings from localStorage', e);
+    }
+    return [];
+  });
+
+  const [isSettingsPaneOpen, setIsSettingsPaneOpen] = useState(false);
+  const [draftSettings, setDraftSettings] = useState<CttModelSetting[]>([]);
+
+  const openSettingsPane = () => {
+    setDraftSettings(JSON.parse(JSON.stringify(cttSettings)));
+    setIsSettingsPaneOpen(true);
+  };
+
+  const closeSettingsPane = () => {
+    setIsSettingsPaneOpen(false);
+  };
+
+  const handleSaveSettings = () => {
+    const sanitized = draftSettings.slice(0, 4).map((s) => ({
+      ...s,
+      setting0: (s.setting0 || '').slice(0, 30),
+      setting5: Math.min(500, Math.max(1, typeof s.setting5 === 'number' && !isNaN(s.setting5) && s.setting5 >= 1 ? s.setting5 : 1)),
+    }));
+    setCttSettings(sanitized);
+    try {
+      localStorage.setItem('ctt_model_settings', JSON.stringify(sanitized));
+    } catch (e) {
+      console.error('Failed to save ctt_model_settings to localStorage', e);
+    }
+    setIsSettingsPaneOpen(false);
+  };
+
+  const handleAddParam = () => {
+    if (draftSettings.length >= 4) return;
+    const newParam: CttModelSetting = {
+      id: `ctt_param_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      setting0: '',
+      setting1: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'],
+      setting2: false,
+      setting3: false,
+      setting4: 'Temps Trajet Matin',
+      setting5: 30,
+    };
+    setDraftSettings([...draftSettings, newParam]);
+  };
+
+  const handleDeleteParam = (index: number) => {
+    setDraftSettings(draftSettings.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateParam = (index: number, updates: Partial<CttModelSetting>) => {
+    setDraftSettings((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...updates } : item))
+    );
+  };
+
+  const handleToggleDay = (index: number, day: string) => {
+    setDraftSettings((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        const days = item.setting1 || [];
+        const nextDays = days.includes(day)
+          ? days.filter((d) => d !== day)
+          : [...days, day];
+        return { ...item, setting1: nextDays };
+      })
+    );
+  };
 
   // Extract technician list
   const techNamesFromMembers = (members || [])
@@ -572,7 +704,7 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
   });
 
   const handleDownloadCSV = (techName: string, year: number, monthIndex: number) => {
-    const csvContent = generateMonthlyCSV(techName, year, monthIndex, pointages, members);
+    const csvContent = generateMonthlyCSV(techName, year, monthIndex, pointages, members, cttSettings);
     const monthLabel = `${FRENCH_MONTH_NAMES[monthIndex]}_${year}`;
     const fileName = `CTT_${techName.replace(/\s+/g, '_')}_${monthLabel}.csv`;
 
@@ -638,6 +770,39 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
           font-weight: 100 !important;
         }
+        #temps-settings-pane input:not([type="radio"]):not([type="checkbox"]),
+        #temps-settings-pane select {
+          padding: 10px 14px !important;
+          border: 1px solid #c9bfcd !important;
+          border-radius: 13px !important;
+          font-size: 16px !important;
+          font-weight: 400 !important;
+          background: #ffffff !important;
+          color: #000000 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+          box-sizing: border-box !important;
+          outline: none !important;
+          transition: all 0s !important;
+          width: 100% !important;
+        }
+        #temps-settings-pane select {
+          appearance: none !important;
+          -webkit-appearance: none !important;
+          -moz-appearance: none !important;
+          background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23000000%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E") !important;
+          background-repeat: no-repeat !important;
+          background-position: right 14px center !important;
+          background-size: 10px auto !important;
+          padding-right: 32px !important;
+          cursor: pointer !important;
+        }
+        #temps-settings-pane input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled),
+        #temps-settings-pane input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled),
+        #temps-settings-pane select:hover:not(:disabled),
+        #temps-settings-pane select:focus:not(:disabled) {
+          outline: 2.5px solid #fa53d5 !important;
+          outline-offset: 2px !important;
+        }
       `}</style>
 
       {/* Tab Header Dashboard */}
@@ -665,6 +830,17 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
           </div>
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
+            {/* Bouton Réglages du modèle */}
+            <button
+              type="button"
+              onClick={openSettingsPane}
+              style={actionButtonStyle}
+              className="hover:bg-zinc-800 transition-colors shrink-0"
+              id="btn-model-settings"
+            >
+              {t("Réglages du modèle")}
+            </button>
+
             {/* Search Bar Input */}
             <div className="relative w-full sm:w-80 bg-white">
               <input
@@ -808,6 +984,297 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
           </div>
         )}
       </div>
+
+      {/* SIDE PANE DRAWER: RÉGLAGES DU MODÈLE CSV */}
+      {isSettingsPaneOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden" id="temps-settings-pane-wrapper">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity cursor-pointer"
+            onClick={closeSettingsPane}
+          />
+
+          {/* Drawer Container */}
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10" id="temps-settings-pane">
+            <div className="w-screen max-w-md sm:max-w-xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-gray-200 shrink-0">
+                <div>
+                  <h3 className="text-xl font-bold font-gochi text-black">
+                    {t("Réglages du modèle")}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-sans mt-0.5">
+                    {t("Paramètres appliqués exclusivement à l'export CSV CTT")} ({draftSettings.length}/4)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeSettingsPane}
+                  className="text-gray-400 hover:text-black p-1 text-2xl font-bold cursor-pointer leading-none transition-colors"
+                  aria-label="Fermer"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {/* Parameters List */}
+              <div className="space-y-5 flex-1 pt-4 pb-2">
+                {draftSettings.length === 0 ? (
+                  <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl my-4">
+                    <p className="text-sm text-slate-500 font-sans mb-3">
+                      {t("Aucun réglage configuré pour le modèle.")}
+                    </p>
+                    <p className="text-xs text-slate-400 font-sans">
+                      {t("Cliquez sur le bouton ci-dessous pour ajouter un paramètre (0 à 4 paramètres).")}
+                    </p>
+                  </div>
+                ) : (
+                  draftSettings.map((param, idx) => (
+                    <div
+                      key={param.id}
+                      className="space-y-4 p-4 relative"
+                      style={{
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '13px',
+                        backgroundColor: '#ffffff',
+                      }}
+                    >
+                      {/* Parameter Header */}
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span className="text-xs font-bold text-slate-600 uppercase font-sans tracking-wide">
+                          {t("Paramètre")} #{idx + 1} {param.setting0 ? `— ${param.setting0}` : ''}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteParam(idx)}
+                          className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors cursor-pointer px-2 py-0.5 rounded hover:bg-red-50"
+                        >
+                          {t("Supprimer")}
+                        </button>
+                      </div>
+
+                      {/* SETTING0: Titre du paramètre */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase font-sans mb-1">
+                          {t("Titre du paramètre.")}
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={30}
+                          value={param.setting0}
+                          onChange={(e) => handleUpdateParam(idx, { setting0: e.target.value })}
+                          placeholder={t("Nom ou repère (max 30 car.)")}
+                        />
+                        <div className="text-right text-[11px] text-slate-400 mt-1 font-sans">
+                          {param.setting0.length}/30
+                        </div>
+                      </div>
+
+                      {/* SETTING1: Appliquer aux jours */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase font-sans mb-1">
+                          {t("Appliquer aux jours.")}
+                        </label>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {WEEK_DAYS.map((dayLabel) => {
+                            const isSelected = (param.setting1 || []).includes(dayLabel);
+                            return (
+                              <button
+                                key={dayLabel}
+                                type="button"
+                                onClick={() => handleToggleDay(idx, dayLabel)}
+                                style={{
+                                  borderRadius: '100px',
+                                  fontSize: '15px',
+                                  borderColor: isSelected ? '#000000' : '#d7d7d7',
+                                }}
+                                className={`px-3.5 py-1.5 font-semibold border transition-all select-none font-sans cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-black text-white shadow-sm'
+                                    : 'bg-white text-black hover:border-black'
+                                }`}
+                              >
+                                {dayLabel}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* SETTING2 & SETTING3: Toggles (Retirer / Ajouter) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        {/* SETTING2: Retirer du temps effectif */}
+                        <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-slate-50/50">
+                          <span className="text-xs font-semibold text-black select-none pr-2">
+                            {t("Retirer du temps effectif.")}
+                          </span>
+                          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={param.setting2}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                handleUpdateParam(idx, {
+                                  setting2: checked,
+                                  setting3: checked ? false : param.setting3,
+                                });
+                              }}
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                          </label>
+                        </div>
+
+                        {/* SETTING3: Ajouter au temps effectif */}
+                        <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-slate-50/50">
+                          <span className="text-xs font-semibold text-black select-none pr-2">
+                            {t("Ajouter au temps effectif.")}
+                          </span>
+                          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={param.setting3}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                handleUpdateParam(idx, {
+                                  setting3: checked,
+                                  setting2: checked ? false : param.setting2,
+                                });
+                              }}
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* SETTING4: Colonne attribuée */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase font-sans mb-1">
+                          {t("Colonne attribuée.")}
+                        </label>
+                        <select
+                          value={param.setting4}
+                          onChange={(e) =>
+                            handleUpdateParam(idx, { setting4: e.target.value as CttColumnTarget })
+                          }
+                        >
+                          <option value="Temps Trajet Matin">Temps Trajet Matin</option>
+                          <option value="Temps Trajet Soir">Temps Trajet Soir</option>
+                          <option value="Temps Repas">Temps Repas</option>
+                        </select>
+                      </div>
+
+                      {/* SETTING5: Valeur (Mins) */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase font-sans mb-1">
+                          {t("Valeur (Mins).")}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={3}
+                          value={param.setting5 === 0 ? '' : param.setting5}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/\D/g, '');
+                            if (raw === '') {
+                              handleUpdateParam(idx, { setting5: 0 });
+                              return;
+                            }
+                            const num = parseInt(raw, 10);
+                            const clamped = Math.min(500, Math.max(1, num));
+                            handleUpdateParam(idx, { setting5: clamped });
+                          }}
+                          onBlur={() => {
+                            if (!param.setting5 || param.setting5 < 1) {
+                              handleUpdateParam(idx, { setting5: 1 });
+                            }
+                          }}
+                          placeholder="1 à 500"
+                        />
+                        <div className="text-right text-[11px] text-slate-400 mt-1 font-sans">
+                          {t("Min: 1 min — Max: 500 mins (chiffres uniquement)")}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+
+                {/* Add parameter button (allowed 0 to 4 parameters) */}
+                {draftSettings.length < 4 ? (
+                  <button
+                    type="button"
+                    onClick={handleAddParam}
+                    style={{
+                      border: '1.5px dashed #000000',
+                      borderRadius: '13px',
+                      padding: '12px',
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      backgroundColor: '#ffffff',
+                      color: '#000000',
+                      cursor: 'pointer',
+                      width: '100%',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    }}
+                    className="hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    + {t("Ajouter un paramètre")} ({draftSettings.length}/4)
+                  </button>
+                ) : (
+                  <p className="text-xs text-slate-400 text-center font-sans py-1">
+                    {t("Maximum de 4 paramètres atteint.")}
+                  </p>
+                )}
+              </div>
+
+              {/* Bottom Actions: Enregistrer & Fermer */}
+              <div className="pt-4 space-y-2 mt-auto border-t border-slate-100 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleSaveSettings}
+                  style={{
+                    backgroundColor: '#3556ec',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    padding: '14px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    width: '100%',
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                  className="hover:bg-[#2b48cc] transition-colors"
+                >
+                  {t("Enregistrer")}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={closeSettingsPane}
+                  style={{
+                    backgroundColor: '#000000',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    padding: '14px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    width: '100%',
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                  className="hover:bg-zinc-800 transition-colors"
+                >
+                  {t("Fermer")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
