@@ -1586,24 +1586,31 @@ export default function DefibTab({
   }, [filteredDefibs, isFormOpen, updateHeaderStickyPosition]);
 
   // Row selectors
+  const displayedToSelect = useMemo(() => {
+    return paginatedDefibs.slice(0, 50);
+  }, [paginatedDefibs]);
+
   const handleSelectRow = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter(selectedId => selectedId !== id));
     } else {
+      if (selectedIds.length >= 50) {
+        return;
+      }
       setSelectedIds([...selectedIds, id]);
     }
   };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedIds(filteredDefibs.map(df => df.id));
+      setSelectedIds(displayedToSelect.map(df => df.id));
     } else {
       setSelectedIds([]);
     }
   };
 
-  const isAllSelected = filteredDefibs.length > 0 && selectedIds.length === filteredDefibs.length;
+  const isAllSelected = displayedToSelect.length > 0 && displayedToSelect.every(df => selectedIds.includes(df.id));
 
   // Re-roll random identifiant button helper
   const reRollIdentifiant = () => {
@@ -2556,7 +2563,7 @@ export default function DefibTab({
                         if (isAllSelected) {
                           setSelectedIds([]);
                         } else {
-                          setSelectedIds(filteredDefibs.map(df => df.id));
+                          setSelectedIds(displayedToSelect.map(df => df.id));
                         }
                       }}
                       id="select-all-radio-checkbox"

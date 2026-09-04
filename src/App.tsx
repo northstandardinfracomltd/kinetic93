@@ -6049,20 +6049,20 @@ export default function App() {
               { id: 'stocks', label: t('Centrale des stocks'), icon: Inbox },
               { id: 'stocks-distribues', label: t('Stocks distribués'), icon: Layers },
               { id: 'achats-fournisseurs', label: t('Achats fournisseurs'), icon: ShoppingBag },
-              { id: 'variables', label: t('Variables'), icon: Layers },
               { id: 'crm', label: t('CRM'), icon: FolderSync },
-              { id: 'ged', label: t('GED'), icon: ClipboardList },
               { id: 'satisfaction', label: t('Satisfaction'), icon: ThumbsUp },
               { id: 'temps', label: t('Temps'), icon: Clock },
               { id: 'localisations', label: t('Localisations'), icon: MapPin },
               { id: 'tickets', label: t('Tickets Caisse'), icon: Ticket },
               { id: 'veilles', label: t('Relevé Concurrentiel'), icon: ClipboardList },
-              { id: 'import-export', label: t('Importer Exporter'), icon: Download },
               { id: 'formations', label: t('Formations'), icon: Layers },
               { id: 'stagiaires', label: t('Stagiaires'), icon: User },
               { id: 'emargements', label: t('Émargements'), icon: ClipboardList },
               { id: 'statistiques', label: t('Statistiques'), icon: TrendingUp },
+              { id: 'variables', label: t('Variables'), icon: Layers },
+              { id: 'import-export', label: t('Importer Exporter'), icon: Download },
               { id: 'notifications', label: 'Notifications', icon: Bell },
+              { id: 'ged', label: t('GED'), icon: ClipboardList },
             ];
 
             const filteredTabs = rawTabs.filter(tab => {
@@ -6105,10 +6105,24 @@ export default function App() {
             });
 
             const equipGroupIds = ['defibrillateurs', 'autres-materiels', 'clients'];
+            const fsmGroupIds = ['fsm', 'gmao'];
             const stockGroupIds = ['stocks', 'stocks-distribues', 'achats-fournisseurs'];
-            const crmGroupIds = ['crm', 'ged', 'satisfaction'];
+            const crmGroupIds = ['crm', 'satisfaction'];
             const newGroupIds = ['temps', 'localisations', 'tickets', 'veilles'];
             const formationGroupIds = ['formations', 'stagiaires', 'emargements'];
+
+            const renderSectionTitle = (title: string) => (
+              <div
+                className="text-left font-gochi text-white select-none px-2.5 pt-1 pb-0.5"
+                style={{
+                  fontSize: '16px',
+                  color: '#ffffff',
+                  fontFamily: '"Gochi", cursive, sans-serif',
+                }}
+              >
+                {title}
+              </div>
+            );
 
             const renderButton = (tab: { id: string; label: string }) => (
               <button
@@ -6155,7 +6169,24 @@ export default function App() {
                     className="p-2 space-y-2 rounded-2xl"
                     style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
                   >
+                    {renderSectionTitle(t('Exploitation'))}
                     {equipGroup.map(gt => renderButton(gt))}
+                  </div>
+                );
+              } else if (fsmGroupIds.includes(tab.id)) {
+                const fsmGroup: typeof rawTabs = [];
+                while (i < filteredTabs.length && fsmGroupIds.includes(filteredTabs[i].id)) {
+                  fsmGroup.push(filteredTabs[i]);
+                  i++;
+                }
+                elements.push(
+                  <div
+                    key="fsm-group-container"
+                    className="p-2 space-y-2 rounded-2xl"
+                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
+                  >
+                    {renderSectionTitle(t('FSM & GMAO'))}
+                    {fsmGroup.map(gt => renderButton(gt))}
                   </div>
                 );
               } else if (stockGroupIds.includes(tab.id)) {
@@ -6170,6 +6201,7 @@ export default function App() {
                     className="p-2 space-y-2 rounded-2xl"
                     style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
                   >
+                    {renderSectionTitle(t('Gestion des stocks'))}
                     {stockGroup.map(gt => renderButton(gt))}
                   </div>
                 );
@@ -6185,6 +6217,7 @@ export default function App() {
                     className="p-2 space-y-2 rounded-2xl"
                     style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
                   >
+                    {renderSectionTitle(t('Données Clients'))}
                     {crmGroup.map(gt => renderButton(gt))}
                   </div>
                 );
@@ -6200,6 +6233,7 @@ export default function App() {
                     className="p-2 space-y-2 rounded-2xl"
                     style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
                   >
+                    {renderSectionTitle(t('Données Techniciens'))}
                     {newGroup.map(gt => renderButton(gt))}
                   </div>
                 );
@@ -6215,6 +6249,7 @@ export default function App() {
                     className="p-2 space-y-2 rounded-2xl"
                     style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
                   >
+                    {renderSectionTitle(t('Module Formations'))}
                     {formationGroup.map(gt => renderButton(gt))}
                   </div>
                 );
