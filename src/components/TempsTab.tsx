@@ -789,11 +789,6 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
           appearance: none !important;
           -webkit-appearance: none !important;
           -moz-appearance: none !important;
-          background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23000000%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E") !important;
-          background-repeat: no-repeat !important;
-          background-position: right 14px center !important;
-          background-size: 10px auto !important;
-          padding-right: 32px !important;
           cursor: pointer !important;
         }
         #temps-settings-pane input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled),
@@ -997,240 +992,207 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
           {/* Drawer Container */}
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10" id="temps-settings-pane">
             <div className="w-screen max-w-md sm:max-w-xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto">
-              {/* Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-gray-200 shrink-0">
-                <div>
-                  <h3 className="text-xl font-bold font-gochi text-black">
-                    {t("Réglages du modèle")}
-                  </h3>
-                  <p className="text-xs text-slate-500 font-sans mt-0.5">
-                    {t("Paramètres appliqués exclusivement à l'export CSV CTT")} ({draftSettings.length}/4)
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeSettingsPane}
-                  className="text-gray-400 hover:text-black p-1 text-2xl font-bold cursor-pointer leading-none transition-colors"
-                  aria-label="Fermer"
-                >
-                  &times;
-                </button>
-              </div>
-
               {/* Parameters List */}
-              <div className="space-y-5 flex-1 pt-4 pb-2">
-                {draftSettings.length === 0 ? (
-                  <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl my-4">
-                    <p className="text-sm text-slate-500 font-sans mb-3">
-                      {t("Aucun réglage configuré pour le modèle.")}
-                    </p>
-                    <p className="text-xs text-slate-400 font-sans">
-                      {t("Cliquez sur le bouton ci-dessous pour ajouter un paramètre (0 à 4 paramètres).")}
-                    </p>
-                  </div>
-                ) : (
-                  draftSettings.map((param, idx) => (
-                    <div
-                      key={param.id}
-                      className="space-y-4 p-4 relative"
-                      style={{
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '13px',
-                        backgroundColor: '#ffffff',
-                      }}
-                    >
-                      {/* Parameter Header */}
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span className="text-xs font-bold text-slate-600 uppercase font-sans tracking-wide">
-                          {t("Paramètre")} #{idx + 1} {param.setting0 ? `— ${param.setting0}` : ''}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteParam(idx)}
-                          className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors cursor-pointer px-2 py-0.5 rounded hover:bg-red-50"
-                        >
-                          {t("Supprimer")}
-                        </button>
-                      </div>
+              <div className="space-y-5 flex-1 pt-2 pb-2">
+                {draftSettings.map((param, idx) => (
+                  <div
+                    key={param.id}
+                    className="space-y-4 p-4 relative"
+                    style={{
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '13px',
+                      backgroundColor: '#ffffff',
+                    }}
+                  >
+                    {/* Parameter Header */}
+                    <div className="flex items-center justify-between">
+                      <span
+                        className="text-base font-bold text-black"
+                        style={{ fontFamily: '"Gochi", cursive, sans-serif' }}
+                      >
+                        PARAMÈTRES #{idx + 1} {param.setting0 ? `— ${param.setting0}` : ''}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteParam(idx)}
+                        className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors cursor-pointer px-2 py-0.5 rounded hover:bg-red-50"
+                      >
+                        {t("Supprimer")}
+                      </button>
+                    </div>
 
-                      {/* SETTING0: Titre du paramètre */}
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase font-sans mb-1">
-                          {t("Titre du paramètre.")}
-                        </label>
-                        <input
-                          type="text"
-                          maxLength={30}
-                          value={param.setting0}
-                          onChange={(e) => handleUpdateParam(idx, { setting0: e.target.value })}
-                          placeholder={t("Nom ou repère (max 30 car.)")}
-                        />
-                        <div className="text-right text-[11px] text-slate-400 mt-1 font-sans">
-                          {param.setting0.length}/30
-                        </div>
-                      </div>
-
-                      {/* SETTING1: Appliquer aux jours */}
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase font-sans mb-1">
-                          {t("Appliquer aux jours.")}
-                        </label>
-                        <div className="flex flex-wrap gap-1.5 mt-1">
-                          {WEEK_DAYS.map((dayLabel) => {
-                            const isSelected = (param.setting1 || []).includes(dayLabel);
-                            return (
-                              <button
-                                key={dayLabel}
-                                type="button"
-                                onClick={() => handleToggleDay(idx, dayLabel)}
-                                style={{
-                                  borderRadius: '100px',
-                                  fontSize: '15px',
-                                  borderColor: isSelected ? '#000000' : '#d7d7d7',
-                                }}
-                                className={`px-3.5 py-1.5 font-semibold border transition-all select-none font-sans cursor-pointer ${
-                                  isSelected
-                                    ? 'bg-black text-white shadow-sm'
-                                    : 'bg-white text-black hover:border-black'
-                                }`}
-                              >
-                                {dayLabel}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* SETTING2 & SETTING3: Toggles (Retirer / Ajouter) */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                        {/* SETTING2: Retirer du temps effectif */}
-                        <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-slate-50/50">
-                          <span className="text-xs font-semibold text-black select-none pr-2">
-                            {t("Retirer du temps effectif.")}
-                          </span>
-                          <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                            <input
-                              type="checkbox"
-                              checked={param.setting2}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                handleUpdateParam(idx, {
-                                  setting2: checked,
-                                  setting3: checked ? false : param.setting3,
-                                });
-                              }}
-                              className="sr-only peer"
-                            />
-                            <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
-                          </label>
-                        </div>
-
-                        {/* SETTING3: Ajouter au temps effectif */}
-                        <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-slate-50/50">
-                          <span className="text-xs font-semibold text-black select-none pr-2">
-                            {t("Ajouter au temps effectif.")}
-                          </span>
-                          <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                            <input
-                              type="checkbox"
-                              checked={param.setting3}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                handleUpdateParam(idx, {
-                                  setting3: checked,
-                                  setting2: checked ? false : param.setting2,
-                                });
-                              }}
-                              className="sr-only peer"
-                            />
-                            <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
-                          </label>
-                        </div>
-                      </div>
-
-                      {/* SETTING4: Colonne attribuée */}
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase font-sans mb-1">
-                          {t("Colonne attribuée.")}
-                        </label>
-                        <select
-                          value={param.setting4}
-                          onChange={(e) =>
-                            handleUpdateParam(idx, { setting4: e.target.value as CttColumnTarget })
-                          }
-                        >
-                          <option value="Temps Trajet Matin">Temps Trajet Matin</option>
-                          <option value="Temps Trajet Soir">Temps Trajet Soir</option>
-                          <option value="Temps Repas">Temps Repas</option>
-                        </select>
-                      </div>
-
-                      {/* SETTING5: Valeur (Mins) */}
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase font-sans mb-1">
-                          {t("Valeur (Mins).")}
-                        </label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          maxLength={3}
-                          value={param.setting5 === 0 ? '' : param.setting5}
-                          onChange={(e) => {
-                            const raw = e.target.value.replace(/\D/g, '');
-                            if (raw === '') {
-                              handleUpdateParam(idx, { setting5: 0 });
-                              return;
-                            }
-                            const num = parseInt(raw, 10);
-                            const clamped = Math.min(500, Math.max(1, num));
-                            handleUpdateParam(idx, { setting5: clamped });
-                          }}
-                          onBlur={() => {
-                            if (!param.setting5 || param.setting5 < 1) {
-                              handleUpdateParam(idx, { setting5: 1 });
-                            }
-                          }}
-                          placeholder="1 à 500"
-                        />
-                        <div className="text-right text-[11px] text-slate-400 mt-1 font-sans">
-                          {t("Min: 1 min — Max: 500 mins (chiffres uniquement)")}
-                        </div>
+                    {/* SETTING0: Titre du paramètre */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 font-sans mb-1">
+                        {t("Titre du paramètre.")}
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={30}
+                        value={param.setting0}
+                        onChange={(e) => handleUpdateParam(idx, { setting0: e.target.value })}
+                        placeholder={t("Nom ou repère (max 30 car.)")}
+                      />
+                      <div className="text-right text-[11px] text-slate-400 mt-1 font-sans">
+                        {param.setting0.length}/30
                       </div>
                     </div>
-                  ))
-                )}
 
-                {/* Add parameter button (allowed 0 to 4 parameters) */}
-                {draftSettings.length < 4 ? (
-                  <button
-                    type="button"
-                    onClick={handleAddParam}
-                    style={{
-                      border: '1.5px dashed #000000',
-                      borderRadius: '13px',
-                      padding: '12px',
-                      fontSize: '16px',
-                      fontWeight: 'bold',
-                      backgroundColor: '#ffffff',
-                      color: '#000000',
-                      cursor: 'pointer',
-                      width: '100%',
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    }}
-                    className="hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
-                  >
-                    + {t("Ajouter un paramètre")} ({draftSettings.length}/4)
-                  </button>
-                ) : (
-                  <p className="text-xs text-slate-400 text-center font-sans py-1">
-                    {t("Maximum de 4 paramètres atteint.")}
-                  </p>
-                )}
+                    {/* SETTING1: Appliquer aux jours */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 font-sans mb-1">
+                        {t("Appliquer aux jours.")}
+                      </label>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {WEEK_DAYS.map((dayLabel) => {
+                          const isSelected = (param.setting1 || []).includes(dayLabel);
+                          return (
+                            <button
+                              key={dayLabel}
+                              type="button"
+                              onClick={() => handleToggleDay(idx, dayLabel)}
+                              style={{
+                                borderRadius: '100px',
+                                fontSize: '15px',
+                                borderColor: isSelected ? '#000000' : '#d7d7d7',
+                              }}
+                              className={`px-3.5 py-1.5 font-semibold border transition-all select-none font-sans cursor-pointer ${
+                                isSelected
+                                  ? 'bg-black text-white shadow-sm'
+                                  : 'bg-white text-black hover:border-black'
+                              }`}
+                            >
+                              {dayLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* SETTING2 & SETTING3: Toggles (Retirer / Ajouter) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      {/* SETTING2: Retirer du temps effectif */}
+                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-slate-50/50">
+                        <span className="text-xs font-semibold text-black select-none pr-2">
+                          {t("Retirer du temps effectif.")}
+                        </span>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={param.setting2}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              handleUpdateParam(idx, {
+                                setting2: checked,
+                                setting3: checked ? false : param.setting3,
+                              });
+                            }}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                        </label>
+                      </div>
+
+                      {/* SETTING3: Ajouter au temps effectif */}
+                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-slate-50/50">
+                        <span className="text-xs font-semibold text-black select-none pr-2">
+                          {t("Ajouter au temps effectif.")}
+                        </span>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={param.setting3}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              handleUpdateParam(idx, {
+                                setting3: checked,
+                                setting2: checked ? false : param.setting2,
+                              });
+                            }}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* SETTING4: Colonne attribuée */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 font-sans mb-1">
+                        {t("Colonne attribuée.")}
+                      </label>
+                      <select
+                        value={param.setting4}
+                        onChange={(e) =>
+                          handleUpdateParam(idx, { setting4: e.target.value as CttColumnTarget })
+                        }
+                      >
+                        <option value="Temps Trajet Matin">Temps Trajet Matin</option>
+                        <option value="Temps Trajet Soir">Temps Trajet Soir</option>
+                        <option value="Temps Repas">Temps Repas</option>
+                      </select>
+                    </div>
+
+                    {/* SETTING5: Valeur (Mins) */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 font-sans mb-1">
+                        {t("Valeur (Mins).")}
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={3}
+                        value={param.setting5 === 0 ? '' : param.setting5}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/\D/g, '');
+                          if (raw === '') {
+                            handleUpdateParam(idx, { setting5: 0 });
+                            return;
+                          }
+                          const num = parseInt(raw, 10);
+                          const clamped = Math.min(500, Math.max(1, num));
+                          handleUpdateParam(idx, { setting5: clamped });
+                        }}
+                        onBlur={() => {
+                          if (!param.setting5 || param.setting5 < 1) {
+                            handleUpdateParam(idx, { setting5: 1 });
+                          }
+                        }}
+                        placeholder="1 à 500"
+                      />
+                      <div className="text-right text-[11px] text-slate-400 mt-1 font-sans">
+                        {t("Min: 1 min — Max: 500 mins (chiffres uniquement)")}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              {/* Bottom Actions: Enregistrer & Fermer */}
-              <div className="pt-4 space-y-2 mt-auto border-t border-slate-100 shrink-0">
+              {/* Bottom Actions: Ajouter un paramètre, Enregistrer & Fermer */}
+              <div className="pt-4 space-y-2 mt-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={handleAddParam}
+                  disabled={draftSettings.length >= 4}
+                  style={{
+                    backgroundColor: '#000000',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    padding: '14px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    width: '100%',
+                    cursor: draftSettings.length >= 4 ? 'not-allowed' : 'pointer',
+                    opacity: draftSettings.length >= 4 ? 0.4 : 1,
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                  className={draftSettings.length >= 4 ? '' : 'hover:bg-zinc-800 transition-colors'}
+                >
+                  + {t("Ajouter un paramètre")} ({draftSettings.length}/4)
+                </button>
+
                 <button
                   type="button"
                   onClick={handleSaveSettings}
