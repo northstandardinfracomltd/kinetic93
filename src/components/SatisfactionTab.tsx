@@ -16,6 +16,8 @@ interface Review {
   explications?: number;
   sensibilisation?: number;
   dateStr?: string;
+  date?: string;
+  createdAt?: string | number;
 }
 
 interface SatisfactionTabProps {
@@ -36,12 +38,16 @@ interface MonthOption {
   count: number;
 }
 
+const getReviewDate = (rev: Review): string => {
+  return rev.dateStr || rev.date || (rev.createdAt ? String(rev.createdAt) : '') || '';
+};
+
 const extractMonthFromDate = (dateStr?: string): { key: string; label: string; year: number; month: number } | null => {
   if (!dateStr || typeof dateStr !== 'string') return null;
   const str = dateStr.trim();
   if (!str) return null;
 
-  // 1. YYYY-MM-DD or YYYY/MM/DD
+  // 1. YYYY-MM-DD or YYYY/MM/DD or ISO string starting with YYYY-MM
   const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})/);
   if (ymdMatch) {
     const year = parseInt(ymdMatch[1], 10);
@@ -53,10 +59,11 @@ const extractMonthFromDate = (dateStr?: string): { key: string; label: string; y
     }
   }
 
-  // 2. DD-MM-YYYY or DD/MM/YYYY
-  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  // 2. DD-MM-YYYY or DD/MM/YYYY (with 2 to 4 digits year)
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
   if (dmyMatch) {
-    const year = parseInt(dmyMatch[3], 10);
+    let year = parseInt(dmyMatch[3], 10);
+    if (year < 100) year += 2000;
     const month = parseInt(dmyMatch[2], 10);
     if (month >= 1 && month <= 12 && year > 1900) {
       const key = `${year}-${String(month).padStart(2, '0')}`;
@@ -65,7 +72,22 @@ const extractMonthFromDate = (dateStr?: string): { key: string; label: string; y
     }
   }
 
-  // 3. Textual month check like "15 Sept 2026", "15 Septembre 2026", etc.
+  // 3. Numeric timestamp string (seconds or ms)
+  if (/^\d{10,13}$/.test(str)) {
+    const num = parseInt(str, 10);
+    const d = new Date(num > 10000000000 ? num : num * 1000);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = d.getMonth() + 1;
+      if (year > 1900 && month >= 1 && month <= 12) {
+        const key = `${year}-${String(month).padStart(2, '0')}`;
+        const label = `${FRENCH_MONTH_NAMES[month - 1]} ${year}`;
+        return { key, label, year, month };
+      }
+    }
+  }
+
+  // 4. Textual month check like "15 Sept 2026", "15 Septembre 2026", etc.
   const monthRegexes = [
     { m: 1, re: /janv/i },
     { m: 2, re: /f[ée]vr/i },
@@ -94,7 +116,7 @@ const extractMonthFromDate = (dateStr?: string): { key: string; label: string; y
     }
   }
 
-  // 4. Fallback new Date(str)
+  // 5. Fallback new Date(str)
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
     const year = parsed.getFullYear();
@@ -126,7 +148,7 @@ export default function SatisfactionTab({
   const availableMonths = useMemo<MonthOption[]>(() => {
     const map = new Map<string, MonthOption>();
     for (const rev of customerReviews) {
-      const parsed = extractMonthFromDate(rev.dateStr);
+      const parsed = extractMonthFromDate(getReviewDate(rev));
       if (parsed) {
         if (!map.has(parsed.key)) {
           map.set(parsed.key, { ...parsed, count: 1 });
@@ -152,11 +174,18 @@ export default function SatisfactionTab({
   // Helper date formatter
   const formatToDisplayDate = (dateStr?: string): string => {
     if (!dateStr) return '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      const parts = dateStr.split('-');
-      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    const clean = dateStr.trim();
+    // YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
+    const ymd = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (ymd) {
+      return `${String(ymd[3]).padStart(2, '0')}-${String(ymd[2]).padStart(2, '0')}-${ymd[1]}`;
     }
-    return dateStr;
+    // DD-MM-YYYY or DD/MM/YYYY
+    const dmy = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (dmy) {
+      return `${String(dmy[1]).padStart(2, '0')}-${String(dmy[2]).padStart(2, '0')}-${dmy[3]}`;
+    }
+    return clean;
   };
 
   const getNoteGlobale = (rev: Review): string => {
@@ -240,7 +269,30 @@ export default function SatisfactionTab({
     transition: 'all 0s',
   };
 
-  // CSV Export handler
+  // Searching and month filtering logic - calculates exactly the rows displayed on screen
+  const filteredReviews = useMemo(() => {
+    return customerReviews.filter((rev) => {
+      // 1. Month filter
+      if (selectedMonth !== 'all') {
+        const parsed = extractMonthFromDate(getReviewDate(rev));
+        if (!parsed || parsed.key !== selectedMonth) {
+          return false;
+        }
+      }
+
+      // 2. Search query filter
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        (rev.clientName && rev.clientName.toLowerCase().includes(q)) ||
+        (rev.comment && rev.comment.toLowerCase().includes(q)) ||
+        (rev.label && rev.label.toLowerCase().includes(q)) ||
+        (rev.defibId && rev.defibId.toLowerCase().includes(q))
+      );
+    });
+  }, [customerReviews, selectedMonth, search]);
+
+  // CSV Export handler - exports dynamically based on the current display and title
   const handleExportCSV = () => {
     const headers = [
       "Note globale",
@@ -257,14 +309,14 @@ export default function SatisfactionTab({
 
     const rows = filteredReviews.map(rev => {
       const note = getNoteGlobale(rev);
-      const date = formatToDisplayDate(rev.dateStr) || '';
+      const date = formatToDisplayDate(getReviewDate(rev)) || '';
       const client = rev.clientName || '';
-      const qualite = rev.qualite ?? '';
-      const ponctualite = rev.ponctualite ?? '';
-      const politesse = rev.politesse ?? '';
-      const clartePdf = rev.clartePdf ?? '';
-      const explications = rev.explications ?? '';
-      const sensibilisation = rev.sensibilisation ?? '';
+      const qualite = rev.qualite !== undefined && rev.qualite !== null ? rev.qualite : '';
+      const ponctualite = rev.ponctualite !== undefined && rev.ponctualite !== null ? rev.ponctualite : '';
+      const politesse = rev.politesse !== undefined && rev.politesse !== null ? rev.politesse : '';
+      const clartePdf = rev.clartePdf !== undefined && rev.clartePdf !== null ? rev.clartePdf : '';
+      const explications = rev.explications !== undefined && rev.explications !== null ? rev.explications : '';
+      const sensibilisation = rev.sensibilisation !== undefined && rev.sensibilisation !== null ? rev.sensibilisation : '';
       const evaluation = (rev.comment || '').replace(/"/g, '""').replace(/\r?\n|\r/g, ' ');
 
       return [
@@ -286,32 +338,19 @@ export default function SatisfactionTab({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `evaluations_satisfaction_${new Date().toISOString().split('T')[0]}.csv`);
+
+    // Dynamic file name based on current display / period title
+    const selectedMonthOption = availableMonths.find((m) => m.key === selectedMonth);
+    const periodLabel = selectedMonth === 'all'
+      ? 'Tous_les_mois'
+      : (selectedMonthOption ? selectedMonthOption.label.replace(/\s+/g, '_') : selectedMonth);
+
+    link.setAttribute('download', `evaluations_satisfaction_${periodLabel}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
-
-  // Searching and month filtering logic
-  const filteredReviews = customerReviews.filter((rev) => {
-    // 1. Month filter
-    if (selectedMonth !== 'all') {
-      const parsed = extractMonthFromDate(rev.dateStr);
-      if (!parsed || parsed.key !== selectedMonth) {
-        return false;
-      }
-    }
-
-    // 2. Search query filter
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      (rev.clientName && rev.clientName.toLowerCase().includes(q)) ||
-      (rev.comment && rev.comment.toLowerCase().includes(q)) ||
-      (rev.label && rev.label.toLowerCase().includes(q)) ||
-      (rev.defibId && rev.defibId.toLowerCase().includes(q))
-    );
-  });
 
   // Dynamic column averages for the second header row based on displayed reviews
   const columnAverages = useMemo(() => {
@@ -388,10 +427,8 @@ export default function SatisfactionTab({
                 appearance: 'none',
                 WebkitAppearance: 'none',
                 MozAppearance: 'none',
-                backgroundColor: selectedMonth !== 'all' ? '#fa53d5' : '#000000',
-                boxShadow: selectedMonth !== 'all'
-                  ? 'inset 0 1px 1px #ffffff00, 0 1px 2px #fa53d533, 0 4px 4px #ffffff00, 0 7px 0 -12px #fa53d5, inset 0 6px 12px #ffffff36'
-                  : rowActionButtonStyle.boxShadow,
+                backgroundColor: '#000000',
+                boxShadow: rowActionButtonStyle.boxShadow,
                 textAlign: 'center',
                 textAlignLast: 'center',
               }}
@@ -579,7 +616,7 @@ export default function SatisfactionTab({
                       {/* Date of review */}
                       <td className="px-4 py-4 font-sans align-middle cursor-default whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                         <div className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                          {formatToDisplayDate(rev.dateStr) || '-'}
+                          {formatToDisplayDate(getReviewDate(rev)) || '-'}
                         </div>
                       </td>
 

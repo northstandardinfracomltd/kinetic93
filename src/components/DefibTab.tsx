@@ -939,6 +939,47 @@ export default function DefibTab({
   const [numeroAtlasante, setNumeroAtlasante] = useState('');
   const [versionLogiciel, setVersionLogiciel] = useState('');
 
+  // Copy Identifiant state
+  const [copiedTableId, setCopiedTableId] = useState<string | null>(null);
+  const copiedTableTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isCopiedFormIdentifiant, setIsCopiedFormIdentifiant] = useState(false);
+  const copiedFormTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const copyIdentifiantToClipboard = (text: string) => {
+    if (!text) return;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  };
+
+  const fallbackCopy = (text: string) => {
+    try {
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.setAttribute('readonly', '');
+      el.style.position = 'fixed';
+      el.style.left = '-9999px';
+      el.style.top = '-9999px';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    } catch (err) {
+      console.error('Copy failed', err);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (copiedTableTimeoutRef.current) clearTimeout(copiedTableTimeoutRef.current);
+      if (copiedFormTimeoutRef.current) clearTimeout(copiedFormTimeoutRef.current);
+    };
+  }, []);
+
   // Auto-resize Section 1 Commentaire field
   useEffect(() => {
     if (commentaireRef.current) {
@@ -2626,6 +2667,15 @@ export default function DefibTab({
                       <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              copyIdentifiantToClipboard(df.identifiant || '');
+                              setCopiedTableId(df.id);
+                              if (copiedTableTimeoutRef.current) clearTimeout(copiedTableTimeoutRef.current);
+                              copiedTableTimeoutRef.current = setTimeout(() => {
+                                setCopiedTableId(null);
+                              }, 1500);
+                            }}
                             style={{ 
                               display: 'inline-flex', 
                               alignItems: 'center', 
@@ -2633,10 +2683,32 @@ export default function DefibTab({
                               border: '1px solid rgb(231, 231, 231)',
                               borderRadius: '1000px',
                               padding: '4px 12px',
-                              backgroundColor: '#ffffff'
+                              backgroundColor: '#ffffff',
+                              position: 'relative',
+                              cursor: 'pointer',
                             }} 
-                            className="whitespace-nowrap shrink-0"
+                            className="whitespace-nowrap shrink-0 hover:border-slate-400 select-none"
+                            title="Cliquer pour copier l'identifiant"
                           >
+                            {copiedTableId === df.id && (
+                              <span 
+                                style={{
+                                  position: 'absolute',
+                                  bottom: 'calc(100% + 4px)',
+                                  left: '50%',
+                                  transform: 'translateX(-50%)',
+                                  fontSize: '18px',
+                                  color: '#16a34a',
+                                  fontWeight: 'bold',
+                                  pointerEvents: 'none',
+                                  whiteSpace: 'nowrap',
+                                  zIndex: 50,
+                                  textShadow: '0 1px 2px #ffffff',
+                                }}
+                              >
+                                Copié!
+                              </span>
+                            )}
                             {(() => {
                               const status = getSafetyStatus(df);
                               return (
@@ -3167,8 +3239,39 @@ export default function DefibTab({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Identifiant */}
-                      <div className="space-y-1">
-                        <label htmlFor="form-identifiant" className="block text-[11px] font-bold text-slate-500 uppercase">
+                      <div 
+                        className="space-y-1 relative cursor-pointer"
+                        onClick={() => {
+                          if (!identifiant) return;
+                          copyIdentifiantToClipboard(identifiant);
+                          setIsCopiedFormIdentifiant(true);
+                          if (copiedFormTimeoutRef.current) clearTimeout(copiedFormTimeoutRef.current);
+                          copiedFormTimeoutRef.current = setTimeout(() => {
+                            setIsCopiedFormIdentifiant(false);
+                          }, 1500);
+                        }}
+                        title="Cliquer pour copier l'identifiant"
+                      >
+                        {isCopiedFormIdentifiant && (
+                          <span
+                            style={{
+                              position: 'absolute',
+                              bottom: 'calc(100% + 4px)',
+                              left: '50%',
+                              transform: 'translateX(-50%)',
+                              fontSize: '18px',
+                              color: '#16a34a',
+                              fontWeight: 'bold',
+                              pointerEvents: 'none',
+                              whiteSpace: 'nowrap',
+                              zIndex: 50,
+                              textShadow: '0 1px 2px #ffffff',
+                            }}
+                          >
+                            Copié!
+                          </span>
+                        )}
+                        <label htmlFor="form-identifiant" className="block text-[11px] font-bold text-slate-500 uppercase cursor-pointer">
                           Identifiant.
                         </label>
                         <div className="flex items-center gap-1.5">
@@ -3178,16 +3281,19 @@ export default function DefibTab({
                             value={identifiant}
                             readOnly
                             placeholder="AAA-111"
-                            className="flex-1 min-w-0 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono font-bold bg-slate-100 text-slate-500 cursor-not-allowed"
+                            className="flex-1 min-w-0 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono font-bold bg-slate-100 text-slate-600 cursor-pointer select-none"
                             required
                           />
                           {!editingDefib && (
                             <button
                               type="button"
-                              onClick={reRollIdentifiant}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                reRollIdentifiant();
+                              }}
                               title="Générer un code aléatoire libre"
                               style={rowActionButton18Style}
-                              className="shrink-0 font-sans"
+                              className="shrink-0 font-sans cursor-pointer"
                             >
                               Générer
                             </button>

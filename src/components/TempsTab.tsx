@@ -125,6 +125,17 @@ function secondsToHMMSS(totalSec: number): string {
   return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+function formatDurationWithSign(totalSec: number): string {
+  if (totalSec === 0) return '0:00:00';
+  const isNegative = totalSec < 0;
+  const absSec = Math.abs(totalSec);
+  const h = Math.floor(absSec / 3600);
+  const m = Math.floor((absSec % 3600) / 60);
+  const s = absSec % 60;
+  const formatted = `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return isNegative ? `-${formatted}` : formatted;
+}
+
 function formatDurationField(val?: string): string {
   if (!val || val.trim() === '') return '';
   const sec = parseTimeToSeconds(val);
@@ -278,6 +289,12 @@ function generateMonthlyCSV(
       let repasSec = parseTimeToSeconds(pt.tempsRepas);
       let tmSec = parseTimeToSeconds(pt.trajetMatin);
       let tsSec = parseTimeToSeconds(pt.trajetSoir);
+      let hasTmAdjustment = false;
+      let hasTsAdjustment = false;
+      let hasRepasAdjustment = false;
+
+      // Base effective working time
+      let totalEffectifSec = amplitudeSec - repasSec - tmSec - tsSec;
 
       // Apply CTT model settings if matching day of the week
       if (settings && settings.length > 0) {
@@ -288,30 +305,43 @@ function generateMonthlyCSV(
           if (deltaSec <= 0) return;
 
           if (s.setting4 === 'Temps Trajet Matin') {
+            hasTmAdjustment = true;
             if (s.setting2) {
-              // Retirer du temps effectif
-              tmSec = Math.max(0, tmSec - deltaSec);
+              // Retirer
+              tmSec = tmSec - deltaSec;
+              totalEffectifSec = totalEffectifSec - deltaSec;
             } else if (s.setting3) {
-              // Ajouter au temps effectif
+              // Ajouter
               tmSec = tmSec + deltaSec;
+              totalEffectifSec = totalEffectifSec + deltaSec;
             }
           } else if (s.setting4 === 'Temps Trajet Soir') {
+            hasTsAdjustment = true;
             if (s.setting2) {
-              tsSec = Math.max(0, tsSec - deltaSec);
+              // Retirer
+              tsSec = tsSec - deltaSec;
+              totalEffectifSec = totalEffectifSec - deltaSec;
             } else if (s.setting3) {
+              // Ajouter
               tsSec = tsSec + deltaSec;
+              totalEffectifSec = totalEffectifSec + deltaSec;
             }
           } else if (s.setting4 === 'Temps Repas') {
+            hasRepasAdjustment = true;
             if (s.setting2) {
-              repasSec = Math.max(0, repasSec - deltaSec);
+              // Retirer
+              repasSec = repasSec - deltaSec;
+              totalEffectifSec = totalEffectifSec - deltaSec;
             } else if (s.setting3) {
+              // Ajouter
               repasSec = repasSec + deltaSec;
+              totalEffectifSec = totalEffectifSec + deltaSec;
             }
           }
         });
       }
 
-      const workedCTTSec = Math.max(0, amplitudeSec - repasSec - tmSec - tsSec);
+      const workedCTTSec = Math.max(0, totalEffectifSec);
       const adminSec = parseTimeToSeconds(pt.tempsAdmin);
 
       workingDays.push({
@@ -324,9 +354,9 @@ function generateMonthlyCSV(
         pointage: pt,
         workedCTTSec,
         adminSec,
-        adjustedTmSec: tmSec,
-        adjustedTsSec: tsSec,
-        adjustedRepasSec: repasSec,
+        adjustedTmSec: hasTmAdjustment ? tmSec : undefined,
+        adjustedTsSec: hasTsAdjustment ? tsSec : undefined,
+        adjustedRepasSec: hasRepasAdjustment ? repasSec : undefined,
       });
       continue;
     }
@@ -415,15 +445,15 @@ function generateMonthlyCSV(
       const ampFormatted = amplitudeSec > 0 ? secondsToHMMSS(amplitudeSec) : '';
       
       const tmFormatted = wd.adjustedTmSec !== undefined
-        ? (wd.adjustedTmSec > 0 ? secondsToHMMSS(wd.adjustedTmSec) : (pt.trajetMatin ? '0:00:00' : ''))
+        ? formatDurationWithSign(wd.adjustedTmSec)
         : formatDurationField(pt.trajetMatin);
       const tsFormatted = wd.adjustedTsSec !== undefined
-        ? (wd.adjustedTsSec > 0 ? secondsToHMMSS(wd.adjustedTsSec) : (pt.trajetSoir ? '0:00:00' : ''))
+        ? formatDurationWithSign(wd.adjustedTsSec)
         : formatDurationField(pt.trajetSoir);
       const repasFormatted = wd.adjustedRepasSec !== undefined
-        ? (wd.adjustedRepasSec > 0 ? secondsToHMMSS(wd.adjustedRepasSec) : (pt.tempsRepas ? '0:00:00' : ''))
+        ? formatDurationWithSign(wd.adjustedRepasSec)
         : formatDurationField(pt.tempsRepas);
-      const workedCTTFormatted = wd.workedCTTSec > 0 ? secondsToHMMSS(wd.workedCTTSec) : '';
+      const workedCTTFormatted = wd.workedCTTSec > 0 ? secondsToHMMSS(wd.workedCTTSec) : '0:00:00';
       const adminFormatted = formatDurationField(pt.tempsAdmin);
 
       csvLines.push([
@@ -1113,8 +1143,8 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
                       {/* Parameter Header */}
                       <div className="flex items-center justify-between">
                         <span
-                          className="text-base font-bold text-black"
-                          style={{ fontFamily: '"Gochi", cursive, sans-serif' }}
+                          className="font-bold text-black"
+                          style={{ fontFamily: '"Gochi", cursive, sans-serif', fontSize: '22px' }}
                         >
                           {`Paramètre ${idx + 1}`}
                         </span>
@@ -1194,10 +1224,11 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
                                 onClick={() => handleToggleDay(idx, dayLabel)}
                                 style={{
                                   borderRadius: '100px',
-                                  fontSize: '15px',
+                                  fontSize: '18px',
+                                  padding: '7px 15px',
                                   borderColor: isSelected ? '#000000' : '#d7d7d7',
                                 }}
-                                className={`px-3.5 py-1.5 font-semibold border transition-all select-none font-sans cursor-pointer ${
+                                className={`font-semibold border transition-all select-none font-sans cursor-pointer ${
                                   isSelected
                                     ? 'bg-black text-white shadow-sm'
                                     : 'bg-white text-black hover:border-black'
