@@ -6105,6 +6105,7 @@ export default function App() {
             });
 
             const equipGroupIds = ['defibrillateurs', 'autres-materiels', 'clients'];
+            const devisGroupIds = ['devis'];
             const fsmGroupIds = ['fsm', 'gmao'];
             const stockGroupIds = ['stocks', 'stocks-distribues', 'achats-fournisseurs'];
             const crmGroupIds = ['crm', 'satisfaction'];
@@ -6113,11 +6114,12 @@ export default function App() {
 
             const renderSectionTitle = (title: string) => (
               <div
-                className="text-left font-gochi text-white select-none px-2.5 pt-1 pb-0.5"
+                className="text-left select-none font-gochi"
                 style={{
-                  fontSize: '16px',
-                  color: '#ffffff',
-                  fontFamily: '"Gochi", cursive, sans-serif',
+                  fontSize: '18px',
+                  color: 'rgb(255 255 255 / 59%)',
+                  fontFamily: 'Gochi, cursive, sans-serif',
+                  padding: '15px 10px 5px 15px',
                 }}
               >
                 {title}
@@ -6171,6 +6173,22 @@ export default function App() {
                   >
                     {renderSectionTitle(t('Exploitation'))}
                     {equipGroup.map(gt => renderButton(gt))}
+                  </div>
+                );
+              } else if (devisGroupIds.includes(tab.id)) {
+                const devisGroup: typeof rawTabs = [];
+                while (i < filteredTabs.length && devisGroupIds.includes(filteredTabs[i].id)) {
+                  devisGroup.push(filteredTabs[i]);
+                  i++;
+                }
+                elements.push(
+                  <div
+                    key="devis-group-container"
+                    className="p-2 space-y-2 rounded-2xl"
+                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
+                  >
+                    {renderSectionTitle(t('Ventes'))}
+                    {devisGroup.map(gt => renderButton(gt))}
                   </div>
                 );
               } else if (fsmGroupIds.includes(tab.id)) {
