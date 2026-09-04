@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Calendar, ChevronDown, Check, X } from 'lucide-react';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
@@ -23,6 +24,92 @@ interface SatisfactionTabProps {
   onUpdateReviews: (updated: Review[]) => void;
 }
 
+const FRENCH_MONTH_NAMES = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+];
+
+interface MonthOption {
+  key: string; // e.g. "2026-09"
+  label: string; // e.g. "Septembre 2026"
+  year: number;
+  month: number; // 1-12
+  count: number;
+}
+
+const extractMonthFromDate = (dateStr?: string): { key: string; label: string; year: number; month: number } | null => {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const str = dateStr.trim();
+  if (!str) return null;
+
+  // 1. YYYY-MM-DD or YYYY/MM/DD
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})/);
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10);
+    const month = parseInt(ymdMatch[2], 10);
+    if (month >= 1 && month <= 12 && year > 1900) {
+      const key = `${year}-${String(month).padStart(2, '0')}`;
+      const label = `${FRENCH_MONTH_NAMES[month - 1]} ${year}`;
+      return { key, label, year, month };
+    }
+  }
+
+  // 2. DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmyMatch) {
+    const year = parseInt(dmyMatch[3], 10);
+    const month = parseInt(dmyMatch[2], 10);
+    if (month >= 1 && month <= 12 && year > 1900) {
+      const key = `${year}-${String(month).padStart(2, '0')}`;
+      const label = `${FRENCH_MONTH_NAMES[month - 1]} ${year}`;
+      return { key, label, year, month };
+    }
+  }
+
+  // 3. Textual month check like "15 Sept 2026", "15 Septembre 2026", etc.
+  const monthRegexes = [
+    { m: 1, re: /janv/i },
+    { m: 2, re: /f[ée]vr/i },
+    { m: 3, re: /mars/i },
+    { m: 4, re: /avr/i },
+    { m: 5, re: /mai/i },
+    { m: 6, re: /juin/i },
+    { m: 7, re: /juil/i },
+    { m: 8, re: /ao[uû]/i },
+    { m: 9, re: /sept/i },
+    { m: 10, re: /oct/i },
+    { m: 11, re: /nov/i },
+    { m: 12, re: /d[ée]c/i },
+  ];
+
+  const yearMatch = str.match(/\b(20\d{2}|19\d{2})\b/);
+  if (yearMatch) {
+    const year = parseInt(yearMatch[1], 10);
+    for (const item of monthRegexes) {
+      if (item.re.test(str)) {
+        const month = item.m;
+        const key = `${year}-${String(month).padStart(2, '0')}`;
+        const label = `${FRENCH_MONTH_NAMES[month - 1]} ${year}`;
+        return { key, label, year, month };
+      }
+    }
+  }
+
+  // 4. Fallback new Date(str)
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = parsed.getMonth() + 1;
+    if (year > 1900 && month >= 1 && month <= 12) {
+      const key = `${year}-${String(month).padStart(2, '0')}`;
+      const label = `${FRENCH_MONTH_NAMES[month - 1]} ${year}`;
+      return { key, label, year, month };
+    }
+  }
+
+  return null;
+};
+
 export default function SatisfactionTab({
   customerReviews,
   onUpdateReviews,
@@ -32,6 +119,53 @@ export default function SatisfactionTab({
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null);
+
+  // Month filter state
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [isMonthMenuOpen, setIsMonthMenuOpen] = useState(false);
+  const monthMenuRef = useRef<HTMLDivElement>(null);
+
+  // Dynamically extract only months that actually exist in the reviews list
+  const availableMonths = useMemo<MonthOption[]>(() => {
+    const map = new Map<string, MonthOption>();
+    for (const rev of customerReviews) {
+      const parsed = extractMonthFromDate(rev.dateStr);
+      if (parsed) {
+        if (!map.has(parsed.key)) {
+          map.set(parsed.key, { ...parsed, count: 1 });
+        } else {
+          map.get(parsed.key)!.count += 1;
+        }
+      }
+    }
+    // Sort chronologically descending (most recent first)
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year;
+      return b.month - a.month;
+    });
+  }, [customerReviews]);
+
+  // If the active filter is removed because of review deletion, reset to 'all'
+  useEffect(() => {
+    if (selectedMonth !== 'all' && !availableMonths.some((m) => m.key === selectedMonth)) {
+      setSelectedMonth('all');
+    }
+  }, [availableMonths, selectedMonth]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (monthMenuRef.current && !monthMenuRef.current.contains(event.target as Node)) {
+        setIsMonthMenuOpen(false);
+      }
+    };
+    if (isMonthMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMonthMenuOpen]);
 
   // Helper date formatter
   const formatToDisplayDate = (dateStr?: string): string => {
@@ -161,14 +295,24 @@ export default function SatisfactionTab({
     document.body.removeChild(link);
   };
 
-  // Searching logic
+  // Searching and month filtering logic
   const filteredReviews = customerReviews.filter((rev) => {
+    // 1. Month filter
+    if (selectedMonth !== 'all') {
+      const parsed = extractMonthFromDate(rev.dateStr);
+      if (!parsed || parsed.key !== selectedMonth) {
+        return false;
+      }
+    }
+
+    // 2. Search query filter
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
       (rev.clientName && rev.clientName.toLowerCase().includes(q)) ||
       (rev.comment && rev.comment.toLowerCase().includes(q)) ||
-      (rev.label && rev.label.toLowerCase().includes(q))
+      (rev.label && rev.label.toLowerCase().includes(q)) ||
+      (rev.defibId && rev.defibId.toLowerCase().includes(q))
     );
   });
 
@@ -215,6 +359,124 @@ export default function SatisfactionTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
+            {/* Month Filter Button with Dropdown */}
+            <div className="relative" ref={monthMenuRef}>
+              <button
+                type="button"
+                id="btn-filter-month-satisfaction"
+                onClick={() => setIsMonthMenuOpen(!isMonthMenuOpen)}
+                style={{
+                  ...rowActionButtonStyle,
+                  backgroundColor: selectedMonth !== 'all' ? '#fa53d5' : '#000000',
+                  boxShadow: selectedMonth !== 'all'
+                    ? 'inset 0 1px 1px #ffffff00, 0 1px 2px #fa53d533, 0 4px 4px #ffffff00, 0 7px 0 -12px #fa53d5, inset 0 6px 12px #ffffff36'
+                    : rowActionButtonStyle.boxShadow,
+                }}
+                className="cursor-pointer font-sans whitespace-nowrap hover:opacity-85 transition-all flex items-center gap-2 select-none"
+                title={t("Filtrer par mois")}
+              >
+                <Calendar className="w-4 h-4 text-white shrink-0" />
+                <span>
+                  {selectedMonth === 'all'
+                    ? t("Mois")
+                    : availableMonths.find((m) => m.key === selectedMonth)?.label || selectedMonth}
+                </span>
+                {selectedMonth !== 'all' ? (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMonth('all');
+                      setIsMonthMenuOpen(false);
+                    }}
+                    className="ml-1 p-0.5 rounded-full hover:bg-white/25 transition-colors inline-flex items-center justify-center cursor-pointer"
+                    title={t("Effacer le filtre")}
+                  >
+                    <X className="w-3.5 h-3.5 text-white" />
+                  </span>
+                ) : (
+                  <ChevronDown
+                    className={`w-4 h-4 text-white shrink-0 transition-transform duration-150 ${
+                      isMonthMenuOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                )}
+              </button>
+
+              {/* Dynamic Month Dropdown Menu */}
+              {isMonthMenuOpen && (
+                <div
+                  id="dropdown-filter-month-satisfaction"
+                  className="absolute top-full left-0 mt-2 z-50 bg-white border border-[#dadada] rounded-2xl shadow-xl overflow-hidden min-w-[240px] animate-fadeIn"
+                  style={{
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                  }}
+                >
+                  <div className="py-2 max-h-80 overflow-y-auto">
+                    {/* Option: Tous les mois */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMonth('all');
+                        setIsMonthMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-[15px] flex items-center justify-between transition-colors cursor-pointer ${
+                        selectedMonth === 'all'
+                          ? 'bg-[#ffecf8] text-black font-semibold'
+                          : 'text-black hover:bg-[#f8f8f8]'
+                      }`}
+                    >
+                      <span>{t("Tous les mois")}</span>
+                      {selectedMonth === 'all' && <Check className="w-4 h-4 text-[#fa53d5]" />}
+                    </button>
+
+                    <div className="h-px bg-[#eee] my-1" />
+
+                    {availableMonths.length === 0 ? (
+                      <div className="px-4 py-3 text-xs text-neutral-500 italic text-center">
+                        {t("Aucun mois disponible")}
+                      </div>
+                    ) : (
+                      availableMonths.map((m) => {
+                        const isSelected = selectedMonth === m.key;
+                        return (
+                          <button
+                            key={m.key}
+                            type="button"
+                            onClick={() => {
+                              setSelectedMonth(m.key);
+                              setIsMonthMenuOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-[15px] flex items-center justify-between transition-colors cursor-pointer ${
+                              isSelected
+                                ? 'bg-[#ffecf8] text-black font-semibold'
+                                : 'text-black hover:bg-[#f8f8f8]'
+                            }`}
+                          >
+                            <span>{m.label}</span>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                                  isSelected
+                                    ? 'bg-[#fa53d5] text-white'
+                                    : 'bg-neutral-100 text-neutral-600'
+                                }`}
+                              >
+                                {m.count}
+                              </span>
+                              {isSelected && <Check className="w-4 h-4 text-[#fa53d5]" />}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Search Bar Input */}
             <div className="relative w-full sm:w-80 bg-white">
               <input
@@ -222,7 +484,7 @@ export default function SatisfactionTab({
                 id="search-satisfaction-input"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("Recherche.")}
+                placeholder={t("Rechercher.") || t("Recherche.") || "Rechercher."}
                 className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
                 style={searchInputStyle}
                 onMouseEnter={() => setIsSearchHovered(true)}
@@ -235,6 +497,7 @@ export default function SatisfactionTab({
             {/* Export CSV Button */}
             <button
               type="button"
+              id="btn-export-satisfaction-csv"
               onClick={handleExportCSV}
               style={rowActionButtonStyle}
               className="cursor-pointer font-sans whitespace-nowrap hover:opacity-80 transition-all"
