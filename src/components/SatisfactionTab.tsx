@@ -194,6 +194,21 @@ export default function SatisfactionTab({
     cursor: 'default',
   };
 
+  const roundBadgeStyle: React.CSSProperties = {
+    width: '38px',
+    height: '38px',
+    borderRadius: '50%',
+    backgroundColor: '#fe4eba',
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: '15px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+    margin: '0 auto',
+  };
+
   const rowActionButtonStyle: React.CSSProperties = {
     backgroundColor: '#000',
     color: '#fff',
@@ -297,6 +312,28 @@ export default function SatisfactionTab({
       (rev.defibId && rev.defibId.toLowerCase().includes(q))
     );
   });
+
+  // Dynamic column averages for the second header row based on displayed reviews
+  const columnAverages = useMemo(() => {
+    const calcAvg = (key: 'qualite' | 'ponctualite' | 'politesse' | 'clartePdf' | 'explications' | 'sensibilisation'): string => {
+      const nums = filteredReviews
+        .map((r) => r[key])
+        .filter((v): v is number => typeof v === 'number' && !isNaN(v));
+      if (nums.length === 0) return '-';
+      const sum = nums.reduce((a, b) => a + b, 0);
+      const avg = sum / nums.length;
+      return avg % 1 === 0 ? avg.toFixed(0) : avg.toFixed(1);
+    };
+
+    return {
+      qualite: calcAvg('qualite'),
+      ponctualite: calcAvg('ponctualite'),
+      politesse: calcAvg('politesse'),
+      clartePdf: calcAvg('clartePdf'),
+      explications: calcAvg('explications'),
+      sensibilisation: calcAvg('sensibilisation'),
+    };
+  }, [filteredReviews]);
 
   return (
     <div className="space-y-6 animate-fadeIn" id="satisfaction-tab-container-harmonized">
@@ -465,17 +502,55 @@ export default function SatisfactionTab({
             <table className="w-full text-left font-sans border-collapse text-xs" id="satisfaction-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
               <thead>
                 <tr className="bg-transparent">
-                  <th className="px-4 py-3.5 text-center w-28 whitespace-nowrap" style={thStyle}>{t("Note globale.")}</th>
-                  <th className="px-4 py-3.5 w-28 whitespace-nowrap" style={thStyle}>{t("Date.")}</th>
-                  <th className="px-4 py-3.5 w-40 whitespace-nowrap" style={thStyle}>{t("Rédacteur.")}</th>
-                  <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Qualité.")}</th>
-                  <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Ponctualité.")}</th>
-                  <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Politesse.")}</th>
-                  <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Clarté PDF.")}</th>
-                  <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Explications.")}</th>
-                  <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Sensibilisation.")}</th>
-                  <th className="px-4 py-3.5" style={thStyle}>{t("Évaluation.")}</th>
-                  <th className="px-4 py-3.5 text-right w-24 whitespace-nowrap" style={thStyle}>{t("Action.")}</th>
+                  <th className="px-4 pt-3 pb-1.5 text-center w-28 whitespace-nowrap" style={thStyle}>{t("Note globale.")}</th>
+                  <th className="px-4 pt-3 pb-1.5 w-28 whitespace-nowrap" style={thStyle}>{t("Date.")}</th>
+                  <th className="px-4 pt-3 pb-1.5 w-40 whitespace-nowrap" style={thStyle}>{t("Rédacteur.")}</th>
+                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Qualité.")}</th>
+                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Ponctualité.")}</th>
+                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Politesse.")}</th>
+                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Clarté PDF.")}</th>
+                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Explications.")}</th>
+                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Sensibilisation.")}</th>
+                  <th className="px-4 pt-3 pb-1.5" style={thStyle}>{t("Évaluation.")}</th>
+                  <th className="px-4 pt-3 pb-1.5 text-right w-24 whitespace-nowrap" style={thStyle}>{t("Action.")}</th>
+                </tr>
+                {/* Second header row: column averages */}
+                <tr className="bg-transparent" style={{ borderBottom: '1px solid rgb(218, 218, 218)' }}>
+                  <th className="px-4 pt-1.5 pb-3 text-center"></th>
+                  <th className="px-4 pt-1.5 pb-3"></th>
+                  <th className="px-4 pt-1.5 pb-3"></th>
+                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
+                    <div style={roundBadgeStyle} title={t("Moyenne Qualité")}>
+                      {columnAverages.qualite}
+                    </div>
+                  </th>
+                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
+                    <div style={roundBadgeStyle} title={t("Moyenne Ponctualité")}>
+                      {columnAverages.ponctualite}
+                    </div>
+                  </th>
+                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
+                    <div style={roundBadgeStyle} title={t("Moyenne Politesse")}>
+                      {columnAverages.politesse}
+                    </div>
+                  </th>
+                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
+                    <div style={roundBadgeStyle} title={t("Moyenne Clarté PDF")}>
+                      {columnAverages.clartePdf}
+                    </div>
+                  </th>
+                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
+                    <div style={roundBadgeStyle} title={t("Moyenne Explications")}>
+                      {columnAverages.explications}
+                    </div>
+                  </th>
+                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
+                    <div style={roundBadgeStyle} title={t("Moyenne Sensibilisation")}>
+                      {columnAverages.sensibilisation}
+                    </div>
+                  </th>
+                  <th className="px-4 pt-1.5 pb-3"></th>
+                  <th className="px-4 pt-1.5 pb-3 text-right"></th>
                 </tr>
               </thead>
               <tbody className="text-slate-700 text-xs text-black">
@@ -496,22 +571,7 @@ export default function SatisfactionTab({
                       
                       {/* Round badge for Note globale */}
                       <td className="px-4 py-4 align-middle text-center cursor-default">
-                        <div 
-                          style={{ 
-                            width: '38px', 
-                            height: '38px', 
-                            borderRadius: '50%', 
-                            backgroundColor: '#fe4eba', 
-                            color: '#ffffff', 
-                            fontWeight: 'bold', 
-                            fontSize: '15px', 
-                            display: 'inline-flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            margin: '0 auto'
-                          }}
-                        >
+                        <div style={roundBadgeStyle}>
                           {noteGlobale}
                         </div>
                       </td>
