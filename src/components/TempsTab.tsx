@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PointageLog, Member, CttModelSetting, CttColumnTarget } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { t } from '../utils/translate';
+import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
 
 const WEEK_DAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
@@ -519,7 +520,8 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
   // Settings for CTT Model (0 to 4 parameters)
   const [cttSettings, setCttSettings] = useState<CttModelSetting[]>(() => {
     try {
-      const saved = localStorage.getItem('ctt_model_settings');
+      const tid = (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+      const saved = localStorage.getItem(`defib_${tid}_ctt_model_settings`) || localStorage.getItem('ctt_model_settings');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -531,6 +533,43 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
     }
     return [];
   });
+
+  // Sync with Firestore on mount and upon custom update events
+  useEffect(() => {
+    let isMounted = true;
+    const loadSettingsFromFirebase = async () => {
+      try {
+        const tid = (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+        const saved = localStorage.getItem(`defib_${tid}_ctt_model_settings`) || localStorage.getItem('ctt_model_settings');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && isMounted) {
+              setCttSettings(parsed.slice(0, 4));
+            }
+          } catch (_) {}
+        }
+        const remote = await fetchCollectionFromFirestore<CttModelSetting[]>('ctt_model_settings');
+        if (isMounted && remote && Array.isArray(remote)) {
+          const sanitized = remote.slice(0, 4);
+          setCttSettings(sanitized);
+          localStorage.setItem(`defib_${tid}_ctt_model_settings`, JSON.stringify(sanitized));
+          localStorage.setItem('ctt_model_settings', JSON.stringify(sanitized));
+        }
+      } catch (err) {
+        console.error('Error fetching ctt_model_settings from Firestore:', err);
+      }
+    };
+
+    loadSettingsFromFirebase();
+    window.addEventListener('storage', loadSettingsFromFirebase);
+    window.addEventListener('defib_ctt_model_settings_updated', loadSettingsFromFirebase);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', loadSettingsFromFirebase);
+      window.removeEventListener('defib_ctt_model_settings_updated', loadSettingsFromFirebase);
+    };
+  }, []);
 
   const [isSettingsPaneOpen, setIsSettingsPaneOpen] = useState(false);
   const [draftSettings, setDraftSettings] = useState<CttModelSetting[]>([]);
@@ -552,9 +591,15 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
     }));
     setCttSettings(sanitized);
     try {
+      const tid = (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+      localStorage.setItem(`defib_${tid}_ctt_model_settings`, JSON.stringify(sanitized));
       localStorage.setItem('ctt_model_settings', JSON.stringify(sanitized));
+      window.dispatchEvent(new Event('defib_ctt_model_settings_updated'));
+      saveCollectionToFirestore('ctt_model_settings', sanitized).catch((err) => {
+        console.error('Error saving ctt_model_settings to Firestore:', err);
+      });
     } catch (e) {
-      console.error('Failed to save ctt_model_settings to localStorage', e);
+      console.error('Failed to save ctt_model_settings to localStorage or Firestore', e);
     }
     setIsSettingsPaneOpen(false);
   };
@@ -1015,7 +1060,19 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
                       <button
                         type="button"
                         onClick={() => handleDeleteParam(idx)}
-                        className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors cursor-pointer px-2 py-0.5 rounded hover:bg-red-50"
+                        style={{
+                          borderRadius: '13px',
+                          fontSize: '16px',
+                          backgroundColor: 'rgb(185, 28, 28)',
+                          boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                          color: 'rgb(255, 255, 255)',
+                          padding: '6px 16px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        }}
+                        className="hover:opacity-90 active:scale-95 transition-all shrink-0"
                       >
                         {t("Supprimer")}
                       </button>

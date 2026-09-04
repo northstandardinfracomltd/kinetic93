@@ -183,6 +183,8 @@ export function getCollectionNameAliases(collectionName: string): string[] {
     aliases.push('companyInfo', 'company_info');
   } else if (collectionName === 'notifications' || collectionName === 'app_notifications') {
     aliases.push('notifications', 'app_notifications');
+  } else if (collectionName === 'ctt_model_settings' || collectionName === 'cttModelSettings' || collectionName === 'ctt_settings') {
+    aliases.push('ctt_model_settings', 'cttModelSettings', 'ctt_settings');
   }
   return Array.from(new Set(aliases));
 }

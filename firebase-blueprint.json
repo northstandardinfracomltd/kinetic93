@@ -15,7 +15,7 @@
   "firestore": {
     "/appData/{documentId}": {
       "schema": "app_data",
-      "description": "Collections storing synced lists for clients, defibrillateurs, support tickets, stocks, etc."
+      "description": "Collections storing synced lists for clients, defibrillateurs, support tickets, stocks, ctt model settings, etc."
     }
   }
 }
