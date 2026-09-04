@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Calendar, ChevronDown, Check, X } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
@@ -122,8 +121,6 @@ export default function SatisfactionTab({
 
   // Month filter state
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
-  const [isMonthMenuOpen, setIsMonthMenuOpen] = useState(false);
-  const monthMenuRef = useRef<HTMLDivElement>(null);
 
   // Dynamically extract only months that actually exist in the reviews list
   const availableMonths = useMemo<MonthOption[]>(() => {
@@ -151,21 +148,6 @@ export default function SatisfactionTab({
       setSelectedMonth('all');
     }
   }, [availableMonths, selectedMonth]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (monthMenuRef.current && !monthMenuRef.current.contains(event.target as Node)) {
-        setIsMonthMenuOpen(false);
-      }
-    };
-    if (isMonthMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isMonthMenuOpen]);
 
   // Helper date formatter
   const formatToDisplayDate = (dateStr?: string): string => {
@@ -359,123 +341,35 @@ export default function SatisfactionTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
-            {/* Month Filter Button with Dropdown */}
-            <div className="relative" ref={monthMenuRef}>
-              <button
-                type="button"
-                id="btn-filter-month-satisfaction"
-                onClick={() => setIsMonthMenuOpen(!isMonthMenuOpen)}
-                style={{
-                  ...rowActionButtonStyle,
-                  backgroundColor: selectedMonth !== 'all' ? '#fa53d5' : '#000000',
-                  boxShadow: selectedMonth !== 'all'
-                    ? 'inset 0 1px 1px #ffffff00, 0 1px 2px #fa53d533, 0 4px 4px #ffffff00, 0 7px 0 -12px #fa53d5, inset 0 6px 12px #ffffff36'
-                    : rowActionButtonStyle.boxShadow,
-                }}
-                className="cursor-pointer font-sans whitespace-nowrap hover:opacity-85 transition-all flex items-center gap-2 select-none"
-                title={t("Filtrer par mois")}
-              >
-                <Calendar className="w-4 h-4 text-white shrink-0" />
-                <span>
-                  {selectedMonth === 'all'
-                    ? t("Mois")
-                    : availableMonths.find((m) => m.key === selectedMonth)?.label || selectedMonth}
-                </span>
-                {selectedMonth !== 'all' ? (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedMonth('all');
-                      setIsMonthMenuOpen(false);
-                    }}
-                    className="ml-1 p-0.5 rounded-full hover:bg-white/25 transition-colors inline-flex items-center justify-center cursor-pointer"
-                    title={t("Effacer le filtre")}
-                  >
-                    <X className="w-3.5 h-3.5 text-white" />
-                  </span>
-                ) : (
-                  <ChevronDown
-                    className={`w-4 h-4 text-white shrink-0 transition-transform duration-150 ${
-                      isMonthMenuOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                )}
-              </button>
-
-              {/* Dynamic Month Dropdown Menu */}
-              {isMonthMenuOpen && (
-                <div
-                  id="dropdown-filter-month-satisfaction"
-                  className="absolute top-full left-0 mt-2 z-50 bg-white border border-[#dadada] rounded-2xl shadow-xl overflow-hidden min-w-[240px] animate-fadeIn"
-                  style={{
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                  }}
-                >
-                  <div className="py-2 max-h-80 overflow-y-auto">
-                    {/* Option: Tous les mois */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedMonth('all');
-                        setIsMonthMenuOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-2.5 text-[15px] flex items-center justify-between transition-colors cursor-pointer ${
-                        selectedMonth === 'all'
-                          ? 'bg-[#ffecf8] text-black font-semibold'
-                          : 'text-black hover:bg-[#f8f8f8]'
-                      }`}
-                    >
-                      <span>{t("Tous les mois")}</span>
-                      {selectedMonth === 'all' && <Check className="w-4 h-4 text-[#fa53d5]" />}
-                    </button>
-
-                    <div className="h-px bg-[#eee] my-1" />
-
-                    {availableMonths.length === 0 ? (
-                      <div className="px-4 py-3 text-xs text-neutral-500 italic text-center">
-                        {t("Aucun mois disponible")}
-                      </div>
-                    ) : (
-                      availableMonths.map((m) => {
-                        const isSelected = selectedMonth === m.key;
-                        return (
-                          <button
-                            key={m.key}
-                            type="button"
-                            onClick={() => {
-                              setSelectedMonth(m.key);
-                              setIsMonthMenuOpen(false);
-                            }}
-                            className={`w-full text-left px-4 py-2.5 text-[15px] flex items-center justify-between transition-colors cursor-pointer ${
-                              isSelected
-                                ? 'bg-[#ffecf8] text-black font-semibold'
-                                : 'text-black hover:bg-[#f8f8f8]'
-                            }`}
-                          >
-                            <span>{m.label}</span>
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                                  isSelected
-                                    ? 'bg-[#fa53d5] text-white'
-                                    : 'bg-neutral-100 text-neutral-600'
-                                }`}
-                              >
-                                {m.count}
-                              </span>
-                              {isSelected && <Check className="w-4 h-4 text-[#fa53d5]" />}
-                            </div>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Native System Dropdown for Month Filter */}
+            <select
+              id="filter-month-satisfaction"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              style={{
+                ...rowActionButtonStyle,
+                appearance: 'none',
+                WebkitAppearance: 'none',
+                MozAppearance: 'none',
+                backgroundColor: selectedMonth !== 'all' ? '#fa53d5' : '#000000',
+                boxShadow: selectedMonth !== 'all'
+                  ? 'inset 0 1px 1px #ffffff00, 0 1px 2px #fa53d533, 0 4px 4px #ffffff00, 0 7px 0 -12px #fa53d5, inset 0 6px 12px #ffffff36'
+                  : rowActionButtonStyle.boxShadow,
+                textAlign: 'center',
+                textAlignLast: 'center',
+              }}
+              className="cursor-pointer font-sans whitespace-nowrap hover:opacity-85 transition-all outline-none"
+              title={t("Filtrer par mois")}
+            >
+              <option value="all" className="bg-white text-black font-normal">
+                {t("Tous les mois")}
+              </option>
+              {availableMonths.map((m) => (
+                <option key={m.key} value={m.key} className="bg-white text-black font-normal">
+                  {m.label}
+                </option>
+              ))}
+            </select>
 
             {/* Search Bar Input */}
             <div className="relative w-full sm:w-80 bg-white">
@@ -511,7 +405,7 @@ export default function SatisfactionTab({
       <HelpBubble 
         cacheKey="help_dismissed_satisfaction" 
         text="Retrouvez ici les retours de vos clients suite au lien envoyé après chaque intervention. Ces données permettent de mesurer la satisfaction globale et d'identifier d'éventuels points d'amélioration pour vos services. Chaque retour est horodaté et associé à l'évaluation donnée par le client." 
-        style={{ marginBottom: '10px' }}
+        style={{ marginBottom: '16px' }}
       />
 
       {/* Fixed Info Div: Satisfaction Form Preview */}
@@ -524,7 +418,7 @@ export default function SatisfactionTab({
           backgroundColor: 'rgba(255, 255, 255, 0)',
           boxShadow: 'none',
           maxWidth: '98%',
-          margin: '0 auto 20px auto',
+          margin: '20px auto',
         }}
       >
         <div className="flex flex-col md:flex-row items-center md:items-center gap-4 flex-1">
