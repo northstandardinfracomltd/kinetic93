@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import compression from "compression";
 import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
@@ -22,7 +21,6 @@ const DATA_DIR = path.join(process.cwd(), '.data');
 const STORE_FILE = path.join(DATA_DIR, 'server-store.json');
 
 const serverMemoryStore = new Map<string, any>();
-const serverMemoryStoreTimestamps = new Map<string, number>();
 
 // Initialize disk store
 try {
@@ -35,7 +33,6 @@ try {
     for (const [k, v] of Object.entries(parsed)) {
       if (Array.isArray(v)) {
         serverMemoryStore.set(k, v);
-        serverMemoryStoreTimestamps.set(k, Date.now());
       }
     }
   }
@@ -43,36 +40,24 @@ try {
   console.warn("Failed to load server disk store:", e);
 }
 
-let diskPersistTimer: NodeJS.Timeout | null = null;
 function persistServerStoreToDisk() {
-  if (diskPersistTimer) clearTimeout(diskPersistTimer);
-  diskPersistTimer = setTimeout(() => {
-    try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-      const obj: Record<string, any[]> = {};
-      for (const [k, v] of serverMemoryStore.entries()) {
-        // Skip redundant alias variations to keep disk store lean and fast
-        if (k.startsWith('d') && /^d\d+_/.test(k)) continue;
-        if (/^\d+_/.test(k)) continue;
-        obj[k] = v;
-      }
-      fs.writeFile(STORE_FILE, JSON.stringify(obj), 'utf-8', (err) => {
-        if (err) console.warn("Failed to persist server disk store:", err);
-      });
-    } catch (e) {
-      console.warn("Failed to persist server disk store:", e);
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-  }, 3000);
+    const obj: Record<string, any[]> = {};
+    for (const [k, v] of serverMemoryStore.entries()) {
+      obj[k] = v;
+    }
+    fs.writeFileSync(STORE_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn("Failed to persist server disk store:", e);
+  }
 }
 
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
-
-  // Compression middleware (gzip/deflate) to drastically compress large payloads (e.g. 2500+ DAEs)
-  app.use(compression());
 
   // CORS support and preflight handling for CRM website form embedding & Defibeo Public API
   app.use(["/api/crm/embed-lead", "/v1/*", "/api/v1/*"], (req, res, next) => {
@@ -511,159 +496,23 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   };
 
   const colAliases = getCollectionNameAliases(colName);
+  const rawKeys: string[] = [];
   const activeTenant = (tenantId || 'demo').trim();
   const isDNum = /^d\d+$/i.test(activeTenant);
   const isNum = /^\d+$/.test(activeTenant);
   const numOnly = isDNum || isNum ? activeTenant.replace(/^d/i, '') : '';
-  const primaryKey = activeTenant === 'demo' ? colName : `${activeTenant}_${colName}`;
-
-  // 1. Fast path: check in-memory cache with 30s TTL
-  const lastFetch = serverMemoryStoreTimestamps.get(primaryKey) || 0;
-  if (Date.now() - lastFetch < 30000 && serverMemoryStore.has(primaryKey)) {
-    const cached = serverMemoryStore.get(primaryKey);
-    if (cached !== undefined && cached !== null) {
-      if (Array.isArray(cached)) {
-        return sanitizeForTenant(cached);
-      }
-      return cached;
-    }
-  }
-
-  // Also check normalized key variants in memory cache
-  const candidateCacheKeys = [
-    primaryKey,
-    numOnly ? `D${numOnly}_${colName}` : '',
-    numOnly ? `d${numOnly}_${colName}` : '',
-    numOnly ? `${numOnly}_${colName}` : ''
-  ].filter(Boolean);
-
-  for (const ck of candidateCacheKeys) {
-    const cLastFetch = serverMemoryStoreTimestamps.get(ck) || 0;
-    if (Date.now() - cLastFetch < 30000 && serverMemoryStore.has(ck)) {
-      const cached = serverMemoryStore.get(ck);
-      if (cached !== undefined && cached !== null) {
-        if (Array.isArray(cached)) {
-          return sanitizeForTenant(cached);
-        }
-        return cached;
-      }
-    }
-  }
-
-  // Helper to safely load a document or its chunks from Firestore
-  async function loadServerDocOrChunks(key: string): Promise<{ type: 'array' | 'object' | 'primitive'; data?: any; items?: any[] } | null> {
-    try {
-      const docRef = doc(db, 'appData', key);
-      const snap = await withTimeout(getDoc(docRef), 6000, null);
-      if (!snap || !snap.exists()) {
-        return null;
-      }
-      const payload = snap.data();
-      let isChunked = payload._chunked && typeof payload.chunksCount === 'number';
-      let chunksCount = payload.chunksCount || 0;
-
-      if (!isChunked) {
-        // Check if chunk 0 exists as fallback
-        try {
-          const c0Ref = doc(db, 'appData', `${key}_chunk_0`);
-          const c0Snap = await withTimeout(getDoc(c0Ref), 2000, null);
-          if (c0Snap && c0Snap.exists()) {
-            isChunked = true;
-            chunksCount = 0;
-          }
-        } catch (_) {}
-      }
-
-      if (isChunked) {
-        const combined: any[] = [];
-        if (chunksCount > 0) {
-          const count = Math.min(chunksCount, 50);
-          const chunkPromises = [];
-          for (let i = 0; i < count; i++) {
-            const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
-            chunkPromises.push(withTimeout(getDoc(chunkRef), 6000, null));
-          }
-          const chunkSnaps = await Promise.all(chunkPromises);
-          for (const cSnap of chunkSnaps) {
-            if (cSnap && cSnap.exists()) {
-              const cData = cSnap.data();
-              if (Array.isArray(cData.value)) {
-                combined.push(...cData.value);
-              }
-            }
-          }
-        } else {
-          // Sequentially probe chunks until first missing chunk
-          for (let i = 0; i < 30; i++) {
-            const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
-            const cSnap = await withTimeout(getDoc(chunkRef), 3000, null);
-            if (cSnap && cSnap.exists()) {
-              const cData = cSnap.data();
-              if (Array.isArray(cData.value)) {
-                combined.push(...cData.value);
-              } else {
-                break;
-              }
-            } else {
-              break;
-            }
-          }
-        }
-        return { type: 'array', items: combined };
-      } else if (payload.value !== undefined && payload.value !== null) {
-        if (Array.isArray(payload.value)) {
-          return { type: 'array', items: payload.value };
-        } else if (typeof payload.value === 'object') {
-          return { type: 'object', data: payload.value };
-        } else {
-          return { type: 'primitive', data: payload.value };
-        }
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  // 2. Prioritize primary keys first to avoid fetching 20+ keys concurrently
-  const primaryKeysToTry = [
-    primaryKey,
-    ...(numOnly ? [`D${numOnly}_${colName}`, `d${numOnly}_${colName}`, `${numOnly}_${colName}`] : [])
-  ];
-
-  for (const pKey of primaryKeysToTry) {
-    const res = await loadServerDocOrChunks(pKey);
-    if (res) {
-      if (res.type === 'array' && Array.isArray(res.items) && res.items.length > 0) {
-        const sanitized = sanitizeForTenant(res.items);
-        serverMemoryStore.set(primaryKey, sanitized);
-        serverMemoryStoreTimestamps.set(primaryKey, Date.now());
-        if (pKey !== primaryKey) {
-          serverMemoryStore.set(pKey, sanitized);
-          serverMemoryStoreTimestamps.set(pKey, Date.now());
-        }
-        return sanitized;
-      } else if (res.type === 'object' && res.data) {
-        serverMemoryStore.set(primaryKey, res.data);
-        serverMemoryStoreTimestamps.set(primaryKey, Date.now());
-        return res.data;
-      } else if (res.type === 'primitive' && res.data !== undefined) {
-        serverMemoryStore.set(primaryKey, res.data);
-        serverMemoryStoreTimestamps.set(primaryKey, Date.now());
-        return res.data;
-      }
-    }
-  }
-
-  // 3. Fallback: Check aliases if primary keys returned no data
-  const rawFallbackKeys: string[] = [];
+  
   if (activeTenant === 'demo') {
     for (const c of colAliases) {
-      rawFallbackKeys.push(c, `demo_${c}`);
+      rawKeys.push(c, `demo_${c}`);
     }
   } else {
     for (const c of colAliases) {
-      rawFallbackKeys.push(`${activeTenant}_${c}`);
+      rawKeys.push(`${activeTenant}_${c}`);
       if (numOnly) {
-        rawFallbackKeys.push(`D${numOnly}_${c}`, `d${numOnly}_${c}`, `${numOnly}_${c}`);
+        rawKeys.push(`D${numOnly}_${c}`);
+        rawKeys.push(`d${numOnly}_${c}`);
+        rawKeys.push(`${numOnly}_${c}`);
       }
     }
   }
@@ -675,26 +524,82 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
       const isANum = /^\d+$/.test(a);
       const aNum = isADNum || isANum ? a.replace(/^d/i, '') : '';
       for (const c of colAliases) {
-        rawFallbackKeys.push(`${a}_${c}`);
+        rawKeys.push(`${a}_${c}`);
         if (aNum) {
-          rawFallbackKeys.push(`D${aNum}_${c}`, `d${aNum}_${c}`, `${aNum}_${c}`);
+          rawKeys.push(`D${aNum}_${c}`);
+          rawKeys.push(`d${aNum}_${c}`);
+          rawKeys.push(`${aNum}_${c}`);
         }
       }
     }
   }
 
-  const fallbackKeys = Array.from(new Set(rawFallbackKeys.filter(k => k && !primaryKeysToTry.includes(k))));
+  // Deduplicate keys
+  const collectionKeys = Array.from(new Set(rawKeys.filter(Boolean)));
+
+  // 1. Query Firestore aggregating ALL candidate keys concurrently
   const aggregatedItems: any[] = [];
   let mergedObject: Record<string, any> | null = null;
   let primitiveResult: any = null;
+  let foundAnyValidKey = false;
 
-  const fetchPromises = fallbackKeys.slice(0, 10).map(async (key) => {
-    return loadServerDocOrChunks(key);
+  const fetchPromises = collectionKeys.map(async (collectionKey) => {
+    try {
+      const docRef = doc(db, 'appData', collectionKey);
+      const snap = await withTimeout(getDoc(docRef), 10000, null);
+      if (snap && snap.exists()) {
+        const payload = snap.data();
+        let isChunked = payload._chunked && typeof payload.chunksCount === 'number';
+        let chunksCount = payload.chunksCount || 0;
+
+        if (!isChunked) {
+          try {
+            const c0Ref = doc(db, 'appData', `${collectionKey}_chunk_0`);
+            const c0Snap = await withTimeout(getDoc(c0Ref), 3000, null);
+            if (c0Snap && c0Snap.exists()) {
+              isChunked = true;
+              chunksCount = 30;
+            }
+          } catch (_) {}
+        }
+
+        if (isChunked) {
+          const chunkPromises = [];
+          for (let i = 0; i < (chunksCount || 30); i++) {
+            const chunkRef = doc(db, 'appData', `${collectionKey}_chunk_${i}`);
+            chunkPromises.push(withTimeout(getDoc(chunkRef), 10000, null));
+          }
+          const chunkSnaps = await Promise.all(chunkPromises);
+          let combined: any[] = [];
+          for (const cSnap of chunkSnaps) {
+            if (cSnap && cSnap.exists()) {
+              const cData = cSnap.data();
+              if (Array.isArray(cData.value)) {
+                combined.push(...cData.value);
+              }
+            }
+          }
+          return { type: 'array', items: combined, key: collectionKey };
+        } else if (payload.value !== undefined && payload.value !== null) {
+          if (Array.isArray(payload.value)) {
+            return { type: 'array', items: payload.value, key: collectionKey };
+          } else if (typeof payload.value === 'object') {
+            return { type: 'object', data: payload.value, key: collectionKey };
+          } else {
+            return { type: 'primitive', data: payload.value, key: collectionKey };
+          }
+        }
+      }
+    } catch (err) {
+      // Graceful fallback
+    }
+    return null;
   });
 
   const results = await Promise.allSettled(fetchPromises);
   for (const res of results) {
     if (res.status === 'fulfilled' && res.value) {
+      foundAnyValidKey = true;
       const val = res.value;
       if (val.type === 'array' && Array.isArray(val.items)) {
         aggregatedItems.push(...val.items);
@@ -709,36 +614,58 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   if (aggregatedItems.length > 0) {
     const merged = mergeServerCollectionItems(colName, aggregatedItems);
     const sanitized = sanitizeForTenant(merged);
-    serverMemoryStore.set(primaryKey, sanitized);
-    serverMemoryStoreTimestamps.set(primaryKey, Date.now());
+    for (const ck of collectionKeys) {
+      serverMemoryStore.set(ck, sanitized);
+    }
+    persistServerStoreToDisk();
     return sanitized;
   } else if (mergedObject) {
-    serverMemoryStore.set(primaryKey, mergedObject);
-    serverMemoryStoreTimestamps.set(primaryKey, Date.now());
+    for (const ck of collectionKeys) {
+      serverMemoryStore.set(ck, mergedObject);
+    }
+    persistServerStoreToDisk();
     return mergedObject as any;
   } else if (primitiveResult !== null) {
-    serverMemoryStore.set(primaryKey, primitiveResult);
-    serverMemoryStoreTimestamps.set(primaryKey, Date.now());
+    for (const ck of collectionKeys) {
+      serverMemoryStore.set(ck, primitiveResult);
+    }
     return primitiveResult;
+  } else if (foundAnyValidKey) {
+    const emptyArr: any[] = [];
+    for (const ck of collectionKeys) {
+      serverMemoryStore.set(ck, emptyArr);
+    }
+    return emptyArr;
   }
 
-  // 4. Fallback to existing in-memory store if any
-  for (const k of [primaryKey, ...candidateCacheKeys, ...fallbackKeys]) {
-    if (serverMemoryStore.has(k)) {
-      const val = serverMemoryStore.get(k);
+  // 2. Fallback to in-memory store (aggregate arrays)
+  const memAggregated: any[] = [];
+  let memObj: any = null;
+  for (const collectionKey of collectionKeys) {
+    if (serverMemoryStore.has(collectionKey)) {
+      const val = serverMemoryStore.get(collectionKey);
       if (val !== undefined && val !== null) {
         if (Array.isArray(val)) {
-          return sanitizeForTenant(val);
+          memAggregated.push(...val);
+        } else if (typeof val === 'object' && !memObj) {
+          memObj = val;
         }
-        return val;
       }
     }
+  }
+
+  if (memAggregated.length > 0) {
+    const merged = mergeServerCollectionItems(colName, memAggregated);
+    return sanitizeForTenant(merged);
+  }
+  if (memObj) {
+    return memObj;
   }
 
   return [];
 }
 
-// Helper function to persist collection to Firestore and in-memory store across candidate keys
+// Helper function to persist collection to Firestore and in-memory store across all candidate keys
 async function saveServerCollection(colName: string, tenantId: string, items: any, extraAliases: (string | undefined | null)[] = []): Promise<void> {
   const colAliases = getCollectionNameAliases(colName);
   const activeTenant = (tenantId || 'demo').trim();
@@ -776,50 +703,16 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
   }
 
   const uniqueKeys = Array.from(new Set(targetKeys.filter(Boolean)));
-  const primaryKey = activeTenant === 'demo' ? colName : `${activeTenant}_${colName}`;
-  serverMemoryStore.set(primaryKey, items);
-  serverMemoryStoreTimestamps.set(primaryKey, Date.now());
+  for (const k of uniqueKeys) {
+    serverMemoryStore.set(k, items);
+  }
   persistServerStoreToDisk();
 
-  // Firestore save with chunking support if payload is large (> 400 KB)
-  try {
-    const jsonStr = JSON.stringify(items);
-    if (Array.isArray(items) && jsonStr.length > 400000) {
-      const avgItemLen = Math.max(1, Math.ceil(jsonStr.length / items.length));
-      const chunkSize = Math.max(1, Math.floor(250000 / avgItemLen));
-      const chunksCount = Math.ceil(items.length / chunkSize);
-
-      for (let i = 0; i < chunksCount; i++) {
-        const chunkItems = items.slice(i * chunkSize, (i + 1) * chunkSize);
-        for (const k of uniqueKeys.slice(0, 5)) {
-          try {
-            const chunkRef = doc(db, 'appData', `${k}_chunk_${i}`);
-            withTimeout(setDoc(chunkRef, { value: chunkItems }), 5000, null).catch(() => {});
-          } catch (_) {}
-        }
-      }
-
-      for (const k of uniqueKeys.slice(0, 5)) {
-        try {
-          const mainDocRef = doc(db, 'appData', k);
-          withTimeout(setDoc(mainDocRef, { 
-            _chunked: true, 
-            chunksCount, 
-            totalItems: items.length,
-            updatedAt: new Date().toISOString() 
-          }), 5000, null).catch(() => {});
-        } catch (_) {}
-      }
-    } else {
-      for (const k of uniqueKeys.slice(0, 5)) {
-        try {
-          const docRef = doc(db, 'appData', k);
-          withTimeout(setDoc(docRef, { value: items, _chunked: false }), 5000, null).catch(() => {});
-        } catch (_) {}
-      }
-    }
-  } catch (err) {
-    console.warn(`Error saving server collection ${colName}:`, err);
+  for (const k of uniqueKeys) {
+    try {
+      const docRef = doc(db, 'appData', k);
+      withTimeout(setDoc(docRef, { value: items }), 4000, null).catch(() => {});
+    } catch (_) {}
   }
 }
 
@@ -1448,39 +1341,13 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           return res.status(404).json({ status: "error", error: `Client '${subId}' non trouvé dans l'environnement ${targetTenant.shortEnvId || tenantId}` });
         }
 
-        const total = clients.length;
-        const isAll = req.query.all === 'true' || req.query.limit === 'all' || req.query.max === 'all' || req.query.limit === '0';
-        const rawLimit = req.query.limit || req.query.per_page || req.query.max || req.query.pageSize || req.query.taille;
-        
-        let limit = 250;
-        if (isAll) {
-          limit = total > 0 ? total : 250;
-        } else if (rawLimit) {
-          const parsed = parseInt(String(rawLimit), 10);
-          if (!isNaN(parsed) && parsed > 0) {
-            limit = Math.min(parsed, 10000);
-          }
-        } else if (total <= 250) {
-          limit = total > 0 ? total : 250;
-        }
-
-        const page = Math.max(1, parseInt(String(req.query.page || req.query.p || '1'), 10) || 1);
-        const totalPages = Math.max(1, Math.ceil(total / limit));
-        const startIndex = (page - 1) * limit;
-        const paginatedClients = isAll ? clients : clients.slice(startIndex, startIndex + limit);
-
         return res.json({
           status: "success",
           environnement: targetTenant.shortEnvId || tenantId,
-          page,
-          limit,
-          total,
-          total_pages: totalPages,
-          count: paginatedClients.length,
-          has_more: page < totalPages,
-          next_page: page < totalPages ? `/v1/clients?page=${page + 1}&limit=${limit}` : null,
-          clients: paginatedClients,
-          data: paginatedClients
+          count: clients.length,
+          total: clients.length,
+          clients,
+          data: clients
         });
       }
 
@@ -1586,39 +1453,13 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           });
         }
 
-        const total = defibs.length;
-        const isAll = req.query.all === 'true' || req.query.limit === 'all' || req.query.max === 'all' || req.query.limit === '0';
-        const rawLimit = req.query.limit || req.query.per_page || req.query.max || req.query.pageSize || req.query.taille;
-        
-        let limit = 250;
-        if (isAll) {
-          limit = total > 0 ? total : 250;
-        } else if (rawLimit) {
-          const parsed = parseInt(String(rawLimit), 10);
-          if (!isNaN(parsed) && parsed > 0) {
-            limit = Math.min(parsed, 10000);
-          }
-        } else if (total <= 250) {
-          limit = total > 0 ? total : 250;
-        }
-
-        const page = Math.max(1, parseInt(String(req.query.page || req.query.p || '1'), 10) || 1);
-        const totalPages = Math.max(1, Math.ceil(total / limit));
-        const startIndex = (page - 1) * limit;
-        const paginatedDefibs = isAll ? defibs : defibs.slice(startIndex, startIndex + limit);
-
         return res.json({
           status: "success",
           environnement: targetTenant.shortEnvId || tenantId,
-          page,
-          limit,
-          total,
-          total_pages: totalPages,
-          count: paginatedDefibs.length,
-          has_more: page < totalPages,
-          next_page: page < totalPages ? `/v1/defibrillateurs?page=${page + 1}&limit=${limit}` : null,
-          defibrillateurs: paginatedDefibs,
-          data: paginatedDefibs
+          count: defibs.length,
+          total: defibs.length,
+          defibrillateurs: defibs,
+          data: defibs
         });
       }
 
