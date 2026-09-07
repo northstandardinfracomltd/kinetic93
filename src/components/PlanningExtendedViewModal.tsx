@@ -468,7 +468,15 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       <div className="bg-white border-b border-neutral-200 px-4 py-3 sm:px-6 flex flex-wrap items-center justify-between gap-3 shrink-0">
         {/* Left: Title */}
         <div className="flex items-center gap-3">
-          <span className="text-xl font-bold tracking-tight text-neutral-900">
+          <span
+            style={{
+              letterSpacing: '0px',
+              color: '#000',
+              cursor: 'default',
+              fontSize: '22px',
+              fontWeight: 'bold'
+            }}
+          >
             Planning vue étendue
           </span>
         </div>
@@ -478,16 +486,25 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={handlePrevMonth}
-            className="px-3.5 py-1.5 rounded-lg border border-neutral-300 text-neutral-800 text-sm font-semibold hover:bg-neutral-100 active:bg-neutral-200 transition-colors cursor-pointer"
+            className="transition-colors cursor-pointer"
+            style={{
+              fontSize: '18px',
+              borderRadius: '13px',
+              padding: '10px 20px',
+              border: 'none',
+              background: '#edededa6',
+              color: '#fff'
+            }}
             title="Mois précédent"
           >
             Précédent
           </button>
 
           <div
-            className="px-4 py-0 text-3xl text-neutral-950 min-w-[200px] text-center select-none"
+            className="px-4 py-0 text-neutral-950 min-w-[200px] text-center select-none"
             style={{
               fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif",
+              fontSize: '24px',
               lineHeight: '1.2'
             }}
           >
@@ -497,7 +514,15 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={handleNextMonth}
-            className="px-3.5 py-1.5 rounded-lg border border-neutral-300 text-neutral-800 text-sm font-semibold hover:bg-neutral-100 active:bg-neutral-200 transition-colors cursor-pointer"
+            className="transition-colors cursor-pointer"
+            style={{
+              fontSize: '18px',
+              borderRadius: '13px',
+              padding: '10px 20px',
+              border: 'none',
+              background: '#edededa6',
+              color: '#fff'
+            }}
             title="Mois suivant"
           >
             Suivant
@@ -506,7 +531,15 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={handleCurrentMonth}
-            className="px-3 py-1.5 rounded-lg border border-neutral-300 text-neutral-700 text-sm font-medium hover:bg-neutral-100 transition-colors cursor-pointer ml-1"
+            className="transition-colors cursor-pointer ml-1"
+            style={{
+              fontSize: '18px',
+              borderRadius: '13px',
+              padding: '10px 20px',
+              border: 'none',
+              background: '#edededa6',
+              color: '#fff'
+            }}
             title="Revenir au mois en cours"
           >
             Aujourd'hui
@@ -525,7 +558,15 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             type="button"
             disabled={isRefreshing}
             onClick={handleRefresh}
-            className="px-3.5 py-1.5 rounded-lg border border-neutral-300 text-neutral-800 text-sm font-semibold hover:bg-neutral-100 active:bg-neutral-200 transition-colors cursor-pointer disabled:opacity-50"
+            className="transition-colors cursor-pointer disabled:opacity-50"
+            style={{
+              fontSize: '18px',
+              borderRadius: '13px',
+              padding: '10px 20px',
+              border: 'none',
+              background: '#edededa6',
+              color: '#fff'
+            }}
             title="Recharger les données sans recharger la page"
           >
             {isRefreshing ? 'Actualisation...' : 'Actualiser'}
@@ -534,7 +575,15 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-black text-white text-sm font-bold hover:bg-neutral-800 active:bg-neutral-900 transition-colors cursor-pointer ml-2"
+            className="transition-colors cursor-pointer ml-2"
+            style={{
+              fontSize: '18px',
+              borderRadius: '13px',
+              padding: '10px 20px',
+              border: 'none',
+              color: '#fff',
+              background: '#000000'
+            }}
           >
             Fermer
           </button>
@@ -565,7 +614,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       <div className="flex-1 overflow-auto bg-white">
         <div className="inline-block min-w-full align-top">
           {/* Timeline Table Grid */}
-          <table className="border-collapse text-left" style={{ minWidth: `${260 + daysInMonth.length * 108}px`, width: '100%' }}>
+          <table className="border-collapse text-left" style={{ minWidth: `${260 + daysInMonth.length * 170}px`, width: '100%' }}>
             {/* Header: Weeks and Days */}
             <thead className="sticky top-0 z-30 bg-white">
               {/* Row 1: Weeks */}
@@ -596,7 +645,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                 {daysInMonth.map((d) => (
                   <th
                     key={`day-header-${d.isoDate}`}
-                    className={`border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none w-[108px] min-w-[108px] max-w-[108px] ${
+                    className={`border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none w-[170px] min-w-[170px] max-w-[170px] ${
                       d.isToday
                         ? 'bg-pink-100/80 text-[#FD4EBB] border-b-2 border-b-[#FD4EBB]'
                         : d.isWeekend
@@ -643,7 +692,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                       {daysInMonth.map((d) => (
                         <td
                           key={`tech-cell-${tech.name}-${d.isoDate}`}
-                          className={`border-r border-neutral-200 p-0 text-center w-[108px] min-w-[108px] max-w-[108px] ${
+                          className={`border-r border-neutral-200 p-0 text-center w-[170px] min-w-[170px] max-w-[170px] ${
                             d.isToday ? 'bg-pink-50/40' : d.isWeekend ? 'bg-neutral-100/40' : 'bg-neutral-50/60'
                           }`}
                         />
@@ -657,7 +706,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                         {daysInMonth.map((d) => (
                           <td
                             key={`empty-${tech.name}-${d.isoDate}`}
-                            className={`border-r border-neutral-200 p-1 w-[108px] min-w-[108px] max-w-[108px] ${
+                            className={`border-r border-neutral-200 p-1 w-[170px] min-w-[170px] max-w-[170px] ${
                               d.isToday ? 'bg-pink-50/30' : d.isWeekend ? 'bg-neutral-100/30' : 'bg-white'
                             }`}
                           />
@@ -667,9 +716,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
 
                     {/* TOURNÉES PARENT ENCARTS & MISSIONS */}
                     {tours.map((tItem, tIdx) => {
-                      const dateRangeStr = tItem.startIso === tItem.endIso
-                        ? tItem.startIso.split('-').reverse().slice(0, 2).join('/')
-                        : `${tItem.startIso.split('-').reverse().slice(0, 2).join('/')} → ${tItem.endIso.split('-').reverse().slice(0, 2).join('/')}`;
+                      const startFormatted = tItem.startIso.split('-').reverse().slice(0, 2).join('/');
+                      const endFormatted = tItem.endIso.split('-').reverse().slice(0, 2).join('/');
 
                       return (
                         <tr
@@ -678,12 +726,23 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                         >
                           {/* Sticky Left: Tournée Parent Encart */}
                           <td className="sticky left-0 z-20 bg-white border-r border-neutral-300 px-3 py-2 w-[260px] min-w-[260px] align-top">
-                            <div className="border-l-4 border-[#FD4EBB] pl-2 space-y-0.5">
+                            <div className="border-l-4 border-[#FD4EBB] pl-2 space-y-1">
                               <div className="font-bold text-xs text-neutral-900 truncate" title={tItem.title}>
                                 {tItem.title}
                               </div>
-                              <div className="text-[11px] text-neutral-500 truncate">
-                                {dateRangeStr}
+                              <div className="flex items-center gap-1.5 pt-0.5">
+                                <span
+                                  className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-white text-[11px] font-semibold"
+                                  style={{ backgroundColor: '#000000' }}
+                                >
+                                  {startFormatted}
+                                </span>
+                                <span
+                                  className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-white text-[11px] font-semibold"
+                                  style={{ backgroundColor: '#000000' }}
+                                >
+                                  {endFormatted}
+                                </span>
                               </div>
                             </div>
                           </td>
@@ -696,7 +755,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                             return (
                               <td
                                 key={`tour-day-${tItem.tourId}-${d.isoDate}`}
-                                className={`border-r border-neutral-200 p-1 align-top w-[108px] min-w-[108px] max-w-[108px] ${
+                                className={`border-r border-neutral-200 p-1 align-top w-[170px] min-w-[170px] max-w-[170px] ${
                                   d.isToday
                                     ? 'bg-pink-50/50'
                                     : isWithinTour
@@ -707,7 +766,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                 }`}
                               >
                                 {dayMissions.length > 0 ? (
-                                  <div className="space-y-1">
+                                  <div className="space-y-1.5">
                                     {dayMissions.map((m: any, mIdx: number) => {
                                       const details = getMissionDetails(m);
 
@@ -723,21 +782,35 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                       return (
                                         <div
                                           key={`mission-bar-${m.id || mIdx}`}
-                                          className="w-[100px] max-w-[100px] px-1.5 py-1 rounded text-white text-[10.5px] font-semibold leading-tight shadow-xs select-none cursor-default overflow-hidden"
+                                          className="w-[160px] max-w-[160px] select-none cursor-default overflow-hidden"
                                           style={{
-                                            backgroundColor: barColor
+                                            backgroundColor: barColor,
+                                            borderRadius: '10px',
+                                            padding: '8px 12px',
+                                            fontSize: '12px',
+                                            color: '#fff',
+                                            lineHeight: '16px'
                                           }}
                                         >
                                           {/* Line 1: Créneau - Identifiant */}
-                                          <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block">
+                                          <div
+                                            className="truncate whitespace-nowrap overflow-hidden text-ellipsis block font-semibold"
+                                            style={{ fontSize: '12px', lineHeight: '16px', color: '#fff' }}
+                                          >
                                             {line1 || 'Mission'}
                                           </div>
                                           {/* Line 2: Client - Site */}
-                                          <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block text-white/95">
+                                          <div
+                                            className="truncate whitespace-nowrap overflow-hidden text-ellipsis block"
+                                            style={{ fontSize: '12px', lineHeight: '16px', color: '#fff' }}
+                                          >
                                             {line2 || 'Client'}
                                           </div>
                                           {/* Line 3: Localisation */}
-                                          <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block text-white/85 text-[9.5px]">
+                                          <div
+                                            className="truncate whitespace-nowrap overflow-hidden text-ellipsis block"
+                                            style={{ fontSize: '12px', lineHeight: '16px', color: '#fff' }}
+                                          >
                                             {line3 || '-'}
                                           </div>
                                         </div>
@@ -776,7 +849,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                           return (
                             <td
                               key={`spont-cell-${tech.name}-${d.isoDate}`}
-                              className={`border-r border-neutral-200 p-1 align-top w-[108px] min-w-[108px] max-w-[108px] ${
+                              className={`border-r border-neutral-200 p-1 align-top w-[170px] min-w-[170px] max-w-[170px] ${
                                 d.isToday
                                   ? 'bg-pink-50/50'
                                   : d.isWeekend
@@ -785,7 +858,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                               }`}
                             >
                               {matchingEvts.length > 0 && (
-                                <div className="space-y-1">
+                                <div className="space-y-1.5">
                                   {matchingEvts.map((evt) => {
                                     const line1 = [evt.creneau, 'Spontané'].filter(Boolean).join(' - ');
                                     const line2 = evt.intitule || '';
@@ -794,15 +867,32 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                     return (
                                       <div
                                         key={evt.id}
-                                        className="w-[100px] max-w-[100px] px-1.5 py-1 rounded bg-[#9333ea] text-white text-[10.5px] font-semibold leading-tight shadow-xs select-none cursor-default overflow-hidden"
+                                        className="w-[160px] max-w-[160px] select-none cursor-default overflow-hidden"
+                                        style={{
+                                          backgroundColor: '#9333ea',
+                                          borderRadius: '10px',
+                                          padding: '8px 12px',
+                                          fontSize: '12px',
+                                          color: '#fff',
+                                          lineHeight: '16px'
+                                        }}
                                       >
-                                        <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block">
+                                        <div
+                                          className="truncate whitespace-nowrap overflow-hidden text-ellipsis block font-semibold"
+                                          style={{ fontSize: '12px', lineHeight: '16px', color: '#fff' }}
+                                        >
                                           {line1}
                                         </div>
-                                        <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block text-white/95">
+                                        <div
+                                          className="truncate whitespace-nowrap overflow-hidden text-ellipsis block"
+                                          style={{ fontSize: '12px', lineHeight: '16px', color: '#fff' }}
+                                        >
                                           {line2}
                                         </div>
-                                        <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block text-white/85 text-[9.5px]">
+                                        <div
+                                          className="truncate whitespace-nowrap overflow-hidden text-ellipsis block"
+                                          style={{ fontSize: '12px', lineHeight: '16px', color: '#fff' }}
+                                        >
                                           {line3 || '-'}
                                         </div>
                                       </div>
