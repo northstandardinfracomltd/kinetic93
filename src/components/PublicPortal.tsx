@@ -10813,12 +10813,24 @@ export default function PublicPortal({
                   className="space-y-6 pb-16 animate-fadeIn"
                   id="tab-temps-screen"
                 >
-                  <HelpBubble
-                    cacheKey="help_webapp_temps_improvement"
-                    text="Cette page est en cours d'amélioration. Un peu de patience : votre onglet sera bientôt encore plus intuitif et agréable à utiliser !"
-                  />
-
                   <style>{`
+                    #tab-temps-screen input,
+                    #tab-temps-screen textarea,
+                    #tab-temps-screen select {
+                      box-sizing: border-box !important;
+                      max-width: 100% !important;
+                    }
+                    #tab-temps-screen input[type="date"],
+                    #tab-temps-screen input[type="time"],
+                    #tab-temps-screen input[type="text"] {
+                      -webkit-appearance: none !important;
+                      appearance: none !important;
+                      box-sizing: border-box !important;
+                      width: 100% !important;
+                      max-width: 100% !important;
+                      min-width: 0 !important;
+                      display: block !important;
+                    }
                     #tab-temps-screen input[type="date"]::-webkit-calendar-picker-indicator,
                     #tab-temps-screen input[type="time"]::-webkit-calendar-picker-indicator {
                       display: none !important;
@@ -10827,6 +10839,14 @@ export default function PublicPortal({
                       width: 0 !important;
                       height: 0 !important;
                       margin: 0 !important;
+                    }
+                    #tab-temps-screen input[type="date"]::-webkit-date-and-time-value,
+                    #tab-temps-screen input[type="time"]::-webkit-date-and-time-value {
+                      text-align: left !important;
+                      margin: 0 !important;
+                      padding: 0 !important;
+                      min-height: 1.2em !important;
+                      line-height: normal !important;
                     }
                   `}</style>
 
@@ -10945,9 +10965,10 @@ export default function PublicPortal({
                         return (
                           <div
                             key={p.id}
-                            className="p-4 sm:p-5 rounded-[16px] space-y-4 bg-white shadow-xs"
+                            className="p-4 sm:p-5 rounded-[16px] space-y-4 bg-white shadow-xs overflow-hidden max-w-full box-border"
                             style={{
                               border: "1px solid rgb(201, 190, 205)",
+                              boxSizing: "border-box",
                             }}
                             id={`pointage-card-${p.id}`}
                           >
@@ -10971,9 +10992,9 @@ export default function PublicPortal({
                             </div>
 
                             {/* Main Fields Grid */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full min-w-0 max-w-full">
                               {/* Date Journée. (Always visible) */}
-                              <div className="space-y-1">
+                              <div className="space-y-1 min-w-0 w-full">
                                 <label
                                   style={{ fontSize: "16px", color: "#000000" }}
                                   className="block font-bold"
@@ -10991,8 +11012,14 @@ export default function PublicPortal({
                                     outline: "none",
                                     color: "rgb(0, 0, 0)",
                                     backgroundColor: "#ffffff",
+                                    boxSizing: "border-box",
+                                    width: "100%",
+                                    maxWidth: "100%",
+                                    minWidth: 0,
+                                    WebkitAppearance: "none",
+                                    appearance: "none",
                                   }}
-                                  className="w-full"
+                                  className="w-full min-w-0 max-w-full box-border block"
                                   onChange={(e) =>
                                     handleEditPointageField(p.id, {
                                       startDate: getFrenchDate(e.target.value),
@@ -11004,7 +11031,7 @@ export default function PublicPortal({
                               {isExpanded && (
                                 <>
                                   {/* Début Journée. */}
-                                  <div className="space-y-1">
+                                  <div className="space-y-1 min-w-0 w-full">
                                     <label
                                       style={{ fontSize: "16px", color: "#000000" }}
                                       className="block font-bold"
@@ -11022,8 +11049,14 @@ export default function PublicPortal({
                                         outline: "none",
                                         color: "rgb(0, 0, 0)",
                                         backgroundColor: "#ffffff",
+                                        boxSizing: "border-box",
+                                        width: "100%",
+                                        maxWidth: "100%",
+                                        minWidth: 0,
+                                        WebkitAppearance: "none",
+                                        appearance: "none",
                                       }}
-                                      className="w-full"
+                                      className="w-full min-w-0 max-w-full box-border block"
                                       onChange={(e) =>
                                         handleEditPointageField(p.id, {
                                           startTime: e.target.value,
@@ -11033,7 +11066,7 @@ export default function PublicPortal({
                                   </div>
 
                                   {/* Fin Journée. */}
-                                  <div className="space-y-1">
+                                  <div className="space-y-1 min-w-0 w-full">
                                     <label
                                       style={{ fontSize: "16px", color: "#000000" }}
                                       className="block font-bold"
@@ -11051,8 +11084,14 @@ export default function PublicPortal({
                                         outline: "none",
                                         color: "rgb(0, 0, 0)",
                                         backgroundColor: "#ffffff",
+                                        boxSizing: "border-box",
+                                        width: "100%",
+                                        maxWidth: "100%",
+                                        minWidth: 0,
+                                        WebkitAppearance: "none",
+                                        appearance: "none",
                                       }}
-                                      className="w-full"
+                                      className="w-full min-w-0 max-w-full box-border block"
                                       onChange={(e) =>
                                         handleEditPointageField(p.id, {
                                           endTime: e.target.value,
@@ -11062,7 +11101,7 @@ export default function PublicPortal({
                                   </div>
 
                                   {/* Amplitude Journée. (Disabled) */}
-                                  <div className="space-y-1">
+                                  <div className="space-y-1 min-w-0 w-full">
                                     <label
                                       style={{ fontSize: "16px", color: "#000000" }}
                                       className="block font-bold"
@@ -11082,13 +11121,19 @@ export default function PublicPortal({
                                         outline: "none",
                                         color: "rgb(0, 0, 0)",
                                         backgroundColor: "#e2d9e6",
+                                        boxSizing: "border-box",
+                                        width: "100%",
+                                        maxWidth: "100%",
+                                        minWidth: 0,
+                                        WebkitAppearance: "none",
+                                        appearance: "none",
                                       }}
-                                      className="w-full cursor-not-allowed"
+                                      className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
                                     />
                                   </div>
 
                                   {/* Commentaire Journée. */}
-                                  <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+                                  <div className="space-y-1 sm:col-span-2 lg:col-span-2 min-w-0 w-full">
                                     <label
                                       style={{ fontSize: "16px", color: "#000000" }}
                                       className="block font-bold"
@@ -11108,8 +11153,14 @@ export default function PublicPortal({
                                         outline: "none",
                                         color: "rgb(0, 0, 0)",
                                         backgroundColor: "#ffffff",
+                                        boxSizing: "border-box",
+                                        width: "100%",
+                                        maxWidth: "100%",
+                                        minWidth: 0,
+                                        WebkitAppearance: "none",
+                                        appearance: "none",
                                       }}
-                                      className="w-full"
+                                      className="w-full min-w-0 max-w-full box-border block"
                                       onChange={(e) =>
                                         handleEditPointageField(p.id, {
                                           comment: e.target.value,
@@ -11121,46 +11172,53 @@ export default function PublicPortal({
                               )}
                             </div>
 
-                            {/* Full-width Toggle Button: Dérouler / Réduire */}
-                            <button
-                              type="button"
-                              onClick={() => togglePointageExpanded(p.id)}
-                              style={{
-                                color: "#fff",
-                                boxShadow:
-                                  "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                                backgroundColor: "rgb(39, 78, 255)",
-                                borderRadius: "13px",
-                                padding: "10px 18px",
-                                fontSize: "18px",
-                                fontWeight: 700,
-                                border: "none",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: "6px",
-                                width: "100%",
-                              }}
-                              className="w-full shrink-0 select-none transition-all active:scale-[0.99]"
-                            >
-                              {isExpanded ? t("Réduire") : t("Dérouler")}
-                            </button>
+                            {/* Full-width Toggle Button: Dérouler (only when collapsed) */}
+                            {!isExpanded && (
+                              <button
+                                type="button"
+                                onClick={() => togglePointageExpanded(p.id)}
+                                style={{
+                                  color: "#fff",
+                                  boxShadow:
+                                    "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                  backgroundColor: "rgb(39, 78, 255)",
+                                  borderRadius: "13px",
+                                  padding: "10px 18px",
+                                  fontSize: "18px",
+                                  fontWeight: 700,
+                                  border: "none",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: "6px",
+                                  width: "100%",
+                                }}
+                                className="w-full shrink-0 select-none transition-all active:scale-[0.99]"
+                              >
+                                {t("Dérouler")}
+                              </button>
+                            )}
 
                             {/* Expanded Details */}
                             {isExpanded && (
-                              <div className="space-y-4 pt-1">
+                              <div className="space-y-4 pt-1 w-full min-w-0">
                                 {/* Section Title : « Trajet » */}
                                 <div className="space-y-3 pt-1">
                                   <h4
-                                    style={{ fontSize: "18px", color: "#000000" }}
-                                    className="font-bold"
+                                    style={{
+                                      fontSize: "22px",
+                                      color: "#000000",
+                                      fontFamily: "'Gochi', cursive, sans-serif",
+                                      cursor: "default",
+                                    }}
+                                    className="font-bold font-gochi"
                                   >
                                     {t("Trajet")}
                                   </h4>
-                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full min-w-0 max-w-full">
                                     {/* Temps Trajet Matin. */}
-                                    <div className="space-y-1">
+                                    <div className="space-y-1 min-w-0 w-full">
                                       <label
                                         style={{ fontSize: "16px", color: "#000000" }}
                                         className="block font-bold"
@@ -11179,8 +11237,14 @@ export default function PublicPortal({
                                           outline: "none",
                                           color: "rgb(0, 0, 0)",
                                           backgroundColor: "#ffffff",
+                                          boxSizing: "border-box",
+                                          width: "100%",
+                                          maxWidth: "100%",
+                                          minWidth: 0,
+                                          WebkitAppearance: "none",
+                                          appearance: "none",
                                         }}
-                                        className="w-full"
+                                        className="w-full min-w-0 max-w-full box-border block"
                                         onChange={(e) =>
                                           handleEditPointageField(p.id, {
                                             trajetMatin: e.target.value,
@@ -11190,7 +11254,7 @@ export default function PublicPortal({
                                     </div>
 
                                     {/* Temps Trajet Soir. */}
-                                    <div className="space-y-1">
+                                    <div className="space-y-1 min-w-0 w-full">
                                       <label
                                         style={{ fontSize: "16px", color: "#000000" }}
                                         className="block font-bold"
@@ -11209,8 +11273,14 @@ export default function PublicPortal({
                                           outline: "none",
                                           color: "rgb(0, 0, 0)",
                                           backgroundColor: "#ffffff",
+                                          boxSizing: "border-box",
+                                          width: "100%",
+                                          maxWidth: "100%",
+                                          minWidth: 0,
+                                          WebkitAppearance: "none",
+                                          appearance: "none",
                                         }}
-                                        className="w-full"
+                                        className="w-full min-w-0 max-w-full box-border block"
                                         onChange={(e) =>
                                           handleEditPointageField(p.id, {
                                             trajetSoir: e.target.value,
@@ -11220,7 +11290,7 @@ export default function PublicPortal({
                                     </div>
 
                                     {/* Temps Trajet Journée. (Disabled) */}
-                                    <div className="space-y-1">
+                                    <div className="space-y-1 min-w-0 w-full">
                                       <label
                                         style={{ fontSize: "16px", color: "#000000" }}
                                         className="block font-bold"
@@ -11240,8 +11310,14 @@ export default function PublicPortal({
                                           outline: "none",
                                           color: "rgb(0, 0, 0)",
                                           backgroundColor: "#e2d9e6",
+                                          boxSizing: "border-box",
+                                          width: "100%",
+                                          maxWidth: "100%",
+                                          minWidth: 0,
+                                          WebkitAppearance: "none",
+                                          appearance: "none",
                                         }}
-                                        className="w-full cursor-not-allowed"
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
                                       />
                                     </div>
                                   </div>
@@ -11250,14 +11326,19 @@ export default function PublicPortal({
                                 {/* Section Title : « Repas » */}
                                 <div className="space-y-3 pt-1">
                                   <h4
-                                    style={{ fontSize: "18px", color: "#000000" }}
-                                    className="font-bold"
+                                    style={{
+                                      fontSize: "22px",
+                                      color: "#000000",
+                                      fontFamily: "'Gochi', cursive, sans-serif",
+                                      cursor: "default",
+                                    }}
+                                    className="font-bold font-gochi"
                                   >
                                     {t("Repas")}
                                   </h4>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full min-w-0 max-w-full">
                                     {/* Temps de repas. */}
-                                    <div className="space-y-1">
+                                    <div className="space-y-1 min-w-0 w-full">
                                       <label
                                         style={{ fontSize: "16px", color: "#000000" }}
                                         className="block font-bold"
@@ -11276,8 +11357,14 @@ export default function PublicPortal({
                                           outline: "none",
                                           color: "rgb(0, 0, 0)",
                                           backgroundColor: "#ffffff",
+                                          boxSizing: "border-box",
+                                          width: "100%",
+                                          maxWidth: "100%",
+                                          minWidth: 0,
+                                          WebkitAppearance: "none",
+                                          appearance: "none",
                                         }}
-                                        className="w-full"
+                                        className="w-full min-w-0 max-w-full box-border block"
                                         onChange={(e) =>
                                           handleEditPointageField(p.id, {
                                             tempsRepas: e.target.value,
@@ -11291,14 +11378,19 @@ export default function PublicPortal({
                                 {/* Title : « CTT » */}
                                 <div className="space-y-3 pt-1">
                                   <h4
-                                    style={{ fontSize: "18px", color: "#000000" }}
-                                    className="font-bold"
+                                    style={{
+                                      fontSize: "22px",
+                                      color: "#000000",
+                                      fontFamily: "'Gochi', cursive, sans-serif",
+                                      cursor: "default",
+                                    }}
+                                    className="font-bold font-gochi"
                                   >
                                     {t("CTT")}
                                   </h4>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full min-w-0 max-w-full">
                                     {/* Amplitude Journée. (Disabled under CTT) */}
-                                    <div className="space-y-1">
+                                    <div className="space-y-1 min-w-0 w-full">
                                       <label
                                         style={{ fontSize: "16px", color: "#000000" }}
                                         className="block font-bold"
@@ -11318,13 +11410,19 @@ export default function PublicPortal({
                                           outline: "none",
                                           color: "rgb(0, 0, 0)",
                                           backgroundColor: "#e2d9e6",
+                                          boxSizing: "border-box",
+                                          width: "100%",
+                                          maxWidth: "100%",
+                                          minWidth: 0,
+                                          WebkitAppearance: "none",
+                                          appearance: "none",
                                         }}
-                                        className="w-full cursor-not-allowed"
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
                                       />
                                     </div>
 
                                     {/* Temps Administratif/Autres. */}
-                                    <div className="space-y-1">
+                                    <div className="space-y-1 min-w-0 w-full">
                                       <label
                                         style={{ fontSize: "16px", color: "#000000" }}
                                         className="block font-bold"
@@ -11343,8 +11441,14 @@ export default function PublicPortal({
                                           outline: "none",
                                           color: "rgb(0, 0, 0)",
                                           backgroundColor: "#ffffff",
+                                          boxSizing: "border-box",
+                                          width: "100%",
+                                          maxWidth: "100%",
+                                          minWidth: 0,
+                                          WebkitAppearance: "none",
+                                          appearance: "none",
                                         }}
-                                        className="w-full"
+                                        className="w-full min-w-0 max-w-full box-border block"
                                         onChange={(e) =>
                                           handleEditPointageField(p.id, {
                                             tempsAdmin: e.target.value,
@@ -11354,6 +11458,32 @@ export default function PublicPortal({
                                     </div>
                                   </div>
                                 </div>
+
+                                {/* Full-width Toggle Button: Réduire (after the last field: Temps Administratif/Autres.) */}
+                                <button
+                                  type="button"
+                                  onClick={() => togglePointageExpanded(p.id)}
+                                  style={{
+                                    color: "#fff",
+                                    boxShadow:
+                                      "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                    backgroundColor: "rgb(39, 78, 255)",
+                                    borderRadius: "13px",
+                                    padding: "10px 18px",
+                                    fontSize: "18px",
+                                    fontWeight: 700,
+                                    border: "none",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "6px",
+                                    width: "100%",
+                                  }}
+                                  className="w-full shrink-0 select-none transition-all active:scale-[0.99]"
+                                >
+                                  {t("Réduire")}
+                                </button>
 
                                 {/* Card Buttons: Supprimer & Enregistrer */}
                                 <div className="flex items-center gap-3 pt-3 w-full">
