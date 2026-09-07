@@ -1587,6 +1587,7 @@ export default function PublicPortal({
 
   // Tournées/Interventions Dummy State
   const [tours, setTours] = useState(() => {
+    let activeTechName = "";
     // Try to load and translate from defib_fsm_tours
     try {
       const mainToursRaw = localStorage.getItem("defib_fsm_tours");
@@ -1597,7 +1598,9 @@ export default function PublicPortal({
           activeTech = JSON.parse(activeTechRaw);
         } catch {}
       }
-      const activeTechName = activeTech ? activeTech.name : "";
+      if (activeTech?.name) {
+        activeTechName = activeTech.name;
+      }
 
       if (mainToursRaw) {
         const mainTours = JSON.parse(mainToursRaw);
@@ -1762,6 +1765,7 @@ export default function PublicPortal({
       {
         id: "tour-1",
         title: "Tournée Nantes Hyper-Centre",
+        techName: activeTechName || "Jakub Démo",
         startDate: "03-06-2026",
         passages: [
           {
@@ -1802,6 +1806,7 @@ export default function PublicPortal({
       {
         id: "tour-2",
         title: "Tournée Agglomération Ouest",
+        techName: activeTechName || "Jakub Démo",
         startDate: "04-06-2026",
         passages: [
           {
@@ -2300,14 +2305,117 @@ export default function PublicPortal({
     return 0;
   };
 
-  const sortedAndLimitedReports = [...generatedReports]
-    .filter((rep) => rep.validated !== true)
-    .sort((a, b) => {
-      const timeA = parseReportDate(a.date);
-      const timeB = parseReportDate(b.date);
-      return timeB - timeA;
-    })
-    .slice(0, 50);
+  const [selectedReportTech, setSelectedReportTech] = useState<string>(() => {
+    return authenticatedUser?.name || "";
+  });
+
+  const hasInitializedReportTechRef = useRef(false);
+  useEffect(() => {
+    if (authenticatedUser?.name && !hasInitializedReportTechRef.current) {
+      setSelectedReportTech(authenticatedUser.name);
+      hasInitializedReportTechRef.current = true;
+    }
+  }, [authenticatedUser?.name]);
+
+  const availableReportTechnicians = useMemo(() => {
+    const techSet = new Set<string>();
+    if (authenticatedUser?.name?.trim()) {
+      techSet.add(authenticatedUser.name.trim());
+    }
+    (members || []).forEach((m) => {
+      if (m?.name?.trim()) {
+        techSet.add(m.name.trim());
+      }
+    });
+    generatedReports.forEach((rep) => {
+      if (
+        rep?.techName &&
+        rep.techName.trim() &&
+        rep.techName !== "Non assigné" &&
+        rep.techName !== "Technicien connecté" &&
+        rep.techName !== "Un technicien"
+      ) {
+        techSet.add(rep.techName.trim());
+      }
+    });
+    if (selectedReportTech && selectedReportTech !== "all") {
+      techSet.add(selectedReportTech.trim());
+    }
+    return Array.from(techSet).sort((a, b) => a.localeCompare(b, "fr"));
+  }, [authenticatedUser, members, generatedReports, selectedReportTech]);
+
+  const sortedAndLimitedReports = useMemo(() => {
+    return [...generatedReports]
+      .filter((rep) => {
+        // 1. Exclure les rapports validés (seuls les rapports À MODÉRER doivent apparaître)
+        if (rep.validated === true) return false;
+
+        // 2. Exclure les rapports À VENIR
+        const isUpcoming = Boolean(
+          rep.isUpcoming === true ||
+          rep.status === "À venir" ||
+          rep.status === "upcoming" ||
+          rep.upcoming === true ||
+          rep.isFuture === true ||
+          rep.date === "À venir" ||
+          (typeof rep.id === "string" && rep.id.startsWith("REP-UPCOMING-"))
+        );
+        if (isUpcoming) return false;
+
+        // 3. Exclure les missions formation
+        const isFormation = Boolean(
+          rep.equipmentType === "Formation" ||
+          rep.equipmentType?.toLowerCase()?.includes("formation") ||
+          rep.defibSnapshot?.categorie === "Formation" ||
+          rep.defibSnapshot?.categorie?.toLowerCase()?.includes("formation") ||
+          rep.formationId ||
+          rep.defibIdentifiant === "Formation"
+        );
+        if (isFormation) return false;
+
+        // 4. Doit être un rapport EFFECTUÉ
+        const isEffectue = Boolean(
+          rep.missionStatus === "Effectué" ||
+          rep.conforme === "Conforme" ||
+          rep.conforme === "Non Conforme" ||
+          rep.conforme === "Intervention impossible" ||
+          rep.status === "Effectué" ||
+          rep.techSignature ||
+          rep.clientSignature ||
+          (!rep.isUpcoming && rep.status !== "À venir" && rep.date && rep.date !== "À venir")
+        );
+        if (!isEffectue) return false;
+
+        // 5. Filtrer par technicien sélectionné (si spécifié)
+        if (selectedReportTech && selectedReportTech !== "all") {
+          const target = selectedReportTech.trim().toLowerCase();
+          const repTech = (rep.techName || "").trim().toLowerCase();
+          const currentUserName = (authenticatedUser?.name || "").trim().toLowerCase();
+
+          if (repTech) {
+            if (repTech === target) return true;
+            if (
+              (repTech === "technicien connecté" || repTech === "un technicien") &&
+              currentUserName &&
+              target === currentUserName
+            ) {
+              return true;
+            }
+            return false;
+          } else {
+            return Boolean(currentUserName && target === currentUserName);
+          }
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        const timeA = parseReportDate(a.date);
+        const timeB = parseReportDate(b.date);
+        return timeB - timeA;
+      })
+      .slice(0, 50);
+  }, [generatedReports, selectedReportTech, authenticatedUser]);
 
   const [printingReport, setPrintingReport] = useState<GeneratedReport | null>(
     null,
@@ -8344,6 +8452,34 @@ export default function PublicPortal({
                   className="space-y-4 pb-16 animate-fadeIn"
                   id="tab-rapports-screen"
                 >
+                  {/* Technician filter dropdown full-width tout comme dans INTERVENTIONS */}
+                  <div className="px-1 select-none">
+                    <select
+                      id="select-report-technician-filter"
+                      value={selectedReportTech}
+                      onChange={(e) => setSelectedReportTech(e.target.value)}
+                      className="w-full bg-white text-black cursor-pointer appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center"
+                      style={{
+                        border: "1px solid rgb(201, 190, 205)",
+                        borderRadius: "14px",
+                        padding: "14px 20px",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                        boxShadow: "none",
+                        outline: "none",
+                        textAlign: "center",
+                        textAlignLast: "center",
+                      }}
+                    >
+                      <option value="all">Tous les techniciens</option>
+                      {availableReportTechnicians.map((tech) => (
+                        <option key={tech} value={tech}>
+                          {tech}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -8375,6 +8511,19 @@ export default function PublicPortal({
                   </button>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-0">
+                    {sortedAndLimitedReports.length === 0 && (
+                      <div
+                        className="col-span-1 md:col-span-2 text-center py-10 px-4 bg-white rounded-[14px]"
+                        style={{
+                          border: "1px solid rgb(201, 190, 205)",
+                          color: "#000000",
+                          fontSize: "16px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        Aucun rapport effectué en attente de modération{selectedReportTech && selectedReportTech !== "all" ? ` pour ${selectedReportTech}` : ""}.
+                      </div>
+                    )}
                     {sortedAndLimitedReports.map((rep) => {
                       const snapshot =
                         rep.defibSnapshot ||

@@ -60,14 +60,37 @@ const getFormattedDateFR = (dateStr?: any): string => {
   return s;
 };
 
+const normalizeName = (name?: string): string => {
+  return (name || '')
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+};
+
 const toIsoDateStr = (rawDate?: any): string => {
   if (!rawDate || rawDate === 'A trier') return '';
-  const s = String(rawDate);
+  const s = String(rawDate).trim();
   if (s.includes('-')) {
     const parts = s.split('-');
     if (parts.length === 3) {
-      if (parts[0].length === 4) return s;
-      if (parts[2].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      if (parts[0].length === 4) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
+      if (parts[2].length === 4) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+  }
+  if (s.includes('/')) {
+    const parts = s.split('/');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
+      if (parts[2].length === 4) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
     }
   }
   return s;
@@ -225,26 +248,30 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       return true;
     });
 
-    // Ensure authenticated user is included
-    if (authenticatedUser && authenticatedUser.name) {
-      const exists = filtered.some(m => m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase());
-      if (!exists) {
-        filtered = [authenticatedUser, ...filtered];
-      }
-    }
-
     const techOnly = filtered.filter(m => {
       const r = (m.role || '').toLowerCase();
       return r.includes('tech') || r.includes('technicien');
     });
 
-    const result = techOnly.length > 0 ? techOnly : (filtered.length > 0 ? filtered : (authenticatedUser ? [authenticatedUser] : []));
+    let result = techOnly.length > 0 ? techOnly : (filtered.length > 0 ? filtered : []);
 
-    // Deduplicate by name
+    // Ensure authenticated user is included
+    if (authenticatedUser && authenticatedUser.name) {
+      const exists = result.some(m => normalizeName(m.name) === normalizeName(authenticatedUser.name));
+      if (!exists) {
+        result = [authenticatedUser, ...result];
+      }
+    }
+
+    if (result.length === 0 && authenticatedUser) {
+      result = [authenticatedUser];
+    }
+
+    // Deduplicate by normalized name
     const uniqueMap = new Map<string, Member>();
     result.forEach(m => {
       if (m && m.name) {
-        const key = m.name.trim().toLowerCase();
+        const key = normalizeName(m.name);
         if (!uniqueMap.has(key)) {
           uniqueMap.set(key, m);
         }
@@ -253,6 +280,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
     return Array.from(uniqueMap.values());
   }, [members, companyInfo, authenticatedUser]);
+
+  const userManuallySelectedRef = React.useRef<boolean>(false);
+  const prevAuthUserRef = React.useRef<string>(authenticatedUser?.name || '');
 
   // Selected technician state - auto select logged-in technician
   const [selectedTech, setSelectedTech] = useState<string>(() => {
@@ -274,35 +304,83 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
   // Default selected technician: auto-select logged-in technician
   useEffect(() => {
-    if (authenticatedUser?.name && authenticatedUser.name.trim() !== '') {
+    // If the authenticated user changed (e.g. login/switch account)
+    if (authenticatedUser?.name && authenticatedUser.name !== prevAuthUserRef.current) {
+      prevAuthUserRef.current = authenticatedUser.name;
+      userManuallySelectedRef.current = false;
       setSelectedTech(authenticatedUser.name);
-    } else if (initialTech && initialTech.trim() !== '') {
-      setSelectedTech(initialTech);
-    } else if (!selectedTech || selectedTech === 'Tous' || selectedTech === 'Sélectionner un technicien' || selectedTech === '') {
-      try {
-        const activeUserRaw = localStorage.getItem("defib_active_tech_session");
-        if (activeUserRaw) {
-          const u = JSON.parse(activeUserRaw);
-          if (u?.name) {
-            setSelectedTech(u.name);
-            return;
-          }
+      return;
+    }
+
+    // Only set initial tech if user has not manually changed the dropdown
+    if (!userManuallySelectedRef.current) {
+      if (authenticatedUser?.name && authenticatedUser.name.trim() !== '') {
+        setSelectedTech(authenticatedUser.name);
+      } else if (initialTech && initialTech.trim() !== '') {
+        setSelectedTech(initialTech);
+      } else if (!selectedTech || selectedTech === 'Tous') {
+        if (techniciansList.length > 0 && techniciansList[0]?.name) {
+          setSelectedTech(techniciansList[0].name);
         }
-      } catch (_) {}
-      if (techniciansList.length > 0 && techniciansList[0]?.name) {
-        setSelectedTech(techniciansList[0].name);
       }
     }
-  }, [authenticatedUser?.name, initialTech, techniciansList]);
+  }, [authenticatedUser?.name, initialTech]);
 
-  // Active member object
+  // Active member object strictly for selected technician
   const activeMember = useMemo(() => {
-    if (selectedTech === 'Tous' || !selectedTech) {
-      return authenticatedUser || (techniciansList.length > 0 ? techniciansList[0] : null);
+    if (!selectedTech || selectedTech.trim() === '' || selectedTech === 'Tous') {
+      return null;
     }
-    const found = techniciansList.find(m => m.name.trim().toLowerCase() === selectedTech.trim().toLowerCase());
-    return found || authenticatedUser || null;
-  }, [selectedTech, techniciansList, authenticatedUser]);
+    const normSelTech = normalizeName(selectedTech);
+
+    const inTechList = techniciansList.find(m => normalizeName(m.name) === normSelTech);
+    if (inTechList) return inTechList;
+
+    const rawAll = (members && members.length > 0) ? members : (companyInfo?.members || []);
+    const inAll = rawAll.find((m: any) => normalizeName(m.name) === normSelTech);
+    if (inAll) return inAll;
+
+    if (authenticatedUser?.name && normalizeName(authenticatedUser.name) === normSelTech) {
+      return authenticatedUser;
+    }
+
+    return null;
+  }, [selectedTech, techniciansList, members, companyInfo, authenticatedUser]);
+
+  // Combined source of tours from props or localStorage fallback
+  const resolvedTours = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+
+    const addTours = (arr: any[]) => {
+      if (!Array.isArray(arr)) return;
+      arr.forEach((t: any) => {
+        if (!t || typeof t !== 'object') return;
+        const key = t.id || t.title;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          list.push(t);
+        } else if (!key) {
+          list.push(t);
+        }
+      });
+    };
+
+    if (Array.isArray(fsmTours) && fsmTours.length > 0) {
+      addTours(fsmTours);
+    } else {
+      try {
+        const tid = localStorage.getItem("defib_tenant_id") || "demo";
+        const saved = localStorage.getItem(`defib_${tid}_fsm_tours`) || localStorage.getItem("defib_fsm_tours");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          addTours(parsed);
+        }
+      } catch (_) {}
+    }
+
+    return list;
+  }, [fsmTours]);
 
   // Days list for selected month/year
   const daysInMonthList = useMemo(() => {
@@ -352,131 +430,144 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     return weeks;
   }, [daysInMonthList]);
 
-  // Retrieve assigned missions
+  // Retrieve assigned missions strictly for selected technician
   const missionsByDate = useMemo(() => {
     const map: Record<string, { tour: any; mission: any }[]> = {};
 
-    if (!selectedTech || selectedTech.trim() === '') {
+    if (!selectedTech || selectedTech.trim() === '' || selectedTech === 'Tous') {
       return map;
     }
 
-    if (Array.isArray(fsmTours)) {
-      fsmTours.forEach(tour => {
-        if (!tour) return;
-        if (selectedTech !== 'Tous') {
-          const tourTech = String(tour.techName || '').trim().toLowerCase();
-          const selTech = selectedTech.trim().toLowerCase();
-          if (tourTech !== selTech) return;
+    const normSelTech = normalizeName(selectedTech);
+
+    resolvedTours.forEach(tour => {
+      if (!tour) return;
+      const normTourTech = normalizeName(tour.techName || tour.technicien || tour.technicienNom || tour.tech);
+
+      // If the tour is explicitly assigned to another technician, skip it
+      if (normTourTech && normTourTech !== normSelTech) {
+        return;
+      }
+
+      const tourMissions = tour.missions || tour.passages || [];
+      if (!Array.isArray(tourMissions)) return;
+
+      tourMissions.forEach((m: any) => {
+        if (!m) return;
+
+        // If the mission has its own specific technician assignment
+        const normMissionTech = normalizeName(m.techName || m.technicien || m.assignedTech || m.technicienNom);
+        if (normMissionTech && normMissionTech !== normSelTech) {
+          return;
         }
 
-        const tourMissions = tour.missions || tour.passages || [];
-        if (!Array.isArray(tourMissions)) return;
+        // Must be assigned either via the tour or via the mission
+        if (!normTourTech && !normMissionTech) {
+          return;
+        }
 
-        tourMissions.forEach((m: any) => {
-          if (!m) return;
-          const rawDate = m.estimatedDate || m.date || (tour.startDate !== 'A trier' ? tour.startDate : null);
-          if (!rawDate) return;
+        const rawDate = m.estimatedDate || m.date || (tour.startDate !== 'A trier' ? tour.startDate : null);
+        if (!rawDate) return;
 
-          const missionIso = toIsoDateStr(rawDate);
-          if (!missionIso) return;
+        const missionIso = toIsoDateStr(rawDate);
+        if (!missionIso) return;
 
-          if (!map[missionIso]) {
-            map[missionIso] = [];
-          }
-          map[missionIso].push({ tour, mission: m });
-        });
+        if (!map[missionIso]) {
+          map[missionIso] = [];
+        }
+        map[missionIso].push({ tour, mission: m });
       });
-    }
+    });
 
     return map;
-  }, [fsmTours, selectedTech]);
+  }, [resolvedTours, selectedTech]);
 
-  // Compute active tours per day based on tour period (startDate) and the last mission date
+  // Compute active tours per day based on tour period (startDate) and the last mission date strictly for selected technician
   const activeToursByDate = useMemo(() => {
     const map: Record<string, { tourId: string; title: string; tour: any }[]> = {};
 
-    if (!selectedTech || selectedTech.trim() === '') {
+    if (!selectedTech || selectedTech.trim() === '' || selectedTech === 'Tous') {
       return map;
     }
 
-    if (Array.isArray(fsmTours)) {
-      fsmTours.forEach((tour, tIdx) => {
-        if (!tour || tour.id === 'a-trier') return;
-        if (selectedTech !== 'Tous') {
-          const tourTech = String(tour.techName || '').trim().toLowerCase();
-          const selTech = selectedTech.trim().toLowerCase();
-          if (tourTech !== selTech) return;
-        }
+    const normSelTech = normalizeName(selectedTech);
 
-        const rawStart = tour.startDate !== 'A trier' ? tour.startDate : null;
-        const startIso = toIsoDateStr(rawStart);
-        if (!startIso) return;
+    resolvedTours.forEach((tour, tIdx) => {
+      if (!tour || tour.id === 'a-trier') return;
 
-        // Find the farthest (latest) date among all missions
-        const tourMissions = tour.missions || tour.passages || [];
-        let endIso = startIso;
+      const normTourTech = normalizeName(tour.techName || tour.technicien || tour.technicienNom || tour.tech);
+      if (!normTourTech || normTourTech !== normSelTech) {
+        return;
+      }
 
-        if (Array.isArray(tourMissions) && tourMissions.length > 0) {
-          tourMissions.forEach((m: any) => {
-            if (!m) return;
-            const mRawDate = m.estimatedDate || m.date;
-            if (mRawDate && mRawDate !== 'A trier') {
-              const mIso = toIsoDateStr(mRawDate);
-              if (mIso && mIso > endIso) {
-                endIso = mIso;
-              }
+      const rawStart = tour.startDate !== 'A trier' ? tour.startDate : null;
+      const startIso = toIsoDateStr(rawStart);
+      if (!startIso) return;
+
+      // Find the farthest (latest) date among all missions
+      const tourMissions = tour.missions || tour.passages || [];
+      let endIso = startIso;
+
+      if (Array.isArray(tourMissions) && tourMissions.length > 0) {
+        tourMissions.forEach((m: any) => {
+          if (!m) return;
+          const mRawDate = m.estimatedDate || m.date;
+          if (mRawDate && mRawDate !== 'A trier') {
+            const mIso = toIsoDateStr(mRawDate);
+            if (mIso && mIso > endIso) {
+              endIso = mIso;
             }
-          });
-        }
-
-        const tourTitle = tour.title || tour.name || `Tournée ${tIdx + 1}`;
-        const tourId = String(tour.id || `tour-${tIdx}`);
-
-        // Iterate from startIso to endIso day by day
-        try {
-          const cur = new Date(startIso + 'T00:00:00');
-          const end = new Date(endIso + 'T00:00:00');
-
-          // Guard against invalid dates or runaway loops (max 90 days)
-          let daysCount = 0;
-          while (cur <= end && daysCount < 90) {
-            const y = cur.getFullYear();
-            const m = String(cur.getMonth() + 1).padStart(2, '0');
-            const d = String(cur.getDate()).padStart(2, '0');
-            const curIso = `${y}-${m}-${d}`;
-
-            if (!map[curIso]) {
-              map[curIso] = [];
-            }
-            if (!map[curIso].some(item => item.tourId === tourId)) {
-              map[curIso].push({
-                tourId,
-                title: tourTitle,
-                tour
-              });
-            }
-
-            cur.setDate(cur.getDate() + 1);
-            daysCount++;
           }
-        } catch (_) {
-          // Fallback to startIso only if date parsing fails
-          if (!map[startIso]) {
-            map[startIso] = [];
+        });
+      }
+
+      const tourTitle = tour.title || tour.name || `Tournée ${tIdx + 1}`;
+      const tourId = String(tour.id || `tour-${tIdx}`);
+
+      // Iterate from startIso to endIso day by day
+      try {
+        const cur = new Date(startIso + 'T00:00:00');
+        const end = new Date(endIso + 'T00:00:00');
+
+        // Guard against invalid dates or runaway loops (max 90 days)
+        let daysCount = 0;
+        while (cur <= end && daysCount < 90) {
+          const y = cur.getFullYear();
+          const m = String(cur.getMonth() + 1).padStart(2, '0');
+          const d = String(cur.getDate()).padStart(2, '0');
+          const curIso = `${y}-${m}-${d}`;
+
+          if (!map[curIso]) {
+            map[curIso] = [];
           }
-          if (!map[startIso].some(item => item.tourId === tourId)) {
-            map[startIso].push({
+          if (!map[curIso].some(item => item.tourId === tourId)) {
+            map[curIso].push({
               tourId,
               title: tourTitle,
               tour
             });
           }
+
+          cur.setDate(cur.getDate() + 1);
+          daysCount++;
         }
-      });
-    }
+      } catch (_) {
+        // Fallback to startIso only if date parsing fails
+        if (!map[startIso]) {
+          map[startIso] = [];
+        }
+        if (!map[startIso].some(item => item.tourId === tourId)) {
+          map[startIso].push({
+            tourId,
+            title: tourTitle,
+            tour
+          });
+        }
+      }
+    });
 
     return map;
-  }, [fsmTours, selectedTech]);
+  }, [resolvedTours, selectedTech]);
 
   // Auto-scroll to today's date card on load
   useEffect(() => {
@@ -597,7 +688,10 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       <div className="px-0 select-none">
         <select
           value={selectedTech}
-          onChange={(e) => setSelectedTech(e.target.value)}
+          onChange={(e) => {
+            userManuallySelectedRef.current = true;
+            setSelectedTech(e.target.value);
+          }}
           className="w-full bg-white text-black appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center cursor-pointer"
           style={{
             border: "1px solid rgb(201, 190, 205)",
@@ -611,8 +705,13 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             textAlignLast: "center",
           }}
         >
-          {techniciansList.length === 0 && (
+          {techniciansList.length === 0 && !selectedTech && (
             <option value="">-- Aucun technicien --</option>
+          )}
+          {selectedTech && !techniciansList.some(m => normalizeName(m.name) === normalizeName(selectedTech)) && (
+            <option value={selectedTech}>
+              {selectedTech}
+            </option>
           )}
           {techniciansList.map((m) => (
             <option key={m.name} value={m.name}>
@@ -827,21 +926,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
       {/* Divs "Technicien en pause" */}
       {selectedTech && selectedTech !== 'Tous' && selectedTech.trim() !== '' && (() => {
-        const toursSource = (Array.isArray(fsmTours) && fsmTours.length > 0)
-          ? fsmTours
-          : (() => {
-              try {
-                const tid = localStorage.getItem("defib_tenant_id") || "demo";
-                const saved = localStorage.getItem(`defib_${tid}_fsm_tours`) || localStorage.getItem("defib_fsm_tours");
-                return saved ? JSON.parse(saved) : [];
-              } catch {
-                return [];
-              }
-            })();
-
-        const pausedTours = Array.isArray(toursSource) ? toursSource.filter((t: any) => {
+        const pausedTours = Array.isArray(resolvedTours) ? resolvedTours.filter((t: any) => {
           if (!t) return false;
-          const nameMatch = String(t.techName || '').trim().toLowerCase() === selectedTech.trim().toLowerCase();
+          const nameMatch = normalizeName(t.techName || t.technicien || t.technicienNom) === normalizeName(selectedTech);
           const isActive = t.status !== "Terminé";
           return nameMatch && isActive && (t.isPaused || t.pauseEnabled);
         }) : [];
@@ -854,7 +941,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           const activeUserRaw = localStorage.getItem("defib_active_tech_session");
           if (isLocalPaused && activeUserRaw) {
             const activeUser = JSON.parse(activeUserRaw);
-            if (String(activeUser?.name || '').trim().toLowerCase() === selectedTech.trim().toLowerCase()) {
+            if (normalizeName(activeUser?.name) === normalizeName(selectedTech)) {
               if (pausedTours.length === 0) {
                 showFallback = true;
               }
@@ -941,9 +1028,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                 {days.map(({ dayNum, isoDate, dayName, isToday }) => {
                   // Absences
                   const matchingAbsences: { memberName: string; abs: MemberAbsence }[] = [];
-                  const techsToCheck = selectedTech === 'Tous'
-                    ? techniciansList
-                    : (activeMember ? [activeMember] : []);
+                  const techsToCheck = activeMember ? [activeMember] : [];
 
                   techsToCheck.forEach(m => {
                     if (m && m.absences && Array.isArray(m.absences)) {
@@ -1092,10 +1177,10 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           if (!evt) return false;
                           const evtIso = toIsoDateStr(evt.date);
                           if (!evtIso || evtIso !== isoDate) return false;
-                          if (!selectedTech || selectedTech === 'Tous') return true;
-                          const evtTech = String(evt.techName || '').trim().toLowerCase();
-                          const selTech = selectedTech.trim().toLowerCase();
-                          return evtTech === selTech || evtTech.includes(selTech) || selTech.includes(evtTech);
+                          if (!selectedTech || selectedTech.trim() === '' || selectedTech === 'Tous') return false;
+                          const evtTech = normalizeName(evt.techName);
+                          const selTech = normalizeName(selectedTech);
+                          return evtTech === selTech;
                         });
 
                         return daySpontaneousEvents.map((evt) => (
