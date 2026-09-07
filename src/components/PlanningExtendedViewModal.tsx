@@ -137,7 +137,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     try {
       const tid = localStorage.getItem('defib_tenant_id') || 'demo';
 
-      // 1. Refresh Tours from local storage or remote
+      // 1. Refresh Tours from local storage
       const savedTours = localStorage.getItem(`defib_${tid}_fsm_tours`) || localStorage.getItem('defib_fsm_tours');
       if (savedTours) {
         try {
@@ -240,9 +240,19 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     return groups;
   }, [daysInMonth]);
 
-  // Mapping client / equipment helpers
-  const getClientName = useCallback((mission: any) => {
-    if (!mission) return '';
+  // Helpers to retrieve values for mission 3 lines
+  const getMissionDetails = useCallback((mission: any) => {
+    if (!mission) {
+      return {
+        creneau: '',
+        identifiant: '',
+        clientName: '',
+        siteName: '',
+        locationStr: '',
+        isDefib: true
+      };
+    }
+
     const defib = defibrillateurs.find(
       (d: any) =>
         d && (
@@ -271,56 +281,92 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         )
     );
 
-    return (
+    // Line 1: Creneau & Identifiant
+    const creneau = mission.estimatedSlot || mission.creneau || mission.slot || mission.creneauHoraire || mission.estimatedTime || mission.time || '';
+    const identifiant = (() => {
+      if (mission.formationId) return String(mission.formationId);
+      if (mission.defibIdentifiant && mission.defibIdentifiant !== 'Formation') return String(mission.defibIdentifiant);
+      if (mission.identifiant) return String(mission.identifiant);
+      if (mission.interventionReference) return String(mission.interventionReference);
+      if (defib?.identifiant) return String(defib.identifiant);
+      if (other?.identifiant) return String(other.identifiant);
+      return '';
+    })();
+
+    // Line 2: Client & Site
+    const clientName = (
       mission.clientDenomination ||
       mission.client ||
       clientObj?.denomination ||
       mission.clientName ||
       defib?.exploitant ||
       defib?.nomPrenomSite ||
-      'Client'
+      ''
     );
-  }, [clients, defibrillateurs, otherEquipments]);
 
-  // Format mission status color
-  const getMissionStatusColors = (statusRaw?: string) => {
-    const s = String(statusRaw || '').toLowerCase().trim();
-    if (s.includes('réalisé') || s.includes('effectué') || s.includes('terminé') || s.includes('clôturé') || s.includes('done')) {
-      return {
-        bg: '#059669', // Emerald 600
-        border: '#047857',
-        text: '#ffffff',
-        badge: 'Réalisé'
-      };
+    const siteName = (() => {
+      let raw = '';
+      if (defib?.nomSite) raw = defib.nomSite;
+      else if (other?.nomPrenomSite || other?.nomSite) raw = other.nomPrenomSite || other.nomSite;
+      else if (mission.site || mission.siteName) raw = mission.site || mission.siteName;
+      if (
+        !raw ||
+        raw === 'Représentant Standard' ||
+        raw === 'Représentant standard' ||
+        raw === 'Non renseigné' ||
+        raw === 'Nom du Site'
+      ) {
+        return '';
+      }
+      return raw;
+    })();
+
+    // Line 3: Localisation
+    const locationStr = (() => {
+      if (mission.ville) {
+        return `${mission.ville}${mission.codePostal ? ` (${mission.codePostal})` : ''}`;
+      }
+      if (defib) {
+        const parts = [defib.ville, defib.cp ? `(${defib.cp})` : ''].filter(Boolean);
+        if (parts.length > 0) return parts.join(' ');
+      }
+      if (other) {
+        const parts = [other.ville, other.codePostal ? `(${other.codePostal})` : ''].filter(Boolean);
+        if (parts.length > 0) return parts.join(' ');
+      }
+      if (mission.address) return String(mission.address);
+      if (clientObj?.ville) {
+        return `${clientObj.ville}${clientObj.codePostal ? ` (${clientObj.codePostal})` : ''}`;
+      }
+      return '';
+    })();
+
+    // Determine if mission is Défibrillateur or Autre Matériel
+    const eqType = String(mission.equipmentType || '').toLowerCase();
+    const isFormation = eqType.includes('formation') || Boolean(mission.formationId);
+    let isDefib = true;
+    if (isFormation) {
+      isDefib = true;
+    } else if (eqType.includes('défibrillateur') || eqType.includes('defibrillateur')) {
+      isDefib = true;
+    } else if (other) {
+      isDefib = false;
+    } else if (eqType && !eqType.includes('défibrillateur') && !eqType.includes('defibrillateur')) {
+      isDefib = false;
     }
-    if (s.includes('en cours') || s.includes('démarré') || s.includes('started')) {
-      return {
-        bg: '#0284c7', // Sky 600
-        border: '#0369a1',
-        text: '#ffffff',
-        badge: 'En cours'
-      };
-    }
-    if (s.includes('annulé') || s.includes('refusé') || s.includes('annule')) {
-      return {
-        bg: '#dc2626', // Red 600
-        border: '#b91c1c',
-        text: '#ffffff',
-        badge: 'Annulé'
-      };
-    }
-    // Default: À faire / Planifié
+
     return {
-      bg: '#4338ca', // Indigo 700
-      border: '#3730a3',
-      text: '#ffffff',
-      badge: 'À faire'
+      creneau,
+      identifiant,
+      clientName,
+      siteName,
+      locationStr,
+      isDefib
     };
-  };
+  }, [clients, defibrillateurs, otherEquipments]);
 
   // Technicians dataset grouped
   const techniciansData = useMemo(() => {
-    // Current month ISO bounds
     const monthStartIso = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
     const lastDayNum = new Date(currentYear, currentMonth + 1, 0).getDate();
     const monthEndIso = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
@@ -335,7 +381,6 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         if (!tour || isDraftTour(tour)) return;
         const normTourTech = normalizeName(tour.techName || tour.technicien || tour.technicienNom || tour.tech);
 
-        // Check if any missions in the tour are assigned to this technician
         const tourMissions = Array.isArray(tour.missions || tour.passages) ? (tour.missions || tour.passages) : [];
 
         const hasMissionsAssignedToTech = tourMissions.some((m: any) => {
@@ -384,7 +429,6 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         techTours.push({
           tourId: tour.id || `tour-${tIdx}`,
           title: tour.title || tour.name || `Tournée #${tIdx + 1}`,
-          status: tour.status || 'Planifiée',
           startIso,
           endIso,
           rawTour: tour,
@@ -406,8 +450,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         tech,
         normTech,
         tours: techTours,
-        spontaneousEvents: techSpontaneous,
-        totalMissionsCount: techTours.reduce((sum, t) => sum + t.missions.length, 0) + techSpontaneous.length
+        spontaneousEvents: techSpontaneous
       };
     });
   }, [techniciansList, localTours, localEvents, currentYear, currentMonth]);
@@ -423,45 +466,41 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     >
       {/* Header Bar */}
       <div className="bg-white border-b border-neutral-200 px-4 py-3 sm:px-6 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        {/* Left: Title & Subtitle */}
+        {/* Left: Title */}
         <div className="flex items-center gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-bold tracking-tight text-neutral-900">
-                Planning vue étendue
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-neutral-100 text-neutral-700 border border-neutral-200">
-                Vue mensuelle mixée
-              </span>
-            </div>
-            <div className="text-xs text-neutral-500 font-medium mt-0.5">
-              {techniciansList.length} technicien{techniciansList.length > 1 ? 's' : ''} • Vue consultative d'ensemble
-            </div>
-          </div>
+          <span className="text-xl font-bold tracking-tight text-neutral-900">
+            Planning vue étendue
+          </span>
         </div>
 
         {/* Center: Month Navigation Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handlePrevMonth}
-            className="px-3 py-1.5 rounded-lg border border-neutral-300 text-neutral-800 text-sm font-semibold hover:bg-neutral-100 active:bg-neutral-200 transition-colors cursor-pointer"
+            className="px-3.5 py-1.5 rounded-lg border border-neutral-300 text-neutral-800 text-sm font-semibold hover:bg-neutral-100 active:bg-neutral-200 transition-colors cursor-pointer"
             title="Mois précédent"
           >
-            ← Précédent
+            Précédent
           </button>
 
-          <div className="px-4 py-1.5 text-base font-bold text-neutral-900 min-w-[150px] text-center">
+          <div
+            className="px-4 py-0 text-3xl text-neutral-950 min-w-[200px] text-center select-none"
+            style={{
+              fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif",
+              lineHeight: '1.2'
+            }}
+          >
             {MONTH_NAMES_FR[currentMonth]} {currentYear}
           </div>
 
           <button
             type="button"
             onClick={handleNextMonth}
-            className="px-3 py-1.5 rounded-lg border border-neutral-300 text-neutral-800 text-sm font-semibold hover:bg-neutral-100 active:bg-neutral-200 transition-colors cursor-pointer"
+            className="px-3.5 py-1.5 rounded-lg border border-neutral-300 text-neutral-800 text-sm font-semibold hover:bg-neutral-100 active:bg-neutral-200 transition-colors cursor-pointer"
             title="Mois suivant"
           >
-            Suivant →
+            Suivant
           </button>
 
           <button
@@ -502,33 +541,23 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         </div>
       </div>
 
-      {/* Sub-header / Legend Bar (Compact) */}
-      <div className="bg-neutral-50 border-b border-neutral-200 px-4 py-1.5 sm:px-6 flex flex-wrap items-center justify-between gap-2 text-xs font-medium shrink-0">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-xs bg-[#4338ca] inline-block" />
-            <span className="text-neutral-700">Mission à faire</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-xs bg-[#059669] inline-block" />
-            <span className="text-neutral-700">Mission réalisée</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-xs bg-[#0284c7] inline-block" />
-            <span className="text-neutral-700">Mission en cours</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-xs bg-[#9333ea] inline-block" />
-            <span className="text-neutral-700">Événement spontané</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-xs border border-pink-400 bg-pink-100 inline-block" />
-            <span className="text-neutral-700">Période de tournée</span>
-          </div>
+      {/* Sub-header / Legend Bar */}
+      <div className="bg-neutral-50 border-b border-neutral-200 px-4 py-2 sm:px-6 flex flex-wrap items-center gap-5 text-xs font-medium shrink-0">
+        <div className="flex items-center gap-1.5">
+          <span className="w-3.5 h-3.5 rounded-xs bg-[#165dfc] inline-block shrink-0" />
+          <span className="text-neutral-800 font-semibold">Mission Défibrillateur</span>
         </div>
-
-        <div className="text-neutral-500 italic text-[11px]">
-          Survolez un bâtonnet pour afficher les détails complets de la mission
+        <div className="flex items-center gap-1.5">
+          <span className="w-3.5 h-3.5 rounded-xs bg-[#0891b2] inline-block shrink-0" />
+          <span className="text-neutral-800 font-semibold">Autre Matériel</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-3.5 h-3.5 rounded-xs bg-[#9333ea] inline-block shrink-0" />
+          <span className="text-neutral-800 font-semibold">Événement spontané</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-3.5 h-3.5 rounded-xs border border-pink-400 bg-pink-100 inline-block shrink-0" />
+          <span className="text-neutral-800 font-semibold">Période de tournée</span>
         </div>
       </div>
 
@@ -536,13 +565,13 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       <div className="flex-1 overflow-auto bg-white">
         <div className="inline-block min-w-full align-top">
           {/* Timeline Table Grid */}
-          <table className="border-collapse text-left" style={{ minWidth: `${280 + daysInMonth.length * 68}px`, width: '100%' }}>
+          <table className="border-collapse text-left" style={{ minWidth: `${260 + daysInMonth.length * 108}px`, width: '100%' }}>
             {/* Header: Weeks and Days */}
             <thead className="sticky top-0 z-30 bg-white">
               {/* Row 1: Weeks */}
               <tr className="border-b border-neutral-200 bg-neutral-100 text-neutral-600 text-xs font-semibold">
                 <th
-                  className="sticky left-0 z-40 bg-neutral-100 border-r border-neutral-300 px-3 py-1.5 w-[280px] min-w-[280px]"
+                  className="sticky left-0 z-40 bg-neutral-100 border-r border-neutral-300 px-3 py-1.5 w-[260px] min-w-[260px]"
                 >
                   Semaines
                 </th>
@@ -560,14 +589,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
               {/* Row 2: Days (1 to 31) */}
               <tr className="border-b border-neutral-300 bg-white text-neutral-800 text-xs">
                 <th
-                  className="sticky left-0 z-40 bg-white border-r border-neutral-300 px-3 py-2 w-[280px] min-w-[280px] font-bold text-neutral-900 shadow-xs"
+                  className="sticky left-0 z-40 bg-white border-r border-neutral-300 px-3 py-2 w-[260px] min-w-[260px] font-bold text-neutral-900 shadow-xs"
                 >
                   Technicien / Tournées & Missions
                 </th>
                 {daysInMonth.map((d) => (
                   <th
                     key={`day-header-${d.isoDate}`}
-                    className={`border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none w-[68px] min-w-[68px] max-w-[68px] ${
+                    className={`border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none w-[108px] min-w-[108px] max-w-[108px] ${
                       d.isToday
                         ? 'bg-pink-100/80 text-[#FD4EBB] border-b-2 border-b-[#FD4EBB]'
                         : d.isWeekend
@@ -594,7 +623,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                 </tr>
               )}
 
-              {techniciansData.map(({ tech, tours, spontaneousEvents: techEvts, totalMissionsCount }, techIdx) => {
+              {techniciansData.map(({ tech, tours, spontaneousEvents: techEvts }, techIdx) => {
                 const hasActivity = tours.length > 0 || techEvts.length > 0;
 
                 return (
@@ -603,20 +632,10 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                     <tr className="bg-neutral-50 border-t-2 border-neutral-300">
                       {/* Sticky Left: Technician Profile */}
                       <td
-                        className="sticky left-0 z-20 bg-neutral-50 border-r border-neutral-300 px-3 py-2 w-[280px] min-w-[280px]"
+                        className="sticky left-0 z-20 bg-neutral-50 border-r border-neutral-300 px-3 py-2 w-[260px] min-w-[260px]"
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="font-bold text-sm text-neutral-900 truncate" title={tech.name}>
-                              {tech.name}
-                            </div>
-                            <div className="text-[11px] text-neutral-500">
-                              {tech.role || 'Technicien'}
-                            </div>
-                          </div>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-200 text-neutral-800 shrink-0">
-                            {totalMissionsCount} {totalMissionsCount > 1 ? 'act.' : 'act.'}
-                          </span>
+                        <div className="font-bold text-sm text-neutral-900 truncate" title={tech.name}>
+                          {tech.name}
                         </div>
                       </td>
 
@@ -624,23 +643,21 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                       {daysInMonth.map((d) => (
                         <td
                           key={`tech-cell-${tech.name}-${d.isoDate}`}
-                          className={`border-r border-neutral-200 p-0 text-center w-[68px] min-w-[68px] max-w-[68px] ${
+                          className={`border-r border-neutral-200 p-0 text-center w-[108px] min-w-[108px] max-w-[108px] ${
                             d.isToday ? 'bg-pink-50/40' : d.isWeekend ? 'bg-neutral-100/40' : 'bg-neutral-50/60'
                           }`}
                         />
                       ))}
                     </tr>
 
-                    {/* IF NO ACTIVITY THIS MONTH */}
+                    {/* IF NO ACTIVITY THIS MONTH: Blank row without placeholder text */}
                     {!hasActivity && (
                       <tr className="border-b border-neutral-200">
-                        <td className="sticky left-0 z-20 bg-white border-r border-neutral-300 px-3 py-2 text-neutral-400 italic text-[11px]">
-                          Aucune tournée ou mission ce mois
-                        </td>
+                        <td className="sticky left-0 z-20 bg-white border-r border-neutral-300 px-3 py-2 w-[260px] min-w-[260px]" />
                         {daysInMonth.map((d) => (
                           <td
                             key={`empty-${tech.name}-${d.isoDate}`}
-                            className={`border-r border-neutral-200 p-1 w-[68px] min-w-[68px] max-w-[68px] ${
+                            className={`border-r border-neutral-200 p-1 w-[108px] min-w-[108px] max-w-[108px] ${
                               d.isToday ? 'bg-pink-50/30' : d.isWeekend ? 'bg-neutral-100/30' : 'bg-white'
                             }`}
                           />
@@ -650,46 +667,36 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
 
                     {/* TOURNÉES PARENT ENCARTS & MISSIONS */}
                     {tours.map((tItem, tIdx) => {
+                      const dateRangeStr = tItem.startIso === tItem.endIso
+                        ? tItem.startIso.split('-').reverse().slice(0, 2).join('/')
+                        : `${tItem.startIso.split('-').reverse().slice(0, 2).join('/')} → ${tItem.endIso.split('-').reverse().slice(0, 2).join('/')}`;
+
                       return (
                         <tr
                           key={`tour-row-${tech.name}-${tItem.tourId}-${tIdx}`}
                           className="border-b border-neutral-200 hover:bg-neutral-50/40 transition-colors"
                         >
                           {/* Sticky Left: Tournée Parent Encart */}
-                          <td className="sticky left-0 z-20 bg-white border-r border-neutral-300 px-3 py-2 w-[280px] min-w-[280px] align-top">
+                          <td className="sticky left-0 z-20 bg-white border-r border-neutral-300 px-3 py-2 w-[260px] min-w-[260px] align-top">
                             <div className="border-l-4 border-[#FD4EBB] pl-2 space-y-0.5">
                               <div className="font-bold text-xs text-neutral-900 truncate" title={tItem.title}>
                                 {tItem.title}
                               </div>
-                              <div className="flex items-center justify-between text-[11px] text-neutral-500">
-                                <span>
-                                  {tItem.startIso === tItem.endIso
-                                    ? tItem.startIso.split('-').reverse().slice(0, 2).join('/')
-                                    : `${tItem.startIso.split('-').reverse().slice(0, 2).join('/')} → ${tItem.endIso.split('-').reverse().slice(0, 2).join('/')}`}
-                                </span>
-                                <span className="font-semibold text-neutral-700">
-                                  {tItem.missions.length} mission{tItem.missions.length > 1 ? 's' : ''}
-                                </span>
+                              <div className="text-[11px] text-neutral-500 truncate">
+                                {dateRangeStr}
                               </div>
-                              {tItem.status && (
-                                <span className="inline-block text-[10px] font-medium px-1.5 py-0.2 rounded bg-neutral-100 text-neutral-700 border border-neutral-200">
-                                  {tItem.status}
-                                </span>
-                              )}
                             </div>
                           </td>
 
                           {/* Days Columns for this Tournée */}
                           {daysInMonth.map((d) => {
-                            // Check if this day is within the tournée period
                             const isWithinTour = d.isoDate >= tItem.startIso && d.isoDate <= tItem.endIso;
-                            // Missions for this specific day
                             const dayMissions = tItem.missions.filter((m: any) => m.resolvedIsoDate === d.isoDate);
 
                             return (
                               <td
                                 key={`tour-day-${tItem.tourId}-${d.isoDate}`}
-                                className={`border-r border-neutral-200 p-1 align-top w-[68px] min-w-[68px] max-w-[68px] ${
+                                className={`border-r border-neutral-200 p-1 align-top w-[108px] min-w-[108px] max-w-[108px] ${
                                   d.isToday
                                     ? 'bg-pink-50/50'
                                     : isWithinTour
@@ -702,33 +709,37 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                 {dayMissions.length > 0 ? (
                                   <div className="space-y-1">
                                     {dayMissions.map((m: any, mIdx: number) => {
-                                      const clientName = getClientName(m);
-                                      const slot = m.estimatedSlot || m.creneau || m.slot || m.estimatedTime || '';
-                                      const statusCfg = getMissionStatusColors(m.status || m.situation);
-                                      const equipmentType = m.equipmentType || 'Défibrillateur';
-                                      const address = m.ville || m.address || '';
+                                      const details = getMissionDetails(m);
 
-                                      const tooltipText = [
-                                        `Tournée : ${tItem.title}`,
-                                        `Date : ${d.isoDate}${slot ? ` à ${slot}` : ''}`,
-                                        `Client : ${clientName}`,
-                                        address ? `Lieu : ${address}` : null,
-                                        `Équipement : ${equipmentType}`,
-                                        `Statut : ${statusCfg.badge}`
-                                      ].filter(Boolean).join('\n');
+                                      // Line 1: Créneau - Identifiant
+                                      const line1 = [details.creneau, details.identifiant].filter(Boolean).join(' - ');
+                                      // Line 2: Client - Site
+                                      const line2 = [details.clientName, details.siteName].filter(Boolean).join(' - ');
+                                      // Line 3: Localisation
+                                      const line3 = details.locationStr;
+
+                                      const barColor = details.isDefib ? '#165dfc' : '#0891b2';
 
                                       return (
                                         <div
                                           key={`mission-bar-${m.id || mIdx}`}
-                                          title={tooltipText}
-                                          className="px-1.5 py-1 rounded text-white text-[11px] font-semibold truncate shadow-xs cursor-help leading-tight"
+                                          className="w-[100px] max-w-[100px] px-1.5 py-1 rounded text-white text-[10.5px] font-semibold leading-tight shadow-xs select-none cursor-default overflow-hidden"
                                           style={{
-                                            backgroundColor: statusCfg.bg,
-                                            borderLeft: `3px solid ${statusCfg.border}`
+                                            backgroundColor: barColor
                                           }}
                                         >
-                                          {slot ? `${slot} ` : ''}
-                                          {clientName}
+                                          {/* Line 1: Créneau - Identifiant */}
+                                          <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block">
+                                            {line1 || 'Mission'}
+                                          </div>
+                                          {/* Line 2: Client - Site */}
+                                          <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block text-white/95">
+                                            {line2 || 'Client'}
+                                          </div>
+                                          {/* Line 3: Localisation */}
+                                          <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block text-white/85 text-[9.5px]">
+                                            {line3 || '-'}
+                                          </div>
                                         </div>
                                       );
                                     })}
@@ -736,7 +747,6 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                 ) : isWithinTour ? (
                                   // Tournée parent visual marker bar if no mission on this exact day
                                   <div
-                                    title={`Tournée ${tItem.title} en cours`}
                                     className="h-2 rounded-xs bg-pink-200/80 my-1 cursor-default"
                                   />
                                 ) : null}
@@ -751,13 +761,10 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                     {techEvts.length > 0 && (
                       <tr className="border-b border-neutral-200 bg-purple-50/20">
                         {/* Sticky Left */}
-                        <td className="sticky left-0 z-20 bg-white border-r border-neutral-300 px-3 py-1.5 w-[280px] min-w-[280px] align-middle">
+                        <td className="sticky left-0 z-20 bg-white border-r border-neutral-300 px-3 py-1.5 w-[260px] min-w-[260px] align-middle">
                           <div className="border-l-4 border-purple-600 pl-2">
                             <div className="font-bold text-xs text-purple-900">
                               Événements spontanés
-                            </div>
-                            <div className="text-[11px] text-purple-700">
-                              {techEvts.length} événement{techEvts.length > 1 ? 's' : ''}
                             </div>
                           </div>
                         </td>
@@ -769,7 +776,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                           return (
                             <td
                               key={`spont-cell-${tech.name}-${d.isoDate}`}
-                              className={`border-r border-neutral-200 p-1 align-top w-[68px] min-w-[68px] max-w-[68px] ${
+                              className={`border-r border-neutral-200 p-1 align-top w-[108px] min-w-[108px] max-w-[108px] ${
                                 d.isToday
                                   ? 'bg-pink-50/50'
                                   : d.isWeekend
@@ -780,21 +787,24 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                               {matchingEvts.length > 0 && (
                                 <div className="space-y-1">
                                   {matchingEvts.map((evt) => {
-                                    const tooltipText = [
-                                      `Événement spontané (${tech.name})`,
-                                      `Date : ${d.isoDate} (${evt.creneau || 'Journée'})`,
-                                      `Intitulé : ${evt.intitule}`,
-                                      evt.commentaire ? `Commentaire : ${evt.commentaire}` : null
-                                    ].filter(Boolean).join('\n');
+                                    const line1 = [evt.creneau, 'Spontané'].filter(Boolean).join(' - ');
+                                    const line2 = evt.intitule || '';
+                                    const line3 = evt.commentaire || '';
 
                                     return (
                                       <div
                                         key={evt.id}
-                                        title={tooltipText}
-                                        className="px-1.5 py-1 rounded bg-[#9333ea] text-white text-[11px] font-semibold truncate shadow-xs cursor-help leading-tight"
+                                        className="w-[100px] max-w-[100px] px-1.5 py-1 rounded bg-[#9333ea] text-white text-[10.5px] font-semibold leading-tight shadow-xs select-none cursor-default overflow-hidden"
                                       >
-                                        {evt.creneau ? `${evt.creneau} ` : ''}
-                                        {evt.intitule}
+                                        <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block">
+                                          {line1}
+                                        </div>
+                                        <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block text-white/95">
+                                          {line2}
+                                        </div>
+                                        <div className="truncate whitespace-nowrap overflow-hidden text-ellipsis block text-white/85 text-[9.5px]">
+                                          {line3 || '-'}
+                                        </div>
                                       </div>
                                     );
                                   })}
