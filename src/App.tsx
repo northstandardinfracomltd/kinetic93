@@ -64,7 +64,7 @@ import StagiairesTab from './components/StagiairesTab';
 import EmargementsTab from './components/EmargementsTab';
 import GmaoCorrectionForm from './components/GmaoCorrectionForm';
 import ImportExportTab from './components/ImportExportTab';
-import { geocodeAddress, sortMissionsByProximity, scheduleMissions } from './utils/fsmOptimizer';
+import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from './utils/fsmOptimizer';
 import SatisfactionFormPage from './components/SatisfactionFormPage';
 import NotificationsTab from './components/NotificationsTab';
 import { PlanningTab } from './components/PlanningTab';
@@ -1541,7 +1541,37 @@ export default function App() {
       const preference = tech.optimizationPreference || 'proche';
       const sortedMissions = sortMissionsByProximity(tour.missions, startCoord, equipmentCoords, preference as any);
 
-      const scheduledMissions = scheduleMissions(sortedMissions, tour.startDate, equipmentDetails, tech);
+      // Determine first mission travel hours from technician departure address
+      let firstCoord = (sortedMissions.length > 0 && sortedMissions[0].defibIdentifiant)
+        ? equipmentCoords[sortedMissions[0].defibIdentifiant]
+        : null;
+
+      if (!firstCoord && sortedMissions.length > 0) {
+        const firstDefib = defibrillateurs.find(d => d.identifiant === sortedMissions[0].defibIdentifiant);
+        const firstOther = otherEquipments.find(o => o.identifiant === sortedMissions[0].defibIdentifiant);
+        const eq = firstDefib || firstOther;
+        if (eq) {
+          const addressStr = [eq.numVoie, eq.cp, eq.ville].filter(Boolean).join(' ');
+          if (addressStr.trim()) {
+            firstCoord = await geocodeAddress(addressStr);
+            if (firstCoord) {
+              equipmentCoords[sortedMissions[0].defibIdentifiant] = firstCoord;
+            }
+          }
+        }
+      }
+
+      const firstMissionTravelHours = (startCoord && firstCoord)
+        ? await calculateFirstMissionTravelHours(startCoord, firstCoord)
+        : (startCoord ? 1 : 0);
+
+      const scheduledMissions = scheduleMissions(
+        sortedMissions,
+        tour.startDate,
+        equipmentDetails,
+        tech,
+        firstMissionTravelHours
+      );
 
       const updatedTours = currentToursList.map(t => {
         if (t.id === tourId) {

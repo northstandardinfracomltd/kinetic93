@@ -76,7 +76,7 @@ import {
 } from "../utils/emailService";
 import { auth } from "../firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { geocodeAddress, sortMissionsByProximity, scheduleMissions } from "../utils/fsmOptimizer";
+import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from "../utils/fsmOptimizer";
 import { PlanningTab } from "./PlanningTab";
 import HelpBubble from "./HelpBubble";
 import TopBarProgress from "./TopBarProgress";
@@ -1025,11 +1025,36 @@ export default function PublicPortal({
         preference as any
       );
 
+      // Determine first mission travel hours from technician departure address
+      let firstCoord = (sortedMissions.length > 0 && sortedMissions[0].defibIdentifiant)
+        ? equipmentCoords[sortedMissions[0].defibIdentifiant]
+        : null;
+
+      if (!firstCoord && sortedMissions.length > 0) {
+        const firstDefib = defibrillateurs.find((d: any) => d.identifiant === sortedMissions[0].defibIdentifiant);
+        const firstOther = otherEquipments.find((o: any) => o.identifiant === sortedMissions[0].defibIdentifiant);
+        const eq = firstDefib || firstOther;
+        if (eq) {
+          const addressStr = [eq.numVoie, eq.cp, eq.ville].filter(Boolean).join(' ');
+          if (addressStr.trim()) {
+            firstCoord = await geocodeAddress(addressStr);
+            if (firstCoord) {
+              equipmentCoords[sortedMissions[0].defibIdentifiant] = firstCoord;
+            }
+          }
+        }
+      }
+
+      const firstMissionTravelHours = (startCoord && firstCoord)
+        ? await calculateFirstMissionTravelHours(startCoord, firstCoord)
+        : (startCoord ? 1 : 0);
+
       const scheduledMissions = scheduleMissions(
         sortedMissions,
         tour.startDate,
         equipmentDetails,
-        tech
+        tech,
+        firstMissionTravelHours
       );
 
       const updatedToursList = activeToursSource.map((t: any) => {

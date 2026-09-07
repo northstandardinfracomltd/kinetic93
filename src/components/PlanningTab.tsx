@@ -137,6 +137,33 @@ const hasValidMissionSlot = (m: any): boolean => {
   return true;
 };
 
+export const isTechnicianRole = (m: any): boolean => {
+  if (!m) return false;
+  const roleLower = String(m.role || '').trim().toLowerCase();
+  const titleLower = String(m.title || (m as any).titre || '').trim().toLowerCase();
+  const funcLower = String((m as any).function || (m as any).fonction || '').trim().toLowerCase();
+
+  if (
+    roleLower === 'administrateur' ||
+    roleLower.includes('admin') ||
+    roleLower === 'propriétaire / admin' ||
+    roleLower === 'super-administrateur' ||
+    roleLower.includes('propriétaire') ||
+    roleLower.includes('responsable')
+  ) {
+    return false;
+  }
+
+  return (
+    roleLower === 'technicien' ||
+    roleLower === 'technician' ||
+    roleLower === 'maintenance terrain' ||
+    roleLower.includes('tech') ||
+    titleLower.includes('tech') ||
+    funcLower.includes('tech')
+  );
+};
+
 export const PlanningTab: React.FC<PlanningTabProps> = ({
   companyInfo,
   fsmTours = [],
@@ -249,7 +276,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     }));
   };
 
-  // List of technician members only (strictly tenant-isolated)
+  // List of technician members only (strictly tenant-isolated and strictly technician role)
   const techniciansList = useMemo(() => {
     const rawAll = (members && members.length > 0) ? members : (companyInfo?.members || []);
     const activeTenantId = (
@@ -281,28 +308,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       return true;
     });
 
-    const techOnly = filtered.filter(m => {
-      const r = (m.role || '').toLowerCase();
-      return r.includes('tech') || r.includes('technicien');
-    });
-
-    let result = techOnly.length > 0 ? techOnly : (filtered.length > 0 ? filtered : []);
-
-    // Ensure authenticated user is included
-    if (authenticatedUser && authenticatedUser.name) {
-      const exists = result.some(m => normalizeName(m.name) === normalizeName(authenticatedUser.name));
-      if (!exists) {
-        result = [authenticatedUser, ...result];
-      }
-    }
-
-    if (result.length === 0 && authenticatedUser) {
-      result = [authenticatedUser];
-    }
+    // Strictly filter to members who are technicians
+    const techOnly = filtered.filter(m => isTechnicianRole(m));
 
     // Deduplicate by normalized name
     const uniqueMap = new Map<string, Member>();
-    result.forEach(m => {
+    techOnly.forEach(m => {
       if (m && m.name) {
         const key = normalizeName(m.name);
         if (!uniqueMap.has(key)) {
@@ -315,70 +326,48 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   }, [members, companyInfo, authenticatedUser]);
 
   const userManuallySelectedRef = React.useRef<boolean>(false);
-  const prevAuthUserRef = React.useRef<string>(authenticatedUser?.name || '');
 
-  // Selected technician state - auto select logged-in technician
+  // Selected technician state - never auto-fill unless initialTech is explicitly provided and is a valid technician
   const [selectedTech, setSelectedTech] = useState<string>(() => {
-    if (authenticatedUser?.name && authenticatedUser.name.trim() !== '') {
-      return authenticatedUser.name;
-    }
     if (initialTech && initialTech.trim() !== '') {
       return initialTech;
     }
-    try {
-      const activeUserRaw = localStorage.getItem("defib_active_tech_session");
-      if (activeUserRaw) {
-        const u = JSON.parse(activeUserRaw);
-        if (u?.name) return u.name;
-      }
-    } catch (_) {}
     return '';
   });
 
-  // Default selected technician: auto-select logged-in technician
   useEffect(() => {
-    // If the authenticated user changed (e.g. login/switch account)
-    if (authenticatedUser?.name && authenticatedUser.name !== prevAuthUserRef.current) {
-      prevAuthUserRef.current = authenticatedUser.name;
-      userManuallySelectedRef.current = false;
-      setSelectedTech(authenticatedUser.name);
-      return;
-    }
-
-    // Only set initial tech if user has not manually changed the dropdown
+    // Only synchronize initialTech if user has not manually chosen a technician in the dropdown
     if (!userManuallySelectedRef.current) {
-      if (authenticatedUser?.name && authenticatedUser.name.trim() !== '') {
-        setSelectedTech(authenticatedUser.name);
-      } else if (initialTech && initialTech.trim() !== '') {
-        setSelectedTech(initialTech);
-      } else if (!selectedTech || selectedTech === 'Tous') {
-        if (techniciansList.length > 0 && techniciansList[0]?.name) {
-          setSelectedTech(techniciansList[0].name);
+      if (initialTech && initialTech.trim() !== '') {
+        const matching = techniciansList.find(m => normalizeName(m.name) === normalizeName(initialTech));
+        if (matching) {
+          setSelectedTech(matching.name);
+        } else {
+          setSelectedTech('');
         }
+      } else {
+        setSelectedTech('');
       }
     }
-  }, [authenticatedUser?.name, initialTech]);
+  }, [initialTech, techniciansList]);
 
   // Active member object strictly for selected technician
+  const isTechSelected = Boolean(selectedTech && selectedTech.trim() !== '' && selectedTech !== 'Tous' && selectedTech !== 'Sélectionner un technicien');
+
+  useEffect(() => {
+    if (!isTechSelected && isSpontaneousFormOpen) {
+      setIsSpontaneousFormOpen(false);
+    }
+  }, [isTechSelected, isSpontaneousFormOpen]);
+
   const activeMember = useMemo(() => {
     if (!selectedTech || selectedTech.trim() === '' || selectedTech === 'Tous') {
       return null;
     }
     const normSelTech = normalizeName(selectedTech);
-
     const inTechList = techniciansList.find(m => normalizeName(m.name) === normSelTech);
-    if (inTechList) return inTechList;
-
-    const rawAll = (members && members.length > 0) ? members : (companyInfo?.members || []);
-    const inAll = rawAll.find((m: any) => normalizeName(m.name) === normSelTech);
-    if (inAll) return inAll;
-
-    if (authenticatedUser?.name && normalizeName(authenticatedUser.name) === normSelTech) {
-      return authenticatedUser;
-    }
-
-    return null;
-  }, [selectedTech, techniciansList, members, companyInfo, authenticatedUser]);
+    return inTechList || null;
+  }, [selectedTech, techniciansList]);
 
   // Combined source of tours from props or localStorage fallback
   const resolvedTours = useMemo(() => {
@@ -683,14 +672,16 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
   const handleSaveSpontaneousEvent = () => {
     setFormError('');
+    if (!isTechSelected) {
+      setFormError('Veuillez sélectionner un technicien.');
+      return;
+    }
     if (!formDate || !formCreneau || !formIntitule.trim() || !formCommentaire.trim()) {
       setFormError('Tous les champs sont requis.');
       return;
     }
 
-    const techForEvent = (selectedTech && selectedTech !== 'Tous')
-      ? selectedTech
-      : (authenticatedUser?.name || 'Technicien');
+    const techForEvent = selectedTech;
 
     const newEvt: SpontaneousEvent = {
       id: `spont_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -752,14 +743,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             textAlignLast: "center",
           }}
         >
-          {techniciansList.length === 0 && !selectedTech && (
-            <option value="">-- Aucun technicien --</option>
-          )}
-          {selectedTech && !techniciansList.some(m => normalizeName(m.name) === normalizeName(selectedTech)) && (
-            <option value={selectedTech}>
-              {selectedTech}
-            </option>
-          )}
+          <option value="">
+            {techniciansList.length === 0 ? "-- Aucun technicien disponible --" : "Sélectionner un technicien"}
+          </option>
           {techniciansList.map((m) => (
             <option key={m.name} value={m.name}>
               {m.name}
@@ -793,181 +779,186 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           ))}
         </select>
 
-        {/* Bouton Ajouter événement spontané / Enregistrer (Uniquement si un technicien est sélectionné) */}
-        {Boolean(selectedTech && selectedTech.trim() !== '' && selectedTech !== 'Tous' && selectedTech !== 'Sélectionner un technicien') && (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                if (isSpontaneousFormOpen) {
-                  handleSaveSpontaneousEvent();
-                } else {
-                  setIsSpontaneousFormOpen(true);
-                }
-              }}
-              className="w-full text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none"
-              style={{
-                backgroundColor: "rgb(22, 93, 252)",
-                borderRadius: "14px",
-                padding: "14px 12px",
-                fontSize: "18px",
-                border: "none",
-                boxShadow: "none"
-              }}
-            >
-              {isSpontaneousFormOpen ? "Enregistrer" : "Ajouter événement spontané"}
-            </button>
+        {/* Bouton Ajouter événement spontané / Enregistrer (Désactivé si aucun technicien n'est sélectionné) */}
+        <button
+          type="button"
+          disabled={!isTechSelected}
+          onClick={() => {
+            if (!isTechSelected) return;
+            if (isSpontaneousFormOpen) {
+              handleSaveSpontaneousEvent();
+            } else {
+              setIsSpontaneousFormOpen(true);
+            }
+          }}
+          title={!isTechSelected ? "Veuillez sélectionner un technicien pour ajouter un événement spontané" : undefined}
+          className={`w-full font-bold transition-all duration-150 focus:outline-none text-center flex items-center justify-center select-none ${
+            isTechSelected
+              ? "text-white cursor-pointer hover:opacity-95"
+              : "text-neutral-400 cursor-not-allowed opacity-60"
+          }`}
+          style={{
+            backgroundColor: isTechSelected ? "rgb(22, 93, 252)" : "rgb(229, 231, 235)",
+            color: isTechSelected ? "#ffffff" : "rgb(156, 163, 175)",
+            borderRadius: "14px",
+            padding: "14px 12px",
+            fontSize: "18px",
+            border: isTechSelected ? "none" : "1px solid rgb(209, 213, 219)",
+            boxShadow: "none",
+            cursor: isTechSelected ? "pointer" : "not-allowed",
+          }}
+        >
+          {isSpontaneousFormOpen ? "Enregistrer" : "Ajouter événement spontané"}
+        </button>
 
-            {/* Mini Form Evénement spontané */}
-            {isSpontaneousFormOpen && (
-              <div
-                className="bg-white p-4 space-y-4 my-2 select-none"
-                style={{
-                  border: "1px solid rgb(201, 190, 205)",
-                  borderRadius: "14px",
-                }}
-              >
-                {formError && (
-                  <div className="p-3 bg-red-50 text-red-600 rounded-lg text-[16px] font-semibold">
-                    {formError}
-                  </div>
-                )}
-
-                {/* Field 1: Date */}
-                <div className="space-y-1">
-                  <label className="block font-bold text-[16px] text-black">
-                    Date <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={formDate}
-                    onChange={(e) => {
-                      setFormDate(e.target.value);
-                      if (formError) setFormError('');
-                    }}
-                    onClick={(e) => {
-                      try {
-                        (e.currentTarget as any).showPicker?.();
-                      } catch (_) {}
-                    }}
-                    className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden cursor-pointer"
-                    style={{
-                      fontSize: "18px",
-                      padding: "14px",
-                      borderRadius: "13px",
-                      border: "1px solid rgb(201, 191, 205)",
-                      outline: "none",
-                      color: "rgb(0, 0, 0)",
-                      WebkitAppearance: "none",
-                      appearance: "none",
-                    }}
-                  />
-                </div>
-
-                {/* Field 2: Créneau */}
-                <div className="space-y-1">
-                  <label className="block font-bold text-[16px] text-black">
-                    Créneau <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formCreneau}
-                    onChange={(e) => {
-                      setFormCreneau(e.target.value);
-                      if (formError) setFormError('');
-                    }}
-                    className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none cursor-pointer"
-                    style={{
-                      fontSize: "18px",
-                      padding: "14px",
-                      borderRadius: "13px",
-                      border: "1px solid rgb(201, 191, 205)",
-                      outline: "none",
-                      color: "rgb(0, 0, 0)",
-                    }}
-                  >
-                    <option value="">Sélectionner un créneau</option>
-                    {CRENEAU_OPTIONS.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Field 3: Intitulé */}
-                <div className="space-y-1">
-                  <label className="block font-bold text-[16px] text-black">
-                    Intitulé <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex : Réunion équipe, Formation..."
-                    value={formIntitule}
-                    onChange={(e) => {
-                      setFormIntitule(e.target.value);
-                      if (formError) setFormError('');
-                    }}
-                    className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
-                    style={{
-                      fontSize: "18px",
-                      padding: "14px",
-                      borderRadius: "13px",
-                      border: "1px solid rgb(201, 191, 205)",
-                      outline: "none",
-                      color: "rgb(0, 0, 0)",
-                    }}
-                  />
-                </div>
-
-                {/* Field 4: Commentaire */}
-                <div className="space-y-1">
-                  <label className="block font-bold text-[16px] text-black">
-                    Commentaire <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Détails de l'événement..."
-                    value={formCommentaire}
-                    onChange={(e) => {
-                      setFormCommentaire(e.target.value);
-                      if (formError) setFormError('');
-                    }}
-                    className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
-                    style={{
-                      fontSize: "18px",
-                      padding: "14px",
-                      borderRadius: "13px",
-                      border: "1px solid rgb(201, 191, 205)",
-                      outline: "none",
-                      color: "rgb(0, 0, 0)",
-                    }}
-                  />
-                </div>
-
-                {/* Bouton Annuler */}
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSpontaneousFormOpen(false);
-                      setFormError('');
-                    }}
-                    className="w-full font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer select-none"
-                    style={{
-                      backgroundColor: "#000000",
-                      borderRadius: "13px",
-                      color: "#ffffff",
-                      padding: "14px 20px",
-                      fontSize: "18px",
-                      border: "none",
-                    }}
-                  >
-                    Annuler
-                  </button>
-                </div>
+        {/* Mini Form Evénement spontané */}
+        {isSpontaneousFormOpen && isTechSelected && (
+          <div
+            className="bg-white p-4 space-y-4 my-2 select-none"
+            style={{
+              border: "1px solid rgb(201, 190, 205)",
+              borderRadius: "14px",
+            }}
+          >
+            {formError && (
+              <div className="p-3 bg-red-50 text-red-600 rounded-lg text-[16px] font-semibold">
+                {formError}
               </div>
             )}
-          </>
+
+            {/* Field 1: Date */}
+            <div className="space-y-1">
+              <label className="block font-bold text-[16px] text-black">
+                Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={formDate}
+                onChange={(e) => {
+                  setFormDate(e.target.value);
+                  if (formError) setFormError('');
+                }}
+                onClick={(e) => {
+                  try {
+                    (e.currentTarget as any).showPicker?.();
+                  } catch (_) {}
+                }}
+                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden cursor-pointer"
+                style={{
+                  fontSize: "18px",
+                  padding: "14px",
+                  borderRadius: "13px",
+                  border: "1px solid rgb(201, 191, 205)",
+                  outline: "none",
+                  color: "rgb(0, 0, 0)",
+                  WebkitAppearance: "none",
+                  appearance: "none",
+                }}
+              />
+            </div>
+
+            {/* Field 2: Créneau */}
+            <div className="space-y-1">
+              <label className="block font-bold text-[16px] text-black">
+                Créneau <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formCreneau}
+                onChange={(e) => {
+                  setFormCreneau(e.target.value);
+                  if (formError) setFormError('');
+                }}
+                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none cursor-pointer"
+                style={{
+                  fontSize: "18px",
+                  padding: "14px",
+                  borderRadius: "13px",
+                  border: "1px solid rgb(201, 191, 205)",
+                  outline: "none",
+                  color: "rgb(0, 0, 0)",
+                }}
+              >
+                <option value="">Sélectionner un créneau</option>
+                {CRENEAU_OPTIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Field 3: Intitulé */}
+            <div className="space-y-1">
+              <label className="block font-bold text-[16px] text-black">
+                Intitulé <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Ex : Réunion équipe, Formation..."
+                value={formIntitule}
+                onChange={(e) => {
+                  setFormIntitule(e.target.value);
+                  if (formError) setFormError('');
+                }}
+                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
+                style={{
+                  fontSize: "18px",
+                  padding: "14px",
+                  borderRadius: "13px",
+                  border: "1px solid rgb(201, 191, 205)",
+                  outline: "none",
+                  color: "rgb(0, 0, 0)",
+                }}
+              />
+            </div>
+
+            {/* Field 4: Commentaire */}
+            <div className="space-y-1">
+              <label className="block font-bold text-[16px] text-black">
+                Commentaire <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Détails de l'événement..."
+                value={formCommentaire}
+                onChange={(e) => {
+                  setFormCommentaire(e.target.value);
+                  if (formError) setFormError('');
+                }}
+                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
+                style={{
+                  fontSize: "18px",
+                  padding: "14px",
+                  borderRadius: "13px",
+                  border: "1px solid rgb(201, 191, 205)",
+                  outline: "none",
+                  color: "rgb(0, 0, 0)",
+                }}
+              />
+            </div>
+
+            {/* Bouton Annuler */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSpontaneousFormOpen(false);
+                  setFormError('');
+                }}
+                className="w-full font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer select-none"
+                style={{
+                  backgroundColor: "#000000",
+                  borderRadius: "13px",
+                  color: "#ffffff",
+                  padding: "14px 20px",
+                  fontSize: "18px",
+                  border: "none",
+                }}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -1527,6 +1518,13 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Message indicatif quand aucun technicien n'est sélectionné */}
+      {(!selectedTech || selectedTech.trim() === '') && (
+        <div className="py-16 text-center text-neutral-500 font-medium text-[17px] select-none">
+          Veuillez sélectionner un technicien pour afficher son planning.
         </div>
       )}
 

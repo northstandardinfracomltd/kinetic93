@@ -73,6 +73,74 @@ export function getHaversineDistance(c1: Coordinate, c2: Coordinate): number {
 }
 
 /**
+ * Calculates the travel duration in whole hours (1h, 2h, 3h, 4h, etc.)
+ * between the technician's starting departure coordinates and the first mission coordinates.
+ * In accordance with business rules: "on fonctionne d'heure en heure, donc il faut déterminer
+ * dans le calcul du trajet si le technicien a besoin de 1h, 2h, 3h, 4h, etc.... selon son point de départ
+ * pour déterminer l'heure probable/estimée de la première mission."
+ */
+export async function calculateFirstMissionTravelHours(
+  startCoord: Coordinate | null,
+  firstCoord: Coordinate | null
+): Promise<number> {
+  if (!startCoord || !firstCoord) return 0;
+  if (
+    typeof startCoord.lat !== 'number' ||
+    typeof startCoord.lng !== 'number' ||
+    typeof firstCoord.lat !== 'number' ||
+    typeof firstCoord.lng !== 'number' ||
+    isNaN(startCoord.lat) ||
+    isNaN(startCoord.lng) ||
+    isNaN(firstCoord.lat) ||
+    isNaN(firstCoord.lng)
+  ) {
+    return 0;
+  }
+
+  const distKm = getHaversineDistance(startCoord, firstCoord);
+  // If departure location is essentially identical to the first mission (< 200m), no travel needed
+  if (distKm < 0.2) return 0;
+
+  let travelMinutes = 0;
+
+  // 1. Try real road routing via OSRM with a strict 2s timeout
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const url = `https://router.project-osrm.org/route/v1/driving/${startCoord.lng},${startCoord.lat};${firstCoord.lng},${firstCoord.lat}?overview=false`;
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.routes?.[0]?.duration !== undefined) {
+        const sec = Number(data.routes[0].duration);
+        if (!isNaN(sec) && sec > 0) {
+          travelMinutes = sec / 60;
+        }
+      }
+    }
+  } catch (err) {
+    // Network offline or timeout, proceed to fallback
+  }
+
+  // 2. High-precision fallback based on real road driving conditions in France
+  if (travelMinutes <= 0) {
+    const roadDistKm = distKm * 1.25; // 1.25 road curvature factor
+    let avgSpeedKmH = 40; // Urban / local
+    if (roadDistKm > 80) {
+      avgSpeedKmH = 85; // Highway / express
+    } else if (roadDistKm > 25) {
+      avgSpeedKmH = 65; // National / departmental
+    }
+    travelMinutes = (roadDistKm / avgSpeedKmH) * 60;
+  }
+
+  // Rule: "on fonctionne d'heure en heure, donc il faut déterminer dans le calcul du trajet si le technicien à besoin de 1h, 2h, 3h, 4h, etc."
+  const hoursNeeded = Math.max(1, Math.ceil(travelMinutes / 60));
+  return hoursNeeded;
+}
+
+/**
  * Orders missions using a Nearest-Neighbor Traveling Salesperson algorithm.
  * Starts from the technician's start address and proceeds point-by-point,
  * sorting either by closest (proche) or furthest (loin).
@@ -395,7 +463,8 @@ export function scheduleMissions(
   missions: any[],
   tourStartDate: string,
   equipmentDetails: Record<string, any>,
-  tech?: any
+  tech?: any,
+  firstMissionTravelHours: number = 0
 ): any[] {
   if (!missions || missions.length === 0) return [];
 
@@ -461,7 +530,16 @@ export function scheduleMissions(
           }
           let found = false;
           for (const interval of intervals) {
-            const candidateStart = Math.max(currentCursorMinutes, interval.start);
+            let candidateStart = Math.max(currentCursorMinutes, interval.start);
+
+            // SPECIAL RULE: For the first mission of the tour (i === 0), incorporate travel time from technician departure point
+            if (i === 0 && firstMissionTravelHours > 0) {
+              const techInts = getTechnicianIntervals(currentCursorDate, tech);
+              const dayTechStart = (techInts.length > 0 && techInts[0].start) ? techInts[0].start : 480;
+              const earliestArrival = dayTechStart + (firstMissionTravelHours * 60);
+              candidateStart = Math.max(earliestArrival, interval.start);
+            }
+
             if (candidateStart + duration <= interval.end) {
               assignedStartMinutes = candidateStart;
               found = true;
@@ -519,9 +597,17 @@ export function scheduleMissions(
           }
 
           for (const interval of intervals) {
-            const candStart = (candDateStr === formatDate(currentCursorDate))
+            let candStart = (candDateStr === formatDate(currentCursorDate))
               ? Math.max(currentCursorMinutes, interval.start)
               : interval.start;
+
+            // SPECIAL RULE: For the first mission of the tour (i === 0), incorporate travel time from technician departure point
+            if (i === 0 && firstMissionTravelHours > 0) {
+              const techInts = getTechnicianIntervals(candidateDate, tech);
+              const dayTechStart = (techInts.length > 0 && techInts[0].start) ? techInts[0].start : 480;
+              const earliestArrival = dayTechStart + (firstMissionTravelHours * 60);
+              candStart = Math.max(earliestArrival, interval.start);
+            }
 
             const candEnd = candStart + duration;
 
@@ -577,6 +663,15 @@ export function scheduleMissions(
               limitDateObj = addDays(limitDateObj, -1);
               limitMins = 1080;
               startMinsK = limitMins - durK;
+            }
+
+            if (k === 0 && firstMissionTravelHours > 0) {
+              const techInts = getTechnicianIntervals(limitDateObj, tech);
+              const dayTechStart = (techInts.length > 0 && techInts[0].start) ? techInts[0].start : 480;
+              const earliestArrival = dayTechStart + (firstMissionTravelHours * 60);
+              if (startMinsK < earliestArrival) {
+                startMinsK = earliestArrival;
+              }
             }
 
             const kDateStr = formatDate(limitDateObj);
