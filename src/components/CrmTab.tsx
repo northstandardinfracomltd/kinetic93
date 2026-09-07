@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SupportTicket, Member, Client, CompanyInfo } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { ChevronDown, X } from 'lucide-react';
+import { INITIAL_TICKETS } from '../utils';
 
 export const CRITICITE_OPTIONS: Array<{
   value: 'Urgent' | 'Semaine prochaine' | 'Ce mois' | 'Mois prochain' | 'Non renseigné';
@@ -15,20 +16,15 @@ export const CRITICITE_OPTIONS: Array<{
   { value: 'Non renseigné', label: 'Non renseigné', color: '#38917a' },
 ];
 
-export const getCriticiteColor = (crit: string): string => {
-  switch (crit) {
-    case 'Urgent':
-      return '#ce293e';
-    case 'Semaine prochaine':
-      return '#de5815';
-    case 'Ce mois':
-      return '#8944af';
-    case 'Mois prochain':
-      return '#235dbe';
-    case 'Non renseigné':
-    default:
-      return '#38917a';
-  }
+export const getCriticiteColor = (crit?: string): string => {
+  if (!crit) return '#38917a';
+  const c = crit.trim().toLowerCase();
+  if (c === 'urgent') return '#ce293e';
+  if (c === 'semaine prochaine') return '#de5815';
+  if (c === 'ce mois') return '#8944af';
+  if (c === 'mois prochain') return '#235dbe';
+  if (c === 'non renseigné' || c === 'non renseigne') return '#38917a';
+  return '#38917a';
 };
 
 interface CrmTabProps {
@@ -100,16 +96,31 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   }, [isCriticiteDropdownOpen]);
 
   // Auto-expand vertical height of Description textarea
+  const adjustDescriptionHeight = () => {
+    const el = descriptionTextareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.max(el.scrollHeight, 100)}px`;
+  };
+
   useEffect(() => {
-    if (isPaneOpen && descriptionTextareaRef.current) {
-      requestAnimationFrame(() => {
-        if (descriptionTextareaRef.current) {
-          descriptionTextareaRef.current.style.height = 'auto';
-          descriptionTextareaRef.current.style.height = `${Math.max(descriptionTextareaRef.current.scrollHeight, 100)}px`;
-        }
-      });
+    if (isPaneOpen) {
+      adjustDescriptionHeight();
+      const t1 = setTimeout(adjustDescriptionHeight, 20);
+      const t2 = setTimeout(adjustDescriptionHeight, 100);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
     }
   }, [formDescription, isPaneOpen]);
+
+  // Ensure default demo tickets exist if list is empty so the CRM table and Gérer sidepane can be viewed immediately
+  useEffect(() => {
+    if (tickets.length === 0 && INITIAL_TICKETS && INITIAL_TICKETS.length > 0) {
+      onSaveTickets(INITIAL_TICKETS);
+    }
+  }, [tickets.length, onSaveTickets]);
 
   const activeTenant = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
 
@@ -702,10 +713,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           <span
                             className="inline-block rounded-full shrink-0"
                             style={{
-                              width: '8px',
-                              height: '8px',
+                              width: '10px',
+                              height: '10px',
+                              minWidth: '10px',
+                              minHeight: '10px',
                               backgroundColor: getCriticiteColor(critVal),
                             }}
+                            aria-hidden="true"
                           />
                         </span>
                       </td>
@@ -894,7 +908,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     </select>
                   </div>
 
-                  <div className="relative" ref={criticiteDropdownRef}>
+                    <div className="relative" ref={criticiteDropdownRef}>
                     <label>Criticité.</label>
                     <button
                       type="button"
@@ -920,14 +934,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       }}
                     >
                       <div className="flex items-center gap-2">
-                        <span>{formCriticite}</span>
+                        <span className="text-[18px] text-black font-normal">{formCriticite}</span>
                         <span
                           className="inline-block rounded-full shrink-0"
                           style={{
-                            width: '8px',
-                            height: '8px',
+                            width: '10px',
+                            height: '10px',
+                            minWidth: '10px',
+                            minHeight: '10px',
                             backgroundColor: getCriticiteColor(formCriticite),
                           }}
+                          aria-hidden="true"
                         />
                       </div>
                       <ChevronDown
@@ -936,21 +953,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         }`}
                       />
                     </button>
-
-                    {/* Hidden native select for accessibility & form compatibility */}
-                    <select
-                      value={formCriticite}
-                      onChange={(e: any) => setFormCriticite(e.target.value)}
-                      className="sr-only"
-                      tabIndex={-1}
-                      aria-hidden="true"
-                    >
-                      {CRITICITE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
 
                     {/* Dropdown Menu */}
                     {isCriticiteDropdownOpen && (
@@ -974,14 +976,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               }`}
                             >
                               <div className="flex items-center gap-2">
-                                <span className="text-[18px] text-black">{opt.label}</span>
+                                <span className="text-[18px] text-black font-normal">{opt.label}</span>
                                 <span
                                   className="inline-block rounded-full shrink-0"
                                   style={{
-                                    width: '8px',
-                                    height: '8px',
+                                    width: '10px',
+                                    height: '10px',
+                                    minWidth: '10px',
+                                    minHeight: '10px',
                                     backgroundColor: opt.color,
                                   }}
+                                  aria-hidden="true"
                                 />
                               </div>
                               {isSelected && (
@@ -1059,17 +1064,21 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <label>Description.</label>
                     <textarea
                       ref={descriptionTextareaRef}
+                      id="crm-form-description-textarea"
                       placeholder="Entrez une description détaillée..."
                       value={formDescription}
+                      onInput={adjustDescriptionHeight}
                       onChange={(e) => {
                         setFormDescription(e.target.value);
-                        e.target.style.height = 'auto';
-                        e.target.style.height = `${Math.max(e.target.scrollHeight, 100)}px`;
+                        adjustDescriptionHeight();
                       }}
                       style={{
                         resize: 'none',
                         overflow: 'hidden',
                         minHeight: '100px',
+                        lineHeight: '1.5',
+                        display: 'block',
+                        width: '100%',
                       }}
                     />
                   </div>
