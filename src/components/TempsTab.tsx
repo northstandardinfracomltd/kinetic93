@@ -463,7 +463,7 @@ export function getMonthlyWorkingDaysData(
   });
 
   return {
-    title: 'CTT Planning Horaires',
+    title: 'Fichier PDF CTT',
     subtitle: `${techName} - ${monthLabel}`,
     techName,
     monthLabel,
@@ -487,7 +487,7 @@ function generateMonthlyCSV(
   const csvLines: string[][] = [];
 
   // Line 1: Titre fixe
-  csvLines.push([data.title, '', '', '', '', '', '', '', '', '', '', '']);
+  csvLines.push(['Fichier CSV CTT', '', '', '', '', '', '', '', '', '', '', '']);
   // Line 2: Sous-titre variable
   csvLines.push([data.subtitle, '', '', '', '', '', '', '', '', '', '', '']);
   // Line 3: Ligne vide d'espacement
@@ -824,10 +824,11 @@ function generateMonthlyPDFHTML(
       color: #000000 !important;
     }
     .overtime-card {
-      border: 1px solid #dadada !important;
-      background-color: #f6f6f6 !important;
+      border: none !important;
+      background: transparent !important;
+      background-color: transparent !important;
       border-radius: 0px !important;
-      padding: 3px 12px;
+      padding: 0px;
       text-align: right;
       min-width: 160px;
     }
@@ -954,7 +955,6 @@ function generateMonthlyPDFHTML(
       <div class="signature-card">
         <div>Fait à _________________________, le ______ / ______ / 2026</div>
         <div style="font-weight: 600; margin-top: 2px;">Signature Employé :</div>
-        <div style="height: 24px; border-bottom: 1px dashed #dadada; width: 220px; margin-top: 2px;"></div>
       </div>
 
       <div class="overtime-card">
