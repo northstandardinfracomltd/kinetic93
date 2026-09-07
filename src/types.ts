@@ -528,6 +528,7 @@ export interface GedDocument {
   dateStr: string;
   fileContent?: string;
   fileUrl?: string;
+  driveUrl?: string;
 }
 
 export interface Memo {

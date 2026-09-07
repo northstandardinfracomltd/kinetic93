@@ -54,8 +54,17 @@ export default function LocalisationsTab({ members }: LocalisationsTabProps) {
     transition: 'all 0s',
   };
 
+  // Filter technicians only
+  const isTechnician = (m: Member) => {
+    if (!m) return false;
+    const roleLower = (m.role || '').toLowerCase();
+    return m.role === 'Technicien' || m.role === 'Maintenance Terrain' || roleLower.includes('tech');
+  };
+
+  const technicianMembers = members.filter(isTechnician);
+
   // Searching logic
-  const filteredMembers = members.filter((m) => {
+  const filteredMembers = technicianMembers.filter((m) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -137,11 +146,11 @@ export default function LocalisationsTab({ members }: LocalisationsTabProps) {
           {filteredMembers.length === 0 ? (
             <div className="p-16 text-center font-sans lg:py-24" id="no-members-view">
               <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100, marginBottom: '8px' }}>
-                {search ? "Aucun résultat." : "Aucun collaborateur enregistré"}
+                {search ? "Aucun résultat." : "Aucun technicien enregistré"}
               </p>
               {!search && (
                 <p style={{ color: '#888888', fontSize: '13px', fontWeight: 100 }}>
-                  Enregistrez d'abord des collaborateurs dans la section Équipe.
+                  Enregistrez d'abord des techniciens dans la section Équipe.
                 </p>
               )}
             </div>

@@ -5358,18 +5358,25 @@ export default function App() {
   };
 
   const handleConsultGed = (doc: GedDocument) => {
+    const targetUrl = doc.driveUrl || doc.fileUrl;
+    if (targetUrl) {
+      window.open(targetUrl, '_blank');
+      return;
+    }
     if (doc.fileContent) {
+      if (doc.fileContent.startsWith('http')) {
+        window.open(doc.fileContent, '_blank');
+        return;
+      }
       const link = document.createElement('a');
       link.href = doc.fileContent;
       link.download = doc.fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } else if (doc.fileUrl) {
-      window.open(doc.fileUrl, '_blank');
-    } else {
-      window.open('https://civilprom.s3.eu-north-1.amazonaws.com/Civilprom1.otf', '_blank');
+      return;
     }
+    window.open('https://drive.google.com', '_blank');
   };
 
   const handleDeleteExpense = (id: string) => {

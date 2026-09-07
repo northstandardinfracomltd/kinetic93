@@ -1,6 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { SupportTicket, Member, Client, CompanyInfo } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { ChevronDown, X } from 'lucide-react';
+
+export const CRITICITE_OPTIONS: Array<{
+  value: 'Urgent' | 'Semaine prochaine' | 'Ce mois' | 'Mois prochain' | 'Non renseigné';
+  label: string;
+  color: string;
+}> = [
+  { value: 'Urgent', label: 'Urgent', color: '#ce293e' },
+  { value: 'Semaine prochaine', label: 'Semaine prochaine', color: '#de5815' },
+  { value: 'Ce mois', label: 'Ce mois', color: '#8944af' },
+  { value: 'Mois prochain', label: 'Mois prochain', color: '#235dbe' },
+  { value: 'Non renseigné', label: 'Non renseigné', color: '#38917a' },
+];
+
+export const getCriticiteColor = (crit: string): string => {
+  switch (crit) {
+    case 'Urgent':
+      return '#ce293e';
+    case 'Semaine prochaine':
+      return '#de5815';
+    case 'Ce mois':
+      return '#8944af';
+    case 'Mois prochain':
+      return '#235dbe';
+    case 'Non renseigné':
+    default:
+      return '#38917a';
+  }
+};
 
 interface CrmTabProps {
   tickets: SupportTicket[];
@@ -27,6 +56,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   // Side-pane drawer state
   const [isPaneOpen, setIsPaneOpen] = useState(false);
   const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
+  const [isSettingsPaneOpen, setIsSettingsPaneOpen] = useState(false);
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
 
   // Form State
   const [formRef, setFormRef] = useState('');
@@ -40,6 +71,45 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formClientSelect, setFormClientSelect] = useState('Autre');
   const [formCustomClientName, setFormCustomClientName] = useState('');
   const [formDescription, setFormDescription] = useState('');
+
+  // Criticite dropdown custom control state & refs
+  const [isCriticiteDropdownOpen, setIsCriticiteDropdownOpen] = useState(false);
+  const [isCriticiteHovered, setIsCriticiteHovered] = useState(false);
+  const criticiteDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Auto-expand vertical textarea ref for Description
+  const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Handle click outside for criticite dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        criticiteDropdownRef.current &&
+        !criticiteDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsCriticiteDropdownOpen(false);
+      }
+    };
+
+    if (isCriticiteDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isCriticiteDropdownOpen]);
+
+  // Auto-expand vertical height of Description textarea
+  useEffect(() => {
+    if (isPaneOpen && descriptionTextareaRef.current) {
+      requestAnimationFrame(() => {
+        if (descriptionTextareaRef.current) {
+          descriptionTextareaRef.current.style.height = 'auto';
+          descriptionTextareaRef.current.style.height = `${Math.max(descriptionTextareaRef.current.scrollHeight, 100)}px`;
+        }
+      });
+    }
+  }, [formDescription, isPaneOpen]);
 
   const activeTenant = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
 
@@ -262,6 +332,24 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     transition: 'background-color 0.15s ease',
   };
 
+  const blackButtonStyle: React.CSSProperties = {
+    backgroundColor: '#000000',
+    color: '#ffffff',
+    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    borderRadius: '13px',
+    fontSize: '18px',
+    padding: '9px 19px',
+    fontWeight: 'normal',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.5rem',
+    cursor: 'pointer',
+    border: 'none',
+    transition: 'all 0s ease-in-out',
+    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+  };
+
   const thStyle: React.CSSProperties = {
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
     fontWeight: 600,
@@ -316,12 +404,115 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     fontSize: '18px',
   };
 
+  const companyDisplayName = companyInfo?.name || companyInfo?.nomLogiciel || 'Votre Entreprise';
+  const embedCode = `<!-- Formulaire de contact Défibeo pour ${companyDisplayName} -->
+<div class="defibeo-contact-wrapper" id="defibeo-contact-box" style="max-width: 500px; margin: 20px auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); text-align: left; box-sizing: border-box;">
+  <style>
+    @font-face {
+      font-family: 'Civilprom';
+      src: url('https://civilprom.s3.eu-north-1.amazonaws.com/Civilprom1.otf') format('opentype');
+    }
+    #defibeo-contact-box, #defibeo-contact-box * {
+      font-family: 'Civilprom', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+    #defibeo-contact-box input::placeholder, #defibeo-contact-box textarea::placeholder {
+      color: #000000 !important;
+      opacity: 0.6;
+      font-size: 16px !important;
+    }
+  </style>
+
+  <h2 style="font-size: 18px; color: #000000; margin-top: 0; margin-bottom: 8px; text-align: left; font-weight: normal;">Envoyer un message à ${companyDisplayName}</h2>
+  <p style="font-size: 16px; color: #000000; margin-bottom: 24px; text-align: left; line-height: 1.5;">Vous avez une question ou besoin d'assistance ? Remplissez ce formulaire pour nous contacter.</p>
+  
+  <form id="defibeo-contact-form" style="display: flex; flex-direction: column; gap: 16px;">
+    <input type="hidden" name="tenantId" value="${activeTenant}" />
+    
+    <div>
+      <label style="display: block; font-size: 16px; color: #000000; margin-bottom: 6px;">Adresse Email</label>
+      <input type="email" name="email" required style="width: 100%; padding: 12px 16px; border: 1px solid #cbd5e0; border-radius: 13px; font-size: 16px; color: #000000; box-sizing: border-box; outline: none; transition: border-color 0.2s;" placeholder="votre@email.com" />
+    </div>
+    
+    <div>
+      <label style="display: block; font-size: 16px; color: #000000; margin-bottom: 6px;">Message</label>
+      <textarea name="message" required rows="4" style="width: 100%; padding: 12px 16px; border: 1px solid #cbd5e0; border-radius: 13px; font-size: 16px; color: #000000; box-sizing: border-box; outline: none; transition: border-color 0.2s; resize: vertical;" placeholder="Entrez votre message, veuillez détailler votre demande et mentionner votre nom et votre entreprise."></textarea>
+    </div>
+    
+    <button type="submit" id="defibeo-submit-btn" style="background-color: #3556ec; color: #ffffff; padding: 14px 20px; border: none; border-radius: 13px; font-size: 16px; font-weight: normal; cursor: pointer; transition: background-color 0.2s; display: block; width: 100%; text-align: center; margin-top: 8px;">Envoyer</button>
+    
+    <div id="defibeo-response-msg" style="display: none; font-size: 14px; text-align: left; margin-top: 10px;"></div>
+  </form>
+
+  <script>
+    (function() {
+      var form = document.getElementById('defibeo-contact-form');
+      if (!form) return;
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var btn = document.getElementById('defibeo-submit-btn');
+        var msgDiv = document.getElementById('defibeo-response-msg');
+        
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+        btn.innerText = 'Envoi en cours...';
+        
+        var tenantId = form.querySelector('[name="tenantId"]').value;
+        var email = form.querySelector('[name="email"]').value;
+        var message = form.querySelector('[name="message"]').value;
+        
+        var params = new URLSearchParams();
+        params.append('tenantId', tenantId);
+        params.append('email', email);
+        params.append('message', message);
+        
+        fetch('${typeof window !== 'undefined' ? window.location.origin : ''}/api/crm/embed-lead', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json'
+          },
+          body: params
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.innerText = 'Envoyer';
+          msgDiv.style.display = 'block';
+          msgDiv.style.padding = '0';
+          msgDiv.style.border = 'none';
+          msgDiv.style.background = 'none';
+          
+          if (data.success) {
+            msgDiv.style.color = '#16a34a';
+            msgDiv.innerText = '✓ Message envoyé avec succès. Merci !';
+            form.reset();
+          } else {
+            msgDiv.style.color = '#dc2626';
+            msgDiv.innerText = 'Erreur : ' + (data.error || 'Une erreur est survenue.');
+          }
+        })
+        .catch(function(err) {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.innerText = 'Envoyer';
+          msgDiv.style.display = 'block';
+          msgDiv.style.padding = '0';
+          msgDiv.style.border = 'none';
+          msgDiv.style.background = 'none';
+          msgDiv.style.color = '#dc2626';
+          msgDiv.innerText = 'Erreur de connexion.';
+        });
+      });
+    })();
+  </script>
+</div>`;
+
   return (
     <div className="space-y-6 animate-fadeIn" id="crm-tab-container">
       <style>{`
         #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-crm-input),
         #crm-tab-container select,
-        #crm-tab-container textarea {
+        #crm-tab-container textarea:not(#crm-embed-textarea) {
           padding: 10px 12px !important;
           border: 1px solid #c9bfcd !important;
           border-radius: 13px !important;
@@ -345,8 +536,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-crm-input),
         #crm-tab-container select:hover:not(:disabled),
         #crm-tab-container select:focus:not(:disabled),
-        #crm-tab-container textarea:hover:not(:disabled),
-        #crm-tab-container textarea:focus:not(:disabled),
+        #crm-tab-container textarea:not(#crm-embed-textarea):hover:not(:disabled),
+        #crm-tab-container textarea:not(#crm-embed-textarea):focus:not(:disabled),
         #crm-tab-container #search-crm-input:hover,
         #crm-tab-container #search-crm-input:focus {
           outline: 2.5px solid #fa53d5 !important;
@@ -383,6 +574,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Réglages CRM Button */}
+            <button
+              type="button"
+              onClick={() => setIsSettingsPaneOpen(true)}
+              id="btn-crm-settings"
+              style={blackButtonStyle}
+              className="hover:bg-zinc-800 transition-colors"
+            >
+              Réglages CRM
+            </button>
+
             {/* Search Input */}
             <input
               type="text"
@@ -495,8 +697,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
                       {/* Criticité. (in gelule) */}
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span style={geluleStyle}>
-                          {critVal}
+                        <span style={geluleStyle} className="inline-flex items-center gap-2">
+                          <span>{critVal}</span>
+                          <span
+                            className="inline-block rounded-full shrink-0"
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              backgroundColor: getCriticiteColor(critVal),
+                            }}
+                          />
                         </span>
                       </td>
 
@@ -684,19 +894,104 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     </select>
                   </div>
 
-                  <div>
+                  <div className="relative" ref={criticiteDropdownRef}>
                     <label>Criticité.</label>
+                    <button
+                      type="button"
+                      id="crm-form-criticite-button"
+                      onClick={() => setIsCriticiteDropdownOpen(!isCriticiteDropdownOpen)}
+                      onMouseEnter={() => setIsCriticiteHovered(true)}
+                      onMouseLeave={() => setIsCriticiteHovered(false)}
+                      className="w-full flex items-center justify-between cursor-pointer text-left"
+                      style={{
+                        padding: '10px 12px',
+                        border: '1px solid #c9bfcd',
+                        borderRadius: '13px',
+                        fontSize: '18px',
+                        fontWeight: 400,
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        boxSizing: 'border-box',
+                        outline: (isCriticiteHovered || isCriticiteDropdownOpen) ? '2.5px solid #fa53d5' : 'none',
+                        outlineOffset: (isCriticiteHovered || isCriticiteDropdownOpen) ? '2px' : '0px',
+                        transition: 'all 0s',
+                        height: '49px',
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{formCriticite}</span>
+                        <span
+                          className="inline-block rounded-full shrink-0"
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            backgroundColor: getCriticiteColor(formCriticite),
+                          }}
+                        />
+                      </div>
+                      <ChevronDown
+                        className={`w-4 h-4 text-slate-500 transition-transform duration-150 shrink-0 ${
+                          isCriticiteDropdownOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
+
+                    {/* Hidden native select for accessibility & form compatibility */}
                     <select
                       value={formCriticite}
                       onChange={(e: any) => setFormCriticite(e.target.value)}
-                      style={selectStyle}
+                      className="sr-only"
+                      tabIndex={-1}
+                      aria-hidden="true"
                     >
-                      <option value="Urgent">Urgent</option>
-                      <option value="Semaine prochaine">Semaine prochaine</option>
-                      <option value="Ce mois">Ce mois</option>
-                      <option value="Mois prochain">Mois prochain</option>
-                      <option value="Non renseigné">Non renseigné</option>
+                      {CRITICITE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
                     </select>
+
+                    {/* Dropdown Menu */}
+                    {isCriticiteDropdownOpen && (
+                      <div
+                        className="absolute left-0 right-0 top-full mt-1 z-50 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden py-1 animate-fadeIn"
+                        style={{
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        }}
+                      >
+                        {CRITICITE_OPTIONS.map((opt) => {
+                          const isSelected = formCriticite === opt.value;
+                          return (
+                            <div
+                              key={opt.value}
+                              onClick={() => {
+                                setFormCriticite(opt.value);
+                                setIsCriticiteDropdownOpen(false);
+                              }}
+                              className={`px-3 py-2.5 flex items-center justify-between cursor-pointer transition-colors ${
+                                isSelected ? 'bg-slate-100 font-medium' : 'hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-[18px] text-black">{opt.label}</span>
+                                <span
+                                  className="inline-block rounded-full shrink-0"
+                                  style={{
+                                    width: '8px',
+                                    height: '8px',
+                                    backgroundColor: opt.color,
+                                  }}
+                                />
+                              </div>
+                              {isSelected && (
+                                <span className="text-xs font-bold text-slate-400">✓</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -763,10 +1058,19 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <div>
                     <label>Description.</label>
                     <textarea
-                      rows={4}
+                      ref={descriptionTextareaRef}
                       placeholder="Entrez une description détaillée..."
                       value={formDescription}
-                      onChange={(e) => setFormDescription(e.target.value)}
+                      onChange={(e) => {
+                        setFormDescription(e.target.value);
+                        e.target.style.height = 'auto';
+                        e.target.style.height = `${Math.max(e.target.scrollHeight, 100)}px`;
+                      }}
+                      style={{
+                        resize: 'none',
+                        overflow: 'hidden',
+                        minHeight: '100px',
+                      }}
                     />
                   </div>
 
@@ -828,6 +1132,141 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CRM SETTINGS SIDE PANE DRAWER */}
+      {isSettingsPaneOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden" id="crm-settings-drawer-modal">
+          {/* Overlay backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity cursor-pointer"
+            onClick={() => setIsSettingsPaneOpen(false)}
+          />
+
+          {/* Drawer container */}
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-md sm:max-w-xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto justify-between">
+              <div>
+                {/* Header with Title and Close button */}
+                <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-6">
+                  <h2 className="text-2xl font-bold font-gochi text-black" id="crm-settings-pane-title">
+                    Réglages CRM
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setIsSettingsPaneOpen(false)}
+                    className="text-slate-400 hover:text-black transition-colors p-1 rounded-lg"
+                    aria-label="Fermer"
+                    id="btn-close-crm-settings-top"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Div Intégrez le formulaire de contact à votre site web */}
+                  <div 
+                    className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
+                    id="crm-settings-section-embed-form"
+                  >
+                    <h3 className="text-xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
+                      Intégrez le formulaire de contact à votre site web
+                    </h3>
+                    
+                    <p className="text-[16px] text-black font-sans leading-relaxed">
+                      Générez un formulaire de contact professionnel à intégrer sur votre site internet. Tous les messages envoyés depuis ce formulaire remonteront dans votre onglet CRM et vous recevrez un email de notification.
+                    </p>
+
+                    <div className="space-y-3 mt-3">
+                      <textarea
+                        id="crm-embed-textarea"
+                        readOnly
+                        value={embedCode}
+                        style={{
+                          backgroundColor: '#1e293b',
+                          color: '#f8fafc',
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                          fontSize: '11px',
+                          padding: '12px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          resize: 'none',
+                          height: '190px',
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                        className="select-all"
+                      />
+                      <button
+                        type="button"
+                        id="btn-copy-embed-code"
+                        onClick={() => {
+                          navigator.clipboard.writeText(embedCode);
+                          setCopiedEmbed(true);
+                          setTimeout(() => setCopiedEmbed(false), 2000);
+                        }}
+                        style={{
+                          backgroundColor: '#000000',
+                          color: '#ffffff',
+                          fontSize: '18px',
+                          fontWeight: 'normal',
+                          borderRadius: '12px',
+                          padding: '12px 24px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          width: '100%',
+                          display: 'block',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        }}
+                        className="hover:opacity-90 active:scale-[0.99] transition-all font-sans"
+                      >
+                        {copiedEmbed ? "Copié !" : "Copier le code"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Div Recommandations */}
+                  <div 
+                    className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 text-left"
+                    id="crm-settings-section-recommendations"
+                  >
+                    <h3 className="text-xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
+                      Recommandations.
+                    </h3>
+                    <p className="text-[16px] text-black font-sans leading-relaxed">
+                      Les clients existants peuvent envoyer leurs demandes directement depuis leur espace client. Nous vous recommandons de créer une page de contact sur votre site web et d’y intégrer le formulaire à l'aide du code prêt à coller ci-dessus. Les demandes envoyées via ce formulaire arriveront également automatiquement dans votre CRM.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Full-width Fermer button at bottom */}
+              <div className="pt-6">
+                <button
+                  type="button"
+                  id="btn-close-crm-settings-bottom"
+                  onClick={() => setIsSettingsPaneOpen(false)}
+                  style={{
+                    backgroundColor: '#000000',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    padding: '14px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    width: '100%',
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                  className="hover:bg-zinc-800 transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
             </div>
           </div>
         </div>
