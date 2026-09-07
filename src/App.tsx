@@ -5358,17 +5358,17 @@ export default function App() {
   };
 
   const handleConsultGed = (doc: GedDocument) => {
-    if (doc.fileContent) {
+    if (doc.fileUrl) {
+      window.open(doc.fileUrl, '_blank', 'noopener,noreferrer');
+    } else if (doc.fileContent) {
       const link = document.createElement('a');
       link.href = doc.fileContent;
       link.download = doc.fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } else if (doc.fileUrl) {
-      window.open(doc.fileUrl, '_blank');
     } else {
-      window.open('https://civilprom.s3.eu-north-1.amazonaws.com/Civilprom1.otf', '_blank');
+      window.open('https://drive.google.com', '_blank');
     }
   };
 
@@ -12132,6 +12132,7 @@ export default function App() {
               isGedFormOpen={isGedFormOpen}
               setIsGedFormOpen={setIsGedFormOpen}
               handleConsultGed={handleConsultGed}
+              setActiveTab={setActiveTab}
             />
           )}
 

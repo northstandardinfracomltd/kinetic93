@@ -1019,6 +1019,10 @@ export default function SettingsModal({
         setGoogleDriveActive(true);
         setGoogleDriveEmail(email);
         setGoogleDriveAccessToken(token);
+        localStorage.setItem('defib_google_drive_active', 'true');
+        localStorage.setItem('defib_google_drive_email', email);
+        localStorage.setItem('defib_google_drive_token', token);
+        window.dispatchEvent(new Event('google-drive-status-changed'));
       } catch (err: any) {
         console.error("Google Drive connection failed with Firebase popup, falling back:", err);
         // Fallback for custom clients if popup cancelled or domain restricted
@@ -1084,16 +1088,24 @@ export default function SettingsModal({
                   setGoogleDriveActive(true);
                   setGoogleDriveEmail(email);
                   setGoogleDriveAccessToken(token);
+                  localStorage.setItem('defib_google_drive_active', 'true');
+                  localStorage.setItem('defib_google_drive_email', email);
+                  localStorage.setItem('defib_google_drive_token', token);
+                  window.dispatchEvent(new Event('google-drive-status-changed'));
                 }
               }
             } catch (e: any) {
               clearInterval(pollTimer);
               setGoogleDriveActive(false);
+              localStorage.setItem('defib_google_drive_active', 'false');
+              window.dispatchEvent(new Event('google-drive-status-changed'));
               alert("Erreur de connexion Google Drive : " + (e.message || e));
             }
           }, 500);
         } catch (fallbackErr: any) {
           setGoogleDriveActive(false);
+          localStorage.setItem('defib_google_drive_active', 'false');
+          window.dispatchEvent(new Event('google-drive-status-changed'));
           alert("Erreur de connexion Google Drive : " + (fallbackErr.message || fallbackErr));
         }
       }
@@ -1101,6 +1113,10 @@ export default function SettingsModal({
       setGoogleDriveActive(false);
       setGoogleDriveEmail('');
       setGoogleDriveAccessToken('');
+      localStorage.setItem('defib_google_drive_active', 'false');
+      localStorage.removeItem('defib_google_drive_email');
+      localStorage.removeItem('defib_google_drive_token');
+      window.dispatchEvent(new Event('google-drive-status-changed'));
     }
   };
 
@@ -1229,6 +1245,12 @@ export default function SettingsModal({
         googleDriveEmail,
         googleDriveAccessToken
       };
+      localStorage.setItem('defib_google_drive_active', String(googleDriveActive));
+      if (googleDriveEmail) localStorage.setItem('defib_google_drive_email', googleDriveEmail);
+      else localStorage.removeItem('defib_google_drive_email');
+      if (googleDriveAccessToken) localStorage.setItem('defib_google_drive_token', googleDriveAccessToken);
+      else localStorage.removeItem('defib_google_drive_token');
+      window.dispatchEvent(new Event('google-drive-status-changed'));
       await saveCollectionToFirestore('api_connectors', payload);
       setConnectorsSaveStatus('saved');
       if (onConnectorsUpdated) {
