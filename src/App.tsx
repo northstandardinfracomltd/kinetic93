@@ -6916,6 +6916,7 @@ export default function App() {
                           members={members}
                           t={translate}
                           initialTech=""
+                          enableExtendedView={true}
                         />
                       </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence } from '../types';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
 import { getActiveTenantCountry, getHolidaysForYear, SupportedCountry } from '../utils/holidays';
+import { PlanningExtendedViewModal } from './PlanningExtendedViewModal';
 
 export interface SpontaneousEvent {
   id: string;
@@ -33,6 +34,7 @@ interface PlanningTabProps {
   members?: Member[];
   t: (key: string) => string;
   initialTech?: string;
+  enableExtendedView?: boolean;
 }
 
 const MONTH_NAMES_FR = [
@@ -174,11 +176,13 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   variables = [],
   members = [],
   t,
-  initialTech
+  initialTech,
+  enableExtendedView = false
 }) => {
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(today.getMonth());
+  const [isExtendedViewOpen, setIsExtendedViewOpen] = useState<boolean>(false);
 
   // Detect active tenant country (France, Belgique, Luxembourg, Monaco, Suisse, Royaume-Uni, Espagne, Portugal)
   const [activeCountry, setActiveCountry] = useState<SupportedCountry>(() =>
@@ -722,6 +726,27 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
   return (
     <div className="space-y-4 font-sans pb-12" id="planning-tab-wrapper">
+      {/* Bouton Planning vue étendue (Uniquement sur le logiciel principal) */}
+      {enableExtendedView && (
+        <div className="px-0 select-none pb-0">
+          <button
+            type="button"
+            onClick={() => setIsExtendedViewOpen(true)}
+            className="w-full font-bold transition-all duration-150 focus:outline-none text-center flex items-center justify-center select-none cursor-pointer text-white hover:opacity-95 active:scale-[0.99]"
+            style={{
+              backgroundColor: "rgb(22, 93, 252)",
+              borderRadius: "14px",
+              padding: "14px 12px",
+              fontSize: "18px",
+              border: "none",
+              boxShadow: "none",
+            }}
+          >
+            Planning vue étendue
+          </button>
+        </div>
+      )}
+
       {/* Field Technicien */}
       <div className="px-0 select-none">
         <select
@@ -1547,6 +1572,23 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             {t("Remonter")}
           </button>
         </div>
+      )}
+
+      {/* Modal Planning vue étendue */}
+      {isExtendedViewOpen && (
+        <PlanningExtendedViewModal
+          isOpen={isExtendedViewOpen}
+          onClose={() => setIsExtendedViewOpen(false)}
+          techniciansList={techniciansList}
+          resolvedTours={resolvedTours}
+          spontaneousEvents={spontaneousEvents}
+          clients={clients}
+          defibrillateurs={defibrillateurs}
+          otherEquipments={otherEquipments}
+          initialMonth={selectedMonth}
+          initialYear={selectedYear}
+          onUpdateSpontaneousEvents={(updated) => setSpontaneousEvents(updated)}
+        />
       )}
     </div>
   );
