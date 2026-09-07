@@ -1019,15 +1019,6 @@ export default function SettingsModal({
         setGoogleDriveActive(true);
         setGoogleDriveEmail(email);
         setGoogleDriveAccessToken(token);
-        localStorage.setItem('defib_google_drive_active', 'true');
-        localStorage.setItem('defib_google_drive_email', email);
-        localStorage.setItem('defib_google_drive_token', token);
-        window.dispatchEvent(new Event('storage'));
-        saveCollectionToFirestore('api_connectors', {
-          googleDriveActive: true,
-          googleDriveEmail: email,
-          googleDriveAccessToken: token,
-        }).catch(e => console.warn("Could not immediately sync api_connectors:", e));
       } catch (err: any) {
         console.error("Google Drive connection failed with Firebase popup, falling back:", err);
         // Fallback for custom clients if popup cancelled or domain restricted
@@ -1093,33 +1084,16 @@ export default function SettingsModal({
                   setGoogleDriveActive(true);
                   setGoogleDriveEmail(email);
                   setGoogleDriveAccessToken(token);
-                  localStorage.setItem('defib_google_drive_active', 'true');
-                  localStorage.setItem('defib_google_drive_email', email);
-                  localStorage.setItem('defib_google_drive_token', token);
-                  window.dispatchEvent(new Event('storage'));
-                  saveCollectionToFirestore('api_connectors', {
-                    googleDriveActive: true,
-                    googleDriveEmail: email,
-                    googleDriveAccessToken: token,
-                  }).catch(e => console.warn("Could not immediately sync api_connectors:", e));
                 }
               }
             } catch (e: any) {
               clearInterval(pollTimer);
               setGoogleDriveActive(false);
-              localStorage.setItem('defib_google_drive_active', 'false');
-              localStorage.removeItem('defib_google_drive_email');
-              localStorage.removeItem('defib_google_drive_token');
-              window.dispatchEvent(new Event('storage'));
               alert("Erreur de connexion Google Drive : " + (e.message || e));
             }
           }, 500);
         } catch (fallbackErr: any) {
           setGoogleDriveActive(false);
-          localStorage.setItem('defib_google_drive_active', 'false');
-          localStorage.removeItem('defib_google_drive_email');
-          localStorage.removeItem('defib_google_drive_token');
-          window.dispatchEvent(new Event('storage'));
           alert("Erreur de connexion Google Drive : " + (fallbackErr.message || fallbackErr));
         }
       }
@@ -1127,15 +1101,6 @@ export default function SettingsModal({
       setGoogleDriveActive(false);
       setGoogleDriveEmail('');
       setGoogleDriveAccessToken('');
-      localStorage.setItem('defib_google_drive_active', 'false');
-      localStorage.removeItem('defib_google_drive_email');
-      localStorage.removeItem('defib_google_drive_token');
-      window.dispatchEvent(new Event('storage'));
-      saveCollectionToFirestore('api_connectors', {
-        googleDriveActive: false,
-        googleDriveEmail: '',
-        googleDriveAccessToken: '',
-      }).catch(e => console.warn("Could not immediately sync api_connectors:", e));
     }
   };
 
