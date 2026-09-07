@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SupportTicket, Member, Client, CompanyInfo } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
-import { ChevronDown, X } from 'lucide-react';
 import { INITIAL_TICKETS } from '../utils';
 
 export const CRITICITE_OPTIONS: Array<{
@@ -68,32 +67,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formCustomClientName, setFormCustomClientName] = useState('');
   const [formDescription, setFormDescription] = useState('');
 
-  // Criticite dropdown custom control state & refs
-  const [isCriticiteDropdownOpen, setIsCriticiteDropdownOpen] = useState(false);
-  const [isCriticiteHovered, setIsCriticiteHovered] = useState(false);
-  const criticiteDropdownRef = useRef<HTMLDivElement>(null);
-
   // Auto-expand vertical textarea ref for Description
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Handle click outside for criticite dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        criticiteDropdownRef.current &&
-        !criticiteDropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsCriticiteDropdownOpen(false);
-      }
-    };
-
-    if (isCriticiteDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isCriticiteDropdownOpen]);
 
   // Auto-expand vertical height of Description textarea
   const adjustDescriptionHeight = () => {
@@ -543,6 +518,18 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           -moz-appearance: none !important;
           background-image: none !important;
         }
+        #crm-tab-container select.text-center,
+        #crm-tab-container select#crm-form-categorie-select,
+        #crm-tab-container select#crm-form-criticite-select {
+          text-align: center !important;
+          text-align-last: center !important;
+          -webkit-text-align-last: center !important;
+          -moz-text-align-last: center !important;
+        }
+        #crm-tab-container select#crm-form-categorie-select option,
+        #crm-tab-container select#crm-form-criticite-select option {
+          text-align: center !important;
+        }
         #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-crm-input),
         #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-crm-input),
         #crm-tab-container select:hover:not(:disabled),
@@ -585,17 +572,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Réglages CRM Button */}
-            <button
-              type="button"
-              onClick={() => setIsSettingsPaneOpen(true)}
-              id="btn-crm-settings"
-              style={blackButtonStyle}
-              className="hover:bg-zinc-800 transition-colors"
-            >
-              Réglages CRM
-            </button>
-
             {/* Search Input */}
             <input
               type="text"
@@ -617,7 +593,18 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               }}
             />
 
-            {/* Nouveau Dossier/Ticket Button */}
+            {/* Réglages CRM Button */}
+            <button
+              type="button"
+              onClick={() => setIsSettingsPaneOpen(true)}
+              id="btn-crm-settings"
+              style={blackButtonStyle}
+              className="hover:bg-zinc-800 transition-colors"
+            >
+              Réglages CRM
+            </button>
+
+            {/* Nouveau Ticket Button */}
             <button
               type="button"
               onClick={openNewTicketPane}
@@ -625,7 +612,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               style={customButtonStyle}
               className="hover:bg-[#2b48cc] transition-colors"
             >
-              Nouveau Dossier/Ticket
+              Nouveau Ticket
             </button>
           </div>
         </div>
@@ -897,9 +884,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <div>
                     <label>Catégorie.</label>
                     <select
+                      id="crm-form-categorie-select"
                       value={formCategorie}
                       onChange={(e: any) => setFormCategorie(e.target.value)}
-                      style={selectStyle}
+                      style={{ ...selectStyle, textAlign: 'center', textAlignLast: 'center' }}
+                      className="text-center"
                     >
                       <option value="Technique">Technique</option>
                       <option value="Commercial">Commercial</option>
@@ -908,95 +897,21 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     </select>
                   </div>
 
-                    <div className="relative" ref={criticiteDropdownRef}>
+                  <div>
                     <label>Criticité.</label>
-                    <button
-                      type="button"
-                      id="crm-form-criticite-button"
-                      onClick={() => setIsCriticiteDropdownOpen(!isCriticiteDropdownOpen)}
-                      onMouseEnter={() => setIsCriticiteHovered(true)}
-                      onMouseLeave={() => setIsCriticiteHovered(false)}
-                      className="w-full flex items-center justify-between cursor-pointer text-left"
-                      style={{
-                        padding: '10px 12px',
-                        border: '1px solid #c9bfcd',
-                        borderRadius: '13px',
-                        fontSize: '18px',
-                        fontWeight: 400,
-                        backgroundColor: '#ffffff',
-                        color: '#000000',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        boxSizing: 'border-box',
-                        outline: (isCriticiteHovered || isCriticiteDropdownOpen) ? '2.5px solid #fa53d5' : 'none',
-                        outlineOffset: (isCriticiteHovered || isCriticiteDropdownOpen) ? '2px' : '0px',
-                        transition: 'all 0s',
-                        height: '49px',
-                      }}
+                    <select
+                      id="crm-form-criticite-select"
+                      value={formCriticite}
+                      onChange={(e: any) => setFormCriticite(e.target.value)}
+                      style={{ ...selectStyle, textAlign: 'center', textAlignLast: 'center' }}
+                      className="text-center"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-[18px] text-black font-normal">{formCriticite}</span>
-                        <span
-                          className="inline-block rounded-full shrink-0"
-                          style={{
-                            width: '10px',
-                            height: '10px',
-                            minWidth: '10px',
-                            minHeight: '10px',
-                            backgroundColor: getCriticiteColor(formCriticite),
-                          }}
-                          aria-hidden="true"
-                        />
-                      </div>
-                      <ChevronDown
-                        className={`w-4 h-4 text-slate-500 transition-transform duration-150 shrink-0 ${
-                          isCriticiteDropdownOpen ? 'rotate-180' : ''
-                        }`}
-                      />
-                    </button>
-
-                    {/* Dropdown Menu */}
-                    {isCriticiteDropdownOpen && (
-                      <div
-                        className="absolute left-0 right-0 top-full mt-1 z-50 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden py-1 animate-fadeIn"
-                        style={{
-                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        }}
-                      >
-                        {CRITICITE_OPTIONS.map((opt) => {
-                          const isSelected = formCriticite === opt.value;
-                          return (
-                            <div
-                              key={opt.value}
-                              onClick={() => {
-                                setFormCriticite(opt.value);
-                                setIsCriticiteDropdownOpen(false);
-                              }}
-                              className={`px-3 py-2.5 flex items-center justify-between cursor-pointer transition-colors ${
-                                isSelected ? 'bg-slate-100 font-medium' : 'hover:bg-slate-50'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="text-[18px] text-black font-normal">{opt.label}</span>
-                                <span
-                                  className="inline-block rounded-full shrink-0"
-                                  style={{
-                                    width: '10px',
-                                    height: '10px',
-                                    minWidth: '10px',
-                                    minHeight: '10px',
-                                    backgroundColor: opt.color,
-                                  }}
-                                  aria-hidden="true"
-                                />
-                              </div>
-                              {isSelected && (
-                                <span className="text-xs font-bold text-slate-400">✓</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                      {CRITICITE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -1159,33 +1074,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
             <div className="w-screen max-w-md sm:max-w-xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto justify-between">
               <div>
-                {/* Header with Title and Close button */}
-                <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-6">
-                  <h2 className="text-2xl font-bold font-gochi text-black" id="crm-settings-pane-title">
-                    Réglages CRM
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={() => setIsSettingsPaneOpen(false)}
-                    className="text-slate-400 hover:text-black transition-colors p-1 rounded-lg"
-                    aria-label="Fermer"
-                    id="btn-close-crm-settings-top"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-
                 <div className="space-y-6">
                   {/* Div Intégrez le formulaire de contact à votre site web */}
                   <div 
                     className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
                     id="crm-settings-section-embed-form"
                   >
-                    <h3 className="text-xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
-                      Intégrez le formulaire de contact à votre site web
-                    </h3>
-                    
-                    <p className="text-[16px] text-black font-sans leading-relaxed">
+                    <p 
+                      className="text-black font-sans leading-relaxed"
+                      style={{ fontSize: '18px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                    >
                       Générez un formulaire de contact professionnel à intégrer sur votre site internet. Tous les messages envoyés depuis ce formulaire remonteront dans votre onglet CRM et vous recevrez un email de notification.
                     </p>
 
@@ -1195,18 +1093,19 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         readOnly
                         value={embedCode}
                         style={{
-                          backgroundColor: '#1e293b',
-                          color: '#f8fafc',
-                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                          fontSize: '11px',
-                          padding: '12px',
-                          borderRadius: '8px',
+                          backgroundColor: '#3b1e62',
+                          color: '#ffffff',
+                          fontFamily: "'Civilprom', sans-serif",
+                          fontSize: '16px',
+                          padding: '20px',
+                          borderRadius: '13px',
                           border: 'none',
                           resize: 'none',
-                          height: '190px',
+                          height: '210px',
                           width: '100%',
                           boxSizing: 'border-box',
                           outline: 'none',
+                          lineHeight: '1.5',
                         }}
                         className="select-all"
                       />
@@ -1243,10 +1142,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 text-left"
                     id="crm-settings-section-recommendations"
                   >
-                    <h3 className="text-xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
-                      Recommandations.
-                    </h3>
-                    <p className="text-[16px] text-black font-sans leading-relaxed">
+                    <p 
+                      className="text-black font-sans leading-relaxed"
+                      style={{ fontSize: '18px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                    >
                       Les clients existants peuvent envoyer leurs demandes directement depuis leur espace client. Nous vous recommandons de créer une page de contact sur votre site web et d’y intégrer le formulaire à l'aide du code prêt à coller ci-dessus. Les demandes envoyées via ce formulaire arriveront également automatiquement dans votre CRM.
                     </p>
                   </div>

@@ -638,69 +638,66 @@ function generateMonthlyPDFHTML(
   compName: string
 ): string {
   const showLogo = tenantLogo && tenantLogo.trim() !== ''
-    ? `<img src="${tenantLogo}" alt="Logo" style="max-height: 55px; max-width: 220px; object-fit: contain; display: block;" referrerPolicy="no-referrer" />`
-    : (compName ? `<div style="font-size: 15px; font-weight: bold; color: #000000; letter-spacing: -0.2px;">${escapeHtml(compName)}</div>` : '');
+    ? `<img src="${tenantLogo}" alt="Logo" style="max-height: 32px; max-width: 140px; object-fit: contain; display: block; border-radius: 0px;" referrerPolicy="no-referrer" />`
+    : (compName ? `<div style="font-size: 11px; font-weight: bold; color: #000000; letter-spacing: -0.2px;">${escapeHtml(compName)}</div>` : '');
 
-  const rowsHtml = data.days.map((d, index) => {
-    const isEven = index % 2 === 1;
-    const bgStyle = isEven ? 'background-color: #fafbfc;' : 'background-color: #ffffff;';
-
+  const rowsHtml = data.days.map((d) => {
     if (d.type === 'absence') {
       return `
-        <tr style="page-break-inside: avoid; border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 500; text-align: center; white-space: nowrap; ${bgStyle}">${escapeHtml(d.displayDate)}</td>
-          <td colspan="8" style="padding: 6px 10px; border: 1px solid #e2e8f0; text-align: left; font-style: italic; color: #475569; background-color: #f8fafc;">
+        <tr style="page-break-inside: avoid; border-bottom: 1px solid #dadada;">
+          <td style="padding: 2px 2px; border: 1px solid #dadada; font-weight: 500; text-align: center; white-space: nowrap; color: #000000; background-color: #ffffff;">${escapeHtml(d.displayDate)}</td>
+          <td colspan="8" style="padding: 2px 6px; border: 1px solid #dadada; text-align: left; font-style: italic; color: #000000; background-color: #f6f6f6;">
             Période d'indisponibilité : ${escapeHtml(d.absenceReason || 'Absence')}
           </td>
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 600; text-align: center; color: #0f172a; background-color: #f1f5f9;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}"></td>
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: left; ${bgStyle}"></td>
+          <td style="padding: 2px 2px; border: 1px solid #dadada; font-weight: 600; text-align: center; color: #000000; background-color: #f6f6f6;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
+          <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: center; color: #000000; background-color: #ffffff;"></td>
+          <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: left; color: #000000; background-color: #ffffff;"></td>
         </tr>
       `;
     }
 
     if (d.type === 'holiday') {
       return `
-        <tr style="page-break-inside: avoid; border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 500; text-align: center; white-space: nowrap; ${bgStyle}">${escapeHtml(d.displayDate)}</td>
-          <td colspan="8" style="padding: 6px 10px; border: 1px solid #e2e8f0; text-align: left; font-style: italic; font-weight: 500; color: #475569; background-color: #f8fafc;">
+        <tr style="page-break-inside: avoid; border-bottom: 1px solid #dadada;">
+          <td style="padding: 2px 2px; border: 1px solid #dadada; font-weight: 500; text-align: center; white-space: nowrap; color: #000000; background-color: #ffffff;">${escapeHtml(d.displayDate)}</td>
+          <td colspan="8" style="padding: 2px 6px; border: 1px solid #dadada; text-align: left; font-style: italic; font-weight: 500; color: #000000; background-color: #f6f6f6;">
             Jour Férié (France)
           </td>
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 600; text-align: center; color: #0f172a; background-color: #f1f5f9;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}"></td>
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: left; ${bgStyle}"></td>
+          <td style="padding: 2px 2px; border: 1px solid #dadada; font-weight: 600; text-align: center; color: #000000; background-color: #f6f6f6;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
+          <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: center; color: #000000; background-color: #ffffff;"></td>
+          <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: left; color: #000000; background-color: #ffffff;"></td>
         </tr>
       `;
     }
 
     if (d.type === 'nodata') {
       return `
-        <tr style="page-break-inside: avoid; border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 500; text-align: center; white-space: nowrap; ${bgStyle}">${escapeHtml(d.displayDate)}</td>
-          <td colspan="8" style="padding: 6px 10px; border: 1px solid #e2e8f0; text-align: left; font-style: italic; color: #94a3b8; background-color: #fcfcfd;">
+        <tr style="page-break-inside: avoid; border-bottom: 1px solid #dadada;">
+          <td style="padding: 2px 2px; border: 1px solid #dadada; font-weight: 500; text-align: center; white-space: nowrap; color: #000000; background-color: #ffffff;">${escapeHtml(d.displayDate)}</td>
+          <td colspan="8" style="padding: 2px 6px; border: 1px solid #dadada; text-align: left; font-style: italic; color: #000000; background-color: #ffffff;">
             Aucune donnée.
           </td>
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 600; text-align: center; color: #0f172a; background-color: #f1f5f9;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}"></td>
-          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: left; ${bgStyle}"></td>
+          <td style="padding: 2px 2px; border: 1px solid #dadada; font-weight: 600; text-align: center; color: #000000; background-color: #f6f6f6;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
+          <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: center; color: #000000; background-color: #ffffff;"></td>
+          <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: left; color: #000000; background-color: #ffffff;"></td>
         </tr>
       `;
     }
 
     return `
-      <tr style="page-break-inside: avoid; border-bottom: 1px solid #e2e8f0;">
-        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; font-weight: 500; text-align: center; white-space: nowrap; ${bgStyle}">${escapeHtml(d.displayDate)}</td>
-        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.startTime || '')}</td>
-        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.endTime || '')}</td>
-        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.ampFormatted || '')}</td>
-        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.tmFormatted || '')}</td>
-        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.tsFormatted || '')}</td>
-        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.repasFormatted || '')}</td>
-        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; font-weight: 600; text-align: center; color: #0f172a; ${bgStyle}">${escapeHtml(d.workedCTTFormatted || '0:00:00')}</td>
-        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.adminFormatted || '')}</td>
-        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; font-weight: 600; text-align: center; color: #0f172a; background-color: #f1f5f9;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
-        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.creditHeures || '')}</td>
-        <td style="padding: 5px 6px; border: 1px solid #e2e8f0; text-align: left; font-size: 9.5px; max-width: 140px; word-break: break-word; ${bgStyle}">${escapeHtml(d.comment || '')}</td>
+      <tr style="page-break-inside: avoid; border-bottom: 1px solid #dadada;">
+        <td style="padding: 2px 2px; border: 1px solid #dadada; font-weight: 500; text-align: center; white-space: nowrap; color: #000000; background-color: #ffffff;">${escapeHtml(d.displayDate)}</td>
+        <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: center; color: #000000; background-color: #ffffff;">${escapeHtml(d.startTime || '')}</td>
+        <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: center; color: #000000; background-color: #ffffff;">${escapeHtml(d.endTime || '')}</td>
+        <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: center; color: #000000; background-color: #ffffff;">${escapeHtml(d.ampFormatted || '')}</td>
+        <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: center; color: #000000; background-color: #ffffff;">${escapeHtml(d.tmFormatted || '')}</td>
+        <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: center; color: #000000; background-color: #ffffff;">${escapeHtml(d.tsFormatted || '')}</td>
+        <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: center; color: #000000; background-color: #ffffff;">${escapeHtml(d.repasFormatted || '')}</td>
+        <td style="padding: 2px 2px; border: 1px solid #dadada; font-weight: 600; text-align: center; color: #000000; background-color: #ffffff;">${escapeHtml(d.workedCTTFormatted || '0:00:00')}</td>
+        <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: center; color: #000000; background-color: #ffffff;">${escapeHtml(d.adminFormatted || '')}</td>
+        <td style="padding: 2px 2px; border: 1px solid #dadada; font-weight: 600; text-align: center; color: #000000; background-color: #f6f6f6;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
+        <td style="padding: 2px 2px; border: 1px solid #dadada; text-align: center; color: #000000; background-color: #ffffff;">${escapeHtml(d.creditHeures || '')}</td>
+        <td style="padding: 2px 3px; border: 1px solid #dadada; text-align: left; font-size: 7px; max-width: 140px; word-break: break-word; color: #000000; background-color: #ffffff;">${escapeHtml(d.comment || '')}</td>
       </tr>
     `;
   }).join('');
@@ -720,143 +717,175 @@ function generateMonthlyPDFHTML(
     }
     @page {
       size: A4 landscape;
-      margin: 8mm 8mm 8mm 8mm;
+      margin: 4mm 6mm 4mm 6mm;
     }
     * {
       box-sizing: border-box;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      border-radius: 0px !important;
+      color: #000000;
     }
     html, body {
       margin: 0;
       padding: 0;
       background-color: #ffffff;
-      color: #0f172a;
+      color: #000000 !important;
       font-family: "Civilprom", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 11px;
-      line-height: 1.35;
+      font-size: 8px;
+      line-height: 1.15;
     }
     .page-container {
       width: 100%;
-      padding: 10px 14px;
+      padding: 0;
       box-sizing: border-box;
     }
     .header-bar {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
-      border-bottom: 1.5px solid #cbd5e1;
-      padding-bottom: 10px;
-      margin-bottom: 12px;
-      gap: 16px;
+      align-items: center;
+      padding-bottom: 0px;
+      margin-bottom: 3px;
+      gap: 12px;
+      border: none;
     }
     .header-left {
       display: flex;
       flex-direction: column;
       align-items: flex-start;
-      gap: 2px;
+      gap: 1px;
     }
     .header-title {
-      font-size: 20px;
+      font-size: 13px;
       font-weight: bold;
-      color: #000000;
+      color: #000000 !important;
       letter-spacing: -0.2px;
       margin: 0;
+      line-height: 1.2;
     }
     .header-subtitle {
-      font-size: 13.5px;
-      color: #334155;
+      font-size: 9px;
+      color: #000000 !important;
       font-weight: 500;
       margin: 0;
-    }
-    .header-date {
-      font-size: 10px;
-      color: #64748b;
-      margin-top: 2px;
+      line-height: 1.2;
     }
     .header-right {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: flex-end;
-      min-width: 120px;
+      min-width: 100px;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 10px;
-      margin-bottom: 14px;
+      font-size: 7.5px;
+      margin-bottom: 3px;
       table-layout: fixed;
+      border: 1px solid #dadada;
+      border-radius: 0px !important;
     }
     th {
-      background-color: #f1f5f9 !important;
-      color: #0f172a;
+      background-color: #f6f6f6 !important;
+      color: #000000 !important;
       font-weight: 600;
-      padding: 7px 4px;
-      border: 1px solid #cbd5e1;
+      padding: 2.5px 2px;
+      border: 1px solid #dadada !important;
+      border-radius: 0px !important;
       text-align: center;
-      line-height: 1.25;
+      line-height: 1.1;
       word-break: break-word;
+      font-size: 7.5px;
+    }
+    td {
+      border: 1px solid #dadada !important;
+      border-radius: 0px !important;
+      color: #000000 !important;
+      font-size: 7.5px;
+      line-height: 1.1;
     }
     .footer-section {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-top: 14px;
-      padding-top: 8px;
+      margin-top: 3px;
+      padding-top: 0px;
       page-break-inside: avoid;
     }
     .signature-card {
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      font-size: 11px;
-      color: #334155;
+      gap: 2px;
+      font-size: 8px;
+      color: #000000 !important;
+      border-radius: 0px !important;
+    }
+    .signature-card * {
+      color: #000000 !important;
     }
     .overtime-card {
-      border: 1px solid #cbd5e1;
-      background-color: #f8fafc;
-      border-radius: 8px;
-      padding: 8px 18px;
+      border: 1px solid #dadada !important;
+      background-color: #f6f6f6 !important;
+      border-radius: 0px !important;
+      padding: 3px 12px;
       text-align: right;
-      min-width: 220px;
+      min-width: 160px;
+    }
+    .overtime-card * {
+      color: #000000 !important;
     }
     .no-print-bar {
       position: fixed;
-      top: 12px;
-      right: 16px;
+      top: 10px;
+      right: 14px;
       display: flex;
       gap: 8px;
       z-index: 99999;
       background: #ffffff;
-      padding: 6px 10px;
-      border-radius: 8px;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.14);
-      border: 1px solid #e2e8f0;
+      padding: 5px 8px;
+      border-radius: 0px !important;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+      border: 1px solid #dadada;
     }
     .no-print-bar button {
-      border: none;
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-size: 12px;
+      border: 1px solid #dadada;
+      padding: 6px 12px;
+      border-radius: 0px !important;
+      font-size: 11px;
       font-weight: 600;
       cursor: pointer;
       font-family: sans-serif;
     }
     .btn-print {
       background-color: #000000;
-      color: #ffffff;
+      color: #ffffff !important;
     }
     .btn-close {
-      background-color: #f1f5f9;
-      color: #0f172a;
-      border: 1px solid #cbd5e1 !important;
+      background-color: #f6f6f6;
+      color: #000000 !important;
+      border: 1px solid #dadada !important;
     }
     @media print {
+      html, body {
+        height: 100% !important;
+        overflow: hidden !important;
+      }
       .no-print {
         display: none !important;
       }
       .page-container {
-        padding: 0;
+        padding: 0 !important;
+        page-break-inside: avoid !important;
+        page-break-after: avoid !important;
+      }
+      table {
+        page-break-inside: avoid !important;
+      }
+      tr {
+        page-break-inside: avoid !important;
+      }
+      .footer-section {
+        page-break-inside: avoid !important;
       }
     }
   </style>
@@ -879,7 +908,6 @@ function generateMonthlyPDFHTML(
       <div class="header-left">
         <h1 class="header-title">${escapeHtml(data.title)}</h1>
         <div class="header-subtitle">${escapeHtml(data.subtitle)}</div>
-        <div class="header-date">Édité le ${new Date().toLocaleDateString('fr-FR')}</div>
       </div>
       <div class="header-right">
         ${showLogo}
@@ -925,13 +953,13 @@ function generateMonthlyPDFHTML(
     <div class="footer-section">
       <div class="signature-card">
         <div>Fait à _________________________, le ______ / ______ / 2026</div>
-        <div style="font-weight: 600; margin-top: 4px;">Signature Employé :</div>
-        <div style="height: 38px; border-bottom: 1px dashed #94a3b8; width: 240px; margin-top: 4px;"></div>
+        <div style="font-weight: 600; margin-top: 2px;">Signature Employé :</div>
+        <div style="height: 24px; border-bottom: 1px dashed #dadada; width: 220px; margin-top: 2px;"></div>
       </div>
 
       <div class="overtime-card">
-        <div style="font-size: 11px; color: #475569; font-weight: 600;">Heure(s) Supplémentaire(s)</div>
-        <div style="font-size: 15px; font-weight: bold; color: #0f172a; margin-top: 2px;">0:00:00</div>
+        <div style="font-size: 8px; color: #000000; font-weight: 600;">Heure(s) Supplémentaire(s)</div>
+        <div style="font-size: 12px; font-weight: bold; color: #000000; margin-top: 1px;">0:00:00</div>
       </div>
     </div>
   </div>
