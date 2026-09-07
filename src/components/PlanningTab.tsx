@@ -104,6 +104,39 @@ const getISOWeekNumber = (date: Date): number => {
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 };
 
+const isDraftTour = (tour: any): boolean => {
+  if (!tour) return true;
+  if (tour.id === 'a-trier' || tour.id === 'A trier') return true;
+  const statusStr = String(tour.status || '').trim().toLowerCase();
+  return statusStr === 'brouillon' || statusStr === 'draft' || statusStr === 'à trier' || statusStr === 'a trier';
+};
+
+const getMissionIsoDate = (m: any): string | null => {
+  if (!m) return null;
+  const raw = m.estimatedDate || m.date;
+  if (!raw || (typeof raw !== 'string' && typeof raw !== 'number')) return null;
+  const s = String(raw).trim();
+  if (s === '' || s === 'A trier' || s === 'a-trier' || s === 'Non renseigné' || s === '--' || s === 'NC') {
+    return null;
+  }
+  const iso = toIsoDateStr(s);
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    return null;
+  }
+  return iso;
+};
+
+const hasValidMissionSlot = (m: any): boolean => {
+  if (!m) return false;
+  const raw = m.estimatedSlot || m.creneau || m.slot || m.creneauHoraire || m.estimatedTime || m.time;
+  if (!raw) return false;
+  const s = String(raw).trim();
+  if (s === '' || s === 'Non renseigné' || s === '--' || s === 'NC' || s === 'null' || s === 'undefined') {
+    return false;
+  }
+  return true;
+};
+
 export const PlanningTab: React.FC<PlanningTabProps> = ({
   companyInfo,
   fsmTours = [],
@@ -442,6 +475,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
     resolvedTours.forEach(tour => {
       if (!tour) return;
+
+      // 1. Les tournées en statut 'Brouillon' ne doivent pas s'afficher sur le planning
+      if (isDraftTour(tour)) {
+        return;
+      }
+
       const normTourTech = normalizeName(tour.techName || tour.technicien || tour.technicienNom || tour.tech);
 
       // If the tour is explicitly assigned to another technician, skip it
@@ -455,6 +494,22 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       tourMissions.forEach((m: any) => {
         if (!m) return;
 
+        // Ne pas afficher les missions en statut brouillon
+        const mStatus = String(m.status || '').trim().toLowerCase();
+        if (mStatus === 'brouillon' || mStatus === 'draft') {
+          return;
+        }
+
+        // 2. Les missions des tournées qui n'ont pas de DATE et CRÉNEAU estimé de renseigné ne doivent pas s'afficher
+        const missionIso = getMissionIsoDate(m);
+        if (!missionIso) {
+          return;
+        }
+
+        if (!hasValidMissionSlot(m)) {
+          return;
+        }
+
         // If the mission has its own specific technician assignment
         const normMissionTech = normalizeName(m.techName || m.technicien || m.assignedTech || m.technicienNom);
         if (normMissionTech && normMissionTech !== normSelTech) {
@@ -465,12 +520,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
         if (!normTourTech && !normMissionTech) {
           return;
         }
-
-        const rawDate = m.estimatedDate || m.date || (tour.startDate !== 'A trier' ? tour.startDate : null);
-        if (!rawDate) return;
-
-        const missionIso = toIsoDateStr(rawDate);
-        if (!missionIso) return;
 
         if (!map[missionIso]) {
           map[missionIso] = [];
@@ -493,14 +542,15 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     const normSelTech = normalizeName(selectedTech);
 
     resolvedTours.forEach((tour, tIdx) => {
-      if (!tour || tour.id === 'a-trier') return;
+      // 3. Les tournées en statut 'Brouillon' ne doivent pas s'afficher sur le planning
+      if (!tour || isDraftTour(tour)) return;
 
       const normTourTech = normalizeName(tour.techName || tour.technicien || tour.technicienNom || tour.tech);
       if (!normTourTech || normTourTech !== normSelTech) {
         return;
       }
 
-      const rawStart = tour.startDate !== 'A trier' ? tour.startDate : null;
+      const rawStart = tour.startDate !== 'A trier' && tour.startDate !== 'a-trier' ? tour.startDate : null;
       const startIso = toIsoDateStr(rawStart);
       if (!startIso) return;
 
@@ -511,12 +561,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       if (Array.isArray(tourMissions) && tourMissions.length > 0) {
         tourMissions.forEach((m: any) => {
           if (!m) return;
-          const mRawDate = m.estimatedDate || m.date;
-          if (mRawDate && mRawDate !== 'A trier') {
-            const mIso = toIsoDateStr(mRawDate);
-            if (mIso && mIso > endIso) {
-              endIso = mIso;
-            }
+          const mIso = getMissionIsoDate(m);
+          if (mIso && mIso > endIso) {
+            endIso = mIso;
           }
         });
       }
@@ -927,7 +974,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       {/* Divs "Technicien en pause" */}
       {selectedTech && selectedTech !== 'Tous' && selectedTech.trim() !== '' && (() => {
         const pausedTours = Array.isArray(resolvedTours) ? resolvedTours.filter((t: any) => {
-          if (!t) return false;
+          if (!t || isDraftTour(t)) return false;
           const nameMatch = normalizeName(t.techName || t.technicien || t.technicienNom) === normalizeName(selectedTech);
           const isActive = t.status !== "Terminé";
           return nameMatch && isActive && (t.isPaused || t.pauseEnabled);
@@ -1373,7 +1420,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           return '';
                         })();
 
-                        const creneauVal = mission.estimatedSlot || mission.creneau || mission.estimatedTime || mission.time || '08:00';
+                        const creneauVal = mission.estimatedSlot || mission.creneau || mission.slot || mission.creneauHoraire || mission.estimatedTime || mission.time || '';
                         const missionKey = `plan-${tour.id || 'tour'}-${mission.id || mIdx}`;
                         const isExpanded = !!expandedMissions[missionKey];
 
