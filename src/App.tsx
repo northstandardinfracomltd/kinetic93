@@ -12152,6 +12152,7 @@ export default function App() {
               pointages={pointages}
               members={members}
               onUpdatePointages={(updated) => savePointages(updated)}
+              companyInfo={companyInfo}
             />
           )}
 

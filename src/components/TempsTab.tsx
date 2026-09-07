@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PointageLog, Member, CttModelSetting, CttColumnTarget } from '../types';
+import { PointageLog, Member, CttModelSetting, CttColumnTarget, CompanyInfo } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { t } from '../utils/translate';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
@@ -10,6 +10,7 @@ interface TempsTabProps {
   pointages: PointageLog[];
   members?: Member[];
   onUpdatePointages?: (updated: PointageLog[]) => void;
+  companyInfo?: CompanyInfo;
 }
 
 const FRENCH_MONTH_NAMES = [
@@ -153,31 +154,50 @@ function calculateAmplitudeSeconds(startTime?: string, endTime?: string): number
   return 0;
 }
 
-// Generate the full CSV content for a technician for a given month
-function generateMonthlyCSV(
+// Generate the structured monthly data for both CSV and PDF export
+export interface FormattedDayRow {
+  displayDate: string;
+  type: 'absence' | 'holiday' | 'pointage' | 'nodata';
+  absenceReason?: string;
+  startTime?: string;
+  endTime?: string;
+  ampFormatted?: string;
+  tmFormatted?: string;
+  tsFormatted?: string;
+  repasFormatted?: string;
+  workedCTTFormatted?: string;
+  adminFormatted?: string;
+  weeklyAmplitudeCol?: string;
+  creditHeures?: string;
+  comment?: string;
+}
+
+export interface MonthlyTableData {
+  title: string;
+  subtitle: string;
+  techName: string;
+  monthLabel: string;
+  year: number;
+  monthIndex: number;
+  headers: string[];
+  days: FormattedDayRow[];
+}
+
+export function getMonthlyWorkingDaysData(
   techName: string,
   year: number,
   monthIndex: number,
   pointages: PointageLog[],
   members: Member[] = [],
   settings: CttModelSetting[] = []
-): string {
+): MonthlyTableData {
   const monthLabel = `${FRENCH_MONTH_NAMES[monthIndex]} ${year}`;
   const holidays = getFrenchHolidaysSet(year);
   const member = members.find(
     (m) => m.name === techName || m.name?.toLowerCase() === techName.toLowerCase()
   );
 
-  const csvLines: string[][] = [];
-
-  // Line 1: Titre fixe
-  csvLines.push(['CTT Planning Horaires', '', '', '', '', '', '', '', '', '', '', '']);
-  // Line 2: Sous-titre variable
-  csvLines.push([`${techName} - ${monthLabel}`, '', '', '', '', '', '', '', '', '', '', '']);
-  // Line 3: Ligne vide d'espacement
-  csvLines.push(['', '', '', '', '', '', '', '', '', '', '', '']);
-  // Line 4: Labels du tableau
-  csvLines.push([
+  const headers = [
     'Date',
     'Début Journée',
     'Fin Journée',
@@ -187,10 +207,10 @@ function generateMonthlyCSV(
     'Temps Repas',
     'Amplitude Journée',
     'Temps Administratif/Autres',
-    'Amplitude Hebdomadaire ',
+    'Amplitude Hebdomadaire',
     'Crédit Heures',
     'Commentaires'
-  ]);
+  ];
 
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
 
@@ -211,7 +231,6 @@ function generateMonthlyCSV(
   }
 
   const workingDays: DayInfo[] = [];
-
   const DAY_KEYS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
   for (let day = 1; day <= daysInMonth; day++) {
@@ -307,33 +326,27 @@ function generateMonthlyCSV(
           if (s.setting4 === 'Temps Trajet Matin') {
             hasTmAdjustment = true;
             if (s.setting2) {
-              // Retirer
               tmSec = tmSec - deltaSec;
               totalEffectifSec = totalEffectifSec - deltaSec;
             } else if (s.setting3) {
-              // Ajouter
               tmSec = tmSec + deltaSec;
               totalEffectifSec = totalEffectifSec + deltaSec;
             }
           } else if (s.setting4 === 'Temps Trajet Soir') {
             hasTsAdjustment = true;
             if (s.setting2) {
-              // Retirer
               tsSec = tsSec - deltaSec;
               totalEffectifSec = totalEffectifSec - deltaSec;
             } else if (s.setting3) {
-              // Ajouter
               tsSec = tsSec + deltaSec;
               totalEffectifSec = totalEffectifSec + deltaSec;
             }
           } else if (s.setting4 === 'Temps Repas') {
             hasRepasAdjustment = true;
             if (s.setting2) {
-              // Retirer
               repasSec = repasSec - deltaSec;
               totalEffectifSec = totalEffectifSec - deltaSec;
             } else if (s.setting3) {
-              // Ajouter
               repasSec = repasSec + deltaSec;
               totalEffectifSec = totalEffectifSec + deltaSec;
             }
@@ -387,31 +400,133 @@ function generateMonthlyCSV(
     }
   });
 
-  // Build CSV Rows
-  workingDays.forEach((wd) => {
+  const formattedDays: FormattedDayRow[] = workingDays.map((wd) => {
     const isFirstDayInMonthForWeek = firstDayOfWeekMap.get(wd.mondayIso) === wd.dateIso;
     const weekTotalSec = weekTotalsMap.get(wd.mondayIso) || 0;
     const weeklyAmplitudeCol =
       isFirstDayInMonthForWeek && weekTotalSec > 0 ? secondsToHMMSS(weekTotalSec) : '';
 
     if (wd.type === 'absence') {
-      csvLines.push([
-        wd.displayDate,
-        `Période d'indisponibilité : ${wd.absenceReason}`,
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
+      return {
+        displayDate: wd.displayDate,
+        type: 'absence',
+        absenceReason: wd.absenceReason,
         weeklyAmplitudeCol,
+      };
+    }
+    if (wd.type === 'holiday') {
+      return {
+        displayDate: wd.displayDate,
+        type: 'holiday',
+        weeklyAmplitudeCol,
+      };
+    }
+    if (wd.type === 'nodata') {
+      return {
+        displayDate: wd.displayDate,
+        type: 'nodata',
+        weeklyAmplitudeCol,
+      };
+    }
+
+    const pt = wd.pointage!;
+    const amplitudeSec = calculateAmplitudeSeconds(pt.startTime, pt.endTime);
+    const ampFormatted = amplitudeSec > 0 ? secondsToHMMSS(amplitudeSec) : '';
+
+    const tmFormatted = wd.adjustedTmSec !== undefined
+      ? formatDurationWithSign(wd.adjustedTmSec)
+      : formatDurationField(pt.trajetMatin);
+    const tsFormatted = wd.adjustedTsSec !== undefined
+      ? formatDurationWithSign(wd.adjustedTsSec)
+      : formatDurationField(pt.trajetSoir);
+    const repasFormatted = wd.adjustedRepasSec !== undefined
+      ? formatDurationWithSign(wd.adjustedRepasSec)
+      : formatDurationField(pt.tempsRepas);
+    const workedCTTFormatted = wd.workedCTTSec > 0 ? secondsToHMMSS(wd.workedCTTSec) : '0:00:00';
+    const adminFormatted = formatDurationField(pt.tempsAdmin);
+
+    return {
+      displayDate: wd.displayDate,
+      type: 'pointage',
+      startTime: pt.startTime || '',
+      endTime: pt.endTime || '',
+      ampFormatted,
+      tmFormatted,
+      tsFormatted,
+      repasFormatted,
+      workedCTTFormatted,
+      adminFormatted,
+      weeklyAmplitudeCol,
+      creditHeures: '',
+      comment: pt.comment || '',
+    };
+  });
+
+  return {
+    title: 'CTT Planning Horaires',
+    subtitle: `${techName} - ${monthLabel}`,
+    techName,
+    monthLabel,
+    year,
+    monthIndex,
+    headers,
+    days: formattedDays,
+  };
+}
+
+// Generate the full CSV content for a technician for a given month
+function generateMonthlyCSV(
+  techName: string,
+  year: number,
+  monthIndex: number,
+  pointages: PointageLog[],
+  members: Member[] = [],
+  settings: CttModelSetting[] = []
+): string {
+  const data = getMonthlyWorkingDaysData(techName, year, monthIndex, pointages, members, settings);
+  const csvLines: string[][] = [];
+
+  // Line 1: Titre fixe
+  csvLines.push([data.title, '', '', '', '', '', '', '', '', '', '', '']);
+  // Line 2: Sous-titre variable
+  csvLines.push([data.subtitle, '', '', '', '', '', '', '', '', '', '', '']);
+  // Line 3: Ligne vide d'espacement
+  csvLines.push(['', '', '', '', '', '', '', '', '', '', '', '']);
+  // Line 4: Labels du tableau
+  csvLines.push([
+    'Date',
+    'Début Journée',
+    'Fin Journée',
+    'Amplitude Journée',
+    'Temps Trajet Matin',
+    'Temps Trajet Soir',
+    'Temps Repas',
+    'Amplitude Journée',
+    'Temps Administratif/Autres',
+    'Amplitude Hebdomadaire ',
+    'Crédit Heures',
+    'Commentaires'
+  ]);
+
+  data.days.forEach((d) => {
+    if (d.type === 'absence') {
+      csvLines.push([
+        d.displayDate,
+        `Période d'indisponibilité : ${d.absenceReason || ''}`,
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        d.weeklyAmplitudeCol || '',
         '',
         ''
       ]);
-    } else if (wd.type === 'holiday') {
+    } else if (d.type === 'holiday') {
       csvLines.push([
-        wd.displayDate,
+        d.displayDate,
         'Jour Férié (France)',
         '',
         '',
@@ -420,13 +535,13 @@ function generateMonthlyCSV(
         '',
         '',
         '',
-        weeklyAmplitudeCol,
+        d.weeklyAmplitudeCol || '',
         '',
         ''
       ]);
-    } else if (wd.type === 'nodata') {
+    } else if (d.type === 'nodata') {
       csvLines.push([
-        wd.displayDate,
+        d.displayDate,
         'Aucune donnée.',
         '',
         '',
@@ -435,40 +550,24 @@ function generateMonthlyCSV(
         '',
         '',
         '',
-        weeklyAmplitudeCol,
+        d.weeklyAmplitudeCol || '',
         '',
         ''
       ]);
-    } else if (wd.type === 'pointage' && wd.pointage) {
-      const pt = wd.pointage;
-      const amplitudeSec = calculateAmplitudeSeconds(pt.startTime, pt.endTime);
-      const ampFormatted = amplitudeSec > 0 ? secondsToHMMSS(amplitudeSec) : '';
-      
-      const tmFormatted = wd.adjustedTmSec !== undefined
-        ? formatDurationWithSign(wd.adjustedTmSec)
-        : formatDurationField(pt.trajetMatin);
-      const tsFormatted = wd.adjustedTsSec !== undefined
-        ? formatDurationWithSign(wd.adjustedTsSec)
-        : formatDurationField(pt.trajetSoir);
-      const repasFormatted = wd.adjustedRepasSec !== undefined
-        ? formatDurationWithSign(wd.adjustedRepasSec)
-        : formatDurationField(pt.tempsRepas);
-      const workedCTTFormatted = wd.workedCTTSec > 0 ? secondsToHMMSS(wd.workedCTTSec) : '0:00:00';
-      const adminFormatted = formatDurationField(pt.tempsAdmin);
-
+    } else {
       csvLines.push([
-        wd.displayDate,
-        pt.startTime || '',
-        pt.endTime || '',
-        ampFormatted,
-        tmFormatted,
-        tsFormatted,
-        repasFormatted,
-        workedCTTFormatted,
-        adminFormatted,
-        weeklyAmplitudeCol,
+        d.displayDate,
+        d.startTime || '',
+        d.endTime || '',
+        d.ampFormatted || '',
+        d.tmFormatted || '',
+        d.tsFormatted || '',
+        d.repasFormatted || '',
+        d.workedCTTFormatted || '',
+        d.adminFormatted || '',
+        d.weeklyAmplitudeCol || '',
         '',
-        pt.comment || ''
+        d.comment || ''
       ]);
     }
   });
@@ -522,6 +621,324 @@ function generateMonthlyCSV(
   );
 }
 
+function escapeHtml(str: string): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Generate the high-quality, printable PDF HTML document
+function generateMonthlyPDFHTML(
+  data: MonthlyTableData,
+  tenantLogo: string,
+  compName: string
+): string {
+  const showLogo = tenantLogo && tenantLogo.trim() !== ''
+    ? `<img src="${tenantLogo}" alt="Logo" style="max-height: 55px; max-width: 220px; object-fit: contain; display: block;" referrerPolicy="no-referrer" />`
+    : (compName ? `<div style="font-size: 15px; font-weight: bold; color: #000000; letter-spacing: -0.2px;">${escapeHtml(compName)}</div>` : '');
+
+  const rowsHtml = data.days.map((d, index) => {
+    const isEven = index % 2 === 1;
+    const bgStyle = isEven ? 'background-color: #fafbfc;' : 'background-color: #ffffff;';
+
+    if (d.type === 'absence') {
+      return `
+        <tr style="page-break-inside: avoid; border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 500; text-align: center; white-space: nowrap; ${bgStyle}">${escapeHtml(d.displayDate)}</td>
+          <td colspan="8" style="padding: 6px 10px; border: 1px solid #e2e8f0; text-align: left; font-style: italic; color: #475569; background-color: #f8fafc;">
+            Période d'indisponibilité : ${escapeHtml(d.absenceReason || 'Absence')}
+          </td>
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 600; text-align: center; color: #0f172a; background-color: #f1f5f9;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}"></td>
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: left; ${bgStyle}"></td>
+        </tr>
+      `;
+    }
+
+    if (d.type === 'holiday') {
+      return `
+        <tr style="page-break-inside: avoid; border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 500; text-align: center; white-space: nowrap; ${bgStyle}">${escapeHtml(d.displayDate)}</td>
+          <td colspan="8" style="padding: 6px 10px; border: 1px solid #e2e8f0; text-align: left; font-style: italic; font-weight: 500; color: #475569; background-color: #f8fafc;">
+            Jour Férié (France)
+          </td>
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 600; text-align: center; color: #0f172a; background-color: #f1f5f9;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}"></td>
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: left; ${bgStyle}"></td>
+        </tr>
+      `;
+    }
+
+    if (d.type === 'nodata') {
+      return `
+        <tr style="page-break-inside: avoid; border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 500; text-align: center; white-space: nowrap; ${bgStyle}">${escapeHtml(d.displayDate)}</td>
+          <td colspan="8" style="padding: 6px 10px; border: 1px solid #e2e8f0; text-align: left; font-style: italic; color: #94a3b8; background-color: #fcfcfd;">
+            Aucune donnée.
+          </td>
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: 600; text-align: center; color: #0f172a; background-color: #f1f5f9;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}"></td>
+          <td style="padding: 6px 4px; border: 1px solid #e2e8f0; text-align: left; ${bgStyle}"></td>
+        </tr>
+      `;
+    }
+
+    return `
+      <tr style="page-break-inside: avoid; border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; font-weight: 500; text-align: center; white-space: nowrap; ${bgStyle}">${escapeHtml(d.displayDate)}</td>
+        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.startTime || '')}</td>
+        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.endTime || '')}</td>
+        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.ampFormatted || '')}</td>
+        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.tmFormatted || '')}</td>
+        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.tsFormatted || '')}</td>
+        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.repasFormatted || '')}</td>
+        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; font-weight: 600; text-align: center; color: #0f172a; ${bgStyle}">${escapeHtml(d.workedCTTFormatted || '0:00:00')}</td>
+        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.adminFormatted || '')}</td>
+        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; font-weight: 600; text-align: center; color: #0f172a; background-color: #f1f5f9;">${escapeHtml(d.weeklyAmplitudeCol || '')}</td>
+        <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: center; ${bgStyle}">${escapeHtml(d.creditHeures || '')}</td>
+        <td style="padding: 5px 6px; border: 1px solid #e2e8f0; text-align: left; font-size: 9.5px; max-width: 140px; word-break: break-word; ${bgStyle}">${escapeHtml(d.comment || '')}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>${escapeHtml(data.title)} - ${escapeHtml(data.techName)} - ${escapeHtml(data.monthLabel)}</title>
+  <style>
+    @font-face {
+      font-family: "Civilprom";
+      src: url("https://civilprom.s3.eu-north-1.amazonaws.com/Civilprom1.otf") format("opentype");
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
+    @page {
+      size: A4 landscape;
+      margin: 8mm 8mm 8mm 8mm;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #ffffff;
+      color: #0f172a;
+      font-family: "Civilprom", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .page-container {
+      width: 100%;
+      padding: 10px 14px;
+      box-sizing: border-box;
+    }
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1.5px solid #cbd5e1;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+      gap: 16px;
+    }
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
+    .header-title {
+      font-size: 20px;
+      font-weight: bold;
+      color: #000000;
+      letter-spacing: -0.2px;
+      margin: 0;
+    }
+    .header-subtitle {
+      font-size: 13.5px;
+      color: #334155;
+      font-weight: 500;
+      margin: 0;
+    }
+    .header-date {
+      font-size: 10px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .header-right {
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      min-width: 120px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+      margin-bottom: 14px;
+      table-layout: fixed;
+    }
+    th {
+      background-color: #f1f5f9 !important;
+      color: #0f172a;
+      font-weight: 600;
+      padding: 7px 4px;
+      border: 1px solid #cbd5e1;
+      text-align: center;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+    .footer-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-top: 14px;
+      padding-top: 8px;
+      page-break-inside: avoid;
+    }
+    .signature-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 11px;
+      color: #334155;
+    }
+    .overtime-card {
+      border: 1px solid #cbd5e1;
+      background-color: #f8fafc;
+      border-radius: 8px;
+      padding: 8px 18px;
+      text-align: right;
+      min-width: 220px;
+    }
+    .no-print-bar {
+      position: fixed;
+      top: 12px;
+      right: 16px;
+      display: flex;
+      gap: 8px;
+      z-index: 99999;
+      background: #ffffff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.14);
+      border: 1px solid #e2e8f0;
+    }
+    .no-print-bar button {
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: sans-serif;
+    }
+    .btn-print {
+      background-color: #000000;
+      color: #ffffff;
+    }
+    .btn-close {
+      background-color: #f1f5f9;
+      color: #0f172a;
+      border: 1px solid #cbd5e1 !important;
+    }
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+      .page-container {
+        padding: 0;
+      }
+    }
+  </style>
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    };
+  </script>
+</head>
+<body>
+  <div class="no-print no-print-bar">
+    <button class="btn-print" onclick="window.print()">Imprimer / Enregistrer en PDF</button>
+    <button class="btn-close" onclick="window.close()">Fermer</button>
+  </div>
+
+  <div class="page-container">
+    <div class="header-bar">
+      <div class="header-left">
+        <h1 class="header-title">${escapeHtml(data.title)}</h1>
+        <div class="header-subtitle">${escapeHtml(data.subtitle)}</div>
+        <div class="header-date">Édité le ${new Date().toLocaleDateString('fr-FR')}</div>
+      </div>
+      <div class="header-right">
+        ${showLogo}
+      </div>
+    </div>
+
+    <table>
+      <colgroup>
+        <col style="width: 7.5%;">
+        <col style="width: 7.5%;">
+        <col style="width: 7.5%;">
+        <col style="width: 8%;">
+        <col style="width: 8.5%;">
+        <col style="width: 8.5%;">
+        <col style="width: 7.5%;">
+        <col style="width: 8.5%;">
+        <col style="width: 9%;">
+        <col style="width: 9.5%;">
+        <col style="width: 7%;">
+        <col style="width: 11.5%;">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Début Journée</th>
+          <th>Fin Journée</th>
+          <th>Amplitude Journée</th>
+          <th>Temps Trajet Matin</th>
+          <th>Temps Trajet Soir</th>
+          <th>Temps Repas</th>
+          <th>Amplitude Journée</th>
+          <th>Temps Administratif/Autres</th>
+          <th>Amplitude Hebdomadaire</th>
+          <th>Crédit Heures</th>
+          <th>Commentaires</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+
+    <div class="footer-section">
+      <div class="signature-card">
+        <div>Fait à _________________________, le ______ / ______ / 2026</div>
+        <div style="font-weight: 600; margin-top: 4px;">Signature Employé :</div>
+        <div style="height: 38px; border-bottom: 1px dashed #94a3b8; width: 240px; margin-top: 4px;"></div>
+      </div>
+
+      <div class="overtime-card">
+        <div style="font-size: 11px; color: #475569; font-weight: 600;">Heure(s) Supplémentaire(s)</div>
+        <div style="font-size: 15px; font-weight: bold; color: #0f172a; margin-top: 2px;">0:00:00</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 function hasPointageInMonth(
   techName: string,
   year: number,
@@ -541,7 +958,7 @@ function hasPointageInMonth(
   });
 }
 
-export default function TempsTab({ pointages = [], members = [] }: TempsTabProps) {
+export default function TempsTab({ pointages = [], members = [], companyInfo }: TempsTabProps) {
   const [search, setSearch] = useState('');
   const [selectedTechFilter, setSelectedTechFilter] = useState<string>('Tous');
   const [isSearchHovered, setIsSearchHovered] = useState(false);
@@ -851,6 +1268,43 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
     URL.revokeObjectURL(url);
   };
 
+  const getTenantLogo = (): string => {
+    if (companyInfo?.logo && companyInfo.logo.trim() !== '') {
+      return companyInfo.logo.trim();
+    }
+    const tenantId = (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+    try {
+      const cached = localStorage.getItem(`defib_${tenantId}_companyInfo`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.logo && typeof parsed.logo === 'string' && parsed.logo.trim() !== '') {
+          return parsed.logo.trim();
+        }
+      }
+    } catch (e) {}
+    try {
+      const globalCached = localStorage.getItem('defib_company_info');
+      if (globalCached) {
+        const parsed = JSON.parse(globalCached);
+        if (parsed.logo && typeof parsed.logo === 'string' && parsed.logo.trim() !== '') {
+          return parsed.logo.trim();
+        }
+      }
+    } catch (e) {}
+    return '';
+  };
+
+  const handleDownloadPDF = (techName: string, year: number, monthIndex: number) => {
+    const data = getMonthlyWorkingDaysData(techName, year, monthIndex, pointages, members, cttSettings);
+    const logoUrl = getTenantLogo();
+    const compName = companyInfo?.name || 'Défibeo Solutions';
+    const htmlContent = generateMonthlyPDFHTML(data, logoUrl, compName);
+
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  };
+
   const actionButtonStyle: React.CSSProperties = {
     backgroundColor: '#000',
     color: '#fff',
@@ -1095,14 +1549,26 @@ export default function TempsTab({ pointages = [], members = [] }: TempsTabProps
 
                     {/* Actions */}
                     <td className="px-6 py-4 text-right whitespace-nowrap bg-transparent">
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadCSV(row.techName, row.year, row.monthIndex)}
-                        style={actionButtonStyle}
-                        className="hover:opacity-90 active:scale-95 font-sans bg-black text-white rounded"
-                      >
-                        {t("Télécharger")}
-                      </button>
+                      <div className="inline-flex items-center justify-end gap-2.5">
+                        <button
+                          type="button"
+                          id={`btn-download-csv-${row.techName}-${row.year}-${row.monthIndex}`}
+                          onClick={() => handleDownloadCSV(row.techName, row.year, row.monthIndex)}
+                          style={actionButtonStyle}
+                          className="hover:opacity-90 active:scale-95 font-sans bg-black text-white rounded"
+                        >
+                          {t("Télécharger CSV")}
+                        </button>
+                        <button
+                          type="button"
+                          id={`btn-download-pdf-${row.techName}-${row.year}-${row.monthIndex}`}
+                          onClick={() => handleDownloadPDF(row.techName, row.year, row.monthIndex)}
+                          style={actionButtonStyle}
+                          className="hover:opacity-90 active:scale-95 font-sans bg-black text-white rounded"
+                        >
+                          {t("Télécharger PDF")}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
