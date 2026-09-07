@@ -1637,7 +1637,32 @@ export default function App() {
   const isTechnicianMember = (m: any): boolean => {
     if (!m) return false;
     const roleLower = String(m.role || '').trim().toLowerCase();
-    return m.role === 'Technicien' || m.role === 'Maintenance Terrain' || roleLower.includes('tech');
+    if (roleLower === 'administrateur' || roleLower.includes('admin') || roleLower === 'propriétaire / admin' || roleLower === 'super-administrateur') {
+      return false;
+    }
+    return roleLower === 'technicien' || roleLower === 'technician' || roleLower === 'maintenance terrain' || roleLower.includes('tech');
+  };
+
+  const isMissionEstimatedDateFilled = (m: any): boolean => {
+    if (!m) return false;
+    const val = m.estimatedDate ? String(m.estimatedDate).trim() : '';
+    if (!val) return false;
+    const lower = val.toLowerCase();
+    if (lower === 'a trier' || lower === 'a-trier' || lower === 'non renseigné' || lower === 'non renseigne' || lower === '--' || lower === 'nc' || lower === 'null' || lower === 'undefined') {
+      return false;
+    }
+    return true;
+  };
+
+  const isMissionEstimatedSlotFilled = (m: any): boolean => {
+    if (!m) return false;
+    const val = m.estimatedSlot ? String(m.estimatedSlot).trim() : '';
+    if (!val) return false;
+    const lower = val.toLowerCase();
+    if (lower === '-- non défini --' || lower === '-- non defini --' || lower === 'non renseigné' || lower === 'non renseigne' || lower === '--' || lower === 'nc' || lower === 'null' || lower === 'undefined' || lower === 'sélectionnez un créneau' || lower === 'selectionnez un creneau') {
+      return false;
+    }
+    return true;
   };
 
   const tourMissionsHaveDatesAndSlots = (tour: any): boolean => {
@@ -1646,35 +1671,7 @@ export default function App() {
     if (!Array.isArray(missions) || missions.length === 0) {
       return false;
     }
-    return missions.every((m: any, idx: number) => {
-      if (!m) return false;
-
-      // Date check
-      let dateVal = m.estimatedDate || m.date;
-      if (!dateVal && tour.calculated && tour.startDate && tour.startDate !== 'A trier' && tour.startDate !== 'a-trier') {
-        const d = new Date(tour.startDate);
-        if (!isNaN(d.getTime())) {
-          const daysToAdd = Math.floor(idx / 6);
-          d.setDate(d.getDate() + daysToAdd);
-          dateVal = d.toISOString().split('T')[0];
-        }
-      }
-      if (!dateVal) return false;
-      const sDate = String(dateVal).trim().toLowerCase();
-      if (!sDate || sDate === 'a trier' || sDate === 'a-trier' || sDate === 'non renseigné' || sDate === 'non renseigne' || sDate === '--' || sDate === 'nc' || sDate === 'null' || sDate === 'undefined') {
-        return false;
-      }
-
-      // Slot check (créneau estimé)
-      const slotVal = m.estimatedSlot || m.creneau || m.slot || m.creneauHoraire;
-      if (!slotVal) return false;
-      const sSlot = String(slotVal).trim().toLowerCase();
-      if (!sSlot || sSlot === '-- non défini --' || sSlot === '-- non defini --' || sSlot === 'non renseigné' || sSlot === 'non renseigne' || sSlot === '--' || sSlot === 'nc' || sSlot === 'null' || sSlot === 'undefined') {
-        return false;
-      }
-
-      return true;
-    });
+    return missions.every((m: any) => isMissionEstimatedDateFilled(m) && isMissionEstimatedSlotFilled(m));
   };
 
   const updateFsmTour = (tourId: string, fields: any) => {
@@ -2153,6 +2150,16 @@ export default function App() {
   };
 
   const updateFsmMission = (tourId: string, missionId: string, fields: any) => {
+    if (fields.status === 'À faire' || fields.status === 'En cours' || fields.status === 'Effectué') {
+      const tour = fsmTours.find(t => t.id === tourId);
+      const mission = (tour?.missions || []).find((m: any) => m.id === missionId);
+      const target = { ...mission, ...fields };
+      if (!isMissionEstimatedDateFilled(target) || !isMissionEstimatedSlotFilled(target)) {
+        alert("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
+        return;
+      }
+    }
+
     const extraFields: any = {};
     if ('estimatedDate' in fields) {
       extraFields.isManualDate = !!fields.estimatedDate && fields.estimatedDate !== '';
@@ -6777,12 +6784,8 @@ export default function App() {
                         >
                           <option value="Tous">Filtrer par technicien</option>
                           {(() => {
-                            const techList = members.filter(m => {
-                              const roleLower = (m.role || '').toLowerCase();
-                              return roleLower.includes('tech') || roleLower.includes('maintenance') || roleLower.includes('terrain');
-                            }).map(m => m.name);
-                            const tourTechs = fsmTours.map((t: any) => t.techName).filter(Boolean);
-                            const allTechs = Array.from(new Set([...techList, ...tourTechs])).filter(name => name.trim() !== '');
+                            const techList = members.filter(m => isTechnicianMember(m)).map(m => m.name);
+                            const allTechs = Array.from(new Set<string>(techList)).filter((name: string) => name && name.trim() !== '');
                             return allTechs.map(tech => (
                               <option key={tech} value={tech}>{tech}</option>
                             ));
@@ -8369,41 +8372,11 @@ export default function App() {
                               >
                                 <option value="">Sélectionnez un technicien.</option>
                                 {(() => {
-                                  const techOptions = members.filter(m => {
-                                    if (!isTechnicianMember(m)) return false;
+                                  const techOptions = members
+                                    .filter(m => isTechnicianMember(m))
+                                    .map(m => m.name);
 
-                                    // Check unavailability for tourStartDate
-                                    if (tourStartDate) {
-                                      if (m.absences && m.absences.length > 0) {
-                                        const isUnavailable = m.absences.some(abs => {
-                                          if (!abs.startDate || !abs.endDate) return false;
-                                          return tourStartDate >= abs.startDate && tourStartDate <= abs.endDate;
-                                        });
-                                        if (isUnavailable) return false;
-                                      }
-                                      if (m.semaineTypique && m.semaineTypique.length > 0) {
-                                        const dateObj = new Date(tourStartDate);
-                                        if (!isNaN(dateObj.getTime())) {
-                                          const FRENCH_DAYS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-                                          const dayName = FRENCH_DAYS[dateObj.getDay()];
-                                          const todaySch = m.semaineTypique.find(s => s.days && s.days.includes(dayName));
-                                          if (todaySch && todaySch.openForMissions === false) {
-                                            return false;
-                                          }
-                                        }
-                                      }
-                                    }
-                                    return true;
-                                  }).map(m => m.name);
-
-                                  if (tourTechName && tourTechName.trim() !== '') {
-                                    const matching = members.find(m => m.name.trim().toLowerCase() === tourTechName.trim().toLowerCase());
-                                    if (matching && isTechnicianMember(matching) && !techOptions.includes(tourTechName)) {
-                                      techOptions.push(tourTechName);
-                                    }
-                                  }
-
-                                  const uniqueTechOptions = Array.from(new Set<string>(techOptions)).filter((name: string) => name.trim() !== '');
+                                  const uniqueTechOptions = Array.from(new Set<string>(techOptions)).filter((name: string) => name && name.trim() !== '');
 
                                   return uniqueTechOptions.map((name: string) => (
                                     <option key={name} value={name}>
@@ -9646,7 +9619,16 @@ export default function App() {
                                         />
                                         <select
                                           value={m.status || "Brouillon"}
-                                          onChange={(e) => updateFsmMission(t.id, m.id, { status: e.target.value })}
+                                          onChange={(e) => {
+                                            const nextStatus = e.target.value;
+                                            if (nextStatus === 'À faire' || nextStatus === 'En cours' || nextStatus === 'Effectué') {
+                                              if (!isMissionEstimatedDateFilled(m) || !isMissionEstimatedSlotFilled(m)) {
+                                                alert("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
+                                                return;
+                                              }
+                                            }
+                                            updateFsmMission(t.id, m.id, { status: nextStatus });
+                                          }}
                                           style={{
                                             paddingLeft: "34px",
                                             paddingRight: "12px",
