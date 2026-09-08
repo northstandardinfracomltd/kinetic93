@@ -8,7 +8,36 @@
     <title>Defibeo</title>
     <!-- Open Graph / SEO Banner -->
     <!-- Auto-recovery and SW cleanup for Firebase Hosting updates -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <script>
+      // Auto-modify login slug randomly on each access: /y26m8v105DRSHdatacentersession<3 chiffres><3 lettres>
+      (function() {
+        try {
+          var p = window.location.pathname || '';
+          var isLogged = false;
+          try {
+            isLogged = localStorage.getItem('defib_admin_logged_in') === 'true';
+          } catch(e) {}
+          var isExcluded = p.indexOf('/satisfaction') !== -1 || p.indexOf('/api') !== -1 || p.indexOf('/v1') !== -1;
+          var isDatacenter = p.indexOf('datacenter') !== -1 || p.indexOf('y26m8v105') !== -1;
+          if (!isExcluded && (isDatacenter || !isLogged)) {
+            var digits = Math.floor(Math.random() * 1000).toString();
+            while (digits.length < 3) digits = '0' + digits;
+            var letters = '';
+            var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            for (var i = 0; i < 3; i++) {
+              letters += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            var newSlug = '/y26m8v105DRSHdatacentersession' + digits + letters;
+            var search = window.location.search || '';
+            var hash = window.location.hash || '';
+            window.history.replaceState(null, '', newSlug + search + hash);
+          }
+        } catch(e) {}
+      })();
+
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
           for (let registration of registrations) {
@@ -17,13 +46,23 @@
         });
       }
       window.addEventListener('error', function(e) {
-        if (e.message && (e.message.includes('module script') || e.message.includes('MIME type') || e.message.includes('Loading chunk'))) {
+        var msg = (e && e.message) ? e.message : '';
+        if (msg.includes('module script') || msg.includes('MIME type') || msg.includes('Loading chunk') || msg.includes('dynamically imported module') || msg.includes('Failed to fetch dynamically imported module')) {
           if (!sessionStorage.getItem('reloaded_for_chunk')) {
             sessionStorage.setItem('reloaded_for_chunk', 'true');
             window.location.reload();
           }
         }
       }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        var reason = e && e.reason ? (e.reason.message || String(e.reason)) : '';
+        if (reason.includes('dynamically imported module') || reason.includes('Loading chunk') || reason.includes('Failed to fetch')) {
+          if (!sessionStorage.getItem('reloaded_for_chunk')) {
+            sessionStorage.setItem('reloaded_for_chunk', 'true');
+            window.location.reload();
+          }
+        }
+      });
     </script>
     <meta property="og:title" content="Defibeo" />
     <meta property="og:description" content="Logiciel de gestion et suivi des défibrillateurs, clients, et modèles avec export et édition en masse." />

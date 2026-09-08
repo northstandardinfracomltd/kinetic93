@@ -176,7 +176,15 @@ const ERROR_CODES_DB = [
   // Mindray
   { label: "Mindray - Code 00-0022", description: "Erreur d'authentification ou d'identification de la batterie intelligente. Il faut nettoyer les contacts de la batterie ou tester avec une autre batterie d'origine Mindray." },
   { label: "Mindray - Code 01-0004", description: "Échec du circuit de détection d'impédance du patient. Il faut remplacer le câble patient (câble thérapeutique) ou nettoyer le connecteur femelle de l'appareil." },
-  { label: "Mindray - Code 02-0008", description: "Erreur fatale du module de défibrillation (Échec du circuit d'analyse d'onde). L'appareil doit être immédiatement retiré du service pour remplacement de la carte principale." }
+  { label: "Mindray - Code 02-0008", description: "Erreur fatale du module de défibrillation (Échec du circuit d'analyse d'onde). L'appareil doit être immédiatement retiré du service pour remplacement de la carte principale." },
+
+  // Saver One
+  { label: "Saver One — Error 85", description: "Défaut de fonctionnement du bouton de choc. Le bouton n'a pas été actionné dans le délai imparti du compte à rebours ou présente une anomalie mécanique/électrique. Éteindre l'appareil puis refaire un test d'allumage." },
+  { label: "Saver One — Error xx", description: "Code numérique généré lors d'une défaillance critique d'un composant interne (carte mère, circuit haute tension, charge du condensateur). Nécessite l'arrêt et l'envoi au support technique." },
+  { label: "Saver One — Icône Clé à molette", description: "Échec lors de l'autotest quotidien automatique ou test d'activation. L'appareil est indisponible pour le secours. Contacter immédiatement l'assistance technique en relevant le code affiché." },
+  { label: "Saver One — LED Rouge clignotante", description: "État d'erreur critique ou batterie complètement déchargée. L'autotest a échoué. Remplacer la batterie ou faire réviser l'appareil s'il continue de biper." },
+  { label: "Saver One — Symbole Batterie barrée", description: "Niveau de batterie critique ou accumulateur absent/défectueux. La pile Li-SOCl2 ou Li-MnO2 doit être immédiatement remplacée par un pack neuf pour assurer l'état de veille." },
+  { label: "Saver One — Icône Électrodes clignotante", description: "Électrodes de défibrillation non connectées, périmées, gel conducteur desséché ou impédance de contact patient anormale pendant l'analyse du rythme." }
 ];
 
 const rowActionButtonStyle: React.CSSProperties = {

@@ -12,6 +12,7 @@ import {
 } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { triggerEmail1Inscription, triggerEmail4Signalement, triggerAuthCodeEmail } from '../utils/emailService';
+import { updateLoginSessionSlug } from '../utils/sessionSlug';
 import TopBarProgress from './TopBarProgress';
 
 interface LoginProps {
@@ -467,6 +468,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [clientIp, setClientIp] = useState<string>('local_ip');
 
   React.useEffect(() => {
+    // Auto-modify login slug randomly on each access: /y26m8v105DRSHdatacentersession<3 chiffres><3 lettres>
+    updateLoginSessionSlug();
+
     // Purge cached collection snapshots on arriving at the login screen to ensure fresh synchronization
     purgeAllLocalEnvironmentCaches();
 

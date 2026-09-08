@@ -71,6 +71,7 @@ import { PlanningTab } from './components/PlanningTab';
 import FeedbackDrawer from './components/FeedbackDrawer';
 import { EmptyTablePlaceholder } from './components/EmptyTablePlaceholder';
 import TopBarProgress from './components/TopBarProgress';
+import { updateLoginSessionSlug } from './utils/sessionSlug';
 
 
 import {
@@ -509,6 +510,7 @@ export default function App() {
     setIsPublicPortalOpen(false);
     setIsClientPortalOpen(false);
     setActivePortalClient(null);
+    updateLoginSessionSlug();
   };
 
   useEffect(() => {

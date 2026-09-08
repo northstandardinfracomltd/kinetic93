@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Member } from '../types';
 import { SpontaneousEvent } from './PlanningTab';
 import { fetchCollectionFromFirestore } from '../firebase';
@@ -238,9 +238,33 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     }
   };
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToToday = useCallback((smooth = true) => {
+    setTimeout(() => {
+      const container = scrollContainerRef.current;
+      const todayEl = document.getElementById("extended-planning-today-col");
+      if (container && todayEl) {
+        const cursorOffset = todayEl.offsetLeft + (todayEl.offsetWidth * (todayCursorPercent / 100));
+        const targetScrollLeft = cursorOffset - (container.clientWidth / 2);
+        container.scrollTo({
+          left: Math.max(0, targetScrollLeft),
+          behavior: smooth ? "smooth" : "auto"
+        });
+      }
+    }, 60);
+  }, [todayCursorPercent]);
+
+  useEffect(() => {
+    if (isOpen && currentMonth === today.getMonth() && currentYear === today.getFullYear()) {
+      scrollToToday(false);
+    }
+  }, [isOpen, currentMonth, currentYear, scrollToToday, today]);
+
   const handleCurrentMonth = () => {
     setCurrentMonth(today.getMonth());
     setCurrentYear(today.getFullYear());
+    scrollToToday(true);
   };
 
   // Days list for the viewed month
@@ -595,7 +619,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         {/* Right: Actualiser & Fermer */}
         <div className="flex items-center gap-2">
           {lastRefreshedText && (
-            <span className="text-xs text-emerald-700 font-semibold px-2 py-1 bg-emerald-50 rounded-md border border-emerald-200 animate-fadeIn">
+            <span className="text-[15px] font-semibold text-emerald-600 animate-fadeIn select-none mr-2">
               {lastRefreshedText}
             </span>
           )}
@@ -651,13 +675,13 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <span className="text-neutral-800 font-semibold">Événement spontané</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-3.5 h-3.5 rounded-xs border border-pink-400 bg-pink-100 inline-block shrink-0" />
+          <span className="w-3.5 h-1.5 rounded-full bg-[#fe4eba] inline-block shrink-0" />
           <span className="text-neutral-800 font-semibold">Période de tournée</span>
         </div>
       </div>
 
       {/* Main Matrix Gantt Container */}
-      <div className="flex-1 overflow-auto bg-white">
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto bg-white">
         <div className="inline-block min-w-full align-top">
           {/* Timeline Table Grid */}
           <table className="border-collapse text-left" style={{ minWidth: `${daysInMonth.length * 200}px`, width: '100%' }}>
@@ -681,6 +705,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                 {daysInMonth.map((d) => (
                   <th
                     key={`day-header-${d.isoDate}`}
+                    id={d.isToday ? "extended-planning-today-col" : undefined}
                     className={`relative border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none w-[200px] min-w-[200px] max-w-[200px] ${
                       d.isToday
                         ? 'bg-pink-100/80 text-[#FD4EBB] border-b-2 border-b-[#FD4EBB]'
@@ -728,13 +753,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                         colSpan={daysInMonth.length}
                         className="px-4 py-2 font-bold text-sm text-neutral-900 bg-neutral-100 select-none shadow-2xs"
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-neutral-800 inline-block" />
+                        <div className="flex items-center">
                           <span className="text-base text-neutral-950 font-bold tracking-tight">{tech.name}</span>
-                          <span className="text-xs font-normal text-neutral-500 ml-2">
-                            {tours.length} {tours.length > 1 ? 'tournées' : 'tournée'}
-                            {techEvts.length > 0 && ` • ${techEvts.length} événement${techEvts.length > 1 ? 's' : ''} spontané${techEvts.length > 1 ? 's' : ''}`}
-                          </span>
                         </div>
                       </td>
                     </tr>
@@ -799,19 +819,9 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                 {/* Tournée pink barrette: ALWAYS visible if within tour, regardless of missions count */}
                                 {isWithinTour && (
                                   <div
-                                    className="rounded-md bg-pink-100/90 border border-pink-300/80 px-2 py-1 mb-1.5 text-[11px] font-semibold text-pink-950 flex items-center justify-between gap-1 overflow-hidden shrink-0 cursor-default"
-                                    title={`Tournée : ${tItem.title} (${startFormatted} - ${endFormatted})`}
-                                  >
-                                    {(d.isoDate === tItem.startIso || (d.day === 1 && tItem.startIso < d.isoDate)) ? (
-                                      <div className="flex items-center gap-1.5 truncate">
-                                        <span className="truncate font-bold text-neutral-950">{tItem.title}</span>
-                                        <span className="px-1.5 py-0.2 rounded-full bg-black text-white text-[10px] shrink-0 font-medium">{startFormatted}</span>
-                                        <span className="px-1.5 py-0.2 rounded-full bg-black text-white text-[10px] shrink-0 font-medium">{endFormatted}</span>
-                                      </div>
-                                    ) : (
-                                      <div className="h-1.5 w-full bg-pink-300/80 rounded-xs" />
-                                    )}
-                                  </div>
+                                    className="h-2 w-full rounded-full bg-[#fe4eba]/80 hover:bg-[#fe4eba] transition-colors mb-1.5 cursor-default shrink-0"
+                                    title={tItem.title}
+                                  />
                                 )}
 
                                 {/* Day missions: placed under the pink barrette, horizontally shifted based on time */}

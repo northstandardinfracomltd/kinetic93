@@ -1546,13 +1546,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
         </div>
       )}
 
-      {/* Message indicatif quand aucun technicien n'est sélectionné */}
-      {(!selectedTech || selectedTech.trim() === '') && (
-        <div className="py-16 text-center text-neutral-500 font-medium text-[17px] select-none">
-          Veuillez sélectionner un technicien pour afficher son planning.
-        </div>
-      )}
-
       {/* Floating Button "Remonter" when header is not visible (>200px scroll) */}
       {showScrollTop && (
         <div className="fixed bottom-4 right-4 sm:bottom-4 sm:right-6 z-40 animate-fade-in">

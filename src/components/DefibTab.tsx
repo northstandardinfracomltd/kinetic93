@@ -198,6 +198,7 @@ import {
   generateRandomShortCode,
   computeProchaineMaintenance
 } from '../utils';
+import { exportSelectedDefibsToPDF } from '../utils/exportDefibPdf';
 import { getRegionsForCountry, REGIONS_BY_COUNTRY } from '../utils/regions';
 import {
   Plus,
@@ -228,7 +229,9 @@ import {
   RefreshCw,
   Clock,
   Filter,
-  Map as MapIcon
+  Map as MapIcon,
+  Minimize2,
+  Maximize2
 } from 'lucide-react';
 
 function parseDateHelper(dStr: string | undefined | null): Date | null {
@@ -374,6 +377,35 @@ interface DefibTabProps {
   isDeveloper?: boolean;
   isReadOnly?: boolean;
 }
+
+const getPostalIndicatif = (rawCp: any): number | null => {
+  if (!rawCp || typeof rawCp !== 'string') return null;
+  const cleaned = rawCp.trim().replace(/\s+/g, '');
+  if (!cleaned) return null;
+
+  // Handle Corsica 2A / 2B
+  if (/^2[ab]/i.test(cleaned)) {
+    return 20;
+  }
+
+  // If 4 digits (e.g., "1987" for 01987 or "6112" for 06112), pad leading zero to 5 digits
+  const normalized = /^\d{4}$/.test(cleaned) ? '0' + cleaned : cleaned;
+
+  // Match the first two digits
+  const match = normalized.match(/^(\d{2})/);
+  if (match) {
+    const val = parseInt(match[1], 10);
+    return isNaN(val) ? null : val;
+  }
+
+  const single = normalized.match(/^(\d)/);
+  if (single) {
+    const val = parseInt(single[1], 10);
+    return isNaN(val) ? null : val;
+  }
+
+  return null;
+};
 
 export default function DefibTab({
   currentLang,
@@ -1316,7 +1348,8 @@ export default function DefibTab({
 
   const [bulkApplyRappelMensuelAuto, setBulkApplyRappelMensuelAuto] = useState(false);
   const [bulkRappelMensuelAuto, setBulkRappelMensuelAuto] = useState<'Oui' | 'Non'>('Non');
-  const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | null>(null);
+  const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | 'postal_code_asc' | 'postal_code_desc' | null>(null);
+  const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('all');
 
   // --- LOOKUP INDEXES ---
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
@@ -1457,6 +1490,15 @@ export default function DefibTab({
       );
       const isMatchRejected = !activeFilters.actionRejected || hasBeenRejected;
 
+      // 9. Maintenance autorisée (fsmAutorise) toggle filter
+      let isMatchMaintenance = true;
+      const fsmVal = (df.fsmAutorise || "").trim().toLowerCase();
+      if (maintenanceFilter === 'oui') {
+        isMatchMaintenance = fsmVal === 'oui';
+      } else if (maintenanceFilter === 'non') {
+        isMatchMaintenance = fsmVal === 'non';
+      }
+
       return isMatchSearch && 
              isMatchRegion && 
              isMatchModele &&
@@ -1465,7 +1507,8 @@ export default function DefibTab({
              isMatchActionExpired &&
              isMatchCategorie &&
              isMatchContrat &&
-             isMatchRejected;
+             isMatchRejected &&
+             isMatchMaintenance;
     });
 
     if (sortFilter === 'recent') {
@@ -1491,10 +1534,38 @@ export default function DefibTab({
         }
         return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
       });
+    } else if (sortFilter === 'postal_code_asc' || sortFilter === 'postal_code_desc') {
+      const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, idx]));
+      const isAsc = sortFilter === 'postal_code_asc';
+      result = [...result].sort((a, b) => {
+        const prefixA = getPostalIndicatif(a.cp);
+        const prefixB = getPostalIndicatif(b.cp);
+
+        // If one or both are null (no valid postal code)
+        if (prefixA === null && prefixB === null) {
+          return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
+        }
+        if (prefixA === null) return 1;
+        if (prefixB === null) return -1;
+
+        if (prefixA !== prefixB) {
+          return isAsc ? prefixA - prefixB : prefixB - prefixA;
+        }
+
+        // Secondary sort: compare full cleaned postal codes
+        const cleanA = (a.cp || "").trim();
+        const cleanB = (b.cp || "").trim();
+        if (cleanA !== cleanB) {
+          const comp = cleanA.localeCompare(cleanB, undefined, { numeric: true });
+          return isAsc ? comp : -comp;
+        }
+
+        return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
+      });
     }
 
     return result;
-  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, fsmTours, sortFilter]);
+  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, fsmTours, sortFilter, maintenanceFilter]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -1502,7 +1573,7 @@ export default function DefibTab({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, activeFilters, sortFilter]);
+  }, [search, activeFilters, sortFilter, maintenanceFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredDefibs.length / ITEMS_PER_PAGE));
 
@@ -1521,7 +1592,34 @@ export default function DefibTab({
   const topScrollRef = React.useRef<HTMLDivElement>(null);
   const bottomScrollRef = React.useRef<HTMLDivElement>(null);
   const theadRef = React.useRef<HTMLTableSectionElement>(null);
+  const tableRef = React.useRef<HTMLTableElement>(null);
   const [tableScrollWidth, setTableScrollWidth] = useState<number>(0);
+
+  // Unzoom / Fit view mode to display all columns within webview
+  const [isTableFitView, setIsTableFitView] = useState<boolean>(false);
+  const [tableFitScale, setTableFitScale] = useState<number>(1);
+  const naturalTableWidthRef = useRef<number>(1700);
+
+  const toggleTableFitView = () => {
+    setIsTableFitView(prev => {
+      const next = !prev;
+      if (next) {
+        if (bottomScrollRef.current) {
+          const sWidth = bottomScrollRef.current.scrollWidth;
+          if (sWidth > 500) {
+            naturalTableWidthRef.current = sWidth;
+          }
+          const clientW = bottomScrollRef.current.clientWidth;
+          const naturalW = naturalTableWidthRef.current || 1700;
+          const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
+          setTableFitScale(scale);
+        }
+      } else {
+        setTableFitScale(1);
+      }
+      return next;
+    });
+  };
 
   const handleTopScroll = () => {
     if (topScrollRef.current && bottomScrollRef.current) {
@@ -1548,10 +1646,12 @@ export default function DefibTab({
     }
     
     const ths = theadRef.current.querySelectorAll('th');
+    const effectiveScale = isTableFitView ? tableFitScale : 1;
+    const adjustedTranslateY = effectiveScale > 0 ? translateY / effectiveScale : translateY;
     ths.forEach(th => {
-      (th as HTMLElement).style.transform = `translateY(${translateY}px)`;
+      (th as HTMLElement).style.transform = `translateY(${adjustedTranslateY}px)`;
     });
-  }, []);
+  }, [isTableFitView, tableFitScale]);
 
   useEffect(() => {
     window.addEventListener('scroll', updateHeaderStickyPosition, { passive: true });
@@ -1564,10 +1664,21 @@ export default function DefibTab({
     if (!bottomScrollRef.current) return;
 
     const updateWidth = () => {
-      if (bottomScrollRef.current) {
-        setTableScrollWidth(bottomScrollRef.current.scrollWidth);
-        updateHeaderStickyPosition();
+      if (!bottomScrollRef.current) return;
+      const clientW = bottomScrollRef.current.clientWidth;
+      if (!isTableFitView) {
+        const sWidth = bottomScrollRef.current.scrollWidth;
+        if (sWidth > 500) {
+          naturalTableWidthRef.current = sWidth;
+        }
+        setTableScrollWidth(sWidth);
+        setTableFitScale(1);
+      } else {
+        const naturalW = naturalTableWidthRef.current || 1700;
+        const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
+        setTableFitScale(scale);
       }
+      updateHeaderStickyPosition();
     };
 
     // Delay slightly to make sure the DOM has rendered completely
@@ -1583,7 +1694,7 @@ export default function DefibTab({
       observer.disconnect();
       window.removeEventListener('resize', updateWidth);
     };
-  }, [filteredDefibs, isFormOpen, updateHeaderStickyPosition]);
+  }, [filteredDefibs, isFormOpen, isTableFitView, updateHeaderStickyPosition]);
 
   // Row selectors
   const displayedToSelect = useMemo(() => {
@@ -2217,6 +2328,75 @@ export default function DefibTab({
                   />
                 </div>
 
+                {/* 3-item Segmented Toggle for 'Tous' / 'Main. Oui' / 'Main. Non' */}
+                <div 
+                  className="flex items-center p-1 bg-white select-none" 
+                  style={{ 
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    borderRadius: '15px',
+                    border: '1px solid #dadada',
+                    backgroundColor: '#ffffff',
+                  }}
+                >
+                  <button
+                    type="button"
+                    id="toggle-main-all"
+                    onClick={() => setMaintenanceFilter('all')}
+                    style={{
+                      fontSize: '18px',
+                      borderRadius: '13px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: maintenanceFilter === 'all' ? '#fe4eba' : 'transparent',
+                      color: maintenanceFilter === 'all' ? '#ffffff' : '#000000',
+                      transition: 'none',
+                    }}
+                    className={`px-4 py-1.5 font-bold ${
+                      maintenanceFilter === 'all' ? 'shadow-sm' : ''
+                    }`}
+                  >
+                    {t("Tous")}
+                  </button>
+                  <button
+                    type="button"
+                    id="toggle-main-oui"
+                    onClick={() => setMaintenanceFilter('oui')}
+                    style={{
+                      fontSize: '18px',
+                      borderRadius: '13px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: maintenanceFilter === 'oui' ? '#fe4eba' : 'transparent',
+                      color: maintenanceFilter === 'oui' ? '#ffffff' : '#000000',
+                      transition: 'none',
+                    }}
+                    className={`px-4 py-1.5 font-bold ${
+                      maintenanceFilter === 'oui' ? 'shadow-sm' : ''
+                    }`}
+                  >
+                    {t("Main. Oui")}
+                  </button>
+                  <button
+                    type="button"
+                    id="toggle-main-non"
+                    onClick={() => setMaintenanceFilter('non')}
+                    style={{
+                      fontSize: '18px',
+                      borderRadius: '13px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: maintenanceFilter === 'non' ? '#fe4eba' : 'transparent',
+                      color: maintenanceFilter === 'non' ? '#ffffff' : '#000000',
+                      transition: 'none',
+                    }}
+                    className={`px-4 py-1.5 font-bold ${
+                      maintenanceFilter === 'non' ? 'shadow-sm' : ''
+                    }`}
+                  >
+                    {t("Main. Non")}
+                  </button>
+                </div>
+
                 <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setIsFilterPaneOpen(true)}
@@ -2425,6 +2605,26 @@ export default function DefibTab({
                   </div>
      
                   <button
+                    type="button"
+                    onClick={() => {
+                      const selectedList = defibrillateurs.filter(d => selectedIds.includes(d.id));
+                      exportSelectedDefibsToPDF({
+                        selectedDefibs: selectedList,
+                        clients,
+                        variables,
+                        companyInfo,
+                        fsmTours,
+                      });
+                    }}
+                    id="btn-bulk-export-pdf"
+                    style={rowActionButton18Style}
+                    className="cursor-pointer"
+                    title={t("Télécharger la sélection en PDF")}
+                  >
+                    PDF
+                  </button>
+
+                  <button
                     onClick={() => exportToCSV(defibrillateurs.filter(d => selectedIds.includes(d.id)), clients, variables)}
                     style={rowActionButton18Style}
                     className="cursor-pointer"
@@ -2530,12 +2730,93 @@ export default function DefibTab({
             >
               {t("Pro.Main au plus proche")}
             </button>
+
+            <button
+              type="button"
+              id="filter-sort-postal-asc"
+              onClick={() => setSortFilter(prev => prev === 'postal_code_asc' ? null : 'postal_code_asc')}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: sortFilter === 'postal_code_asc' ? '#fe4eba' : '#ffffff',
+                color: sortFilter === 'postal_code_asc' ? '#ffffff' : '#000000',
+                border: sortFilter === 'postal_code_asc' ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="transition-all"
+            >
+              {t("Indicatif Postal Croissant")}
+            </button>
+
+            <button
+              type="button"
+              id="filter-sort-postal-desc"
+              onClick={() => setSortFilter(prev => prev === 'postal_code_desc' ? null : 'postal_code_desc')}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: sortFilter === 'postal_code_desc' ? '#fe4eba' : '#ffffff',
+                color: sortFilter === 'postal_code_desc' ? '#ffffff' : '#000000',
+                border: sortFilter === 'postal_code_desc' ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="transition-all"
+            >
+              {t("Indicatif Postal Décroissant")}
+            </button>
+          </div>
+
+          {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard */}
+          <div 
+            className="flex items-center justify-start"
+            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
+          >
+            <button
+              type="button"
+              id="btn-toggle-fit-view"
+              onClick={toggleTableFitView}
+              style={{
+                fontSize: '9px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                fontWeight: 100,
+                cursor: 'pointer',
+                background: 'transparent',
+                border: 'none',
+                padding: '2px 4px',
+                color: isTableFitView ? '#fe4eba' : '#475569',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                textDecoration: 'underline',
+                textUnderlineOffset: '2px',
+                transition: 'all 0.15s ease'
+              }}
+              className="hover:text-black hover:opacity-80 transition-all select-none cursor-pointer"
+              title={isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
+            >
+              {isTableFitView ? (
+                <Maximize2 size={10} className="shrink-0" />
+              ) : (
+                <Minimize2 size={10} className="shrink-0" />
+              )}
+              <span>{isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
+            </button>
           </div>
 
       {/* Main Table Records Sheet */}
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         {/* Scrollbar supérieur pour faciliter la navigation horizontale sur ordinateur fixe */}
-        {filteredDefibs.length > 0 && tableScrollWidth > 0 && (
+        {filteredDefibs.length > 0 && tableScrollWidth > 0 && !isTableFitView && (
           <div 
             ref={topScrollRef} 
             onScroll={handleTopScroll} 
@@ -2548,12 +2829,29 @@ export default function DefibTab({
         <div 
           ref={bottomScrollRef} 
           onScroll={handleBottomScroll} 
-          className="overflow-x-auto"
+          className={isTableFitView ? "overflow-x-hidden" : "overflow-x-auto"}
+          style={isTableFitView ? { width: '100%', overflowX: 'hidden' } : undefined}
         >
           {filteredDefibs.length === 0 ? (
             <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
           ) : (
-            <table className="w-full text-left font-sans border-collapse text-xs" id="records-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+            <table 
+              ref={tableRef}
+              className="w-full text-left font-sans border-collapse text-xs" 
+              id="records-table" 
+              style={{ 
+                borderTop: '1px solid rgb(218, 218, 218)', 
+                borderBottom: '1px solid rgb(218, 218, 218)',
+                ...(isTableFitView ? {
+                  zoom: tableFitScale,
+                  width: `${naturalTableWidthRef.current || 1700}px`,
+                  minWidth: `${naturalTableWidthRef.current || 1700}px`,
+                  transition: 'zoom 0.15s ease'
+                } : {
+                  width: '100%'
+                })
+              }}
+            >
               <thead ref={theadRef}>
                 <tr className="bg-transparent">
                   <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default', position: 'sticky', top: 0, backgroundColor: '#ffffff', zIndex: 10, borderBottom: '1px solid rgb(218, 218, 218)' }}>
