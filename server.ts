@@ -490,6 +490,26 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     const isNum = /^\d+$/.test(cleanTid);
     const numTid = isDNum || isNum ? cleanTid.replace(/^d/i, '') : '';
 
+    const validAliases = new Set<string>();
+    validAliases.add(cleanTid);
+    if (numTid) {
+      validAliases.add(`d${numTid}`);
+      validAliases.add(numTid);
+    }
+    for (const a of extraAliases) {
+      if (a && typeof a === 'string') {
+        const ca = a.trim().toLowerCase();
+        if (ca) {
+          validAliases.add(ca);
+          const aNum = ca.replace(/^d/i, '');
+          if (/^\d+$/.test(aNum)) {
+            validAliases.add(`d${aNum}`);
+            validAliases.add(aNum);
+          }
+        }
+      }
+    }
+
     return items.filter((item: any) => {
       if (!item || typeof item !== 'object') return true;
       const itemEnv = (item.envId || item.tenantId || '').trim().toLowerCase();
@@ -504,8 +524,11 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
 
       if (itemEnv) {
         if (itemEnv === 'demo') return false;
-        if (itemEnv === cleanTid) return true;
-        if (numTid && numItemEnv && numTid === numItemEnv) return true;
+        if (validAliases.has(itemEnv)) return true;
+        if (numItemEnv && (validAliases.has(numItemEnv) || validAliases.has(`d${numItemEnv}`))) return true;
+        for (const va of validAliases) {
+          if (va.length >= 2 && (itemEnv === va || itemEnv.includes(va) || va.includes(itemEnv))) return true;
+        }
         return false; // Rejects items belonging to other tenants!
       }
 
@@ -1411,8 +1434,8 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         });
       }
 
-      // Defibrillateurs Endpoint
-      if (cleanPath.startsWith('defibrillateurs')) {
+      // Defibrillateurs Endpoint (supports both plural and singular routes)
+      if (cleanPath.startsWith('defibrillateur') || cleanPath.startsWith('defibs') || cleanPath.startsWith('devices') || cleanPath.startsWith('dae')) {
         // Strict blocking: Prohibit deletion of defibrillators via API DEFIBEO
         const isDeleteAction = 
           req.method === 'DELETE' || 
@@ -1479,36 +1502,136 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           });
         }
 
-        const subId = cleanPath.split('/')[1];
-        if (subId) {
-          let found = defibs.find((d: any) => 
-            d.id === subId || 
-            d.identifiant === subId || 
-            d.numeroSerie === subId || 
-            d.num_serie === subId ||
-            (d.identifiant && d.identifiant.toLowerCase() === subId.toLowerCase()) ||
-            (d.numeroSerie && d.numeroSerie.toLowerCase() === subId.toLowerCase())
-          );
+        // Robust single defibrillator identifier resolution (from URL path or query params)
+        const pathSegments = cleanPath.split('/').map(s => s.trim()).filter(Boolean);
+        let subId = '';
+        if (pathSegments.length > 1) {
+          if (['detail', 'item', 'get', 'view', 'info', 'fiche'].includes(pathSegments[1].toLowerCase()) && pathSegments[2]) {
+            subId = pathSegments[2];
+          } else {
+            subId = pathSegments[1];
+          }
+        }
+        if (!subId) {
+          subId = (
+            (req.query.identifiant as string) ||
+            (req.query.numeroSerie as string) ||
+            (req.query.numero_serie as string) ||
+            (req.query.num_serie as string) ||
+            (req.query.serial as string) ||
+            (req.query.sn as string) ||
+            (req.query.id as string) ||
+            (req.query.code as string) ||
+            ''
+          ).trim();
+        }
 
-          // If not found in current tenant partition, check standard demo database as fallback
-          if (!found && tenantId !== 'demo') {
-            const demoDefibs = await fetchServerCollection('defibrillateurs', 'demo');
-            found = demoDefibs.find((d: any) => 
-              d.id === subId || 
-              d.identifiant === subId || 
-              d.numeroSerie === subId || 
-              d.num_serie === subId ||
-              (d.identifiant && d.identifiant.toLowerCase() === subId.toLowerCase()) ||
-              (d.numeroSerie && d.numeroSerie.toLowerCase() === subId.toLowerCase())
-            );
+        if (subId) {
+          const rawSubId = decodeURIComponent(subId).trim();
+          const lowerSubId = rawSubId.toLowerCase();
+          const cleanSubId = rawSubId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+          const matchesDefib = (d: any): boolean => {
+            if (!d || typeof d !== 'object') return false;
+            const candidates = [
+              d.id,
+              d.identifiant,
+              d.defibIdentifiant,
+              d.identifiantDAE,
+              d.identifiantUnique,
+              d.code,
+              d.reference,
+              d.ref,
+              d.defibId,
+              d.numeroSerie,
+              d.num_serie,
+              d.numero_serie,
+              d.numSerie,
+              d.numSerieDAE,
+              d.serial,
+              d.serialNumber,
+              d.sn,
+              d.numeroAtlasante,
+              d.defibSnapshot?.identifiant,
+              d.defibSnapshot?.numeroSerie,
+              d.defibSnapshot?.id
+            ];
+
+            for (const val of candidates) {
+              if (val === undefined || val === null) continue;
+              const sVal = String(val).trim();
+              if (!sVal) continue;
+              // 1. Exact match
+              if (sVal === rawSubId) return true;
+              // 2. Case-insensitive match
+              if (sVal.toLowerCase() === lowerSubId) return true;
+              // 3. Normalized alphanumeric match (ignores spaces, hyphens, slashes)
+              if (cleanSubId.length >= 3) {
+                const cVal = sVal.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                if (cVal === cleanSubId) return true;
+              }
+            }
+            return false;
+          };
+
+          let found = defibs.find(matchesDefib);
+
+          // If not found in default loaded list, search across all tenant aliases and partitions
+          if (!found) {
+            const searchAliases = Array.from(new Set([
+              targetTenant.shortEnvId,
+              targetTenant.id,
+              sanitizedTenantId,
+              rawTenantId,
+              tenantId,
+              'D58',
+              '58',
+              'demo'
+            ].filter(Boolean)));
+
+            for (const alias of searchAliases) {
+              if (alias === tenantId) continue;
+              const extraDefibs = await fetchServerCollection('defibrillateurs', alias, searchAliases);
+              if (Array.isArray(extraDefibs)) {
+                found = extraDefibs.find(matchesDefib);
+                if (found) break;
+              }
+            }
+          }
+
+          // If still not found, check alternative collection names (e.g. 'defibs', 'devices', 'dae')
+          if (!found) {
+            for (const altCol of ['defibs', 'devices', 'dae']) {
+              const altDefibs = await fetchServerCollection(altCol, tenantId, tenantAliases);
+              if (Array.isArray(altDefibs)) {
+                found = altDefibs.find(matchesDefib);
+                if (found) break;
+              }
+            }
+          }
+
+          // If still not found, check in-memory store directly across all keys
+          if (!found) {
+            for (const [key, val] of serverMemoryStore.entries()) {
+              if (Array.isArray(val) && (key.includes('defib') || key.includes('device') || key.includes('dae'))) {
+                found = val.find(matchesDefib);
+                if (found) break;
+              }
+            }
           }
 
           if (found) {
-            return sendOptimizedJson(req, res, { status: "success", environnement: targetTenant.shortEnvId || tenantId, defibrillateur: found, data: found });
+            return sendOptimizedJson(req, res, { 
+              status: "success", 
+              environnement: targetTenant.shortEnvId || tenantId, 
+              defibrillateur: found, 
+              data: found 
+            });
           }
+
           return res.status(404).json({ 
             status: "error", 
-            error: `Défibrillateur '${subId}' non trouvé dans l'environnement ${targetTenant.shortEnvId || tenantId}`,
+            error: `Défibrillateur '${rawSubId}' non trouvé dans l'environnement ${targetTenant.shortEnvId || tenantId}`,
             code: "DEFIBRILLATEUR_NOT_FOUND" 
           });
         }
