@@ -1,5 +1,4 @@
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { Defibrillateur, Client, Variable, CompanyInfo } from '../types';
 import { formatDateToFR, computeProchaineMaintenance } from '../utils';
 
@@ -10,11 +9,17 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
     img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
     img.onerror = () => {
-      // If CORS fails on external image, fallback to null gracefully
       resolve(null);
     };
     img.src = url;
   });
+}
+
+interface ColumnDef {
+  header: string;
+  width: number;
+  align?: 'left' | 'center' | 'right';
+  bold?: boolean;
 }
 
 export async function exportSelectedDefibsToPDF({
@@ -42,10 +47,10 @@ export async function exportSelectedDefibsToPDF({
     format: 'a4',
   });
 
-  const pageWidth = doc.internal.pageSize.getWidth(); // 297 mm
-  const pageHeight = doc.internal.pageSize.getHeight(); // 210 mm
+  const pageWidth = doc.internal.pageSize.getWidth(); // ~297 mm
+  const pageHeight = doc.internal.pageSize.getHeight(); // ~210 mm
   const marginX = 10;
-  let startY = 10;
+  const marginBottom = 14;
 
   // Header: Tenant Logo on top-left
   let logoOffsetLeft = marginX;
@@ -53,32 +58,32 @@ export async function exportSelectedDefibsToPDF({
     try {
       const img = await loadImage(companyInfo.logo);
       if (img && img.width > 0 && img.height > 0) {
-        const maxW = 42;
-        const maxH = 15;
+        const maxW = 38;
+        const maxH = 14;
         let renderW = (img.width / img.height) * maxH;
         let renderH = maxH;
         if (renderW > maxW) {
           renderW = maxW;
           renderH = (img.height / img.width) * maxW;
         }
-        doc.addImage(img, 'PNG', marginX, 10, renderW, renderH);
+        doc.addImage(img, 'PNG', marginX, 8, renderW, renderH);
         logoOffsetLeft = marginX + renderW + 8;
       }
     } catch {
-      // Ignore logo error, keep clean layout
+      // Fallback cleanly
     }
   }
 
   // Header Title and Info
   const companyName = companyInfo?.name || 'Gestionnaire de Défibrillateurs';
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
+  doc.setFontSize(12);
   doc.setTextColor(0, 0, 0);
-  doc.text(companyName, logoOffsetLeft, 14);
+  doc.text(companyName, logoOffsetLeft, 13);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(70, 70, 70);
+  doc.setFontSize(8.5);
+  doc.setTextColor(80, 80, 80);
   const nowStr = new Date().toLocaleDateString('fr-FR', {
     day: '2-digit',
     month: '2-digit',
@@ -87,37 +92,73 @@ export async function exportSelectedDefibsToPDF({
   doc.text(
     `Export des défibrillateurs sélectionnés — ${selectedDefibs.length} équipement(s) — Édité le ${nowStr}`,
     logoOffsetLeft,
-    20
+    19
   );
 
-  // Divider line
+  // Divider line under header
   doc.setDrawColor(218, 218, 218);
   doc.setLineWidth(0.3);
-  doc.line(marginX, 27, pageWidth - marginX, 27);
+  doc.line(marginX, 25, pageWidth - marginX, 25);
 
-  startY = 30;
-
-  // Prepare table headers matching the Table View
-  const headers = [
-    [
-      'Identifiant',
-      'N° Série',
-      'Modèle',
-      'Client',
-      'Nom du site',
-      'Contrat',
-      'Localisation',
-      'Expir. garantie',
-      'Pro. visite',
-      'Péremp. A',
-      'Péremp. P',
-      'Péremp. B',
-      'Tournée',
-    ],
+  // Column definitions (total width: 277 mm, perfectly fits 297mm page with 10mm margins)
+  const columns: ColumnDef[] = [
+    { header: 'Identifiant', width: 25, bold: true },
+    { header: 'N° Série', width: 22 },
+    { header: 'Modèle', width: 25 },
+    { header: 'Client', width: 28 },
+    { header: 'Nom du site', width: 24 },
+    { header: 'Contrat', width: 26 },
+    { header: 'Localisation', width: 24 },
+    { header: 'Garantie', width: 17, align: 'center' },
+    { header: 'Pro. visite', width: 17, align: 'center' },
+    { header: 'Péremp. A', width: 16, align: 'center' },
+    { header: 'Péremp. P', width: 16, align: 'center' },
+    { header: 'Péremp. B', width: 16, align: 'center' },
+    { header: 'Tournée', width: 21 },
   ];
 
+  const headerHeight = 7;
+  const rowHeight = 6.2;
+  let currentY = 28;
+
+  const drawTableHeader = (y: number) => {
+    let x = marginX;
+    doc.setFillColor(245, 247, 250);
+    doc.setDrawColor(210, 215, 225);
+    doc.setLineWidth(0.2);
+
+    columns.forEach((col) => {
+      doc.rect(x, y, col.width, headerHeight, 'FD');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(20, 20, 20);
+
+      const textY = y + 4.6;
+      if (col.align === 'center') {
+        doc.text(col.header, x + col.width / 2, textY, { align: 'center' });
+      } else if (col.align === 'right') {
+        doc.text(col.header, x + col.width - 2, textY, { align: 'right' });
+      } else {
+        doc.text(col.header, x + 2, textY);
+      }
+      x += col.width;
+    });
+  };
+
+  // Draw initial header
+  drawTableHeader(currentY);
+  currentY += headerHeight;
+
   // Prepare table data rows
-  const rows = selectedDefibs.map((df) => {
+  selectedDefibs.forEach((df, index) => {
+    // Check if new page is needed
+    if (currentY + rowHeight > pageHeight - marginBottom) {
+      doc.addPage();
+      currentY = 12;
+      drawTableHeader(currentY);
+      currentY += headerHeight;
+    }
+
     const linkedClient = clientMap.get(df.clientId);
     const linkedModel = variableMap.get(df.modeleId);
 
@@ -156,13 +197,13 @@ export async function exportSelectedDefibsToPDF({
       const matchMission = latestTour.missions?.find((m: any) => m.defibIdentifiant === df.identifiant);
       const isRejected = matchMission && matchMission.status !== 'Effectué' && matchMission.rejectionReason;
       if (isRejected) {
-        tourneeStr = `Non effectué : ${latestTour.title || 'Tournée'}`;
+        tourneeStr = `Non fait : ${latestTour.title || 'Tournée'}`;
       } else {
         tourneeStr = `${latestTour.title || 'Tournée'}${latestTour.status ? ` (${latestTour.status})` : ''}`;
       }
     }
 
-    return [
+    const rowValues = [
       df.identifiant || '-',
       df.numeroSerie || '-',
       linkedModel?.nom || df.modeleId || '-',
@@ -177,62 +218,67 @@ export async function exportSelectedDefibsToPDF({
       perempB,
       tourneeStr,
     ];
+
+    // Background color (alternating rows)
+    const isEven = index % 2 === 0;
+    if (isEven) {
+      doc.setFillColor(255, 255, 255);
+    } else {
+      doc.setFillColor(250, 251, 253);
+    }
+
+    doc.setDrawColor(228, 231, 236);
+    doc.setLineWidth(0.15);
+
+    let cellX = marginX;
+    columns.forEach((col, cIdx) => {
+      doc.rect(cellX, currentY, col.width, rowHeight, 'FD');
+
+      let val = String(rowValues[cIdx] || '');
+      doc.setFont('helvetica', col.bold ? 'bold' : 'normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(35, 45, 60);
+
+      const maxTextWidth = col.width - 3;
+      // Truncate text with ellipsis if it exceeds column width
+      if (doc.getTextWidth(val) > maxTextWidth) {
+        while (val.length > 3 && doc.getTextWidth(val + '…') > maxTextWidth) {
+          val = val.slice(0, -1);
+        }
+        val += '…';
+      }
+
+      const textY = currentY + 4.2;
+      if (col.align === 'center') {
+        doc.text(val, cellX + col.width / 2, textY, { align: 'center' });
+      } else if (col.align === 'right') {
+        doc.text(val, cellX + col.width - 1.5, textY, { align: 'right' });
+      } else {
+        doc.text(val, cellX + 1.5, textY);
+      }
+
+      cellX += col.width;
+    });
+
+    currentY += rowHeight;
   });
 
-  // Call autoTable to render compact landscape table
-  autoTable(doc, {
-    head: headers,
-    body: rows,
-    startY,
-    margin: { left: marginX, right: marginX, bottom: 12 },
-    styles: {
-      fontSize: 7,
-      cellPadding: 2,
-      font: 'helvetica',
-      textColor: [30, 41, 59],
-      lineColor: [220, 220, 220],
-      lineWidth: 0.2,
-      overflow: 'linebreak',
-      valign: 'middle',
-    },
-    headStyles: {
-      fillColor: [245, 247, 250],
-      textColor: [0, 0, 0],
-      fontStyle: 'bold',
-      fontSize: 7.2,
-      lineColor: [210, 215, 225],
-      lineWidth: 0.2,
-    },
-    alternateRowStyles: {
-      fillColor: [255, 255, 255],
-    },
-    columnStyles: {
-      0: { cellWidth: 26, fontStyle: 'bold' }, // Identifiant
-      1: { cellWidth: 22 }, // Série
-      2: { cellWidth: 24 }, // Modèle
-      3: { cellWidth: 28 }, // Client
-      4: { cellWidth: 24 }, // Nom du site
-      5: { cellWidth: 26 }, // Contrat
-      6: { cellWidth: 24 }, // Localisation
-      7: { cellWidth: 17, halign: 'center' }, // Garantie
-      8: { cellWidth: 17, halign: 'center' }, // Pro. visite
-      9: { cellWidth: 17, halign: 'center' }, // Péremp A
-      10: { cellWidth: 17, halign: 'center' }, // Péremp P
-      11: { cellWidth: 17, halign: 'center' }, // Péremp B
-      12: { cellWidth: 'auto' }, // Tournée
-    },
-    didDrawPage: (data) => {
-      // Footer page numbering
-      const str = `Page ${data.pageNumber} / ${(doc as any).internal.getNumberOfPages()}`;
-      doc.setFontSize(7);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(130, 130, 130);
-      doc.text(str, pageWidth - marginX - 18, pageHeight - 6);
-      if (companyInfo?.name) {
-        doc.text(companyInfo.name, marginX, pageHeight - 6);
-      }
-    },
-  });
+  // Footers on all pages
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(140, 140, 140);
+    doc.text(
+      `Page ${p} / ${totalPages}`,
+      pageWidth - marginX - 16,
+      pageHeight - 6
+    );
+    if (companyInfo?.name) {
+      doc.text(companyInfo.name, marginX, pageHeight - 6);
+    }
+  }
 
   // Filename with current date
   const cleanDate = new Date().toISOString().slice(0, 10);
