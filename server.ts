@@ -912,6 +912,12 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       const isADNum = /^d\d+$/i.test(a);
       const isANum = /^\d+$/.test(a);
       const aNum = isADNum || isANum ? a.replace(/^d/i, '') : '';
+
+      // Strict safety: Never cross-write to a different tenant environment (e.g. D27 writing to D58)
+      if (numOnly && aNum && numOnly !== aNum) {
+        continue;
+      }
+
       for (const c of colAliases) {
         targetKeys.push(`${a}_${c}`);
         if (aNum) {
@@ -958,6 +964,15 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       if (!collectionName || !tenantId) {
         return res.status(400).json({ error: "Paramètres collectionName et tenantId requis." });
       }
+
+      // Security check: Block attempts to wipe collections with empty arrays
+      if (Array.isArray(value) && value.length === 0) {
+        return res.status(403).json({ 
+          error: "Requête sensible bloquée : la synchronisation d'une collection vide est strictement interdite.",
+          code: "EMPTY_SYNC_FORBIDDEN" 
+        });
+      }
+
       const rawTenant = String(tenantId).trim();
       const collectionKey = rawTenant === 'demo' ? collectionName : `${rawTenant}_${collectionName}`;
       
@@ -1337,28 +1352,21 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
     }
 
-    // 2. Strict blocking of any deletion intent in query parameters, headers, or body
+    // 2. Strict blocking of any deletion, archive, hiding, or wiping intent in query parameters, headers, or body
     const query = (req.query || {}) as Record<string, any>;
-    const isDeleteInQuery = 
-      query.delete === 'true' || 
-      query.delete === '1' || 
-      query.action === 'delete' || 
-      query.action === 'supprimer' || 
-      query.action === 'destroy' || 
-      query.action === 'remove' || 
-      query.action === 'truncate' || 
-      query.action === 'clear' || 
-      query.action === 'purge' || 
-      query.action === 'drop' || 
-      query.action === 'wipe' || 
-      query.supprimer === 'true' || 
-      query.destroy === 'true' || 
-      query.remove === 'true' || 
-      query.truncate === 'true' || 
-      query.clear === 'true' || 
-      query.purge === 'true';
+    const sensitiveQueryKeywords = [
+      'delete', 'supprimer', 'destroy', 'remove', 'truncate', 'clear', 'purge', 'drop', 'wipe',
+      'archive', 'archiver', 'hide', 'masquer', 'disable', 'desactiver', 'bulk', 'bulk_delete',
+      'batch', 'delete_all', 'erase', 'detach', 'unlink'
+    ];
 
-    if (isDeleteInQuery) {
+    const isDeleteOrHideInQuery = sensitiveQueryKeywords.some(keyword => {
+      const qVal = String(query[keyword] || '').toLowerCase().trim();
+      const actionVal = String(query.action || '').toLowerCase().trim();
+      return qVal === 'true' || qVal === '1' || qVal === 'oui' || actionVal === keyword || actionVal.includes(keyword);
+    });
+
+    if (isDeleteOrHideInQuery) {
       return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
     }
 
@@ -1374,7 +1382,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
       }
 
-      // Direct array replacement attempt (e.g. sending [] to empty the dataset)
+      // Direct array replacement attempt (e.g. sending [] or list to bulk update/empty the dataset)
       if (Array.isArray(body)) {
         return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
       }
@@ -1385,20 +1393,24 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
         }
 
-        // Explicit delete indicators in body
+        // Explicit delete, hide, archive, or wipe actions in body
+        const actionStr = String(body.action || body.operation || body.command || '').toLowerCase().trim();
+        if (actionStr && sensitiveQueryKeywords.some(k => actionStr === k || actionStr.includes(k))) {
+          return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+        }
+
         if (
-          body.action === 'delete' || 
-          body.action === 'supprimer' || 
-          body.action === 'destroy' || 
-          body.action === 'remove' || 
-          body.action === 'clear' || 
-          body.action === 'purge' || 
           body.delete === true || 
           body.supprimer === true || 
           body.destroy === true || 
           body.remove === true || 
           body.clear === true || 
           body.purge === true || 
+          body.isDeleted === true ||
+          body.deleted === true ||
+          body.actif === false ||
+          body.active === false ||
+          body.enabled === false ||
           body._method === 'DELETE' || 
           body._method === 'PUT' || 
           body.method === 'DELETE' || 
@@ -1407,13 +1419,62 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
         }
 
-        // Empty collection replacement inside body
+        // Strict blocking of hiding/archiving payloads
+        const archiveVal = String(body.archive || '').trim().toLowerCase();
         if (
-          (Array.isArray(body.defibrillateurs) && body.defibrillateurs.length === 0) ||
-          (Array.isArray(body.clients) && body.clients.length === 0) ||
-          (Array.isArray(body.data) && body.data.length === 0) ||
-          (Array.isArray(body.items) && body.items.length === 0) ||
-          (Array.isArray(body.tickets) && body.tickets.length === 0)
+          archiveVal === 'oui' ||
+          archiveVal === 'true' ||
+          archiveVal === '1' ||
+          body.archive === true ||
+          body.archived === true ||
+          body.isArchived === true ||
+          body.hide === true ||
+          body.hidden === true ||
+          body.masque === true ||
+          body.masquer === true ||
+          body.invisible === true
+        ) {
+          return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+        }
+
+        // Blocking status downgrades to deleted/archived/inactive
+        const statusVal = String(body.statut || body.status || '').trim().toLowerCase();
+        if (statusVal && /archiv|supprim|inactif|delete|inactive|desactiv|hors service/i.test(statusVal)) {
+          return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+        }
+
+        // Blocking maintenance disabling
+        const fsmVal = String(body.fsmAutorise || '').trim().toLowerCase();
+        if (fsmVal === 'non' || body.fsmAutorise === false) {
+          return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+        }
+
+        // Blocking non-compliant status tampering
+        const conformeVal = String(body.conforme || '').trim().toLowerCase();
+        if (conformeVal === 'non' || body.conforme === false) {
+          return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+        }
+
+        // Blocking unlinking / nullifying of client connections
+        if ('clientId' in body && (body.clientId === '' || body.clientId === null || body.clientId === 'deleted' || body.clientId === 'none')) {
+          return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+        }
+        if ('client_id' in body && (body.client_id === '' || body.client_id === null || body.client_id === 'deleted' || body.client_id === 'none')) {
+          return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+        }
+        if ('client_nom' in body && (body.client_nom === '' || body.client_nom === null || body.client_nom === 'deleted')) {
+          return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+        }
+
+        // Batch / bulk submission arrays inside body
+        if (
+          (Array.isArray(body.defibrillateurs)) ||
+          (Array.isArray(body.clients)) ||
+          (Array.isArray(body.data)) ||
+          (Array.isArray(body.items)) ||
+          (Array.isArray(body.ids)) ||
+          (Array.isArray(body.defibs)) ||
+          (Array.isArray(body.tickets))
         ) {
           return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
         }
@@ -1656,7 +1717,10 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         });
       }
 
-      const tenantId = targetTenant.id;
+      const effectiveStorageTenant = (sanitizedTenantId && /^d\d+$/i.test(sanitizedTenantId)) 
+        ? sanitizedTenantId.toUpperCase() 
+        : (targetTenant.shortEnvId || targetTenant.id || 'demo');
+      const tenantId = effectiveStorageTenant;
       const tenantAliases = [targetTenant.shortEnvId, targetTenant.id, sanitizedTenantId, rawTenantId].filter(Boolean);
 
       // Perform comprehensive sensitivity and compliance security check
@@ -2031,7 +2095,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               });
             }
 
-            // Safe merge: lock sensitive identifiers, id_record, and tenant connection
+            // Safe merge: strictly lock sensitive identifiers, archive/visibility, client links, and status
             const updatedDefib = {
               ...existing,
               ...body,
@@ -2040,8 +2104,17 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               numeroSerie: existing.numeroSerie,
               num_serie: existing.num_serie || existing.numeroSerie,
               id_record: existing.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${existing.id}`,
-              envId: targetTenant.shortEnvId || tenantId,
-              tenantId: tenantId
+              envId: existing.envId || targetTenant.shortEnvId || tenantId,
+              tenantId: existing.tenantId || tenantId,
+              // Never allow hiding, archiving, or muting defibrillators via API
+              archive: existing.archive || 'Non',
+              fsmAutorise: existing.fsmAutorise || 'Oui',
+              conforme: existing.conforme || 'Oui',
+              statut: existing.statut || 'Opérationnel',
+              // Never allow unlinking or disconnecting defibrillators from their assigned clients
+              clientId: existing.clientId || existing.client_id || '',
+              client_id: existing.client_id || existing.clientId || '',
+              client_nom: existing.client_nom || existing.client || ''
             };
             defibs[existingIdx] = updatedDefib;
 
@@ -2065,8 +2138,10 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               num_serie: body.num_serie || body.numeroSerie || targetId,
               modele: body.modele || body.model || "DAE Standard",
               marque: body.marque || body.brand || "Standard",
-              statut: body.statut || body.status || "Opérationnel",
-              conforme: body.conforme || "Oui",
+              statut: "Opérationnel",
+              conforme: "Oui",
+              archive: "Non",
+              fsmAutorise: "Oui",
               id_record: body.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${targetId}`,
               envId: targetTenant.shortEnvId || tenantId,
               tenantId: tenantId
