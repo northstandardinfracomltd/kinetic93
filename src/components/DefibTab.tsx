@@ -2430,13 +2430,6 @@ export default function DefibTab({
                   {t('Plan')}
                 </button>
                 <button
-                  onClick={() => window.location.reload()}
-                  id="btn-refresh-page"
-                  style={customButtonStyle}
-                >
-                  {t('Actualiser')}
-                </button>
-                <button
                   onClick={openAddForm}
                   id="btn-add-defib"
                   style={{
@@ -2750,7 +2743,7 @@ export default function DefibTab({
               }}
               className="transition-all"
             >
-              {t("Indicatif Postal Croissant")}
+              {t("Indicatif postal croissant")}
             </button>
 
             <button
@@ -2772,7 +2765,7 @@ export default function DefibTab({
               }}
               className="transition-all"
             >
-              {t("Indicatif Postal Décroissant")}
+              {t("Indicatif postal décroissant")}
             </button>
           </div>
 
@@ -2793,23 +2786,22 @@ export default function DefibTab({
                 background: 'transparent',
                 border: 'none',
                 padding: '2px 4px',
-                color: isTableFitView ? '#fe4eba' : '#475569',
+                color: '#000000',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
-                textDecoration: 'underline',
-                textUnderlineOffset: '2px',
+                textDecoration: 'none',
                 transition: 'all 0.15s ease'
               }}
-              className="hover:text-black hover:opacity-80 transition-all select-none cursor-pointer"
+              className="hover:opacity-80 transition-all select-none cursor-pointer"
               title={isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
             >
               {isTableFitView ? (
-                <Maximize2 size={10} className="shrink-0" />
+                <Maximize2 size={10} className="shrink-0 text-black" color="#000000" />
               ) : (
-                <Minimize2 size={10} className="shrink-0" />
+                <Minimize2 size={10} className="shrink-0 text-black" color="#000000" />
               )}
-              <span>{isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
+              <span style={{ color: '#000000' }}>{isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
             </button>
           </div>
 

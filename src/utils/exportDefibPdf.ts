@@ -2,24 +2,76 @@ import { jsPDF } from 'jspdf';
 import { Defibrillateur, Client, Variable, CompanyInfo } from '../types';
 import { formatDateToFR, computeProchaineMaintenance } from '../utils';
 
-function loadImage(url: string): Promise<HTMLImageElement | null> {
-  return new Promise((resolve) => {
-    if (!url || !url.trim()) return resolve(null);
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = () => {
-      resolve(null);
-    };
-    img.src = url;
-  });
-}
-
 interface ColumnDef {
   header: string;
   width: number;
   align?: 'left' | 'center' | 'right';
   bold?: boolean;
+}
+
+const FONT_FAMILY = '"Civilprom", "DefibeoMain", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+async function loadTenantLogo(url?: string): Promise<HTMLImageElement | null> {
+  if (!url || !url.trim()) return null;
+  try {
+    const resp = await fetch(url, { mode: 'cors' });
+    if (resp.ok) {
+      const blob = await resp.blob();
+      const objUrl = URL.createObjectURL(blob);
+      return await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = objUrl;
+      });
+    }
+  } catch {
+    // Fallback to standard crossOrigin image
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let truncated = text;
+  while (truncated.length > 1 && ctx.measureText(truncated + '…').width > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated + '…';
+}
+
+function drawCellText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  align: 'left' | 'center' | 'right' = 'left',
+  paddingX = 14
+) {
+  const maxW = Math.max(10, width - paddingX * 2);
+  const renderedText = truncateText(ctx, text, maxW);
+  const textY = y + height / 2;
+
+  ctx.textBaseline = 'middle';
+  if (align === 'center') {
+    ctx.textAlign = 'center';
+    ctx.fillText(renderedText, x + width / 2, textY);
+  } else if (align === 'right') {
+    ctx.textAlign = 'right';
+    ctx.fillText(renderedText, x + width - paddingX, textY);
+  } else {
+    ctx.textAlign = 'left';
+    ctx.fillText(renderedText, x + paddingX, textY);
+  }
 }
 
 export async function exportSelectedDefibsToPDF({
@@ -37,128 +89,57 @@ export async function exportSelectedDefibsToPDF({
 }) {
   if (!selectedDefibs || selectedDefibs.length === 0) return;
 
-  const clientMap = new Map(clients.map(c => [c.id, c]));
-  const variableMap = new Map(variables.map(v => [v.id, v]));
-
-  // Create A4 Landscape PDF
-  const doc = new jsPDF({
-    orientation: 'landscape',
-    unit: 'mm',
-    format: 'a4',
-  });
-
-  const pageWidth = doc.internal.pageSize.getWidth(); // ~297 mm
-  const pageHeight = doc.internal.pageSize.getHeight(); // ~210 mm
-  const marginX = 10;
-  const marginBottom = 14;
-
-  // Header: Tenant Logo on top-left
-  let logoOffsetLeft = marginX;
-  if (companyInfo?.logo) {
+  // Ensure document fonts are loaded so Civilprom / DefibeoMain is applied to the Canvas
+  if (typeof document !== 'undefined' && document.fonts) {
     try {
-      const img = await loadImage(companyInfo.logo);
-      if (img && img.width > 0 && img.height > 0) {
-        const maxW = 38;
-        const maxH = 14;
-        let renderW = (img.width / img.height) * maxH;
-        let renderH = maxH;
-        if (renderW > maxW) {
-          renderW = maxW;
-          renderH = (img.height / img.width) * maxW;
-        }
-        doc.addImage(img, 'PNG', marginX, 8, renderW, renderH);
-        logoOffsetLeft = marginX + renderW + 8;
-      }
+      await document.fonts.ready;
     } catch {
-      // Fallback cleanly
+      // Continue if fonts.ready fails
     }
   }
 
-  // Header Title and Info
-  const companyName = companyInfo?.name || 'Gestionnaire de Défibrillateurs';
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(0, 0, 0);
-  doc.text(companyName, logoOffsetLeft, 13);
+  const clientMap = new Map(clients.map(c => [c.id, c]));
+  const variableMap = new Map(variables.map(v => [v.id, v]));
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(80, 80, 80);
-  const nowStr = new Date().toLocaleDateString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-  doc.text(
-    `Export des défibrillateurs sélectionnés — ${selectedDefibs.length} équipement(s) — Édité le ${nowStr}`,
-    logoOffsetLeft,
-    19
-  );
+  // Canvas dimensions for A4 Landscape (10px per mm => 2970 x 2100 px, ~254 DPI)
+  const canvasW = 2970;
+  const canvasH = 2100;
+  const marginX = 100; // 10 mm
+  const marginBottom = 130; // 13 mm
+  const tableW = canvasW - marginX * 2; // 2770 px
 
-  // Divider line under header
-  doc.setDrawColor(218, 218, 218);
-  doc.setLineWidth(0.3);
-  doc.line(marginX, 25, pageWidth - marginX, 25);
+  // Formatted date dd/mm/yyyy
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy = now.getFullYear();
+  const dateFormatted = `${dd}/${mm}/${yyyy}`;
+  const subtitleText = `Export Matériel(s) Le ${dateFormatted}`;
 
-  // Column definitions (total width: 277 mm, perfectly fits 297mm page with 10mm margins)
+  // Columns definition (total 2770 px)
   const columns: ColumnDef[] = [
-    { header: 'Identifiant', width: 25, bold: true },
-    { header: 'N° Série', width: 22 },
-    { header: 'Modèle', width: 25 },
-    { header: 'Client', width: 28 },
-    { header: 'Nom du site', width: 24 },
-    { header: 'Contrat', width: 26 },
-    { header: 'Localisation', width: 24 },
-    { header: 'Garantie', width: 17, align: 'center' },
-    { header: 'Pro. visite', width: 17, align: 'center' },
-    { header: 'Péremp. A', width: 16, align: 'center' },
-    { header: 'Péremp. P', width: 16, align: 'center' },
-    { header: 'Péremp. B', width: 16, align: 'center' },
-    { header: 'Tournée', width: 21 },
+    { header: 'Identifiant', width: 250, bold: true },
+    { header: 'N° Série', width: 220 },
+    { header: 'Modèle', width: 250 },
+    { header: 'Client', width: 280 },
+    { header: 'Nom du site', width: 240 },
+    { header: 'Contrat', width: 260 },
+    { header: 'Localisation', width: 240 },
+    { header: 'Garantie', width: 170, align: 'center' },
+    { header: 'Pro. visite', width: 170, align: 'center' },
+    { header: 'Péremp. A', width: 160, align: 'center' },
+    { header: 'Péremp. P', width: 160, align: 'center' },
+    { header: 'Péremp. B', width: 160, align: 'center' },
+    { header: 'Tournée', width: 210 },
   ];
 
-  const headerHeight = 7;
-  const rowHeight = 6.2;
-  let currentY = 28;
+  // Identical font-size for both table headers and values
+  const TABLE_FONT_SIZE = 22;
+  const HEADER_HEIGHT = 65;
+  const ROW_HEIGHT = 58;
 
-  const drawTableHeader = (y: number) => {
-    let x = marginX;
-    doc.setFillColor(245, 247, 250);
-    doc.setDrawColor(210, 215, 225);
-    doc.setLineWidth(0.2);
-
-    columns.forEach((col) => {
-      doc.rect(x, y, col.width, headerHeight, 'FD');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      doc.setTextColor(20, 20, 20);
-
-      const textY = y + 4.6;
-      if (col.align === 'center') {
-        doc.text(col.header, x + col.width / 2, textY, { align: 'center' });
-      } else if (col.align === 'right') {
-        doc.text(col.header, x + col.width - 2, textY, { align: 'right' });
-      } else {
-        doc.text(col.header, x + 2, textY);
-      }
-      x += col.width;
-    });
-  };
-
-  // Draw initial header
-  drawTableHeader(currentY);
-  currentY += headerHeight;
-
-  // Prepare table data rows
-  selectedDefibs.forEach((df, index) => {
-    // Check if new page is needed
-    if (currentY + rowHeight > pageHeight - marginBottom) {
-      doc.addPage();
-      currentY = 12;
-      drawTableHeader(currentY);
-      currentY += headerHeight;
-    }
-
+  // Build rows data
+  const rowsData: string[][] = selectedDefibs.map((df) => {
     const linkedClient = clientMap.get(df.clientId);
     const linkedModel = variableMap.get(df.modeleId);
 
@@ -203,7 +184,7 @@ export async function exportSelectedDefibsToPDF({
       }
     }
 
-    const rowValues = [
+    return [
       df.identifiant || '-',
       df.numeroSerie || '-',
       linkedModel?.nom || df.modeleId || '-',
@@ -218,70 +199,166 @@ export async function exportSelectedDefibsToPDF({
       perempB,
       tourneeStr,
     ];
-
-    // Background color (alternating rows)
-    const isEven = index % 2 === 0;
-    if (isEven) {
-      doc.setFillColor(255, 255, 255);
-    } else {
-      doc.setFillColor(250, 251, 253);
-    }
-
-    doc.setDrawColor(228, 231, 236);
-    doc.setLineWidth(0.15);
-
-    let cellX = marginX;
-    columns.forEach((col, cIdx) => {
-      doc.rect(cellX, currentY, col.width, rowHeight, 'FD');
-
-      let val = String(rowValues[cIdx] || '');
-      doc.setFont('helvetica', col.bold ? 'bold' : 'normal');
-      doc.setFontSize(6.5);
-      doc.setTextColor(35, 45, 60);
-
-      const maxTextWidth = col.width - 3;
-      // Truncate text with ellipsis if it exceeds column width
-      if (doc.getTextWidth(val) > maxTextWidth) {
-        while (val.length > 3 && doc.getTextWidth(val + '…') > maxTextWidth) {
-          val = val.slice(0, -1);
-        }
-        val += '…';
-      }
-
-      const textY = currentY + 4.2;
-      if (col.align === 'center') {
-        doc.text(val, cellX + col.width / 2, textY, { align: 'center' });
-      } else if (col.align === 'right') {
-        doc.text(val, cellX + col.width - 1.5, textY, { align: 'right' });
-      } else {
-        doc.text(val, cellX + 1.5, textY);
-      }
-
-      cellX += col.width;
-    });
-
-    currentY += rowHeight;
   });
 
-  // Footers on all pages
-  const totalPages = doc.getNumberOfPages();
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(140, 140, 140);
-    doc.text(
-      `Page ${p} / ${totalPages}`,
-      pageWidth - marginX - 16,
-      pageHeight - 6
-    );
-    if (companyInfo?.name) {
-      doc.text(companyInfo.name, marginX, pageHeight - 6);
-    }
+  // Calculate pages
+  const page1StartY = 205; // Table starts directly after header title + subtitle (NO line divider)
+  const page1AvailableH = canvasH - marginBottom - page1StartY;
+  const page1MaxRows = Math.floor((page1AvailableH - HEADER_HEIGHT) / ROW_HEIGHT);
+
+  const subsequentStartY = 95;
+  const subsequentAvailableH = canvasH - marginBottom - subsequentStartY;
+  const subsequentMaxRows = Math.floor((subsequentAvailableH - HEADER_HEIGHT) / ROW_HEIGHT);
+
+  const pageRowChunks: { startIdx: number; rows: string[][]; isFirstPage: boolean }[] = [];
+  let remainingRows = [...rowsData];
+  let currentStartIdx = 0;
+
+  // First page chunk
+  const p1Rows = remainingRows.splice(0, page1MaxRows);
+  pageRowChunks.push({ startIdx: currentStartIdx, rows: p1Rows, isFirstPage: true });
+  currentStartIdx += p1Rows.length;
+
+  // Subsequent pages chunks
+  while (remainingRows.length > 0) {
+    const chunk = remainingRows.splice(0, subsequentMaxRows);
+    pageRowChunks.push({ startIdx: currentStartIdx, rows: chunk, isFirstPage: false });
+    currentStartIdx += chunk.length;
   }
 
-  // Filename with current date
+  const totalPages = pageRowChunks.length;
+
+  // Pre-load logo if available
+  let logoImg: HTMLImageElement | null = null;
+  if (companyInfo?.logo) {
+    logoImg = await loadTenantLogo(companyInfo.logo);
+  }
+
+  // Create jsPDF instance
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  // Render each page to an HTML Canvas
+  for (let pageIdx = 0; pageIdx < pageRowChunks.length; pageIdx++) {
+    const chunk = pageRowChunks[pageIdx];
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) continue;
+
+    const renderPage = (includeLogo: boolean) => {
+      // White page background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvasW, canvasH);
+
+      let tableStartY = subsequentStartY;
+
+      if (chunk.isFirstPage) {
+        // Page 1 Header: Tenant Logo and Titles
+        let textLeft = marginX;
+        if (includeLogo && logoImg && logoImg.width > 0 && logoImg.height > 0) {
+          const maxLogoW = 380;
+          const maxLogoH = 130;
+          let renderW = (logoImg.width / logoImg.height) * maxLogoH;
+          let renderH = maxLogoH;
+          if (renderW > maxLogoW) {
+            renderW = maxLogoW;
+            renderH = (logoImg.height / logoImg.width) * maxLogoW;
+          }
+          ctx.drawImage(logoImg, marginX, 60, renderW, renderH);
+          textLeft = marginX + renderW + 50;
+        }
+
+        // Company Name Title
+        const companyName = companyInfo?.name || 'Gestionnaire de Défibrillateurs';
+        ctx.font = `bold 32px ${FONT_FAMILY}`;
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(companyName, textLeft, 95);
+
+        // Subtitle: Export Matériel(s) Le dd/mm/yyyy
+        ctx.font = `normal 22px ${FONT_FAMILY}`;
+        ctx.fillStyle = '#475569';
+        ctx.fillText(subtitleText, textLeft, 140);
+
+        // NOTE: Line divider above table is intentionally removed per user feedback!
+        tableStartY = page1StartY;
+      }
+
+      // Draw Table Header
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(marginX, tableStartY, tableW, HEADER_HEIGHT);
+
+      let headerX = marginX;
+      for (const col of columns) {
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(headerX, tableStartY, col.width, HEADER_HEIGHT);
+
+        ctx.font = `bold ${TABLE_FONT_SIZE}px ${FONT_FAMILY}`;
+        ctx.fillStyle = '#0f172a';
+        drawCellText(ctx, col.header, headerX, tableStartY, col.width, HEADER_HEIGHT, col.align || 'left');
+        headerX += col.width;
+      }
+
+      // Draw Table Rows
+      for (let rIdx = 0; rIdx < chunk.rows.length; rIdx++) {
+        const row = chunk.rows[rIdx];
+        const rowY = tableStartY + HEADER_HEIGHT + rIdx * ROW_HEIGHT;
+        const isEven = (chunk.startIdx + rIdx) % 2 === 0;
+
+        // Background: alternating white and clean light slate (no dark backgrounds!)
+        ctx.fillStyle = isEven ? '#ffffff' : '#f8fafc';
+        ctx.fillRect(marginX, rowY, tableW, ROW_HEIGHT);
+
+        let cellX = marginX;
+        for (let cIdx = 0; cIdx < columns.length; cIdx++) {
+          const col = columns[cIdx];
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(cellX, rowY, col.width, ROW_HEIGHT);
+
+          ctx.font = `${col.bold ? 'bold ' : 'normal '}${TABLE_FONT_SIZE}px ${FONT_FAMILY}`;
+          ctx.fillStyle = '#0f172a';
+          const cellVal = String(row[cIdx] ?? '-');
+          drawCellText(ctx, cellVal, cellX, rowY, col.width, ROW_HEIGHT, col.align || 'left');
+
+          cellX += col.width;
+        }
+      }
+
+      // Footer: Tenant commercial name REMOVED per user feedback; pagination in color #000
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = '#000000';
+      ctx.font = `normal 22px ${FONT_FAMILY}`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`Page ${pageIdx + 1} / ${totalPages}`, canvasW - marginX, canvasH - 50);
+    };
+
+    renderPage(true);
+
+    let imgData: string;
+    try {
+      imgData = canvas.toDataURL('image/jpeg', 0.95);
+    } catch {
+      // In case canvas was tainted by cross-origin logo, re-render without external logo
+      renderPage(false);
+      imgData = canvas.toDataURL('image/jpeg', 0.95);
+    }
+
+    if (pageIdx > 0) {
+      doc.addPage('a4', 'landscape');
+    }
+    doc.addImage(imgData, 'JPEG', 0, 0, 297, 210);
+  }
+
+  // Save the generated PDF
   const cleanDate = new Date().toISOString().slice(0, 10);
-  const fileName = `defibrillateurs_selection_${cleanDate}.pdf`;
+  const fileName = `export_materiels_${cleanDate}.pdf`;
   doc.save(fileName);
 }
