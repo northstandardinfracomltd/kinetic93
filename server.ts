@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import zlib from "zlib";
 import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
@@ -21,6 +22,7 @@ const DATA_DIR = path.join(process.cwd(), '.data');
 const STORE_FILE = path.join(DATA_DIR, 'server-store.json');
 
 const serverMemoryStore = new Map<string, any>();
+const serverStoreTimestamps = new Map<string, number>();
 
 // Initialize disk store
 try {
@@ -33,6 +35,7 @@ try {
     for (const [k, v] of Object.entries(parsed)) {
       if (Array.isArray(v)) {
         serverMemoryStore.set(k, v);
+        serverStoreTimestamps.set(k, Date.now());
       }
     }
   }
@@ -40,18 +43,59 @@ try {
   console.warn("Failed to load server disk store:", e);
 }
 
+let persistTimeout: NodeJS.Timeout | null = null;
 function persistServerStoreToDisk() {
+  if (persistTimeout) return;
+  persistTimeout = setTimeout(() => {
+    persistTimeout = null;
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      const obj: Record<string, any[]> = {};
+      for (const [k, v] of serverMemoryStore.entries()) {
+        // Skip redundant lowercase or raw numeric aliases to keep disk footprint minimal and avoid string length limits
+        if (/^[0-9]+_/.test(k) || /^d[0-9]+_/.test(k)) continue;
+        obj[k] = v;
+      }
+      fs.writeFile(STORE_FILE, JSON.stringify(obj), 'utf-8', (err) => {
+        if (err) console.warn("Failed to persist server disk store:", err);
+      });
+    } catch (e) {
+      console.warn("Failed to persist server disk store:", e);
+    }
+  }, 1500);
+}
+
+// Optimized JSON responder with transparent gzip support using native Node.js zlib
+function sendOptimizedJson(req: express.Request, res: express.Response, data: any, statusCode: number = 200) {
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
+    const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
+    const acceptEncoding = String(req.headers['accept-encoding'] || '');
+    
+    if (acceptEncoding.includes('gzip') && jsonStr.length > 1024) {
+      zlib.gzip(Buffer.from(jsonStr, 'utf-8'), (err, compressed) => {
+        if (err) {
+          res.status(statusCode);
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          return res.send(jsonStr);
+        }
+        res.status(statusCode);
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Encoding', 'gzip');
+        res.setHeader('Vary', 'Accept-Encoding');
+        res.send(compressed);
+      });
+    } else {
+      res.status(statusCode);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.send(jsonStr);
     }
-    const obj: Record<string, any[]> = {};
-    for (const [k, v] of serverMemoryStore.entries()) {
-      obj[k] = v;
+  } catch (err: any) {
+    console.error("sendOptimizedJson error:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ status: "error", error: "Erreur lors de la sérialisation des données: " + (err.message || String(err)) });
     }
-    fs.writeFileSync(STORE_FILE, JSON.stringify(obj, null, 2), 'utf-8');
-  } catch (e) {
-    console.warn("Failed to persist server disk store:", e);
   }
 }
 
@@ -495,171 +539,150 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     });
   };
 
-  const colAliases = getCollectionNameAliases(colName);
-  const rawKeys: string[] = [];
   const activeTenant = (tenantId || 'demo').trim();
+  const canonicalKey = activeTenant === 'demo' ? colName : `${activeTenant}_${colName}`;
   const isDNum = /^d\d+$/i.test(activeTenant);
   const isNum = /^\d+$/.test(activeTenant);
   const numOnly = isDNum || isNum ? activeTenant.replace(/^d/i, '') : '';
-  
-  if (activeTenant === 'demo') {
-    for (const c of colAliases) {
-      rawKeys.push(c, `demo_${c}`);
-    }
-  } else {
-    for (const c of colAliases) {
-      rawKeys.push(`${activeTenant}_${c}`);
-      if (numOnly) {
-        rawKeys.push(`D${numOnly}_${c}`);
-        rawKeys.push(`d${numOnly}_${c}`);
-        rawKeys.push(`${numOnly}_${c}`);
-      }
+
+  // 1. FAST PATH: Check in-memory store first (TTL: 45 seconds)
+  const lastCached = serverStoreTimestamps.get(canonicalKey) || 0;
+  if (Date.now() - lastCached < 45000 && serverMemoryStore.has(canonicalKey)) {
+    const memVal = serverMemoryStore.get(canonicalKey);
+    if (memVal !== undefined && memVal !== null) {
+      return sanitizeForTenant(memVal);
     }
   }
 
+  // 2. Helper to load a single candidate key from Firestore safely
+  async function loadKeyFromFirestore(key: string): Promise<{ type: string; items?: any[]; data?: any } | null> {
+    try {
+      const docRef = doc(db, 'appData', key);
+      const snap = await withTimeout(getDoc(docRef), 6000, null);
+      if (!snap || !snap.exists()) return null;
+      const payload = snap.data();
+      if (!payload) return null;
+
+      // Handle chunked storage for large datasets (e.g. defibrillateurs)
+      if (payload._chunked && typeof payload.chunksCount === 'number' && payload.chunksCount > 0) {
+        const count = Math.min(payload.chunksCount, 50);
+        const chunkPromises: Promise<any>[] = [];
+        for (let i = 0; i < count; i++) {
+          const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
+          chunkPromises.push(withTimeout(getDoc(chunkRef), 7000, null));
+        }
+        const chunkSnaps = await Promise.all(chunkPromises);
+        const combined: any[] = [];
+        for (const cSnap of chunkSnaps) {
+          if (cSnap && cSnap.exists()) {
+            const cData = cSnap.data();
+            if (Array.isArray(cData?.value)) {
+              combined.push(...cData.value);
+            }
+          }
+        }
+        return { type: 'array', items: combined };
+      }
+
+      if (Array.isArray(payload.value)) {
+        return { type: 'array', items: payload.value };
+      } else if (payload.value !== undefined && payload.value !== null && typeof payload.value === 'object') {
+        return { type: 'object', data: payload.value };
+      } else if (payload.value !== undefined && payload.value !== null) {
+        return { type: 'primitive', data: payload.value };
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // 3. Build prioritized candidate key tiers
+  // Tier 1: Canonical primary keys (exact tenant + standard collection name)
+  const tier1Keys: string[] = [];
+  if (activeTenant === 'demo') {
+    tier1Keys.push(colName, `demo_${colName}`);
+  } else {
+    tier1Keys.push(`${activeTenant}_${colName}`);
+    if (numOnly) {
+      tier1Keys.push(`D${numOnly}_${colName}`, `d${numOnly}_${colName}`, `${numOnly}_${colName}`);
+    }
+  }
+
+  // Tier 2: Extra aliases explicitly passed
+  const tier2Keys: string[] = [];
   for (const alias of extraAliases) {
     if (alias && typeof alias === 'string' && alias.trim() && alias !== activeTenant) {
       const a = alias.trim();
+      tier2Keys.push(`${a}_${colName}`);
       const isADNum = /^d\d+$/i.test(a);
       const isANum = /^\d+$/.test(a);
       const aNum = isADNum || isANum ? a.replace(/^d/i, '') : '';
-      for (const c of colAliases) {
-        rawKeys.push(`${a}_${c}`);
-        if (aNum) {
-          rawKeys.push(`D${aNum}_${c}`);
-          rawKeys.push(`d${aNum}_${c}`);
-          rawKeys.push(`${aNum}_${c}`);
+      if (aNum) {
+        tier2Keys.push(`D${aNum}_${colName}`, `d${aNum}_${colName}`, `${aNum}_${colName}`);
+      }
+    }
+  }
+
+  // Tier 3: Alternative collection name aliases (e.g. defibs, devices)
+  const tier3Keys: string[] = [];
+  const colAliases = getCollectionNameAliases(colName).filter(c => c !== colName);
+  for (const c of colAliases) {
+    if (activeTenant === 'demo') {
+      tier3Keys.push(c, `demo_${c}`);
+    } else {
+      tier3Keys.push(`${activeTenant}_${c}`);
+      if (numOnly) {
+        tier3Keys.push(`D${numOnly}_${c}`, `${numOnly}_${c}`);
+      }
+    }
+  }
+
+  const allKeyTiers = [tier1Keys, tier2Keys, tier3Keys];
+  const allCandidateKeys = Array.from(new Set([...tier1Keys, ...tier2Keys, ...tier3Keys, colName].filter(Boolean)));
+
+  // 4. Query Firestore: check Tier 1 first. If data is found, STOP immediately!
+  for (const tier of allKeyTiers) {
+    const keysToTry = Array.from(new Set(tier.filter(Boolean)));
+    if (keysToTry.length === 0) continue;
+
+    const results = await Promise.allSettled(keysToTry.map(k => loadKeyFromFirestore(k)));
+    for (const res of results) {
+      if (res.status === 'fulfilled' && res.value) {
+        const val = res.value;
+        if (val.type === 'array' && Array.isArray(val.items) && val.items.length > 0) {
+          const merged = mergeServerCollectionItems(colName, val.items);
+          const sanitized = sanitizeForTenant(merged);
+          
+          // Cache in memory with timestamp
+          serverMemoryStore.set(canonicalKey, sanitized);
+          serverStoreTimestamps.set(canonicalKey, Date.now());
+          for (const k of allCandidateKeys) {
+            serverMemoryStore.set(k, sanitized);
+            serverStoreTimestamps.set(k, Date.now());
+          }
+          // Note: NO disk write on reads to preserve CPU & avoid blocking event loop
+          return sanitized;
+        } else if (val.type === 'object' && val.data) {
+          serverMemoryStore.set(canonicalKey, val.data);
+          serverStoreTimestamps.set(canonicalKey, Date.now());
+          return val.data;
+        } else if (val.type === 'primitive') {
+          return val.data;
         }
       }
     }
   }
 
-  // Deduplicate keys
-  const collectionKeys = Array.from(new Set(rawKeys.filter(Boolean)));
-
-  // 1. Query Firestore aggregating ALL candidate keys concurrently
-  const aggregatedItems: any[] = [];
-  let mergedObject: Record<string, any> | null = null;
-  let primitiveResult: any = null;
-  let foundAnyValidKey = false;
-
-  const fetchPromises = collectionKeys.map(async (collectionKey) => {
-    try {
-      const docRef = doc(db, 'appData', collectionKey);
-      const snap = await withTimeout(getDoc(docRef), 10000, null);
-      if (snap && snap.exists()) {
-        const payload = snap.data();
-        let isChunked = payload._chunked && typeof payload.chunksCount === 'number';
-        let chunksCount = payload.chunksCount || 0;
-
-        if (!isChunked) {
-          try {
-            const c0Ref = doc(db, 'appData', `${collectionKey}_chunk_0`);
-            const c0Snap = await withTimeout(getDoc(c0Ref), 3000, null);
-            if (c0Snap && c0Snap.exists()) {
-              isChunked = true;
-              chunksCount = 30;
-            }
-          } catch (_) {}
-        }
-
-        if (isChunked) {
-          const chunkPromises = [];
-          for (let i = 0; i < (chunksCount || 30); i++) {
-            const chunkRef = doc(db, 'appData', `${collectionKey}_chunk_${i}`);
-            chunkPromises.push(withTimeout(getDoc(chunkRef), 10000, null));
-          }
-          const chunkSnaps = await Promise.all(chunkPromises);
-          let combined: any[] = [];
-          for (const cSnap of chunkSnaps) {
-            if (cSnap && cSnap.exists()) {
-              const cData = cSnap.data();
-              if (Array.isArray(cData.value)) {
-                combined.push(...cData.value);
-              }
-            }
-          }
-          return { type: 'array', items: combined, key: collectionKey };
-        } else if (payload.value !== undefined && payload.value !== null) {
-          if (Array.isArray(payload.value)) {
-            return { type: 'array', items: payload.value, key: collectionKey };
-          } else if (typeof payload.value === 'object') {
-            return { type: 'object', data: payload.value, key: collectionKey };
-          } else {
-            return { type: 'primitive', data: payload.value, key: collectionKey };
-          }
-        }
-      }
-    } catch (err) {
-      // Graceful fallback
-    }
-    return null;
-  });
-
-  const results = await Promise.allSettled(fetchPromises);
-  for (const res of results) {
-    if (res.status === 'fulfilled' && res.value) {
-      foundAnyValidKey = true;
-      const val = res.value;
-      if (val.type === 'array' && Array.isArray(val.items)) {
-        aggregatedItems.push(...val.items);
-      } else if (val.type === 'object' && val.data) {
-        mergedObject = mergedObject ? { ...val.data, ...mergedObject } : { ...val.data };
-      } else if (val.type === 'primitive' && primitiveResult === null) {
-        primitiveResult = val.data;
-      }
-    }
-  }
-
-  if (aggregatedItems.length > 0) {
-    const merged = mergeServerCollectionItems(colName, aggregatedItems);
-    const sanitized = sanitizeForTenant(merged);
-    for (const ck of collectionKeys) {
-      serverMemoryStore.set(ck, sanitized);
-    }
-    persistServerStoreToDisk();
-    return sanitized;
-  } else if (mergedObject) {
-    for (const ck of collectionKeys) {
-      serverMemoryStore.set(ck, mergedObject);
-    }
-    persistServerStoreToDisk();
-    return mergedObject as any;
-  } else if (primitiveResult !== null) {
-    for (const ck of collectionKeys) {
-      serverMemoryStore.set(ck, primitiveResult);
-    }
-    return primitiveResult;
-  } else if (foundAnyValidKey) {
-    const emptyArr: any[] = [];
-    for (const ck of collectionKeys) {
-      serverMemoryStore.set(ck, emptyArr);
-    }
-    return emptyArr;
-  }
-
-  // 2. Fallback to in-memory store (aggregate arrays)
-  const memAggregated: any[] = [];
-  let memObj: any = null;
-  for (const collectionKey of collectionKeys) {
-    if (serverMemoryStore.has(collectionKey)) {
-      const val = serverMemoryStore.get(collectionKey);
+  // 5. Fallback: check in-memory store for any candidate key
+  for (const k of allCandidateKeys) {
+    if (serverMemoryStore.has(k)) {
+      const val = serverMemoryStore.get(k);
       if (val !== undefined && val !== null) {
         if (Array.isArray(val)) {
-          memAggregated.push(...val);
-        } else if (typeof val === 'object' && !memObj) {
-          memObj = val;
+          return sanitizeForTenant(val);
         }
+        return val;
       }
     }
-  }
-
-  if (memAggregated.length > 0) {
-    const merged = mergeServerCollectionItems(colName, memAggregated);
-    return sanitizeForTenant(merged);
-  }
-  if (memObj) {
-    return memObj;
   }
 
   return [];
@@ -705,6 +728,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
   const uniqueKeys = Array.from(new Set(targetKeys.filter(Boolean)));
   for (const k of uniqueKeys) {
     serverMemoryStore.set(k, items);
+    serverStoreTimestamps.set(k, Date.now());
   }
   persistServerStoreToDisk();
 
@@ -743,12 +767,16 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       
       if (value !== undefined && value !== null) {
         serverMemoryStore.set(collectionKey, value);
+        serverStoreTimestamps.set(collectionKey, Date.now());
         // Also map normalized key if D-prefixed
         if (/^d\d+$/i.test(rawTenant)) {
           const numOnly = rawTenant.replace(/^d/i, '');
           serverMemoryStore.set(`D${numOnly}_${collectionName}`, value);
+          serverStoreTimestamps.set(`D${numOnly}_${collectionName}`, Date.now());
           serverMemoryStore.set(`d${numOnly}_${collectionName}`, value);
+          serverStoreTimestamps.set(`d${numOnly}_${collectionName}`, Date.now());
           serverMemoryStore.set(`${numOnly}_${collectionName}`, value);
+          serverStoreTimestamps.set(`${numOnly}_${collectionName}`, Date.now());
         }
         persistServerStoreToDisk();
       }
@@ -1336,18 +1364,50 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         if (subId) {
           const found = clients.find((c: any) => c.id === subId || c.identifiantUnique === subId || c.nom === subId || c.reference === subId);
           if (found) {
-            return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, client: found, data: found });
+            return sendOptimizedJson(req, res, { status: "success", environnement: targetTenant.shortEnvId || tenantId, client: found, data: found });
           }
           return res.status(404).json({ status: "error", error: `Client '${subId}' non trouvé dans l'environnement ${targetTenant.shortEnvId || tenantId}` });
         }
 
-        return res.json({
+        const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+        const limitParam = req.query.limit || req.query.per_page || req.query.max || req.query.count;
+        const isPaginated = !!(limitParam || req.query.page);
+        const limit = limitParam === 'all' 
+          ? clients.length 
+          : Math.max(1, parseInt(limitParam as string, 10) || (isPaginated ? 100 : clients.length));
+
+        let filteredClients = clients;
+        const q = (req.query.search as string || req.query.q as string || '').trim().toLowerCase();
+        if (q) {
+          filteredClients = filteredClients.filter((c: any) => 
+            (c.denomination && String(c.denomination).toLowerCase().includes(q)) ||
+            (c.nom && String(c.nom).toLowerCase().includes(q)) ||
+            (c.clientCode && String(c.clientCode).toLowerCase().includes(q)) ||
+            (c.email && String(c.email).toLowerCase().includes(q)) ||
+            (c.ville && String(c.ville).toLowerCase().includes(q))
+          );
+        }
+
+        const total = filteredClients.length;
+        const totalPages = Math.max(1, Math.ceil(total / limit));
+        const startIndex = isPaginated ? (page - 1) * limit : 0;
+        const returnedClients = isPaginated ? filteredClients.slice(startIndex, startIndex + limit) : filteredClients;
+
+        res.setHeader('X-Total-Count', String(total));
+        res.setHeader('X-Page', String(page));
+        res.setHeader('X-Per-Page', String(limit));
+        res.setHeader('X-Total-Pages', String(totalPages));
+
+        return sendOptimizedJson(req, res, {
           status: "success",
           environnement: targetTenant.shortEnvId || tenantId,
-          count: clients.length,
-          total: clients.length,
-          clients,
-          data: clients
+          total,
+          count: returnedClients.length,
+          page: isPaginated ? page : 1,
+          limit: isPaginated ? limit : total,
+          total_pages: isPaginated ? totalPages : 1,
+          clients: returnedClients,
+          data: returnedClients
         });
       }
 
@@ -1444,7 +1504,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           }
 
           if (found) {
-            return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, defibrillateur: found, data: found });
+            return sendOptimizedJson(req, res, { status: "success", environnement: targetTenant.shortEnvId || tenantId, defibrillateur: found, data: found });
           }
           return res.status(404).json({ 
             status: "error", 
@@ -1453,13 +1513,67 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           });
         }
 
-        return res.json({
+        const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+        const limitParam = req.query.limit || req.query.per_page || req.query.max || req.query.count;
+        const isPaginated = !!(limitParam || req.query.page);
+        const limit = limitParam === 'all' 
+          ? defibs.length 
+          : Math.max(1, parseInt(limitParam as string, 10) || (isPaginated ? 100 : defibs.length));
+
+        let filteredDefibs = defibs;
+        const q = (req.query.search as string || req.query.q as string || '').trim().toLowerCase();
+        if (q) {
+          filteredDefibs = filteredDefibs.filter((d: any) => 
+            (d.numeroSerie && String(d.numeroSerie).toLowerCase().includes(q)) ||
+            (d.num_serie && String(d.num_serie).toLowerCase().includes(q)) ||
+            (d.identifiant && String(d.identifiant).toLowerCase().includes(q)) ||
+            (d.defibIdentifiant && String(d.defibIdentifiant).toLowerCase().includes(q)) ||
+            (d.id && String(d.id).toLowerCase().includes(q)) ||
+            (d.modele && String(d.modele).toLowerCase().includes(q)) ||
+            (d.marque && String(d.marque).toLowerCase().includes(q)) ||
+            (d.client_nom && String(d.client_nom).toLowerCase().includes(q)) ||
+            (d.siteMission && String(d.siteMission).toLowerCase().includes(q)) ||
+            (d.ville && String(d.ville).toLowerCase().includes(q))
+          );
+        }
+
+        const clientFilter = (req.query.client_id as string || req.query.clientId as string || req.query.client as string || '').trim().toLowerCase();
+        if (clientFilter) {
+          filteredDefibs = filteredDefibs.filter((d: any) => 
+            (d.client_id && String(d.client_id).toLowerCase() === clientFilter) ||
+            (d.clientId && String(d.clientId).toLowerCase() === clientFilter) ||
+            (d.client_nom && String(d.client_nom).toLowerCase().includes(clientFilter))
+          );
+        }
+
+        const statutFilter = (req.query.statut as string || req.query.status as string || '').trim().toLowerCase();
+        if (statutFilter) {
+          filteredDefibs = filteredDefibs.filter((d: any) => 
+            (d.statut && String(d.statut).toLowerCase() === statutFilter) ||
+            (d.status && String(d.status).toLowerCase() === statutFilter)
+          );
+        }
+
+        const total = filteredDefibs.length;
+        const totalPages = Math.max(1, Math.ceil(total / limit));
+        const startIndex = isPaginated ? (page - 1) * limit : 0;
+        const returnedDefibs = isPaginated ? filteredDefibs.slice(startIndex, startIndex + limit) : filteredDefibs;
+
+        res.setHeader('X-Total-Count', String(total));
+        res.setHeader('X-Page', String(page));
+        res.setHeader('X-Per-Page', String(limit));
+        res.setHeader('X-Total-Pages', String(totalPages));
+
+        return sendOptimizedJson(req, res, {
           status: "success",
           environnement: targetTenant.shortEnvId || tenantId,
-          count: defibs.length,
-          total: defibs.length,
-          defibrillateurs: defibs,
-          data: defibs
+          total,
+          count: returnedDefibs.length,
+          page: isPaginated ? page : 1,
+          limit: isPaginated ? limit : total,
+          total_pages: isPaginated ? totalPages : 1,
+          defibrillateurs: returnedDefibs,
+          data: returnedDefibs
         });
       }
 
