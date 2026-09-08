@@ -816,7 +816,20 @@ export default function SettingsModal({
     { entity: 'Formation', slug: 'code_postal', type: 'string', label: 'Code postal du lieu', example: '75008' },
     { entity: 'Formation', slug: 'region', type: 'string', label: 'Région / Département', example: 'Île-de-France' },
     { entity: 'Formation', slug: 'pays', type: 'string', label: 'Pays du lieu', example: 'France' },
-    { entity: 'Formation', slug: 'commentaire', type: 'string', label: 'Commentaires et remarques', example: 'Session matinée - 10 participants' }
+    { entity: 'Formation', slug: 'commentaire', type: 'string', label: 'Commentaires et remarques', example: 'Session matinée - 10 participants' },
+
+    // Missions & ADV (Tournées & Missions)
+    { entity: 'Mission / ADV', slug: 'identifiant', type: 'string', label: 'Identifiant unique matériel (DAE ou Autre) à intervenir', example: 'DAE-88192' },
+    { entity: 'Mission / ADV', slug: 'client_id', type: 'string', label: 'Identifiant du client rattaché à la mission', example: 'CLI-0042' },
+    { entity: 'Mission / ADV', slug: 'client', type: 'string', label: 'Nom ou raison sociale du client', example: 'Clinique Saint-Jean' },
+    { entity: 'Mission / ADV', slug: 'nom_site', type: 'string', label: 'Nom du site d\'intervention', example: 'Bâtiment Principal' },
+    { entity: 'Mission / ADV', slug: 'type_materiel', type: 'string', label: 'Type d\'équipement ("Défibrillateur" ou "Matériel")', example: 'Défibrillateur' },
+    { entity: 'Mission / ADV', slug: 'modele', type: 'string', label: 'Modèle de l\'appareil', example: 'ZOLL AED Plus' },
+    { entity: 'Mission / ADV', slug: 'bon_de_commande', type: 'string', label: 'Référence du bon de commande ADV ou contrat', example: 'BC-2026-0891' },
+    { entity: 'Mission / ADV', slug: 'raison_prestation', type: 'string / array', label: 'Motif(s) de prestation ou d\'intervention', example: 'Contrôle annuel & Remplacement batterie' },
+    { entity: 'Mission / ADV', slug: 'priorite', type: 'string', label: 'Niveau d\'urgence ("Normale", "Haute", "Urgente")', example: 'Normale' },
+    { entity: 'Mission / ADV', slug: 'pieces_requises', type: 'array', label: 'Liste des pièces / consommables à prévoir', example: '["Batterie ZOLL", "Électrodes Adulte"]' },
+    { entity: 'Mission / ADV', slug: 'commentaire', type: 'string', label: 'Consignes d\'accès ou d\'intervention technicien', example: 'Badge à demander à l\'accueil RDC' }
   ];
 
   const generateApiDefibeoKeys = () => {
@@ -5301,10 +5314,11 @@ const { defibrillateurs } = await res.json();`}
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e4e1e1' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3">
                         <span style={{ color: '#fff', background: 'oklch(0.67 0.15 128.49)', border: 'none', borderRadius: '7px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST /v1/tournees</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Création d'une tournée complète planifiée</span>
                       </div>
                     </div>
                     <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée une nouvelle tournée FSM et insère des missions associées aux identifiants de défibrillateurs ou autres matériels.</p>
+                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée une nouvelle tournée FSM datée et insère des missions associées aux identifiants de défibrillateurs ou autres matériels.</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
                         <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
@@ -5330,6 +5344,156 @@ const { defibrillateurs } = await res.json();`}
   ]
 }`}
                         </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 8.bis Missions ADV - POST Create dans "À trier / Ordres ADV" */}
+                  <div style={{ border: '1px solid #e4e1e1', background: '#f7f7f7', borderRadius: '13px' }} className="overflow-hidden shadow-2xs">
+                    <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e4e1e1' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span style={{ color: '#fff', background: 'oklch(0.67 0.15 128.49)', border: 'none', borderRadius: '7px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST /v1/missions</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>TOURNÉES &amp; MISSIONS — Panier « À trier / Ordres ADV »</span>
+                      </div>
+                      <span style={{ backgroundColor: '#fa53d5', color: '#ffffff', borderRadius: '1000px', padding: '4px 12px', fontSize: '14px', fontWeight: 600 }}>À trier / ADV</span>
+                    </div>
+
+                    <div className="p-4 space-y-4 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black leading-relaxed" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        Cet endpoint permet d'injecter automatiquement des <strong>ordres de travail, maintenances ou demandes d'intervention ADV</strong> (issues d'un CRM, ERP type Sage/Cegid/Pennylane, bon de commande client ou site web) directement dans le bac d'attente <strong>« À trier / Ordres ADV »</strong> de l'onglet <strong>TOURNÉES &amp; MISSIONS</strong>.
+                      </p>
+
+                      <div style={{ background: '#ffffff', border: '1px solid #e4e1e1', borderRadius: '10px', padding: '14px' }} className="space-y-2 text-[15px]">
+                        <div className="font-bold text-black flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-[#fa53d5] inline-block"></span>
+                          Rattachement automatique &amp; Enrichissement des données :
+                        </div>
+                        <p className="text-black">
+                          Dès lors que vous renseignez l'identifiant du matériel (<code className="bg-[#f0f0f0] text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]">"identifiant": "DAE-88192"</code> ou numéro de série constructeur), l'API Defibeo fait automatiquement la liaison avec votre parc : elle renseigne de façon autonome le <strong>nom du client</strong>, l'<strong>adresse complète</strong>, les <strong>coordonnées GPS</strong>, le <strong>numéro de téléphone</strong> et le <strong>modèle</strong> dans la mission générée.
+                        </p>
+                      </div>
+
+                      <div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête unitaire (JSON payload) :</div>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+{`{
+  "identifiant": "DAE-88192",
+  "client_id": "CLI-0042",
+  "client": "Clinique Saint-Jean",
+  "nom_site": "Bâtiment Principal - Consultation",
+  "type_materiel": "Défibrillateur",
+  "modele": "ZOLL AED Plus",
+  "bon_de_commande": "BC-2026-0891",
+  "raison_prestation": ["Contrôle annuel", "Remplacement batterie"],
+  "priorite": "Haute",
+  "pieces_requises": ["Batterie ZOLL Lithium 123A", "Paire électrodes CPR-D Padz"],
+  "commentaire": "Badge Vigik requis à l'accueil, demander Mme Martin",
+  "heure": "14:00"
+}`}
+                        </pre>
+                      </div>
+
+                      <div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Variante par lot / Multi-missions (Batch) :</div>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+{`{
+  "missions": [
+    {
+      "identifiant": "DAE-88192",
+      "bon_de_commande": "BC-2026-0891",
+      "raison_prestation": "Contrôle annuel",
+      "priorite": "Normale"
+    },
+    {
+      "identifiant": "MAT-00109",
+      "type_materiel": "Autre Matériel",
+      "bon_de_commande": "BC-2026-0892",
+      "raison_prestation": "Remplacement filtre HEPA H14",
+      "priorite": "Urgente"
+    }
+  ]
+}`}
+                        </pre>
+                      </div>
+
+                      <div>
+                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (201 Created) :</div>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+{`{
+  "status": "success",
+  "message": "1 mission(s) ajoutée(s) avec succès dans À trier / Ordres ADV",
+  "environnement": "YOUR_ENV_ID",
+  "destination": "TOURNÉES & MISSIONS > À trier / Ordres ADV",
+  "count": 1,
+  "missions": [
+    {
+      "id": "fsm-m-api-1788900405-0-lwiw",
+      "clientName": "Clinique Saint-Jean",
+      "clientId": "CLI-0042",
+      "defibIdentifiant": "DAE-88192",
+      "equipmentType": "Défibrillateur",
+      "modele": "ZOLL AED Plus",
+      "reason": "Contrôle annuel",
+      "reasons": ["Contrôle annuel", "Remplacement batterie"],
+      "requiredParts": ["Batterie ZOLL Lithium 123A", "Paire électrodes CPR-D Padz"],
+      "status": "Brouillon",
+      "priority": "Haute",
+      "time": "14:00",
+      "bonDeCommande": "BC-2026-0891",
+      "commentaire": "Badge Vigik requis à l'accueil",
+      "createdAt": "2026-08-10T14:30:00.000Z"
+    }
+  ]
+}`}
+                        </pre>
+                      </div>
+
+                      {/* Code Examples cURL & JS */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                        <div style={{ background: '#ffffff', borderRadius: '10px', padding: '12px', border: '1px solid #e4e1e1' }}>
+                          <div className="text-xs font-bold text-emerald-700 mb-1">Exemple cURL :</div>
+                          <pre style={{ fontSize: '13px', color: '#000000', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+{`curl -X POST "https://consoledefibeo.deroesch.com/v1/missions" \\
+  -H "X-Defibeo-Tenant-ID: YOUR_ENV_ID" \\
+  -H "X-Defibeo-API-Key: YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "identifiant": "DAE-88192",
+    "bon_de_commande": "BC-2026-0891",
+    "raison_prestation": "Contrôle annuel",
+    "priorite": "Haute"
+  }'`}
+                          </pre>
+                        </div>
+                        <div style={{ background: '#ffffff', borderRadius: '10px', padding: '12px', border: '1px solid #e4e1e1' }}>
+                          <div className="text-xs font-bold text-sky-700 mb-1">Exemple JavaScript (Fetch) :</div>
+                          <pre style={{ fontSize: '13px', color: '#000000', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+{`const res = await fetch("https://consoledefibeo.deroesch.com/v1/missions", {
+  method: "POST",
+  headers: {
+    "X-Defibeo-Tenant-ID": "YOUR_ENV_ID",
+    "X-Defibeo-API-Key": "YOUR_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    identifiant: "DAE-88192",
+    bon_de_commande: "BC-2026-0891",
+    raison_prestation: ["Contrôle annuel", "Remplacement batterie"],
+    priorite: "Haute"
+  })
+});
+const data = await res.json();`}
+                          </pre>
+                        </div>
+                      </div>
+
+                      {/* Display in Interface note */}
+                      <div style={{ background: '#fdf2fa', border: '1px solid #f9a8d4', borderRadius: '10px', padding: '12px' }} className="flex items-start gap-3">
+                        <span className="text-lg">📍</span>
+                        <div className="text-[15px] text-black">
+                          <strong>Où retrouver la mission dans le logiciel ?</strong><br />
+                          Rendez-vous dans <strong>LOGICIEL PRINCIPAL &gt; TOURNÉES &amp; MISSIONS</strong>. Cliquez sur la pilule de filtre <strong>« À trier / Ordres ADV »</strong> en haut du calendrier. Toutes les missions injectées par l'API y sont stockées et prêtes à être glissées dans une tournée ou affectées à un technicien terrain.
+                        </div>
                       </div>
                     </div>
                   </div>

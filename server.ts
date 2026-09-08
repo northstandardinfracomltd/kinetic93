@@ -1522,6 +1522,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       'materiels',
       'commandes',
       'tournees',
+      'missions',
       'rapports',
       'stocks',
       'formations'
@@ -1717,9 +1718,11 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         });
       }
 
-      const effectiveStorageTenant = (sanitizedTenantId && /^d\d+$/i.test(sanitizedTenantId)) 
-        ? sanitizedTenantId.toUpperCase() 
-        : (targetTenant.shortEnvId || targetTenant.id || 'demo');
+      const effectiveStorageTenant = (targetTenant.id === 'demo' || sanitizedTenantId === 'demo')
+        ? 'demo'
+        : ((sanitizedTenantId && /^d\d+$/i.test(sanitizedTenantId)) 
+            ? sanitizedTenantId.toUpperCase() 
+            : (targetTenant.shortEnvId || targetTenant.id || 'demo'));
       const tenantId = effectiveStorageTenant;
       const tenantAliases = [targetTenant.shortEnvId, targetTenant.id, sanitizedTenantId, rawTenantId].filter(Boolean);
 
@@ -2340,10 +2343,160 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         }
       }
 
-      // 7. Tournées Endpoint
-      if (cleanPath.startsWith('tournees')) {
+      // 7. Tournées & Missions Endpoints
+      if (cleanPath.startsWith('missions')) {
+        let tours = await fetchServerCollection('fsm_tours', tenantId, tenantAliases);
+        let aTrierTour = tours.find((t: any) => t && (t.id === 'a-trier' || t.id === 'A trier' || t.startDate === 'A trier' || (t.title && String(t.title).toLowerCase().includes('trier'))));
+
+        if (req.method === 'GET') {
+          const missions = aTrierTour && Array.isArray(aTrierTour.missions) ? aTrierTour.missions : [];
+          return res.json({
+            status: "success",
+            environnement: targetTenant.shortEnvId || tenantId,
+            destination: "TOURNÉES & MISSIONS > À trier / Ordres ADV",
+            count: missions.length,
+            missions
+          });
+        }
+
         if (req.method === 'POST') {
           const body = req.body || {};
+          let rawMissions: any[] = [];
+          if (Array.isArray(body)) {
+            rawMissions = body;
+          } else if (Array.isArray(body.missions)) {
+            rawMissions = body.missions;
+          } else {
+            rawMissions = [body];
+          }
+
+          if (rawMissions.length === 0) {
+            return res.status(400).json({ status: "error", error: "Le corps de la requête ne contient aucune mission valide." });
+          }
+
+          const defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
+          const clients = await fetchServerCollection('clients', tenantId, tenantAliases);
+
+          const newMissions = rawMissions.map((item: any, idx: number) => {
+            const eqId = item.identifiant || item.defibIdentifiant || item.equipement_id || item.equipmentId || item.serie || '';
+            const matchedDefib = defibs.find((d: any) => d && (d.id === eqId || d.identifiant === eqId || d.numeroSerie === eqId));
+            const matchedClient = clients.find((c: any) => c && (c.id === item.client_id || c.id === item.clientId || (matchedDefib && (c.id === matchedDefib.clientId || c.denomination === matchedDefib.clientId))));
+
+            const clientName = item.client || item.clientName || item.entreprise || (matchedDefib && (matchedDefib.nomSite || matchedDefib.nomPrenomSite)) || (matchedClient && matchedClient.denomination) || 'Client ADV';
+            const equipmentType = item.type_materiel || item.categorie_materiel || item.equipmentType || (matchedDefib ? 'Défibrillateur' : 'Matériel');
+            const modele = item.modele || (matchedDefib && (matchedDefib.modele || matchedDefib.modeleId)) || '';
+
+            const reasons = Array.isArray(item.reasons) 
+              ? item.reasons 
+              : (Array.isArray(item.raison_prestation) 
+                  ? item.raison_prestation 
+                  : (item.raison_prestation || item.reason ? [String(item.raison_prestation || item.reason)] : ['Maintenance / Contrôle']));
+
+            return {
+              id: item.id || `fsm-m-api-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+              clientName,
+              clientId: item.client_id || item.clientId || (matchedClient ? matchedClient.id : (matchedDefib ? matchedDefib.clientId : '')),
+              defibIdentifiant: eqId || (matchedDefib ? matchedDefib.identifiant : ''),
+              equipmentType,
+              modele,
+              reason: reasons[0] || 'Intervention',
+              reasons,
+              requiredParts: item.pieces_requises || item.requiredParts || [],
+              status: item.situation || item.status || 'Brouillon',
+              priority: item.priorite || item.priority || 'Normale',
+              time: item.heure || item.time || '14:00',
+              bonDeCommande: item.bon_de_commande || item.bonDeCommande || item.order_ref || '',
+              commentaire: item.commentaire || item.comment || item.remarque || '',
+              numVoie: item.adresse || item.numero_et_voie || (matchedDefib ? matchedDefib.numVoie : '') || '',
+              cp: item.code_postal || item.cp || (matchedDefib ? matchedDefib.cp : '') || '',
+              ville: item.ville || (matchedDefib ? matchedDefib.ville : '') || '',
+              telephone: item.telephone || (matchedDefib ? matchedDefib.telephoneSite : '') || (matchedClient ? matchedClient.telephone : '') || '',
+              contact: item.contact || item.nom_prenom || (matchedDefib ? matchedDefib.nomPrenomSite : '') || (matchedClient ? matchedClient.contact : '') || '',
+              latitude: item.latitude || (matchedDefib ? matchedDefib.latitude : '') || '',
+              longitude: item.longitude || (matchedDefib ? matchedDefib.longitude : '') || '',
+              createdAt: new Date().toISOString()
+            };
+          });
+
+          if (!aTrierTour) {
+            aTrierTour = {
+              id: 'a-trier',
+              title: 'Missions à trier / Ordres ADV',
+              techName: '',
+              startDate: 'A trier',
+              status: 'Brouillon',
+              missions: newMissions,
+              vehicule: 'Aucun',
+              calculated: false,
+              envId: targetTenant.shortEnvId || tenantId,
+              tenantId: tenantId
+            };
+            tours = [aTrierTour, ...tours];
+          } else {
+            aTrierTour.missions = [...(aTrierTour.missions || []), ...newMissions];
+            tours = tours.map((t: any) => (t.id === aTrierTour.id ? aTrierTour : t));
+          }
+
+          await saveServerCollection('fsm_tours', tenantId, tours, tenantAliases);
+
+          return res.status(201).json({
+            status: "success",
+            message: `${newMissions.length} mission(s) ajoutée(s) avec succès dans À trier / Ordres ADV`,
+            environnement: targetTenant.shortEnvId || tenantId,
+            destination: "TOURNÉES & MISSIONS > À trier / Ordres ADV",
+            count: newMissions.length,
+            missions: newMissions
+          });
+        }
+      }
+
+      if (cleanPath.startsWith('tournees')) {
+        if (req.method === 'GET') {
+          const tours = await fetchServerCollection('fsm_tours', tenantId, tenantAliases);
+          return res.json({
+            status: "success",
+            environnement: targetTenant.shortEnvId || tenantId,
+            count: tours.length,
+            tournees: tours
+          });
+        }
+
+        if (req.method === 'POST') {
+          const body = req.body || {};
+          let tours = await fetchServerCollection('fsm_tours', tenantId, tenantAliases);
+          
+          const isTrierDest = body.id === 'a-trier' || body.startDate === 'A trier' || body.destination === 'a-trier' || String(body.title || '').toLowerCase().includes('trier');
+          
+          if (isTrierDest && Array.isArray(body.missions) && body.missions.length > 0) {
+            let aTrierTour = tours.find((t: any) => t && (t.id === 'a-trier' || t.id === 'A trier' || t.startDate === 'A trier' || (t.title && String(t.title).toLowerCase().includes('trier'))));
+            if (aTrierTour) {
+              aTrierTour.missions = [...(aTrierTour.missions || []), ...body.missions];
+              tours = tours.map((t: any) => (t.id === aTrierTour.id ? aTrierTour : t));
+            } else {
+              const newTrierTour = {
+                id: 'a-trier',
+                title: 'Missions à trier / Ordres ADV',
+                techName: '',
+                startDate: 'A trier',
+                status: 'Brouillon',
+                missions: body.missions,
+                vehicule: 'Aucun',
+                calculated: false,
+                envId: targetTenant.shortEnvId || tenantId,
+                tenantId: tenantId
+              };
+              tours = [newTrierTour, ...tours];
+            }
+            await saveServerCollection('fsm_tours', tenantId, tours, tenantAliases);
+            return res.status(201).json({
+              status: "success",
+              message: "Missions ajoutées avec succès dans À trier / Ordres ADV",
+              environnement: targetTenant.shortEnvId || tenantId,
+              destination: "TOURNÉES & MISSIONS > À trier / Ordres ADV",
+              count: body.missions.length
+            });
+          }
+
           const tourId = body.id || `TOUR-${Date.now().toString().slice(-6)}`;
           const newTour = {
             ...body,
@@ -2352,7 +2505,6 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             envId: targetTenant.shortEnvId || tenantId,
             tenantId: tenantId
           };
-          let tours = await fetchServerCollection('fsm_tours', tenantId, tenantAliases);
           tours = [newTour, ...tours];
           await saveServerCollection('fsm_tours', tenantId, tours, tenantAliases);
           return res.status(201).json({ status: "success", message: "Tournée enregistrée avec succès", environnement: targetTenant.shortEnvId || tenantId, tournee: newTour });
