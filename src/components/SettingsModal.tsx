@@ -5355,24 +5355,9 @@ const { defibrillateurs } = await res.json();`}
                         <span style={{ color: '#fff', background: 'oklch(0.67 0.15 128.49)', border: 'none', borderRadius: '7px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST /v1/missions</span>
                         <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>TOURNÉES &amp; MISSIONS — Panier « À trier / Ordres ADV »</span>
                       </div>
-                      <span style={{ backgroundColor: '#fa53d5', color: '#ffffff', borderRadius: '1000px', padding: '4px 12px', fontSize: '14px', fontWeight: 600 }}>À trier / ADV</span>
                     </div>
 
                     <div className="p-4 space-y-4 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      <p className="text-black leading-relaxed" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                        Cet endpoint permet d'injecter automatiquement des <strong>ordres de travail, maintenances ou demandes d'intervention ADV</strong> (issues d'un CRM, ERP type Sage/Cegid/Pennylane, bon de commande client ou site web) directement dans le bac d'attente <strong>« À trier / Ordres ADV »</strong> de l'onglet <strong>TOURNÉES &amp; MISSIONS</strong>.
-                      </p>
-
-                      <div style={{ background: '#ffffff', border: '1px solid #e4e1e1', borderRadius: '10px', padding: '14px' }} className="space-y-2 text-[15px]">
-                        <div className="font-bold text-black flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-[#fa53d5] inline-block"></span>
-                          Rattachement automatique &amp; Enrichissement des données :
-                        </div>
-                        <p className="text-black">
-                          Dès lors que vous renseignez l'identifiant du matériel (<code className="bg-[#f0f0f0] text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]">"identifiant": "DAE-88192"</code> ou numéro de série constructeur), l'API Defibeo fait automatiquement la liaison avec votre parc : elle renseigne de façon autonome le <strong>nom du client</strong>, l'<strong>adresse complète</strong>, les <strong>coordonnées GPS</strong>, le <strong>numéro de téléphone</strong> et le <strong>modèle</strong> dans la mission générée.
-                        </p>
-                      </div>
-
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête unitaire (JSON payload) :</div>
                         <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
