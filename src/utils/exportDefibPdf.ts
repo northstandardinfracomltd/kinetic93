@@ -9,68 +9,140 @@ interface ColumnDef {
   bold?: boolean;
 }
 
-const FONT_FAMILY = '"Civilprom", "DefibeoMain", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+// Columns definition for A4 Landscape (total = 287 mm, spanning page width 297 mm with 5 mm margins)
+// Each header strictly ends with a dot '.' as requested by the user and styled in the table view
+const COLUMNS: ColumnDef[] = [
+  { header: 'Identifiant.', width: 25, bold: true },
+  { header: 'N° Série.', width: 22 },
+  { header: 'Modèle.', width: 25 },
+  { header: 'Client.', width: 28 },
+  { header: 'Nom du site.', width: 26 },
+  { header: 'Contrat.', width: 24 },
+  { header: 'Localisation.', width: 25 },
+  { header: 'Garantie.', width: 17, align: 'center' },
+  { header: 'Pro. visite.', width: 17, align: 'center' },
+  { header: 'Péremption A.', width: 19, align: 'center' },
+  { header: 'Péremption P.', width: 19, align: 'center' },
+  { header: 'Péremption B.', width: 19, align: 'center' },
+  { header: 'Tournée.', width: 21 },
+];
 
-async function loadTenantLogo(url?: string): Promise<HTMLImageElement | null> {
+async function loadTenantLogoData(url?: string): Promise<{ dataUrl: string; width: number; height: number; format: 'PNG' | 'JPEG' } | null> {
   if (!url || !url.trim()) return null;
+
   try {
     const resp = await fetch(url, { mode: 'cors' });
     if (resp.ok) {
       const blob = await resp.blob();
-      const objUrl = URL.createObjectURL(blob);
       return await new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(null);
-        img.src = objUrl;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          const img = new Image();
+          img.onload = () => {
+            const format = dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+            resolve({
+              dataUrl,
+              width: img.naturalWidth || img.width,
+              height: img.naturalHeight || img.height,
+              format,
+            });
+          };
+          img.onerror = () => resolve(null);
+          img.src = dataUrl;
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
       });
     }
   } catch {
-    // Fallback to standard crossOrigin image
+    // Continue with fallback
   }
 
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
+  try {
+    return await new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            const dataUrl = canvas.toDataURL('image/png');
+            resolve({
+              dataUrl,
+              width: canvas.width,
+              height: canvas.height,
+              format: 'PNG',
+            });
+            return;
+          }
+        } catch {
+          // Cross-origin tainted canvas
+        }
+        resolve(null);
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  } catch {
+    return null;
+  }
 }
 
-function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
-  if (ctx.measureText(text).width <= maxWidth) return text;
+/**
+ * Truncates text with an ellipsis if it exceeds the maximum vector width in mm.
+ */
+function truncateVectorText(doc: jsPDF, text: string, maxW: number): string {
+  if (!text) return '-';
+  if (doc.getTextWidth(text) <= maxW) return text;
+
   let truncated = text;
-  while (truncated.length > 1 && ctx.measureText(truncated + '…').width > maxWidth) {
+  const ellipsis = '…';
+  while (truncated.length > 1 && doc.getTextWidth(truncated + ellipsis) > maxW) {
     truncated = truncated.slice(0, -1);
   }
-  return truncated + '…';
+  return truncated + ellipsis;
 }
 
-function drawCellText(
-  ctx: CanvasRenderingContext2D,
+/**
+ * Draws a 100% native vector table cell with white background and crisp vector border.
+ */
+function drawVectorCell(
+  doc: jsPDF,
   text: string,
   x: number,
   y: number,
   width: number,
   height: number,
   align: 'left' | 'center' | 'right' = 'left',
-  paddingX = 14
+  bold = false,
+  paddingX = 1.2
 ) {
-  const maxW = Math.max(10, width - paddingX * 2);
-  const renderedText = truncateText(ctx, text, maxW);
+  // Pure white vector background as requested (headers and value cells)
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(203, 213, 225); // #cbd5e1 subtle slate border
+  doc.setLineWidth(0.2); // Vector stroke
+  doc.rect(x, y, width, height, 'FD');
+
+  // Vector typography (100% vector, laser sharp at any zoom level)
+  doc.setFont('helvetica', bold ? 'bold' : 'normal');
+  doc.setFontSize(7.2);
+  doc.setTextColor(15, 23, 42); // #0f172a
+
+  const maxW = Math.max(1, width - paddingX * 2);
+  const renderedText = truncateVectorText(doc, text, maxW);
   const textY = y + height / 2;
 
-  ctx.textBaseline = 'middle';
   if (align === 'center') {
-    ctx.textAlign = 'center';
-    ctx.fillText(renderedText, x + width / 2, textY);
+    doc.text(renderedText, x + width / 2, textY, { align: 'center', baseline: 'middle' });
   } else if (align === 'right') {
-    ctx.textAlign = 'right';
-    ctx.fillText(renderedText, x + width - paddingX, textY);
+    doc.text(renderedText, x + width - paddingX, textY, { align: 'right', baseline: 'middle' });
   } else {
-    ctx.textAlign = 'left';
-    ctx.fillText(renderedText, x + paddingX, textY);
+    doc.text(renderedText, x + paddingX, textY, { align: 'left', baseline: 'middle' });
   }
 }
 
@@ -89,24 +161,16 @@ export async function exportSelectedDefibsToPDF({
 }) {
   if (!selectedDefibs || selectedDefibs.length === 0) return;
 
-  // Ensure document fonts are loaded so Civilprom / DefibeoMain is applied to the Canvas
-  if (typeof document !== 'undefined' && document.fonts) {
-    try {
-      await document.fonts.ready;
-    } catch {
-      // Continue if fonts.ready fails
-    }
-  }
-
   const clientMap = new Map(clients.map(c => [c.id, c]));
   const variableMap = new Map(variables.map(v => [v.id, v]));
 
-  // Canvas dimensions for A4 Landscape (10px per mm => 2970 x 2100 px, ~254 DPI)
-  const canvasW = 2970;
-  const canvasH = 2100;
-  const marginX = 50; // 5 mm (reduced page padding)
-  const marginBottom = 70; // 7 mm (reduced bottom padding)
-  const tableW = canvasW - marginX * 2; // 2870 px
+  // A4 Landscape geometry in mm
+  const marginX = 5; // 5 mm margin left & right
+  const page1StartY = 16; // Table starts at 16 mm on Page 1
+  const subsequentStartY = 7; // Table starts at 7 mm on subsequent pages
+  const HEADER_HEIGHT = 7.2; // mm
+  const ROW_HEIGHT = 6.4; // mm
+  const maxContentBottomY = 201; // mm (leaves 9 mm for footer pagination)
 
   // Formatted date dd/mm/yyyy
   const now = new Date();
@@ -115,30 +179,6 @@ export async function exportSelectedDefibsToPDF({
   const yyyy = now.getFullYear();
   const dateFormatted = `${dd}/${mm}/${yyyy}`;
   const subtitleText = `Export Matériel(s) Le ${dateFormatted}`;
-
-  // Columns definition (total 2870 px, spanning full reduced-padding table width)
-  const columns: ColumnDef[] = [
-    { header: 'Identifiant', width: 260, bold: true },
-    { header: 'N° Série', width: 230 },
-    { header: 'Modèle', width: 260 },
-    { header: 'Client', width: 300 },
-    { header: 'Nom du site', width: 255 },
-    { header: 'Contrat', width: 275 },
-    { header: 'Localisation', width: 250 },
-    { header: 'Garantie', width: 170, align: 'center' },
-    { header: 'Pro. visite', width: 170, align: 'center' },
-    { header: 'Péremp. A', width: 160, align: 'center' },
-    { header: 'Péremp. P', width: 160, align: 'center' },
-    { header: 'Péremp. B', width: 160, align: 'center' },
-    { header: 'Tournée', width: 220 },
-  ];
-
-  // Identical font-size for both table headers and values
-  const TABLE_FONT_SIZE = 22;
-  const HEADER_HEIGHT = 65;
-  const ROW_HEIGHT = 58;
-  const BORDER_COLOR = '#cbd5e1';
-  const BORDER_WIDTH = 1;
 
   // Build rows data
   const rowsData: string[][] = selectedDefibs.map((df) => {
@@ -203,17 +243,15 @@ export async function exportSelectedDefibsToPDF({
     ];
   });
 
-  // Calculate pages
-  const page1StartY = 135; // Compact header with reduced padding
-  const page1AvailableH = canvasH - marginBottom - page1StartY;
+  // Calculate row capacity per page
+  const page1AvailableH = maxContentBottomY - page1StartY;
   const page1MaxRows = Math.floor((page1AvailableH - HEADER_HEIGHT) / ROW_HEIGHT);
 
-  const subsequentStartY = 50;
-  const subsequentAvailableH = canvasH - marginBottom - subsequentStartY;
+  const subsequentAvailableH = maxContentBottomY - subsequentStartY;
   const subsequentMaxRows = Math.floor((subsequentAvailableH - HEADER_HEIGHT) / ROW_HEIGHT);
 
   const pageRowChunks: { startIdx: number; rows: string[][]; isFirstPage: boolean }[] = [];
-  let remainingRows = [...rowsData];
+  const remainingRows = [...rowsData];
   let currentStartIdx = 0;
 
   // First page chunk
@@ -231,135 +269,94 @@ export async function exportSelectedDefibsToPDF({
   const totalPages = pageRowChunks.length;
 
   // Pre-load logo if available
-  let logoImg: HTMLImageElement | null = null;
+  let logoData: { dataUrl: string; width: number; height: number; format: 'PNG' | 'JPEG' } | null = null;
   if (companyInfo?.logo) {
-    logoImg = await loadTenantLogo(companyInfo.logo);
+    logoData = await loadTenantLogoData(companyInfo.logo);
   }
 
-  // Create jsPDF instance
+  // Create native vector jsPDF instance (Landscape A4)
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
     format: 'a4',
   });
 
-  // Render each page to an HTML Canvas
+  // Render each page with 100% native vector graphics (no canvas flattening)
   for (let pageIdx = 0; pageIdx < pageRowChunks.length; pageIdx++) {
-    const chunk = pageRowChunks[pageIdx];
-    const canvas = document.createElement('canvas');
-    canvas.width = canvasW;
-    canvas.height = canvasH;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) continue;
-
-    const renderPage = (includeLogo: boolean) => {
-      // White page background
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvasW, canvasH);
-
-      let tableStartY = subsequentStartY;
-
-      if (chunk.isFirstPage) {
-        // Page 1 Header: Tenant Logo and Titles with reduced top padding
-        let textLeft = marginX;
-        if (includeLogo && logoImg && logoImg.width > 0 && logoImg.height > 0) {
-          const maxLogoW = 320;
-          const maxLogoH = 85;
-          let renderW = (logoImg.width / logoImg.height) * maxLogoH;
-          let renderH = maxLogoH;
-          if (renderW > maxLogoW) {
-            renderW = maxLogoW;
-            renderH = (logoImg.height / logoImg.width) * maxLogoW;
-          }
-          ctx.drawImage(logoImg, marginX, 35, renderW, renderH);
-          textLeft = marginX + renderW + 35;
-        }
-
-        // Company Name Title
-        const companyName = companyInfo?.name || 'Gestionnaire de Défibrillateurs';
-        ctx.font = `bold 28px ${FONT_FAMILY}`;
-        ctx.fillStyle = '#000000';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(companyName, textLeft, 58);
-
-        // Subtitle: Export Matériel(s) Le dd/mm/yyyy in #000
-        ctx.font = `normal 22px ${FONT_FAMILY}`;
-        ctx.fillStyle = '#000000';
-        ctx.fillText(subtitleText, textLeft, 95);
-
-        // NOTE: Line divider above table is intentionally removed per user feedback!
-        tableStartY = page1StartY;
-      }
-
-      // Draw Table Header
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(marginX, tableStartY, tableW, HEADER_HEIGHT);
-
-      let headerX = marginX;
-      for (const col of columns) {
-        ctx.strokeStyle = BORDER_COLOR;
-        ctx.lineWidth = BORDER_WIDTH;
-        ctx.strokeRect(headerX, tableStartY, col.width, HEADER_HEIGHT);
-
-        ctx.font = `bold ${TABLE_FONT_SIZE}px ${FONT_FAMILY}`;
-        ctx.fillStyle = '#0f172a';
-        drawCellText(ctx, col.header, headerX, tableStartY, col.width, HEADER_HEIGHT, col.align || 'left');
-        headerX += col.width;
-      }
-
-      // Draw Table Rows
-      for (let rIdx = 0; rIdx < chunk.rows.length; rIdx++) {
-        const row = chunk.rows[rIdx];
-        const rowY = tableStartY + HEADER_HEIGHT + rIdx * ROW_HEIGHT;
-        const isEven = (chunk.startIdx + rIdx) % 2 === 0;
-
-        // Background: alternating white and clean light slate (no dark backgrounds!)
-        ctx.fillStyle = isEven ? '#ffffff' : '#f8fafc';
-        ctx.fillRect(marginX, rowY, tableW, ROW_HEIGHT);
-
-        let cellX = marginX;
-        for (let cIdx = 0; cIdx < columns.length; cIdx++) {
-          const col = columns[cIdx];
-          ctx.strokeStyle = BORDER_COLOR;
-          ctx.lineWidth = BORDER_WIDTH;
-          ctx.strokeRect(cellX, rowY, col.width, ROW_HEIGHT);
-
-          ctx.font = `${col.bold ? 'bold ' : 'normal '}${TABLE_FONT_SIZE}px ${FONT_FAMILY}`;
-          ctx.fillStyle = '#0f172a';
-          const cellVal = String(row[cIdx] ?? '-');
-          drawCellText(ctx, cellVal, cellX, rowY, col.width, ROW_HEIGHT, col.align || 'left');
-
-          cellX += col.width;
-        }
-      }
-
-      // Footer: Tenant commercial name REMOVED per user feedback; pagination in color #000
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillStyle = '#000000';
-      ctx.font = `normal 20px ${FONT_FAMILY}`;
-      ctx.textAlign = 'right';
-      ctx.fillText(`Page ${pageIdx + 1} / ${totalPages}`, canvasW - marginX, canvasH - 30);
-    };
-
-    renderPage(true);
-
-    let imgData: string;
-    try {
-      imgData = canvas.toDataURL('image/jpeg', 0.95);
-    } catch {
-      // In case canvas was tainted by cross-origin logo, re-render without external logo
-      renderPage(false);
-      imgData = canvas.toDataURL('image/jpeg', 0.95);
-    }
-
     if (pageIdx > 0) {
       doc.addPage('a4', 'landscape');
     }
-    doc.addImage(imgData, 'JPEG', 0, 0, 297, 210);
+
+    const chunk = pageRowChunks[pageIdx];
+    let tableStartY = subsequentStartY;
+
+    if (chunk.isFirstPage) {
+      // Page 1 Header: Tenant Logo + Company Name Title + Subtitle
+      let textLeft = marginX;
+      if (logoData && logoData.width > 0 && logoData.height > 0) {
+        const maxLogoW = 32; // mm
+        const maxLogoH = 9.5; // mm
+        let renderW = (logoData.width / logoData.height) * maxLogoH;
+        let renderH = maxLogoH;
+        if (renderW > maxLogoW) {
+          renderW = maxLogoW;
+          renderH = (logoData.height / logoData.width) * maxLogoW;
+        }
+        try {
+          doc.addImage(logoData.dataUrl, logoData.format, marginX, 3.5, renderW, renderH);
+          textLeft = marginX + renderW + 3.5;
+        } catch (err) {
+          console.warn('Could not render logo in PDF:', err);
+        }
+      }
+
+      // Company Name
+      const companyName = companyInfo?.name || 'Gestionnaire de Défibrillateurs';
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(0, 0, 0);
+      doc.text(companyName, textLeft, 7, { baseline: 'middle' });
+
+      // Subtitle: Export Matériel(s) Le dd/mm/yyyy
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.2);
+      doc.setTextColor(0, 0, 0);
+      doc.text(subtitleText, textLeft, 12, { baseline: 'middle' });
+
+      tableStartY = page1StartY;
+    }
+
+    // 1. Draw Table Header (Pure white background + trailing dot '.' on each header)
+    let headerX = marginX;
+    for (const col of COLUMNS) {
+      // Ensure header ends with a dot
+      const headerTitle = col.header.endsWith('.') ? col.header : `${col.header}.`;
+      drawVectorCell(doc, headerTitle, headerX, tableStartY, col.width, HEADER_HEIGHT, col.align || 'left', true);
+      headerX += col.width;
+    }
+
+    // 2. Draw Table Rows (Pure white background for all cells)
+    for (let rIdx = 0; rIdx < chunk.rows.length; rIdx++) {
+      const row = chunk.rows[rIdx];
+      const rowY = tableStartY + HEADER_HEIGHT + rIdx * ROW_HEIGHT;
+
+      let cellX = marginX;
+      for (let cIdx = 0; cIdx < COLUMNS.length; cIdx++) {
+        const col = COLUMNS[cIdx];
+        const cellVal = String(row[cIdx] ?? '-');
+        drawVectorCell(doc, cellVal, cellX, rowY, col.width, ROW_HEIGHT, col.align || 'left', col.bold || false);
+        cellX += col.width;
+      }
+    }
+
+    // 3. Footer: Pagination in pure vector black font
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Page ${pageIdx + 1} / ${totalPages}`, 297 - marginX, 205, { align: 'right', baseline: 'bottom' });
   }
 
-  // Save the generated PDF
+  // Save the native vector PDF
   const cleanDate = new Date().toISOString().slice(0, 10);
   const fileName = `export_materiels_${cleanDate}.pdf`;
   doc.save(fileName);
