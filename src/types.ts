@@ -246,6 +246,9 @@ export interface Defibrillateur {
   rappelMensuelAuto?: 'Oui' | 'Non';
   rappelHebdoAuto?: 'Oui' | 'Non';
   rappelJournalierAuto?: 'Oui' | 'Non';
+  envId?: string;
+  tenantId?: string;
+  id_record?: string;
 }
 
 export interface SupportTicket {

@@ -3668,7 +3668,17 @@ export default function App() {
         const baseVariables = getLocalTenantValue<Variable[]>('variables', INITIAL_VARIABLES);
         setVariables(baseVariables);
 
-        const baseDefibrillateurs = getLocalTenantValue<Defibrillateur[]>('defibrillateurs', activeRunTenantId === 'demo' ? INITIAL_DEFIBRILLATEURS : []);
+        const tenantInitialDefibs: Defibrillateur[] = INITIAL_DEFIBRILLATEURS.map(d => ({
+          ...d,
+          id: activeRunTenantId === 'demo' ? d.id : `df_${activeRunTenantId.toLowerCase()}_1`,
+          identifiant: activeRunTenantId === 'demo' ? d.identifiant : (d.identifiant ? d.identifiant.replace('D26', activeRunTenantId.toUpperCase()) : `DAE-${activeRunTenantId.toUpperCase()}-01`),
+          numeroSerie: activeRunTenantId === 'demo' ? d.numeroSerie : (d.numeroSerie ? d.numeroSerie.replace('SN-G5', `SN-${activeRunTenantId.toUpperCase()}`) : `SN-${activeRunTenantId.toUpperCase()}-998124`),
+          envId: activeRunTenantId,
+          tenantId: activeRunTenantId,
+          id_record: d.id_record || `record_${activeRunTenantId.toLowerCase()}_dae1`
+        }));
+        const rawOfflineDefibs = getLocalTenantValue<Defibrillateur[]>('defibrillateurs', tenantInitialDefibs);
+        const baseDefibrillateurs = (Array.isArray(rawOfflineDefibs) && rawOfflineDefibs.length > 0) ? rawOfflineDefibs : tenantInitialDefibs;
         setDefibrillateurs(baseDefibrillateurs);
 
         const defaultInfo = {

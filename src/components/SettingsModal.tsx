@@ -27,6 +27,7 @@ import { REGIONS_FRANCAISES, getLocationCustomName } from '../utils';
 import { getRegionsForCountry } from '../utils/regions';
 import { geocodeAddress } from '../utils/fsmOptimizer';
 import HelpBubble from './HelpBubble';
+import { ApiActivityDrawer } from './ApiActivityDrawer';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -712,6 +713,7 @@ export default function SettingsModal({
   const [apiDefibeoSecretKey, setApiDefibeoSecretKey] = React.useState('');
   const [apiDefibeoCopied, setApiDefibeoCopied] = React.useState<string | null>(null);
   const [isApiDocOpen, setIsApiDocOpen] = React.useState(false);
+  const [isApiActivityOpen, setIsApiActivityOpen] = React.useState(false);
   const [isShopDrawerOpen, setIsShopDrawerOpen] = React.useState(false);
   const [apiFieldSearch, setApiFieldSearch] = React.useState('');
   const [apiFieldCategory, setApiFieldCategory] = React.useState<string>('Tous');
@@ -4221,6 +4223,30 @@ export default function SettingsModal({
                           Consulter la documentation
                         </button>
                       </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsApiActivityOpen(true)}
+                          style={{
+                            color: 'rgb(255, 255, 255)',
+                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                            background: 'rgb(96, 28, 104)',
+                            borderRadius: '13px',
+                            padding: '9px',
+                            fontSize: '18px',
+                            fontWeight: '100',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            border: 'none',
+                            cursor: 'pointer',
+                            width: '100%',
+                            textAlign: 'center',
+                          }}
+                          className="transition-opacity hover:opacity-90"
+                        >
+                          Historique de l’activité
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -5720,6 +5746,14 @@ const { defibrillateurs } = await res.json();`}
           </div>
         </div>
       )}
+
+      {/* SIDE PANE DRAWER FOR API DEFIBEO ACTIVITY HISTORY */}
+      <ApiActivityDrawer
+        isOpen={isApiActivityOpen}
+        onClose={() => setIsApiActivityOpen(false)}
+        tenantId={myTenantId}
+        shortEnvId={envIdDisplay}
+      />
 
       {/* SIDE PANE DRAWER FOR BOUTIQUE DEFIBEO */}
       {isShopDrawerOpen && (

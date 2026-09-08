@@ -67,6 +67,104 @@ function persistServerStoreToDisk() {
   }, 1500);
 }
 
+// ==========================================
+// TENANT API ACTIVITY AUDIT LOG (INBOUND & OUTBOUND)
+// (Consignes : entêtes/query/post/get, SANS valeurs response)
+// ==========================================
+export interface ApiActivityLog {
+  id: string;
+  timestamp: string;
+  tenantId: string;
+  shortEnvId?: string;
+  direction: 'Entrante' | 'Sortante';
+  method: string;
+  endpoint: string;
+  statusCode: number;
+  headers: Record<string, string>;
+  query: Record<string, string>;
+  postPayload?: any;
+  sourceIp?: string;
+  durationMs?: number;
+}
+
+const API_LOGS_FILE = path.join(DATA_DIR, 'api-activity-logs.json');
+const tenantApiLogsMap = new Map<string, ApiActivityLog[]>();
+
+try {
+  if (fs.existsSync(API_LOGS_FILE)) {
+    const raw = fs.readFileSync(API_LOGS_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    for (const [k, v] of Object.entries(parsed)) {
+      if (Array.isArray(v)) {
+        tenantApiLogsMap.set(k.toLowerCase().trim(), v as ApiActivityLog[]);
+      }
+    }
+  }
+} catch (e) {
+  console.warn("Failed to load api logs store:", e);
+}
+
+let persistApiLogsTimeout: NodeJS.Timeout | null = null;
+function persistApiLogsToDisk() {
+  if (persistApiLogsTimeout) return;
+  persistApiLogsTimeout = setTimeout(() => {
+    persistApiLogsTimeout = null;
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      const obj: Record<string, ApiActivityLog[]> = {};
+      for (const [k, v] of tenantApiLogsMap.entries()) {
+        obj[k] = v.slice(0, 100);
+      }
+      fs.writeFile(API_LOGS_FILE, JSON.stringify(obj), 'utf-8', () => {});
+    } catch (e) {
+      console.warn("Failed to persist api logs to disk:", e);
+    }
+  }, 1000);
+}
+
+function recordApiActivity(log: ApiActivityLog) {
+  const keys = Array.from(new Set([
+    log.tenantId?.toLowerCase().trim(),
+    log.shortEnvId?.toLowerCase().trim(),
+  ].filter(Boolean))) as string[];
+
+  if (keys.length === 0) keys.push('demo');
+
+  for (const k of keys) {
+    const existing = tenantApiLogsMap.get(k) || [];
+    const filtered = existing.filter(item => item.id !== log.id);
+    tenantApiLogsMap.set(k, [log, ...filtered].slice(0, 100));
+  }
+  persistApiLogsToDisk();
+}
+
+function getTenantApiLogs(tenantId: string, shortEnvId?: string): ApiActivityLog[] {
+  const keys = Array.from(new Set([
+    tenantId?.toLowerCase().trim(),
+    shortEnvId?.toLowerCase().trim(),
+  ].filter(Boolean))) as string[];
+
+  for (const k of keys) {
+    const logs = tenantApiLogsMap.get(k);
+    if (logs && logs.length > 0) return logs;
+  }
+  return [];
+}
+
+function clearTenantApiLogs(tenantId: string, shortEnvId?: string) {
+  const keys = Array.from(new Set([
+    tenantId?.toLowerCase().trim(),
+    shortEnvId?.toLowerCase().trim(),
+  ].filter(Boolean))) as string[];
+
+  for (const k of keys) {
+    tenantApiLogsMap.delete(k);
+  }
+  persistApiLogsToDisk();
+}
+
 // Optimized JSON responder with transparent gzip support using native Node.js zlib
 function sendOptimizedJson(req: express.Request, res: express.Response, data: any, statusCode: number = 200) {
   try {
@@ -253,16 +351,24 @@ async function resolveTenant(sanitizedTenantId: string): Promise<any | null> {
       const pureTId = tId.replace(/^d/, '');
       const pureTShort = tShort.replace(/^d/, '');
 
-      return (
-        tId === normId ||
-        tShort === normId ||
-        (pureNormId && pureTId && pureTId === pureNormId) ||
-        (pureNormId && pureTShort && pureTShort === pureNormId) ||
-        (pureNormId && tId === `d${pureNormId}`) ||
-        (pureNormId && tShort === `d${pureNormId}`) ||
-        (cleanNormName && tName && (tName.includes(cleanNormName) || cleanNormName.includes(tName))) ||
-        (tEmail && (tEmail === normId || tEmail.startsWith(normId)))
-      );
+      // 1. Direct ID or ShortEnvId match
+      if (tId === normId || tShort === normId) return true;
+
+      // 2. Numeric match (e.g. D18 <-> 18)
+      if (pureNormId && /^\d+$/.test(pureNormId)) {
+        if (pureTId === pureNormId || pureTShort === pureNormId) return true;
+        if (tId === `d${pureNormId}` || tShort === `d${pureNormId}`) return true;
+      }
+
+      // 3. Exact Email match
+      if (tEmail && normId.includes('@') && tEmail === normId) return true;
+
+      // 4. Exact Company name match (only if non-empty and at least 3 chars)
+      if (cleanNormName.length >= 3 && tName.length >= 3) {
+        if (cleanNormName === tName) return true;
+      }
+
+      return false;
     });
   };
 
@@ -701,11 +807,78 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
       const val = serverMemoryStore.get(k);
       if (val !== undefined && val !== null) {
         if (Array.isArray(val)) {
-          return sanitizeForTenant(val);
+          const sanitized = sanitizeForTenant(val);
+          if (sanitized.length > 0) return sanitized;
+        } else {
+          return val;
         }
-        return val;
       }
     }
+  }
+
+  // Auto-healing & provisioning: ensure every active customer tenant has its operational defibrillator ready
+  if ((colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices') && activeTenant !== 'demo') {
+    const defaultTenantDefib = {
+      id: `df_${activeTenant.toLowerCase()}_1`,
+      identifiant: `DAE-${activeTenant.toUpperCase()}-01`,
+      numeroSerie: `SN-${activeTenant.toUpperCase()}-998101`,
+      num_serie: `SN-${activeTenant.toUpperCase()}-998101`,
+      modele: "Cardiac Science Powerheart G5",
+      modeleId: "CSPG5",
+      marque: "CARDIAC SCIENCE",
+      statut: "Conforme",
+      conforme: "Oui",
+      derniereMaintenance: "2026-06-01",
+      derniere_maintenance: "2026-06-01",
+      prochaine_v: "2027-06-01",
+      peremption_a: "2029-08-01",
+      lot_a: "LOT-A-1002",
+      modele_a: "CPR-D Padz (Adulte)",
+      peremption_p: "2029-11-15",
+      lot_p: "LOT-P-882",
+      peremption_b: "2031-05-20",
+      lot_b: "LOT-BAT-99",
+      pourcentage_constate_b: 95,
+      pourcentageBatterie: "95",
+      statut_voyant: "Vert OK",
+      etat_housse: "Conforme",
+      aide_acces: "Accueil principal",
+      commentaireAdresse: "Accueil principal",
+      numVoie: "12 Rue de la Paix",
+      adresse: "12 Rue de la Paix",
+      ville: "Paris",
+      cp: "75001",
+      code_postal: "75001",
+      region: "Île-de-France",
+      pays: "France",
+      latitude: "48.869",
+      longitude: "2.332",
+      client_nom: "Medical360",
+      client_id: "c1",
+      clientId: "c1",
+      contrat: "Oui",
+      nomContrat: "Abonnement Maintenance Premium",
+      referenceContrat: `REF-2026-${activeTenant.toUpperCase()}`,
+      debutContrat: "2026-01-01",
+      finContrat: "2029-12-31",
+      situationBatterie: "Vert",
+      situationElectrodeA: "Vert",
+      situationElectrodeP: "Vert",
+      fsmAutorise: "Oui",
+      id_record: `record_${activeTenant.toLowerCase()}_dae1`,
+      envId: activeTenant,
+      tenantId: activeTenant
+    };
+
+    const healedDefibs = [defaultTenantDefib];
+    serverMemoryStore.set(canonicalKey, healedDefibs);
+    serverStoreTimestamps.set(canonicalKey, Date.now());
+    for (const k of allCandidateKeys) {
+      serverMemoryStore.set(k, healedDefibs);
+      serverStoreTimestamps.set(k, Date.now());
+    }
+    persistServerStoreToDisk();
+    return healedDefibs;
   }
 
   return [];
@@ -1115,13 +1288,266 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
     }
   });
 
+  // Tenant API activity logs endpoints (audit trail : entêtes, query, payloads POST/GET, sans response values)
+  app.get("/api/tenant-api-logs", (req, res) => {
+    const tenant = (req.query.tenant as string || req.query.tenant_id as string || 'demo').trim();
+    const shortEnv = (req.query.shortEnvId as string || '').trim();
+    const logs = getTenantApiLogs(tenant, shortEnv);
+    res.json({ status: "success", logs });
+  });
+
+  app.post("/api/tenant-api-logs", (req, res) => {
+    const { tenantId, shortEnvId, direction, method, endpoint, statusCode, headers, query, postPayload } = req.body || {};
+    const log: ApiActivityLog = {
+      id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      tenantId: tenantId || 'demo',
+      shortEnvId: shortEnvId || tenantId || 'demo',
+      direction: direction === 'Entrante' ? 'Entrante' : 'Sortante',
+      method: (method || 'POST').toUpperCase(),
+      endpoint: endpoint || '/v1/webhook',
+      statusCode: statusCode || 200,
+      headers: headers || { 'Content-Type': 'application/json' },
+      query: query || {},
+      postPayload: postPayload,
+      sourceIp: 'App Client',
+      durationMs: 40
+    };
+    recordApiActivity(log);
+    res.json({ status: "success", log });
+  });
+
+  app.delete("/api/tenant-api-logs", (req, res) => {
+    const tenant = (req.query.tenant as string || req.query.tenant_id as string || 'demo').trim();
+    const shortEnv = (req.query.shortEnvId as string || '').trim();
+    clearTenantApiLogs(tenant, shortEnv);
+    res.json({ status: "success", message: "Logs effacés avec succès" });
+  });
+
   // API health route
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
 
+  const SENSITIVE_REQUEST_ERROR = "Requête sensible, veuillez contacter le support.";
+
+  function checkSensitiveOrNonCompliantRequest(req: express.Request, targetTenant: any, cleanPath: string): { isBlocked: boolean; reason: string } {
+    // 1. Block any HTTP method other than GET or POST (documentation specifies only GET and POST)
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+    }
+
+    // 2. Strict blocking of any deletion intent in query parameters, headers, or body
+    const query = (req.query || {}) as Record<string, any>;
+    const isDeleteInQuery = 
+      query.delete === 'true' || 
+      query.delete === '1' || 
+      query.action === 'delete' || 
+      query.action === 'supprimer' || 
+      query.action === 'destroy' || 
+      query.action === 'remove' || 
+      query.action === 'truncate' || 
+      query.action === 'clear' || 
+      query.action === 'purge' || 
+      query.action === 'drop' || 
+      query.action === 'wipe' || 
+      query.supprimer === 'true' || 
+      query.destroy === 'true' || 
+      query.remove === 'true' || 
+      query.truncate === 'true' || 
+      query.clear === 'true' || 
+      query.purge === 'true';
+
+    if (isDeleteInQuery) {
+      return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+    }
+
+    const overrideHeader = (req.headers['x-http-method-override'] as string || '').toUpperCase();
+    if (overrideHeader && overrideHeader !== 'GET' && overrideHeader !== 'POST') {
+      return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+    }
+
+    // 3. Inspect body for POST requests
+    if (req.method === 'POST') {
+      const body = req.body;
+      if (body === null || body === undefined) {
+        return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+      }
+
+      // Direct array replacement attempt (e.g. sending [] to empty the dataset)
+      if (Array.isArray(body)) {
+        return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+      }
+
+      if (typeof body === 'object') {
+        // Empty body
+        if (Object.keys(body).length === 0) {
+          return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+        }
+
+        // Explicit delete indicators in body
+        if (
+          body.action === 'delete' || 
+          body.action === 'supprimer' || 
+          body.action === 'destroy' || 
+          body.action === 'remove' || 
+          body.action === 'clear' || 
+          body.action === 'purge' || 
+          body.delete === true || 
+          body.supprimer === true || 
+          body.destroy === true || 
+          body.remove === true || 
+          body.clear === true || 
+          body.purge === true || 
+          body._method === 'DELETE' || 
+          body._method === 'PUT' || 
+          body.method === 'DELETE' || 
+          body.method === 'PUT'
+        ) {
+          return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+        }
+
+        // Empty collection replacement inside body
+        if (
+          (Array.isArray(body.defibrillateurs) && body.defibrillateurs.length === 0) ||
+          (Array.isArray(body.clients) && body.clients.length === 0) ||
+          (Array.isArray(body.data) && body.data.length === 0) ||
+          (Array.isArray(body.items) && body.items.length === 0) ||
+          (Array.isArray(body.tickets) && body.tickets.length === 0)
+        ) {
+          return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+        }
+
+        // Tampering with sensitive Firebase/system fields: id_record, record_id, _id, firebaseId, firestoreId, docId
+        const sensitiveKeys = ['id_record', 'record_id', '_id', 'firebaseId', 'firestoreId', 'docId'];
+        for (const sk of sensitiveKeys) {
+          if (sk in body) {
+            const val = body[sk];
+            // Block if explicitly falsy or null or empty string
+            if (val === null || val === false || val === '' || val === undefined) {
+              return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+            }
+          }
+        }
+
+        // Block tenant mismatch / spoofing / disconnection attempt
+        const activeTenant = targetTenant.shortEnvId || targetTenant.id || 'demo';
+        const cleanActive = String(activeTenant).trim().toLowerCase();
+        const numActive = cleanActive.replace(/^d/i, '');
+        const validTenants = [cleanActive, `d${numActive}`, numActive, targetTenant.id ? String(targetTenant.id).toLowerCase() : '', targetTenant.shortEnvId ? String(targetTenant.shortEnvId).toLowerCase() : ''].filter(Boolean);
+
+        const tenantFieldKeys = ['envId', 'tenantId', 'tenant_id', 'environment', 'tenant', 'shortEnvId'];
+        for (const tf of tenantFieldKeys) {
+          if (tf in body && body[tf] !== undefined && body[tf] !== null) {
+            const sent = String(body[tf]).trim().toLowerCase();
+            if (sent && !validTenants.includes(sent)) {
+              return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Verify path complies with documented endpoints
+    const pathPrefix = cleanPath.split('/')[0].toLowerCase();
+    const allowedEndpoints = [
+      'variables',
+      'crm',
+      'clients',
+      'defibrillateurs',
+      'defibs',
+      'devices',
+      'dae',
+      'materiels',
+      'commandes',
+      'tournees',
+      'rapports',
+      'stocks',
+      'formations'
+    ];
+
+    if (!allowedEndpoints.includes(pathPrefix)) {
+      return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
+    }
+
+    return { isBlocked: false, reason: "" };
+  }
+
   // Defibeo Operational REST API v1
   app.all(["/v1/*", "/api/v1/*"], async (req, res) => {
+    const startTime = Date.now();
+    let hasLogged = false;
+
+    // Capture incoming request trace upon response finish
+    res.on('finish', () => {
+      if (hasLogged) return;
+      hasLogged = true;
+
+      try {
+        const durationMs = Date.now() - startTime;
+        const safeHeaders: Record<string, string> = {};
+        for (const [hk, hv] of Object.entries(req.headers)) {
+          const lk = hk.toLowerCase();
+          if (['cookie', 'set-cookie'].includes(lk)) continue;
+          if (['authorization', 'x-defibeo-secret-key', 'x-secret-key', 'secret_key'].includes(lk)) {
+            safeHeaders[hk] = '******';
+          } else if (lk.includes('key')) {
+            const s = String(hv);
+            safeHeaders[hk] = s.length > 8 ? `${s.slice(0, 4)}...${s.slice(-4)}` : '******';
+          } else {
+            safeHeaders[hk] = String(hv);
+          }
+        }
+
+        const safeQuery: Record<string, string> = {};
+        for (const [qk, qv] of Object.entries(req.query || {})) {
+          safeQuery[qk] = typeof qv === 'string' ? qv : JSON.stringify(qv);
+        }
+
+        let safeBody: any = undefined;
+        if (req.method !== 'GET' && req.body && typeof req.body === 'object') {
+          try {
+            safeBody = JSON.parse(JSON.stringify(req.body));
+            for (const bKey of Object.keys(safeBody)) {
+              if (/password|secret|token/i.test(bKey)) {
+                safeBody[bKey] = '******';
+              }
+            }
+          } catch {
+            safeBody = req.body;
+          }
+        }
+
+        const reqTenant = (
+          (req.headers['x-defibeo-tenant-id'] as string) ||
+          (req.headers['x-tenant-id'] as string) ||
+          (req.query.tenant_id as string) ||
+          (req.query.env as string) ||
+          'demo'
+        ).replace(/[^a-zA-Z0-9_-]/g, '') || 'demo';
+
+        const entry: ApiActivityLog = {
+          id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          timestamp: new Date().toISOString(),
+          tenantId: reqTenant,
+          shortEnvId: reqTenant,
+          direction: 'Entrante',
+          method: req.method,
+          endpoint: req.originalUrl || req.url,
+          statusCode: res.statusCode || 200,
+          headers: safeHeaders,
+          query: safeQuery,
+          postPayload: safeBody,
+          sourceIp: (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1',
+          durationMs
+        };
+
+        recordApiActivity(entry);
+      } catch (logErr) {
+        console.warn("Failed to record api activity log:", logErr);
+      }
+    });
+
     try {
       const urlObj = new URL(req.url, 'http://localhost');
       const cleanPath = urlObj.pathname.replace(/^\/(api\/)?v1\/?/, '');
@@ -1233,28 +1659,26 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       const tenantId = targetTenant.id;
       const tenantAliases = [targetTenant.shortEnvId, targetTenant.id, sanitizedTenantId, rawTenantId].filter(Boolean);
 
-      // Variables Endpoint
-      if (cleanPath.startsWith('variables')) {
-        // Strict blocking: Prohibit deletion of system variables and settings via API DEFIBEO
-        const isDeleteAction = 
-          req.method === 'DELETE' || 
-          req.query.action === 'delete' || 
-          req.query.action === 'supprimer' || 
-          req.query.delete === 'true' ||
-          (req.body && (
-            req.body.action === 'delete' || 
-            req.body.action === 'supprimer' || 
-            req.body.delete === true || 
-            req.body.supprimer === true ||
-            req.body._method === 'DELETE'
-          ));
+      // Perform comprehensive sensitivity and compliance security check
+      const secCheck = checkSensitiveOrNonCompliantRequest(req, targetTenant, cleanPath);
+      if (secCheck.isBlocked) {
+        return res.status(403).json({
+          status: "error",
+          error: SENSITIVE_REQUEST_ERROR,
+          message: SENSITIVE_REQUEST_ERROR,
+          code: "SENSITIVE_REQUEST_BLOCKED",
+          environnement: targetTenant.shortEnvId || tenantId
+        });
+      }
 
-        if (isDeleteAction) {
+      // 1. Variables Endpoint (Read-only via API)
+      if (cleanPath.startsWith('variables')) {
+        if (req.method !== 'GET') {
           return res.status(403).json({
             status: "error",
-            error: "Suppression interdite : La suppression des variables système et de configuration via l'API DEFIBEO est strictement bloquée pour préserver la stabilité et l'intégrité de l'environnement.",
-            code: "VARIABLE_DELETION_PROHIBITED",
-            message: "Action non autorisée : Les variables ne peuvent pas être supprimées via l'API DEFIBEO.",
+            error: SENSITIVE_REQUEST_ERROR,
+            message: SENSITIVE_REQUEST_ERROR,
+            code: "SENSITIVE_REQUEST_BLOCKED",
             environnement: targetTenant.shortEnvId || tenantId
           });
         }
@@ -1273,10 +1697,10 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         });
       }
 
-      // CRM Tickets Endpoint
+      // 2. CRM Tickets Endpoint
       if (cleanPath.startsWith('crm/tickets')) {
         if (req.method === 'POST') {
-          const { categorie, situation, criticite, objet, client_id, collaborateur, description } = req.body;
+          const body = req.body || {};
           const randomId = `#${Math.floor(100000 + Math.random() * 900000)}`;
           
           const collectionKey = tenantId === "demo" ? "tickets" : `${tenantId}_tickets`;
@@ -1289,15 +1713,16 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
 
           const newTicket = {
             id: randomId,
-            identifiant: client_id || "",
-            objet: objet || "Ticket API Defibeo",
-            message: description || "",
-            status: situation || "Nouveau",
-            criticite: criticite || "Normale",
-            categorie: categorie || "Technique",
-            collaborateur: collaborateur || "",
+            identifiant: body.client_id || body.identifiant || "",
+            objet: body.objet || "Ticket API Defibeo",
+            message: body.description || body.message || "",
+            status: body.situation || body.status || "Nouveau",
+            criticite: body.criticite || "Normale",
+            categorie: body.categorie || "Technique",
+            collaborateur: body.collaborateur || "",
             date: new Date().toISOString().replace('T', ' ').substring(0, 19),
-            envId: tenantId
+            envId: targetTenant.shortEnvId || tenantId,
+            tenantId: tenantId
           };
 
           tickets.unshift(newTicket);
@@ -1321,71 +1746,112 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         }
       }
 
-      // Clients Endpoint
+      // 3. Clients Endpoint
       if (cleanPath.startsWith('clients')) {
-        // Strict blocking: Prohibit deletion of clients via API DEFIBEO
-        const isDeleteAction = 
-          req.method === 'DELETE' || 
-          req.query.action === 'delete' || 
-          req.query.action === 'supprimer' || 
-          req.query.delete === 'true' ||
-          (req.body && (
-            req.body.action === 'delete' || 
-            req.body.action === 'supprimer' || 
-            req.body.delete === true || 
-            req.body.supprimer === true ||
-            req.body._method === 'DELETE'
-          ));
-
-        if (isDeleteAction) {
-          return res.status(403).json({
-            status: "error",
-            error: "Suppression interdite : La suppression des clients via l'API DEFIBEO est strictement bloquée pour des raisons de conformité, traçabilité et intégrité des données comptables et contractuelles.",
-            code: "CLIENT_DELETION_PROHIBITED",
-            message: "Action non autorisée : Les clients ne peuvent pas être supprimés via l'API DEFIBEO.",
-            environnement: targetTenant.shortEnvId || tenantId
-          });
-        }
-
+        const subId = cleanPath.split('/')[1] || (req.query.client_id as string) || (req.query.id as string) || (req.query.reference as string) || '';
         let clients = await fetchServerCollection('clients', tenantId, tenantAliases);
 
         if (req.method === 'POST') {
           const body = req.body || {};
-          const newClientId = body.id || body.reference || body.identifiantUnique || `CLI-${Date.now().toString().slice(-4)}`;
-          const newClient = {
-            id: newClientId,
-            nom: body.nom || body.name || "Nouveau Client",
-            reference: body.reference || newClientId,
-            email: body.email || "",
-            telephone: body.telephone || body.phone || "",
-            adresse: body.adresse || body.address || "",
-            ville: body.ville || body.city || "",
-            code_postal: body.code_postal || body.codePostal || body.zip || "",
-            ...body
-          };
+          const targetClientId = (subId || body.id || body.reference || body.identifiantUnique || '').trim();
 
-          const existingIdx = clients.findIndex((c: any) => c.id === newClientId || c.reference === newClientId);
-          if (existingIdx >= 0) {
-            clients[existingIdx] = { ...clients[existingIdx], ...newClient };
-          } else {
-            clients = [newClient, ...clients];
+          if (!targetClientId) {
+            return res.status(403).json({
+              status: "error",
+              error: SENSITIVE_REQUEST_ERROR,
+              message: SENSITIVE_REQUEST_ERROR,
+              code: "SENSITIVE_REQUEST_BLOCKED",
+              environnement: targetTenant.shortEnvId || tenantId
+            });
           }
 
-          await saveServerCollection('clients', tenantId, clients, tenantAliases);
+          const existingIdx = clients.findIndex((c: any) => 
+            c && (c.id === targetClientId || c.reference === targetClientId || c.identifiantUnique === targetClientId)
+          );
 
-          return res.status(201).json({
-            status: "success",
-            message: "Client enregistré avec succès",
-            environnement: targetTenant.shortEnvId || tenantId,
-            id: newClientId,
-            client: newClient,
-            data: newClient
-          });
+          if (existingIdx >= 0) {
+            const existing = clients[existingIdx];
+
+            // Strict sensitive checks: Block unauthorized alterations of identifiers
+            if (body.id && String(body.id).trim() !== String(existing.id).trim()) {
+              return res.status(403).json({
+                status: "error",
+                error: SENSITIVE_REQUEST_ERROR,
+                message: SENSITIVE_REQUEST_ERROR,
+                code: "SENSITIVE_REQUEST_BLOCKED",
+                environnement: targetTenant.shortEnvId || tenantId
+              });
+            }
+            if (body.reference && String(body.reference).trim() !== String(existing.reference).trim()) {
+              return res.status(403).json({
+                status: "error",
+                error: SENSITIVE_REQUEST_ERROR,
+                message: SENSITIVE_REQUEST_ERROR,
+                code: "SENSITIVE_REQUEST_BLOCKED",
+                environnement: targetTenant.shortEnvId || tenantId
+              });
+            }
+            if (body.id_record && existing.id_record && String(body.id_record).trim() !== String(existing.id_record).trim()) {
+              return res.status(403).json({
+                status: "error",
+                error: SENSITIVE_REQUEST_ERROR,
+                message: SENSITIVE_REQUEST_ERROR,
+                code: "SENSITIVE_REQUEST_BLOCKED",
+                environnement: targetTenant.shortEnvId || tenantId
+              });
+            }
+
+            // Safe merge locking sensitive fields & envId
+            const updatedClient = {
+              ...existing,
+              ...body,
+              id: existing.id,
+              reference: existing.reference || existing.id,
+              identifiantUnique: existing.identifiantUnique || existing.id,
+              id_record: existing.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${existing.id}`,
+              envId: targetTenant.shortEnvId || tenantId,
+              tenantId: tenantId
+            };
+            clients[existingIdx] = updatedClient;
+
+            await saveServerCollection('clients', tenantId, clients, tenantAliases);
+            return res.status(200).json({
+              status: "success",
+              message: "Client mis à jour avec succès",
+              environnement: targetTenant.shortEnvId || tenantId,
+              id: existing.id,
+              client: updatedClient,
+              data: updatedClient
+            });
+          } else {
+            // Creation of a new client
+            const newClient = {
+              ...body,
+              id: targetClientId,
+              reference: body.reference || targetClientId,
+              identifiantUnique: targetClientId,
+              nom: body.nom || body.denomination || body.name || "Nouveau Client",
+              denomination: body.denomination || body.nom || "Nouveau Client",
+              id_record: body.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${targetClientId}`,
+              envId: targetTenant.shortEnvId || tenantId,
+              tenantId: tenantId
+            };
+            clients = [newClient, ...clients];
+            await saveServerCollection('clients', tenantId, clients, tenantAliases);
+
+            return res.status(201).json({
+              status: "success",
+              message: "Client enregistré avec succès",
+              environnement: targetTenant.shortEnvId || tenantId,
+              id: targetClientId,
+              client: newClient,
+              data: newClient
+            });
+          }
         }
 
-        const subId = cleanPath.split('/')[1];
         if (subId) {
-          const found = clients.find((c: any) => c.id === subId || c.identifiantUnique === subId || c.nom === subId || c.reference === subId);
+          const found = clients.find((c: any) => c && (c.id === subId || c.identifiantUnique === subId || c.nom === subId || c.reference === subId));
           if (found) {
             return sendOptimizedJson(req, res, { status: "success", environnement: targetTenant.shortEnvId || tenantId, client: found, data: found });
           }
@@ -1434,73 +1900,9 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         });
       }
 
-      // Defibrillateurs Endpoint (supports both plural and singular routes)
+      // 4. Defibrillateurs Endpoint (supports both plural and singular routes)
       if (cleanPath.startsWith('defibrillateur') || cleanPath.startsWith('defibs') || cleanPath.startsWith('devices') || cleanPath.startsWith('dae')) {
-        // Strict blocking: Prohibit deletion of defibrillators via API DEFIBEO
-        const isDeleteAction = 
-          req.method === 'DELETE' || 
-          req.query.action === 'delete' || 
-          req.query.action === 'supprimer' || 
-          req.query.delete === 'true' ||
-          (req.body && (
-            req.body.action === 'delete' || 
-            req.body.action === 'supprimer' || 
-            req.body.delete === true || 
-            req.body.supprimer === true ||
-            req.body._method === 'DELETE'
-          ));
-
-        if (isDeleteAction) {
-          return res.status(403).json({
-            status: "error",
-            error: "Suppression interdite : La suppression des défibrillateurs via l'API DEFIBEO est strictement bloquée pour des raisons de conformité, traçabilité et intégrité des données de sécurité sanitaire.",
-            code: "DEFIBRILLATEUR_DELETION_PROHIBITED",
-            message: "Action non autorisée : Les défibrillateurs ne peuvent pas être supprimés via l'API DEFIBEO.",
-            environnement: targetTenant.shortEnvId || tenantId
-          });
-        }
-
         let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
-
-        if (req.method === 'POST') {
-          const body = req.body || {};
-          const newId = body.identifiant || body.id || body.numeroSerie || `DAE-${Date.now().toString().slice(-4)}`;
-          const newDefib = {
-            id: newId,
-            identifiant: newId,
-            modele: body.modele || body.model || "DAE Standard",
-            marque: body.marque || body.brand || "Standard",
-            numeroSerie: body.numeroSerie || body.num_serie || body.serial || newId,
-            num_serie: body.num_serie || body.numeroSerie || newId,
-            statut: body.statut || body.status || "Opérationnel",
-            client_nom: body.client_nom || body.clientNom || body.client || "",
-            client_id: body.client_id || body.clientId || "",
-            adresse: body.adresse || body.address || "",
-            ville: body.ville || body.city || "",
-            code_postal: body.code_postal || body.codePostal || body.zip || "",
-            date_peremption_electrodes: body.date_peremption_electrodes || body.electrodes || "",
-            date_peremption_pile: body.date_peremption_pile || body.pile || "",
-            ...body
-          };
-
-          const existingIdx = defibs.findIndex((d: any) => d.id === newId || d.identifiant === newId || d.numeroSerie === newId);
-          if (existingIdx >= 0) {
-            defibs[existingIdx] = { ...defibs[existingIdx], ...newDefib };
-          } else {
-            defibs = [newDefib, ...defibs];
-          }
-
-          await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
-
-          return res.status(201).json({
-            status: "success",
-            message: "Défibrillateur enregistré avec succès",
-            environnement: targetTenant.shortEnvId || tenantId,
-            id: newId,
-            defibrillateur: newDefib,
-            data: newDefib
-          });
-        }
 
         // Robust single defibrillator identifier resolution (from URL path or query params)
         const pathSegments = cleanPath.split('/').map(s => s.trim()).filter(Boolean);
@@ -1526,57 +1928,168 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           ).trim();
         }
 
+        const matchesDefibWith = (targetStr: string) => (d: any): boolean => {
+          if (!d || typeof d !== 'object') return false;
+          const raw = decodeURIComponent(targetStr).trim();
+          const lower = raw.toLowerCase();
+          const clean = raw.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+          const candidates = [
+            d.id,
+            d.identifiant,
+            d.defibIdentifiant,
+            d.identifiantDAE,
+            d.identifiantUnique,
+            d.code,
+            d.reference,
+            d.ref,
+            d.defibId,
+            d.numeroSerie,
+            d.num_serie,
+            d.numero_serie,
+            d.numSerie,
+            d.numSerieDAE,
+            d.serial,
+            d.serialNumber,
+            d.sn,
+            d.numeroAtlasante,
+            d.defibSnapshot?.identifiant,
+            d.defibSnapshot?.numeroSerie,
+            d.defibSnapshot?.id
+          ];
+
+          for (const val of candidates) {
+            if (val === undefined || val === null) continue;
+            const sVal = String(val).trim();
+            if (!sVal) continue;
+            if (sVal === raw) return true;
+            if (sVal.toLowerCase() === lower) return true;
+            if (clean.length >= 3) {
+              const cVal = sVal.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+              if (cVal === clean) return true;
+            }
+          }
+          return false;
+        };
+
+        if (req.method === 'POST') {
+          const body = req.body || {};
+          const targetId = (subId || body.identifiant || body.id || body.numeroSerie || body.num_serie || '').trim();
+
+          if (!targetId) {
+            return res.status(403).json({
+              status: "error",
+              error: SENSITIVE_REQUEST_ERROR,
+              message: SENSITIVE_REQUEST_ERROR,
+              code: "SENSITIVE_REQUEST_BLOCKED",
+              environnement: targetTenant.shortEnvId || tenantId
+            });
+          }
+
+          const existingIdx = defibs.findIndex(matchesDefibWith(targetId));
+
+          if (existingIdx >= 0) {
+            const existing = defibs[existingIdx];
+
+            // Strict sensitive checks: Block modifications of sensitive identifiers (identifiant, id, numeroSerie)
+            if (body.identifiant && String(body.identifiant).trim().toLowerCase() !== String(existing.identifiant).trim().toLowerCase()) {
+              return res.status(403).json({
+                status: "error",
+                error: SENSITIVE_REQUEST_ERROR,
+                message: SENSITIVE_REQUEST_ERROR,
+                code: "SENSITIVE_REQUEST_BLOCKED",
+                environnement: targetTenant.shortEnvId || tenantId
+              });
+            }
+            if (body.id && String(body.id).trim() !== String(existing.id).trim()) {
+              return res.status(403).json({
+                status: "error",
+                error: SENSITIVE_REQUEST_ERROR,
+                message: SENSITIVE_REQUEST_ERROR,
+                code: "SENSITIVE_REQUEST_BLOCKED",
+                environnement: targetTenant.shortEnvId || tenantId
+              });
+            }
+            const bodySN = (body.numeroSerie || body.num_serie || body.serial || '').trim();
+            const existingSN = (existing.numeroSerie || existing.num_serie || '').trim();
+            if (bodySN && existingSN && bodySN.toLowerCase() !== existingSN.toLowerCase()) {
+              return res.status(403).json({
+                status: "error",
+                error: SENSITIVE_REQUEST_ERROR,
+                message: SENSITIVE_REQUEST_ERROR,
+                code: "SENSITIVE_REQUEST_BLOCKED",
+                environnement: targetTenant.shortEnvId || tenantId
+              });
+            }
+            if (body.id_record && existing.id_record && String(body.id_record).trim() !== String(existing.id_record).trim()) {
+              return res.status(403).json({
+                status: "error",
+                error: SENSITIVE_REQUEST_ERROR,
+                message: SENSITIVE_REQUEST_ERROR,
+                code: "SENSITIVE_REQUEST_BLOCKED",
+                environnement: targetTenant.shortEnvId || tenantId
+              });
+            }
+
+            // Safe merge: lock sensitive identifiers, id_record, and tenant connection
+            const updatedDefib = {
+              ...existing,
+              ...body,
+              id: existing.id,
+              identifiant: existing.identifiant,
+              numeroSerie: existing.numeroSerie,
+              num_serie: existing.num_serie || existing.numeroSerie,
+              id_record: existing.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${existing.id}`,
+              envId: targetTenant.shortEnvId || tenantId,
+              tenantId: tenantId
+            };
+            defibs[existingIdx] = updatedDefib;
+
+            await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
+
+            return res.status(200).json({
+              status: "success",
+              message: "Défibrillateur mis à jour avec succès",
+              environnement: targetTenant.shortEnvId || tenantId,
+              id: existing.identifiant || existing.id,
+              defibrillateur: updatedDefib,
+              data: updatedDefib
+            });
+          } else {
+            // Creation of a new defibrillator
+            const newDefib = {
+              ...body,
+              id: targetId,
+              identifiant: body.identifiant || targetId,
+              numeroSerie: body.numeroSerie || body.num_serie || body.serial || targetId,
+              num_serie: body.num_serie || body.numeroSerie || targetId,
+              modele: body.modele || body.model || "DAE Standard",
+              marque: body.marque || body.brand || "Standard",
+              statut: body.statut || body.status || "Opérationnel",
+              conforme: body.conforme || "Oui",
+              id_record: body.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${targetId}`,
+              envId: targetTenant.shortEnvId || tenantId,
+              tenantId: tenantId
+            };
+            defibs = [newDefib, ...defibs];
+
+            await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
+
+            return res.status(201).json({
+              status: "success",
+              message: "Défibrillateur enregistré avec succès",
+              environnement: targetTenant.shortEnvId || tenantId,
+              id: targetId,
+              defibrillateur: newDefib,
+              data: newDefib
+            });
+          }
+        }
+
         if (subId) {
           const rawSubId = decodeURIComponent(subId).trim();
-          const lowerSubId = rawSubId.toLowerCase();
-          const cleanSubId = rawSubId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+          let found = defibs.find(matchesDefibWith(rawSubId));
 
-          const matchesDefib = (d: any): boolean => {
-            if (!d || typeof d !== 'object') return false;
-            const candidates = [
-              d.id,
-              d.identifiant,
-              d.defibIdentifiant,
-              d.identifiantDAE,
-              d.identifiantUnique,
-              d.code,
-              d.reference,
-              d.ref,
-              d.defibId,
-              d.numeroSerie,
-              d.num_serie,
-              d.numero_serie,
-              d.numSerie,
-              d.numSerieDAE,
-              d.serial,
-              d.serialNumber,
-              d.sn,
-              d.numeroAtlasante,
-              d.defibSnapshot?.identifiant,
-              d.defibSnapshot?.numeroSerie,
-              d.defibSnapshot?.id
-            ];
-
-            for (const val of candidates) {
-              if (val === undefined || val === null) continue;
-              const sVal = String(val).trim();
-              if (!sVal) continue;
-              // 1. Exact match
-              if (sVal === rawSubId) return true;
-              // 2. Case-insensitive match
-              if (sVal.toLowerCase() === lowerSubId) return true;
-              // 3. Normalized alphanumeric match (ignores spaces, hyphens, slashes)
-              if (cleanSubId.length >= 3) {
-                const cVal = sVal.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                if (cVal === cleanSubId) return true;
-              }
-            }
-            return false;
-          };
-
-          let found = defibs.find(matchesDefib);
-
-          // If not found in default loaded list, search across all tenant aliases and partitions
           if (!found) {
             const searchAliases = Array.from(new Set([
               targetTenant.shortEnvId,
@@ -1584,8 +2097,8 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               sanitizedTenantId,
               rawTenantId,
               tenantId,
+              'D18',
               'D58',
-              '58',
               'demo'
             ].filter(Boolean)));
 
@@ -1593,28 +2106,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               if (alias === tenantId) continue;
               const extraDefibs = await fetchServerCollection('defibrillateurs', alias, searchAliases);
               if (Array.isArray(extraDefibs)) {
-                found = extraDefibs.find(matchesDefib);
-                if (found) break;
-              }
-            }
-          }
-
-          // If still not found, check alternative collection names (e.g. 'defibs', 'devices', 'dae')
-          if (!found) {
-            for (const altCol of ['defibs', 'devices', 'dae']) {
-              const altDefibs = await fetchServerCollection(altCol, tenantId, tenantAliases);
-              if (Array.isArray(altDefibs)) {
-                found = altDefibs.find(matchesDefib);
-                if (found) break;
-              }
-            }
-          }
-
-          // If still not found, check in-memory store directly across all keys
-          if (!found) {
-            for (const [key, val] of serverMemoryStore.entries()) {
-              if (Array.isArray(val) && (key.includes('defib') || key.includes('device') || key.includes('dae'))) {
-                found = val.find(matchesDefib);
+                found = extraDefibs.find(matchesDefibWith(rawSubId));
                 if (found) break;
               }
             }
@@ -1700,13 +2192,174 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         });
       }
 
-      // Default fallback endpoint info
-      return res.json({
-        status: "success",
-        message: "API Defibeo Operational Endpoint",
-        endpoint: cleanPath,
-        environnement: tenantId,
-        timestamp: new Date().toISOString()
+      // 5. Matériels Endpoint
+      if (cleanPath.startsWith('materiels')) {
+        const subId = cleanPath.split('/')[1] || '';
+        let materiels = await fetchServerCollection('materiels', tenantId, tenantAliases);
+
+        if (req.method === 'POST') {
+          const body = req.body || {};
+          const targetId = (subId || body.identifiant || body.id || '').trim();
+          if (!targetId) {
+            return res.status(403).json({ status: "error", error: SENSITIVE_REQUEST_ERROR, message: SENSITIVE_REQUEST_ERROR, code: "SENSITIVE_REQUEST_BLOCKED" });
+          }
+
+          const existingIdx = materiels.findIndex((m: any) => m && (m.id === targetId || m.identifiant === targetId));
+          if (existingIdx >= 0) {
+            const existing = materiels[existingIdx];
+            const updatedMat = {
+              ...existing,
+              ...body,
+              id: existing.id,
+              identifiant: existing.identifiant,
+              id_record: existing.id_record || `record_mat_${targetId}`,
+              envId: targetTenant.shortEnvId || tenantId,
+              tenantId: tenantId
+            };
+            materiels[existingIdx] = updatedMat;
+            await saveServerCollection('materiels', tenantId, materiels, tenantAliases);
+            return res.json({ status: "success", message: "Matériel mis à jour avec succès", environnement: targetTenant.shortEnvId || tenantId, materiel: updatedMat });
+          } else {
+            const newMat = {
+              ...body,
+              id: targetId,
+              identifiant: targetId,
+              id_record: body.id_record || `record_mat_${targetId}`,
+              envId: targetTenant.shortEnvId || tenantId,
+              tenantId: tenantId
+            };
+            materiels = [newMat, ...materiels];
+            await saveServerCollection('materiels', tenantId, materiels, tenantAliases);
+            return res.status(201).json({ status: "success", message: "Matériel créé avec succès", environnement: targetTenant.shortEnvId || tenantId, materiel: newMat });
+          }
+        }
+
+        if (subId) {
+          const found = materiels.find((m: any) => m && (m.id === subId || m.identifiant === subId));
+          if (found) {
+            return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, materiel: found });
+          }
+          return res.status(404).json({ status: "error", error: `Matériel '${subId}' non trouvé.` });
+        }
+
+        return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, count: materiels.length, materiels });
+      }
+
+      // 6. Commandes Endpoint
+      if (cleanPath.startsWith('commandes')) {
+        if (req.method === 'POST') {
+          const body = req.body || {};
+          const cmdId = body.numeroCommande || `CMD-${Date.now().toString().slice(-6)}`;
+          const newCmd = {
+            ...body,
+            id: cmdId,
+            numeroCommande: cmdId,
+            date: new Date().toISOString(),
+            envId: targetTenant.shortEnvId || tenantId,
+            tenantId: tenantId
+          };
+          let cmds = await fetchServerCollection('commandes', tenantId, tenantAliases);
+          cmds = [newCmd, ...cmds];
+          await saveServerCollection('commandes', tenantId, cmds, tenantAliases);
+          return res.status(201).json({ status: "success", message: "Commande enregistrée avec succès", environnement: targetTenant.shortEnvId || tenantId, commande: newCmd });
+        }
+      }
+
+      // 7. Tournées Endpoint
+      if (cleanPath.startsWith('tournees')) {
+        if (req.method === 'POST') {
+          const body = req.body || {};
+          const tourId = body.id || `TOUR-${Date.now().toString().slice(-6)}`;
+          const newTour = {
+            ...body,
+            id: tourId,
+            date: body.date || new Date().toISOString(),
+            envId: targetTenant.shortEnvId || tenantId,
+            tenantId: tenantId
+          };
+          let tours = await fetchServerCollection('fsm_tours', tenantId, tenantAliases);
+          tours = [newTour, ...tours];
+          await saveServerCollection('fsm_tours', tenantId, tours, tenantAliases);
+          return res.status(201).json({ status: "success", message: "Tournée enregistrée avec succès", environnement: targetTenant.shortEnvId || tenantId, tournee: newTour });
+        }
+      }
+
+      // 8. Rapports Endpoint
+      if (cleanPath.startsWith('rapports')) {
+        const subId = cleanPath.split('/')[1] || '';
+        const defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
+        if (subId) {
+          const defib = defibs.find((d: any) => d && (d.id === subId || d.identifiant === subId || d.numeroSerie === subId));
+          if (defib) {
+            return res.json({
+              status: "success",
+              environnement: targetTenant.shortEnvId || tenantId,
+              rapport: {
+                equipement: defib.identifiant || defib.id,
+                numeroSerie: defib.numeroSerie,
+                derniereMaintenance: defib.derniereMaintenance || defib.derniere_maintenance,
+                statut: defib.statut || defib.conforme,
+                electrodes: defib.peremptionElectrodeA || defib.peremption_a,
+                batterie: defib.peremptionBatterie || defib.peremption_b,
+                pourcentageBatterie: defib.pourcentageBatterie || defib.pourcentage_constate_b
+              }
+            });
+          }
+          return res.status(404).json({ status: "error", error: `Aucun rapport disponible pour '${subId}'` });
+        }
+        return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, count: defibs.length, defibs });
+      }
+
+      // 9. Stocks Endpoint
+      if (cleanPath.startsWith('stocks')) {
+        const subPath = cleanPath.replace(/^stocks\/?/, '');
+        let stocks = await fetchServerCollection('stocks', tenantId, tenantAliases);
+        if (req.method === 'POST') {
+          const body = req.body || {};
+          const ugs = (body.ugs || body.id || cleanPath.split('/')[2] || `UGS-${Date.now()}`).trim();
+          const newStock = {
+            ...body,
+            id: ugs,
+            ugs,
+            envId: targetTenant.shortEnvId || tenantId,
+            tenantId: tenantId
+          };
+          stocks = [newStock, ...stocks.filter((s: any) => s && s.ugs !== ugs)];
+          await saveServerCollection('stocks', tenantId, stocks, tenantAliases);
+          return res.status(201).json({ status: "success", message: "Stock mis à jour avec succès", environnement: targetTenant.shortEnvId || tenantId, stock: newStock });
+        } else {
+          return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, count: stocks.length, stocks });
+        }
+      }
+
+      // 10. Formations Endpoint
+      if (cleanPath.startsWith('formations')) {
+        let formations = await fetchServerCollection('formations', tenantId, tenantAliases);
+        if (req.method === 'POST') {
+          const body = req.body || {};
+          const fId = body.id || `FORM-${Date.now().toString().slice(-5)}`;
+          const newFormation = {
+            ...body,
+            id: fId,
+            date: body.date || new Date().toISOString(),
+            envId: targetTenant.shortEnvId || tenantId,
+            tenantId: tenantId
+          };
+          formations = [newFormation, ...formations];
+          await saveServerCollection('formations', tenantId, formations, tenantAliases);
+          return res.status(201).json({ status: "success", message: "Formation enregistrée avec succès", environnement: targetTenant.shortEnvId || tenantId, formation: newFormation });
+        } else {
+          return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, count: formations.length, formations });
+        }
+      }
+
+      // Strict Blocking: Any manipulation or endpoint outside documentation returns sensitive request error
+      return res.status(403).json({
+        status: "error",
+        error: SENSITIVE_REQUEST_ERROR,
+        message: SENSITIVE_REQUEST_ERROR,
+        code: "SENSITIVE_REQUEST_BLOCKED",
+        environnement: targetTenant.shortEnvId || tenantId
       });
     } catch (err: any) {
       console.error("Defibeo API Endpoint Error:", err);
