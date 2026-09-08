@@ -4223,30 +4223,6 @@ export default function SettingsModal({
                           Consulter la documentation
                         </button>
                       </div>
-
-                      <div className="pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setIsApiActivityOpen(true)}
-                          style={{
-                            color: 'rgb(255, 255, 255)',
-                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                            background: 'rgb(96, 28, 104)',
-                            borderRadius: '13px',
-                            padding: '9px',
-                            fontSize: '18px',
-                            fontWeight: '100',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            border: 'none',
-                            cursor: 'pointer',
-                            width: '100%',
-                            textAlign: 'center',
-                          }}
-                          className="transition-opacity hover:opacity-90"
-                        >
-                          Historique de l’activité
-                        </button>
-                      </div>
                     </div>
                   )}
                 </div>

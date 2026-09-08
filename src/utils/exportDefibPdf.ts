@@ -104,9 +104,9 @@ export async function exportSelectedDefibsToPDF({
   // Canvas dimensions for A4 Landscape (10px per mm => 2970 x 2100 px, ~254 DPI)
   const canvasW = 2970;
   const canvasH = 2100;
-  const marginX = 100; // 10 mm
-  const marginBottom = 130; // 13 mm
-  const tableW = canvasW - marginX * 2; // 2770 px
+  const marginX = 50; // 5 mm (reduced page padding)
+  const marginBottom = 70; // 7 mm (reduced bottom padding)
+  const tableW = canvasW - marginX * 2; // 2870 px
 
   // Formatted date dd/mm/yyyy
   const now = new Date();
@@ -116,27 +116,29 @@ export async function exportSelectedDefibsToPDF({
   const dateFormatted = `${dd}/${mm}/${yyyy}`;
   const subtitleText = `Export Matériel(s) Le ${dateFormatted}`;
 
-  // Columns definition (total 2770 px)
+  // Columns definition (total 2870 px, spanning full reduced-padding table width)
   const columns: ColumnDef[] = [
-    { header: 'Identifiant', width: 250, bold: true },
-    { header: 'N° Série', width: 220 },
-    { header: 'Modèle', width: 250 },
-    { header: 'Client', width: 280 },
-    { header: 'Nom du site', width: 240 },
-    { header: 'Contrat', width: 260 },
-    { header: 'Localisation', width: 240 },
+    { header: 'Identifiant', width: 260, bold: true },
+    { header: 'N° Série', width: 230 },
+    { header: 'Modèle', width: 260 },
+    { header: 'Client', width: 300 },
+    { header: 'Nom du site', width: 255 },
+    { header: 'Contrat', width: 275 },
+    { header: 'Localisation', width: 250 },
     { header: 'Garantie', width: 170, align: 'center' },
     { header: 'Pro. visite', width: 170, align: 'center' },
     { header: 'Péremp. A', width: 160, align: 'center' },
     { header: 'Péremp. P', width: 160, align: 'center' },
     { header: 'Péremp. B', width: 160, align: 'center' },
-    { header: 'Tournée', width: 210 },
+    { header: 'Tournée', width: 220 },
   ];
 
   // Identical font-size for both table headers and values
   const TABLE_FONT_SIZE = 22;
   const HEADER_HEIGHT = 65;
   const ROW_HEIGHT = 58;
+  const BORDER_COLOR = '#cbd5e1';
+  const BORDER_WIDTH = 1;
 
   // Build rows data
   const rowsData: string[][] = selectedDefibs.map((df) => {
@@ -202,11 +204,11 @@ export async function exportSelectedDefibsToPDF({
   });
 
   // Calculate pages
-  const page1StartY = 205; // Table starts directly after header title + subtitle (NO line divider)
+  const page1StartY = 135; // Compact header with reduced padding
   const page1AvailableH = canvasH - marginBottom - page1StartY;
   const page1MaxRows = Math.floor((page1AvailableH - HEADER_HEIGHT) / ROW_HEIGHT);
 
-  const subsequentStartY = 95;
+  const subsequentStartY = 50;
   const subsequentAvailableH = canvasH - marginBottom - subsequentStartY;
   const subsequentMaxRows = Math.floor((subsequentAvailableH - HEADER_HEIGHT) / ROW_HEIGHT);
 
@@ -258,33 +260,33 @@ export async function exportSelectedDefibsToPDF({
       let tableStartY = subsequentStartY;
 
       if (chunk.isFirstPage) {
-        // Page 1 Header: Tenant Logo and Titles
+        // Page 1 Header: Tenant Logo and Titles with reduced top padding
         let textLeft = marginX;
         if (includeLogo && logoImg && logoImg.width > 0 && logoImg.height > 0) {
-          const maxLogoW = 380;
-          const maxLogoH = 130;
+          const maxLogoW = 320;
+          const maxLogoH = 85;
           let renderW = (logoImg.width / logoImg.height) * maxLogoH;
           let renderH = maxLogoH;
           if (renderW > maxLogoW) {
             renderW = maxLogoW;
             renderH = (logoImg.height / logoImg.width) * maxLogoW;
           }
-          ctx.drawImage(logoImg, marginX, 60, renderW, renderH);
-          textLeft = marginX + renderW + 50;
+          ctx.drawImage(logoImg, marginX, 35, renderW, renderH);
+          textLeft = marginX + renderW + 35;
         }
 
         // Company Name Title
         const companyName = companyInfo?.name || 'Gestionnaire de Défibrillateurs';
-        ctx.font = `bold 32px ${FONT_FAMILY}`;
+        ctx.font = `bold 28px ${FONT_FAMILY}`;
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(companyName, textLeft, 95);
+        ctx.fillText(companyName, textLeft, 58);
 
-        // Subtitle: Export Matériel(s) Le dd/mm/yyyy
+        // Subtitle: Export Matériel(s) Le dd/mm/yyyy in #000
         ctx.font = `normal 22px ${FONT_FAMILY}`;
-        ctx.fillStyle = '#475569';
-        ctx.fillText(subtitleText, textLeft, 140);
+        ctx.fillStyle = '#000000';
+        ctx.fillText(subtitleText, textLeft, 95);
 
         // NOTE: Line divider above table is intentionally removed per user feedback!
         tableStartY = page1StartY;
@@ -296,8 +298,8 @@ export async function exportSelectedDefibsToPDF({
 
       let headerX = marginX;
       for (const col of columns) {
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = BORDER_COLOR;
+        ctx.lineWidth = BORDER_WIDTH;
         ctx.strokeRect(headerX, tableStartY, col.width, HEADER_HEIGHT);
 
         ctx.font = `bold ${TABLE_FONT_SIZE}px ${FONT_FAMILY}`;
@@ -319,8 +321,8 @@ export async function exportSelectedDefibsToPDF({
         let cellX = marginX;
         for (let cIdx = 0; cIdx < columns.length; cIdx++) {
           const col = columns[cIdx];
-          ctx.strokeStyle = '#e2e8f0';
-          ctx.lineWidth = 1;
+          ctx.strokeStyle = BORDER_COLOR;
+          ctx.lineWidth = BORDER_WIDTH;
           ctx.strokeRect(cellX, rowY, col.width, ROW_HEIGHT);
 
           ctx.font = `${col.bold ? 'bold ' : 'normal '}${TABLE_FONT_SIZE}px ${FONT_FAMILY}`;
@@ -335,9 +337,9 @@ export async function exportSelectedDefibsToPDF({
       // Footer: Tenant commercial name REMOVED per user feedback; pagination in color #000
       ctx.textBaseline = 'alphabetic';
       ctx.fillStyle = '#000000';
-      ctx.font = `normal 22px ${FONT_FAMILY}`;
+      ctx.font = `normal 20px ${FONT_FAMILY}`;
       ctx.textAlign = 'right';
-      ctx.fillText(`Page ${pageIdx + 1} / ${totalPages}`, canvasW - marginX, canvasH - 50);
+      ctx.fillText(`Page ${pageIdx + 1} / ${totalPages}`, canvasW - marginX, canvasH - 30);
     };
 
     renderPage(true);
