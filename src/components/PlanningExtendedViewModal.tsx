@@ -90,6 +90,30 @@ const getISOWeekNumber = (date: Date): number => {
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 };
 
+const parseTimeInMinutes = (raw: any): number | null => {
+  if (!raw || typeof raw !== 'string') return null;
+  const s = raw.trim().toLowerCase();
+  const match = s.match(/(\d{1,2})[h:](\d{2})?/);
+  if (match) {
+    const hours = parseInt(match[1], 10);
+    const minutes = match[2] ? parseInt(match[2], 10) : 0;
+    if (!isNaN(hours) && hours >= 0 && hours <= 24) {
+      return hours * 60 + minutes;
+    }
+  }
+  return null;
+};
+
+const getTimeOffsetPercent = (rawTime: any): number => {
+  const mins = parseTimeInMinutes(rawTime);
+  if (mins === null) return 0;
+  // Standard workday scale: 07:30 (450 mins) to 18:30 (1110 mins)
+  const startDayMins = 7.5 * 60; // 450
+  const endDayMins = 18.5 * 60;  // 1110
+  const clamped = Math.max(startDayMins, Math.min(endDayMins, mins));
+  return (clamped - startDayMins) / (endDayMins - startDayMins); // 0 to 1
+};
+
 export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps> = ({
   isOpen,
   onClose,
@@ -110,6 +134,28 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
   const [currentYear, setCurrentYear] = useState<number>(() => {
     return typeof initialYear === 'number' ? initialYear : today.getFullYear();
   });
+
+  // Real-time clock for the vertical red cursor bar
+  const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const todayCursorPercent = useMemo(() => {
+    const hours = currentTime.getHours();
+    const minutes = currentTime.getMinutes();
+    const currentTotalMins = hours * 60 + minutes;
+
+    // Scale between 07:30 (450 mins) and 18:30 (1110 mins) -> 660 mins span
+    const startDayMins = 7.5 * 60; // 450
+    const endDayMins = 18.5 * 60;  // 1110
+    const rawPct = ((currentTotalMins - startDayMins) / (endDayMins - startDayMins)) * 100;
+    return Math.max(2, Math.min(98, rawPct));
+  }, [currentTime]);
 
   // Local re-fetchable data states for live "Actualiser" button
   const [localTours, setLocalTours] = useState<any[]>(initialTours || []);
@@ -486,14 +532,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={handlePrevMonth}
-            className="transition-colors cursor-pointer"
+            className="transition-colors cursor-pointer hover:opacity-80"
             style={{
               fontSize: '18px',
               borderRadius: '13px',
               padding: '10px 20px',
               border: 'none',
               background: '#edededa6',
-              color: '#fff'
+              color: '#000'
             }}
             title="Mois précédent"
           >
@@ -514,14 +560,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={handleNextMonth}
-            className="transition-colors cursor-pointer"
+            className="transition-colors cursor-pointer hover:opacity-80"
             style={{
               fontSize: '18px',
               borderRadius: '13px',
               padding: '10px 20px',
               border: 'none',
               background: '#edededa6',
-              color: '#fff'
+              color: '#000'
             }}
             title="Mois suivant"
           >
@@ -531,14 +577,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={handleCurrentMonth}
-            className="transition-colors cursor-pointer ml-1"
+            className="transition-colors cursor-pointer hover:opacity-80 ml-1"
             style={{
               fontSize: '18px',
               borderRadius: '13px',
               padding: '10px 20px',
               border: 'none',
               background: '#edededa6',
-              color: '#fff'
+              color: '#000'
             }}
             title="Revenir au mois en cours"
           >
@@ -558,14 +604,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             type="button"
             disabled={isRefreshing}
             onClick={handleRefresh}
-            className="transition-colors cursor-pointer disabled:opacity-50"
+            className="transition-colors cursor-pointer disabled:opacity-50 hover:opacity-80"
             style={{
               fontSize: '18px',
               borderRadius: '13px',
               padding: '10px 20px',
               border: 'none',
               background: '#edededa6',
-              color: '#fff'
+              color: '#000'
             }}
             title="Recharger les données sans recharger la page"
           >
@@ -575,7 +621,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={onClose}
-            className="transition-colors cursor-pointer ml-2"
+            className="transition-colors cursor-pointer ml-2 hover:opacity-90"
             style={{
               fontSize: '18px',
               borderRadius: '13px',
@@ -614,21 +660,16 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       <div className="flex-1 overflow-auto bg-white">
         <div className="inline-block min-w-full align-top">
           {/* Timeline Table Grid */}
-          <table className="border-collapse text-left" style={{ minWidth: `${260 + daysInMonth.length * 170}px`, width: '100%' }}>
-            {/* Header: Weeks and Days */}
-            <thead className="sticky top-0 z-30 bg-white">
+          <table className="border-collapse text-left" style={{ minWidth: `${daysInMonth.length * 200}px`, width: '100%' }}>
+            {/* Header: Weeks and Days (No left header column, day columns take full width) */}
+            <thead className="sticky top-0 z-30 bg-white shadow-xs">
               {/* Row 1: Weeks */}
               <tr className="border-b border-neutral-200 bg-neutral-100 text-neutral-600 text-xs font-semibold">
-                <th
-                  className="sticky left-0 z-40 bg-neutral-100 border-r border-neutral-300 px-3 py-1.5 w-[260px] min-w-[260px]"
-                >
-                  Semaines
-                </th>
                 {weeksGroup.map((w, idx) => (
                   <th
                     key={`week-${w.weekNum}-${idx}`}
                     colSpan={w.count}
-                    className="border-r border-neutral-300 px-2 py-1 text-center font-bold text-neutral-700 bg-neutral-100/90 text-xs"
+                    className="border-r border-neutral-300 px-2 py-1.5 text-center font-bold text-neutral-700 bg-neutral-100/95 text-xs"
                   >
                     Semaine {w.weekNum}
                   </th>
@@ -637,15 +678,10 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
 
               {/* Row 2: Days (1 to 31) */}
               <tr className="border-b border-neutral-300 bg-white text-neutral-800 text-xs">
-                <th
-                  className="sticky left-0 z-40 bg-white border-r border-neutral-300 px-3 py-2 w-[260px] min-w-[260px] font-bold text-neutral-900 shadow-xs"
-                >
-                  Technicien / Tournées & Missions
-                </th>
                 {daysInMonth.map((d) => (
                   <th
                     key={`day-header-${d.isoDate}`}
-                    className={`border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none w-[170px] min-w-[170px] max-w-[170px] ${
+                    className={`relative border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none w-[200px] min-w-[200px] max-w-[200px] ${
                       d.isToday
                         ? 'bg-pink-100/80 text-[#FD4EBB] border-b-2 border-b-[#FD4EBB]'
                         : d.isWeekend
@@ -657,6 +693,15 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                     <div className={`text-sm font-bold ${d.isToday ? 'text-[#FD4EBB]' : 'text-neutral-900'}`}>
                       {d.day}
                     </div>
+
+                    {/* Red Pin for current time cursor on today's header */}
+                    {d.isToday && (
+                      <div
+                        className="absolute bottom-0 w-2.5 h-2.5 -mb-1 -ml-1 rounded-full bg-[#ef4444] z-30 shadow-xs pointer-events-none"
+                        style={{ left: `${todayCursorPercent}%` }}
+                        title={`Curseur temps réel : ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`}
+                      />
+                    )}
                   </th>
                 ))}
               </tr>
@@ -666,7 +711,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             <tbody className="divide-y divide-neutral-200 text-xs">
               {techniciansData.length === 0 && (
                 <tr>
-                  <td colSpan={1 + daysInMonth.length} className="py-12 text-center text-neutral-500 font-medium text-sm">
+                  <td colSpan={daysInMonth.length} className="py-12 text-center text-neutral-500 font-medium text-sm">
                     Aucun technicien trouvé pour ce tenant.
                   </td>
                 </tr>
@@ -677,44 +722,45 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
 
                 return (
                   <React.Fragment key={`tech-row-group-${tech.name}-${techIdx}`}>
-                    {/* TECHNICIAN HEADER ROW */}
-                    <tr className="bg-neutral-50 border-t-2 border-neutral-300">
-                      {/* Sticky Left: Technician Profile */}
+                    {/* TECHNICIAN HORIZONTAL INTERCALAIRE ROW */}
+                    <tr className="bg-neutral-100/90 border-t-2 border-b border-neutral-300">
                       <td
-                        className="sticky left-0 z-20 bg-neutral-50 border-r border-neutral-300 px-3 py-2 w-[260px] min-w-[260px]"
+                        colSpan={daysInMonth.length}
+                        className="px-4 py-2 font-bold text-sm text-neutral-900 bg-neutral-100 select-none shadow-2xs"
                       >
-                        <div className="font-bold text-sm text-neutral-900 truncate" title={tech.name}>
-                          {tech.name}
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-neutral-800 inline-block" />
+                          <span className="text-base text-neutral-950 font-bold tracking-tight">{tech.name}</span>
+                          <span className="text-xs font-normal text-neutral-500 ml-2">
+                            {tours.length} {tours.length > 1 ? 'tournées' : 'tournée'}
+                            {techEvts.length > 0 && ` • ${techEvts.length} événement${techEvts.length > 1 ? 's' : ''} spontané${techEvts.length > 1 ? 's' : ''}`}
+                          </span>
                         </div>
                       </td>
-
-                      {/* Timeline Day background for Tech Header */}
-                      {daysInMonth.map((d) => (
-                        <td
-                          key={`tech-cell-${tech.name}-${d.isoDate}`}
-                          className={`border-r border-neutral-200 p-0 text-center w-[170px] min-w-[170px] max-w-[170px] ${
-                            d.isToday ? 'bg-pink-50/40' : d.isWeekend ? 'bg-neutral-100/40' : 'bg-neutral-50/60'
-                          }`}
-                        />
-                      ))}
                     </tr>
 
-                    {/* IF NO ACTIVITY THIS MONTH: Blank row without placeholder text */}
+                    {/* IF NO ACTIVITY THIS MONTH: Blank row */}
                     {!hasActivity && (
                       <tr className="border-b border-neutral-200">
-                        <td className="sticky left-0 z-20 bg-white border-r border-neutral-300 px-3 py-2 w-[260px] min-w-[260px]" />
                         {daysInMonth.map((d) => (
                           <td
                             key={`empty-${tech.name}-${d.isoDate}`}
-                            className={`border-r border-neutral-200 p-1 w-[170px] min-w-[170px] max-w-[170px] ${
+                            className={`relative border-r border-neutral-200 p-1 w-[200px] min-w-[200px] max-w-[200px] ${
                               d.isToday ? 'bg-pink-50/30' : d.isWeekend ? 'bg-neutral-100/30' : 'bg-white'
                             }`}
-                          />
+                          >
+                            {d.isToday && (
+                              <div
+                                className="absolute top-0 bottom-0 pointer-events-none z-20 w-[2px] bg-[#ef4444]"
+                                style={{ left: `${todayCursorPercent}%` }}
+                              />
+                            )}
+                          </td>
                         ))}
                       </tr>
                     )}
 
-                    {/* TOURNÉES PARENT ENCARTS & MISSIONS */}
+                    {/* TOURNÉES & MISSIONS */}
                     {tours.map((tItem, tIdx) => {
                       const startFormatted = tItem.startIso.split('-').reverse().slice(0, 2).join('/');
                       const endFormatted = tItem.endIso.split('-').reverse().slice(0, 2).join('/');
@@ -722,32 +768,9 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                       return (
                         <tr
                           key={`tour-row-${tech.name}-${tItem.tourId}-${tIdx}`}
-                          className="border-b border-neutral-200 hover:bg-neutral-50/40 transition-colors"
+                          className="border-b border-neutral-200 hover:bg-neutral-50/30 transition-colors"
                         >
-                          {/* Sticky Left: Tournée Parent Encart */}
-                          <td className="sticky left-0 z-20 bg-white border-r border-neutral-300 px-3 py-2 w-[260px] min-w-[260px] align-top">
-                            <div className="border-l-4 border-[#FD4EBB] pl-2 space-y-1">
-                              <div className="font-bold text-xs text-neutral-900 truncate" title={tItem.title}>
-                                {tItem.title}
-                              </div>
-                              <div className="flex items-center gap-1.5 pt-0.5">
-                                <span
-                                  className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-white text-[11px] font-semibold"
-                                  style={{ backgroundColor: '#000000' }}
-                                >
-                                  {startFormatted}
-                                </span>
-                                <span
-                                  className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-white text-[11px] font-semibold"
-                                  style={{ backgroundColor: '#000000' }}
-                                >
-                                  {endFormatted}
-                                </span>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Days Columns for this Tournée */}
+                          {/* Days Columns for this Tournée (Full Width) */}
                           {daysInMonth.map((d) => {
                             const isWithinTour = d.isoDate >= tItem.startIso && d.isoDate <= tItem.endIso;
                             const dayMissions = tItem.missions.filter((m: any) => m.resolvedIsoDate === d.isoDate);
@@ -755,7 +778,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                             return (
                               <td
                                 key={`tour-day-${tItem.tourId}-${d.isoDate}`}
-                                className={`border-r border-neutral-200 p-1 align-top w-[170px] min-w-[170px] max-w-[170px] ${
+                                className={`relative border-r border-neutral-200 p-1.5 align-top w-[200px] min-w-[200px] max-w-[200px] ${
                                   d.isToday
                                     ? 'bg-pink-50/50'
                                     : isWithinTour
@@ -765,7 +788,34 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                     : 'bg-white'
                                 }`}
                               >
-                                {dayMissions.length > 0 ? (
+                                {/* Vertical red cursor bar advancing by time across the calendar height */}
+                                {d.isToday && (
+                                  <div
+                                    className="absolute top-0 bottom-0 pointer-events-none z-20 w-[2px] bg-[#ef4444]"
+                                    style={{ left: `${todayCursorPercent}%` }}
+                                  />
+                                )}
+
+                                {/* Tournée pink barrette: ALWAYS visible if within tour, regardless of missions count */}
+                                {isWithinTour && (
+                                  <div
+                                    className="rounded-md bg-pink-100/90 border border-pink-300/80 px-2 py-1 mb-1.5 text-[11px] font-semibold text-pink-950 flex items-center justify-between gap-1 overflow-hidden shrink-0 cursor-default"
+                                    title={`Tournée : ${tItem.title} (${startFormatted} - ${endFormatted})`}
+                                  >
+                                    {(d.isoDate === tItem.startIso || (d.day === 1 && tItem.startIso < d.isoDate)) ? (
+                                      <div className="flex items-center gap-1.5 truncate">
+                                        <span className="truncate font-bold text-neutral-950">{tItem.title}</span>
+                                        <span className="px-1.5 py-0.2 rounded-full bg-black text-white text-[10px] shrink-0 font-medium">{startFormatted}</span>
+                                        <span className="px-1.5 py-0.2 rounded-full bg-black text-white text-[10px] shrink-0 font-medium">{endFormatted}</span>
+                                      </div>
+                                    ) : (
+                                      <div className="h-1.5 w-full bg-pink-300/80 rounded-xs" />
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Day missions: placed under the pink barrette, horizontally shifted based on time */}
+                                {dayMissions.length > 0 && (
                                   <div className="space-y-1.5">
                                     {dayMissions.map((m: any, mIdx: number) => {
                                       const details = getMissionDetails(m);
@@ -778,12 +828,16 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                       const line3 = details.locationStr;
 
                                       const barColor = details.isDefib ? '#165dfc' : '#0891b2';
+                                      const timeOffset = getTimeOffsetPercent(details.creneau);
+                                      // Shift horizontally between 0px and 40px depending on time
+                                      const marginLeftPx = Math.round(timeOffset * 40);
 
                                       return (
                                         <div
                                           key={`mission-bar-${m.id || mIdx}`}
-                                          className="w-[160px] max-w-[160px] select-none cursor-default overflow-hidden"
+                                          className="w-[150px] max-w-[150px] select-none cursor-default overflow-hidden transition-all shadow-xs"
                                           style={{
+                                            marginLeft: `${marginLeftPx}px`,
                                             backgroundColor: barColor,
                                             borderRadius: '10px',
                                             padding: '8px 12px',
@@ -791,6 +845,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                             color: '#fff',
                                             lineHeight: '16px'
                                           }}
+                                          title={`Créneau : ${details.creneau || 'Non spécifié'}`}
                                         >
                                           {/* Line 1: Créneau - Identifiant */}
                                           <div
@@ -817,12 +872,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                       );
                                     })}
                                   </div>
-                                ) : isWithinTour ? (
-                                  // Tournée parent visual marker bar if no mission on this exact day
-                                  <div
-                                    className="h-2 rounded-xs bg-pink-200/80 my-1 cursor-default"
-                                  />
-                                ) : null}
+                                )}
                               </td>
                             );
                           })}
@@ -830,26 +880,16 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                       );
                     })}
 
-                    {/* SPONTANEOUS EVENTS ROW */}
+                    {/* SPONTANEOUS EVENTS ROW (Full Width, no left header) */}
                     {techEvts.length > 0 && (
-                      <tr className="border-b border-neutral-200 bg-purple-50/20">
-                        {/* Sticky Left */}
-                        <td className="sticky left-0 z-20 bg-white border-r border-neutral-300 px-3 py-1.5 w-[260px] min-w-[260px] align-middle">
-                          <div className="border-l-4 border-purple-600 pl-2">
-                            <div className="font-bold text-xs text-purple-900">
-                              Événements spontanés
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Days Columns */}
+                      <tr className="border-b border-neutral-200 bg-purple-50/15 hover:bg-purple-50/25 transition-colors">
                         {daysInMonth.map((d) => {
                           const matchingEvts = techEvts.filter(e => toIsoDateStr(e.date) === d.isoDate);
 
                           return (
                             <td
                               key={`spont-cell-${tech.name}-${d.isoDate}`}
-                              className={`border-r border-neutral-200 p-1 align-top w-[170px] min-w-[170px] max-w-[170px] ${
+                              className={`relative border-r border-neutral-200 p-1.5 align-top w-[200px] min-w-[200px] max-w-[200px] ${
                                 d.isToday
                                   ? 'bg-pink-50/50'
                                   : d.isWeekend
@@ -857,18 +897,29 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   : 'bg-white'
                               }`}
                             >
+                              {/* Red vertical cursor line */}
+                              {d.isToday && (
+                                <div
+                                  className="absolute top-0 bottom-0 pointer-events-none z-20 w-[2px] bg-[#ef4444]"
+                                  style={{ left: `${todayCursorPercent}%` }}
+                                />
+                              )}
+
                               {matchingEvts.length > 0 && (
                                 <div className="space-y-1.5">
                                   {matchingEvts.map((evt) => {
                                     const line1 = [evt.creneau, 'Spontané'].filter(Boolean).join(' - ');
                                     const line2 = evt.intitule || '';
                                     const line3 = evt.commentaire || '';
+                                    const timeOffset = getTimeOffsetPercent(evt.creneau);
+                                    const marginLeftPx = Math.round(timeOffset * 40);
 
                                     return (
                                       <div
                                         key={evt.id}
-                                        className="w-[160px] max-w-[160px] select-none cursor-default overflow-hidden"
+                                        className="w-[150px] max-w-[150px] select-none cursor-default overflow-hidden transition-all shadow-xs"
                                         style={{
+                                          marginLeft: `${marginLeftPx}px`,
                                           backgroundColor: '#9333ea',
                                           borderRadius: '10px',
                                           padding: '8px 12px',
@@ -876,6 +927,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                           color: '#fff',
                                           lineHeight: '16px'
                                         }}
+                                        title={`Événement spontané : ${evt.creneau || 'Horaire libre'}`}
                                       >
                                         <div
                                           className="truncate whitespace-nowrap overflow-hidden text-ellipsis block font-semibold"
