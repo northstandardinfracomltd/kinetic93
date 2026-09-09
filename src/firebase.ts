@@ -319,11 +319,22 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
 
     if (map.has(key)) {
       const existing = map.get(key);
-      const merged = { ...existing };
+      const isItemFromApi = item._lastSource === 'api';
+      const isExistingFromApi = existing._lastSource === 'api';
+      
+      const itemTime = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+      const existingTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+
+      // When merging, if incoming item is from API or has newer/equal timestamp, it takes precedence
+      const incomingTakesPrecedence = isItemFromApi || (itemTime > 0 && itemTime >= existingTime) || (!isExistingFromApi && !existingTime);
+
+      const merged = incomingTakesPrecedence ? { ...existing, ...item } : { ...item, ...existing };
       for (const [prop, val] of Object.entries(item)) {
         if (val !== undefined && val !== null && val !== '') {
           const current = merged[prop];
-          if (current === undefined || current === null || current === '') {
+          if (incomingTakesPrecedence) {
+            merged[prop] = val;
+          } else if (current === undefined || current === null || current === '') {
             merged[prop] = val;
           } else if (Array.isArray(val) && Array.isArray(current)) {
             if (val.length > current.length) {
@@ -332,6 +343,14 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
           }
         }
       }
+
+      if (isItemFromApi || isExistingFromApi) {
+        merged._lastSource = 'api';
+      }
+      if (itemTime > 0 || existingTime > 0) {
+        merged.updatedAt = (itemTime >= existingTime ? item.updatedAt : existing.updatedAt) || new Date().toISOString();
+      }
+
       map.set(key, merged);
     } else {
       map.set(key, { ...item });

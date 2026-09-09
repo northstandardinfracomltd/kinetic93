@@ -564,11 +564,22 @@ function mergeServerCollectionItems(colName: string, items: any[]): any[] {
 
     if (map.has(key)) {
       const existing = map.get(key);
-      const merged = { ...existing };
+      const isItemFromApi = item._lastSource === 'api';
+      const isExistingFromApi = existing._lastSource === 'api';
+      
+      const itemTime = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+      const existingTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+
+      // When merging, if incoming item is from API or has newer/equal timestamp, it takes precedence
+      const incomingTakesPrecedence = isItemFromApi || (itemTime > 0 && itemTime >= existingTime) || (!isExistingFromApi && !existingTime);
+
+      const merged = incomingTakesPrecedence ? { ...existing, ...item } : { ...item, ...existing };
       for (const [prop, val] of Object.entries(item)) {
         if (val !== undefined && val !== null && val !== '') {
           const current = merged[prop];
-          if (current === undefined || current === null || current === '') {
+          if (incomingTakesPrecedence) {
+            merged[prop] = val;
+          } else if (current === undefined || current === null || current === '') {
             merged[prop] = val;
           } else if (Array.isArray(val) && Array.isArray(current)) {
             if (val.length > current.length) {
@@ -577,6 +588,14 @@ function mergeServerCollectionItems(colName: string, items: any[]): any[] {
           }
         }
       }
+
+      if (isItemFromApi || isExistingFromApi) {
+        merged._lastSource = 'api';
+      }
+      if (itemTime > 0 || existingTime > 0) {
+        merged.updatedAt = (itemTime >= existingTime ? item.updatedAt : existing.updatedAt) || new Date().toISOString();
+      }
+
       map.set(key, merged);
     } else {
       map.set(key, { ...item });
@@ -937,7 +956,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
   for (const k of uniqueKeys) {
     try {
       const docRef = doc(db, 'appData', k);
-      withTimeout(setDoc(docRef, { value: items }), 4000, null).catch(() => {});
+      withTimeout(setDoc(docRef, { value: items, _chunked: false, updatedAt: new Date().toISOString() }), 8000, null).catch(() => {});
     } catch (_) {}
   }
 }
@@ -998,19 +1017,37 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
 
               // If server item was updated via API or has newer data, preserve server's values
               if (serverMatch._lastSource === 'api' || serverMatch.updatedAt) {
+                const sTime = serverMatch.updatedAt ? new Date(serverMatch.updatedAt).getTime() : 0;
+                const cTime = clientItem.updatedAt ? new Date(clientItem.updatedAt).getTime() : 0;
+                const serverTakesPrecedence = serverMatch._lastSource === 'api' || sTime >= cTime;
+
                 const merged = { ...clientItem };
                 for (const [k, sVal] of Object.entries(serverMatch)) {
                   if (sVal !== undefined && sVal !== null && sVal !== '') {
                     const cVal = clientItem[k];
-                    if (cVal === undefined || cVal === null || cVal === '' || serverMatch._lastSource === 'api') {
+                    if (serverTakesPrecedence || cVal === undefined || cVal === null || cVal === '') {
                       merged[k] = sVal;
                     }
                   }
+                }
+                if (serverMatch._lastSource === 'api') {
+                  merged._lastSource = 'api';
                 }
                 return merged;
               }
               return clientItem;
             });
+
+            // CRITICAL: Preserve any items created or updated via API on server that client does not yet have in cache
+            const clientKeys = new Set(value.map((c: any) => String(c?.identifiant || c?.id || c?.numeroSerie || '').toLowerCase()).filter(Boolean));
+            for (const s of currentServerData) {
+              if (s && (s._lastSource === 'api' || s.id)) {
+                const sKey = String(s.identifiant || s.id || s.numeroSerie || '').toLowerCase();
+                if (sKey && !clientKeys.has(sKey)) {
+                  finalValueToStore.push(s);
+                }
+              }
+            }
           }
         }
 
@@ -1550,19 +1587,31 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
     const pathPrefix = cleanPath.split('/')[0].toLowerCase();
     const allowedEndpoints = [
       'variables',
+      'variable',
       'crm',
       'clients',
+      'client',
       'defibrillateurs',
+      'defibrillateur',
       'defibs',
+      'defib',
       'devices',
+      'device',
       'dae',
       'materiels',
+      'materiel',
       'commandes',
+      'commande',
       'tournees',
+      'tournee',
       'missions',
+      'mission',
       'rapports',
+      'rapport',
       'stocks',
-      'formations'
+      'stock',
+      'formations',
+      'formation'
     ];
 
     if (!allowedEndpoints.includes(pathPrefix)) {
@@ -1851,7 +1900,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       }
 
       // 3. Clients Endpoint
-      if (cleanPath.startsWith('clients')) {
+      if (cleanPath.startsWith('clients') || cleanPath.startsWith('client')) {
         const subId = cleanPath.split('/')[1] || (req.query.client_id as string) || (req.query.id as string) || (req.query.reference as string) || '';
         let clients = await fetchServerCollection('clients', tenantId, tenantAliases);
 
@@ -1914,7 +1963,9 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               identifiantUnique: existing.identifiantUnique || existing.id,
               id_record: existing.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${existing.id}`,
               envId: targetTenant.shortEnvId || tenantId,
-              tenantId: tenantId
+              tenantId: tenantId,
+              updatedAt: new Date().toISOString(),
+              _lastSource: 'api'
             };
             clients[existingIdx] = updatedClient;
 
@@ -2030,6 +2081,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           peremption_b: 'peremptionBatterie',
           peremption_batterie: 'peremptionBatterie',
           batterie_peremption: 'peremptionBatterie',
+          date_peremption_batterie: 'peremptionBatterie',
           peremptionBatterie: 'peremptionBatterie',
           modele_b: 'modeleBatterieId',
           modele_batterie: 'modeleBatterieId',
@@ -2056,6 +2108,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           peremption_a: 'peremptionElectrodeA',
           peremption_electrode_a: 'peremptionElectrodeA',
           electrode_a_peremption: 'peremptionElectrodeA',
+          date_peremption_a: 'peremptionElectrodeA',
           peremptionElectrodeA: 'peremptionElectrodeA',
           modele_a: 'modeleElectrodeAId',
           modele_electrode_a: 'modeleElectrodeAId',
@@ -2084,6 +2137,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           peremption_p: 'peremptionElectrodeP',
           peremption_electrode_p: 'peremptionElectrodeP',
           electrode_p_peremption: 'peremptionElectrodeP',
+          date_peremption_p: 'peremptionElectrodeP',
           peremptionElectrodeP: 'peremptionElectrodeP',
           modele_p: 'modeleElectrodePId',
           modele_electrode_p: 'modeleElectrodePId',
@@ -2107,10 +2161,12 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           // Coffret / Boitier
           boitier_modele: 'modeleCoffretId',
           modele_coffret: 'modeleCoffretId',
+          coffret_modele: 'modeleCoffretId',
           modeleCoffret: 'modeleCoffretId',
           modeleCoffretId: 'modeleCoffretId',
           boitier_lot: 'numeroLotCoffret',
           lot_coffret: 'numeroLotCoffret',
+          coffret_lot: 'numeroLotCoffret',
           numeroLotCoffret: 'numeroLotCoffret',
           commentaire_coffret: 'commentaireCoffret',
           commentaireCoffret: 'commentaireCoffret',
@@ -2121,9 +2177,13 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           model: 'modeleId',
           modeleId: 'modeleId',
           marque: 'marque',
+          brand: 'marque',
           statut: 'statut',
           status: 'statut',
+          statut_operationnel: 'statut',
+          etat: 'statut',
           conforme: 'conforme',
+          conformite: 'conforme',
           statut_voyant: 'statutVoyant',
           statutVoyant: 'statutVoyant',
           etat_housse: 'etatHousse',
@@ -2137,24 +2197,38 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           commentaireAdresse: 'commentaireAdresse',
           numero_et_voie: 'numVoie',
           adresse: 'numVoie',
+          rue: 'numVoie',
+          adresse_voie: 'numVoie',
           numVoie: 'numVoie',
           code_postal: 'cp',
+          zip: 'cp',
+          postal_code: 'cp',
           cp: 'cp',
           ville: 'ville',
+          city: 'ville',
           region: 'region',
+          departement: 'region',
           pays: 'pays',
+          country: 'pays',
           latitude: 'latitude',
+          lat: 'latitude',
           longitude: 'longitude',
+          lon: 'longitude',
+          lng: 'longitude',
           nom_prenom: 'nomPrenomSite',
           nom_site: 'nomPrenomSite',
           nomPrenomSite: 'nomPrenomSite',
           telephone_site: 'telephoneSite',
           telephone_portable: 'telephoneSite',
           telephoneSite: 'telephoneSite',
+          phone: 'telephoneSite',
+          tel: 'telephoneSite',
           email_site: 'emailSite',
           email: 'emailSite',
           emailSite: 'emailSite',
           commentaire: 'commentaire',
+          notes: 'commentaire',
+          note: 'commentaire',
 
           // Cycle de vie
           expiration_garantie: 'finGarantie',
@@ -2192,6 +2266,13 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           version_logiciel: 'versionLogiciel',
           versionLogiciel: 'versionLogiciel',
 
+          // Client
+          client_id: 'clientId',
+          clientId: 'clientId',
+          client_nom: 'clientNom',
+          clientNom: 'clientNom',
+          client: 'clientNom',
+
           identifiant: 'identifiant',
           numeroSerie: 'numeroSerie',
           num_serie: 'numeroSerie',
@@ -2207,70 +2288,153 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             numeroSerie: d.numeroSerie || d.num_serie || '',
             num_serie: d.num_serie || d.numeroSerie || '',
 
-            derniereMaintenance: d.derniereMaintenance || d.derniere_maintenance || '',
-            derniere_maintenance: d.derniere_maintenance || d.derniereMaintenance || '',
-            prochaineMaintenance: d.prochaineMaintenance || d.prochaine_v || '',
-            prochaine_v: d.prochaine_v || d.prochaineMaintenance || '',
+            derniereMaintenance: d.derniereMaintenance || d.derniere_maintenance || d.date_derniere_maintenance || '',
+            derniere_maintenance: d.derniere_maintenance || d.derniereMaintenance || d.date_derniere_maintenance || '',
+            date_derniere_maintenance: d.date_derniere_maintenance || d.derniere_maintenance || d.derniereMaintenance || '',
+            prochaineMaintenance: d.prochaineMaintenance || d.prochaine_visite || d.prochaine_v || '',
+            prochaine_visite: d.prochaine_visite || d.prochaineMaintenance || d.prochaine_v || '',
+            prochaine_v: d.prochaine_v || d.prochaine_visite || d.prochaineMaintenance || '',
 
-            modeleElectrodeAId: d.modeleElectrodeAId || d.modele_a || '',
-            modeleElectrodeA: d.modeleElectrodeA || d.modele_a || '',
-            modele_a: d.modele_a || d.modeleElectrodeA || d.modeleElectrodeAId || '',
-            lotElectrodeA: d.lotElectrodeA || d.lot_a || '',
-            lot_a: d.lot_a || d.lotElectrodeA || '',
-            peremptionElectrodeA: d.peremptionElectrodeA || d.peremption_a || '',
-            peremption_a: d.peremption_a || d.peremptionElectrodeA || '',
-            insertionElectrodeA: d.insertionElectrodeA || d.insertion_a || '',
-            insertion_a: d.insertion_a || d.insertionElectrodeA || '',
+            modeleElectrodeAId: d.modeleElectrodeAId || d.modele_a || d.modeleElectrodeA || '',
+            modeleElectrodeA: d.modeleElectrodeA || d.modele_electrode_a || d.modele_a || '',
+            modele_electrode_a: d.modele_electrode_a || d.modeleElectrodeA || d.modele_a || '',
+            modele_a: d.modele_a || d.modele_electrode_a || d.modeleElectrodeA || d.modeleElectrodeAId || '',
+            lotElectrodeA: d.lotElectrodeA || d.lot_electrode_a || d.lot_a || '',
+            lot_electrode_a: d.lot_electrode_a || d.lotElectrodeA || d.lot_a || '',
+            lot_a: d.lot_a || d.lot_electrode_a || d.lotElectrodeA || '',
+            peremptionElectrodeA: d.peremptionElectrodeA || d.peremption_electrode_a || d.peremption_a || '',
+            peremption_electrode_a: d.peremption_electrode_a || d.peremptionElectrodeA || d.peremption_a || '',
+            peremption_a: d.peremption_a || d.peremption_electrode_a || d.peremptionElectrodeA || '',
+            date_peremption_a: d.date_peremption_a || d.peremption_a || d.peremptionElectrodeA || '',
+            insertionElectrodeA: d.insertionElectrodeA || d.insertion_electrode_a || d.insertion_a || '',
+            insertion_electrode_a: d.insertion_electrode_a || d.insertionElectrodeA || d.insertion_a || '',
+            insertion_a: d.insertion_a || d.insertion_electrode_a || d.insertionElectrodeA || '',
+            peremptionSecoursElectrodeA: d.peremptionSecoursElectrodeA || d.peremption_secours_a || '',
+            peremption_secours_a: d.peremption_secours_a || d.peremptionSecoursElectrodeA || '',
 
-            modeleElectrodePId: d.modeleElectrodePId || d.modele_p || '',
-            modeleElectrodeP: d.modeleElectrodeP || d.modele_p || '',
-            modele_p: d.modele_p || d.modeleElectrodeP || d.modeleElectrodePId || '',
-            lotElectrodeP: d.lotElectrodeP || d.lot_p || '',
-            lot_p: d.lot_p || d.lotElectrodeP || '',
-            peremptionElectrodeP: d.peremptionElectrodeP || d.peremption_p || '',
-            peremption_p: d.peremption_p || d.peremptionElectrodeP || '',
-            insertionElectrodeP: d.insertionElectrodeP || d.insertion_p || '',
-            insertion_p: d.insertion_p || d.insertionElectrodeP || '',
+            modeleElectrodePId: d.modeleElectrodePId || d.modele_p || d.modeleElectrodeP || '',
+            modeleElectrodeP: d.modeleElectrodeP || d.modele_electrode_p || d.modele_p || '',
+            modele_electrode_p: d.modele_electrode_p || d.modeleElectrodeP || d.modele_p || '',
+            modele_p: d.modele_p || d.modele_electrode_p || d.modeleElectrodeP || d.modeleElectrodePId || '',
+            lotElectrodeP: d.lotElectrodeP || d.lot_electrode_p || d.lot_p || '',
+            lot_electrode_p: d.lot_electrode_p || d.lotElectrodeP || d.lot_p || '',
+            lot_p: d.lot_p || d.lot_electrode_p || d.lotElectrodeP || '',
+            peremptionElectrodeP: d.peremptionElectrodeP || d.peremption_electrode_p || d.peremption_p || '',
+            peremption_electrode_p: d.peremption_electrode_p || d.peremptionElectrodeP || d.peremption_p || '',
+            peremption_p: d.peremption_p || d.peremption_electrode_p || d.peremptionElectrodeP || '',
+            date_peremption_p: d.date_peremption_p || d.peremption_p || d.peremptionElectrodeP || '',
+            insertionElectrodeP: d.insertionElectrodeP || d.insertion_electrode_p || d.insertion_p || '',
+            insertion_electrode_p: d.insertion_electrode_p || d.insertionElectrodeP || d.insertion_p || '',
+            insertion_p: d.insertion_p || d.insertion_electrode_p || d.insertionElectrodeP || '',
+            peremptionSecoursElectrodeP: d.peremptionSecoursElectrodeP || d.peremption_secours_p || '',
+            peremption_secours_p: d.peremption_secours_p || d.peremptionSecoursElectrodeP || '',
 
-            modeleBatterieId: d.modeleBatterieId || d.modele_b || '',
-            modeleBatterie: d.modeleBatterie || d.modele_b || '',
-            modele_b: d.modele_b || d.modeleBatterie || d.modeleBatterieId || '',
-            lotBatterie: d.lotBatterie || d.lot_b || '',
-            lot_b: d.lot_b || d.lotBatterie || '',
-            peremptionBatterie: d.peremptionBatterie || d.peremption_b || '',
-            peremption_b: d.peremption_b || d.peremptionBatterie || '',
-            insertionBatterie: d.insertionBatterie || d.insertion_b || '',
-            insertion_b: d.insertion_b || d.insertionBatterie || '',
+            modeleBatterieId: d.modeleBatterieId || d.modele_b || d.modeleBatterie || '',
+            modeleBatterie: d.modeleBatterie || d.modele_batterie || d.modele_b || '',
+            modele_batterie: d.modele_batterie || d.modeleBatterie || d.modele_b || '',
+            modele_b: d.modele_b || d.modele_batterie || d.modeleBatterie || d.modeleBatterieId || '',
+            lotBatterie: d.lotBatterie || d.lot_batterie || d.lot_b || '',
+            lot_batterie: d.lot_batterie || d.lotBatterie || d.lot_b || '',
+            lot_b: d.lot_b || d.lot_batterie || d.lotBatterie || '',
+            peremptionBatterie: d.peremptionBatterie || d.peremption_batterie || d.peremption_b || '',
+            peremption_batterie: d.peremption_batterie || d.peremptionBatterie || d.peremption_b || '',
+            peremption_b: d.peremption_b || d.peremption_batterie || d.peremptionBatterie || '',
+            date_peremption_batterie: d.date_peremption_batterie || d.peremption_b || d.peremptionBatterie || '',
+            insertionBatterie: d.insertionBatterie || d.insertion_batterie || d.insertion_b || '',
+            insertion_batterie: d.insertion_batterie || d.insertionBatterie || d.insertion_b || '',
+            insertion_b: d.insertion_b || d.insertion_batterie || d.insertionBatterie || '',
             pourcentageBatterie: d.pourcentageBatterie || (d.pourcentage_constate_b !== undefined ? String(d.pourcentage_constate_b) : '100'),
             pourcentage_constate_b: d.pourcentage_constate_b !== undefined ? d.pourcentage_constate_b : (parseInt(d.pourcentageBatterie, 10) || 100),
+            pourcentage_batterie: d.pourcentage_constate_b !== undefined ? d.pourcentage_constate_b : (parseInt(d.pourcentageBatterie, 10) || 100),
 
-            modeleCoffretId: d.modeleCoffretId || d.boitier_modele || '',
-            modeleCoffret: d.modeleCoffret || d.boitier_modele || '',
-            boitier_modele: d.boitier_modele || d.modeleCoffret || d.modeleCoffretId || '',
-            numeroLotCoffret: d.numeroLotCoffret || d.boitier_lot || '',
-            boitier_lot: d.boitier_lot || d.numeroLotCoffret || '',
+            modeleCoffretId: d.modeleCoffretId || d.boitier_modele || d.modele_coffret || '',
+            modeleCoffret: d.modeleCoffret || d.modele_coffret || d.boitier_modele || '',
+            modele_coffret: d.modele_coffret || d.modeleCoffret || d.boitier_modele || '',
+            boitier_modele: d.boitier_modele || d.modele_coffret || d.modeleCoffret || d.modeleCoffretId || '',
+            numeroLotCoffret: d.numeroLotCoffret || d.boitier_lot || d.lot_coffret || '',
+            lot_coffret: d.lot_coffret || d.numeroLotCoffret || d.boitier_lot || '',
+            boitier_lot: d.boitier_lot || d.lot_coffret || d.numeroLotCoffret || '',
 
-            modele: d.modele || d.modeleId || '',
-            marque: d.marque || 'Standard',
-            statut: d.statut || 'Opérationnel',
+            modele: d.modele || d.modele_dae || d.modeleId || '',
+            modele_dae: d.modele_dae || d.modele || d.modeleId || '',
+            modeleId: d.modeleId || d.modele || '',
+            marque: d.marque || d.brand || 'Standard',
+            brand: d.brand || d.marque || 'Standard',
+            statut: d.statut || d.status || 'Opérationnel',
+            status: d.status || d.statut || 'Opérationnel',
             conforme: d.conforme || 'Oui',
             statutVoyant: d.statutVoyant || d.statut_voyant || 'Vert OK',
             statut_voyant: d.statut_voyant || d.statutVoyant || 'Vert OK',
             etatHousse: d.etatHousse || d.etat_housse || 'Conforme',
             etat_housse: d.etat_housse || d.etatHousse || 'Conforme',
+            peremptionTrousse: d.peremptionTrousse || d.peremption_trousse || '',
+            peremption_trousse: d.peremption_trousse || d.peremptionTrousse || '',
 
             commentaireAdresse: d.commentaireAdresse || d.aide_acces || '',
             aide_acces: d.aide_acces || d.commentaireAdresse || '',
-            numVoie: d.numVoie || d.numero_et_voie || '',
-            numero_et_voie: d.numero_et_voie || d.numVoie || '',
+            numVoie: d.numVoie || d.numero_et_voie || d.adresse || '',
+            numero_et_voie: d.numero_et_voie || d.numVoie || d.adresse || '',
+            adresse: d.adresse || d.numVoie || d.numero_et_voie || '',
             cp: d.cp || d.code_postal || '',
             code_postal: d.code_postal || d.cp || '',
+            ville: d.ville || d.city || '',
+            city: d.city || d.ville || '',
+            region: d.region || '',
+            pays: d.pays || d.country || '',
+            country: d.country || d.pays || '',
+            latitude: d.latitude || d.lat || '',
+            lat: d.lat || d.latitude || '',
+            longitude: d.longitude || d.lon || d.lng || '',
+            lon: d.lon || d.longitude || '',
+            lng: d.lng || d.longitude || '',
             nomPrenomSite: d.nomPrenomSite || d.nom_prenom || d.nom_site || '',
-            nom_prenom: d.nom_prenom || d.nomPrenomSite || '',
-            telephoneSite: d.telephoneSite || d.telephone_portable || '',
-            telephone_portable: d.telephone_portable || d.telephoneSite || '',
-            emailSite: d.emailSite || d.email || '',
-            email: d.email || d.emailSite || ''
+            nom_prenom: d.nom_prenom || d.nomPrenomSite || d.nom_site || '',
+            nom_site: d.nom_site || d.nomPrenomSite || d.nom_prenom || '',
+            telephoneSite: d.telephoneSite || d.telephone_portable || d.telephone_site || d.phone || d.tel || '',
+            telephone_portable: d.telephone_portable || d.telephoneSite || d.telephone_site || d.phone || d.tel || '',
+            telephone_site: d.telephone_site || d.telephoneSite || d.telephone_portable || d.phone || d.tel || '',
+            emailSite: d.emailSite || d.email || d.email_site || '',
+            email: d.email || d.emailSite || d.email_site || '',
+            email_site: d.email_site || d.emailSite || d.email || '',
+            commentaire: d.commentaire || d.notes || d.note || '',
+            notes: d.notes || d.commentaire || '',
+
+            finGarantie: d.finGarantie || d.fin_garantie || d.expiration_garantie || '',
+            fin_garantie: d.fin_garantie || d.finGarantie || d.expiration_garantie || '',
+            fabrication: d.fabrication || d.date_fabrication || '',
+            date_fabrication: d.date_fabrication || d.fabrication || '',
+            miseEnService: d.miseEnService || d.mise_en_service || '',
+            mise_en_service: d.mise_en_service || d.miseEnService || '',
+            sortieFabricant: d.sortieFabricant || d.sortie_fabricant || '',
+            sortie_fabricant: d.sortie_fabricant || d.sortieFabricant || '',
+
+            contrat: d.contrat || d.nomContrat || d.nom_contrat || '',
+            nomContrat: d.nomContrat || d.nom_contrat || d.contrat || '',
+            nom_contrat: d.nom_contrat || d.nomContrat || d.contrat || '',
+            referenceContrat: d.referenceContrat || d.reference_contrat || '',
+            reference_contrat: d.reference_contrat || d.referenceContrat || '',
+            debutContrat: d.debutContrat || d.debut_contrat || '',
+            debut_contrat: d.debut_contrat || d.debutContrat || '',
+            finContrat: d.finContrat || d.fin_contrat || '',
+            fin_contrat: d.fin_contrat || d.finContrat || '',
+
+            acces247: d.acces247 || d.acces_247 || 'Non',
+            acces_247: d.acces_247 || d.acces247 || 'Non',
+            accesSemaine: d.accesSemaine || d.acces_semaine || '',
+            acces_semaine: d.acces_semaine || d.accesSemaine || '',
+            accesWeekend: d.accesWeekend || d.acces_weekend || '',
+            acces_weekend: d.acces_weekend || d.accesWeekend || '',
+            exterieur: d.exterieur || 'Non',
+
+            numeroAtlasante: d.numeroAtlasante || d.numero_atlasante || '',
+            numero_atlasante: d.numero_atlasante || d.numeroAtlasante || '',
+            versionLogiciel: d.versionLogiciel || d.version_logiciel || '',
+            version_logiciel: d.version_logiciel || d.versionLogiciel || '',
+
+            clientId: d.clientId || d.client_id || '',
+            client_id: d.client_id || d.clientId || '',
+            clientNom: d.clientNom || d.client_nom || d.client || '',
+            client_nom: d.client_nom || d.clientNom || d.client || ''
           };
         };
 
@@ -2527,63 +2691,83 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               const dmVal = String(body.derniereMaintenance ?? body.derniere_maintenance ?? body.date_derniere_maintenance).trim();
               updatedDefib.derniereMaintenance = dmVal;
               updatedDefib.derniere_maintenance = dmVal;
+              updatedDefib.date_derniere_maintenance = dmVal;
               updatedFields.add('derniereMaintenance');
+            }
+            if (body.prochaineMaintenance !== undefined || body.prochaine_visite !== undefined || body.prochaine_v !== undefined) {
+              const pvVal = String(body.prochaineMaintenance ?? body.prochaine_visite ?? body.prochaine_v).trim();
+              updatedDefib.prochaineMaintenance = pvVal;
+              updatedDefib.prochaine_visite = pvVal;
+              updatedDefib.prochaine_v = pvVal;
+              updatedFields.add('prochaineMaintenance');
             }
             if (body.pourcentageBatterie !== undefined || body.pourcentage_constate_b !== undefined || body.pourcentage_batterie !== undefined) {
               const pbVal = body.pourcentageBatterie ?? body.pourcentage_constate_b ?? body.pourcentage_batterie;
               updatedDefib.pourcentageBatterie = String(pbVal);
               updatedDefib.pourcentage_constate_b = typeof pbVal === 'number' ? pbVal : (parseInt(pbVal, 10) || 100);
+              updatedDefib.pourcentage_batterie = updatedDefib.pourcentage_constate_b;
               updatedFields.add('pourcentageBatterie');
             }
-            if (body.lotElectrodeA !== undefined || body.lot_a !== undefined) {
-              const lVal = String(body.lotElectrodeA ?? body.lot_a).trim();
+            if (body.lotElectrodeA !== undefined || body.lot_a !== undefined || body.lot_electrode_a !== undefined) {
+              const lVal = String(body.lotElectrodeA ?? body.lot_a ?? body.lot_electrode_a).trim();
               updatedDefib.lotElectrodeA = lVal;
               updatedDefib.lot_a = lVal;
+              updatedDefib.lot_electrode_a = lVal;
               updatedFields.add('lotElectrodeA');
             }
-            if (body.peremptionElectrodeA !== undefined || body.peremption_a !== undefined) {
-              const pVal = String(body.peremptionElectrodeA ?? body.peremption_a).trim();
+            if (body.peremptionElectrodeA !== undefined || body.peremption_a !== undefined || body.peremption_electrode_a !== undefined || body.date_peremption_a !== undefined) {
+              const pVal = String(body.peremptionElectrodeA ?? body.peremption_a ?? body.peremption_electrode_a ?? body.date_peremption_a).trim();
               updatedDefib.peremptionElectrodeA = pVal;
               updatedDefib.peremption_a = pVal;
+              updatedDefib.peremption_electrode_a = pVal;
+              updatedDefib.date_peremption_a = pVal;
               updatedFields.add('peremptionElectrodeA');
             }
-            if (body.lotElectrodeP !== undefined || body.lot_p !== undefined) {
-              const lVal = String(body.lotElectrodeP ?? body.lot_p).trim();
+            if (body.lotElectrodeP !== undefined || body.lot_p !== undefined || body.lot_electrode_p !== undefined) {
+              const lVal = String(body.lotElectrodeP ?? body.lot_p ?? body.lot_electrode_p).trim();
               updatedDefib.lotElectrodeP = lVal;
               updatedDefib.lot_p = lVal;
+              updatedDefib.lot_electrode_p = lVal;
               updatedFields.add('lotElectrodeP');
             }
-            if (body.peremptionElectrodeP !== undefined || body.peremption_p !== undefined) {
-              const pVal = String(body.peremptionElectrodeP ?? body.peremption_p).trim();
+            if (body.peremptionElectrodeP !== undefined || body.peremption_p !== undefined || body.peremption_electrode_p !== undefined || body.date_peremption_p !== undefined) {
+              const pVal = String(body.peremptionElectrodeP ?? body.peremption_p ?? body.peremption_electrode_p ?? body.date_peremption_p).trim();
               updatedDefib.peremptionElectrodeP = pVal;
               updatedDefib.peremption_p = pVal;
+              updatedDefib.peremption_electrode_p = pVal;
+              updatedDefib.date_peremption_p = pVal;
               updatedFields.add('peremptionElectrodeP');
             }
-            if (body.lotBatterie !== undefined || body.lot_b !== undefined) {
-              const lVal = String(body.lotBatterie ?? body.lot_b).trim();
+            if (body.lotBatterie !== undefined || body.lot_b !== undefined || body.lot_batterie !== undefined) {
+              const lVal = String(body.lotBatterie ?? body.lot_b ?? body.lot_batterie).trim();
               updatedDefib.lotBatterie = lVal;
               updatedDefib.lot_b = lVal;
+              updatedDefib.lot_batterie = lVal;
               updatedFields.add('lotBatterie');
             }
-            if (body.peremptionBatterie !== undefined || body.peremption_b !== undefined) {
-              const pVal = String(body.peremptionBatterie ?? body.peremption_b).trim();
+            if (body.peremptionBatterie !== undefined || body.peremption_b !== undefined || body.peremption_batterie !== undefined || body.date_peremption_batterie !== undefined) {
+              const pVal = String(body.peremptionBatterie ?? body.peremption_b ?? body.peremption_batterie ?? body.date_peremption_batterie).trim();
               updatedDefib.peremptionBatterie = pVal;
               updatedDefib.peremption_b = pVal;
+              updatedDefib.peremption_batterie = pVal;
+              updatedDefib.date_peremption_batterie = pVal;
               updatedFields.add('peremptionBatterie');
             }
-            if (body.numeroLotCoffret !== undefined || body.boitier_lot !== undefined) {
-              const cLot = String(body.numeroLotCoffret ?? body.boitier_lot).trim();
+            if (body.numeroLotCoffret !== undefined || body.boitier_lot !== undefined || body.lot_coffret !== undefined) {
+              const cLot = String(body.numeroLotCoffret ?? body.boitier_lot ?? body.lot_coffret).trim();
               updatedDefib.numeroLotCoffret = cLot;
               updatedDefib.boitier_lot = cLot;
+              updatedDefib.lot_coffret = cLot;
               updatedFields.add('numeroLotCoffret');
             }
-            if (body.statut !== undefined || body.status !== undefined) {
-              const sVal = String(body.statut ?? body.status).trim();
+            if (body.statut !== undefined || body.status !== undefined || body.statut_operationnel !== undefined || body.etat !== undefined) {
+              const sVal = String(body.statut ?? body.status ?? body.statut_operationnel ?? body.etat).trim();
               updatedDefib.statut = sVal;
+              updatedDefib.status = sVal;
               updatedFields.add('statut');
             }
-            if (body.conforme !== undefined) {
-              const cVal = String(body.conforme).trim();
+            if (body.conforme !== undefined || body.conformite !== undefined) {
+              const cVal = String(body.conforme ?? body.conformite).trim();
               updatedDefib.conforme = cVal;
               updatedFields.add('conforme');
             }
@@ -2592,6 +2776,257 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               updatedDefib.statutVoyant = vVal;
               updatedDefib.statut_voyant = vVal;
               updatedFields.add('statutVoyant');
+            }
+            if (body.etatHousse !== undefined || body.etat_housse !== undefined) {
+              const ehVal = String(body.etatHousse ?? body.etat_housse).trim();
+              updatedDefib.etatHousse = ehVal;
+              updatedDefib.etat_housse = ehVal;
+              updatedFields.add('etatHousse');
+            }
+            if (body.peremptionTrousse !== undefined || body.peremption_trousse !== undefined) {
+              const ptVal = String(body.peremptionTrousse ?? body.peremption_trousse).trim();
+              updatedDefib.peremptionTrousse = ptVal;
+              updatedDefib.peremption_trousse = ptVal;
+              updatedFields.add('peremptionTrousse');
+            }
+
+            // Insertion / Livraison / Secours
+            if (body.insertionBatterie !== undefined || body.insertion_b !== undefined || body.insertion_batterie !== undefined) {
+              const ibVal = String(body.insertionBatterie ?? body.insertion_b ?? body.insertion_batterie).trim();
+              updatedDefib.insertionBatterie = ibVal;
+              updatedDefib.insertion_b = ibVal;
+              updatedFields.add('insertionBatterie');
+            }
+            if (body.livraisonBatterie !== undefined || body.livraison_b !== undefined || body.livraison_batterie !== undefined) {
+              const lbVal = String(body.livraisonBatterie ?? body.livraison_b ?? body.livraison_batterie).trim();
+              updatedDefib.livraisonBatterie = lbVal;
+              updatedDefib.livraison_b = lbVal;
+              updatedFields.add('livraisonBatterie');
+            }
+            if (body.insertionElectrodeA !== undefined || body.insertion_a !== undefined || body.insertion_electrode_a !== undefined) {
+              const iaVal = String(body.insertionElectrodeA ?? body.insertion_a ?? body.insertion_electrode_a).trim();
+              updatedDefib.insertionElectrodeA = iaVal;
+              updatedDefib.insertion_a = iaVal;
+              updatedFields.add('insertionElectrodeA');
+            }
+            if (body.livraisonElectrodeA !== undefined || body.livraison_a !== undefined || body.livraison_electrode_a !== undefined) {
+              const laVal = String(body.livraisonElectrodeA ?? body.livraison_a ?? body.livraison_electrode_a).trim();
+              updatedDefib.livraisonElectrodeA = laVal;
+              updatedDefib.livraison_a = laVal;
+              updatedFields.add('livraisonElectrodeA');
+            }
+            if (body.insertionElectrodeP !== undefined || body.insertion_p !== undefined || body.insertion_electrode_p !== undefined) {
+              const ipVal = String(body.insertionElectrodeP ?? body.insertion_p ?? body.insertion_electrode_p).trim();
+              updatedDefib.insertionElectrodeP = ipVal;
+              updatedDefib.insertion_p = ipVal;
+              updatedFields.add('insertionElectrodeP');
+            }
+            if (body.livraisonElectrodeP !== undefined || body.livraison_p !== undefined || body.livraison_electrode_p !== undefined) {
+              const lpVal = String(body.livraisonElectrodeP ?? body.livraison_p ?? body.livraison_electrode_p).trim();
+              updatedDefib.livraisonElectrodeP = lpVal;
+              updatedDefib.livraison_p = lpVal;
+              updatedFields.add('livraisonElectrodeP');
+            }
+            if (body.peremptionSecoursElectrodeA !== undefined || body.peremption_secours_a !== undefined) {
+              const psaVal = String(body.peremptionSecoursElectrodeA ?? body.peremption_secours_a).trim();
+              updatedDefib.peremptionSecoursElectrodeA = psaVal;
+              updatedDefib.peremption_secours_a = psaVal;
+              updatedFields.add('peremptionSecoursElectrodeA');
+            }
+            if (body.peremptionSecoursElectrodeP !== undefined || body.peremption_secours_p !== undefined) {
+              const pspVal = String(body.peremptionSecoursElectrodeP ?? body.peremption_secours_p).trim();
+              updatedDefib.peremptionSecoursElectrodeP = pspVal;
+              updatedDefib.peremption_secours_p = pspVal;
+              updatedFields.add('peremptionSecoursElectrodeP');
+            }
+
+            // Localisation & Site
+            if (body.nomPrenomSite !== undefined || body.nom_site !== undefined || body.nom_prenom !== undefined) {
+              const nsVal = String(body.nomPrenomSite ?? body.nom_site ?? body.nom_prenom).trim();
+              updatedDefib.nomPrenomSite = nsVal;
+              updatedDefib.nom_site = nsVal;
+              updatedDefib.nom_prenom = nsVal;
+              updatedFields.add('nomPrenomSite');
+            }
+            if (body.numVoie !== undefined || body.numero_et_voie !== undefined || body.adresse !== undefined || body.rue !== undefined) {
+              const nvVal = String(body.numVoie ?? body.numero_et_voie ?? body.adresse ?? body.rue).trim();
+              updatedDefib.numVoie = nvVal;
+              updatedDefib.numero_et_voie = nvVal;
+              updatedDefib.adresse = nvVal;
+              updatedFields.add('numVoie');
+            }
+            if (body.cp !== undefined || body.code_postal !== undefined || body.zip !== undefined || body.postal_code !== undefined) {
+              const cpVal = String(body.cp ?? body.code_postal ?? body.zip ?? body.postal_code).trim();
+              updatedDefib.cp = cpVal;
+              updatedDefib.code_postal = cpVal;
+              updatedFields.add('cp');
+            }
+            if (body.ville !== undefined || body.city !== undefined) {
+              const vVal = String(body.ville ?? body.city).trim();
+              updatedDefib.ville = vVal;
+              updatedDefib.city = vVal;
+              updatedFields.add('ville');
+            }
+            if (body.region !== undefined || body.departement !== undefined) {
+              const rVal = String(body.region ?? body.departement).trim();
+              updatedDefib.region = rVal;
+              updatedFields.add('region');
+            }
+            if (body.pays !== undefined || body.country !== undefined) {
+              const pVal = String(body.pays ?? body.country).trim();
+              updatedDefib.pays = pVal;
+              updatedDefib.country = pVal;
+              updatedFields.add('pays');
+            }
+            if (body.latitude !== undefined || body.lat !== undefined) {
+              const latVal = String(body.latitude ?? body.lat).trim();
+              updatedDefib.latitude = latVal;
+              updatedDefib.lat = latVal;
+              updatedFields.add('latitude');
+            }
+            if (body.longitude !== undefined || body.lon !== undefined || body.lng !== undefined) {
+              const lonVal = String(body.longitude ?? body.lon ?? body.lng).trim();
+              updatedDefib.longitude = lonVal;
+              updatedDefib.lon = lonVal;
+              updatedDefib.lng = lonVal;
+              updatedFields.add('longitude');
+            }
+            if (body.telephoneSite !== undefined || body.telephone_portable !== undefined || body.telephone_site !== undefined || body.phone !== undefined || body.tel !== undefined) {
+              const telVal = String(body.telephoneSite ?? body.telephone_portable ?? body.telephone_site ?? body.phone ?? body.tel).trim();
+              updatedDefib.telephoneSite = telVal;
+              updatedDefib.telephone_portable = telVal;
+              updatedDefib.telephone_site = telVal;
+              updatedFields.add('telephoneSite');
+            }
+            if (body.emailSite !== undefined || body.email !== undefined || body.email_site !== undefined) {
+              const emVal = String(body.emailSite ?? body.email ?? body.email_site).trim();
+              updatedDefib.emailSite = emVal;
+              updatedDefib.email = emVal;
+              updatedDefib.email_site = emVal;
+              updatedFields.add('emailSite');
+            }
+            if (body.commentaire !== undefined || body.notes !== undefined || body.note !== undefined) {
+              const comVal = String(body.commentaire ?? body.notes ?? body.note).trim();
+              updatedDefib.commentaire = comVal;
+              updatedDefib.notes = comVal;
+              updatedFields.add('commentaire');
+            }
+            if (body.commentaireAdresse !== undefined || body.aide_acces !== undefined) {
+              const caVal = String(body.commentaireAdresse ?? body.aide_acces).trim();
+              updatedDefib.commentaireAdresse = caVal;
+              updatedDefib.aide_acces = caVal;
+              updatedFields.add('commentaireAdresse');
+            }
+
+            // Cycle de vie
+            if (body.finGarantie !== undefined || body.fin_garantie !== undefined || body.expiration_garantie !== undefined) {
+              const fgVal = String(body.finGarantie ?? body.fin_garantie ?? body.expiration_garantie).trim();
+              updatedDefib.finGarantie = fgVal;
+              updatedDefib.fin_garantie = fgVal;
+              updatedFields.add('finGarantie');
+            }
+            if (body.fabrication !== undefined || body.date_fabrication !== undefined) {
+              const fabVal = String(body.fabrication ?? body.date_fabrication).trim();
+              updatedDefib.fabrication = fabVal;
+              updatedDefib.date_fabrication = fabVal;
+              updatedFields.add('fabrication');
+            }
+            if (body.miseEnService !== undefined || body.mise_en_service !== undefined) {
+              const mesVal = String(body.miseEnService ?? body.mise_en_service).trim();
+              updatedDefib.miseEnService = mesVal;
+              updatedDefib.mise_en_service = mesVal;
+              updatedFields.add('miseEnService');
+            }
+            if (body.sortieFabricant !== undefined || body.sortie_fabricant !== undefined) {
+              const sfVal = String(body.sortieFabricant ?? body.sortie_fabricant).trim();
+              updatedDefib.sortieFabricant = sfVal;
+              updatedDefib.sortie_fabricant = sfVal;
+              updatedFields.add('sortieFabricant');
+            }
+
+            // Contrat
+            if (body.contrat !== undefined || body.nomContrat !== undefined || body.nom_contrat !== undefined) {
+              const cVal = String(body.contrat ?? body.nomContrat ?? body.nom_contrat).trim();
+              updatedDefib.contrat = cVal;
+              updatedDefib.nomContrat = cVal;
+              updatedDefib.nom_contrat = cVal;
+              updatedFields.add('contrat');
+            }
+            if (body.referenceContrat !== undefined || body.reference_contrat !== undefined) {
+              const rcVal = String(body.referenceContrat ?? body.reference_contrat).trim();
+              updatedDefib.referenceContrat = rcVal;
+              updatedDefib.reference_contrat = rcVal;
+              updatedFields.add('referenceContrat');
+            }
+            if (body.debutContrat !== undefined || body.debut_contrat !== undefined) {
+              const dcVal = String(body.debutContrat ?? body.debut_contrat).trim();
+              updatedDefib.debutContrat = dcVal;
+              updatedDefib.debut_contrat = dcVal;
+              updatedFields.add('debutContrat');
+            }
+            if (body.finContrat !== undefined || body.fin_contrat !== undefined) {
+              const fcVal = String(body.finContrat ?? body.fin_contrat).trim();
+              updatedDefib.finContrat = fcVal;
+              updatedDefib.fin_contrat = fcVal;
+              updatedFields.add('finContrat');
+            }
+
+            // Accès
+            if (body.acces247 !== undefined || body.acces_247 !== undefined) {
+              const aVal = String(body.acces247 ?? body.acces_247).trim();
+              updatedDefib.acces247 = aVal;
+              updatedDefib.acces_247 = aVal;
+              updatedFields.add('acces247');
+            }
+            if (body.accesSemaine !== undefined || body.acces_semaine !== undefined) {
+              const aVal = String(body.accesSemaine ?? body.acces_semaine).trim();
+              updatedDefib.accesSemaine = aVal;
+              updatedDefib.acces_semaine = aVal;
+              updatedFields.add('accesSemaine');
+            }
+            if (body.accesWeekend !== undefined || body.acces_weekend !== undefined) {
+              const aVal = String(body.accesWeekend ?? body.acces_weekend).trim();
+              updatedDefib.accesWeekend = aVal;
+              updatedDefib.acces_weekend = aVal;
+              updatedFields.add('accesWeekend');
+            }
+            if (body.exterieur !== undefined) {
+              const extVal = String(body.exterieur).trim();
+              updatedDefib.exterieur = extVal;
+              updatedFields.add('exterieur');
+            }
+
+            // Atlasanté & Logiciel
+            if (body.numeroAtlasante !== undefined || body.numero_atlasante !== undefined) {
+              const natVal = String(body.numeroAtlasante ?? body.numero_atlasante).trim();
+              updatedDefib.numeroAtlasante = natVal;
+              updatedDefib.numero_atlasante = natVal;
+              updatedFields.add('numeroAtlasante');
+            }
+            if (body.versionLogiciel !== undefined || body.version_logiciel !== undefined) {
+              const vlVal = String(body.versionLogiciel ?? body.version_logiciel).trim();
+              updatedDefib.versionLogiciel = vlVal;
+              updatedDefib.version_logiciel = vlVal;
+              updatedFields.add('versionLogiciel');
+            }
+
+            // Client association update
+            if (body.clientId !== undefined || body.client_id !== undefined) {
+              const cidVal = String(body.clientId ?? body.client_id).trim();
+              updatedDefib.clientId = cidVal;
+              updatedDefib.client_id = cidVal;
+              updatedFields.add('clientId');
+            } else {
+              updatedDefib.clientId = existing.clientId || existing.client_id || '';
+              updatedDefib.client_id = existing.client_id || existing.clientId || '';
+            }
+            if (body.clientNom !== undefined || body.client_nom !== undefined || body.client !== undefined) {
+              const cnVal = String(body.clientNom ?? body.client_nom ?? body.client).trim();
+              updatedDefib.clientNom = cnVal;
+              updatedDefib.client_nom = cnVal;
+              updatedFields.add('clientNom');
+            } else {
+              updatedDefib.client_nom = existing.client_nom || existing.client || '';
             }
 
             // Strictly lock structural tenant & identity routing keys
@@ -2604,9 +3039,6 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             updatedDefib.tenantId = existing.tenantId || tenantId;
             updatedDefib.archive = existing.archive || 'Non';
             updatedDefib.fsmAutorise = existing.fsmAutorise || 'Oui';
-            updatedDefib.clientId = existing.clientId || existing.client_id || '';
-            updatedDefib.client_id = existing.client_id || existing.clientId || '';
-            updatedDefib.client_nom = existing.client_nom || existing.client || '';
 
             // Timestamp and API provenance to prevent stale browser caches from reverting values
             updatedDefib.updatedAt = new Date().toISOString();

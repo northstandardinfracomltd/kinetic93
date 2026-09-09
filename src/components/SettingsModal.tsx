@@ -4852,12 +4852,45 @@ export default function SettingsModal({
       {/* SIDE PANE DRAWER FOR API DEFIBEO DOCUMENTATION */}
       {isApiDocOpen && (
         <div className="fixed inset-0 z-[9999] overflow-hidden" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+          <style>{`
+            #side-pane-api-doc,
+            #side-pane-api-doc * {
+              -webkit-user-select: text !important;
+              -moz-user-select: text !important;
+              -ms-user-select: text !important;
+              user-select: text !important;
+            }
+            #side-pane-api-doc ::selection {
+              background: #bae6fd !important;
+              background-color: #bae6fd !important;
+              color: #0f172a !important;
+            }
+            #side-pane-api-doc *::selection {
+              background: #bae6fd !important;
+              background-color: #bae6fd !important;
+              color: #0f172a !important;
+            }
+            #side-pane-api-doc ::-moz-selection {
+              background: #bae6fd !important;
+              background-color: #bae6fd !important;
+              color: #0f172a !important;
+            }
+            #side-pane-api-doc *::-moz-selection {
+              background: #bae6fd !important;
+              background-color: #bae6fd !important;
+              color: #0f172a !important;
+            }
+          `}</style>
           <div 
             className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity cursor-pointer animate-fadeIn"
             onClick={() => setIsApiDocOpen(false)}
           />
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-3xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto border-l border-slate-200 animate-slideLeft relative" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+            <div 
+              id="side-pane-api-doc" 
+              className="w-screen max-w-3xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto border-l border-slate-200 animate-slideLeft relative select-text selection:bg-[#bae6fd] selection:text-[#0f172a]" 
+              style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+            >
               
               {/* Drawer Content */}
               <div className="flex-1 py-2 space-y-6 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
