@@ -977,16 +977,53 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       const collectionKey = rawTenant === 'demo' ? collectionName : `${rawTenant}_${collectionName}`;
       
       if (value !== undefined && value !== null) {
-        serverMemoryStore.set(collectionKey, value);
+        let finalValueToStore = value;
+        if (Array.isArray(value) && collectionName === 'defibrillateurs') {
+          const currentServerData = serverMemoryStore.get(collectionKey);
+          if (Array.isArray(currentServerData) && currentServerData.length > 0) {
+            const serverLookup = new Map<string, any>();
+            for (const s of currentServerData) {
+              if (s) {
+                if (s.id) serverLookup.set(String(s.id).toLowerCase(), s);
+                if (s.identifiant) serverLookup.set(String(s.identifiant).toLowerCase(), s);
+                if (s.numeroSerie) serverLookup.set(String(s.numeroSerie).toLowerCase(), s);
+              }
+            }
+
+            finalValueToStore = value.map((clientItem: any) => {
+              if (!clientItem) return clientItem;
+              const key = String(clientItem.identifiant || clientItem.id || clientItem.numeroSerie || '').toLowerCase();
+              const serverMatch = serverLookup.get(key);
+              if (!serverMatch) return clientItem;
+
+              // If server item was updated via API or has newer data, preserve server's values
+              if (serverMatch._lastSource === 'api' || serverMatch.updatedAt) {
+                const merged = { ...clientItem };
+                for (const [k, sVal] of Object.entries(serverMatch)) {
+                  if (sVal !== undefined && sVal !== null && sVal !== '') {
+                    const cVal = clientItem[k];
+                    if (cVal === undefined || cVal === null || cVal === '' || serverMatch._lastSource === 'api') {
+                      merged[k] = sVal;
+                    }
+                  }
+                }
+                return merged;
+              }
+              return clientItem;
+            });
+          }
+        }
+
+        serverMemoryStore.set(collectionKey, finalValueToStore);
         serverStoreTimestamps.set(collectionKey, Date.now());
         // Also map normalized key if D-prefixed
         if (/^d\d+$/i.test(rawTenant)) {
           const numOnly = rawTenant.replace(/^d/i, '');
-          serverMemoryStore.set(`D${numOnly}_${collectionName}`, value);
+          serverMemoryStore.set(`D${numOnly}_${collectionName}`, finalValueToStore);
           serverStoreTimestamps.set(`D${numOnly}_${collectionName}`, Date.now());
-          serverMemoryStore.set(`d${numOnly}_${collectionName}`, value);
+          serverMemoryStore.set(`d${numOnly}_${collectionName}`, finalValueToStore);
           serverStoreTimestamps.set(`d${numOnly}_${collectionName}`, Date.now());
-          serverMemoryStore.set(`${numOnly}_${collectionName}`, value);
+          serverMemoryStore.set(`${numOnly}_${collectionName}`, finalValueToStore);
           serverStoreTimestamps.set(`${numOnly}_${collectionName}`, Date.now());
         }
         persistServerStoreToDisk();
@@ -1971,6 +2008,318 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       if (cleanPath.startsWith('defibrillateur') || cleanPath.startsWith('defibs') || cleanPath.startsWith('devices') || cleanPath.startsWith('dae')) {
         let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
 
+        // Canonical dictionary mapping snake_case and aliases to standard internal camelCase fields
+        const DEFIB_FIELD_ALIASES: Record<string, string> = {
+          // Maintenance
+          derniere_maintenance: 'derniereMaintenance',
+          date_derniere_maintenance: 'derniereMaintenance',
+          derniereMaintenance: 'derniereMaintenance',
+          prochaine_v: 'prochaineMaintenance',
+          prochaine_visite: 'prochaineMaintenance',
+          prochaineMaintenance: 'prochaineMaintenance',
+
+          // Batterie & Consommables
+          pourcentage_constate_b: 'pourcentageBatterie',
+          pourcentage_batterie: 'pourcentageBatterie',
+          batterie_pourcentage: 'pourcentageBatterie',
+          pourcentageBatterie: 'pourcentageBatterie',
+          lot_b: 'lotBatterie',
+          lot_batterie: 'lotBatterie',
+          batterie_lot: 'lotBatterie',
+          lotBatterie: 'lotBatterie',
+          peremption_b: 'peremptionBatterie',
+          peremption_batterie: 'peremptionBatterie',
+          batterie_peremption: 'peremptionBatterie',
+          peremptionBatterie: 'peremptionBatterie',
+          modele_b: 'modeleBatterieId',
+          modele_batterie: 'modeleBatterieId',
+          modeleBatterie: 'modeleBatterieId',
+          modeleBatterieId: 'modeleBatterieId',
+          insertion_b: 'insertionBatterie',
+          insertion_batterie: 'insertionBatterie',
+          insertionBatterie: 'insertionBatterie',
+          livraison_b: 'livraisonBatterie',
+          livraison_batterie: 'livraisonBatterie',
+          livraisonBatterie: 'livraisonBatterie',
+          situation_b: 'situationBatterie',
+          situation_batterie: 'situationBatterie',
+          situationBatterie: 'situationBatterie',
+          commentaire_b: 'commentaireBatterie',
+          commentaire_batterie: 'commentaireBatterie',
+          commentaireBatterie: 'commentaireBatterie',
+
+          // Electrode A (Mixte / Adulte)
+          lot_a: 'lotElectrodeA',
+          lot_electrode_a: 'lotElectrodeA',
+          electrode_a_lot: 'lotElectrodeA',
+          lotElectrodeA: 'lotElectrodeA',
+          peremption_a: 'peremptionElectrodeA',
+          peremption_electrode_a: 'peremptionElectrodeA',
+          electrode_a_peremption: 'peremptionElectrodeA',
+          peremptionElectrodeA: 'peremptionElectrodeA',
+          modele_a: 'modeleElectrodeAId',
+          modele_electrode_a: 'modeleElectrodeAId',
+          modeleElectrodeA: 'modeleElectrodeAId',
+          modeleElectrodeAId: 'modeleElectrodeAId',
+          insertion_a: 'insertionElectrodeA',
+          insertion_electrode_a: 'insertionElectrodeA',
+          insertionElectrodeA: 'insertionElectrodeA',
+          livraison_a: 'livraisonElectrodeA',
+          livraison_electrode_a: 'livraisonElectrodeA',
+          livraisonElectrodeA: 'livraisonElectrodeA',
+          situation_a: 'situationElectrodeA',
+          situation_electrode_a: 'situationElectrodeA',
+          situationElectrodeA: 'situationElectrodeA',
+          commentaire_a: 'commentaireElectrodeA',
+          commentaire_electrode_a: 'commentaireElectrodeA',
+          commentaireElectrodeA: 'commentaireElectrodeA',
+          peremption_secours_a: 'peremptionSecoursElectrodeA',
+          peremptionSecoursElectrodeA: 'peremptionSecoursElectrodeA',
+
+          // Electrode P (Pédiatrique)
+          lot_p: 'lotElectrodeP',
+          lot_electrode_p: 'lotElectrodeP',
+          electrode_p_lot: 'lotElectrodeP',
+          lotElectrodeP: 'lotElectrodeP',
+          peremption_p: 'peremptionElectrodeP',
+          peremption_electrode_p: 'peremptionElectrodeP',
+          electrode_p_peremption: 'peremptionElectrodeP',
+          peremptionElectrodeP: 'peremptionElectrodeP',
+          modele_p: 'modeleElectrodePId',
+          modele_electrode_p: 'modeleElectrodePId',
+          modeleElectrodeP: 'modeleElectrodePId',
+          modeleElectrodePId: 'modeleElectrodePId',
+          insertion_p: 'insertionElectrodeP',
+          insertion_electrode_p: 'insertionElectrodeP',
+          insertionElectrodeP: 'insertionElectrodeP',
+          livraison_p: 'livraisonElectrodeP',
+          livraison_electrode_p: 'livraisonElectrodeP',
+          livraisonElectrodeP: 'livraisonElectrodeP',
+          situation_p: 'situationElectrodeP',
+          situation_electrode_p: 'situationElectrodeP',
+          situationElectrodeP: 'situationElectrodeP',
+          commentaire_p: 'commentaireElectrodeP',
+          commentaire_electrode_p: 'commentaireElectrodeP',
+          commentaireElectrodeP: 'commentaireElectrodeP',
+          peremption_secours_p: 'peremptionSecoursElectrodeP',
+          peremptionSecoursElectrodeP: 'peremptionSecoursElectrodeP',
+
+          // Coffret / Boitier
+          boitier_modele: 'modeleCoffretId',
+          modele_coffret: 'modeleCoffretId',
+          modeleCoffret: 'modeleCoffretId',
+          modeleCoffretId: 'modeleCoffretId',
+          boitier_lot: 'numeroLotCoffret',
+          lot_coffret: 'numeroLotCoffret',
+          numeroLotCoffret: 'numeroLotCoffret',
+          commentaire_coffret: 'commentaireCoffret',
+          commentaireCoffret: 'commentaireCoffret',
+
+          // Matériel DAE
+          modele: 'modeleId',
+          modele_dae: 'modeleId',
+          model: 'modeleId',
+          modeleId: 'modeleId',
+          marque: 'marque',
+          statut: 'statut',
+          status: 'statut',
+          conforme: 'conforme',
+          statut_voyant: 'statutVoyant',
+          statutVoyant: 'statutVoyant',
+          etat_housse: 'etatHousse',
+          etatHousse: 'etatHousse',
+          peremption_trousse: 'peremptionTrousse',
+          peremptionTrousse: 'peremptionTrousse',
+
+          // Localisation & Site
+          aide_acces: 'commentaireAdresse',
+          commentaire_adresse: 'commentaireAdresse',
+          commentaireAdresse: 'commentaireAdresse',
+          numero_et_voie: 'numVoie',
+          adresse: 'numVoie',
+          numVoie: 'numVoie',
+          code_postal: 'cp',
+          cp: 'cp',
+          ville: 'ville',
+          region: 'region',
+          pays: 'pays',
+          latitude: 'latitude',
+          longitude: 'longitude',
+          nom_prenom: 'nomPrenomSite',
+          nom_site: 'nomPrenomSite',
+          nomPrenomSite: 'nomPrenomSite',
+          telephone_site: 'telephoneSite',
+          telephone_portable: 'telephoneSite',
+          telephoneSite: 'telephoneSite',
+          email_site: 'emailSite',
+          email: 'emailSite',
+          emailSite: 'emailSite',
+          commentaire: 'commentaire',
+
+          // Cycle de vie
+          expiration_garantie: 'finGarantie',
+          fin_garantie: 'finGarantie',
+          finGarantie: 'finGarantie',
+          date_fabrication: 'fabrication',
+          fabrication: 'fabrication',
+          mise_en_service: 'miseEnService',
+          miseEnService: 'miseEnService',
+          sortie_fabricant: 'sortieFabricant',
+          sortieFabricant: 'sortieFabricant',
+
+          // Contrat
+          contrat: 'contrat',
+          nom_contrat: 'nomContrat',
+          nomContrat: 'nomContrat',
+          reference_contrat: 'referenceContrat',
+          referenceContrat: 'referenceContrat',
+          debut_contrat: 'debutContrat',
+          debutContrat: 'debutContrat',
+          fin_contrat: 'finContrat',
+          finContrat: 'finContrat',
+
+          // Drapeaux d'accès
+          acces247: 'acces247',
+          acces_247: 'acces247',
+          accesSemaine: 'accesSemaine',
+          acces_semaine: 'accesSemaine',
+          accesWeekend: 'accesWeekend',
+          acces_weekend: 'accesWeekend',
+          exterieur: 'exterieur',
+
+          numero_atlasante: 'numeroAtlasante',
+          numeroAtlasante: 'numeroAtlasante',
+          version_logiciel: 'versionLogiciel',
+          versionLogiciel: 'versionLogiciel',
+
+          identifiant: 'identifiant',
+          numeroSerie: 'numeroSerie',
+          num_serie: 'numeroSerie',
+          id: 'id'
+        };
+
+        const formatDefibrillateurOutput = (d: any): any => {
+          if (!d || typeof d !== 'object') return d;
+          return {
+            ...d,
+            id: d.id,
+            identifiant: d.identifiant || d.id,
+            numeroSerie: d.numeroSerie || d.num_serie || '',
+            num_serie: d.num_serie || d.numeroSerie || '',
+
+            derniereMaintenance: d.derniereMaintenance || d.derniere_maintenance || '',
+            derniere_maintenance: d.derniere_maintenance || d.derniereMaintenance || '',
+            prochaineMaintenance: d.prochaineMaintenance || d.prochaine_v || '',
+            prochaine_v: d.prochaine_v || d.prochaineMaintenance || '',
+
+            modeleElectrodeAId: d.modeleElectrodeAId || d.modele_a || '',
+            modeleElectrodeA: d.modeleElectrodeA || d.modele_a || '',
+            modele_a: d.modele_a || d.modeleElectrodeA || d.modeleElectrodeAId || '',
+            lotElectrodeA: d.lotElectrodeA || d.lot_a || '',
+            lot_a: d.lot_a || d.lotElectrodeA || '',
+            peremptionElectrodeA: d.peremptionElectrodeA || d.peremption_a || '',
+            peremption_a: d.peremption_a || d.peremptionElectrodeA || '',
+            insertionElectrodeA: d.insertionElectrodeA || d.insertion_a || '',
+            insertion_a: d.insertion_a || d.insertionElectrodeA || '',
+
+            modeleElectrodePId: d.modeleElectrodePId || d.modele_p || '',
+            modeleElectrodeP: d.modeleElectrodeP || d.modele_p || '',
+            modele_p: d.modele_p || d.modeleElectrodeP || d.modeleElectrodePId || '',
+            lotElectrodeP: d.lotElectrodeP || d.lot_p || '',
+            lot_p: d.lot_p || d.lotElectrodeP || '',
+            peremptionElectrodeP: d.peremptionElectrodeP || d.peremption_p || '',
+            peremption_p: d.peremption_p || d.peremptionElectrodeP || '',
+            insertionElectrodeP: d.insertionElectrodeP || d.insertion_p || '',
+            insertion_p: d.insertion_p || d.insertionElectrodeP || '',
+
+            modeleBatterieId: d.modeleBatterieId || d.modele_b || '',
+            modeleBatterie: d.modeleBatterie || d.modele_b || '',
+            modele_b: d.modele_b || d.modeleBatterie || d.modeleBatterieId || '',
+            lotBatterie: d.lotBatterie || d.lot_b || '',
+            lot_b: d.lot_b || d.lotBatterie || '',
+            peremptionBatterie: d.peremptionBatterie || d.peremption_b || '',
+            peremption_b: d.peremption_b || d.peremptionBatterie || '',
+            insertionBatterie: d.insertionBatterie || d.insertion_b || '',
+            insertion_b: d.insertion_b || d.insertionBatterie || '',
+            pourcentageBatterie: d.pourcentageBatterie || (d.pourcentage_constate_b !== undefined ? String(d.pourcentage_constate_b) : '100'),
+            pourcentage_constate_b: d.pourcentage_constate_b !== undefined ? d.pourcentage_constate_b : (parseInt(d.pourcentageBatterie, 10) || 100),
+
+            modeleCoffretId: d.modeleCoffretId || d.boitier_modele || '',
+            modeleCoffret: d.modeleCoffret || d.boitier_modele || '',
+            boitier_modele: d.boitier_modele || d.modeleCoffret || d.modeleCoffretId || '',
+            numeroLotCoffret: d.numeroLotCoffret || d.boitier_lot || '',
+            boitier_lot: d.boitier_lot || d.numeroLotCoffret || '',
+
+            modele: d.modele || d.modeleId || '',
+            marque: d.marque || 'Standard',
+            statut: d.statut || 'Opérationnel',
+            conforme: d.conforme || 'Oui',
+            statutVoyant: d.statutVoyant || d.statut_voyant || 'Vert OK',
+            statut_voyant: d.statut_voyant || d.statutVoyant || 'Vert OK',
+            etatHousse: d.etatHousse || d.etat_housse || 'Conforme',
+            etat_housse: d.etat_housse || d.etatHousse || 'Conforme',
+
+            commentaireAdresse: d.commentaireAdresse || d.aide_acces || '',
+            aide_acces: d.aide_acces || d.commentaireAdresse || '',
+            numVoie: d.numVoie || d.numero_et_voie || '',
+            numero_et_voie: d.numero_et_voie || d.numVoie || '',
+            cp: d.cp || d.code_postal || '',
+            code_postal: d.code_postal || d.cp || '',
+            nomPrenomSite: d.nomPrenomSite || d.nom_prenom || d.nom_site || '',
+            nom_prenom: d.nom_prenom || d.nomPrenomSite || '',
+            telephoneSite: d.telephoneSite || d.telephone_portable || '',
+            telephone_portable: d.telephone_portable || d.telephoneSite || '',
+            emailSite: d.emailSite || d.email || '',
+            email: d.email || d.emailSite || ''
+          };
+        };
+
+        const resolveOrCreateVariable = async (
+          category: string,
+          inputVal: string
+        ): Promise<{ id: string; nom: string } | null> => {
+          const cleanInput = (inputVal || '').trim();
+          if (!cleanInput) return null;
+
+          let vars = await fetchServerCollection('variables', tenantId, tenantAliases);
+          if (!Array.isArray(vars)) vars = [];
+
+          const lower = cleanInput.toLowerCase();
+          const match = vars.find((v: any) =>
+            v && (
+              (v.id && v.id.toLowerCase() === lower) ||
+              (v.nom && v.nom.toLowerCase() === lower) ||
+              (`${v.marque || ''} ${v.nom || ''}`.trim().toLowerCase() === lower) ||
+              (v.nom && v.nom.toLowerCase().includes(lower))
+            )
+          );
+
+          if (match) {
+            return { id: match.id, nom: match.nom };
+          }
+
+          const prefix = category === 'Modèle Coffret' ? 'VAR_COFFRET'
+            : category === 'Modèle Électrode' ? 'VAR_ELEC'
+            : category === 'Modèle Batterie' ? 'VAR_BAT'
+            : 'VAR_DAE';
+
+          const slug = cleanInput.toUpperCase().replace(/[^A-Z0-9]/g, '_').slice(0, 20);
+          const newId = `${prefix}_${slug}_${Math.floor(100 + Math.random() * 900)}`;
+          const newVar = {
+            id: newId,
+            category,
+            nom: cleanInput,
+            marque: 'Standard',
+            description: `Modèle ${cleanInput} référencé via API`,
+            envId: targetTenant.shortEnvId || tenantId,
+            tenantId: tenantId
+          };
+
+          vars.push(newVar);
+          await saveServerCollection('variables', tenantId, vars, tenantAliases);
+          return { id: newVar.id, nom: newVar.nom };
+        };
+
         // Robust single defibrillator identifier resolution (from URL path or query params)
         const pathSegments = cleanPath.split('/').map(s => s.trim()).filter(Boolean);
         let subId = '';
@@ -2098,28 +2447,173 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               });
             }
 
-            // Safe merge: strictly lock sensitive identifiers, archive/visibility, client links, and status
-            const updatedDefib = {
+            // Unknown fields validation and warnings
+            const knownKeys = new Set(Object.keys(DEFIB_FIELD_ALIASES));
+            const warnings: string[] = [];
+            for (const key of Object.keys(body)) {
+              if (key.startsWith('_') || key === 'identifiant' || key === 'numeroSerie') continue;
+              if (!knownKeys.has(key)) {
+                warnings.push(`Champ non reconnu: '${key}'. Veuillez utiliser les dénominations acceptées (camelCase ou snake_case supportés).`);
+              }
+            }
+
+            // Resolve hardware/consumable models (ID or label)
+            const coffretRaw = (body.modeleCoffretId || body.modeleCoffret || body.boitier_modele || body.modele_coffret || '').trim();
+            const resolvedCoffret = coffretRaw ? await resolveOrCreateVariable('Modèle Coffret', coffretRaw) : null;
+
+            const elecA_Raw = (body.modeleElectrodeAId || body.modeleElectrodeA || body.modele_a || body.modele_electrode_a || '').trim();
+            const resolvedElecA = elecA_Raw ? await resolveOrCreateVariable('Modèle Électrode', elecA_Raw) : null;
+
+            const elecP_Raw = (body.modeleElectrodePId || body.modeleElectrodeP || body.modele_p || body.modele_electrode_p || '').trim();
+            const resolvedElecP = elecP_Raw ? await resolveOrCreateVariable('Modèle Électrode', elecP_Raw) : null;
+
+            const batRaw = (body.modeleBatterieId || body.modeleBatterie || body.modele_b || body.modele_batterie || '').trim();
+            const resolvedBat = batRaw ? await resolveOrCreateVariable('Modèle Batterie', batRaw) : null;
+
+            const daeRaw = (body.modeleId || body.modele || body.model || body.modele_dae || '').trim();
+            const resolvedDae = daeRaw ? await resolveOrCreateVariable('Modèle Défibrillateur', daeRaw) : null;
+
+            const updatedFields = new Set<string>();
+
+            // Build updated defibrillator with full normalization and unblocked updates
+            const updatedDefib: any = {
               ...existing,
               ...body,
-              id: existing.id,
-              identifiant: existing.identifiant,
-              numeroSerie: existing.numeroSerie,
-              num_serie: existing.num_serie || existing.numeroSerie,
-              id_record: existing.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${existing.id}`,
-              envId: existing.envId || targetTenant.shortEnvId || tenantId,
-              tenantId: existing.tenantId || tenantId,
-              // Never allow hiding, archiving, or muting defibrillators via API
-              archive: existing.archive || 'Non',
-              fsmAutorise: existing.fsmAutorise || 'Oui',
-              conforme: existing.conforme || 'Oui',
-              statut: existing.statut || 'Opérationnel',
-              // Never allow unlinking or disconnecting defibrillators from their assigned clients
-              clientId: existing.clientId || existing.client_id || '',
-              client_id: existing.client_id || existing.clientId || '',
-              client_nom: existing.client_nom || existing.client || ''
             };
-            defibs[existingIdx] = updatedDefib;
+
+            // Map each recognized input key to both canonical camelCase and snake_case alias
+            for (const [key, val] of Object.entries(body)) {
+              if (val === undefined || val === null) continue;
+              const canonical = DEFIB_FIELD_ALIASES[key];
+              if (canonical && !['id', 'identifiant', 'numeroSerie'].includes(canonical)) {
+                updatedDefib[canonical] = typeof val === 'string' ? val.trim() : val;
+                updatedFields.add(canonical);
+              }
+            }
+
+            // Explicit model associations
+            if (resolvedCoffret) {
+              updatedDefib.modeleCoffretId = resolvedCoffret.id;
+              updatedDefib.modeleCoffret = resolvedCoffret.nom;
+              updatedDefib.boitier_modele = resolvedCoffret.nom;
+              updatedFields.add('modeleCoffretId');
+            }
+            if (resolvedElecA) {
+              updatedDefib.modeleElectrodeAId = resolvedElecA.id;
+              updatedDefib.modeleElectrodeA = resolvedElecA.nom;
+              updatedDefib.modele_a = resolvedElecA.nom;
+              updatedFields.add('modeleElectrodeAId');
+            }
+            if (resolvedElecP) {
+              updatedDefib.modeleElectrodePId = resolvedElecP.id;
+              updatedDefib.modeleElectrodeP = resolvedElecP.nom;
+              updatedDefib.modele_p = resolvedElecP.nom;
+              updatedFields.add('modeleElectrodePId');
+            }
+            if (resolvedBat) {
+              updatedDefib.modeleBatterieId = resolvedBat.id;
+              updatedDefib.modeleBatterie = resolvedBat.nom;
+              updatedDefib.modele_b = resolvedBat.nom;
+              updatedFields.add('modeleBatterieId');
+            }
+            if (resolvedDae) {
+              updatedDefib.modeleId = resolvedDae.id;
+              updatedDefib.modele = resolvedDae.nom;
+              updatedFields.add('modeleId');
+            }
+
+            // Sync dual fields
+            if (body.derniereMaintenance !== undefined || body.derniere_maintenance !== undefined || body.date_derniere_maintenance !== undefined) {
+              const dmVal = String(body.derniereMaintenance ?? body.derniere_maintenance ?? body.date_derniere_maintenance).trim();
+              updatedDefib.derniereMaintenance = dmVal;
+              updatedDefib.derniere_maintenance = dmVal;
+              updatedFields.add('derniereMaintenance');
+            }
+            if (body.pourcentageBatterie !== undefined || body.pourcentage_constate_b !== undefined || body.pourcentage_batterie !== undefined) {
+              const pbVal = body.pourcentageBatterie ?? body.pourcentage_constate_b ?? body.pourcentage_batterie;
+              updatedDefib.pourcentageBatterie = String(pbVal);
+              updatedDefib.pourcentage_constate_b = typeof pbVal === 'number' ? pbVal : (parseInt(pbVal, 10) || 100);
+              updatedFields.add('pourcentageBatterie');
+            }
+            if (body.lotElectrodeA !== undefined || body.lot_a !== undefined) {
+              const lVal = String(body.lotElectrodeA ?? body.lot_a).trim();
+              updatedDefib.lotElectrodeA = lVal;
+              updatedDefib.lot_a = lVal;
+              updatedFields.add('lotElectrodeA');
+            }
+            if (body.peremptionElectrodeA !== undefined || body.peremption_a !== undefined) {
+              const pVal = String(body.peremptionElectrodeA ?? body.peremption_a).trim();
+              updatedDefib.peremptionElectrodeA = pVal;
+              updatedDefib.peremption_a = pVal;
+              updatedFields.add('peremptionElectrodeA');
+            }
+            if (body.lotElectrodeP !== undefined || body.lot_p !== undefined) {
+              const lVal = String(body.lotElectrodeP ?? body.lot_p).trim();
+              updatedDefib.lotElectrodeP = lVal;
+              updatedDefib.lot_p = lVal;
+              updatedFields.add('lotElectrodeP');
+            }
+            if (body.peremptionElectrodeP !== undefined || body.peremption_p !== undefined) {
+              const pVal = String(body.peremptionElectrodeP ?? body.peremption_p).trim();
+              updatedDefib.peremptionElectrodeP = pVal;
+              updatedDefib.peremption_p = pVal;
+              updatedFields.add('peremptionElectrodeP');
+            }
+            if (body.lotBatterie !== undefined || body.lot_b !== undefined) {
+              const lVal = String(body.lotBatterie ?? body.lot_b).trim();
+              updatedDefib.lotBatterie = lVal;
+              updatedDefib.lot_b = lVal;
+              updatedFields.add('lotBatterie');
+            }
+            if (body.peremptionBatterie !== undefined || body.peremption_b !== undefined) {
+              const pVal = String(body.peremptionBatterie ?? body.peremption_b).trim();
+              updatedDefib.peremptionBatterie = pVal;
+              updatedDefib.peremption_b = pVal;
+              updatedFields.add('peremptionBatterie');
+            }
+            if (body.numeroLotCoffret !== undefined || body.boitier_lot !== undefined) {
+              const cLot = String(body.numeroLotCoffret ?? body.boitier_lot).trim();
+              updatedDefib.numeroLotCoffret = cLot;
+              updatedDefib.boitier_lot = cLot;
+              updatedFields.add('numeroLotCoffret');
+            }
+            if (body.statut !== undefined || body.status !== undefined) {
+              const sVal = String(body.statut ?? body.status).trim();
+              updatedDefib.statut = sVal;
+              updatedFields.add('statut');
+            }
+            if (body.conforme !== undefined) {
+              const cVal = String(body.conforme).trim();
+              updatedDefib.conforme = cVal;
+              updatedFields.add('conforme');
+            }
+            if (body.statutVoyant !== undefined || body.statut_voyant !== undefined) {
+              const vVal = String(body.statutVoyant ?? body.statut_voyant).trim();
+              updatedDefib.statutVoyant = vVal;
+              updatedDefib.statut_voyant = vVal;
+              updatedFields.add('statutVoyant');
+            }
+
+            // Strictly lock structural tenant & identity routing keys
+            updatedDefib.id = existing.id;
+            updatedDefib.identifiant = existing.identifiant;
+            updatedDefib.numeroSerie = existing.numeroSerie;
+            updatedDefib.num_serie = existing.num_serie || existing.numeroSerie;
+            updatedDefib.id_record = existing.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${existing.id}`;
+            updatedDefib.envId = existing.envId || targetTenant.shortEnvId || tenantId;
+            updatedDefib.tenantId = existing.tenantId || tenantId;
+            updatedDefib.archive = existing.archive || 'Non';
+            updatedDefib.fsmAutorise = existing.fsmAutorise || 'Oui';
+            updatedDefib.clientId = existing.clientId || existing.client_id || '';
+            updatedDefib.client_id = existing.client_id || existing.clientId || '';
+            updatedDefib.client_nom = existing.client_nom || existing.client || '';
+
+            // Timestamp and API provenance to prevent stale browser caches from reverting values
+            updatedDefib.updatedAt = new Date().toISOString();
+            updatedDefib._lastSource = 'api';
+
+            const formatted = formatDefibrillateurOutput(updatedDefib);
+            defibs[existingIdx] = formatted;
 
             await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
 
@@ -2128,28 +2622,71 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               message: "Défibrillateur mis à jour avec succès",
               environnement: targetTenant.shortEnvId || tenantId,
               id: existing.identifiant || existing.id,
-              defibrillateur: updatedDefib,
-              data: updatedDefib
+              updated_fields: Array.from(updatedFields),
+              ...(warnings.length > 0 ? { warnings } : {}),
+              defibrillateur: formatted,
+              data: formatted
             });
           } else {
             // Creation of a new defibrillator
-            const newDefib = {
+            const coffretRaw = (body.modeleCoffretId || body.modeleCoffret || body.boitier_modele || body.modele_coffret || '').trim();
+            const resolvedCoffret = coffretRaw ? await resolveOrCreateVariable('Modèle Coffret', coffretRaw) : null;
+
+            const elecA_Raw = (body.modeleElectrodeAId || body.modeleElectrodeA || body.modele_a || body.modele_electrode_a || '').trim();
+            const resolvedElecA = elecA_Raw ? await resolveOrCreateVariable('Modèle Électrode', elecA_Raw) : null;
+
+            const elecP_Raw = (body.modeleElectrodePId || body.modeleElectrodeP || body.modele_p || body.modele_electrode_p || '').trim();
+            const resolvedElecP = elecP_Raw ? await resolveOrCreateVariable('Modèle Électrode', elecP_Raw) : null;
+
+            const batRaw = (body.modeleBatterieId || body.modeleBatterie || body.modele_b || body.modele_batterie || '').trim();
+            const resolvedBat = batRaw ? await resolveOrCreateVariable('Modèle Batterie', batRaw) : null;
+
+            const daeRaw = (body.modeleId || body.modele || body.model || body.modele_dae || '').trim();
+            const resolvedDae = daeRaw ? await resolveOrCreateVariable('Modèle Défibrillateur', daeRaw) : null;
+
+            const newDefib: any = {
               ...body,
               id: targetId,
               identifiant: body.identifiant || targetId,
               numeroSerie: body.numeroSerie || body.num_serie || body.serial || targetId,
               num_serie: body.num_serie || body.numeroSerie || targetId,
-              modele: body.modele || body.model || "DAE Standard",
+              modele: resolvedDae?.nom || body.modele || body.model || "DAE Standard",
+              modeleId: resolvedDae?.id || body.modeleId || "",
               marque: body.marque || body.brand || "Standard",
-              statut: "Opérationnel",
-              conforme: "Oui",
+              statut: body.statut || body.status || "Opérationnel",
+              conforme: body.conforme || "Oui",
               archive: "Non",
               fsmAutorise: "Oui",
               id_record: body.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${targetId}`,
               envId: targetTenant.shortEnvId || tenantId,
-              tenantId: tenantId
+              tenantId: tenantId,
+              updatedAt: new Date().toISOString(),
+              _lastSource: 'api'
             };
-            defibs = [newDefib, ...defibs];
+
+            if (resolvedCoffret) {
+              newDefib.modeleCoffretId = resolvedCoffret.id;
+              newDefib.modeleCoffret = resolvedCoffret.nom;
+              newDefib.boitier_modele = resolvedCoffret.nom;
+            }
+            if (resolvedElecA) {
+              newDefib.modeleElectrodeAId = resolvedElecA.id;
+              newDefib.modeleElectrodeA = resolvedElecA.nom;
+              newDefib.modele_a = resolvedElecA.nom;
+            }
+            if (resolvedElecP) {
+              newDefib.modeleElectrodePId = resolvedElecP.id;
+              newDefib.modeleElectrodeP = resolvedElecP.nom;
+              newDefib.modele_p = resolvedElecP.nom;
+            }
+            if (resolvedBat) {
+              newDefib.modeleBatterieId = resolvedBat.id;
+              newDefib.modeleBatterie = resolvedBat.nom;
+              newDefib.modele_b = resolvedBat.nom;
+            }
+
+            const formattedNew = formatDefibrillateurOutput(newDefib);
+            defibs = [formattedNew, ...defibs];
 
             await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
 
@@ -2158,8 +2695,8 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               message: "Défibrillateur enregistré avec succès",
               environnement: targetTenant.shortEnvId || tenantId,
               id: targetId,
-              defibrillateur: newDefib,
-              data: newDefib
+              defibrillateur: formattedNew,
+              data: formattedNew
             });
           }
         }
@@ -2191,11 +2728,12 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           }
 
           if (found) {
+            const formattedFound = formatDefibrillateurOutput(found);
             return sendOptimizedJson(req, res, { 
               status: "success", 
               environnement: targetTenant.shortEnvId || tenantId, 
-              defibrillateur: found, 
-              data: found 
+              defibrillateur: formattedFound, 
+              data: formattedFound 
             });
           }
 
@@ -2251,6 +2789,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         const totalPages = Math.max(1, Math.ceil(total / limit));
         const startIndex = isPaginated ? (page - 1) * limit : 0;
         const returnedDefibs = isPaginated ? filteredDefibs.slice(startIndex, startIndex + limit) : filteredDefibs;
+        const formattedReturned = returnedDefibs.map(formatDefibrillateurOutput);
 
         res.setHeader('X-Total-Count', String(total));
         res.setHeader('X-Page', String(page));
@@ -2261,12 +2800,12 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           status: "success",
           environnement: targetTenant.shortEnvId || tenantId,
           total,
-          count: returnedDefibs.length,
+          count: formattedReturned.length,
           page: isPaginated ? page : 1,
           limit: isPaginated ? limit : total,
           total_pages: isPaginated ? totalPages : 1,
-          defibrillateurs: returnedDefibs,
-          data: returnedDefibs
+          defibrillateurs: formattedReturned,
+          data: formattedReturned
         });
       }
 

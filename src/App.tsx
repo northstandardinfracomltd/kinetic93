@@ -3839,24 +3839,6 @@ export default function App() {
         };
 
         loadedTenantIdRef.current = activeRunTenantId;
-
-        // Synchronize browser's active local cache to the backend REST server in background (only if local data is populated)
-        if (typeof fetch !== 'undefined') {
-          if (Array.isArray(baseDefibrillateurs) && baseDefibrillateurs.length > 0) {
-            fetch('/api/sync-collection', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ collectionName: 'defibrillateurs', tenantId: activeRunTenantId, value: baseDefibrillateurs })
-            }).catch(() => {});
-          }
-          if (Array.isArray(sanitizedOffline) && sanitizedOffline.length > 0) {
-            fetch('/api/sync-collection', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ collectionName: 'clients', tenantId: activeRunTenantId, value: sanitizedOffline })
-            }).catch(() => {});
-          }
-        }
       } catch (localErr) {
         console.warn("Failed to load instant offline fallback data:", localErr);
       }

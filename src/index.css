@@ -49,9 +49,14 @@ html, body {
   font-family: var(--font-sans);
 }
 
-*::selection {
-  background: transparent !important;
-  background-color: transparent !important;
+::selection {
+  background: #bae6fd !important;
+  color: #0f172a !important;
+}
+
+::-moz-selection {
+  background: #bae6fd !important;
+  color: #0f172a !important;
 }
 
 .top-nav-bar-gradient {

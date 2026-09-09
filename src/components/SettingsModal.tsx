@@ -5177,34 +5177,149 @@ const { defibrillateurs } = await res.json();`}
                     </div>
                   </div>
 
-                  {/* 4. Défibrillateur - POST Update */}
-                  <div style={{ border: '1px solid #e4e1e1', background: '#f7f7f7', borderRadius: '13px' }} className="overflow-hidden shadow-2xs">
+                  {/* 4. Défibrillateur - POST Update & Déclaration */}
+                  <div style={{ border: '1px solid #e4e1e1', background: '#f7f7f7', borderRadius: '13px' }} className="overflow-hidden shadow-2xs select-text">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e4e1e1' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-3">
                         <span style={{ color: '#fff', background: 'oklch(0.67 0.15 128.49)', border: 'none', borderRadius: '7px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST /v1/defibrillateurs/:identifiant</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>OU POST /v1/defibrillateurs (avec "identifiant" ou "numeroSerie" dans le body)</span>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                      <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Édite et met à jour le jeu de données d'un défibrillateur spécifique. La variable d'URL <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:identifiant</code> (ex: <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>AABBCC</code> ou <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>DAE-88192</code>) désigne le matériel exact à cibler et modifier.</p>
+                    <div className="p-4 space-y-4 text-[16px] text-black select-text" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <p className="text-black leading-relaxed" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        Met à jour ou initialise la fiche d'un défibrillateur dans votre parc. La cible peut être spécifiée dans l'URL (<code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]">/v1/defibrillateurs/DAE-88192</code>) ou directement dans le corps JSON (<code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]">"identifiant": "DAE-88192"</code> ou numéro de série constructeur).
+                      </p>
 
+                      {/* Developer Guide / Highlights */}
+                      <div className="space-y-2 select-text" style={{ background: '#ffffff', border: '1px solid #e4e1e1', borderRadius: '12px', padding: '16px' }}>
+                        <div className="text-[16px] font-bold text-black mb-1">Guide d'intégration &amp; Bonnes pratiques :</div>
+                        <ul className="list-disc pl-5 space-y-2 text-[15px] text-black">
+                          <li>
+                            <strong>Nommage des clés (camelCase &amp; snake_case) :</strong> L'API accepte nativement la notation <strong>camelCase</strong> (standard recommandé : <code className="bg-slate-100 px-1 py-0.5 rounded">lotElectrodeA</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">peremptionBatterie</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">derniereMaintenance</code>) ainsi que les alias historiques en <strong>snake_case</strong> (<code className="bg-slate-100 px-1 py-0.5 rounded">lot_a</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">peremption_b</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">derniere_maintenance</code>). L'ensemble des colonnes est automatiquement synchronisé dans les deux formats.
+                          </li>
+                          <li>
+                            <strong>Remplacement des valeurs existantes :</strong> Tout champ transmis dans le corps de la requête écrase et met à jour la valeur en base, qu'elle ait été vide ou déjà renseignée. Seuls l'identifiant matériel d'origine, le client rattaché et l'état d'archivage restent protégés.
+                          </li>
+                          <li>
+                            <strong>Modèles de matériel (Identifiant ou Libellé clair) :</strong> Vous pouvez indifféremment envoyer l'<strong>ID interne du catalogue</strong> (<code className="bg-slate-100 px-1 py-0.5 rounded">modeleElectrodeAId</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">modeleBatterieId</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">modeleCoffretId</code>) ou directement le <strong>libellé clair en texte</strong> (<code className="bg-slate-100 px-1 py-0.5 rounded">modeleElectrodeA: "CPR-D Padz (Adulte)"</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">modeleBatterie: "Pack Lithium 123A"</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">modeleCoffret: "AIVIA 200"</code>). Defibeo fait la correspondance automatique avec votre catalogue ou crée le modèle dynamiquement.
+                          </li>
+                          <li>
+                            <strong>Traçabilité des écritures :</strong> La réponse HTTP 200 inclut le tableau <code className="bg-slate-100 px-1 py-0.5 rounded">updated_fields</code> confirmant l'ensemble des colonnes impactées, ainsi qu'un tableau <code className="bg-slate-100 px-1 py-0.5 rounded">warnings</code> si un champ inconnu a été envoyé par inadvertance.
+                          </li>
+                        </ul>
+                      </div>
+
+                      {/* Recommandé - Format camelCase */}
                       <div>
-                        <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload exhaustif)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <div className="text-[16px] font-bold text-black mb-2 flex items-center justify-between">
+                          <span>Corps de requête recommandé (camelCase) :</span>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Recommandé</span>
+                        </div>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '15px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }} className="select-text">
+{`{
+  "derniereMaintenance": "2026-08-03",
+  "prochaineMaintenance": "2027-08-01",
+
+  "modeleElectrodeA": "CPR-D Padz (Adulte)",
+  "lotElectrodeA": "LOT-A-1002",
+  "peremptionElectrodeA": "2029-08-01",
+  "insertionElectrodeA": "2026-08-03",
+
+  "modeleElectrodeP": "Pedi-Padz II (Pédiatrique)",
+  "lotElectrodeP": "LOT-P-882",
+  "peremptionElectrodeP": "2029-11-15",
+
+  "modeleBatterie": "Pack Lithium 123A",
+  "lotBatterie": "LOT-BAT-99",
+  "peremptionBatterie": "2031-05-20",
+  "insertionBatterie": "2026-08-03",
+  "pourcentageBatterie": "95",
+
+  "modeleCoffret": "AIVIA 200",
+  "numeroLotCoffret": "LOT-B-88",
+
+  "statut": "Opérationnel",
+  "conforme": "Oui",
+  "statutVoyant": "Vert OK",
+  "etatHousse": "Conforme",
+  "commentaireAdresse": "Nouveau badge sécurité RDC"
+}`}
+                        </pre>
+                      </div>
+
+                      {/* Compatible - Format snake_case */}
+                      <div>
+                        <div className="text-[16px] font-bold text-black mb-2 flex items-center justify-between">
+                          <span>Variante compatible (snake_case) :</span>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">Supporté à 100%</span>
+                        </div>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '15px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }} className="select-text">
 {`{
   "derniere_maintenance": "2026-08-03",
   "prochaine_v": "2027-08-01",
-  "peremption_a": "2029-08-01",
-  "lot_a": "LOT-A-1002",
+
   "modele_a": "CPR-D Padz (Adulte)",
-  "peremption_p": "2029-11-15",
+  "lot_a": "LOT-A-1002",
+  "peremption_a": "2029-08-01",
+
+  "modele_p": "Pedi-Padz II (Pédiatrique)",
   "lot_p": "LOT-P-882",
-  "peremption_b": "2031-05-20",
+  "peremption_p": "2029-11-15",
+
+  "modele_b": "Pack Lithium 123A",
   "lot_b": "LOT-BAT-99",
+  "peremption_b": "2031-05-20",
   "pourcentage_constate_b": 95,
-  "statut": "Conforme",
+
+  "boitier_modele": "AIVIA 200",
+  "boitier_lot": "LOT-B-88",
+
+  "statut": "Opérationnel",
   "statut_voyant": "Vert OK",
-  "etat_housse": "Conforme",
   "aide_acces": "Nouveau badge sécurité RDC"
+}`}
+                        </pre>
+                      </div>
+
+                      {/* Exemple de réponse */}
+                      <div>
+                        <div className="text-[16px] font-bold text-black mb-2">Structure de la réponse HTTP 200 (Success) :</div>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '15px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }} className="select-text">
+{`{
+  "status": "success",
+  "message": "Défibrillateur mis à jour avec succès",
+  "environnement": "YOUR_ENV_ID",
+  "id": "DAE-88192",
+  "updated_fields": [
+    "derniereMaintenance",
+    "modeleElectrodeAId",
+    "lotElectrodeA",
+    "peremptionElectrodeA",
+    "modeleBatterieId",
+    "lotBatterie",
+    "peremptionBatterie",
+    "pourcentageBatterie",
+    "modeleCoffretId",
+    "statut"
+  ],
+  "defibrillateur": {
+    "identifiant": "DAE-88192",
+    "numeroSerie": "SN-9981240",
+    "statut": "Opérationnel",
+    "derniereMaintenance": "2026-08-03",
+    "derniere_maintenance": "2026-08-03",
+    "lotElectrodeA": "LOT-A-1002",
+    "lot_a": "LOT-A-1002",
+    "modeleElectrodeA": "CPR-D Padz (Adulte)",
+    "peremptionElectrodeA": "2029-08-01",
+    "peremption_a": "2029-08-01",
+    "lotBatterie": "LOT-BAT-99",
+    "lot_b": "LOT-BAT-99",
+    "pourcentageBatterie": "95",
+    "pourcentage_constate_b": 95,
+    "modeleCoffret": "AIVIA 200",
+    "boitier_modele": "AIVIA 200"
+  }
 }`}
                         </pre>
                       </div>
