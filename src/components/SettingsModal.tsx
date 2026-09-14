@@ -771,6 +771,9 @@ export default function SettingsModal({
     { entity: 'Défibrillateur', slug: 'date_fabrication', type: 'date (AAAA-MM-JJ)', label: 'Date de fabrication constructeur', example: '2024-02-10' },
     { entity: 'Défibrillateur', slug: 'version_logiciel', type: 'string', label: 'Version firmware interne', example: 'v3.2.1' },
     { entity: 'Défibrillateur', slug: 'numero_atlasante', type: 'string', label: 'Référence ARS / ARLA / Atlasanté', example: 'ATLAS-77120' },
+    { entity: 'Défibrillateur', slug: 'maintenance_autorisee', type: 'string ("Oui"/"Non") | boolean', label: 'Maintenance autorisée (Oui / Non)', example: 'Oui' },
+    { entity: 'Défibrillateur', slug: 'maintenanceAutorisee', type: 'string ("Oui"/"Non") | boolean', label: 'Maintenance autorisée (alias camelCase)', example: 'Oui' },
+    { entity: 'Défibrillateur', slug: 'fsm_autorise', type: 'string ("Oui"/"Non") | boolean', label: 'Maintenance autorisée (alias fsm_autorise)', example: 'Oui' },
 
     // Client
     { entity: 'Client', slug: 'client_id', type: 'string', label: 'Identifiant unique client', example: 'CLI-0042' },

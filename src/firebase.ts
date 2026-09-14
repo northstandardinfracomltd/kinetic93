@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore, doc, getDoc, setDoc, memoryLocalCache, getDocFromServer, getFirestore, getDocFromCache } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+import { idbSet, idbGet } from './idb';
 import {
   INITIAL_VARIABLES,
   INITIAL_CLIENTS,
@@ -701,6 +702,23 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
       }
     }
   }
+
+  // If localItems is empty or has 0 items, check IndexedDB fallback!
+  if (localItems.length === 0 && !localObj) {
+    for (const ck of candidateKeys) {
+      try {
+        const idbVal = await idbGet<any>(ck);
+        if (idbVal !== null) {
+          if (Array.isArray(idbVal) && idbVal.length > 0) {
+            localItems.push(...idbVal);
+          } else if (typeof idbVal === 'object' && !localObj) {
+            localObj = idbVal;
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
   if (localItems.length > 0) {
     const merged = mergeCollectionItems(collectionName, localItems);
     return filterCollectionForTenant(merged as unknown as T, collectionName, activeTenantId);
@@ -812,15 +830,21 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
 
   const finalCleanValue = sanitizeUndefined(sanitizedValue);
   
-  // Save to cache immediately across candidate keys so UI reads it instantly
-  for (const ck of candidateKeys) {
-    saveToLocalCache(ck, finalCleanValue);
+  // Save to IndexedDB and cache immediately across candidate keys so UI reads it instantly
+  try {
+    idbSet(key, finalCleanValue);
+    for (const ck of candidateKeys) {
+      saveToLocalCache(ck, finalCleanValue);
+      idbSet(ck, finalCleanValue);
+    }
+  } catch (cacheErr) {
+    console.warn(`[Cache] Error writing to local/indexed cache for ${key}:`, cacheErr);
   }
 
-  // Background sync to server so REST API /v1 has instant access
+  // Synchronous sync to server so REST API /v1 has instant access
   try {
     if (typeof fetch !== 'undefined') {
-      fetch('/api/sync-collection', {
+      await fetch('/api/sync-collection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -828,45 +852,60 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
           tenantId: activeTenantId,
           value: finalCleanValue
         })
-      }).catch(() => {});
+      });
     }
   } catch (syncErr) {
-    // Non-blocking
+    console.warn(`[Sync Server Relay] Error syncing collection ${collectionName} to server:`, syncErr);
   }
 
   try {
+    const primaryKey = getCollectionKey(collectionName, activeTenantId);
+    const writeKeys = [primaryKey];
+    if (primaryKey.toLowerCase() !== primaryKey) {
+      writeKeys.push(primaryKey.toLowerCase());
+    }
+
     const jsonStr = JSON.stringify(finalCleanValue);
     // Firestore single doc limit is 1MB. If array and payload > 400 KB, chunk it!
     if (Array.isArray(finalCleanValue) && jsonStr.length > 400000) {
       const items = finalCleanValue;
       const avgItemLen = Math.max(1, Math.ceil(jsonStr.length / items.length));
-      const chunkSize = Math.max(1, Math.floor(250000 / avgItemLen));
+      const chunkSize = Math.max(50, Math.floor(450000 / avgItemLen));
       const chunksCount = Math.ceil(items.length / chunkSize);
 
-      for (let i = 0; i < chunksCount; i++) {
-        const chunkItems = items.slice(i * chunkSize, (i + 1) * chunkSize);
-        for (const ck of candidateKeys) {
-          const chunkRef = doc(db, 'appData', `${ck}_chunk_${i}`);
-          await setDoc(chunkRef, { value: chunkItems });
+      // Write chunks in parallel batches of 3
+      for (let i = 0; i < chunksCount; i += 3) {
+        const batch: Promise<any>[] = [];
+        for (let j = i; j < Math.min(i + 3, chunksCount); j++) {
+          const chunkItems = items.slice(j * chunkSize, (j + 1) * chunkSize);
+          for (const wk of writeKeys) {
+            const chunkRef = doc(db, 'appData', `${wk}_chunk_${j}`);
+            batch.push(setDoc(chunkRef, { value: chunkItems }));
+          }
         }
+        await Promise.all(batch);
       }
 
-      for (const ck of candidateKeys) {
-        const mainDocRef = doc(db, 'appData', ck);
-        await setDoc(mainDocRef, { 
+      // Write main metadata doc
+      const mainBatch = writeKeys.map(wk => {
+        const mainDocRef = doc(db, 'appData', wk);
+        return setDoc(mainDocRef, { 
           _chunked: true, 
           chunksCount, 
           totalItems: items.length,
           updatedAt: new Date().toISOString() 
         });
-      }
-      console.log(`Successfully synced chunked collection ${key} (${chunksCount} chunks, ${items.length} items) to Firestore across candidate keys.`);
+      });
+      await Promise.all(mainBatch);
+
+      console.log(`Successfully synced chunked collection ${primaryKey} (${chunksCount} chunks, ${items.length} items) to Firestore.`);
     } else {
-      for (const ck of candidateKeys) {
-        const docRef = doc(db, 'appData', ck);
-        await setDoc(docRef, { value: finalCleanValue, _chunked: false });
-      }
-      console.log(`Successfully synced ${key} to Firestore with hidden environment fields.`);
+      const docBatch = writeKeys.map(wk => {
+        const docRef = doc(db, 'appData', wk);
+        return setDoc(docRef, { value: finalCleanValue, _chunked: false });
+      });
+      await Promise.all(docBatch);
+      console.log(`Successfully synced ${primaryKey} to Firestore.`);
     }
   } catch (error) {
     console.warn(`Error saving collection ${collectionName} to Firestore (kept in cache):`, error);

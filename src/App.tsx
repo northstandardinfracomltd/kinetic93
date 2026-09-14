@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getRegionsForCountry } from './utils/regions';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems } from './firebase';
+import { idbSet, idbGet } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
@@ -3653,7 +3654,7 @@ export default function App() {
         const rawOfflineClients = getLocalTenantValue<Client[]>('clients', activeRunTenantId === 'demo' ? INITIAL_CLIENTS : []);
         let offlineClients: Client[] = Array.isArray(rawOfflineClients) ? rawOfflineClients : [];
         let offlineChanged = false;
-        const sanitizedOffline = offlineClients.map(c => {
+        let sanitizedOffline = offlineClients.map(c => {
           if (!c.signaturePin || !c.signaturePin.trim()) {
             offlineChanged = true;
             return { ...c, signaturePin: generateRandomPin() };
@@ -3678,7 +3679,7 @@ export default function App() {
           id_record: d.id_record || `record_${activeRunTenantId.toLowerCase()}_dae1`
         }));
         const rawOfflineDefibs = getLocalTenantValue<Defibrillateur[]>('defibrillateurs', tenantInitialDefibs);
-        const baseDefibrillateurs = (Array.isArray(rawOfflineDefibs) && rawOfflineDefibs.length > 0) ? rawOfflineDefibs : tenantInitialDefibs;
+        let baseDefibrillateurs = (Array.isArray(rawOfflineDefibs) && rawOfflineDefibs.length > 0) ? rawOfflineDefibs : tenantInitialDefibs;
         setDefibrillateurs(baseDefibrillateurs);
 
         const defaultInfo = {
@@ -3810,6 +3811,20 @@ export default function App() {
         const savedEnable = localStorage.getItem(`defib_${activeRunTenantId}_enable_other_equipments`);
         setEnableOtherEquipments(savedEnable || baseCompanyInfo.enableOtherEquipments || 'Non');
 
+        // Check IndexedDB if localStorage was empty or couldn't store large collections
+        try {
+          const idbDefibs = await idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`);
+          if (Array.isArray(idbDefibs) && idbDefibs.length > baseDefibrillateurs.length) {
+            baseDefibrillateurs = idbDefibs;
+            setDefibrillateurs(idbDefibs);
+          }
+          const idbClients = await idbGet<Client[]>(`defib_${activeRunTenantId}_clients`);
+          if (Array.isArray(idbClients) && idbClients.length > sanitizedOffline.length) {
+            sanitizedOffline = idbClients;
+            setClients(idbClients);
+          }
+        } catch (_) {}
+
         // Prime the loadedDataRef instantly with the loaded offline cached data
         // to prevent any race condition auto-saves from triggering on startup
         loadedDataRef.current = {
@@ -3862,9 +3877,33 @@ export default function App() {
               if (customTransformer) {
                 finalData = await customTransformer(data);
               }
+
+              // CRITICAL RESILIENCE: Prevent overwriting large populated datasets with empty/single placeholder
+              if (Array.isArray(finalData)) {
+                let currentLen = 0;
+                const currentSavedStr = loadedDataRef.current[localStorageKeySuffix] || loadedDataRef.current[collectionName];
+                if (currentSavedStr) {
+                  try {
+                    const parsed = JSON.parse(currentSavedStr);
+                    if (Array.isArray(parsed)) currentLen = parsed.length;
+                  } catch (_) {}
+                }
+                if (currentLen > 50 && finalData.length <= 1) {
+                  console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${currentLen} items) with incomplete remote data (${finalData.length} items). Re-syncing local data to cloud...`);
+                  try {
+                    const parsed = JSON.parse(currentSavedStr!);
+                    saveCollectionToFirestore(collectionName, parsed, activeRunTenantId);
+                  } catch (_) {}
+                  return;
+                }
+              }
+
               stateSetter(finalData);
               const strVal = JSON.stringify(finalData);
               safeSetLocalStorage(`defib_${activeRunTenantId}_${localStorageKeySuffix}`, strVal);
+              try {
+                idbSet(`defib_${activeRunTenantId}_${localStorageKeySuffix}`, finalData);
+              } catch (_) {}
               loadedDataRef.current[localStorageKeySuffix] = strVal;
               loadedDataRef.current[collectionName] = strVal;
             }
@@ -5459,8 +5498,8 @@ export default function App() {
   };
 
 
-  // Save changes to LocalStorage whenever state updates
-  const saveClients = (newClients: Client[]) => {
+  // Save changes to LocalStorage and IndexedDB whenever state updates
+  const saveClients = async (newClients: Client[]): Promise<void> => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
@@ -5474,13 +5513,16 @@ export default function App() {
     setClients(sanitized);
     const str = JSON.stringify(sanitized);
     safeSetLocalStorage(`defib_${tenantId}_clients`, str);
+    try {
+      await idbSet(`defib_${tenantId}_clients`, sanitized);
+    } catch (_) {}
     loadedDataRef.current.clients = str;
     if (tenantId) {
-      saveCollectionToFirestore('clients', sanitized, tenantId);
+      await saveCollectionToFirestore('clients', sanitized, tenantId);
     }
   };
 
-  const saveVariables = (newVariables: Variable[]) => {
+  const saveVariables = async (newVariables: Variable[]): Promise<void> => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
@@ -5488,13 +5530,16 @@ export default function App() {
     setVariables(newVariables);
     const str = JSON.stringify(newVariables);
     safeSetLocalStorage(`defib_${tenantId}_variables`, str);
+    try {
+      await idbSet(`defib_${tenantId}_variables`, newVariables);
+    } catch (_) {}
     loadedDataRef.current.variables = str;
     if (tenantId) {
-      saveCollectionToFirestore('variables', newVariables, tenantId);
+      await saveCollectionToFirestore('variables', newVariables, tenantId);
     }
   };
 
-  const saveDefibs = (newDefibs: Defibrillateur[]) => {
+  const saveDefibs = async (newDefibs: Defibrillateur[]): Promise<void> => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
@@ -5502,13 +5547,16 @@ export default function App() {
     setDefibrillateurs(newDefibs);
     const str = JSON.stringify(newDefibs);
     safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, str);
+    try {
+      await idbSet(`defib_${tenantId}_defibrillateurs`, newDefibs);
+    } catch (_) {}
     loadedDataRef.current.defibrillateurs = str;
     if (tenantId) {
-      saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId);
+      await saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId);
     }
   };
 
-  const saveOtherEquipments = (newItems: OtherEquipment[]) => {
+  const saveOtherEquipments = async (newItems: OtherEquipment[]): Promise<void> => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
@@ -5516,9 +5564,12 @@ export default function App() {
     setOtherEquipments(newItems);
     const str = JSON.stringify(newItems);
     safeSetLocalStorage(`defib_${tenantId}_other_equipments`, str);
+    try {
+      await idbSet(`defib_${tenantId}_other_equipments`, newItems);
+    } catch (_) {}
     loadedDataRef.current.otherEquipments = str;
     if (tenantId) {
-      saveCollectionToFirestore('otherEquipments', newItems, tenantId);
+      await saveCollectionToFirestore('otherEquipments', newItems, tenantId);
     }
   };
 

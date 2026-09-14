@@ -44,6 +44,28 @@ try {
 }
 
 let persistTimeout: NodeJS.Timeout | null = null;
+
+function persistServerStoreToDiskNow() {
+  if (persistTimeout) {
+    clearTimeout(persistTimeout);
+    persistTimeout = null;
+  }
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const obj: Record<string, any[]> = {};
+    for (const [k, v] of serverMemoryStore.entries()) {
+      // Skip redundant lowercase or raw numeric aliases to keep disk footprint minimal and avoid string length limits
+      if (/^[0-9]+_/.test(k) || /^d[0-9]+_/.test(k)) continue;
+      obj[k] = v;
+    }
+    fs.writeFileSync(STORE_FILE, JSON.stringify(obj), 'utf-8');
+  } catch (e) {
+    console.warn("Failed to persist server disk store immediately:", e);
+  }
+}
+
 function persistServerStoreToDisk() {
   if (persistTimeout) return;
   persistTimeout = setTimeout(() => {
@@ -1054,13 +1076,43 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           serverMemoryStore.set(`${numOnly}_${collectionName}`, finalValueToStore);
           serverStoreTimestamps.set(`${numOnly}_${collectionName}`, Date.now());
         }
-        persistServerStoreToDisk();
+        if (Array.isArray(value) && value.length > 20) {
+          persistServerStoreToDiskNow();
+        } else {
+          persistServerStoreToDisk();
+        }
       }
 
       // Also attempt asynchronous Firestore save
       try {
-        const docRef = doc(db, 'appData', collectionKey);
-        setDoc(docRef, { value }).catch(() => {});
+        const jsonStr = JSON.stringify(value);
+        if (Array.isArray(value) && jsonStr.length > 400000) {
+          const items = value;
+          const avgItemLen = Math.max(1, Math.ceil(jsonStr.length / items.length));
+          const chunkSize = Math.max(50, Math.floor(450000 / avgItemLen));
+          const chunksCount = Math.ceil(items.length / chunkSize);
+          (async () => {
+            try {
+              for (let i = 0; i < chunksCount; i++) {
+                const chunkItems = items.slice(i * chunkSize, (i + 1) * chunkSize);
+                const chunkRef = doc(db, 'appData', `${collectionKey}_chunk_${i}`);
+                await setDoc(chunkRef, { value: chunkItems });
+              }
+              const mainDocRef = doc(db, 'appData', collectionKey);
+              await setDoc(mainDocRef, {
+                _chunked: true,
+                chunksCount,
+                totalItems: items.length,
+                updatedAt: new Date().toISOString()
+              });
+            } catch (err) {
+              console.warn(`Server chunked Firestore sync error for ${collectionKey}:`, err);
+            }
+          })();
+        } else {
+          const docRef = doc(db, 'appData', collectionKey);
+          setDoc(docRef, { value, _chunked: false }).catch(() => {});
+        }
       } catch (e) {}
 
       return res.json({ status: "success", syncedKey: collectionKey, count: Array.isArray(value) ? value.length : 1 });

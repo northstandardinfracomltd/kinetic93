@@ -257,10 +257,10 @@ interface ImportExportTabProps {
   stocks?: StockRecord[];
   pointages?: PointageLog[];
   variables?: Variable[];
-  saveDefibs?: (newDefibs: Defibrillateur[]) => void;
-  saveClients?: (newClients: Client[]) => void;
-  saveStocks?: (newStocks: StockRecord[]) => void;
-  saveVariables?: (newVariables: Variable[]) => void;
+  saveDefibs?: (newDefibs: Defibrillateur[]) => void | Promise<void>;
+  saveClients?: (newClients: Client[]) => void | Promise<void>;
+  saveStocks?: (newStocks: StockRecord[]) => void | Promise<void>;
+  saveVariables?: (newVariables: Variable[]) => void | Promise<void>;
   setActiveTab?: (tab: any) => void;
   dropboxActive?: boolean;
   dropboxAccessToken?: string;
@@ -1093,7 +1093,7 @@ const validateAndParseDefibs = (
       archive: (normalizeBooleanValue(archive) as 'Oui' | 'Non') || 'Non',
       conforme: (normalizeBooleanValue(conforme) as 'Oui' | 'Non') || 'Oui',
       sousTraitance: (normalizeBooleanValue(sousTraitance) as 'Oui' | 'Non') || 'Non',
-      fsmAutorise: (normalizeBooleanValue(fsmAutorise) as 'Oui' | 'Non') || 'Non',
+      fsmAutorise: fsmAutorise && fsmAutorise.trim() !== '' ? ((normalizeBooleanValue(fsmAutorise) as 'Oui' | 'Non') || 'Oui') : 'Oui',
       victimeSurvie: 'Non',
       victimeSansSurvie: 'Non',
       ageVictime: '',
@@ -1643,44 +1643,52 @@ export default function ImportExportTab({
 
       setValidationError(null);
       setIsSaving(true);
+      setImportSuccessMessage("Validation réussie. Enregistrement sécurisé dans la base de données...");
 
-      // Simulated saving time
-      setTimeout(async () => {
-        try {
-          if (formCategorie === 'Défibrillateurs.' && saveDefibs) {
-            saveDefibs([...defibrillateurs, ...parsedData]);
-          } else if (formCategorie === 'Clients.' && saveClients) {
-            saveClients([...clients, ...parsedData]);
-          } else if (formCategorie === 'Stocks.' && saveStocks) {
-            saveStocks([...stocks, ...parsedData]);
-          } else if (formCategorie.startsWith('Variable — ') && saveVariables) {
-            saveVariables([...variables, ...parsedData]);
-          }
+      try {
+        if (formCategorie === 'Défibrillateurs.' && saveDefibs) {
+          const combined = [...defibrillateurs, ...parsedData];
+          setImportSuccessMessage(`Enregistrement de ${combined.length} défibrillateurs dans le Cloud et le serveur...`);
+          await saveDefibs(combined);
+        } else if (formCategorie === 'Clients.' && saveClients) {
+          const combined = [...clients, ...parsedData];
+          setImportSuccessMessage(`Enregistrement de ${combined.length} clients...`);
+          await saveClients(combined);
+        } else if (formCategorie === 'Stocks.' && saveStocks) {
+          const combined = [...stocks, ...parsedData];
+          setImportSuccessMessage(`Enregistrement de ${combined.length} stocks...`);
+          await saveStocks(combined);
+        } else if (formCategorie.startsWith('Variable — ') && saveVariables) {
+          const combined = [...variables, ...parsedData];
+          await saveVariables(combined);
+        }
 
-          const dExp = new Date();
-          dExp.setHours(dExp.getHours() + 48);
-          const expiresTime = dExp.getTime();
-          const expDateStr = dExp.toISOString().split('T')[0];
+        const dExp = new Date();
+        dExp.setHours(dExp.getHours() + 48);
+        const expiresTime = dExp.getTime();
+        const expDateStr = dExp.toISOString().split('T')[0];
 
-          // Add transaction list record
-          const newRecord: ImportExportRecord = {
-            id: 'rec_' + Date.now(),
-            date: formDate,
-            type: formType,
-            categorie: formCategorie,
-            format: 'CSV.',
-            expiresAt: expiresTime,
-            expirationDate: expDateStr
-          };
+        // Add transaction list record
+        const newRecord: ImportExportRecord = {
+          id: 'rec_' + Date.now(),
+          date: formDate,
+          type: formType,
+          categorie: formCategorie,
+          format: 'CSV.',
+          expiresAt: expiresTime,
+          expirationDate: expDateStr
+        };
 
-          const updated = [newRecord, ...records];
-          setRecords(updated);
-          const key = `defib_import_export_records_${tenantId}`;
-          localStorage.setItem(key, JSON.stringify(updated));
-          if (isFirebaseLoaded) {
-            await saveCollectionToFirestore('importExportRecords', updated);
-          }
+        const updated = [newRecord, ...records];
+        setRecords(updated);
+        const key = `defib_import_export_records_${tenantId}`;
+        localStorage.setItem(key, JSON.stringify(updated));
+        if (isFirebaseLoaded) {
+          await saveCollectionToFirestore('importExportRecords', updated);
+        }
 
+        setImportSuccessMessage("Importation terminée avec succès !");
+        setTimeout(() => {
           setIsSaving(false);
           setShowForm(false);
           setUploadedCsvContent('');
@@ -1690,13 +1698,13 @@ export default function ImportExportTab({
           if (formCategorie === 'Défibrillateurs.' && setActiveTab) {
             setActiveTab('defibrillateurs');
           }
-        } catch (err) {
-          console.error(err);
-          setIsSaving(false);
-          setValidationError('Une erreur est survenue lors de l’importation.');
-          setImportSuccessMessage(null);
-        }
-      }, 1500);
+        }, 700);
+      } catch (err: any) {
+        console.error(err);
+        setIsSaving(false);
+        setValidationError(`Une erreur est survenue lors de l’importation : ${err?.message || 'Erreur réseau/base de données'}.`);
+        setImportSuccessMessage(null);
+      }
 
       return;
     }

@@ -1492,7 +1492,9 @@ export default function DefibTab({
 
       // 9. Maintenance autorisée (fsmAutorise) toggle filter
       let isMatchMaintenance = true;
-      const fsmVal = (df.fsmAutorise || "").trim().toLowerCase();
+      const rawFsm = (df.fsmAutorise || "").trim().toLowerCase();
+      // If fsmAutorise is empty or undefined, default to 'oui'
+      const fsmVal = rawFsm === 'non' ? 'non' : 'oui';
       if (maintenanceFilter === 'oui') {
         isMatchMaintenance = fsmVal === 'oui';
       } else if (maintenanceFilter === 'non') {
