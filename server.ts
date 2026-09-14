@@ -1038,16 +1038,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               return clientItem;
             });
 
-            // CRITICAL: Preserve any items created or updated via API on server that client does not yet have in cache
-            const clientKeys = new Set(value.map((c: any) => String(c?.identifiant || c?.id || c?.numeroSerie || '').toLowerCase()).filter(Boolean));
-            for (const s of currentServerData) {
-              if (s && (s._lastSource === 'api' || s.id)) {
-                const sKey = String(s.identifiant || s.id || s.numeroSerie || '').toLowerCase();
-                if (sKey && !clientKeys.has(sKey)) {
-                  finalValueToStore.push(s);
-                }
-              }
-            }
+            // When client syncs, client array is source of truth for items in the collection
           }
         }
 

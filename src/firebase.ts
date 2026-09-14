@@ -624,7 +624,11 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
         foundAnyValidKey = true;
         const val = res.value;
         if (val.type === 'array' && Array.isArray(val.items)) {
-          aggregatedItems.push(...val.items);
+          // If we already loaded a valid array from a higher-priority key (like tenant-scoped),
+          // don't merge fallback legacy keys to prevent resurrection of deleted items!
+          if (aggregatedItems.length === 0) {
+            aggregatedItems.push(...val.items);
+          }
         } else if (val.type === 'object' && val.data) {
           mergedObject = mergedObject ? { ...val.data, ...mergedObject } : { ...val.data };
         } else if (val.type === 'primitive' && primitiveResult === null) {
