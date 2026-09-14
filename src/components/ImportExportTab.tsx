@@ -388,7 +388,8 @@ export function parseCSV(text: string): CSVParseResult {
 const validateAndParseDefibs = (
   csvText: string,
   currentVars: Variable[],
-  existingDefibs: Defibrillateur[]
+  existingDefibs: Defibrillateur[],
+  existingClients: Client[] = []
 ): { success: boolean; data: Defibrillateur[]; errorMessage?: string } => {
   let hasLineBreaksInCells = false;
   let hasInvalidValues = false;
@@ -496,25 +497,144 @@ const validateAndParseDefibs = (
     }
   }
 
+  const normalizeMatchStr = (s: string): string => {
+    if (!s) return '';
+    return s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
   const findVar = (val: string, categoryFilter?: string): Variable | undefined => {
     if (!val) return undefined;
     const cleanVal = val.trim();
     if (!cleanVal) return undefined;
-    const norm = cleanVal.toLowerCase().replace(/\s+/g, ' ');
+    const rawNorm = cleanVal.toLowerCase().replace(/\s+/g, ' ');
+    const norm = normalizeMatchStr(cleanVal);
+    if (!norm) return undefined;
 
-    // 1. Direct ID match (exact or normalized)
-    let found = (currentVars || []).find(v => v.id === cleanVal || (v.id && v.id.trim().toLowerCase() === norm));
+    // Absence check (e.g. no boîtier or accessory)
+    if (['aucun', 'sans', 'sans boitier', 'sans coffret', 'neant', 'non', 'na', 'n a', 'sans objet', '-'].includes(norm)) {
+      return undefined;
+    }
+
+    // 1. Direct ID match (exact or case-insensitive)
+    let found = (currentVars || []).find(v => v.id === cleanVal || (v.id && v.id.trim().toLowerCase() === rawNorm));
     if (found) return found;
 
-    // 2. Name match with category filter
+    // 2. Direct identifiant field match (if v.identifiant exists)
+    found = (currentVars || []).find(v => v.identifiant && (
+      v.identifiant === cleanVal ||
+      v.identifiant.trim().toLowerCase() === rawNorm ||
+      normalizeMatchStr(v.identifiant) === norm
+    ));
+    if (found) return found;
+
+    // Filter by category if specified
+    const varsInCategory = categoryFilter
+      ? (currentVars || []).filter(v => v.category === categoryFilter)
+      : (currentVars || []);
+
+    // 3. Exact normalized name match in targeted category
+    found = varsInCategory.find(v => v.nom && normalizeMatchStr(v.nom) === norm);
+    if (found) return found;
+
+    // 4. Exact normalized Brand + Name or Name + Brand in targeted category
+    found = varsInCategory.find(v => {
+      const nomNorm = normalizeMatchStr(v.nom || '');
+      const marqueNorm = normalizeMatchStr(v.marque || '');
+      const comb1 = `${marqueNorm} ${nomNorm}`.trim();
+      const comb2 = `${nomNorm} ${marqueNorm}`.trim();
+      return comb1 === norm || comb2 === norm;
+    });
+    if (found) return found;
+
+    // 5. Exact normalized name match across all categories
     if (categoryFilter) {
-      found = (currentVars || []).find(v => v.category === categoryFilter && v.nom && v.nom.trim().toLowerCase().replace(/\s+/g, ' ') === norm);
+      found = (currentVars || []).find(v => v.nom && normalizeMatchStr(v.nom) === norm);
+      if (found) return found;
+
+      found = (currentVars || []).find(v => {
+        const nomNorm = normalizeMatchStr(v.nom || '');
+        const marqueNorm = normalizeMatchStr(v.marque || '');
+        const comb1 = `${marqueNorm} ${nomNorm}`.trim();
+        const comb2 = `${nomNorm} ${marqueNorm}`.trim();
+        return comb1 === norm || comb2 === norm;
+      });
       if (found) return found;
     }
 
-    // 3. Name match across all categories
-    found = (currentVars || []).find(v => v.nom && v.nom.trim().toLowerCase().replace(/\s+/g, ' ') === norm);
-    return found;
+    // 6. Substring / inclusion match in targeted category (minimum 3 characters)
+    if (norm.length >= 3) {
+      found = varsInCategory.find(v => {
+        const nomNorm = normalizeMatchStr(v.nom || '');
+        if (!nomNorm || nomNorm.length < 3) return false;
+        return nomNorm.includes(norm) || norm.includes(nomNorm);
+      });
+      if (found) return found;
+    }
+
+    // 7. Substring / inclusion match across all categories
+    if (categoryFilter && norm.length >= 3) {
+      found = (currentVars || []).find(v => {
+        const nomNorm = normalizeMatchStr(v.nom || '');
+        if (!nomNorm || nomNorm.length < 3) return false;
+        return nomNorm.includes(norm) || norm.includes(nomNorm);
+      });
+      if (found) return found;
+    }
+
+    return undefined;
+  };
+
+  const findClient = (val: string, clientsList: Client[]): Client | undefined => {
+    if (!val) return undefined;
+    const cleanVal = val.trim();
+    if (!cleanVal) return undefined;
+    const rawNorm = cleanVal.toLowerCase().replace(/\s+/g, ' ');
+    const norm = normalizeMatchStr(cleanVal);
+    if (!norm) return undefined;
+
+    // 1. Direct ID match
+    let found = (clientsList || []).find(c => c.id === cleanVal || (c.id && c.id.trim().toLowerCase() === rawNorm));
+    if (found) return found;
+
+    // 2. Exact normalized denomination match
+    found = (clientsList || []).find(c => c.denomination && normalizeMatchStr(c.denomination) === norm);
+    if (found) return found;
+
+    // 3. Match on SIRET
+    found = (clientsList || []).find(c => c.siret && c.siret.trim().replace(/\s+/g, '') === cleanVal.replace(/\s+/g, ''));
+    if (found) return found;
+
+    // 4. Match on Email
+    found = (clientsList || []).find(c => c.email && c.email.trim().toLowerCase() === rawNorm);
+    if (found) return found;
+
+    // 5. Match on Contact de site (nomPrenomSite)
+    found = (clientsList || []).find(c => c.nomPrenomSite && normalizeMatchStr(c.nomPrenomSite) === norm);
+    if (found) return found;
+
+    // 6. Match by prefix / inclusion on denomination
+    if (norm.length >= 3) {
+      found = (clientsList || []).find(c => {
+        const denomNorm = normalizeMatchStr(c.denomination || '');
+        return denomNorm.startsWith(norm) || norm.startsWith(denomNorm);
+      });
+      if (found) return found;
+
+      found = (clientsList || []).find(c => {
+        const denomNorm = normalizeMatchStr(c.denomination || '');
+        if (!denomNorm || denomNorm.length < 3) return false;
+        return denomNorm.includes(norm) || norm.includes(denomNorm);
+      });
+      if (found) return found;
+    }
+
+    return undefined;
   };
 
   const parsedItems: Defibrillateur[] = [];
@@ -633,43 +753,94 @@ const validateAndParseDefibs = (
       hasInvalidValues = true;
     }
 
-    // Resolve Defibrillator Model
+    // Resolve Defibrillator Model: accepts variable title/name OR unique variable ID
     let matchingVar = findVar(modelVal, 'Modèle Défibrillateur');
+    let finalModeleId = "";
     if (modelVal !== "") {
-      if (!matchingVar) {
+      if (matchingVar) {
+        finalModeleId = matchingVar.id;
+      } else if (modelVal.startsWith("v_")) {
+        finalModeleId = modelVal;
+      } else {
         hasInvalidIdentifiers = true;
       }
     } else {
       matchingVar = (currentVars || []).find(v => v.category === 'Modèle Défibrillateur');
-      if (!matchingVar) {
+      if (matchingVar) {
+        finalModeleId = matchingVar.id;
+      } else {
         hasInvalidIdentifiers = true;
       }
     }
 
-    // Client. (Identifiant unique) starts with "c_" or "cl_" (if provided)
-    if (clientVal !== "" && !clientVal.startsWith("c_") && !clientVal.startsWith("cl_")) {
-      hasInvalidIdentifiers = true;
+    // Resolve Client: accepts client denomination/name OR unique client ID (e.g. c_... or direct ID)
+    const matchedClient = findClient(clientVal, existingClients);
+    let finalClientId = "";
+    if (clientVal !== "") {
+      if (matchedClient) {
+        finalClientId = matchedClient.id;
+      } else if (clientVal.startsWith("c_") || clientVal.startsWith("cl_")) {
+        finalClientId = clientVal;
+      } else {
+        const directClient = (existingClients || []).find(c => c.id === clientVal);
+        if (directClient) {
+          finalClientId = directClient.id;
+        } else {
+          hasInvalidIdentifiers = true;
+        }
+      }
     }
 
-    // Resolve Coffret
-    const coffretVar = findVar(modeleCoffretId, 'Modèle Coffret');
-    const finalCoffretId = coffretVar ? coffretVar.id : modeleCoffretId;
-    if (modeleCoffretId !== "" && !coffretVar && !modeleCoffretId.startsWith("v_")) {
-      hasInvalidIdentifiers = true;
+    const resolvedNomSite = nomSite || (matchedClient ? matchedClient.denomination : "");
+    const resolvedNomPrenomSite = nomPrenomSite || (matchedClient?.nomPrenomSite || "");
+    const resolvedTelephoneSite = telephoneSite || (matchedClient?.telephoneSite || matchedClient?.phone || "");
+    const resolvedEmailSite = emailSite || (matchedClient?.emailSite || matchedClient?.email || "");
+    const resolvedContrat = contrat !== "Non" ? contrat : sanitizeYesNo(matchedClient?.contrat || 'Non', 'Non');
+    const resolvedNomContrat = nomContrat || (matchedClient?.nomContrat || "");
+    const resolvedReferenceContrat = referenceContrat || (matchedClient?.referenceContrat || "");
+    const resolvedDebutContrat = debutContrat || (matchedClient?.debutContrat || "");
+    const resolvedFinContrat = finContrat || (matchedClient?.finContrat || "");
+
+    // Resolve Coffret: accepts variable title/name OR unique variable ID
+    let finalCoffretId = "";
+    const isNoCoffret = !modeleCoffretId || ['aucun', 'sans', 'sans boitier', 'sans coffret', 'neant', 'non', 'na', 'n a', 'sans objet', '-'].includes(normalizeMatchStr(modeleCoffretId));
+    if (!isNoCoffret) {
+      const coffretVar = findVar(modeleCoffretId, 'Modèle Coffret');
+      if (coffretVar) {
+        finalCoffretId = coffretVar.id;
+      } else if (modeleCoffretId.startsWith("v_")) {
+        finalCoffretId = modeleCoffretId;
+      } else {
+        hasInvalidIdentifiers = true;
+      }
     }
 
     // Resolve Electrode Adulte
-    const elecAVar = findVar(modeleElectrodeAId, 'Modèle Électrode');
-    const finalElectrodeAId = elecAVar ? elecAVar.id : modeleElectrodeAId;
-    if (modeleElectrodeAId !== "" && !elecAVar && !modeleElectrodeAId.startsWith("v_")) {
-      hasInvalidIdentifiers = true;
+    let finalElectrodeAId = "";
+    const isNoElecA = !modeleElectrodeAId || ['aucun', 'sans', 'neant', 'non', 'na', 'n a', '-'].includes(normalizeMatchStr(modeleElectrodeAId));
+    if (!isNoElecA) {
+      const elecAVar = findVar(modeleElectrodeAId, 'Modèle Électrode');
+      if (elecAVar) {
+        finalElectrodeAId = elecAVar.id;
+      } else if (modeleElectrodeAId.startsWith("v_")) {
+        finalElectrodeAId = modeleElectrodeAId;
+      } else {
+        hasInvalidIdentifiers = true;
+      }
     }
 
     // Resolve Electrode Adulte Secours
-    const elecASecVar = findVar(modeleElectrodeASecoursId, 'Modèle Électrode');
-    const finalElectrodeASecoursId = elecASecVar ? elecASecVar.id : modeleElectrodeASecoursId;
-    if (modeleElectrodeASecoursId !== "" && !elecASecVar && !modeleElectrodeASecoursId.startsWith("v_")) {
-      hasInvalidIdentifiers = true;
+    let finalElectrodeASecoursId = "";
+    const isNoElecASec = !modeleElectrodeASecoursId || ['aucun', 'sans', 'neant', 'non', 'na', 'n a', '-'].includes(normalizeMatchStr(modeleElectrodeASecoursId));
+    if (!isNoElecASec) {
+      const elecASecVar = findVar(modeleElectrodeASecoursId, 'Modèle Électrode');
+      if (elecASecVar) {
+        finalElectrodeASecoursId = elecASecVar.id;
+      } else if (modeleElectrodeASecoursId.startsWith("v_")) {
+        finalElectrodeASecoursId = modeleElectrodeASecoursId;
+      } else {
+        hasInvalidIdentifiers = true;
+      }
     }
 
     // Section 6 — Électrode Adulte ou Mixte : Statut
@@ -678,17 +849,31 @@ const validateAndParseDefibs = (
     }
 
     // Resolve Electrode Pédiatrique
-    const elecPVar = findVar(modeleElectrodePId, 'Modèle Électrode');
-    const finalElectrodePId = elecPVar ? elecPVar.id : modeleElectrodePId;
-    if (modeleElectrodePId !== "" && !elecPVar && !modeleElectrodePId.startsWith("v_")) {
-      hasInvalidIdentifiers = true;
+    let finalElectrodePId = "";
+    const isNoElecP = !modeleElectrodePId || ['aucun', 'sans', 'neant', 'non', 'na', 'n a', '-'].includes(normalizeMatchStr(modeleElectrodePId));
+    if (!isNoElecP) {
+      const elecPVar = findVar(modeleElectrodePId, 'Modèle Électrode');
+      if (elecPVar) {
+        finalElectrodePId = elecPVar.id;
+      } else if (modeleElectrodePId.startsWith("v_")) {
+        finalElectrodePId = modeleElectrodePId;
+      } else {
+        hasInvalidIdentifiers = true;
+      }
     }
 
     // Resolve Electrode Pédiatrique Secours
-    const elecPSecVar = findVar(modeleElectrodePSecoursId, 'Modèle Électrode');
-    const finalElectrodePSecoursId = elecPSecVar ? elecPSecVar.id : modeleElectrodePSecoursId;
-    if (modeleElectrodePSecoursId !== "" && !elecPSecVar && !modeleElectrodePSecoursId.startsWith("v_")) {
-      hasInvalidIdentifiers = true;
+    let finalElectrodePSecoursId = "";
+    const isNoElecPSec = !modeleElectrodePSecoursId || ['aucun', 'sans', 'neant', 'non', 'na', 'n a', '-'].includes(normalizeMatchStr(modeleElectrodePSecoursId));
+    if (!isNoElecPSec) {
+      const elecPSecVar = findVar(modeleElectrodePSecoursId, 'Modèle Électrode');
+      if (elecPSecVar) {
+        finalElectrodePSecoursId = elecPSecVar.id;
+      } else if (modeleElectrodePSecoursId.startsWith("v_")) {
+        finalElectrodePSecoursId = modeleElectrodePSecoursId;
+      } else {
+        hasInvalidIdentifiers = true;
+      }
     }
 
     // Section 7 — Électrode Pédiatrique : Statut
@@ -697,10 +882,17 @@ const validateAndParseDefibs = (
     }
 
     // Resolve Batterie
-    const batVar = findVar(modeleBatterieId, 'Modèle Batterie');
-    const finalBatterieId = batVar ? batVar.id : modeleBatterieId;
-    if (modeleBatterieId !== "" && !batVar && !modeleBatterieId.startsWith("v_")) {
-      hasInvalidIdentifiers = true;
+    let finalBatterieId = "";
+    const isNoBat = !modeleBatterieId || ['aucun', 'sans', 'neant', 'non', 'na', 'n a', '-'].includes(normalizeMatchStr(modeleBatterieId));
+    if (!isNoBat) {
+      const batVar = findVar(modeleBatterieId, 'Modèle Batterie');
+      if (batVar) {
+        finalBatterieId = batVar.id;
+      } else if (modeleBatterieId.startsWith("v_")) {
+        finalBatterieId = modeleBatterieId;
+      } else {
+        hasInvalidIdentifiers = true;
+      }
     }
 
     // Section 8 — Batterie : Statut
@@ -731,20 +923,20 @@ const validateAndParseDefibs = (
       id: 'df_' + Date.now() + '_' + idx + '_' + Math.floor(Math.random() * 1000),
       identifiant: assignedIdentifiant,
       numeroSerie: serie,
-      modeleId: matchingVar ? matchingVar.id : '',
+      modeleId: finalModeleId,
       numeroAtlasante: numeroAtlasante,
       commentaire: commentaire,
-      clientId: clientVal,
-      nomSite: nomSite,
+      clientId: finalClientId,
+      nomSite: resolvedNomSite,
       categorieEtablissement: categorieEtablissement,
-      nomPrenomSite: nomPrenomSite,
-      telephoneSite: telephoneSite,
-      emailSite: emailSite,
-      contrat: sanitizeYesNo(contrat, 'Non'),
-      nomContrat: nomContrat,
-      referenceContrat: referenceContrat,
-      debutContrat: debutContrat,
-      finContrat: finContrat,
+      nomPrenomSite: resolvedNomPrenomSite,
+      telephoneSite: resolvedTelephoneSite,
+      emailSite: resolvedEmailSite,
+      contrat: sanitizeYesNo(resolvedContrat, 'Non'),
+      nomContrat: resolvedNomContrat,
+      referenceContrat: resolvedReferenceContrat,
+      debutContrat: resolvedDebutContrat,
+      finContrat: resolvedFinContrat,
       payeurId: payeurId,
       clientIdField: clientIdField,
       modeleCoffretId: finalCoffretId,
@@ -1304,7 +1496,7 @@ export default function ImportExportTab({
 
       let parsedData: any[] | null = null;
       if (formCategorie === 'Défibrillateurs.') {
-        const valResult = validateAndParseDefibs(uploadedCsvContent, variables, defibrillateurs);
+        const valResult = validateAndParseDefibs(uploadedCsvContent, variables, defibrillateurs, clients);
         if (!valResult.success) {
           setValidationError(valResult.errorMessage || 'Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
           return;
