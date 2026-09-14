@@ -1349,7 +1349,7 @@ export default function DefibTab({
   const [bulkApplyRappelMensuelAuto, setBulkApplyRappelMensuelAuto] = useState(false);
   const [bulkRappelMensuelAuto, setBulkRappelMensuelAuto] = useState<'Oui' | 'Non'>('Non');
   const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | 'postal_code_asc' | 'postal_code_desc' | null>(null);
-  const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('all');
+  const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('oui');
 
   // --- LOOKUP INDEXES ---
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);

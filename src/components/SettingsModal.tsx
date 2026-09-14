@@ -5223,7 +5223,10 @@ const { defibrillateurs } = await res.json();`}
       "gants_presents_bool": true,
       "rasoir_present": "Oui",
       "rasoir_present_bool": true,
-      "etat_housse": "Conforme"
+      "etat_housse": "Conforme",
+      "maintenance_autorisee": "Oui",
+      "maintenance_autorisee_bool": true,
+      "fsm_autorise": "Oui"
     }
   ]
 }`}
@@ -5250,10 +5253,13 @@ const { defibrillateurs } = await res.json();`}
                         <div className="text-[16px] font-bold text-black mb-1">Guide d'intégration &amp; Bonnes pratiques :</div>
                         <ul className="list-disc pl-5 space-y-2 text-[15px] text-black">
                           <li>
-                            <strong>Nommage des clés (camelCase &amp; snake_case) :</strong> L'API accepte nativement la notation <strong>camelCase</strong> (standard recommandé : <code className="bg-slate-100 px-1 py-0.5 rounded">lotElectrodeA</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">kitCiseauxPresents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">peremptionTrousse</code>) ainsi que les alias historiques en <strong>snake_case</strong> (<code className="bg-slate-100 px-1 py-0.5 rounded">lot_a</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">ciseaux_presents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">peremption_trousse</code>). L'ensemble des colonnes est automatiquement synchronisé dans les deux formats.
+                            <strong>Nommage des clés (camelCase &amp; snake_case) :</strong> L'API accepte nativement la notation <strong>camelCase</strong> (standard recommandé : <code className="bg-slate-100 px-1 py-0.5 rounded">maintenanceAutorisee</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">lotElectrodeA</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">kitCiseauxPresents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">peremptionTrousse</code>) ainsi que les alias historiques en <strong>snake_case</strong> (<code className="bg-slate-100 px-1 py-0.5 rounded">maintenance_autorisee</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">fsm_autorise</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">lot_a</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">ciseaux_presents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">peremption_trousse</code>). L'ensemble des colonnes est automatiquement synchronisé dans les deux formats.
                           </li>
                           <li>
-                            <strong>Format des champs Oui / Non &amp; Booléens :</strong> Pour tous les champs de présence (ex: <code className="bg-slate-100 px-1 py-0.5 rounded">ciseaux_presents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">masque_present</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">serviettes_presentes</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">gants_presents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">rasoir_present</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">conforme</code>), vous pouvez envoyer <strong>soit un booléen JSON (<code className="bg-slate-100 px-1 py-0.5 rounded">true</code> / <code className="bg-slate-100 px-1 py-0.5 rounded">false</code>)</strong>, <strong>soit une chaîne de texte (<code className="bg-slate-100 px-1 py-0.5 rounded">"Oui"</code> / <code className="bg-slate-100 px-1 py-0.5 rounded">"Non"</code>)</strong>. Defibeo les normalise automatiquement. En retour (GET ou après mise à jour), l'API vous fournit à la fois la chaîne <code className="bg-slate-100 px-1 py-0.5 rounded">"Oui"/"Non"</code> et l'équivalent booléen suffixé par <code className="bg-slate-100 px-1 py-0.5 rounded">_bool</code>.
+                            <strong>Format des champs Oui / Non &amp; Booléens :</strong> Pour tous les champs de présence, catégories et conformité (ex: <code className="bg-slate-100 px-1 py-0.5 rounded">maintenance_autorisee</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">conforme</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">ciseaux_presents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">masque_present</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">serviettes_presentes</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">gants_presents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">rasoir_present</code>), vous pouvez envoyer <strong>soit un booléen JSON (<code className="bg-slate-100 px-1 py-0.5 rounded">true</code> / <code className="bg-slate-100 px-1 py-0.5 rounded">false</code>)</strong>, <strong>soit une chaîne de texte (<code className="bg-slate-100 px-1 py-0.5 rounded">"Oui"</code> / <code className="bg-slate-100 px-1 py-0.5 rounded">"Non"</code>)</strong>. Defibeo les normalise automatiquement. En retour (GET ou après mise à jour), l'API vous fournit à la fois la chaîne <code className="bg-slate-100 px-1 py-0.5 rounded">"Oui"/"Non"</code> et l'équivalent booléen suffixé par <code className="bg-slate-100 px-1 py-0.5 rounded">_bool</code>.
+                          </li>
+                          <li>
+                            <strong>Champ Maintenance autorisée (Section Catégories) :</strong> Le champ <code className="bg-slate-100 px-1 py-0.5 rounded">maintenance_autorisee</code> (ou <code className="bg-slate-100 px-1 py-0.5 rounded">fsm_autorise</code> en snake_case, <code className="bg-slate-100 px-1 py-0.5 rounded">maintenanceAutorisee</code> / <code className="bg-slate-100 px-1 py-0.5 rounded">fsmAutorise</code> en camelCase) définit si les interventions de maintenance sur le DAE sont autorisées. Il accepte la valeur <strong>"Oui"</strong> ou <strong>"Non"</strong> (ainsi que les booléens JSON <code className="bg-slate-100 px-1 py-0.5 rounded">true</code> / <code className="bg-slate-100 px-1 py-0.5 rounded">false</code>). En réponse, l'API renvoie la valeur textuelle (<code className="bg-slate-100 px-1 py-0.5 rounded">"Oui"</code> ou <code className="bg-slate-100 px-1 py-0.5 rounded">"Non"</code>) sous <code className="bg-slate-100 px-1 py-0.5 rounded">maintenance_autorisee</code> et <code className="bg-slate-100 px-1 py-0.5 rounded">fsm_autorise</code>, ainsi que le booléen <code className="bg-slate-100 px-1 py-0.5 rounded">maintenance_autorisee_bool</code>.
                           </li>
                           <li>
                             <strong>Section Trousse de secours (8 champs du formulaire Web) :</strong> Tous les 8 champs affichés dans l'interface web sont désormais directement exposés et modifiables via l'API :
@@ -5321,6 +5327,7 @@ const { defibrillateurs } = await res.json();`}
 
   "statut": "Opérationnel",
   "conforme": "Oui",                  // ou true
+  "maintenanceAutorisee": "Oui",      // "Oui" ou "Non" (ou true/false) - Maintenance autorisée
   "statutVoyant": "Vert OK",
   "etatHousse": "Conforme",
   "commentaireAdresse": "Nouveau badge sécurité RDC"
@@ -5366,6 +5373,7 @@ const { defibrillateurs } = await res.json();`}
   "rasoir_present": true,             // ou "Oui"
 
   "statut": "Opérationnel",
+  "maintenance_autorisee": "Oui",     // "Oui" ou "Non" (ou true/false) - Maintenance autorisée
   "statut_voyant": "Vert OK",
   "aide_acces": "Nouveau badge sécurité RDC"
 }`}
@@ -5391,12 +5399,16 @@ const { defibrillateurs } = await res.json();`}
     "peremptionBatterie",
     "pourcentageBatterie",
     "modeleCoffretId",
-    "statut"
+    "statut",
+    "maintenance_autorisee"
   ],
   "defibrillateur": {
     "identifiant": "DAE-88192",
     "numeroSerie": "SN-9981240",
     "statut": "Opérationnel",
+    "maintenance_autorisee": "Oui",
+    "maintenance_autorisee_bool": true,
+    "fsm_autorise": "Oui",
     "derniereMaintenance": "2026-08-03",
     "derniere_maintenance": "2026-08-03",
     "lotElectrodeA": "LOT-A-1002",

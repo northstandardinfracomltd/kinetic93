@@ -2387,6 +2387,10 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           archive: 'archive',
           sous_traitance: 'sousTraitance',
           sousTraitance: 'sousTraitance',
+          maintenance_autorisee: 'fsmAutorise',
+          maintenanceAutorisee: 'fsmAutorise',
+          maintenance_autorise: 'fsmAutorise',
+          maintenanceAutorise: 'fsmAutorise',
           fsm_autorise: 'fsmAutorise',
           fsmAutorise: 'fsmAutorise',
           victime_survie: 'victimeSurvie',
@@ -2684,8 +2688,12 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             archive: d.archive || 'Non',
             sousTraitance: d.sousTraitance || d.sous_traitance || 'Non',
             sous_traitance: d.sous_traitance || d.sousTraitance || 'Non',
-            fsmAutorise: d.fsmAutorise || d.fsm_autorise || 'Oui',
-            fsm_autorise: d.fsm_autorise || d.fsmAutorise || 'Oui',
+            fsmAutorise: d.fsmAutorise || d.fsm_autorise || d.maintenance_autorisee || d.maintenanceAutorisee || 'Oui',
+            fsm_autorise: d.fsm_autorise || d.fsmAutorise || d.maintenance_autorisee || d.maintenanceAutorisee || 'Oui',
+            maintenance_autorisee: d.maintenance_autorisee || d.maintenanceAutorisee || d.fsmAutorise || d.fsm_autorise || 'Oui',
+            maintenanceAutorisee: d.maintenanceAutorisee || d.maintenance_autorisee || d.fsmAutorise || d.fsm_autorise || 'Oui',
+            maintenance_autorisee_bool: toBoolean(d.maintenance_autorisee ?? d.maintenanceAutorisee ?? d.fsmAutorise ?? d.fsm_autorise ?? 'Oui', true),
+            fsm_autorise_bool: toBoolean(d.fsmAutorise ?? d.fsm_autorise ?? d.maintenance_autorisee ?? d.maintenanceAutorisee ?? 'Oui', true),
             victimeSurvie: d.victimeSurvie || d.victime_survie || 'Non',
             victime_survie: d.victime_survie || d.victimeSurvie || 'Non',
             victimeSansSurvie: d.victimeSansSurvie || d.victime_sans_survie || 'Non',
@@ -3352,6 +3360,42 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               updatedDefib.client_nom = existing.client_nom || existing.client || '';
             }
 
+            // Maintenance autorisée (Oui / Non)
+            if (body.maintenance_autorisee !== undefined || body.maintenanceAutorisee !== undefined || body.maintenance_autorise !== undefined || body.maintenanceAutorise !== undefined || body.fsmAutorise !== undefined || body.fsm_autorise !== undefined) {
+              const rawFsm = body.maintenance_autorisee ?? body.maintenanceAutorisee ?? body.maintenance_autorise ?? body.maintenanceAutorise ?? body.fsmAutorise ?? body.fsm_autorise;
+              const fsmVal = normalizeYesNo(rawFsm, 'Oui');
+              updatedDefib.fsmAutorise = fsmVal;
+              updatedDefib.fsm_autorise = fsmVal;
+              updatedDefib.maintenance_autorisee = fsmVal;
+              updatedDefib.maintenanceAutorisee = fsmVal;
+              updatedFields.add('maintenance_autorisee');
+            } else {
+              updatedDefib.fsmAutorise = existing.fsmAutorise || existing.fsm_autorise || existing.maintenance_autorisee || 'Oui';
+            }
+
+            // Catégories additionnelles
+            if (body.loue !== undefined) {
+              const lVal = normalizeYesNo(body.loue, 'Non');
+              updatedDefib.loue = lVal;
+              updatedFields.add('loue');
+            }
+            if (body.prete !== undefined) {
+              const pVal = normalizeYesNo(body.prete, 'Non');
+              updatedDefib.prete = pVal;
+              updatedFields.add('prete');
+            }
+            if (body.stocke !== undefined) {
+              const sVal = normalizeYesNo(body.stocke, 'Non');
+              updatedDefib.stocke = sVal;
+              updatedFields.add('stocke');
+            }
+            if (body.sousTraitance !== undefined || body.sous_traitance !== undefined) {
+              const stVal = normalizeYesNo(body.sousTraitance ?? body.sous_traitance, 'Non');
+              updatedDefib.sousTraitance = stVal;
+              updatedDefib.sous_traitance = stVal;
+              updatedFields.add('sousTraitance');
+            }
+
             // Strictly lock structural tenant & identity routing keys
             updatedDefib.id = existing.id;
             updatedDefib.identifiant = existing.identifiant;
@@ -3360,8 +3404,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             updatedDefib.id_record = existing.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${existing.id}`;
             updatedDefib.envId = existing.envId || targetTenant.shortEnvId || tenantId;
             updatedDefib.tenantId = existing.tenantId || tenantId;
-            updatedDefib.archive = existing.archive || 'Non';
-            updatedDefib.fsmAutorise = existing.fsmAutorise || 'Oui';
+            updatedDefib.archive = body.archive !== undefined ? normalizeYesNo(body.archive, 'Non') : (existing.archive || 'Non');
 
             // Timestamp and API provenance to prevent stale browser caches from reverting values
             updatedDefib.updatedAt = new Date().toISOString();
@@ -3410,8 +3453,9 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               marque: body.marque || body.brand || "Standard",
               statut: body.statut || body.status || "Opérationnel",
               conforme: body.conforme || "Oui",
-              archive: "Non",
-              fsmAutorise: "Oui",
+              archive: body.archive !== undefined ? normalizeYesNo(body.archive, 'Non') : "Non",
+              fsmAutorise: normalizeYesNo(body.maintenance_autorisee ?? body.maintenanceAutorisee ?? body.maintenance_autorise ?? body.maintenanceAutorise ?? body.fsmAutorise ?? body.fsm_autorise, 'Oui'),
+              maintenance_autorisee: normalizeYesNo(body.maintenance_autorisee ?? body.maintenanceAutorisee ?? body.maintenance_autorise ?? body.maintenanceAutorise ?? body.fsmAutorise ?? body.fsm_autorise, 'Oui'),
               id_record: body.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${targetId}`,
               envId: targetTenant.shortEnvId || tenantId,
               tenantId: tenantId,
