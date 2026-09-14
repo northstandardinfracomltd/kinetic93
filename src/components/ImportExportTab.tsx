@@ -759,18 +759,13 @@ const validateAndParseDefibs = (
     if (modelVal !== "") {
       if (matchingVar) {
         finalModeleId = matchingVar.id;
-      } else if (modelVal.startsWith("v_")) {
+      } else if (modelVal.startsWith("v_") && (currentVars || []).some(v => v.id === modelVal)) {
         finalModeleId = modelVal;
       } else {
-        hasInvalidIdentifiers = true;
+        finalModeleId = "";
       }
     } else {
-      matchingVar = (currentVars || []).find(v => v.category === 'Modèle Défibrillateur');
-      if (matchingVar) {
-        finalModeleId = matchingVar.id;
-      } else {
-        hasInvalidIdentifiers = true;
-      }
+      finalModeleId = "";
     }
 
     // Resolve Client: accepts client denomination/name OR unique client ID (e.g. c_... or direct ID)
@@ -786,12 +781,12 @@ const validateAndParseDefibs = (
         if (directClient) {
           finalClientId = directClient.id;
         } else {
-          hasInvalidIdentifiers = true;
+          finalClientId = "";
         }
       }
     }
 
-    const resolvedNomSite = nomSite || (matchedClient ? matchedClient.denomination : "");
+    const resolvedNomSite = nomSite || (matchedClient ? matchedClient.denomination : (clientVal || ""));
     const resolvedNomPrenomSite = nomPrenomSite || (matchedClient?.nomPrenomSite || "");
     const resolvedTelephoneSite = telephoneSite || (matchedClient?.telephoneSite || matchedClient?.phone || "");
     const resolvedEmailSite = emailSite || (matchedClient?.emailSite || matchedClient?.email || "");
@@ -808,10 +803,10 @@ const validateAndParseDefibs = (
       const coffretVar = findVar(modeleCoffretId, 'Modèle Coffret');
       if (coffretVar) {
         finalCoffretId = coffretVar.id;
-      } else if (modeleCoffretId.startsWith("v_")) {
+      } else if (modeleCoffretId.startsWith("v_") && (currentVars || []).some(v => v.id === modeleCoffretId)) {
         finalCoffretId = modeleCoffretId;
       } else {
-        hasInvalidIdentifiers = true;
+        finalCoffretId = "";
       }
     }
 
@@ -822,10 +817,10 @@ const validateAndParseDefibs = (
       const elecAVar = findVar(modeleElectrodeAId, 'Modèle Électrode');
       if (elecAVar) {
         finalElectrodeAId = elecAVar.id;
-      } else if (modeleElectrodeAId.startsWith("v_")) {
+      } else if (modeleElectrodeAId.startsWith("v_") && (currentVars || []).some(v => v.id === modeleElectrodeAId)) {
         finalElectrodeAId = modeleElectrodeAId;
       } else {
-        hasInvalidIdentifiers = true;
+        finalElectrodeAId = "";
       }
     }
 
@@ -836,10 +831,10 @@ const validateAndParseDefibs = (
       const elecASecVar = findVar(modeleElectrodeASecoursId, 'Modèle Électrode');
       if (elecASecVar) {
         finalElectrodeASecoursId = elecASecVar.id;
-      } else if (modeleElectrodeASecoursId.startsWith("v_")) {
+      } else if (modeleElectrodeASecoursId.startsWith("v_") && (currentVars || []).some(v => v.id === modeleElectrodeASecoursId)) {
         finalElectrodeASecoursId = modeleElectrodeASecoursId;
       } else {
-        hasInvalidIdentifiers = true;
+        finalElectrodeASecoursId = "";
       }
     }
 
@@ -855,10 +850,10 @@ const validateAndParseDefibs = (
       const elecPVar = findVar(modeleElectrodePId, 'Modèle Électrode');
       if (elecPVar) {
         finalElectrodePId = elecPVar.id;
-      } else if (modeleElectrodePId.startsWith("v_")) {
+      } else if (modeleElectrodePId.startsWith("v_") && (currentVars || []).some(v => v.id === modeleElectrodePId)) {
         finalElectrodePId = modeleElectrodePId;
       } else {
-        hasInvalidIdentifiers = true;
+        finalElectrodePId = "";
       }
     }
 
@@ -869,10 +864,10 @@ const validateAndParseDefibs = (
       const elecPSecVar = findVar(modeleElectrodePSecoursId, 'Modèle Électrode');
       if (elecPSecVar) {
         finalElectrodePSecoursId = elecPSecVar.id;
-      } else if (modeleElectrodePSecoursId.startsWith("v_")) {
+      } else if (modeleElectrodePSecoursId.startsWith("v_") && (currentVars || []).some(v => v.id === modeleElectrodePSecoursId)) {
         finalElectrodePSecoursId = modeleElectrodePSecoursId;
       } else {
-        hasInvalidIdentifiers = true;
+        finalElectrodePSecoursId = "";
       }
     }
 
@@ -888,10 +883,10 @@ const validateAndParseDefibs = (
       const batVar = findVar(modeleBatterieId, 'Modèle Batterie');
       if (batVar) {
         finalBatterieId = batVar.id;
-      } else if (modeleBatterieId.startsWith("v_")) {
+      } else if (modeleBatterieId.startsWith("v_") && (currentVars || []).some(v => v.id === modeleBatterieId)) {
         finalBatterieId = modeleBatterieId;
       } else {
-        hasInvalidIdentifiers = true;
+        finalBatterieId = "";
       }
     }
 
