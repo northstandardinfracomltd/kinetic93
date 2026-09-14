@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { Client, Defibrillateur, StockRecord, PointageLog, Variable } from '../types';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
 import { generateRandomShortCode, computeProchaineMaintenance } from '../utils';
@@ -265,11 +266,12 @@ interface ImportExportTabProps {
   dropboxAccessToken?: string;
 }
 
-// Helper function to robustly build the exact invalid file message
+// Helper function to robustly build the exact invalid file message with precise column identification
 export function buildInvalidFileMessage(reasons: {
   hasLineBreaksInCells?: boolean;
   hasInvalidValues?: boolean;
   hasInvalidIdentifiers?: boolean;
+  detailedErrors?: string[];
 }): string {
   const parts: string[] = [];
   if (reasons.hasLineBreaksInCells) {
@@ -291,7 +293,19 @@ export function buildInvalidFileMessage(reasons: {
     return part.charAt(0).toUpperCase() + part.slice(1);
   }).join(' ');
 
-  return `Fichier invalide : ${formattedReasons}`;
+  let baseMessage = `Fichier invalide : ${formattedReasons}`;
+
+  if (reasons.detailedErrors && reasons.detailedErrors.length > 0) {
+    const maxShown = 15;
+    const errorsList = reasons.detailedErrors.slice(0, maxShown);
+    const extraCount = reasons.detailedErrors.length - maxShown;
+
+    baseMessage += `\n\nPrécision des colonnes et anomalies détectées (${reasons.detailedErrors.length}) :\n` +
+      errorsList.map(err => `• ${err}`).join('\n') +
+      (extraCount > 0 ? `\n• ... et ${extraCount} autre(s) anomalie(s) supplémentaire(s).` : '');
+  }
+
+  return baseMessage;
 }
 
 // Helper function to robustly parse CSV and detect newlines/breaks inside cells
@@ -394,10 +408,12 @@ const validateAndParseDefibs = (
   let hasLineBreaksInCells = false;
   let hasInvalidValues = false;
   let hasInvalidIdentifiers = false;
+  const detailedErrors: string[] = [];
 
   // Size limit 5 Mo (5 * 1024 * 1024 bytes)
   if (new Blob([csvText]).size > 5 * 1024 * 1024) {
     hasInvalidValues = true;
+    detailedErrors.push("La taille du fichier dépasse la limite maximale autorisée de 5 Mo.");
   }
 
   const { headers, rows, hasLineBreaksInCells: csvHasLineBreaks } = parseCSV(csvText);
@@ -482,19 +498,50 @@ const validateAndParseDefibs = (
     "Section 9 — Catégories : Maintenance autorisée."
   ];
 
-  if (rows.length < 1) {
-    hasInvalidValues = true;
+  // If headers have a trailing empty column caused by a trailing delimiter (e.g. 75 cols instead of 74)
+  if (headers.length === expected.length + 1 && (!headers[headers.length - 1] || headers[headers.length - 1].trim() === "")) {
+    headers.pop();
   }
 
-  const normalizeStr = (s: string) => (s || '').replace(/^\uFEFF/, '').replace(/\s+/g, ' ').trim();
-
+  // Check header count
   if (headers.length !== expected.length) {
     hasInvalidValues = true;
-  } else {
-    const hMatch = headers.every((h, i) => normalizeStr(h) === normalizeStr(expected[i]));
-    if (!hMatch) {
-      hasInvalidValues = true;
+    if (headers.length < expected.length) {
+      const missing = expected.slice(headers.length, headers.length + 3).map((h, i) => `Col ${headers.length + i + 1} (« ${h} »)`).join(', ');
+      detailedErrors.push(
+        `En-tête incomplet : ${headers.length} colonne(s) détectée(s) au lieu des ${expected.length} colonnes obligatoires (colonnes manquantes à partir de la colonne ${headers.length + 1} : ${missing}${expected.length - headers.length > 3 ? '...' : ''}).`
+      );
+    } else {
+      detailedErrors.push(
+        `En-tête avec colonnes excédentaires : ${headers.length} colonnes détectées au lieu des ${expected.length} colonnes attendues (${headers.length - expected.length} colonne(s) en trop à la fin).`
+      );
     }
+  }
+
+  const normalizeHeaderForComparison = (s: string): string => {
+    return (s || '')
+      .replace(/^\uFEFF/, '')
+      .replace(/[–—]/g, '-')
+      .replace(/[’']/g, "'")
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  };
+
+  for (let i = 0; i < Math.min(headers.length, expected.length); i++) {
+    const rawH = headers[i] || '';
+    const expH = expected[i];
+    if (normalizeHeaderForComparison(rawH) !== normalizeHeaderForComparison(expH)) {
+      hasInvalidValues = true;
+      detailedErrors.push(`En-tête Col ${i + 1} non reconnu : reçu « ${rawH || '(vide)'} » (attendu : « ${expH} »).`);
+    }
+  }
+
+  if (rows.length < 1) {
+    hasInvalidValues = true;
+    detailedErrors.push("Aucune ligne de données détectée dans le fichier (seule la ligne d'en-têtes est présente).");
   }
 
   const normalizeMatchStr = (s: string): string => {
@@ -653,16 +700,43 @@ const validateAndParseDefibs = (
     return fallback;
   };
 
+  const normalizeStatusValue = (val: string): "Conforme" | "Attention" | "Alerte" | "" | null => {
+    if (!val || !val.trim()) return "";
+    const s = val.trim().toLowerCase();
+    if (s === "conforme" || s === "vert") return "Conforme";
+    if (s === "attention" || s === "orange") return "Attention";
+    if (s === "alerte" || s === "rouge") return "Alerte";
+    return null;
+  };
+
+  const normalizeBooleanValue = (val: string): "Oui" | "Non" | "" | null => {
+    if (!val || !val.trim()) return "";
+    const s = val.trim().toLowerCase();
+    if (["oui", "o", "true", "1", "yes", "vrai"].includes(s)) return "Oui";
+    if (["non", "n", "false", "0", "no", "faux"].includes(s)) return "Non";
+    return null;
+  };
+
   for (let idx = 0; idx < rows.length; idx++) {
     const row = rows[idx];
+    const rowNum = idx + 2;
+
+    if (row.length === expected.length + 1 && (!row[row.length - 1] || row[row.length - 1].trim() === "")) {
+      row.pop();
+    }
+
     if (row.length !== expected.length) {
       hasInvalidValues = true;
+      detailedErrors.push(`Ligne ${rowNum} : ${row.length} colonne(s) détectée(s) au lieu des ${expected.length} colonnes attendues.`);
       continue;
     }
 
-    for (const cell of row) {
-      if (cell.includes('\n') || cell.includes('\r')) {
+    for (let cIdx = 0; cIdx < row.length; cIdx++) {
+      const cell = row[cIdx];
+      if (cell && (cell.includes('\n') || cell.includes('\r'))) {
         hasLineBreaksInCells = true;
+        const colTitle = expected[cIdx] || `Colonne ${cIdx + 1}`;
+        detailedErrors.push(`Ligne ${rowNum}, Col ${cIdx + 1} (« ${colTitle} ») : retour à la ligne interdit à l'intérieur de la cellule.`);
       }
     }
 
@@ -700,6 +774,7 @@ const validateAndParseDefibs = (
     const miseEnService = row[31] ? row[31].trim() : "";
     const derniereMaintenance = row[32] ? row[32].trim() : "";
     const sortieFabricant = row[33] ? row[33].trim() : "";
+    const prochaineMaintenance = row[34] ? row[34].trim() : "";
     
     const modeleElectrodeAId = row[35] ? row[35].trim() : "";
     const lotElectrodeA = row[36] ? row[36].trim() : "";
@@ -746,11 +821,13 @@ const validateAndParseDefibs = (
     // Erreur A : Identifiant must be empty on import
     if (identifiant !== "") {
       hasInvalidIdentifiers = true;
+      detailedErrors.push(`Ligne ${rowNum}, Col 1 (« Section 1 — Identification : Identifiant. ») : l'identifiant doit être vide lors de l'import (il est généré automatiquement). Valeur reçue : « ${identifiant} »`);
     }
 
     // Erreur B : Série is mandatory
     if (serie === "") {
       hasInvalidValues = true;
+      detailedErrors.push(`Ligne ${rowNum}, Col 2 (« Section 1 — Identification : Série. ») : le numéro de série est obligatoire (champ vide).`);
     }
 
     // Resolve Defibrillator Model: accepts variable title/name OR unique variable ID
@@ -839,8 +916,10 @@ const validateAndParseDefibs = (
     }
 
     // Section 6 — Électrode Adulte ou Mixte : Statut
-    if (situationElectrodeAVal !== "" && !["Conforme", "Attention", "Alerte"].includes(situationElectrodeAVal)) {
+    const normStatA = normalizeStatusValue(situationElectrodeAVal);
+    if (situationElectrodeAVal !== "" && normStatA === null) {
       hasInvalidValues = true;
+      detailedErrors.push(`Ligne ${rowNum}, Col 44 (« Section 6 — Électrode Adulte ou Mixte : Statut. ») : valeur « ${situationElectrodeAVal} » invalide (valeurs autorisées : « Conforme », « Attention », « Alerte », ou vide).`);
     }
 
     // Resolve Electrode Pédiatrique
@@ -872,8 +951,10 @@ const validateAndParseDefibs = (
     }
 
     // Section 7 — Électrode Pédiatrique : Statut
-    if (situationElectrodePVal !== "" && !["Conforme", "Attention", "Alerte"].includes(situationElectrodePVal)) {
+    const normStatP = normalizeStatusValue(situationElectrodePVal);
+    if (situationElectrodePVal !== "" && normStatP === null) {
       hasInvalidValues = true;
+      detailedErrors.push(`Ligne ${rowNum}, Col 56 (« Section 7 — Électrode Pédiatrique : Statut. ») : valeur « ${situationElectrodePVal} » invalide (valeurs autorisées : « Conforme », « Attention », « Alerte », ou vide).`);
     }
 
     // Resolve Batterie
@@ -891,20 +972,40 @@ const validateAndParseDefibs = (
     }
 
     // Section 8 — Batterie : Statut
-    if (situationBatterieVal !== "" && !["Conforme", "Attention", "Alerte"].includes(situationBatterieVal)) {
+    const normStatB = normalizeStatusValue(situationBatterieVal);
+    if (situationBatterieVal !== "" && normStatB === null) {
       hasInvalidValues = true;
+      detailedErrors.push(`Ligne ${rowNum}, Col 65 (« Section 8 — Batterie : Statut. ») : valeur « ${situationBatterieVal} » invalide (valeurs autorisées : « Conforme », « Attention », « Alerte », ou vide).`);
     }
 
     // Section 8 — Batterie : Pourcentage constaté
-    if (pourcentageBatterie !== "" && isNaN(Number(pourcentageBatterie))) {
-      hasInvalidValues = true;
+    if (pourcentageBatterie !== "") {
+      const cleanPct = pourcentageBatterie.replace('%', '').trim();
+      if (isNaN(Number(cleanPct)) || Number(cleanPct) < 0 || Number(cleanPct) > 100) {
+        hasInvalidValues = true;
+        detailedErrors.push(`Ligne ${rowNum}, Col 66 (« Section 8 — Batterie : Pourcentage constaté. ») : valeur « ${pourcentageBatterie} » invalide (un pourcentage entre 0 et 100 est attendu).`);
+      }
     }
 
     // Section 9 categories
-    const catVals = [loue, prete, stocke, archive, conforme, sousTraitance, fsmAutorise];
-    const invalidCat = catVals.some(v => v !== "" && v !== "Oui" && v !== "Non");
-    if (invalidCat) {
-      hasInvalidValues = true;
+    const catCols = [
+      { colIdx: 68, name: "Section 9 — Catégories : Loué.", val: loue },
+      { colIdx: 69, name: "Section 9 — Catégories : Prêté.", val: prete },
+      { colIdx: 70, name: "Section 9 — Catégories : Stocké.", val: stocke },
+      { colIdx: 71, name: "Section 9 — Catégories : Archivé.", val: archive },
+      { colIdx: 72, name: "Section 9 — Catégories : Conforme.", val: conforme },
+      { colIdx: 73, name: "Section 9 — Catégories : Opéré en sous-traitance.", val: sousTraitance },
+      { colIdx: 74, name: "Section 9 — Catégories : Maintenance autorisée.", val: fsmAutorise },
+    ];
+
+    for (const item of catCols) {
+      if (item.val !== "") {
+        const normBool = normalizeBooleanValue(item.val);
+        if (normBool === null) {
+          hasInvalidValues = true;
+          detailedErrors.push(`Ligne ${rowNum}, Col ${item.colIdx} (« ${item.name} ») : valeur « ${item.val} » invalide (valeurs autorisées : « Oui », « Non », ou vide).`);
+        }
+      }
     }
 
     if (hasLineBreaksInCells || hasInvalidValues || hasInvalidIdentifiers) {
@@ -959,7 +1060,7 @@ const validateAndParseDefibs = (
       insertionElectrodeA: insertionElectrodeA,
       peremptionElectrodeA: peremptionElectrodeA,
       livraisonElectrodeA: livraisonElectrodeA,
-      situationElectrodeA: mapStatusToDb(situationElectrodeAVal),
+      situationElectrodeA: mapStatusToDb(normStatA || situationElectrodeAVal),
       commentaireElectrodeA: commentaireElectrodeA,
       peremptionSecoursElectrodeA: peremptionSecoursElectrodeA,
       modeleElectrodeASecoursId: finalElectrodeASecoursId,
@@ -971,7 +1072,7 @@ const validateAndParseDefibs = (
       insertionElectrodeP: insertionElectrodeP,
       peremptionElectrodeP: peremptionElectrodeP,
       livraisonElectrodeP: livraisonElectrodeP,
-      situationElectrodeP: mapStatusToDb(situationElectrodePVal),
+      situationElectrodeP: mapStatusToDb(normStatP || situationElectrodePVal),
       commentaireElectrodeP: commentaireElectrodeP,
       peremptionSecoursElectrodeP: peremptionSecoursElectrodeP,
       modeleElectrodePSecoursId: finalElectrodePSecoursId,
@@ -983,16 +1084,16 @@ const validateAndParseDefibs = (
       insertionBatterie: insertionBatterie,
       peremptionBatterie: peremptionBatterie,
       livraisonBatterie: livraisonBatterie,
-      situationBatterie: mapStatusToDb(situationBatterieVal),
-      pourcentageBatterie: pourcentageBatterie || '100',
+      situationBatterie: mapStatusToDb(normStatB || situationBatterieVal),
+      pourcentageBatterie: pourcentageBatterie ? pourcentageBatterie.replace('%', '').trim() : '100',
       commentaireBatterie: commentaireBatterie,
-      loue: sanitizeYesNo(loue, 'Non'),
-      prete: sanitizeYesNo(prete, 'Non'),
-      stocke: sanitizeYesNo(stocke, 'Non'),
-      archive: sanitizeYesNo(archive, 'Non'),
-      conforme: sanitizeYesNo(conforme, 'Oui'),
-      sousTraitance: sanitizeYesNo(sousTraitance, 'Non'),
-      fsmAutorise: sanitizeYesNo(fsmAutorise, 'Non'),
+      loue: (normalizeBooleanValue(loue) as 'Oui' | 'Non') || 'Non',
+      prete: (normalizeBooleanValue(prete) as 'Oui' | 'Non') || 'Non',
+      stocke: (normalizeBooleanValue(stocke) as 'Oui' | 'Non') || 'Non',
+      archive: (normalizeBooleanValue(archive) as 'Oui' | 'Non') || 'Non',
+      conforme: (normalizeBooleanValue(conforme) as 'Oui' | 'Non') || 'Oui',
+      sousTraitance: (normalizeBooleanValue(sousTraitance) as 'Oui' | 'Non') || 'Non',
+      fsmAutorise: (normalizeBooleanValue(fsmAutorise) as 'Oui' | 'Non') || 'Non',
       victimeSurvie: 'Non',
       victimeSansSurvie: 'Non',
       ageVictime: '',
@@ -1001,10 +1102,18 @@ const validateAndParseDefibs = (
   }
 
   if (hasLineBreaksInCells || hasInvalidValues || hasInvalidIdentifiers || parsedItems.length === 0) {
+    if (parsedItems.length === 0 && detailedErrors.length === 0) {
+      detailedErrors.push("Aucune ligne de défibrillateur valide n'a pu être extraite du fichier.");
+    }
     return {
       success: false,
       data: [],
-      errorMessage: buildInvalidFileMessage({ hasLineBreaksInCells, hasInvalidValues: hasInvalidValues || parsedItems.length === 0, hasInvalidIdentifiers })
+      errorMessage: buildInvalidFileMessage({
+        hasLineBreaksInCells,
+        hasInvalidValues: hasInvalidValues || parsedItems.length === 0,
+        hasInvalidIdentifiers,
+        detailedErrors
+      })
     };
   }
 
@@ -2080,7 +2189,7 @@ export default function ImportExportTab({
                               return;
                             }
                             if (file.size > 5 * 1024 * 1024) {
-                              setValidationError('Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
+                              setValidationError('Fichier trop volumineux : la taille maximale autorisée est de 5 Mo.');
                               setSelectedFileName('');
                               setUploadedCsvContent('');
                               return;
@@ -2115,7 +2224,7 @@ export default function ImportExportTab({
                                   return;
                                 }
                                 if (file.size > 5 * 1024 * 1024) {
-                                  setValidationError('Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
+                                  setValidationError('Fichier trop volumineux : la taille maximale autorisée est de 5 Mo.');
                                   setSelectedFileName('');
                                   setUploadedCsvContent('');
                                   return;
@@ -2155,25 +2264,43 @@ export default function ImportExportTab({
                   </div>
 
                   {validationError && (
-                    <div className="pt-2 text-center" id="validation-error-msg">
-                      <p className="text-red-600 font-bold font-sans animate-pulse-once" style={{ color: '#dc2626', fontSize: '18px', lineHeight: '1.5' }}>
-                        {validationError.includes('https://defibeo.com/school/') ? (
-                          <>
-                            {validationError.split('https://defibeo.com/school/')[0]}
-                            <a 
-                              href="https://defibeo.com/school/" 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="underline text-red-700 hover:text-red-900 transition-colors duration-150 decoration-2 font-extrabold"
-                            >
-                              https://defibeo.com/school/
-                            </a>
-                            {validationError.split('https://defibeo.com/school/')[1]}
-                          </>
-                        ) : (
-                          validationError
-                        )}
-                      </p>
+                    <div className="pt-2 flex justify-center" id="validation-error-msg">
+                      <div className="w-full max-w-3xl text-left bg-red-50 border border-red-200 rounded-xl p-4 shadow-sm animate-pulse-once">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <div className="text-red-700 font-bold font-sans text-base leading-snug">
+                              {validationError.includes('https://defibeo.com/school/') ? (
+                                <>
+                                  {validationError.split('\n\n')[0].includes('https://defibeo.com/school/') ? (
+                                    <>
+                                      {validationError.split('\n\n')[0].split('https://defibeo.com/school/')[0]}
+                                      <a 
+                                        href="https://defibeo.com/school/" 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="underline text-red-800 hover:text-red-950 font-extrabold"
+                                      >
+                                        https://defibeo.com/school/
+                                      </a>
+                                      {validationError.split('\n\n')[0].split('https://defibeo.com/school/')[1]}
+                                    </>
+                                  ) : (
+                                    validationError.split('\n\n')[0]
+                                  )}
+                                </>
+                              ) : (
+                                validationError.split('\n\n')[0]
+                              )}
+                            </div>
+                            {validationError.includes('\n\n') && (
+                              <div className="text-red-800 font-sans text-sm whitespace-pre-line leading-relaxed mt-2.5 pt-2.5 border-t border-red-200/80 font-medium">
+                                {validationError.split('\n\n').slice(1).join('\n\n')}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
 
