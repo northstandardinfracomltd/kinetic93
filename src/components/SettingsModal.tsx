@@ -748,7 +748,14 @@ export default function SettingsModal({
     { entity: 'Défibrillateur', slug: 'peremption_padpak_a', type: 'date (AAAA-MM-JJ)', label: 'Péremption Pad-Pak Adulte', example: '2028-02-15' },
     { entity: 'Défibrillateur', slug: 'lot_padpak_p', type: 'string', label: 'Lot Pad-Pak Pédiatrique (HeartSine)', example: 'PADPAK-P-02' },
     { entity: 'Défibrillateur', slug: 'peremption_padpak_p', type: 'date (AAAA-MM-JJ)', label: 'Péremption Pad-Pak Pédiatrique', example: '2028-06-30' },
-    { entity: 'Défibrillateur', slug: 'peremption_trousse', type: 'date (AAAA-MM-JJ)', label: 'Péremption trousse de secours / rasoir', example: '2028-12-31' },
+    { entity: 'Défibrillateur', slug: 'peremption_trousse', type: 'date (AAAA-MM-JJ)', label: 'Péremption trousse de secours (générale)', example: '2028-12-31' },
+    { entity: 'Défibrillateur', slug: 'ciseaux_presents', type: 'string ("Oui"/"Non") | boolean', label: 'Trousse : Ciseaux présents (Oui/Non ou true/false)', example: 'Oui' },
+    { entity: 'Défibrillateur', slug: 'masque_present', type: 'string ("Oui"/"Non") | boolean', label: 'Trousse : Masque bouche-à-bouche présent (Oui/Non ou true/false)', example: 'Oui' },
+    { entity: 'Défibrillateur', slug: 'peremption_masque', type: 'date (AAAA-MM-JJ)', label: 'Trousse : Date péremption du masque', example: '2028-12-31' },
+    { entity: 'Défibrillateur', slug: 'serviettes_presentes', type: 'string ("Oui"/"Non") | boolean', label: 'Trousse : Serviettes présentes (Oui/Non ou true/false)', example: 'Oui' },
+    { entity: 'Défibrillateur', slug: 'peremption_serviettes', type: 'date (AAAA-MM-JJ)', label: 'Trousse : Date péremption des serviettes', example: '2028-12-31' },
+    { entity: 'Défibrillateur', slug: 'gants_presents', type: 'string ("Oui"/"Non") | boolean', label: 'Trousse : Paire de gants présente (Oui/Non ou true/false)', example: 'Oui' },
+    { entity: 'Défibrillateur', slug: 'rasoir_present', type: 'string ("Oui"/"Non") | boolean', label: 'Trousse : Rasoir jetable présent (Oui/Non ou true/false)', example: 'Oui' },
     { entity: 'Défibrillateur', slug: 'etat_housse', type: 'string', label: 'État de la housse de protection', example: 'Conforme' },
     { entity: 'Défibrillateur', slug: 'boitier_modele', type: 'string', label: 'Modèle boîtier / armoire mural', example: 'AIVIA 200' },
     { entity: 'Défibrillateur', slug: 'boitier_lot', type: 'string', label: 'Numéro de lot armoire mural', example: 'LOT-B-88' },
@@ -1849,13 +1856,16 @@ export default function SettingsModal({
       const originalEmails = new Set(members.map(m => m.email?.trim().toLowerCase()));
       const newMembers = membersToSave.filter(m => m.email && !originalEmails.has(m.email.trim().toLowerCase()));
 
+      const tenantName = (localCompany.name || '').trim() || myTenantId || 'Defibeo';
       for (const m of newMembers) {
+        const roleType = m.role === 'Technicien' ? 'Technicien' : (m.role === 'Client' ? 'Client' : 'Admin');
         promises.push(
           triggerEmailNewMemberAdded(
             m.email.trim(),
             m.pin,
-            localCompany.name || 'Défibeo Suite',
-            localCompany.email || ''
+            tenantName,
+            localCompany.email || '',
+            roleType
           ).catch(e => console.error("Error sending new member invite:", e))
         );
       }
@@ -5201,6 +5211,18 @@ const { defibrillateurs } = await res.json();`}
       "insertion_b": "2026-02-15",
       "pourcentage_constate_b": 100,
       "peremption_trousse": "2028-12-31",
+      "ciseaux_presents": "Oui",
+      "ciseaux_presents_bool": true,
+      "masque_present": "Oui",
+      "masque_present_bool": true,
+      "peremption_masque": "2028-12-31",
+      "serviettes_presentes": "Oui",
+      "serviettes_presentes_bool": true,
+      "peremption_serviettes": "2028-12-31",
+      "gants_presents": "Oui",
+      "gants_presents_bool": true,
+      "rasoir_present": "Oui",
+      "rasoir_present_bool": true,
       "etat_housse": "Conforme"
     }
   ]
@@ -5210,17 +5232,17 @@ const { defibrillateurs } = await res.json();`}
                     </div>
                   </div>
 
-                  {/* 4. Défibrillateur - POST Update & Déclaration */}
+                  {/* 4. Défibrillateur - POST / PUT / PATCH Update & Déclaration */}
                   <div style={{ border: '1px solid #e4e1e1', background: '#f7f7f7', borderRadius: '13px' }} className="overflow-hidden shadow-2xs select-text">
                     <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e4e1e1' }} className="p-4 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-3">
-                        <span style={{ color: '#fff', background: 'oklch(0.67 0.15 128.49)', border: 'none', borderRadius: '7px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST /v1/defibrillateurs/:identifiant</span>
-                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>OU POST /v1/defibrillateurs (avec "identifiant" ou "numeroSerie" dans le body)</span>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span style={{ color: '#fff', background: 'oklch(0.67 0.15 128.49)', border: 'none', borderRadius: '7px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>POST / PUT / PATCH /v1/defibrillateurs/:identifiant</span>
+                        <span className="font-bold text-black text-[16px]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>OU /v1/defibrillateurs (avec "identifiant" ou "numeroSerie" dans le body)</span>
                       </div>
                     </div>
                     <div className="p-4 space-y-4 text-[16px] text-black select-text" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                       <p className="text-black leading-relaxed" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                        Met à jour ou initialise la fiche d'un défibrillateur dans votre parc. La cible peut être spécifiée dans l'URL (<code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]">/v1/defibrillateurs/DAE-88192</code>) ou directement dans le corps JSON (<code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]">"identifiant": "DAE-88192"</code> ou numéro de série constructeur).
+                        Met à jour ou initialise la fiche d'un défibrillateur dans votre parc. Les méthodes HTTP <strong>POST</strong>, <strong>PUT</strong> et <strong>PATCH</strong> sont toutes acceptées et traitées avec les mêmes règles de normalisation. La cible peut être spécifiée dans l'URL (<code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]">/v1/defibrillateurs/DAE-88192</code>) ou directement dans le corps JSON (<code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]">"identifiant": "DAE-88192"</code> ou numéro de série constructeur).
                       </p>
 
                       {/* Developer Guide / Highlights */}
@@ -5228,10 +5250,26 @@ const { defibrillateurs } = await res.json();`}
                         <div className="text-[16px] font-bold text-black mb-1">Guide d'intégration &amp; Bonnes pratiques :</div>
                         <ul className="list-disc pl-5 space-y-2 text-[15px] text-black">
                           <li>
-                            <strong>Nommage des clés (camelCase &amp; snake_case) :</strong> L'API accepte nativement la notation <strong>camelCase</strong> (standard recommandé : <code className="bg-slate-100 px-1 py-0.5 rounded">lotElectrodeA</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">peremptionBatterie</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">derniereMaintenance</code>) ainsi que les alias historiques en <strong>snake_case</strong> (<code className="bg-slate-100 px-1 py-0.5 rounded">lot_a</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">peremption_b</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">derniere_maintenance</code>). L'ensemble des colonnes est automatiquement synchronisé dans les deux formats.
+                            <strong>Nommage des clés (camelCase &amp; snake_case) :</strong> L'API accepte nativement la notation <strong>camelCase</strong> (standard recommandé : <code className="bg-slate-100 px-1 py-0.5 rounded">lotElectrodeA</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">kitCiseauxPresents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">peremptionTrousse</code>) ainsi que les alias historiques en <strong>snake_case</strong> (<code className="bg-slate-100 px-1 py-0.5 rounded">lot_a</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">ciseaux_presents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">peremption_trousse</code>). L'ensemble des colonnes est automatiquement synchronisé dans les deux formats.
                           </li>
                           <li>
-                            <strong>Remplacement des valeurs existantes :</strong> Tout champ transmis dans le corps de la requête écrase et met à jour la valeur en base, qu'elle ait été vide ou déjà renseignée. Seuls l'identifiant matériel d'origine, le client rattaché et l'état d'archivage restent protégés.
+                            <strong>Format des champs Oui / Non &amp; Booléens :</strong> Pour tous les champs de présence (ex: <code className="bg-slate-100 px-1 py-0.5 rounded">ciseaux_presents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">masque_present</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">serviettes_presentes</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">gants_presents</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">rasoir_present</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">conforme</code>), vous pouvez envoyer <strong>soit un booléen JSON (<code className="bg-slate-100 px-1 py-0.5 rounded">true</code> / <code className="bg-slate-100 px-1 py-0.5 rounded">false</code>)</strong>, <strong>soit une chaîne de texte (<code className="bg-slate-100 px-1 py-0.5 rounded">"Oui"</code> / <code className="bg-slate-100 px-1 py-0.5 rounded">"Non"</code>)</strong>. Defibeo les normalise automatiquement. En retour (GET ou après mise à jour), l'API vous fournit à la fois la chaîne <code className="bg-slate-100 px-1 py-0.5 rounded">"Oui"/"Non"</code> et l'équivalent booléen suffixé par <code className="bg-slate-100 px-1 py-0.5 rounded">_bool</code>.
+                          </li>
+                          <li>
+                            <strong>Section Trousse de secours (8 champs du formulaire Web) :</strong> Tous les 8 champs affichés dans l'interface web sont désormais directement exposés et modifiables via l'API :
+                            <div className="mt-1.5 p-2 bg-slate-50 rounded border border-slate-200 text-xs font-mono space-y-0.5">
+                              <div>• <strong>peremption_trousse</strong> / <strong>peremptionTrousse</strong> : Date péremption générale de la trousse (AAAA-MM-JJ)</div>
+                              <div>• <strong>ciseaux_presents</strong> / <strong>kitCiseauxPresents</strong> : Ciseaux présents (Oui/Non ou true/false)</div>
+                              <div>• <strong>masque_present</strong> / <strong>kitMasquePresent</strong> : Masque présent (Oui/Non ou true/false)</div>
+                              <div>• <strong>peremption_masque</strong> / <strong>kitPeremptionMasque</strong> : Date péremption du masque (AAAA-MM-JJ)</div>
+                              <div>• <strong>serviettes_presentes</strong> / <strong>kitServiettesPresentes</strong> : Serviettes présentes (Oui/Non ou true/false)</div>
+                              <div>• <strong>peremption_serviettes</strong> / <strong>kitPeremptionServiettes</strong> : Date péremption serviettes (AAAA-MM-JJ)</div>
+                              <div>• <strong>gants_presents</strong> / <strong>kitGantsPresents</strong> : Paire de gants présente (Oui/Non ou true/false)</div>
+                              <div>• <strong>rasoir_present</strong> / <strong>kitRasoirPresent</strong> : Rasoir présent (Oui/Non ou true/false)</div>
+                            </div>
+                          </li>
+                          <li>
+                            <strong>Remplacement des valeurs existantes :</strong> Tout champ transmis dans le corps de la requête écrase et met à jour la valeur en base, qu'elle ait été vide ou déjà renseignée. Seuls l'identifiant matériel d'origine, le numéro de série constructeur, le client rattaché et l'état d'archivage restent protégés.
                           </li>
                           <li>
                             <strong>Modèles de matériel (Identifiant ou Libellé clair) :</strong> Vous pouvez indifféremment envoyer l'<strong>ID interne du catalogue</strong> (<code className="bg-slate-100 px-1 py-0.5 rounded">modeleElectrodeAId</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">modeleBatterieId</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">modeleCoffretId</code>) ou directement le <strong>libellé clair en texte</strong> (<code className="bg-slate-100 px-1 py-0.5 rounded">modeleElectrodeA: "CPR-D Padz (Adulte)"</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">modeleBatterie: "Pack Lithium 123A"</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">modeleCoffret: "AIVIA 200"</code>). Defibeo fait la correspondance automatique avec votre catalogue ou crée le modèle dynamiquement.
@@ -5271,8 +5309,18 @@ const { defibrillateurs } = await res.json();`}
   "modeleCoffret": "AIVIA 200",
   "numeroLotCoffret": "LOT-B-88",
 
+  // Trousse de secours (8 champs)
+  "peremptionTrousse": "2028-12-31",
+  "kitCiseauxPresents": "Oui",        // ou true
+  "kitMasquePresent": "Oui",          // ou true
+  "kitPeremptionMasque": "2028-12-31",
+  "kitServiettesPresentes": "Oui",    // ou true
+  "kitPeremptionServiettes": "2028-12-31",
+  "kitGantsPresents": "Oui",          // ou true
+  "kitRasoirPresent": "Oui",          // ou true
+
   "statut": "Opérationnel",
-  "conforme": "Oui",
+  "conforme": "Oui",                  // ou true
   "statutVoyant": "Vert OK",
   "etatHousse": "Conforme",
   "commentaireAdresse": "Nouveau badge sécurité RDC"
@@ -5306,6 +5354,16 @@ const { defibrillateurs } = await res.json();`}
 
   "boitier_modele": "AIVIA 200",
   "boitier_lot": "LOT-B-88",
+
+  // Trousse de secours (8 champs)
+  "peremption_trousse": "2028-12-31",
+  "ciseaux_presents": true,           // ou "Oui"
+  "masque_present": true,             // ou "Oui"
+  "peremption_masque": "2028-12-31",
+  "serviettes_presentes": true,       // ou "Oui"
+  "peremption_serviettes": "2028-12-31",
+  "gants_presents": true,             // ou "Oui"
+  "rasoir_present": true,             // ou "Oui"
 
   "statut": "Opérationnel",
   "statut_voyant": "Vert OK",

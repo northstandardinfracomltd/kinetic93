@@ -1421,8 +1421,8 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
   const SENSITIVE_REQUEST_ERROR = "Requête sensible, veuillez contacter le support.";
 
   function checkSensitiveOrNonCompliantRequest(req: express.Request, targetTenant: any, cleanPath: string): { isBlocked: boolean; reason: string } {
-    // 1. Block any HTTP method other than GET or POST (documentation specifies only GET and POST)
-    if (req.method !== 'GET' && req.method !== 'POST') {
+    // 1. Allow GET, POST, PUT, PATCH
+    if (req.method !== 'GET' && req.method !== 'POST' && req.method !== 'PUT' && req.method !== 'PATCH') {
       return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
     }
 
@@ -1445,12 +1445,12 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
     }
 
     const overrideHeader = (req.headers['x-http-method-override'] as string || '').toUpperCase();
-    if (overrideHeader && overrideHeader !== 'GET' && overrideHeader !== 'POST') {
+    if (overrideHeader && !['GET', 'POST', 'PUT', 'PATCH'].includes(overrideHeader)) {
       return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
     }
 
-    // 3. Inspect body for POST requests
-    if (req.method === 'POST') {
+    // 3. Inspect body for POST/PUT/PATCH requests
+    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
       const body = req.body;
       if (body === null || body === undefined) {
         return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
@@ -1486,14 +1486,12 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           body.active === false ||
           body.enabled === false ||
           body._method === 'DELETE' || 
-          body._method === 'PUT' || 
-          body.method === 'DELETE' || 
-          body.method === 'PUT'
+          body.method === 'DELETE'
         ) {
           return { isBlocked: true, reason: SENSITIVE_REQUEST_ERROR };
         }
 
-        // Strict blocking of hiding/archiving payloads
+        // Strict blocking of hiding/archiving payloads (masquer/archive, but not the AED kit mask 'masque')
         const archiveVal = String(body.archive || '').trim().toLowerCase();
         if (
           archiveVal === 'oui' ||
@@ -1504,7 +1502,6 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           body.isArchived === true ||
           body.hide === true ||
           body.hidden === true ||
-          body.masque === true ||
           body.masquer === true ||
           body.invisible === true
         ) {
@@ -2059,6 +2056,27 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       if (cleanPath.startsWith('defibrillateur') || cleanPath.startsWith('defibs') || cleanPath.startsWith('devices') || cleanPath.startsWith('dae')) {
         let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
 
+        // Normalization helpers for boolean/text inputs ('Oui'/'Non', true/false, 1/0)
+        const normalizeYesNo = (val: any, defaultVal: 'Oui' | 'Non' = 'Oui'): 'Oui' | 'Non' => {
+          if (val === undefined || val === null || val === '') return defaultVal;
+          if (typeof val === 'boolean') return val ? 'Oui' : 'Non';
+          if (typeof val === 'number') return val === 1 ? 'Oui' : (val === 0 ? 'Non' : defaultVal);
+          const s = String(val).trim().toLowerCase();
+          if (['oui', 'true', '1', 'yes', 'y', 'vrai', 'o', 'present', 'présent'].includes(s)) return 'Oui';
+          if (['non', 'false', '0', 'no', 'n', 'faux', 'absent'].includes(s)) return 'Non';
+          return defaultVal;
+        };
+
+        const toBoolean = (val: any, defaultVal: boolean = false): boolean => {
+          if (val === undefined || val === null || val === '') return defaultVal;
+          if (typeof val === 'boolean') return val;
+          if (typeof val === 'number') return val === 1;
+          const s = String(val).trim().toLowerCase();
+          if (['oui', 'true', '1', 'yes', 'y', 'vrai', 'o', 'present', 'présent'].includes(s)) return true;
+          if (['non', 'false', '0', 'no', 'n', 'faux', 'absent'].includes(s)) return false;
+          return defaultVal;
+        };
+
         // Canonical dictionary mapping snake_case and aliases to standard internal camelCase fields
         const DEFIB_FIELD_ALIASES: Record<string, string> = {
           // Maintenance
@@ -2099,6 +2117,20 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           commentaire_b: 'commentaireBatterie',
           commentaire_batterie: 'commentaireBatterie',
           commentaireBatterie: 'commentaireBatterie',
+          fabrication_b: 'fabricationBatterie',
+          fabrication_batterie: 'fabricationBatterie',
+          date_fabrication_batterie: 'fabricationBatterie',
+          fabricationBatterie: 'fabricationBatterie',
+          has_batterie_secours: 'hasBatterieSecours',
+          hasBatterieSecours: 'hasBatterieSecours',
+          modele_secours_b: 'modeleBatterieSecoursId',
+          modeleBatterieSecoursId: 'modeleBatterieSecoursId',
+          modeleBatterieSecours: 'modeleBatterieSecoursId',
+          lot_secours_b: 'lotBatterieSecours',
+          lotBatterieSecours: 'lotBatterieSecours',
+          peremption_secours_b: 'peremptionBatterieSecours',
+          date_peremption_secours_b: 'peremptionBatterieSecours',
+          peremptionBatterieSecours: 'peremptionBatterieSecours',
 
           // Electrode A (Mixte / Adulte)
           lot_a: 'lotElectrodeA',
@@ -2128,6 +2160,20 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           commentaireElectrodeA: 'commentaireElectrodeA',
           peremption_secours_a: 'peremptionSecoursElectrodeA',
           peremptionSecoursElectrodeA: 'peremptionSecoursElectrodeA',
+          has_electrode_a_secours: 'hasElectrodeASecours',
+          hasElectrodeASecours: 'hasElectrodeASecours',
+          modele_secours_a: 'modeleElectrodeASecoursId',
+          modeleElectrodeASecoursId: 'modeleElectrodeASecoursId',
+          modeleElectrodeASecours: 'modeleElectrodeASecoursId',
+          lot_secours_a: 'lotElectrodeASecours',
+          lotElectrodeASecours: 'lotElectrodeASecours',
+          has_padpak_a: 'hasPadpakA',
+          hasPadpakA: 'hasPadpakA',
+          lot_padpak_a: 'lotPadpakA',
+          lotPadpakA: 'lotPadpakA',
+          peremption_padpak_a: 'peremptionPadpakA',
+          date_peremption_padpak_a: 'peremptionPadpakA',
+          peremptionPadpakA: 'peremptionPadpakA',
 
           // Electrode P (Pédiatrique)
           lot_p: 'lotElectrodeP',
@@ -2157,6 +2203,20 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           commentaireElectrodeP: 'commentaireElectrodeP',
           peremption_secours_p: 'peremptionSecoursElectrodeP',
           peremptionSecoursElectrodeP: 'peremptionSecoursElectrodeP',
+          has_electrode_p_secours: 'hasElectrodePSecours',
+          hasElectrodePSecours: 'hasElectrodePSecours',
+          modele_secours_p: 'modeleElectrodePSecoursId',
+          modeleElectrodePSecoursId: 'modeleElectrodePSecoursId',
+          modeleElectrodePSecours: 'modeleElectrodePSecoursId',
+          lot_secours_p: 'lotElectrodePSecours',
+          lotElectrodePSecours: 'lotElectrodePSecours',
+          has_padpak_p: 'hasPadpakP',
+          hasPadpakP: 'hasPadpakP',
+          lot_padpak_p: 'lotPadpakP',
+          lotPadpakP: 'lotPadpakP',
+          peremption_padpak_p: 'peremptionPadpakP',
+          date_peremption_padpak_p: 'peremptionPadpakP',
+          peremptionPadpakP: 'peremptionPadpakP',
 
           // Coffret / Boitier
           boitier_modele: 'modeleCoffretId',
@@ -2170,6 +2230,61 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           numeroLotCoffret: 'numeroLotCoffret',
           commentaire_coffret: 'commentaireCoffret',
           commentaireCoffret: 'commentaireCoffret',
+
+          // Trousse de secours (8 champs de la console web)
+          ciseaux_presents: 'kitCiseauxPresents',
+          ciseauxPresents: 'kitCiseauxPresents',
+          ciseaux: 'kitCiseauxPresents',
+          kit_ciseaux: 'kitCiseauxPresents',
+          kit_ciseaux_presents: 'kitCiseauxPresents',
+          kitCiseauxPresents: 'kitCiseauxPresents',
+
+          masque_present: 'kitMasquePresent',
+          masquePresent: 'kitMasquePresent',
+          masque: 'kitMasquePresent',
+          kit_masque: 'kitMasquePresent',
+          kit_masque_present: 'kitMasquePresent',
+          kitMasquePresent: 'kitMasquePresent',
+
+          peremption_masque: 'kitPeremptionMasque',
+          peremptionMasque: 'kitPeremptionMasque',
+          date_peremption_masque: 'kitPeremptionMasque',
+          kit_peremption_masque: 'kitPeremptionMasque',
+          kitPeremptionMasque: 'kitPeremptionMasque',
+
+          serviettes_presentes: 'kitServiettesPresentes',
+          serviettesPresentes: 'kitServiettesPresentes',
+          serviettes: 'kitServiettesPresentes',
+          kit_serviettes: 'kitServiettesPresentes',
+          kit_serviettes_presentes: 'kitServiettesPresentes',
+          kitServiettesPresentes: 'kitServiettesPresentes',
+
+          peremption_serviettes: 'kitPeremptionServiettes',
+          peremptionServiettes: 'kitPeremptionServiettes',
+          date_peremption_serviettes: 'kitPeremptionServiettes',
+          kit_peremption_serviettes: 'kitPeremptionServiettes',
+          kitPeremptionServiettes: 'kitPeremptionServiettes',
+
+          gants_presents: 'kitGantsPresents',
+          gantsPresents: 'kitGantsPresents',
+          paire_gants_presents: 'kitGantsPresents',
+          paireGantsPresents: 'kitGantsPresents',
+          gants: 'kitGantsPresents',
+          kit_gants: 'kitGantsPresents',
+          kit_gants_presents: 'kitGantsPresents',
+          kitGantsPresents: 'kitGantsPresents',
+
+          rasoir_present: 'kitRasoirPresent',
+          rasoirPresent: 'kitRasoirPresent',
+          rasoir: 'kitRasoirPresent',
+          kit_rasoir: 'kitRasoirPresent',
+          kit_rasoir_present: 'kitRasoirPresent',
+          kitRasoirPresent: 'kitRasoirPresent',
+
+          peremption_trousse: 'peremptionTrousse',
+          peremptionTrousse: 'peremptionTrousse',
+          date_peremption_trousse: 'peremptionTrousse',
+          trousse_peremption: 'peremptionTrousse',
 
           // Matériel DAE
           modele: 'modeleId',
@@ -2188,8 +2303,6 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           statutVoyant: 'statutVoyant',
           etat_housse: 'etatHousse',
           etatHousse: 'etatHousse',
-          peremption_trousse: 'peremptionTrousse',
-          peremptionTrousse: 'peremptionTrousse',
 
           // Localisation & Site
           aide_acces: 'commentaireAdresse',
@@ -2218,6 +2331,9 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           nom_prenom: 'nomPrenomSite',
           nom_site: 'nomPrenomSite',
           nomPrenomSite: 'nomPrenomSite',
+          nomSite: 'nomSite',
+          categorie_etablissement: 'categorieEtablissement',
+          categorieEtablissement: 'categorieEtablissement',
           telephone_site: 'telephoneSite',
           telephone_portable: 'telephoneSite',
           telephoneSite: 'telephoneSite',
@@ -2229,6 +2345,9 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           commentaire: 'commentaire',
           notes: 'commentaire',
           note: 'commentaire',
+          commentaire_interne: 'commentaireInterne',
+          commentaireInterne: 'commentaireInterne',
+          horaires: 'horaires',
 
           // Cycle de vie
           expiration_garantie: 'finGarantie',
@@ -2251,6 +2370,10 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           debutContrat: 'debutContrat',
           fin_contrat: 'finContrat',
           finContrat: 'finContrat',
+          payeur_id: 'payeurId',
+          payeurId: 'payeurId',
+          client_id_field: 'clientIdField',
+          clientIdField: 'clientIdField',
 
           // Drapeaux d'accès
           acces247: 'acces247',
@@ -2265,6 +2388,30 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           numeroAtlasante: 'numeroAtlasante',
           version_logiciel: 'versionLogiciel',
           versionLogiciel: 'versionLogiciel',
+
+          // Catégories & Suivi opérationnel
+          loue: 'loue',
+          prete: 'prete',
+          stocke: 'stocke',
+          archive: 'archive',
+          sous_traitance: 'sousTraitance',
+          sousTraitance: 'sousTraitance',
+          fsm_autorise: 'fsmAutorise',
+          fsmAutorise: 'fsmAutorise',
+          victime_survie: 'victimeSurvie',
+          victimeSurvie: 'victimeSurvie',
+          victime_sans_survie: 'victimeSansSurvie',
+          victimeSansSurvie: 'victimeSansSurvie',
+          age_victime: 'ageVictime',
+          ageVictime: 'ageVictime',
+          commentaire_campagne_rappel: 'commentaireCampagneRappel',
+          commentaireCampagneRappel: 'commentaireCampagneRappel',
+          rappel_mensuel_auto: 'rappelMensuelAuto',
+          rappelMensuelAuto: 'rappelMensuelAuto',
+          rappel_hebdo_auto: 'rappelHebdoAuto',
+          rappelHebdoAuto: 'rappelHebdoAuto',
+          rappel_journalier_auto: 'rappelJournalierAuto',
+          rappelJournalierAuto: 'rappelJournalierAuto',
 
           // Client
           client_id: 'clientId',
@@ -2309,8 +2456,27 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             insertionElectrodeA: d.insertionElectrodeA || d.insertion_electrode_a || d.insertion_a || '',
             insertion_electrode_a: d.insertion_electrode_a || d.insertionElectrodeA || d.insertion_a || '',
             insertion_a: d.insertion_a || d.insertion_electrode_a || d.insertionElectrodeA || '',
+            livraisonElectrodeA: d.livraisonElectrodeA || d.livraison_electrode_a || d.livraison_a || '',
+            livraison_electrode_a: d.livraison_electrode_a || d.livraisonElectrodeA || d.livraison_a || '',
+            livraison_a: d.livraison_a || d.livraison_electrode_a || d.livraisonElectrodeA || '',
+            situationElectrodeA: d.situationElectrodeA || d.situation_a || 'Vert',
+            situation_a: d.situation_a || d.situationElectrodeA || 'Vert',
+            commentaireElectrodeA: d.commentaireElectrodeA || d.commentaire_a || '',
+            commentaire_a: d.commentaire_a || d.commentaireElectrodeA || '',
             peremptionSecoursElectrodeA: d.peremptionSecoursElectrodeA || d.peremption_secours_a || '',
             peremption_secours_a: d.peremption_secours_a || d.peremptionSecoursElectrodeA || '',
+            hasElectrodeASecours: d.hasElectrodeASecours || d.has_electrode_a_secours || 'Non',
+            has_electrode_a_secours: d.has_electrode_a_secours || d.hasElectrodeASecours || 'Non',
+            modeleElectrodeASecoursId: d.modeleElectrodeASecoursId || d.modele_secours_a || d.modeleElectrodeASecours || '',
+            modele_secours_a: d.modele_secours_a || d.modeleElectrodeASecoursId || '',
+            lotElectrodeASecours: d.lotElectrodeASecours || d.lot_secours_a || '',
+            lot_secours_a: d.lot_secours_a || d.lotElectrodeASecours || '',
+            hasPadpakA: d.hasPadpakA || d.has_padpak_a || 'Non',
+            has_padpak_a: d.has_padpak_a || d.hasPadpakA || 'Non',
+            lotPadpakA: d.lotPadpakA || d.lot_padpak_a || '',
+            lot_padpak_a: d.lot_padpak_a || d.lotPadpakA || '',
+            peremptionPadpakA: d.peremptionPadpakA || d.peremption_padpak_a || '',
+            peremption_padpak_a: d.peremption_padpak_a || d.peremptionPadpakA || '',
 
             modeleElectrodePId: d.modeleElectrodePId || d.modele_p || d.modeleElectrodeP || '',
             modeleElectrodeP: d.modeleElectrodeP || d.modele_electrode_p || d.modele_p || '',
@@ -2326,8 +2492,27 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             insertionElectrodeP: d.insertionElectrodeP || d.insertion_electrode_p || d.insertion_p || '',
             insertion_electrode_p: d.insertion_electrode_p || d.insertionElectrodeP || d.insertion_p || '',
             insertion_p: d.insertion_p || d.insertion_electrode_p || d.insertionElectrodeP || '',
+            livraisonElectrodeP: d.livraisonElectrodeP || d.livraison_electrode_p || d.livraison_p || '',
+            livraison_electrode_p: d.livraison_electrode_p || d.livraisonElectrodeP || d.livraison_p || '',
+            livraison_p: d.livraison_p || d.livraison_electrode_p || d.livraisonElectrodeP || '',
+            situationElectrodeP: d.situationElectrodeP || d.situation_p || 'Vert',
+            situation_p: d.situation_p || d.situationElectrodeP || 'Vert',
+            commentaireElectrodeP: d.commentaireElectrodeP || d.commentaire_p || '',
+            commentaire_p: d.commentaire_p || d.commentaireElectrodeP || '',
             peremptionSecoursElectrodeP: d.peremptionSecoursElectrodeP || d.peremption_secours_p || '',
             peremption_secours_p: d.peremption_secours_p || d.peremptionSecoursElectrodeP || '',
+            hasElectrodePSecours: d.hasElectrodePSecours || d.has_electrode_p_secours || 'Non',
+            has_electrode_p_secours: d.has_electrode_p_secours || d.hasElectrodePSecours || 'Non',
+            modeleElectrodePSecoursId: d.modeleElectrodePSecoursId || d.modele_secours_p || d.modeleElectrodePSecours || '',
+            modele_secours_p: d.modele_secours_p || d.modeleElectrodePSecoursId || '',
+            lotElectrodePSecours: d.lotElectrodePSecours || d.lot_secours_p || '',
+            lot_secours_p: d.lot_secours_p || d.lotElectrodePSecours || '',
+            hasPadpakP: d.hasPadpakP || d.has_padpak_p || 'Non',
+            has_padpak_p: d.has_padpak_p || d.hasPadpakP || 'Non',
+            lotPadpakP: d.lotPadpakP || d.lot_padpak_p || '',
+            lot_padpak_p: d.lot_padpak_p || d.lotPadpakP || '',
+            peremptionPadpakP: d.peremptionPadpakP || d.peremption_padpak_p || '',
+            peremption_padpak_p: d.peremption_padpak_p || d.peremptionPadpakP || '',
 
             modeleBatterieId: d.modeleBatterieId || d.modele_b || d.modeleBatterie || '',
             modeleBatterie: d.modeleBatterie || d.modele_batterie || d.modele_b || '',
@@ -2343,9 +2528,26 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             insertionBatterie: d.insertionBatterie || d.insertion_batterie || d.insertion_b || '',
             insertion_batterie: d.insertion_batterie || d.insertionBatterie || d.insertion_b || '',
             insertion_b: d.insertion_b || d.insertion_batterie || d.insertionBatterie || '',
+            livraisonBatterie: d.livraisonBatterie || d.livraison_batterie || d.livraison_b || '',
+            livraison_batterie: d.livraison_batterie || d.livraisonBatterie || d.livraison_b || '',
+            livraison_b: d.livraison_b || d.livraison_batterie || d.livraisonBatterie || '',
+            fabricationBatterie: d.fabricationBatterie || d.fabrication_b || d.date_fabrication_batterie || '',
+            fabrication_b: d.fabrication_b || d.fabricationBatterie || d.date_fabrication_batterie || '',
+            situationBatterie: d.situationBatterie || d.situation_b || 'Vert',
+            situation_b: d.situation_b || d.situationBatterie || 'Vert',
             pourcentageBatterie: d.pourcentageBatterie || (d.pourcentage_constate_b !== undefined ? String(d.pourcentage_constate_b) : '100'),
             pourcentage_constate_b: d.pourcentage_constate_b !== undefined ? d.pourcentage_constate_b : (parseInt(d.pourcentageBatterie, 10) || 100),
             pourcentage_batterie: d.pourcentage_constate_b !== undefined ? d.pourcentage_constate_b : (parseInt(d.pourcentageBatterie, 10) || 100),
+            commentaireBatterie: d.commentaireBatterie || d.commentaire_b || '',
+            commentaire_b: d.commentaire_b || d.commentaireBatterie || '',
+            hasBatterieSecours: d.hasBatterieSecours || d.has_batterie_secours || 'Non',
+            has_batterie_secours: d.has_batterie_secours || d.hasBatterieSecours || 'Non',
+            modeleBatterieSecoursId: d.modeleBatterieSecoursId || d.modele_secours_b || d.modeleBatterieSecours || '',
+            modele_secours_b: d.modele_secours_b || d.modeleBatterieSecoursId || '',
+            lotBatterieSecours: d.lotBatterieSecours || d.lot_secours_b || '',
+            lot_secours_b: d.lot_secours_b || d.lotBatterieSecours || '',
+            peremptionBatterieSecours: d.peremptionBatterieSecours || d.peremption_secours_b || '',
+            peremption_secours_b: d.peremption_secours_b || d.peremptionBatterieSecours || '',
 
             modeleCoffretId: d.modeleCoffretId || d.boitier_modele || d.modele_coffret || '',
             modeleCoffret: d.modeleCoffret || d.modele_coffret || d.boitier_modele || '',
@@ -2354,6 +2556,47 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             numeroLotCoffret: d.numeroLotCoffret || d.boitier_lot || d.lot_coffret || '',
             lot_coffret: d.lot_coffret || d.numeroLotCoffret || d.boitier_lot || '',
             boitier_lot: d.boitier_lot || d.lot_coffret || d.numeroLotCoffret || '',
+            commentaireCoffret: d.commentaireCoffret || d.commentaire_coffret || '',
+            commentaire_coffret: d.commentaire_coffret || d.commentaireCoffret || '',
+
+            // Trousse de secours (8 champs conformes à la console web)
+            peremptionTrousse: d.peremptionTrousse || d.peremption_trousse || '',
+            peremption_trousse: d.peremption_trousse || d.peremptionTrousse || '',
+
+            kitCiseauxPresents: d.kitCiseauxPresents || d.kit_ciseaux_presents || d.ciseaux_presents || 'Oui',
+            kit_ciseaux_presents: d.kit_ciseaux_presents || d.kitCiseauxPresents || d.ciseaux_presents || 'Oui',
+            ciseaux_presents: d.ciseaux_presents || d.kitCiseauxPresents || d.kit_ciseaux_presents || 'Oui',
+            ciseaux_presents_bool: toBoolean(d.kitCiseauxPresents ?? d.kit_ciseaux_presents ?? d.ciseaux_presents ?? 'Oui', true),
+
+            kitMasquePresent: d.kitMasquePresent || d.kit_masque_present || d.masque_present || 'Oui',
+            kit_masque_present: d.kit_masque_present || d.kitMasquePresent || d.masque_present || 'Oui',
+            masque_present: d.masque_present || d.kitMasquePresent || d.kit_masque_present || 'Oui',
+            masque_present_bool: toBoolean(d.kitMasquePresent ?? d.kit_masque_present ?? d.masque_present ?? 'Oui', true),
+
+            kitPeremptionMasque: d.kitPeremptionMasque || d.kit_peremption_masque || d.peremption_masque || '',
+            kit_peremption_masque: d.kit_peremption_masque || d.kitPeremptionMasque || d.peremption_masque || '',
+            peremption_masque: d.peremption_masque || d.kitPeremptionMasque || d.kit_peremption_masque || '',
+
+            kitServiettesPresentes: d.kitServiettesPresentes || d.kit_serviettes_presentes || d.serviettes_presentes || 'Oui',
+            kit_serviettes_presentes: d.kit_serviettes_presentes || d.kitServiettesPresentes || d.serviettes_presentes || 'Oui',
+            serviettes_presentes: d.serviettes_presentes || d.kitServiettesPresentes || d.kit_serviettes_presentes || 'Oui',
+            serviettes_presentes_bool: toBoolean(d.kitServiettesPresentes ?? d.kit_serviettes_presentes ?? d.serviettes_presentes ?? 'Oui', true),
+
+            kitPeremptionServiettes: d.kitPeremptionServiettes || d.kit_peremption_serviettes || d.peremption_serviettes || '',
+            kit_peremption_serviettes: d.kit_peremption_serviettes || d.kitPeremptionServiettes || d.peremption_serviettes || '',
+            peremption_serviettes: d.peremption_serviettes || d.kitPeremptionServiettes || d.kit_peremption_serviettes || '',
+
+            kitGantsPresents: d.kitGantsPresents || d.kit_gants_presents || d.gants_presents || d.paire_gants_presents || 'Oui',
+            kit_gants_presents: d.kit_gants_presents || d.kitGantsPresents || d.gants_presents || d.paire_gants_presents || 'Oui',
+            gants_presents: d.gants_presents || d.kitGantsPresents || d.kit_gants_presents || d.paire_gants_presents || 'Oui',
+            paire_gants_presents: d.paire_gants_presents || d.kitGantsPresents || d.kit_gants_presents || d.gants_presents || 'Oui',
+            gants_presents_bool: toBoolean(d.kitGantsPresents ?? d.kit_gants_presents ?? d.gants_presents ?? d.paire_gants_presents ?? 'Oui', true),
+
+            kitRasoirPresent: d.kitRasoirPresent || d.kit_rasoir_present || d.rasoir_present || d.rasoir || 'Oui',
+            kit_rasoir_present: d.kit_rasoir_present || d.kitRasoirPresent || d.rasoir_present || d.rasoir || 'Oui',
+            rasoir_present: d.rasoir_present || d.kitRasoirPresent || d.kit_rasoir_present || d.rasoir || 'Oui',
+            rasoir: d.rasoir || d.kitRasoirPresent || d.kit_rasoir_present || d.rasoir_present || 'Oui',
+            rasoir_present_bool: toBoolean(d.kitRasoirPresent ?? d.kit_rasoir_present ?? d.rasoir_present ?? d.rasoir ?? 'Oui', true),
 
             modele: d.modele || d.modele_dae || d.modeleId || '',
             modele_dae: d.modele_dae || d.modele || d.modeleId || '',
@@ -2367,8 +2610,6 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             statut_voyant: d.statut_voyant || d.statutVoyant || 'Vert OK',
             etatHousse: d.etatHousse || d.etat_housse || 'Conforme',
             etat_housse: d.etat_housse || d.etatHousse || 'Conforme',
-            peremptionTrousse: d.peremptionTrousse || d.peremption_trousse || '',
-            peremption_trousse: d.peremption_trousse || d.peremptionTrousse || '',
 
             commentaireAdresse: d.commentaireAdresse || d.aide_acces || '',
             aide_acces: d.aide_acces || d.commentaireAdresse || '',
@@ -2390,6 +2631,9 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             nomPrenomSite: d.nomPrenomSite || d.nom_prenom || d.nom_site || '',
             nom_prenom: d.nom_prenom || d.nomPrenomSite || d.nom_site || '',
             nom_site: d.nom_site || d.nomPrenomSite || d.nom_prenom || '',
+            nomSite: d.nomSite || d.nom_site || d.nomPrenomSite || '',
+            categorieEtablissement: d.categorieEtablissement || d.categorie_etablissement || '',
+            categorie_etablissement: d.categorie_etablissement || d.categorieEtablissement || '',
             telephoneSite: d.telephoneSite || d.telephone_portable || d.telephone_site || d.phone || d.tel || '',
             telephone_portable: d.telephone_portable || d.telephoneSite || d.telephone_site || d.phone || d.tel || '',
             telephone_site: d.telephone_site || d.telephoneSite || d.telephone_portable || d.phone || d.tel || '',
@@ -2398,6 +2642,9 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             email_site: d.email_site || d.emailSite || d.email || '',
             commentaire: d.commentaire || d.notes || d.note || '',
             notes: d.notes || d.commentaire || '',
+            commentaireInterne: d.commentaireInterne || d.commentaire_interne || '',
+            commentaire_interne: d.commentaire_interne || d.commentaireInterne || '',
+            horaires: d.horaires || '',
 
             finGarantie: d.finGarantie || d.fin_garantie || d.expiration_garantie || '',
             fin_garantie: d.fin_garantie || d.finGarantie || d.expiration_garantie || '',
@@ -2417,19 +2664,51 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
             debut_contrat: d.debut_contrat || d.debutContrat || '',
             finContrat: d.finContrat || d.fin_contrat || '',
             fin_contrat: d.fin_contrat || d.finContrat || '',
+            payeurId: d.payeurId || d.payeur_id || '',
+            payeur_id: d.payeur_id || d.payeurId || '',
+            clientIdField: d.clientIdField || d.client_id_field || '',
+            client_id_field: d.client_id_field || d.clientIdField || '',
 
-            acces247: d.acces247 || d.acces_247 || 'Non',
-            acces_247: d.acces_247 || d.acces247 || 'Non',
-            accesSemaine: d.accesSemaine || d.acces_semaine || '',
-            acces_semaine: d.acces_semaine || d.accesSemaine || '',
-            accesWeekend: d.accesWeekend || d.acces_weekend || '',
-            acces_weekend: d.acces_weekend || d.accesWeekend || '',
-            exterieur: d.exterieur || 'Non',
+            acces247: d.acces247 !== undefined ? d.acces247 : (d.acces_247 !== undefined ? d.acces_247 : false),
+            acces_247: d.acces_247 !== undefined ? d.acces_247 : (d.acces247 !== undefined ? d.acces247 : false),
+            acces_247_bool: toBoolean(d.acces247 ?? d.acces_247, false),
+            accesSemaine: d.accesSemaine !== undefined ? d.accesSemaine : (d.acces_semaine !== undefined ? d.acces_semaine : false),
+            acces_semaine: d.acces_semaine !== undefined ? d.acces_semaine : (d.accesSemaine !== undefined ? d.accesSemaine : false),
+            acces_semaine_bool: toBoolean(d.accesSemaine ?? d.acces_semaine, false),
+            accesWeekend: d.accesWeekend !== undefined ? d.accesWeekend : (d.acces_weekend !== undefined ? d.acces_weekend : false),
+            acces_weekend: d.acces_weekend !== undefined ? d.acces_weekend : (d.accesWeekend !== undefined ? d.accesWeekend : false),
+            acces_weekend_bool: toBoolean(d.accesWeekend ?? d.acces_weekend, false),
+            exterieur: d.exterieur !== undefined ? d.exterieur : false,
+            exterieur_bool: toBoolean(d.exterieur, false),
 
             numeroAtlasante: d.numeroAtlasante || d.numero_atlasante || '',
             numero_atlasante: d.numero_atlasante || d.numeroAtlasante || '',
             versionLogiciel: d.versionLogiciel || d.version_logiciel || '',
             version_logiciel: d.version_logiciel || d.versionLogiciel || '',
+
+            // Catégories & Suivi opérationnel
+            loue: d.loue || 'Non',
+            prete: d.prete || 'Non',
+            stocke: d.stocke || 'Non',
+            archive: d.archive || 'Non',
+            sousTraitance: d.sousTraitance || d.sous_traitance || 'Non',
+            sous_traitance: d.sous_traitance || d.sousTraitance || 'Non',
+            fsmAutorise: d.fsmAutorise || d.fsm_autorise || 'Oui',
+            fsm_autorise: d.fsm_autorise || d.fsmAutorise || 'Oui',
+            victimeSurvie: d.victimeSurvie || d.victime_survie || 'Non',
+            victime_survie: d.victime_survie || d.victimeSurvie || 'Non',
+            victimeSansSurvie: d.victimeSansSurvie || d.victime_sans_survie || 'Non',
+            victime_sans_survie: d.victime_sans_survie || d.victimeSansSurvie || 'Non',
+            ageVictime: d.ageVictime || d.age_victime || '',
+            age_victime: d.age_victime || d.ageVictime || '',
+            commentaireCampagneRappel: d.commentaireCampagneRappel || d.commentaire_campagne_rappel || '',
+            commentaire_campagne_rappel: d.commentaire_campagne_rappel || d.commentaireCampagneRappel || '',
+            rappelMensuelAuto: d.rappelMensuelAuto || d.rappel_mensuel_auto || 'Non',
+            rappel_mensuel_auto: d.rappel_mensuel_auto || d.rappelMensuelAuto || 'Non',
+            rappelHebdoAuto: d.rappelHebdoAuto || d.rappel_hebdo_auto || 'Non',
+            rappel_hebdo_auto: d.rappel_hebdo_auto || d.rappelHebdoAuto || 'Non',
+            rappelJournalierAuto: d.rappelJournalierAuto || d.rappel_journalier_auto || 'Non',
+            rappel_journalier_auto: d.rappel_journalier_auto || d.rappelJournalierAuto || 'Non',
 
             clientId: d.clientId || d.client_id || '',
             client_id: d.client_id || d.clientId || '',
@@ -2552,7 +2831,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           return false;
         };
 
-        if (req.method === 'POST') {
+        if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           const body = req.body || {};
           const targetId = (subId || body.identifiant || body.id || body.numeroSerie || body.num_serie || '').trim();
 
@@ -2783,11 +3062,64 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
               updatedDefib.etat_housse = ehVal;
               updatedFields.add('etatHousse');
             }
-            if (body.peremptionTrousse !== undefined || body.peremption_trousse !== undefined) {
-              const ptVal = String(body.peremptionTrousse ?? body.peremption_trousse).trim();
+
+            // Trousse de secours (8 champs de la console web)
+            if (body.peremptionTrousse !== undefined || body.peremption_trousse !== undefined || body.date_peremption_trousse !== undefined || body.trousse_peremption !== undefined) {
+              const ptVal = String(body.peremptionTrousse ?? body.peremption_trousse ?? body.date_peremption_trousse ?? body.trousse_peremption).trim();
               updatedDefib.peremptionTrousse = ptVal;
               updatedDefib.peremption_trousse = ptVal;
               updatedFields.add('peremptionTrousse');
+            }
+            if (body.kitCiseauxPresents !== undefined || body.ciseaux_presents !== undefined || body.kit_ciseaux_presents !== undefined || body.ciseauxPresents !== undefined || body.ciseaux !== undefined || body.kit_ciseaux !== undefined) {
+              const kcVal = normalizeYesNo(body.kitCiseauxPresents ?? body.ciseaux_presents ?? body.kit_ciseaux_presents ?? body.ciseauxPresents ?? body.ciseaux ?? body.kit_ciseaux, 'Oui');
+              updatedDefib.kitCiseauxPresents = kcVal;
+              updatedDefib.ciseaux_presents = kcVal;
+              updatedDefib.kit_ciseaux_presents = kcVal;
+              updatedFields.add('kitCiseauxPresents');
+            }
+            if (body.kitMasquePresent !== undefined || body.masque_present !== undefined || body.kit_masque_present !== undefined || body.masquePresent !== undefined || body.masque !== undefined || body.kit_masque !== undefined) {
+              const kmVal = normalizeYesNo(body.kitMasquePresent ?? body.masque_present ?? body.kit_masque_present ?? body.masquePresent ?? body.masque ?? body.kit_masque, 'Oui');
+              updatedDefib.kitMasquePresent = kmVal;
+              updatedDefib.masque_present = kmVal;
+              updatedDefib.kit_masque_present = kmVal;
+              updatedFields.add('kitMasquePresent');
+            }
+            if (body.kitPeremptionMasque !== undefined || body.peremption_masque !== undefined || body.kit_peremption_masque !== undefined || body.peremptionMasque !== undefined || body.date_peremption_masque !== undefined) {
+              const kpmVal = String(body.kitPeremptionMasque ?? body.peremption_masque ?? body.kit_peremption_masque ?? body.peremptionMasque ?? body.date_peremption_masque).trim();
+              updatedDefib.kitPeremptionMasque = kpmVal;
+              updatedDefib.peremption_masque = kpmVal;
+              updatedDefib.kit_peremption_masque = kpmVal;
+              updatedFields.add('kitPeremptionMasque');
+            }
+            if (body.kitServiettesPresentes !== undefined || body.serviettes_presentes !== undefined || body.kit_serviettes_presentes !== undefined || body.serviettesPresentes !== undefined || body.serviettes !== undefined || body.kit_serviettes !== undefined) {
+              const ksVal = normalizeYesNo(body.kitServiettesPresentes ?? body.serviettes_presentes ?? body.kit_serviettes_presentes ?? body.serviettesPresentes ?? body.serviettes ?? body.kit_serviettes, 'Oui');
+              updatedDefib.kitServiettesPresentes = ksVal;
+              updatedDefib.serviettes_presentes = ksVal;
+              updatedDefib.kit_serviettes_presentes = ksVal;
+              updatedFields.add('kitServiettesPresentes');
+            }
+            if (body.kitPeremptionServiettes !== undefined || body.peremption_serviettes !== undefined || body.kit_peremption_serviettes !== undefined || body.peremptionServiettes !== undefined || body.date_peremption_serviettes !== undefined) {
+              const kpsVal = String(body.kitPeremptionServiettes ?? body.peremption_serviettes ?? body.kit_peremption_serviettes ?? body.peremptionServiettes ?? body.date_peremption_serviettes).trim();
+              updatedDefib.kitPeremptionServiettes = kpsVal;
+              updatedDefib.peremption_serviettes = kpsVal;
+              updatedDefib.kit_peremption_serviettes = kpsVal;
+              updatedFields.add('kitPeremptionServiettes');
+            }
+            if (body.kitGantsPresents !== undefined || body.gants_presents !== undefined || body.kit_gants_presents !== undefined || body.gantsPresents !== undefined || body.paire_gants_presents !== undefined || body.paireGantsPresents !== undefined || body.gants !== undefined || body.kit_gants !== undefined) {
+              const kgVal = normalizeYesNo(body.kitGantsPresents ?? body.gants_presents ?? body.kit_gants_presents ?? body.gantsPresents ?? body.paire_gants_presents ?? body.paireGantsPresents ?? body.gants ?? body.kit_gants, 'Oui');
+              updatedDefib.kitGantsPresents = kgVal;
+              updatedDefib.gants_presents = kgVal;
+              updatedDefib.kit_gants_presents = kgVal;
+              updatedDefib.paire_gants_presents = kgVal;
+              updatedFields.add('kitGantsPresents');
+            }
+            if (body.kitRasoirPresent !== undefined || body.rasoir_present !== undefined || body.kit_rasoir_present !== undefined || body.rasoirPresent !== undefined || body.rasoir !== undefined || body.kit_rasoir !== undefined) {
+              const krVal = normalizeYesNo(body.kitRasoirPresent ?? body.rasoir_present ?? body.kit_rasoir_present ?? body.rasoirPresent ?? body.rasoir ?? body.kit_rasoir, 'Oui');
+              updatedDefib.kitRasoirPresent = krVal;
+              updatedDefib.rasoir_present = krVal;
+              updatedDefib.kit_rasoir_present = krVal;
+              updatedDefib.rasoir = krVal;
+              updatedFields.add('kitRasoirPresent');
             }
 
             // Insertion / Livraison / Secours

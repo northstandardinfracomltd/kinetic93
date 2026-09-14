@@ -197,10 +197,13 @@ export async function triggerEmailNewMemberAdded(
   userEmail: string,
   passwordCode: string,
   companyName: string,
-  companyEmail: string
+  companyEmail: string,
+  roleType: string = 'Admin'
 ): Promise<boolean> {
-  const subject = `${companyName} : Vous avez été ajouté au logiciel Défibeo.`;
-  const body = `Bonjour, vous avez été ajouté au logiciel Défibeo de ${companyName}. Pour y accéder, ouvrez https://defibeo.deroesch.com/ et connectez-vous en tant que Admin, avec votre email ${userEmail}, et le mot de passe: ${passwordCode}.`;
+  const resolvedRole = roleType === 'Administrateur' ? 'Admin' : (roleType || 'Admin');
+  const resolvedCompany = (companyName || '').trim() || 'Defibeo';
+  const subject = `${resolvedCompany} : Vous avez été ajouté au logiciel Defibeo.`;
+  const body = `Bonjour, vous avez été ajouté au logiciel Defibeo de ${resolvedCompany} \nPour y accéder, ouvrez https://consoledefibeo.deroesch.com/ et connectez-vous en tant que ${resolvedRole}, avec votre email ${userEmail}, et le mot de passe: ${passwordCode}.`;
 
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${userEmail}`,
