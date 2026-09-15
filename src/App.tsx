@@ -3822,8 +3822,22 @@ export default function App() {
 
         // Check IndexedDB if localStorage was empty or couldn't store large collections
         try {
-          const idbDefibs = await idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`);
-          if (Array.isArray(idbDefibs) && (idbDefibs.length > 0 || (baseDefibrillateurs.length === 1 && baseDefibrillateurs[0]?.identifiant?.includes('DAE-')))) {
+          let idbDefibs = await idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`);
+          // If empty, also check alias tenant keys in IndexedDB
+          if (!Array.isArray(idbDefibs) || idbDefibs.length <= 1) {
+            const aliasKeys = [
+              activeRunTenantId.toUpperCase().startsWith('D') ? activeRunTenantId.toLowerCase() : activeRunTenantId.toUpperCase(),
+              'D27', 'D58', 'defibrillateurs'
+            ];
+            for (const ak of aliasKeys) {
+              const alt = await idbGet<Defibrillateur[]>(`defib_${ak}_defibrillateurs`);
+              if (Array.isArray(alt) && alt.length > 1) {
+                idbDefibs = alt;
+                break;
+              }
+            }
+          }
+          if (Array.isArray(idbDefibs) && idbDefibs.length > 0) {
             baseDefibrillateurs = idbDefibs;
             setDefibrillateurs(idbDefibs);
             if (idbDefibs.length > 1) {
@@ -3848,7 +3862,7 @@ export default function App() {
         loadedDataRef.current = {
           clients: JSON.stringify(sanitizedOffline),
           variables: JSON.stringify(baseVariables),
-          defibrillateurs: JSON.stringify(baseDefibrillateurs),
+          defibrillateurs: JSON.stringify(baseDefibrillateurs.length > 250 ? [{ _isLargeCollection: true, length: baseDefibrillateurs.length }] : baseDefibrillateurs),
           stocks: JSON.stringify(baseStocks),
           companyInfo: JSON.stringify(baseCompanyInfo),
           members: JSON.stringify(baseMembers),
@@ -3900,34 +3914,49 @@ export default function App() {
               // CRITICAL RESILIENCE: Prevent overwriting large populated datasets with empty/single placeholder
               if (Array.isArray(finalData)) {
                 let currentLen = 0;
-                const currentSavedStr = loadedDataRef.current[localStorageKeySuffix] || loadedDataRef.current[collectionName];
-                if (currentSavedStr) {
-                  try {
-                    const parsed = JSON.parse(currentSavedStr);
-                    if (Array.isArray(parsed)) currentLen = parsed.length;
-                  } catch (_) {}
+                if (collectionName === 'defibrillateurs') {
+                  currentLen = defibrillateurs?.length || 0;
+                } else {
+                  const currentSavedStr = loadedDataRef.current[localStorageKeySuffix] || loadedDataRef.current[collectionName];
+                  if (currentSavedStr) {
+                    try {
+                      const parsed = JSON.parse(currentSavedStr);
+                      if (Array.isArray(parsed)) currentLen = parsed.length;
+                    } catch (_) {}
+                  }
                 }
                 if (currentLen > 50 && finalData.length <= 1) {
-                  console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${currentLen} items) with incomplete remote data (${finalData.length} items). Re-syncing local data to cloud...`);
-                  try {
-                    const parsed = JSON.parse(currentSavedStr!);
-                    saveCollectionToFirestore(collectionName, parsed, activeRunTenantId);
-                  } catch (_) {}
+                  console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${currentLen} items) with incomplete remote data (${finalData.length} items).`);
                   return;
                 }
               }
 
               stateSetter(finalData);
-              const strVal = JSON.stringify(finalData);
-              safeSetLocalStorage(`defib_${activeRunTenantId}_${localStorageKeySuffix}`, strVal);
-              try {
-                idbSet(`defib_${activeRunTenantId}_${localStorageKeySuffix}`, finalData);
-              } catch (_) {}
-              loadedDataRef.current[localStorageKeySuffix] = strVal;
-              loadedDataRef.current[collectionName] = strVal;
+
+              // For large collections (e.g. 18,000+ defibrillateurs), NEVER serialize 34MB to localStorage!
+              // Store directly into IndexedDB, keeping browser thread fast and responsive.
+              if (Array.isArray(finalData) && finalData.length > 250) {
+                try {
+                  idbSet(`defib_${activeRunTenantId}_${localStorageKeySuffix}`, finalData);
+                } catch (_) {}
+                loadedDataRef.current[localStorageKeySuffix] = JSON.stringify([{ _isLargeCollection: true, length: finalData.length }]);
+                loadedDataRef.current[collectionName] = loadedDataRef.current[localStorageKeySuffix];
+              } else {
+                const strVal = JSON.stringify(finalData);
+                safeSetLocalStorage(`defib_${activeRunTenantId}_${localStorageKeySuffix}`, strVal);
+                try {
+                  idbSet(`defib_${activeRunTenantId}_${localStorageKeySuffix}`, finalData);
+                } catch (_) {}
+                loadedDataRef.current[localStorageKeySuffix] = strVal;
+                loadedDataRef.current[collectionName] = strVal;
+              }
             }
           } catch (err) {
             console.warn(`Background sync failed for ${collectionName}:`, err);
+          } finally {
+            if (collectionName === 'defibrillateurs') {
+              setIsDefibLoading(false);
+            }
           }
         };
 

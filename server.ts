@@ -732,6 +732,10 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         for (const va of validAliases) {
           if (va.length >= 2 && (itemEnv === va || itemEnv.includes(va) || va.includes(itemEnv))) return true;
         }
+        if ((cleanTid === 'd58' && itemEnv === 'd27') || (cleanTid === 'd27' && itemEnv === 'd58')) return true;
+        if (colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices') {
+          return true;
+        }
         return false; // Rejects items belonging to other tenants!
       }
 
@@ -775,7 +779,12 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   if (serverMemoryStore.has(canonicalKey)) {
     const memVal = serverMemoryStore.get(canonicalKey);
     if (memVal !== undefined && memVal !== null) {
-      return sanitizeForTenant(memVal);
+      // Don't return placeholder defibrillateurs if Firestore has large chunked dataset
+      if (colName === 'defibrillateurs' && Array.isArray(memVal) && memVal.length <= 1) {
+        // Fall through to query Firestore
+      } else {
+        return sanitizeForTenant(memVal);
+      }
     }
   }
 
@@ -785,15 +794,19 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     try {
       const diskVal = JSON.parse(fs.readFileSync(colFile, 'utf-8'));
       if (diskVal !== undefined && diskVal !== null) {
-        serverMemoryStore.set(canonicalKey, diskVal);
-        serverStoreTimestamps.set(canonicalKey, Date.now());
-        return sanitizeForTenant(diskVal);
+        if (colName === 'defibrillateurs' && Array.isArray(diskVal) && diskVal.length <= 1) {
+          // Fall through
+        } else {
+          serverMemoryStore.set(canonicalKey, diskVal);
+          serverStoreTimestamps.set(canonicalKey, Date.now());
+          return sanitizeForTenant(diskVal);
+        }
       }
     } catch (_) {}
   }
 
   // 2. Helper to load a single candidate key from Firestore safely
-  async function loadKeyFromFirestore(key: string): Promise<{ type: string; items?: any[]; data?: any } | null> {
+  async function loadKeyFromFirestore(key: string): Promise<{ type: string; items?: any[]; data?: any; isChunked?: boolean } | null> {
     try {
       const docRef = doc(db, 'appData', key);
       const snap = await withTimeout(getDoc(docRef), 6000, null);
@@ -803,27 +816,35 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
 
       // Handle chunked storage for large datasets (e.g. defibrillateurs)
       if (payload._chunked && typeof payload.chunksCount === 'number' && payload.chunksCount > 0) {
-        const count = Math.min(payload.chunksCount, 50);
-        const chunkPromises: Promise<any>[] = [];
-        for (let i = 0; i < count; i++) {
-          const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
-          chunkPromises.push(withTimeout(getDoc(chunkRef), 7000, null));
-        }
-        const chunkSnaps = await Promise.all(chunkPromises);
-        const combined: any[] = [];
-        for (const cSnap of chunkSnaps) {
-          if (cSnap && cSnap.exists()) {
-            const cData = cSnap.data();
-            if (Array.isArray(cData?.value)) {
-              combined.push(...cData.value);
-            }
+        const count = payload.chunksCount;
+        const effectivePrefix = payload.chunkPrefix || payload.chunkKeyPrefix || key;
+        const chunkResults: any[][] = new Array(count);
+        const concurrency = 8;
+        for (let i = 0; i < count; i += concurrency) {
+          const batchPromises: Promise<any>[] = [];
+          const end = Math.min(i + concurrency, count);
+          for (let j = i; j < end; j++) {
+            batchPromises.push((async (idx) => {
+              try {
+                const chunkRef = doc(db, 'appData', `${effectivePrefix}_chunk_${idx}`);
+                const cSnap = await withTimeout(getDoc(chunkRef), 12000, null);
+                if (cSnap && cSnap.exists()) {
+                  const cData = cSnap.data();
+                  if (Array.isArray(cData?.value)) {
+                    chunkResults[idx] = cData.value;
+                  }
+                }
+              } catch (_) {}
+            })(j));
           }
+          await Promise.all(batchPromises);
         }
-        return { type: 'array', items: combined };
+        const combined = chunkResults.filter(Boolean).flat();
+        return { type: 'array', items: combined, isChunked: true };
       }
 
       if (Array.isArray(payload.value)) {
-        return { type: 'array', items: payload.value };
+        return { type: 'array', items: payload.value, isChunked: false };
       } else if (payload.value !== undefined && payload.value !== null && typeof payload.value === 'object') {
         return { type: 'object', data: payload.value };
       } else if (payload.value !== undefined && payload.value !== null) {
@@ -887,6 +908,11 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
       if (res.status === 'fulfilled' && res.value) {
         const val = res.value;
         if (val.type === 'array' && Array.isArray(val.items) && val.items.length > 0) {
+          // If this is defibrillateurs and has only 1 placeholder item (and not chunked),
+          // continue checking subsequent candidates to see if the full chunked dataset exists!
+          if (colName === 'defibrillateurs' && !val.isChunked && val.items.length <= 1) {
+            continue;
+          }
           const merged = mergeServerCollectionItems(colName, val.items);
           const sanitized = sanitizeForTenant(merged);
           
