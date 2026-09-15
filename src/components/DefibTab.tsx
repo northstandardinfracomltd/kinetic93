@@ -7,6 +7,7 @@ import { BarcodeScannerModal } from './BarcodeScannerModal';
 import { runMonthlyVigilanceCampaign } from '../utils/emailService';
 import { checkIfDefibIdentifiantExistsAnywhere, fetchCollectionFromFirestore } from '../firebase';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { DefibTablePreloader } from './DefibTablePreloader';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -376,6 +377,13 @@ interface DefibTabProps {
   members?: any[];
   isDeveloper?: boolean;
   isReadOnly?: boolean;
+  isDefibLoading?: boolean;
+  defibLoadingProgress?: {
+    current: number;
+    total: number;
+    percent?: number;
+    message?: string;
+  };
 }
 
 const getPostalIndicatif = (rawCp: any): number | null => {
@@ -425,6 +433,8 @@ export default function DefibTab({
   members = [],
   isDeveloper = false,
   isReadOnly = false,
+  isDefibLoading = false,
+  defibLoadingProgress,
 }: DefibTabProps) {
   // Navigation, Search & Filters State
   const [search, setSearch] = useState('');
@@ -437,7 +447,7 @@ export default function DefibTab({
     borderRadius: '13px',
     padding: '9px 19px',
     fontSize: '18px',
-    fontWeight: '100',
+    fontWeight: 400,
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -2815,8 +2825,18 @@ export default function DefibTab({
 
       {/* Main Table Records Sheet */}
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
+        {/* Banner preloader if loading and multiple records are already displayed */}
+        {isDefibLoading && filteredDefibs.length > 1 && (
+          <DefibTablePreloader 
+            variant="banner"
+            current={defibLoadingProgress?.current}
+            total={defibLoadingProgress?.total}
+            percent={defibLoadingProgress?.percent}
+            message={defibLoadingProgress?.message}
+          />
+        )}
         {/* Scrollbar supérieur pour faciliter la navigation horizontale sur ordinateur fixe */}
-        {filteredDefibs.length > 0 && tableScrollWidth > 0 && !isTableFitView && (
+        {!isDefibLoading && filteredDefibs.length > 0 && tableScrollWidth > 0 && !isTableFitView && (
           <div 
             ref={topScrollRef} 
             onScroll={handleTopScroll} 
@@ -2832,7 +2852,15 @@ export default function DefibTab({
           className={isTableFitView ? "overflow-x-hidden" : "overflow-x-auto"}
           style={isTableFitView ? { width: '100%', overflowX: 'hidden' } : undefined}
         >
-          {filteredDefibs.length === 0 ? (
+          {isDefibLoading && filteredDefibs.length <= 1 ? (
+            <DefibTablePreloader 
+              variant="inline"
+              current={defibLoadingProgress?.current}
+              total={defibLoadingProgress?.total}
+              percent={defibLoadingProgress?.percent}
+              message={defibLoadingProgress?.message}
+            />
+          ) : filteredDefibs.length === 0 ? (
             <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
           ) : (
             <table 
@@ -3240,11 +3268,18 @@ export default function DefibTab({
         id="defib-tab-total-summary"
       >
         <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
-          {t('Total défibrillateurs (Tous)')} : {defibrillateurs.length} ({paginatedDefibs.length} sur cette page).
+          {isDefibLoading && filteredDefibs.length <= 1 ? (
+            <span className="text-slate-500 text-sm font-medium">
+              {defibLoadingProgress?.message || 'Chargement 1/18,000, Veuillez patienter.'}
+            </span>
+          ) : (
+            `${t('Total défibrillateurs (Tous)')} : ${defibrillateurs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
+          )}
         </div>
 
         {/* Pagination Controls */}
-        <div className="flex items-center gap-2">
+        {(!isDefibLoading || filteredDefibs.length > 1) && (
+          <div className="flex items-center gap-2">
           <select
             value={currentPage}
             onChange={(e) => {
@@ -3275,6 +3310,7 @@ export default function DefibTab({
             ))}
           </select>
         </div>
+        )}
       </div>
 
       {/* Cartographie GIS Overlay */}

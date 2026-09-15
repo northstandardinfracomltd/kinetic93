@@ -733,6 +733,18 @@ export default function App() {
   // Database States
   const [variables, setVariables] = useState<Variable[]>([]);
   const [defibrillateurs, setDefibrillateurs] = useState<Defibrillateur[]>([]);
+  const [isDefibLoading, setIsDefibLoading] = useState<boolean>(true);
+  const [defibLoadingProgress, setDefibLoadingProgress] = useState<{
+    current: number;
+    total: number;
+    percent?: number;
+    message?: string;
+  }>({
+    current: 1,
+    total: 18000,
+    percent: 1,
+    message: 'Chargement 1/18,000, Veuillez patienter.'
+  });
   const [otherEquipments, setOtherEquipments] = useState<OtherEquipment[]>([]);
   const [pointagesAutoVigilance, setPointagesAutoVigilance] = useState<PointageAutoVigilance[]>([]);
   const [enableOtherEquipments, setEnableOtherEquipments] = useState<string>(() => {
@@ -3814,6 +3826,15 @@ export default function App() {
           if (Array.isArray(idbDefibs) && (idbDefibs.length > 0 || (baseDefibrillateurs.length === 1 && baseDefibrillateurs[0]?.identifiant?.includes('DAE-')))) {
             baseDefibrillateurs = idbDefibs;
             setDefibrillateurs(idbDefibs);
+            if (idbDefibs.length > 1) {
+              setDefibLoadingProgress({
+                current: idbDefibs.length,
+                total: idbDefibs.length,
+                percent: 100,
+                message: `Chargement ${idbDefibs.length.toLocaleString('en-US')}/${idbDefibs.length.toLocaleString('en-US')}, Terminé.`
+              });
+              setIsDefibLoading(false);
+            }
           }
           const idbClients = await idbGet<Client[]>(`defib_${activeRunTenantId}_clients`);
           if (Array.isArray(idbClients) && idbClients.length > 0) {
@@ -3864,10 +3885,11 @@ export default function App() {
           collectionName: string,
           localStorageKeySuffix: string,
           stateSetter: (val: T) => void,
-          customTransformer?: (data: T) => T | Promise<T>
+          customTransformer?: (data: T) => T | Promise<T>,
+          onProgress?: (current: number, total: number, message?: string) => void
         ) => {
           try {
-            const data = await fetchCollectionFromFirestore<T>(collectionName, activeRunTenantId);
+            const data = await fetchCollectionFromFirestore<T>(collectionName, activeRunTenantId, onProgress);
             if (activeRunTenantId !== loadedTenantIdRef.current && activeRunTenantId !== tenantId) return;
             if (data !== null) {
               let finalData = data;
@@ -3926,7 +3948,35 @@ export default function App() {
         }));
 
         syncTasks.push(syncBackground<Variable[]>('variables', 'variables', setVariables));
-        syncTasks.push(syncBackground<Defibrillateur[]>('defibrillateurs', 'defibrillateurs', setDefibrillateurs));
+        syncTasks.push(syncBackground<Defibrillateur[]>(
+          'defibrillateurs',
+          'defibrillateurs',
+          (data) => {
+            setDefibrillateurs(data);
+            if (Array.isArray(data)) {
+              setDefibLoadingProgress({
+                current: data.length,
+                total: data.length,
+                percent: 100,
+                message: `Chargement ${data.length.toLocaleString('en-US')}/${data.length.toLocaleString('en-US')}, Terminé.`
+              });
+            }
+            setTimeout(() => {
+              setIsDefibLoading(false);
+            }, 250);
+          },
+          undefined,
+          (loaded, total, msg) => {
+            setIsDefibLoading(true);
+            const p = Math.min(99, Math.max(4, Math.round((loaded / (total || 18000)) * 100)));
+            setDefibLoadingProgress({
+              current: loaded,
+              total: total,
+              percent: p,
+              message: msg || `Chargement ${loaded.toLocaleString('en-US')}/${total.toLocaleString('en-US')}, Veuillez patienter.`
+            });
+          }
+        ));
         syncTasks.push(syncBackground<CompanyInfo>('companyInfo', 'company_info', setCompanyInfo, (firestoreData) => {
           const localRaw = localStorage.getItem(`defib_${tenantId}_company_info`);
           let localData: Partial<CompanyInfo> = {};
@@ -4120,6 +4170,7 @@ export default function App() {
         loadedTenantIdRef.current = tenantId;
         setLoadedTenantIdState(tenantId);
         setIsFirebaseLoaded(true);
+        setIsDefibLoading(false);
 
         const elapsedMs = Date.now() - loadStartMs;
         const remainingMs = Math.max(0, 2000 - elapsedMs);
@@ -6513,6 +6564,8 @@ export default function App() {
               members={members}
               isDeveloper={isDeveloper}
               isReadOnly={isDeveloper}
+              isDefibLoading={isDefibLoading}
+              defibLoadingProgress={defibLoadingProgress}
             />
           )}
 

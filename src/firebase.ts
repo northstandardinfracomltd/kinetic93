@@ -515,9 +515,17 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
  * from Firestore. Returns null if the document does not exist yet.
  * Includes resilience against chunk timeouts, local cache, and backend server proxy fallback.
  */
-export async function fetchCollectionFromFirestore<T>(collectionName: string, tenantId?: string): Promise<T | null> {
+export async function fetchCollectionFromFirestore<T>(
+  collectionName: string, 
+  tenantId?: string,
+  onProgress?: (current: number, total: number, message?: string) => void
+): Promise<T | null> {
   const activeTenantId = tenantId || getTenantId();
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
+
+  if (collectionName === 'defibrillateurs') {
+    onProgress?.(1, 18000, 'Chargement 1/18,000, Veuillez patienter.');
+  }
 
   // If completely offline in browser, immediately check cached versions (aggregate arrays)
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -577,11 +585,26 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
 
           if (isChunked) {
             const chunkPromises = [];
+            const estimatedTotal = chunksCount ? chunksCount * 1000 : 18000;
+            let loadedCount = 0;
             for (let i = 0; i < (chunksCount || 30); i++) {
               const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
               chunkPromises.push(
                 Promise.race([
-                  getDoc(chunkRef),
+                  getDoc(chunkRef).then((snap) => {
+                    if (snap && snap.exists && snap.exists()) {
+                      const snapData = snap.data();
+                      if (Array.isArray(snapData.value)) {
+                        loadedCount += snapData.value.length;
+                        onProgress?.(
+                          loadedCount,
+                          Math.max(loadedCount, estimatedTotal),
+                          `Chargement ${loadedCount.toLocaleString('en-US')}/${Math.max(loadedCount, estimatedTotal).toLocaleString('en-US')}, Veuillez patienter.`
+                        );
+                      }
+                    }
+                    return snap;
+                  }),
                   new Promise<any>((resolve) => setTimeout(() => resolve(null), 10000))
                 ])
               );
@@ -678,6 +701,9 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
         const json = await resp.json();
         if (json && json.value !== undefined) {
           const val = filterCollectionForTenant(json.value as T, collectionName, activeTenantId);
+          if (Array.isArray(val) && val.length > 0) {
+            onProgress?.(val.length, val.length, `Chargement ${val.length.toLocaleString('en-US')}/${val.length.toLocaleString('en-US')}, Terminé.`);
+          }
           const primaryKey = candidateKeys[0] || `${collectionName}_${activeTenantId}`;
           // Persist to local cache and IndexedDB across all browsers (Chrome, Edge, Firefox, Safari)
           idbSet(primaryKey, val);
