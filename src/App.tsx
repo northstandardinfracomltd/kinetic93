@@ -740,10 +740,10 @@ export default function App() {
     percent?: number;
     message?: string;
   }>({
-    current: 1,
-    total: 18000,
-    percent: 1,
-    message: 'Chargement 1/18,000, Veuillez patienter.'
+    current: 0,
+    total: 0,
+    percent: 0,
+    message: 'Chargement en cours, Veuillez patienter.'
   });
   const [otherEquipments, setOtherEquipments] = useState<OtherEquipment[]>([]);
   const [pointagesAutoVigilance, setPointagesAutoVigilance] = useState<PointageAutoVigilance[]>([]);
@@ -3967,13 +3967,20 @@ export default function App() {
           },
           undefined,
           (loaded, total, msg) => {
-            setIsDefibLoading(true);
-            const p = Math.min(99, Math.max(4, Math.round((loaded / (total || 18000)) * 100)));
+            const effectiveTotal = total || loaded || 1;
+            const p = loaded >= effectiveTotal 
+              ? 100 
+              : Math.min(99, Math.max(1, Math.round((loaded / effectiveTotal) * 100)));
+            if (p >= 100) {
+              setIsDefibLoading(false);
+            } else {
+              setIsDefibLoading(true);
+            }
             setDefibLoadingProgress({
               current: loaded,
-              total: total,
+              total: effectiveTotal,
               percent: p,
-              message: msg || `Chargement ${loaded.toLocaleString('en-US')}/${total.toLocaleString('en-US')}, Veuillez patienter.`
+              message: msg || `Chargement ${loaded.toLocaleString('en-US')}/${effectiveTotal.toLocaleString('en-US')}, Veuillez patienter.`
             });
           }
         ));
@@ -9957,7 +9964,7 @@ export default function App() {
 
             const thStyle: React.CSSProperties = {
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              fontWeight: 400,
+              fontWeight: 100,
               letterSpacing: 'normal',
               textTransform: 'none',
               color: '#000000',
@@ -10228,7 +10235,7 @@ export default function App() {
                     className="font-sans leading-relaxed flex-1"
                     style={{ 
                       fontSize: '16px', 
-                      fontWeight: 400, 
+                      fontWeight: 100, 
                       color: '#000000', 
                       cursor: 'default' 
                     }}
@@ -10395,12 +10402,12 @@ export default function App() {
                                 </td>
 
                                 {/* Date / Horodatage */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {rep.date}
                                 </td>
 
                                 {/* Catégorie matériel */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   <div 
                                     style={{ 
                                       display: 'inline-flex', 
@@ -10419,7 +10426,7 @@ export default function App() {
                                 </td>
 
                                 {/* Série */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {rep.defibSnapshot?.numeroSerie && rep.defibSnapshot.numeroSerie.trim() ? (
                                     <div 
                                       style={{ 
@@ -10440,7 +10447,7 @@ export default function App() {
                                 </td>
 
                                  {/* Identifiant */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {rep.defibIdentifiant && rep.defibIdentifiant.trim() ? (
                                     <div 
                                       style={{ 
@@ -10461,7 +10468,7 @@ export default function App() {
                                 </td>
 
                                 {/* Technicien */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {rep.techName && rep.techName.trim() ? (
                                     <div className="font-medium text-[#000000] whitespace-nowrap" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {rep.techName}
@@ -10470,7 +10477,7 @@ export default function App() {
                                 </td>
 
                                 {/* Réf. Intervention */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {rep.interventionReference && rep.interventionReference.trim() ? (
                                     <div 
                                       style={{ 
@@ -10491,7 +10498,7 @@ export default function App() {
                                 </td>
 
                                 {/* Origine. */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {(() => {
                                     const raw = (rep.origin || `${rep.tourDate || ''} ${rep.tourName || ''}`).trim();
                                     if (!raw) return '—';
@@ -10500,7 +10507,7 @@ export default function App() {
                                 </td>
 
                                 {/* Planifié/Effectué. */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {(() => {
                                     let matchMission: any = null;
                                     let matchTour: any = null;
@@ -10596,7 +10603,7 @@ export default function App() {
                                 </td>
 
                                 {/* Situation. */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {(() => {
                                     const sit = rep.missionStatus || (isUpcoming ? 'Brouillon' : 'Effectué');
                                     const dotColor = 
@@ -11211,7 +11218,7 @@ export default function App() {
 
             const thStyle: React.CSSProperties = {
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              fontWeight: 400,
+              fontWeight: 100,
               letterSpacing: 'normal',
               textTransform: 'none',
               color: '#000000',
@@ -11222,7 +11229,7 @@ export default function App() {
               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
               fontSize: '16px',
               color: '#000000',
-              fontWeight: 400,
+              fontWeight: 100,
             };
 
             const tenantCommercialDocs = commercialDocs.filter((doc) => {
@@ -11444,7 +11451,7 @@ export default function App() {
                         style={{
                           color: pennylaneAlertStyle === 'error' ? '#ef4444' : '#10b981',
                           fontSize: '18px',
-                          fontWeight: 400,
+                          fontWeight: 100,
                           textAlign: 'left',
                           marginTop: '16px',
                           marginBottom: '16px',
@@ -11486,7 +11493,7 @@ export default function App() {
                               borderRadius: '1000px',
                               padding: '10px 20px',
                               fontSize: '15px',
-                              fontWeight: 400,
+                              fontWeight: 100,
                               cursor: 'pointer',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                               backgroundColor: docTypeFilter === filterOpt ? '#fa53d5' : '#ffffff',
@@ -11548,32 +11555,32 @@ export default function App() {
                                     }}
                                   >
                                     {/* Référence */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.ref}
                                     </td>
 
                                     {/* Client */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {clientDisplay}
                                     </td>
 
                                     {/* Membre attribué. */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.assignedMemberName || ''}
                                     </td>
 
                                     {/* Objet ou commentaire */}
-                                    <td className="px-4 py-5 max-w-sm truncate" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 max-w-sm truncate" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.commentaire || '-'}
                                     </td>
 
                                     {/* Total HT */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.totalHt.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
                                     </td>
 
                                     {/* Date */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.dateStr}
                                     </td>
 
@@ -11589,7 +11596,7 @@ export default function App() {
                                           border: '1px solid rgb(231, 231, 231)',
                                           color: '#000000',
                                           fontSize: '15px',
-                                          fontWeight: 400,
+                                          fontWeight: 100,
                                           padding: '6px 18px',
                                           whiteSpace: 'nowrap',
                                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
@@ -11600,7 +11607,7 @@ export default function App() {
                                     </td>
 
                                     {/* Réf. Bon Comm. */}
-                                    <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.hasBonCommande ? (doc.bonCommandeReference || '') : ''}
                                     </td>
 

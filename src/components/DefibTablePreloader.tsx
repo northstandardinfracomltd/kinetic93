@@ -18,12 +18,17 @@ export const DefibTablePreloader: React.FC<DefibTablePreloaderProps> = ({
   variant = 'inline',
   className = ''
 }) => {
-  const formattedCurrent = current > 0 ? current.toLocaleString('en-US') : '1';
-  const formattedTotal = total > 0 ? total.toLocaleString('en-US') : '18,000';
   const computedPercent = percent !== undefined 
     ? Math.min(100, Math.max(0, Math.round(percent)))
-    : Math.min(100, Math.max(4, Math.round((current / (total || 18000)) * 100)));
+    : (total > 0 ? Math.min(100, Math.max(4, Math.round((current / total) * 100))) : 100);
 
+  // Once 100% is reached or all items are fully loaded, automatically hide the preloader
+  if (computedPercent >= 100 || (total > 0 && current >= total && current > 1)) {
+    return null;
+  }
+
+  const formattedCurrent = current > 0 ? current.toLocaleString('en-US') : '1';
+  const formattedTotal = total > 0 ? total.toLocaleString('en-US') : '18,000';
   const displayMessage = message || `Chargement ${formattedCurrent}/${formattedTotal}, Veuillez patienter.`;
 
   if (variant === 'banner') {

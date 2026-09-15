@@ -524,7 +524,15 @@ export async function fetchCollectionFromFirestore<T>(
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
 
   if (collectionName === 'defibrillateurs') {
-    onProgress?.(1, 18000, 'Chargement 1/18,000, Veuillez patienter.');
+    let initialTotal = 18207;
+    for (const ck of candidateKeys) {
+      const cachedVal = getFromLocalCache<any>(ck);
+      if (Array.isArray(cachedVal) && cachedVal.length > 0) {
+        initialTotal = cachedVal.length;
+        break;
+      }
+    }
+    onProgress?.(1, initialTotal, `Chargement 1/${initialTotal.toLocaleString('en-US')}, Veuillez patienter.`);
   }
 
   // If completely offline in browser, immediately check cached versions (aggregate arrays)
@@ -568,6 +576,7 @@ export async function fetchCollectionFromFirestore<T>(
           const payload = serverSnap.data();
           let isChunked = payload._chunked && typeof payload.chunksCount === 'number';
           let chunksCount = payload.chunksCount || 0;
+          let totalItemsMeta: number | null = typeof payload.totalItems === 'number' && payload.totalItems > 0 ? payload.totalItems : null;
 
           if (!isChunked) {
             try {
@@ -585,21 +594,28 @@ export async function fetchCollectionFromFirestore<T>(
 
           if (isChunked) {
             const chunkPromises = [];
-            const estimatedTotal = chunksCount ? chunksCount * 1000 : 18000;
+            const effectiveChunks = chunksCount || 30;
             let loadedCount = 0;
-            for (let i = 0; i < (chunksCount || 30); i++) {
+            let completedChunks = 0;
+
+            for (let i = 0; i < effectiveChunks; i++) {
               const chunkRef = doc(db, 'appData', `${key}_chunk_${i}`);
               chunkPromises.push(
                 Promise.race([
                   getDoc(chunkRef).then((snap) => {
+                    completedChunks++;
                     if (snap && snap.exists && snap.exists()) {
                       const snapData = snap.data();
                       if (Array.isArray(snapData.value)) {
                         loadedCount += snapData.value.length;
+                        // Determine the best accurate total: metadata totalItems if present, or dynamic estimate based on chunks loaded
+                        let currentTotal = totalItemsMeta || Math.max(loadedCount, Math.round((loadedCount / completedChunks) * effectiveChunks));
+                        if (!currentTotal || currentTotal < loadedCount) currentTotal = loadedCount;
+                        
                         onProgress?.(
                           loadedCount,
-                          Math.max(loadedCount, estimatedTotal),
-                          `Chargement ${loadedCount.toLocaleString('en-US')}/${Math.max(loadedCount, estimatedTotal).toLocaleString('en-US')}, Veuillez patienter.`
+                          currentTotal,
+                          `Chargement ${loadedCount.toLocaleString('en-US')}/${currentTotal.toLocaleString('en-US')}, Veuillez patienter.`
                         );
                       }
                     }
@@ -619,6 +635,13 @@ export async function fetchCollectionFromFirestore<T>(
                   combined.push(...data.value);
                 }
               }
+            }
+            if (combined.length > 0) {
+              onProgress?.(
+                combined.length,
+                combined.length,
+                `Chargement ${combined.length.toLocaleString('en-US')}/${combined.length.toLocaleString('en-US')}, Terminé.`
+              );
             }
             return { type: 'array', items: combined, key };
           } else if (payload.value !== undefined) {

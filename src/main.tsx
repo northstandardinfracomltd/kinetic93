@@ -3,6 +3,17 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
+// Browser classification for platform-specific typography rendering
+if (typeof navigator !== 'undefined' && typeof document !== 'undefined') {
+  const ua = navigator.userAgent || '';
+  const isEdge = /Edg\//i.test(ua) || /Edge\//i.test(ua);
+  if (isEdge) {
+    document.documentElement.classList.add('is-edge');
+  } else {
+    document.documentElement.classList.add('is-chrome');
+  }
+}
+
 // Silence benign Vite WebSocket and HMR errors/rejections in development environment
 if (typeof window !== 'undefined') {
   if ((import.meta as any).env?.DEV) {

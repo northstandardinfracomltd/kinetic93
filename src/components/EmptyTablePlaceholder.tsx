@@ -28,13 +28,13 @@ export const EmptyTablePlaceholder: React.FC<EmptyTablePlaceholderProps> = ({
 
   return (
     <div className={className}>
-      <p style={{ color: '#000000', fontSize: '16px', fontWeight: 400 }}>{message}</p>
+      <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>{message}</p>
       <p
         style={{
           color: '#6b7280',
           fontSize: '10px',
           marginTop: '6px',
-          fontWeight: 400,
+          fontWeight: 100,
           letterSpacing: '0.01em'
         }}
       >

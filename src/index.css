@@ -47,9 +47,17 @@
 
 html, body {
   font-family: var(--font-sans);
+}
+
+/* Microsoft Edge Windows DirectWrite rendering adjustments (does not affect Chrome) */
+html.is-edge body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+}
+
+html.is-edge [style*="font-weight: 100"],
+html.is-edge [style*="font-weight:100"] {
+  font-weight: 400 !important;
 }
 
 ::selection {

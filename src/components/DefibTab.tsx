@@ -447,7 +447,7 @@ export default function DefibTab({
     borderRadius: '13px',
     padding: '9px 19px',
     fontSize: '18px',
-    fontWeight: 400,
+    fontWeight: 100,
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -528,7 +528,7 @@ export default function DefibTab({
 
   const thStyle: React.CSSProperties = {
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    fontWeight: 400,
+    fontWeight: 100,
     letterSpacing: 'normal',
     textTransform: 'none',
     color: '#000000',
@@ -2707,7 +2707,7 @@ export default function DefibTab({
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
-                fontWeight: 400,
+                fontWeight: 100,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 backgroundColor: sortFilter === 'recent' ? '#fe4eba' : '#ffffff',
@@ -2728,7 +2728,7 @@ export default function DefibTab({
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
-                fontWeight: 400,
+                fontWeight: 100,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 backgroundColor: sortFilter === 'closest_maintenance' ? '#fe4eba' : '#ffffff',
@@ -2750,7 +2750,7 @@ export default function DefibTab({
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
-                fontWeight: 400,
+                fontWeight: 100,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 backgroundColor: sortFilter === 'postal_code_asc' ? '#fe4eba' : '#ffffff',
@@ -2772,7 +2772,7 @@ export default function DefibTab({
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
-                fontWeight: 400,
+                fontWeight: 100,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 backgroundColor: sortFilter === 'postal_code_desc' ? '#fe4eba' : '#ffffff',
@@ -2799,7 +2799,7 @@ export default function DefibTab({
               style={{
                 fontSize: '9px',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                fontWeight: 400,
+                fontWeight: 100,
                 cursor: 'pointer',
                 background: 'transparent',
                 border: 'none',
@@ -2997,7 +2997,7 @@ export default function DefibTab({
                       </td>
 
                       {/* Identifiant */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400 }}>
+                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <div 
                             onClick={(e) => {
@@ -3075,7 +3075,7 @@ export default function DefibTab({
                       </td>
 
                       {/* Série */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400 }}>
+                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                         <div>{df.numeroSerie}</div>
                         {df.numeroAtlasante ? (
                           <div className="text-[10px] text-slate-400 font-mono mt-0.5" title="Numéro Atlasanté">
@@ -3085,12 +3085,12 @@ export default function DefibTab({
                       </td>
 
                       {/* Client */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400 }} title={linkedClient?.denomination}>
+                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={linkedClient?.denomination}>
                         {linkedClient?.denomination || ''}
                       </td>
 
                       {/* Nom du site */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400 }} title={df.nomSite}>
+                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={df.nomSite}>
                         <div>{df.nomSite || ''}</div>
                         {df.categorieEtablissement ? (
                           <div className="text-[10px] text-slate-400 font-mono mt-0.5" title="Catégorie d'établissement">
@@ -3116,7 +3116,7 @@ export default function DefibTab({
                               border: '1px solid rgb(231, 231, 231)',
                               color: '#000000',
                               fontSize: '16px',
-                              fontWeight: 400,
+                              fontWeight: 100,
                               padding: '4px 12px',
                               whiteSpace: 'nowrap',
                             }}>
@@ -3131,32 +3131,32 @@ export default function DefibTab({
                       </td>
 
                       {/* Localisation (ville / cp) */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400 }}>
+                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                         {df.ville && df.cp ? `${df.ville}, ${df.cp}` : (df.ville || df.cp || '-')}
                       </td>
 
                       {/* Fin Garantie */}
-                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 400, color: getDateColor(df.finGarantie), backgroundColor: 'transparent' }}>
+                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.finGarantie), backgroundColor: 'transparent' }}>
                         {formatDateToFR(df.finGarantie) || '-'}
                       </td>
 
                       {/* Prochaine Maintenance */}
-                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 400, color: getDateColor(prochaineMaint), backgroundColor: 'transparent' }}>
+                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(prochaineMaint), backgroundColor: 'transparent' }}>
                         {formatDateToFR(prochaineMaint) || '-'}
                       </td>
 
                       {/* Electrode Adult Expiry */}
-                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 400, color: getDateColor(df.peremptionElectrodeA), backgroundColor: 'transparent' }}>
+                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionElectrodeA), backgroundColor: 'transparent' }}>
                         {formatDateToFR(df.peremptionElectrodeA) || '-'}
                       </td>
 
                       {/* Electrode Pediatric Expiry */}
-                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 400, color: getDateColor(df.peremptionElectrodeP), backgroundColor: 'transparent' }}>
+                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionElectrodeP), backgroundColor: 'transparent' }}>
                         {formatDateToFR(df.peremptionElectrodeP) || '-'}
                       </td>
 
                       {/* Battery Expiry */}
-                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 400, color: getDateColor(df.peremptionBatterie), backgroundColor: 'transparent' }}>
+                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionBatterie), backgroundColor: 'transparent' }}>
                         {formatDateToFR(df.peremptionBatterie) || '-'}
                       </td>
 
@@ -3198,7 +3198,7 @@ export default function DefibTab({
                                     border: '1px solid rgb(231, 231, 231)',
                                     color: '#000000',
                                     fontSize: '16px',
-                                    fontWeight: 400,
+                                    fontWeight: 100,
                                     padding: '4px 12px',
                                     whiteSpace: 'nowrap',
                                     width: 'fit-content'
@@ -3216,7 +3216,7 @@ export default function DefibTab({
                                       backgroundColor: '#dc2626',
                                       color: '#ffffff',
                                       fontSize: '16px',
-                                      fontWeight: 400,
+                                      fontWeight: 100,
                                       padding: '6px 14px',
                                       whiteSpace: 'nowrap',
                                       width: 'fit-content',
@@ -3270,7 +3270,7 @@ export default function DefibTab({
         <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
           {isDefibLoading && filteredDefibs.length <= 1 ? (
             <span className="text-slate-500 text-sm font-medium">
-              {defibLoadingProgress?.message || 'Chargement 1/18,000, Veuillez patienter.'}
+              {defibLoadingProgress?.message || 'Chargement en cours, Veuillez patienter.'}
             </span>
           ) : (
             `${t('Total défibrillateurs (Tous)')} : ${defibrillateurs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
@@ -3564,7 +3564,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 400,
+                          fontWeight: 100,
                           textTransform: 'none',
                         }}
                       >
@@ -3785,7 +3785,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 400,
+                          fontWeight: 100,
                           textTransform: 'none',
                         }}
                       >
@@ -3988,7 +3988,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 400,
+                          fontWeight: 100,
                           textTransform: 'none',
                         }}
                       >
@@ -4095,7 +4095,7 @@ export default function DefibTab({
                             backgroundColor: 'oklch(0.44 0.16 324.65)',
                             borderRadius: '1000px',
                             cursor: 'default',
-                            fontWeight: 400,
+                            fontWeight: 100,
                             textTransform: 'none',
                           }}
                         >
@@ -4328,7 +4328,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 400,
+                          fontWeight: 100,
                           textTransform: 'none',
                         }}
                       >
@@ -4676,7 +4676,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 400,
+                          fontWeight: 100,
                           textTransform: 'none',
                         }}
                       >
@@ -4767,7 +4767,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 400,
+                          fontWeight: 100,
                           textTransform: 'none',
                         }}
                       >
@@ -5067,7 +5067,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 400,
+                          fontWeight: 100,
                           textTransform: 'none',
                         }}
                       >
@@ -5367,7 +5367,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 400,
+                          fontWeight: 100,
                           textTransform: 'none',
                         }}
                       >
@@ -5623,7 +5623,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 400,
+                          fontWeight: 100,
                           textTransform: 'none',
                         }}
                       >
@@ -6275,7 +6275,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
                     </button>
 
                     <button
@@ -6293,7 +6293,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
                     </button>
                   </div>
                 )}
@@ -6338,7 +6338,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
                     </button>
 
                     <button
@@ -6356,7 +6356,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
                     </button>
                   </div>
                 )}
@@ -6401,7 +6401,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
                     </button>
 
                     <button
@@ -6419,7 +6419,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
                     </button>
                   </div>
                 )}
@@ -6464,7 +6464,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
                     </button>
 
                     <button
@@ -6482,7 +6482,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
                     </button>
                   </div>
                 )}
@@ -6714,7 +6714,7 @@ export default function DefibTab({
 
             {/* Filter 3: Action Requise 3-6 Mois */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 400 }}>Action requise 3 à 6 mois.</span>
+              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 100 }}>Action requise 3 à 6 mois.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -6732,7 +6732,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -6751,14 +6751,14 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
                 </button>
               </div>
             </div>
 
             {/* Filter 4: Action Requise 3 Mois */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 400 }}>Action requise 3 mois.</span>
+              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 100 }}>Action requise 3 mois.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -6776,7 +6776,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -6795,14 +6795,14 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
                 </button>
               </div>
             </div>
 
             {/* Filter 5: Action Requise Expirée */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 400 }}>Action requise expirée.</span>
+              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 100 }}>Action requise expirée.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -6820,7 +6820,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -6839,14 +6839,14 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
                 </button>
               </div>
             </div>
 
             {/* Filter 6: Rejeté(s) en intervention */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 400 }}>Rejeté(s) en intervention.</span>
+              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 100 }}>Rejeté(s) en intervention.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -6864,7 +6864,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -6883,7 +6883,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
                 </button>
               </div>
             </div>

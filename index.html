@@ -12,6 +12,16 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <script>
+      // Browser detection for Edge vs Chrome
+      try {
+        var ua = navigator.userAgent || '';
+        if (/Edg\//i.test(ua) || /Edge\//i.test(ua)) {
+          document.documentElement.classList.add('is-edge');
+        } else {
+          document.documentElement.classList.add('is-chrome');
+        }
+      } catch(e) {}
+
       // Auto-modify login slug randomly on each access: /y26m8v105DRSHdatacentersession<3 chiffres><3 lettres>
       (function() {
         try {
