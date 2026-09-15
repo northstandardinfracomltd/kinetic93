@@ -672,14 +672,18 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
   if (typeof fetch !== 'undefined') {
     try {
       const resp = await fetch(`/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(activeTenantId)}`, {
-        signal: AbortSignal.timeout(20000)
+        signal: AbortSignal.timeout(60000)
       });
       if (resp.ok) {
         const json = await resp.json();
         if (json && json.value !== undefined) {
           const val = filterCollectionForTenant(json.value as T, collectionName, activeTenantId);
+          const primaryKey = candidateKeys[0] || `${collectionName}_${activeTenantId}`;
+          // Persist to local cache and IndexedDB across all browsers (Chrome, Edge, Firefox, Safari)
+          idbSet(primaryKey, val);
           for (const ck of candidateKeys) {
             saveToLocalCache(ck, val);
+            idbSet(ck, val);
           }
           return val;
         }
@@ -689,42 +693,35 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string, te
     }
   }
 
-  // 3. Tertiary Strategy: Local storage cache across candidate keys (aggregate arrays)
-  const localItems: any[] = [];
-  let localObj: any = null;
+  // 3. Tertiary Strategy: Local storage and IndexedDB cache
+  // Check primary canonical key first to avoid resurrecting deleted items from legacy aliases
+  const primaryKey = candidateKeys[0] || `${collectionName}_${activeTenantId}`;
+  const primaryVal = getFromLocalCache<any>(primaryKey);
+  if (primaryVal !== null && primaryVal !== undefined) {
+    return filterCollectionForTenant(primaryVal as T, collectionName, activeTenantId);
+  }
+  const primaryIdb = await idbGet<any>(primaryKey);
+  if (primaryIdb !== null && primaryIdb !== undefined) {
+    return filterCollectionForTenant(primaryIdb as T, collectionName, activeTenantId);
+  }
+
+  // Fallback to alias keys only if primary key has no data at all
   for (const ck of candidateKeys) {
+    if (ck === primaryKey) continue;
     const localVal = getFromLocalCache<any>(ck);
-    if (localVal !== null) {
-      if (Array.isArray(localVal)) {
-        localItems.push(...localVal);
-      } else if (typeof localVal === 'object' && !localObj) {
-        localObj = localVal;
+    if (localVal !== null && localVal !== undefined) {
+      return filterCollectionForTenant(localVal as T, collectionName, activeTenantId);
+    }
+  }
+
+  for (const ck of candidateKeys) {
+    if (ck === primaryKey) continue;
+    try {
+      const idbVal = await idbGet<any>(ck);
+      if (idbVal !== null && idbVal !== undefined) {
+        return filterCollectionForTenant(idbVal as T, collectionName, activeTenantId);
       }
-    }
-  }
-
-  // If localItems is empty or has 0 items, check IndexedDB fallback!
-  if (localItems.length === 0 && !localObj) {
-    for (const ck of candidateKeys) {
-      try {
-        const idbVal = await idbGet<any>(ck);
-        if (idbVal !== null) {
-          if (Array.isArray(idbVal) && idbVal.length > 0) {
-            localItems.push(...idbVal);
-          } else if (typeof idbVal === 'object' && !localObj) {
-            localObj = idbVal;
-          }
-        }
-      } catch (_) {}
-    }
-  }
-
-  if (localItems.length > 0) {
-    const merged = mergeCollectionItems(collectionName, localItems);
-    return filterCollectionForTenant(merged as unknown as T, collectionName, activeTenantId);
-  }
-  if (localObj) {
-    return filterCollectionForTenant(localObj as T, collectionName, activeTenantId);
+    } catch (_) {}
   }
 
   return null;
@@ -778,18 +775,6 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
   const key = getCollectionKey(collectionName, activeTenantId);
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
 
-  // CRITICAL PROTECTION: Never overwrite a populated collection with an empty array []
-  // on startup, network lag, or environment transition!
-  if (Array.isArray(value) && value.length === 0 && activeTenantId && activeTenantId !== 'demo') {
-    for (const ck of candidateKeys) {
-      const cached = getFromLocalCache<any[]>(ck);
-      if (Array.isArray(cached) && cached.length > 0) {
-        console.warn(`[Protection] Blocked attempt to overwrite populated collection ${ck} (${cached.length} items) with empty array [].`);
-        return;
-      }
-    }
-  }
-
   // Guard against accidental blank placeholder overwrite of companyInfo
   if ((collectionName === 'companyInfo' || collectionName === 'company_info') && value && typeof value === 'object' && !Array.isArray(value)) {
     const incoming = value as any;
@@ -841,18 +826,39 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
     console.warn(`[Cache] Error writing to local/indexed cache for ${key}:`, cacheErr);
   }
 
-  // Synchronous sync to server so REST API /v1 has instant access
+  // Synchronous sync to server with chunking support for massive collections
   try {
     if (typeof fetch !== 'undefined') {
-      await fetch('/api/sync-collection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          collectionName,
-          tenantId: activeTenantId,
-          value: finalCleanValue
-        })
-      });
+      if (Array.isArray(finalCleanValue) && finalCleanValue.length > 1000) {
+        const CHUNK_SIZE = 1500;
+        const items = finalCleanValue;
+        const totalChunks = Math.ceil(items.length / CHUNK_SIZE);
+        for (let i = 0; i < totalChunks; i++) {
+          const chunk = items.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+          await fetch('/api/sync-collection-chunk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              collectionName,
+              tenantId: activeTenantId,
+              chunkIndex: i,
+              totalChunks,
+              chunkItems: chunk,
+              totalCount: items.length
+            })
+          });
+        }
+      } else {
+        await fetch('/api/sync-collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            collectionName,
+            tenantId: activeTenantId,
+            value: finalCleanValue
+          })
+        });
+      }
     }
   } catch (syncErr) {
     console.warn(`[Sync Server Relay] Error syncing collection ${collectionName} to server:`, syncErr);

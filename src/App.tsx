@@ -3585,15 +3585,24 @@ export default function App() {
       setLoadedTenantIdState('');
       const activeRunTenantId = tenantId;
 
-      // Multi-candidate resilient local storage reader (checks all alias & prefix combinations)
+      // Multi-candidate resilient local storage reader (checks primary key first, avoiding resurrection of deleted records)
       const getLocalTenantValue = <T,>(suffix: string, fallback: T): T => {
+        // 1. Primary key check
+        const primaryRaw = localStorage.getItem(`defib_${activeRunTenantId}_${suffix}`) || localStorage.getItem(`fs_cache_${activeRunTenantId}_${suffix}`);
+        if (primaryRaw) {
+          try {
+            const parsed = JSON.parse(primaryRaw);
+            if (parsed !== undefined && parsed !== null) {
+              return parsed as T;
+            }
+          } catch (_) {}
+        }
+
+        // 2. Candidate keys fallback only if primary is absent
         const isDNum = /^d\d+$/i.test(activeRunTenantId);
         const isNum = /^\d+$/.test(activeRunTenantId);
         const num = (isDNum || isNum) ? activeRunTenantId.replace(/^d/i, '') : '';
-        const candidateKeys = [
-          `defib_${activeRunTenantId}_${suffix}`,
-          `fs_cache_${activeRunTenantId}_${suffix}`
-        ];
+        const candidateKeys: string[] = [];
         if (num) {
           candidateKeys.push(
             `defib_D${num}_${suffix}`,
@@ -3621,29 +3630,17 @@ export default function App() {
           }
         }
         const uniqueCandidateKeys = Array.from(new Set(candidateKeys.filter(Boolean)));
-        const aggregatedLocal: any[] = [];
-        let singleObj: any = null;
 
         for (const k of uniqueCandidateKeys) {
           const raw = localStorage.getItem(k);
           if (raw) {
             try {
               const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed)) {
-                aggregatedLocal.push(...parsed);
-              } else if (parsed && typeof parsed === 'object' && !singleObj) {
-                singleObj = parsed;
+              if (parsed !== undefined && parsed !== null) {
+                return parsed as T;
               }
             } catch (_) {}
           }
-        }
-
-        if (aggregatedLocal.length > 0) {
-          const merged = mergeCollectionItems(suffix, aggregatedLocal);
-          return merged as unknown as T;
-        }
-        if (singleObj) {
-          return singleObj as T;
         }
 
         return fallback;
@@ -3814,12 +3811,12 @@ export default function App() {
         // Check IndexedDB if localStorage was empty or couldn't store large collections
         try {
           const idbDefibs = await idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`);
-          if (Array.isArray(idbDefibs) && idbDefibs.length > baseDefibrillateurs.length) {
+          if (Array.isArray(idbDefibs) && (idbDefibs.length > 0 || (baseDefibrillateurs.length === 1 && baseDefibrillateurs[0]?.identifiant?.includes('DAE-')))) {
             baseDefibrillateurs = idbDefibs;
             setDefibrillateurs(idbDefibs);
           }
           const idbClients = await idbGet<Client[]>(`defib_${activeRunTenantId}_clients`);
-          if (Array.isArray(idbClients) && idbClients.length > sanitizedOffline.length) {
+          if (Array.isArray(idbClients) && idbClients.length > 0) {
             sanitizedOffline = idbClients;
             setClients(idbClients);
           }
@@ -4232,6 +4229,10 @@ export default function App() {
       if (loadedDataRef.current.defibrillateurs === str) return;
       saveCollectionToFirestore('defibrillateurs', defibrillateurs, tenantId);
       safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, str);
+      try {
+        idbSet(`defib_${tenantId}_defibrillateurs`, defibrillateurs);
+        idbSet(`fs_cache_${tenantId}_defibrillateurs`, defibrillateurs);
+      } catch (_) {}
       loadedDataRef.current.defibrillateurs = str;
     }
   }, [defibrillateurs, isFirebaseLoaded, tenantId, loadedTenantIdState]);
@@ -5547,9 +5548,25 @@ export default function App() {
     setDefibrillateurs(newDefibs);
     const str = JSON.stringify(newDefibs);
     safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, str);
+    safeSetLocalStorage(`fs_cache_${tenantId}_defibrillateurs`, str);
     try {
       await idbSet(`defib_${tenantId}_defibrillateurs`, newDefibs);
+      await idbSet(`${tenantId}_defibrillateurs`, newDefibs);
     } catch (_) {}
+
+    const isDNum = /^d\d+$/i.test(tenantId);
+    if (isDNum) {
+      const numOnly = tenantId.replace(/^d/i, '');
+      safeSetLocalStorage(`defib_D${numOnly}_defibrillateurs`, str);
+      safeSetLocalStorage(`fs_cache_D${numOnly}_defibrillateurs`, str);
+      try {
+        localStorage.removeItem(`defib_d${numOnly}_defibrillateurs`);
+        localStorage.removeItem(`defib_${numOnly}_defibrillateurs`);
+        localStorage.removeItem(`fs_cache_d${numOnly}_defibrillateurs`);
+        localStorage.removeItem(`fs_cache_${numOnly}_defibrillateurs`);
+      } catch (_) {}
+    }
+
     loadedDataRef.current.defibrillateurs = str;
     if (tenantId) {
       await saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId);
@@ -9887,7 +9904,7 @@ export default function App() {
 
             const thStyle: React.CSSProperties = {
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              fontWeight: 100,
+              fontWeight: 400,
               letterSpacing: 'normal',
               textTransform: 'none',
               color: '#000000',
@@ -10325,12 +10342,12 @@ export default function App() {
                                 </td>
 
                                 {/* Date / Horodatage */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {rep.date}
                                 </td>
 
                                 {/* Catégorie matériel */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   <div 
                                     style={{ 
                                       display: 'inline-flex', 
@@ -10349,7 +10366,7 @@ export default function App() {
                                 </td>
 
                                 {/* Série */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {rep.defibSnapshot?.numeroSerie && rep.defibSnapshot.numeroSerie.trim() ? (
                                     <div 
                                       style={{ 
@@ -10370,7 +10387,7 @@ export default function App() {
                                 </td>
 
                                  {/* Identifiant */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {rep.defibIdentifiant && rep.defibIdentifiant.trim() ? (
                                     <div 
                                       style={{ 
@@ -10391,7 +10408,7 @@ export default function App() {
                                 </td>
 
                                 {/* Technicien */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {rep.techName && rep.techName.trim() ? (
                                     <div className="font-medium text-[#000000] whitespace-nowrap" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {rep.techName}
@@ -10400,7 +10417,7 @@ export default function App() {
                                 </td>
 
                                 {/* Réf. Intervention */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {rep.interventionReference && rep.interventionReference.trim() ? (
                                     <div 
                                       style={{ 
@@ -10421,7 +10438,7 @@ export default function App() {
                                 </td>
 
                                 {/* Origine. */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {(() => {
                                     const raw = (rep.origin || `${rep.tourDate || ''} ${rep.tourName || ''}`).trim();
                                     if (!raw) return '—';
@@ -10430,7 +10447,7 @@ export default function App() {
                                 </td>
 
                                 {/* Planifié/Effectué. */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {(() => {
                                     let matchMission: any = null;
                                     let matchTour: any = null;
@@ -10526,7 +10543,7 @@ export default function App() {
                                 </td>
 
                                 {/* Situation. */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   {(() => {
                                     const sit = rep.missionStatus || (isUpcoming ? 'Brouillon' : 'Effectué');
                                     const dotColor = 
@@ -11141,7 +11158,7 @@ export default function App() {
 
             const thStyle: React.CSSProperties = {
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              fontWeight: 100,
+              fontWeight: 400,
               letterSpacing: 'normal',
               textTransform: 'none',
               color: '#000000',
@@ -11152,7 +11169,7 @@ export default function App() {
               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
               fontSize: '16px',
               color: '#000000',
-              fontWeight: 100,
+              fontWeight: 400,
             };
 
             const tenantCommercialDocs = commercialDocs.filter((doc) => {
@@ -11374,7 +11391,7 @@ export default function App() {
                         style={{
                           color: pennylaneAlertStyle === 'error' ? '#ef4444' : '#10b981',
                           fontSize: '18px',
-                          fontWeight: 100,
+                          fontWeight: 400,
                           textAlign: 'left',
                           marginTop: '16px',
                           marginBottom: '16px',
@@ -11416,7 +11433,7 @@ export default function App() {
                               borderRadius: '1000px',
                               padding: '10px 20px',
                               fontSize: '15px',
-                              fontWeight: 100,
+                              fontWeight: 400,
                               cursor: 'pointer',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                               backgroundColor: docTypeFilter === filterOpt ? '#fa53d5' : '#ffffff',
@@ -11478,32 +11495,32 @@ export default function App() {
                                     }}
                                   >
                                     {/* Référence */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.ref}
                                     </td>
 
                                     {/* Client */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {clientDisplay}
                                     </td>
 
                                     {/* Membre attribué. */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.assignedMemberName || ''}
                                     </td>
 
                                     {/* Objet ou commentaire */}
-                                    <td className="px-4 py-5 max-w-sm truncate" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 max-w-sm truncate" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.commentaire || '-'}
                                     </td>
 
                                     {/* Total HT */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.totalHt.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
                                     </td>
 
                                     {/* Date */}
-                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.dateStr}
                                     </td>
 
@@ -11519,7 +11536,7 @@ export default function App() {
                                           border: '1px solid rgb(231, 231, 231)',
                                           color: '#000000',
                                           fontSize: '15px',
-                                          fontWeight: 100,
+                                          fontWeight: 400,
                                           padding: '6px 18px',
                                           whiteSpace: 'nowrap',
                                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
@@ -11530,7 +11547,7 @@ export default function App() {
                                     </td>
 
                                     {/* Réf. Bon Comm. */}
-                                    <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                    <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {doc.hasBonCommande ? (doc.bonCommandeReference || '') : ''}
                                     </td>
 

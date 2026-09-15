@@ -20,14 +20,30 @@ const db = getFirestore(firebaseApp);
 
 const DATA_DIR = path.join(process.cwd(), '.data');
 const STORE_FILE = path.join(DATA_DIR, 'server-store.json');
+const COLLECTIONS_DIR = path.join(DATA_DIR, 'collections');
 
 const serverMemoryStore = new Map<string, any>();
 const serverStoreTimestamps = new Map<string, number>();
+
+// Chunked sync buffers for handling massive collections (18,000+ items)
+interface ChunkBuffer {
+  collectionName: string;
+  tenantId: string;
+  canonicalKey: string;
+  totalChunks: number;
+  totalCount: number;
+  chunks: (any[] | null)[];
+  lastUpdated: number;
+}
+const syncChunkBuffers = new Map<string, ChunkBuffer>();
 
 // Initialize disk store
 try {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(COLLECTIONS_DIR)) {
+    fs.mkdirSync(COLLECTIONS_DIR, { recursive: true });
   }
   if (fs.existsSync(STORE_FILE)) {
     const raw = fs.readFileSync(STORE_FILE, 'utf-8');
@@ -39,11 +55,42 @@ try {
       }
     }
   }
+  // Also load any dedicated collection files
+  if (fs.existsSync(COLLECTIONS_DIR)) {
+    const files = fs.readdirSync(COLLECTIONS_DIR);
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        const key = file.replace(/\.json$/, '');
+        try {
+          const content = fs.readFileSync(path.join(COLLECTIONS_DIR, file), 'utf-8');
+          const parsed = JSON.parse(content);
+          if (parsed !== undefined && parsed !== null) {
+            serverMemoryStore.set(key, parsed);
+            serverStoreTimestamps.set(key, Date.now());
+          }
+        } catch (colErr) {
+          console.warn(`Failed to read collection file ${file}:`, colErr);
+        }
+      }
+    }
+  }
 } catch (e) {
   console.warn("Failed to load server disk store:", e);
 }
 
 let persistTimeout: NodeJS.Timeout | null = null;
+
+function persistSingleCollectionToDisk(key: string, value: any) {
+  try {
+    if (!fs.existsSync(COLLECTIONS_DIR)) {
+      fs.mkdirSync(COLLECTIONS_DIR, { recursive: true });
+    }
+    const filePath = path.join(COLLECTIONS_DIR, `${key}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(value), 'utf-8');
+  } catch (e) {
+    console.warn(`Failed to persist collection ${key} to disk:`, e);
+  }
+}
 
 function persistServerStoreToDiskNow() {
   if (persistTimeout) {
@@ -58,6 +105,11 @@ function persistServerStoreToDiskNow() {
     for (const [k, v] of serverMemoryStore.entries()) {
       // Skip redundant lowercase or raw numeric aliases to keep disk footprint minimal and avoid string length limits
       if (/^[0-9]+_/.test(k) || /^d[0-9]+_/.test(k)) continue;
+      // Large collections are saved individually in collections/ to avoid overflowing single JSON
+      if (Array.isArray(v) && v.length > 500) {
+        persistSingleCollectionToDisk(k, v);
+        continue;
+      }
       obj[k] = v;
     }
     fs.writeFileSync(STORE_FILE, JSON.stringify(obj), 'utf-8');
@@ -78,6 +130,10 @@ function persistServerStoreToDisk() {
       for (const [k, v] of serverMemoryStore.entries()) {
         // Skip redundant lowercase or raw numeric aliases to keep disk footprint minimal and avoid string length limits
         if (/^[0-9]+_/.test(k) || /^d[0-9]+_/.test(k)) continue;
+        if (Array.isArray(v) && v.length > 500) {
+          persistSingleCollectionToDisk(k, v);
+          continue;
+        }
         obj[k] = v;
       }
       fs.writeFile(STORE_FILE, JSON.stringify(obj), 'utf-8', (err) => {
@@ -237,9 +293,9 @@ async function startServer() {
     next();
   });
 
-  // Use json middleware for API routes
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  // Use json middleware for API routes with high limit to handle large datasets (18,000+ items)
+  app.use(express.json({ limit: '200mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 
   // Endpoint for identifying a defibrillator model using Gemini API
   app.post("/api/gemini/detect-model", async (req, res) => {
@@ -715,13 +771,25 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   const isNum = /^\d+$/.test(activeTenant);
   const numOnly = isDNum || isNum ? activeTenant.replace(/^d/i, '') : '';
 
-  // 1. FAST PATH: Check in-memory store first (TTL: 45 seconds)
-  const lastCached = serverStoreTimestamps.get(canonicalKey) || 0;
-  if (Date.now() - lastCached < 45000 && serverMemoryStore.has(canonicalKey)) {
+  // 1. FAST PATH: Check in-memory store first (authoritative backend store)
+  if (serverMemoryStore.has(canonicalKey)) {
     const memVal = serverMemoryStore.get(canonicalKey);
     if (memVal !== undefined && memVal !== null) {
       return sanitizeForTenant(memVal);
     }
+  }
+
+  // 1b. Dedicated collection file on disk
+  const colFile = path.join(COLLECTIONS_DIR, `${canonicalKey}.json`);
+  if (fs.existsSync(colFile)) {
+    try {
+      const diskVal = JSON.parse(fs.readFileSync(colFile, 'utf-8'));
+      if (diskVal !== undefined && diskVal !== null) {
+        serverMemoryStore.set(canonicalKey, diskVal);
+        serverStoreTimestamps.set(canonicalKey, Date.now());
+        return sanitizeForTenant(diskVal);
+      }
+    } catch (_) {}
   }
 
   // 2. Helper to load a single candidate key from Firestore safely
@@ -842,14 +910,13 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     }
   }
 
-  // 5. Fallback: check in-memory store for any candidate key
+  // 5. Fallback: check in-memory store for candidate keys
   for (const k of allCandidateKeys) {
     if (serverMemoryStore.has(k)) {
       const val = serverMemoryStore.get(k);
       if (val !== undefined && val !== null) {
         if (Array.isArray(val)) {
-          const sanitized = sanitizeForTenant(val);
-          if (sanitized.length > 0) return sanitized;
+          return sanitizeForTenant(val);
         } else {
           return val;
         }
@@ -857,8 +924,13 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     }
   }
 
-  // Auto-healing & provisioning: ensure every active customer tenant has its operational defibrillator ready
+  // Auto-healing & provisioning: ONLY for brand new tenants that have never been created or accessed
   if ((colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices') && activeTenant !== 'demo') {
+    // If the tenant collection was already initialized, saved, or explicitly emptied, respect it!
+    if (serverMemoryStore.has(canonicalKey) || fs.existsSync(path.join(COLLECTIONS_DIR, `${canonicalKey}.json`))) {
+      return [];
+    }
+
     const defaultTenantDefib = {
       id: `df_${activeTenant.toLowerCase()}_1`,
       identifiant: `DAE-${activeTenant.toUpperCase()}-01`,
@@ -1006,71 +1078,23 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         return res.status(400).json({ error: "Paramètres collectionName et tenantId requis." });
       }
 
-      // Security check: Block attempts to wipe collections with empty arrays
-      if (Array.isArray(value) && value.length === 0) {
-        return res.status(403).json({ 
-          error: "Requête sensible bloquée : la synchronisation d'une collection vide est strictement interdite.",
-          code: "EMPTY_SYNC_FORBIDDEN" 
-        });
-      }
-
       const rawTenant = String(tenantId).trim();
       const collectionKey = rawTenant === 'demo' ? collectionName : `${rawTenant}_${collectionName}`;
       
       if (value !== undefined && value !== null) {
-        let finalValueToStore = value;
-        if (Array.isArray(value) && collectionName === 'defibrillateurs') {
-          const currentServerData = serverMemoryStore.get(collectionKey);
-          if (Array.isArray(currentServerData) && currentServerData.length > 0) {
-            const serverLookup = new Map<string, any>();
-            for (const s of currentServerData) {
-              if (s) {
-                if (s.id) serverLookup.set(String(s.id).toLowerCase(), s);
-                if (s.identifiant) serverLookup.set(String(s.identifiant).toLowerCase(), s);
-                if (s.numeroSerie) serverLookup.set(String(s.numeroSerie).toLowerCase(), s);
-              }
-            }
-
-            finalValueToStore = value.map((clientItem: any) => {
-              if (!clientItem) return clientItem;
-              const key = String(clientItem.identifiant || clientItem.id || clientItem.numeroSerie || '').toLowerCase();
-              const serverMatch = serverLookup.get(key);
-              if (!serverMatch) return clientItem;
-
-              // If server item was updated via API or has newer data, preserve server's values
-              if (serverMatch._lastSource === 'api' || serverMatch.updatedAt) {
-                const sTime = serverMatch.updatedAt ? new Date(serverMatch.updatedAt).getTime() : 0;
-                const cTime = clientItem.updatedAt ? new Date(clientItem.updatedAt).getTime() : 0;
-                const serverTakesPrecedence = serverMatch._lastSource === 'api' || sTime >= cTime;
-
-                const merged = { ...clientItem };
-                for (const [k, sVal] of Object.entries(serverMatch)) {
-                  if (sVal !== undefined && sVal !== null && sVal !== '') {
-                    const cVal = clientItem[k];
-                    if (serverTakesPrecedence || cVal === undefined || cVal === null || cVal === '') {
-                      merged[k] = sVal;
-                    }
-                  }
-                }
-                if (serverMatch._lastSource === 'api') {
-                  merged._lastSource = 'api';
-                }
-                return merged;
-              }
-              return clientItem;
-            });
-
-            // When client syncs, client array is source of truth for items in the collection
-          }
-        }
+        const finalValueToStore = value;
 
         serverMemoryStore.set(collectionKey, finalValueToStore);
         serverStoreTimestamps.set(collectionKey, Date.now());
-        // Also map normalized key if D-prefixed
-        if (/^d\d+$/i.test(rawTenant)) {
+        persistSingleCollectionToDisk(collectionKey, finalValueToStore);
+
+        // Also map normalized key if D-prefixed or numeric
+        if (/^d\d+$/i.test(rawTenant) || /^\d+$/.test(rawTenant)) {
           const numOnly = rawTenant.replace(/^d/i, '');
           serverMemoryStore.set(`D${numOnly}_${collectionName}`, finalValueToStore);
           serverStoreTimestamps.set(`D${numOnly}_${collectionName}`, Date.now());
+          persistSingleCollectionToDisk(`D${numOnly}_${collectionName}`, finalValueToStore);
+
           serverMemoryStore.set(`d${numOnly}_${collectionName}`, finalValueToStore);
           serverStoreTimestamps.set(`d${numOnly}_${collectionName}`, Date.now());
           serverMemoryStore.set(`${numOnly}_${collectionName}`, finalValueToStore);
@@ -1119,6 +1143,76 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
     } catch (err: any) {
       console.error("Error in /api/sync-collection:", err);
       return res.status(500).json({ error: err.message || "Erreur interne de synchronisation." });
+    }
+  });
+
+  // Dedicated chunked sync endpoint for massive collections (18,000+ items)
+  app.post("/api/sync-collection-chunk", (req, res) => {
+    try {
+      const { collectionName, tenantId, chunkIndex, totalChunks, chunkItems, totalCount } = req.body;
+      if (!collectionName || !tenantId || typeof chunkIndex !== 'number' || typeof totalChunks !== 'number' || !Array.isArray(chunkItems)) {
+        return res.status(400).json({ error: "Paramètres de chunk invalides." });
+      }
+
+      const rawTenant = String(tenantId).trim();
+      const collectionKey = rawTenant === 'demo' ? collectionName : `${rawTenant}_${collectionName}`;
+      const bufferKey = `${collectionKey}_buffer`;
+
+      let buffer = syncChunkBuffers.get(bufferKey);
+      if (!buffer || buffer.totalChunks !== totalChunks || (Date.now() - buffer.lastUpdated > 180000)) {
+        buffer = {
+          collectionName,
+          tenantId: rawTenant,
+          canonicalKey: collectionKey,
+          totalChunks,
+          totalCount: totalCount || 0,
+          chunks: new Array(totalChunks).fill(null),
+          lastUpdated: Date.now()
+        };
+        syncChunkBuffers.set(bufferKey, buffer);
+      }
+
+      buffer.chunks[chunkIndex] = chunkItems;
+      buffer.lastUpdated = Date.now();
+
+      // Check if all chunks have been received
+      const receivedCount = buffer.chunks.filter(c => c !== null).length;
+      if (receivedCount === totalChunks) {
+        // Assemble all chunks
+        const completeItems: any[] = [];
+        for (const c of buffer.chunks) {
+          if (Array.isArray(c)) {
+            completeItems.push(...c);
+          }
+        }
+        syncChunkBuffers.delete(bufferKey);
+
+        // Store to memory and disk
+        serverMemoryStore.set(collectionKey, completeItems);
+        serverStoreTimestamps.set(collectionKey, Date.now());
+        persistSingleCollectionToDisk(collectionKey, completeItems);
+
+        if (/^d\d+$/i.test(rawTenant) || /^\d+$/.test(rawTenant)) {
+          const numOnly = rawTenant.replace(/^d/i, '');
+          serverMemoryStore.set(`D${numOnly}_${collectionName}`, completeItems);
+          serverStoreTimestamps.set(`D${numOnly}_${collectionName}`, Date.now());
+          persistSingleCollectionToDisk(`D${numOnly}_${collectionName}`, completeItems);
+
+          serverMemoryStore.set(`d${numOnly}_${collectionName}`, completeItems);
+          serverStoreTimestamps.set(`d${numOnly}_${collectionName}`, Date.now());
+          serverMemoryStore.set(`${numOnly}_${collectionName}`, completeItems);
+          serverStoreTimestamps.set(`${numOnly}_${collectionName}`, Date.now());
+        }
+        persistServerStoreToDiskNow();
+
+        console.log(`[Sync Chunk Relay] Successfully assembled all ${totalChunks} chunks for ${collectionKey} (${completeItems.length} items)`);
+        return res.json({ status: "success", complete: true, totalItems: completeItems.length });
+      }
+
+      return res.json({ status: "chunk_received", chunkIndex, totalChunks, receivedCount });
+    } catch (err: any) {
+      console.error("Error in /api/sync-collection-chunk:", err);
+      return res.status(500).json({ error: err.message || "Erreur interne de chunking." });
     }
   });
 

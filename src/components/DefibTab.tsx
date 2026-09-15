@@ -518,13 +518,13 @@ export default function DefibTab({
 
   const thStyle: React.CSSProperties = {
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    fontWeight: 100,
+    fontWeight: 400,
     letterSpacing: 'normal',
     textTransform: 'none',
     color: '#000000',
     cursor: 'default',
     whiteSpace: 'nowrap',
-    position: 'sticky',
+    position: 'relative',
     top: 0,
     backgroundColor: '#ffffff',
     zIndex: 10,
@@ -1390,127 +1390,127 @@ export default function DefibTab({
     }
   };
 
-  // List search & filters computation
+  // Pre-index rejected defibrillators in a Set only when the rejected filter is active
+  const rejectedDefibSet = useMemo(() => {
+    if (!activeFilters.actionRejected) return null;
+    const set = new Set<string>();
+    if (Array.isArray(fsmTours)) {
+      for (const t of fsmTours) {
+        if (Array.isArray(t.missions)) {
+          for (const m of t.missions) {
+            if (m.defibIdentifiant && m.status !== 'Effectué' && m.rejectionReason) {
+              set.add(m.defibIdentifiant);
+            }
+          }
+        }
+      }
+    }
+    return set;
+  }, [fsmTours, activeFilters.actionRejected]);
+
+  // List search & filters computation - highly optimized for datasets of 18,000+ items across all browsers
   const filteredDefibs = useMemo(() => {
+    const searchLower = (search || '').toLowerCase().trim();
+    const needDates = activeFilters.action3To6 || activeFilters.actionUnder3 || activeFilters.actionExpired;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTime = today.getTime();
+
     let result = defibrillateurs.filter(df => {
-      const clientName = clientMap.get(df.clientId)?.denomination || '';
-      const modelName = variableMap.get(df.modeleId)?.nom || '';
-      const searchLower = (search || '').toLowerCase().trim();
-      const isMatchSearch = !searchLower || (
-        (df.identifiant || '').toLowerCase().includes(searchLower) ||
-        (df.numeroSerie || '').toLowerCase().includes(searchLower) ||
-        (df.numeroAtlasante || '').toLowerCase().includes(searchLower) ||
-        (df.versionLogiciel || '').toLowerCase().includes(searchLower) ||
-        (df.ville || '').toLowerCase().includes(searchLower) ||
-        (clientName || '').toLowerCase().includes(searchLower) ||
-        (modelName || '').toLowerCase().includes(searchLower) ||
-        (df.nomPrenomSite || '').toLowerCase().includes(searchLower) ||
-        (df.nomSite || '').toLowerCase().includes(searchLower) ||
-        (df.categorieEtablissement || '').toLowerCase().includes(searchLower) ||
-        (df.commentaire || '').toLowerCase().includes(searchLower) ||
-        (df.commentaireInterne || '').toLowerCase().includes(searchLower) ||
-        (df.commentaireCoffret || '').toLowerCase().includes(searchLower) ||
-        (df.commentaireAdresse || '').toLowerCase().includes(searchLower) ||
-        (df.commentaireElectrodeA || '').toLowerCase().includes(searchLower) ||
-        (df.commentaireElectrodeP || '').toLowerCase().includes(searchLower) ||
-        (df.commentaireBatterie || '').toLowerCase().includes(searchLower) ||
-        (df.commentaireCampagneRappel || '').toLowerCase().includes(searchLower)
-      );
+      // 1. Fast equality checks first (inexpensive)
+      if (activeFilters.region !== 'Tous' && df.region !== activeFilters.region) return false;
+      if (activeFilters.modeleId !== 'Tous' && df.modeleId !== activeFilters.modeleId) return false;
 
-      const isMatchRegion = activeFilters.region === 'Tous' || df.region === activeFilters.region;
-      const isMatchModele = activeFilters.modeleId === 'Tous' || df.modeleId === activeFilters.modeleId;
-
-      // Dates logic
-      const datesToCheck: Date[] = [];
-      const mDate = parseDateHelper(computeProchaineMaintenance(df.derniereMaintenance));
-      if (mDate) datesToCheck.push(mDate);
-      const eADate = parseDateHelper(df.peremptionElectrodeA);
-      if (eADate) datesToCheck.push(eADate);
-      const ePDate = parseDateHelper(df.peremptionElectrodeP);
-      if (ePDate) datesToCheck.push(ePDate);
-      const bDate = parseDateHelper(df.peremptionBatterie);
-      if (bDate) datesToCheck.push(bDate);
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const getDaysDiff = (targetDate: Date) => {
-        const checkDate = new Date(targetDate);
-        checkDate.setHours(0, 0, 0, 0);
-        const diffTime = checkDate.getTime() - today.getTime();
-        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      };
-
-      const hasExpired = datesToCheck.some(d => {
-        const checkDate = new Date(d);
-        checkDate.setHours(0, 0, 0, 0);
-        return checkDate < today;
-      });
-
-      const hasUnder3Months = datesToCheck.some(d => {
-        const dDiff = getDaysDiff(d);
-        return dDiff >= 0 && dDiff < 90;
-      });
-
-      const hasUnder6Months = datesToCheck.some(d => {
-        const dDiff = getDaysDiff(d);
-        return dDiff >= 90 && dDiff <= 180;
-      });
-
-      // 3. Action 3-6 Mois Match
-      const isMatchAction3To6 = !activeFilters.action3To6 || hasUnder6Months;
-
-      // 4. Action 3 Mois Match
-      const isMatchActionUnder3 = !activeFilters.actionUnder3 || hasUnder3Months;
-
-      // 5. Action Expired Match
-      const isMatchActionExpired = !activeFilters.actionExpired || hasExpired;
-
-      // 6. Catégorie Match (Loué, Prêté, Stocké, Archivé, Sous-Traitance)
-      let isMatchCategorie = true;
+      // 2. Catégorie match
       if (activeFilters.categorie !== 'Tous') {
         const cat = activeFilters.categorie;
-        if (cat === 'Loué') isMatchCategorie = df.loue === 'Oui';
-        else if (cat === 'Prêté') isMatchCategorie = df.prete === 'Oui';
-        else if (cat === 'Stocké') isMatchCategorie = df.stocke === 'Oui';
-        else if (cat === 'Archivé') isMatchCategorie = df.archive === 'Oui';
-        else if (cat === 'Sous-Traitance') isMatchCategorie = df.sousTraitance === 'Oui';
+        if (cat === 'Loué' && df.loue !== 'Oui') return false;
+        if (cat === 'Prêté' && df.prete !== 'Oui') return false;
+        if (cat === 'Stocké' && df.stocke !== 'Oui') return false;
+        if (cat === 'Archivé' && df.archive !== 'Oui') return false;
+        if (cat === 'Sous-Traitance' && df.sousTraitance !== 'Oui') return false;
       }
 
-      // 7. Contrat Match
-      const clientObj = clientMap.get(df.clientId);
-      const activeContrat = clientObj ? (clientObj.contrat || 'Non') : (df.contrat || 'Non');
-      const isMatchContrat = activeFilters.contrat === 'Tous' || activeContrat === activeFilters.contrat;
-
-      // 8. Rejeté Match
-      const hasBeenRejected = (fsmTours || []).some((t: any) => 
-        t.missions?.some((m: any) => 
-          m.defibIdentifiant === df.identifiant && m.status !== 'Effectué' && m.rejectionReason
-        )
-      );
-      const isMatchRejected = !activeFilters.actionRejected || hasBeenRejected;
-
-      // 9. Maintenance autorisée (fsmAutorise) toggle filter
-      let isMatchMaintenance = true;
-      const rawFsm = (df.fsmAutorise || "").trim().toLowerCase();
-      // If fsmAutorise is empty or undefined, default to 'oui'
-      const fsmVal = rawFsm === 'non' ? 'non' : 'oui';
-      if (maintenanceFilter === 'oui') {
-        isMatchMaintenance = fsmVal === 'oui';
-      } else if (maintenanceFilter === 'non') {
-        isMatchMaintenance = fsmVal === 'non';
+      // 3. Maintenance autorisée (fsmAutorise) filter
+      if (maintenanceFilter !== 'tous') {
+        const rawFsm = (df.fsmAutorise || "").trim().toLowerCase();
+        const fsmVal = rawFsm === 'non' ? 'non' : 'oui';
+        if (maintenanceFilter === 'oui' && fsmVal !== 'oui') return false;
+        if (maintenanceFilter === 'non' && fsmVal !== 'non') return false;
       }
 
-      return isMatchSearch && 
-             isMatchRegion && 
-             isMatchModele &&
-             isMatchAction3To6 &&
-             isMatchActionUnder3 &&
-             isMatchActionExpired &&
-             isMatchCategorie &&
-             isMatchContrat &&
-             isMatchRejected &&
-             isMatchMaintenance;
+      // 4. Rejeté Match (O(1) Set lookup instead of scanning all tours)
+      if (rejectedDefibSet && !rejectedDefibSet.has(df.identifiant)) return false;
+
+      // 5. Contrat Match
+      if (activeFilters.contrat !== 'Tous') {
+        const clientObj = clientMap.get(df.clientId);
+        const activeContrat = clientObj ? (clientObj.contrat || 'Non') : (df.contrat || 'Non');
+        if (activeContrat !== activeFilters.contrat) return false;
+      }
+
+      // 6. Search query match
+      if (searchLower) {
+        const clientName = clientMap.get(df.clientId)?.denomination || '';
+        const modelName = variableMap.get(df.modeleId)?.nom || '';
+        const isMatchSearch = (
+          (df.identifiant || '').toLowerCase().includes(searchLower) ||
+          (df.numeroSerie || '').toLowerCase().includes(searchLower) ||
+          (df.ville || '').toLowerCase().includes(searchLower) ||
+          (df.nomSite || '').toLowerCase().includes(searchLower) ||
+          (clientName || '').toLowerCase().includes(searchLower) ||
+          (modelName || '').toLowerCase().includes(searchLower) ||
+          (df.numeroAtlasante || '').toLowerCase().includes(searchLower) ||
+          (df.versionLogiciel || '').toLowerCase().includes(searchLower) ||
+          (df.nomPrenomSite || '').toLowerCase().includes(searchLower) ||
+          (df.categorieEtablissement || '').toLowerCase().includes(searchLower) ||
+          (df.commentaire || '').toLowerCase().includes(searchLower) ||
+          (df.commentaireInterne || '').toLowerCase().includes(searchLower) ||
+          (df.commentaireCoffret || '').toLowerCase().includes(searchLower) ||
+          (df.commentaireAdresse || '').toLowerCase().includes(searchLower) ||
+          (df.commentaireElectrodeA || '').toLowerCase().includes(searchLower) ||
+          (df.commentaireElectrodeP || '').toLowerCase().includes(searchLower) ||
+          (df.commentaireBatterie || '').toLowerCase().includes(searchLower) ||
+          (df.commentaireCampagneRappel || '').toLowerCase().includes(searchLower)
+        );
+        if (!isMatchSearch) return false;
+      }
+
+      // 7. Dates logic (only executed if at least one date filter is active)
+      if (needDates) {
+        const timesToCheck: number[] = [];
+        const mDate = parseDateHelper(computeProchaineMaintenance(df.derniereMaintenance));
+        if (mDate) { mDate.setHours(0, 0, 0, 0); timesToCheck.push(mDate.getTime()); }
+        const eADate = parseDateHelper(df.peremptionElectrodeA);
+        if (eADate) { eADate.setHours(0, 0, 0, 0); timesToCheck.push(eADate.getTime()); }
+        const ePDate = parseDateHelper(df.peremptionElectrodeP);
+        if (ePDate) { ePDate.setHours(0, 0, 0, 0); timesToCheck.push(ePDate.getTime()); }
+        const bDate = parseDateHelper(df.peremptionBatterie);
+        if (bDate) { bDate.setHours(0, 0, 0, 0); timesToCheck.push(bDate.getTime()); }
+
+        if (activeFilters.actionExpired) {
+          const hasExpired = timesToCheck.some(t => t < todayTime);
+          if (!hasExpired) return false;
+        }
+
+        if (activeFilters.actionUnder3) {
+          const hasUnder3Months = timesToCheck.some(t => {
+            const diffDays = Math.ceil((t - todayTime) / (1000 * 60 * 60 * 24));
+            return diffDays >= 0 && diffDays < 90;
+          });
+          if (!hasUnder3Months) return false;
+        }
+
+        if (activeFilters.action3To6) {
+          const hasUnder6Months = timesToCheck.some(t => {
+            const diffDays = Math.ceil((t - todayTime) / (1000 * 60 * 60 * 24));
+            return diffDays >= 90 && diffDays <= 180;
+          });
+          if (!hasUnder6Months) return false;
+        }
+      }
+
+      return true;
     });
 
     if (sortFilter === 'recent') {
@@ -1521,16 +1521,16 @@ export default function DefibTab({
         return idxB - idxA;
       });
     } else if (sortFilter === 'closest_maintenance') {
+      const dateMap = new Map<string, number>();
+      for (const item of result) {
+        const next = computeProchaineMaintenance(item.derniereMaintenance);
+        const parsed = parseDateHelper(next);
+        dateMap.set(item.id, parsed ? parsed.getTime() : Infinity);
+      }
       const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, idx]));
       result = [...result].sort((a, b) => {
-        const nextA = computeProchaineMaintenance(a.derniereMaintenance);
-        const nextB = computeProchaineMaintenance(b.derniereMaintenance);
-        const dateA = parseDateHelper(nextA);
-        const dateB = parseDateHelper(nextB);
-
-        const timeA = dateA ? dateA.getTime() : Infinity;
-        const timeB = dateB ? dateB.getTime() : Infinity;
-
+        const timeA = dateMap.get(a.id) ?? Infinity;
+        const timeB = dateMap.get(b.id) ?? Infinity;
         if (timeA !== timeB) {
           return timeA - timeB;
         }
@@ -1567,7 +1567,7 @@ export default function DefibTab({
     }
 
     return result;
-  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, fsmTours, sortFilter, maintenanceFilter]);
+  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, rejectedDefibSet, sortFilter, maintenanceFilter]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -1635,23 +1635,29 @@ export default function DefibTab({
     }
   };
 
+  const headerRafRef = useRef<number | null>(null);
   const updateHeaderStickyPosition = React.useCallback(() => {
-    if (!bottomScrollRef.current || !theadRef.current) return;
-    const rect = bottomScrollRef.current.getBoundingClientRect();
-    const theadHeight = theadRef.current.offsetHeight || 40;
-    
-    let translateY = 0;
-    // We want the headers to stick to the top of the viewport (0px)
-    if (rect.top < 0) {
-      const maxTranslate = rect.height - theadHeight - 60; // leave some room for table bottom
-      translateY = Math.max(0, Math.min(maxTranslate, -rect.top));
-    }
-    
-    const ths = theadRef.current.querySelectorAll('th');
-    const effectiveScale = isTableFitView ? tableFitScale : 1;
-    const adjustedTranslateY = effectiveScale > 0 ? translateY / effectiveScale : translateY;
-    ths.forEach(th => {
-      (th as HTMLElement).style.transform = `translateY(${adjustedTranslateY}px)`;
+    if (headerRafRef.current !== null) return;
+    headerRafRef.current = requestAnimationFrame(() => {
+      headerRafRef.current = null;
+      if (!bottomScrollRef.current || !theadRef.current) return;
+      const rect = bottomScrollRef.current.getBoundingClientRect();
+      const theadHeight = theadRef.current.offsetHeight || 40;
+      
+      let translateY = 0;
+      // Stick headers to the top of the viewport
+      if (rect.top < 0) {
+        const maxTranslate = rect.height - theadHeight - 60;
+        translateY = Math.max(0, Math.min(maxTranslate, -rect.top));
+      }
+      
+      const ths = theadRef.current.querySelectorAll('th');
+      const effectiveScale = isTableFitView ? tableFitScale : 1;
+      const adjustedTranslateY = effectiveScale > 0 ? Math.round(translateY / effectiveScale) : Math.round(translateY);
+      const transformStr = adjustedTranslateY > 0 ? `translate3d(0, ${adjustedTranslateY}px, 0)` : '';
+      ths.forEach(th => {
+        (th as HTMLElement).style.transform = transformStr;
+      });
     });
   }, [isTableFitView, tableFitScale]);
 
@@ -2691,7 +2697,7 @@ export default function DefibTab({
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
-                fontWeight: 100,
+                fontWeight: 400,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 backgroundColor: sortFilter === 'recent' ? '#fe4eba' : '#ffffff',
@@ -2712,7 +2718,7 @@ export default function DefibTab({
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
-                fontWeight: 100,
+                fontWeight: 400,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 backgroundColor: sortFilter === 'closest_maintenance' ? '#fe4eba' : '#ffffff',
@@ -2734,7 +2740,7 @@ export default function DefibTab({
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
-                fontWeight: 100,
+                fontWeight: 400,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 backgroundColor: sortFilter === 'postal_code_asc' ? '#fe4eba' : '#ffffff',
@@ -2756,7 +2762,7 @@ export default function DefibTab({
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
-                fontWeight: 100,
+                fontWeight: 400,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 backgroundColor: sortFilter === 'postal_code_desc' ? '#fe4eba' : '#ffffff',
@@ -2783,7 +2789,7 @@ export default function DefibTab({
               style={{
                 fontSize: '9px',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                fontWeight: 100,
+                fontWeight: 400,
                 cursor: 'pointer',
                 background: 'transparent',
                 border: 'none',
@@ -2848,7 +2854,7 @@ export default function DefibTab({
             >
               <thead ref={theadRef}>
                 <tr className="bg-transparent">
-                  <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default', position: 'sticky', top: 0, backgroundColor: '#ffffff', zIndex: 10, borderBottom: '1px solid rgb(218, 218, 218)' }}>
+                  <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default', position: 'relative', top: 0, backgroundColor: '#ffffff', zIndex: 10, borderBottom: '1px solid rgb(218, 218, 218)' }}>
                     <button
                       type="button"
                       onClick={() => {
@@ -2963,7 +2969,7 @@ export default function DefibTab({
                       </td>
 
                       {/* Identifiant */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400 }}>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <div 
                             onClick={(e) => {
@@ -3041,7 +3047,7 @@ export default function DefibTab({
                       </td>
 
                       {/* Série */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400 }}>
                         <div>{df.numeroSerie}</div>
                         {df.numeroAtlasante ? (
                           <div className="text-[10px] text-slate-400 font-mono mt-0.5" title="Numéro Atlasanté">
@@ -3051,12 +3057,12 @@ export default function DefibTab({
                       </td>
 
                       {/* Client */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={linkedClient?.denomination}>
+                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400 }} title={linkedClient?.denomination}>
                         {linkedClient?.denomination || ''}
                       </td>
 
                       {/* Nom du site */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={df.nomSite}>
+                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400 }} title={df.nomSite}>
                         <div>{df.nomSite || ''}</div>
                         {df.categorieEtablissement ? (
                           <div className="text-[10px] text-slate-400 font-mono mt-0.5" title="Catégorie d'établissement">
@@ -3082,7 +3088,7 @@ export default function DefibTab({
                               border: '1px solid rgb(231, 231, 231)',
                               color: '#000000',
                               fontSize: '16px',
-                              fontWeight: 100,
+                              fontWeight: 400,
                               padding: '4px 12px',
                               whiteSpace: 'nowrap',
                             }}>
@@ -3097,32 +3103,32 @@ export default function DefibTab({
                       </td>
 
                       {/* Localisation (ville / cp) */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 400 }}>
                         {df.ville && df.cp ? `${df.ville}, ${df.cp}` : (df.ville || df.cp || '-')}
                       </td>
 
                       {/* Fin Garantie */}
-                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.finGarantie), backgroundColor: 'transparent' }}>
+                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 400, color: getDateColor(df.finGarantie), backgroundColor: 'transparent' }}>
                         {formatDateToFR(df.finGarantie) || '-'}
                       </td>
 
                       {/* Prochaine Maintenance */}
-                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(prochaineMaint), backgroundColor: 'transparent' }}>
+                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 400, color: getDateColor(prochaineMaint), backgroundColor: 'transparent' }}>
                         {formatDateToFR(prochaineMaint) || '-'}
                       </td>
 
                       {/* Electrode Adult Expiry */}
-                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionElectrodeA), backgroundColor: 'transparent' }}>
+                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 400, color: getDateColor(df.peremptionElectrodeA), backgroundColor: 'transparent' }}>
                         {formatDateToFR(df.peremptionElectrodeA) || '-'}
                       </td>
 
                       {/* Electrode Pediatric Expiry */}
-                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionElectrodeP), backgroundColor: 'transparent' }}>
+                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 400, color: getDateColor(df.peremptionElectrodeP), backgroundColor: 'transparent' }}>
                         {formatDateToFR(df.peremptionElectrodeP) || '-'}
                       </td>
 
                       {/* Battery Expiry */}
-                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionBatterie), backgroundColor: 'transparent' }}>
+                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 400, color: getDateColor(df.peremptionBatterie), backgroundColor: 'transparent' }}>
                         {formatDateToFR(df.peremptionBatterie) || '-'}
                       </td>
 
@@ -3164,7 +3170,7 @@ export default function DefibTab({
                                     border: '1px solid rgb(231, 231, 231)',
                                     color: '#000000',
                                     fontSize: '16px',
-                                    fontWeight: 100,
+                                    fontWeight: 400,
                                     padding: '4px 12px',
                                     whiteSpace: 'nowrap',
                                     width: 'fit-content'
@@ -3182,7 +3188,7 @@ export default function DefibTab({
                                       backgroundColor: '#dc2626',
                                       color: '#ffffff',
                                       fontSize: '16px',
-                                      fontWeight: 100,
+                                      fontWeight: 400,
                                       padding: '6px 14px',
                                       whiteSpace: 'nowrap',
                                       width: 'fit-content',
@@ -3522,7 +3528,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 100,
+                          fontWeight: 400,
                           textTransform: 'none',
                         }}
                       >
@@ -3743,7 +3749,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 100,
+                          fontWeight: 400,
                           textTransform: 'none',
                         }}
                       >
@@ -3946,7 +3952,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 100,
+                          fontWeight: 400,
                           textTransform: 'none',
                         }}
                       >
@@ -4053,7 +4059,7 @@ export default function DefibTab({
                             backgroundColor: 'oklch(0.44 0.16 324.65)',
                             borderRadius: '1000px',
                             cursor: 'default',
-                            fontWeight: 100,
+                            fontWeight: 400,
                             textTransform: 'none',
                           }}
                         >
@@ -4286,7 +4292,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 100,
+                          fontWeight: 400,
                           textTransform: 'none',
                         }}
                       >
@@ -4634,7 +4640,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 100,
+                          fontWeight: 400,
                           textTransform: 'none',
                         }}
                       >
@@ -4725,7 +4731,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 100,
+                          fontWeight: 400,
                           textTransform: 'none',
                         }}
                       >
@@ -5025,7 +5031,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 100,
+                          fontWeight: 400,
                           textTransform: 'none',
                         }}
                       >
@@ -5325,7 +5331,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 100,
+                          fontWeight: 400,
                           textTransform: 'none',
                         }}
                       >
@@ -5581,7 +5587,7 @@ export default function DefibTab({
                           backgroundColor: 'oklch(0.44 0.16 324.65)',
                           borderRadius: '1000px',
                           cursor: 'default',
-                          fontWeight: 100,
+                          fontWeight: 400,
                           textTransform: 'none',
                         }}
                       >
@@ -6233,7 +6239,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
                     </button>
 
                     <button
@@ -6251,7 +6257,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
                     </button>
                   </div>
                 )}
@@ -6296,7 +6302,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
                     </button>
 
                     <button
@@ -6314,7 +6320,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
                     </button>
                   </div>
                 )}
@@ -6359,7 +6365,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
                     </button>
 
                     <button
@@ -6377,7 +6383,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
                     </button>
                   </div>
                 )}
@@ -6422,7 +6428,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
                     </button>
 
                     <button
@@ -6440,7 +6446,7 @@ export default function DefibTab({
                           <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                         )}
                       </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
+                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
                     </button>
                   </div>
                 )}
@@ -6672,7 +6678,7 @@ export default function DefibTab({
 
             {/* Filter 3: Action Requise 3-6 Mois */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 100 }}>Action requise 3 à 6 mois.</span>
+              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 400 }}>Action requise 3 à 6 mois.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -6690,7 +6696,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -6709,14 +6715,14 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
                 </button>
               </div>
             </div>
 
             {/* Filter 4: Action Requise 3 Mois */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 100 }}>Action requise 3 mois.</span>
+              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 400 }}>Action requise 3 mois.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -6734,7 +6740,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -6753,14 +6759,14 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
                 </button>
               </div>
             </div>
 
             {/* Filter 5: Action Requise Expirée */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 100 }}>Action requise expirée.</span>
+              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 400 }}>Action requise expirée.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -6778,7 +6784,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -6797,14 +6803,14 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
                 </button>
               </div>
             </div>
 
             {/* Filter 6: Rejeté(s) en intervention */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 100 }}>Rejeté(s) en intervention.</span>
+              <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 400 }}>Rejeté(s) en intervention.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -6822,7 +6828,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -6841,7 +6847,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
+                  <span className="text-[16px] text-black font-sans" style={{ fontWeight: 400 }}>Non</span>
                 </button>
               </div>
             </div>
