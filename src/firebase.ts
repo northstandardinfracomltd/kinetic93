@@ -957,17 +957,18 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
       const chunkSize = Math.max(50, Math.floor(450000 / avgItemLen));
       const chunksCount = Math.ceil(items.length / chunkSize);
 
-      // Write chunks in parallel batches of 3
-      for (let i = 0; i < chunksCount; i += 3) {
+      // Write chunks sequentially or in small throttled batches to prevent Firestore Write stream buffer exhaustion
+      for (let i = 0; i < chunksCount; i += 2) {
         const batch: Promise<any>[] = [];
-        for (let j = i; j < Math.min(i + 3, chunksCount); j++) {
+        for (let j = i; j < Math.min(i + 2, chunksCount); j++) {
           const chunkItems = items.slice(j * chunkSize, (j + 1) * chunkSize);
-          for (const wk of writeKeys) {
-            const chunkRef = doc(db, 'appData', `${wk}_chunk_${j}`);
-            batch.push(setDoc(chunkRef, { value: chunkItems }));
-          }
+          const chunkRef = doc(db, 'appData', `${primaryKey}_chunk_${j}`);
+          batch.push(setDoc(chunkRef, { value: chunkItems }));
         }
         await Promise.all(batch);
+        if (chunksCount > 4) {
+          await new Promise(r => setTimeout(r, 60));
+        }
       }
 
       // Write main metadata doc
@@ -976,6 +977,7 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
         return setDoc(mainDocRef, { 
           _chunked: true, 
           chunksCount, 
+          chunkPrefix: primaryKey,
           totalItems: items.length,
           updatedAt: new Date().toISOString() 
         });

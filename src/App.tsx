@@ -249,6 +249,16 @@ export default function App() {
   const loadedTenantIdRef = useRef<string>('');
   const loadedDataRef = useRef<Record<string, string>>({});
 
+  const getCollectionFingerprint = (items: any[] | any): string => {
+    if (!items) return '';
+    if (!Array.isArray(items)) return JSON.stringify(items);
+    if (items.length <= 150) return JSON.stringify(items);
+    const first = items[0] || {};
+    const mid = items[Math.floor(items.length / 2)] || {};
+    const last = items[items.length - 1] || {};
+    return `fp:${items.length}:${first.id || ''}:${first.dateDerniereModification || first.updatedAt || ''}:${mid.id || ''}:${last.id || ''}:${last.dateDerniereModification || last.updatedAt || ''}`;
+  };
+
   const [isSatisfactionFormPage] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
@@ -3860,9 +3870,9 @@ export default function App() {
         // Prime the loadedDataRef instantly with the loaded offline cached data
         // to prevent any race condition auto-saves from triggering on startup
         loadedDataRef.current = {
-          clients: JSON.stringify(sanitizedOffline),
+          clients: getCollectionFingerprint(sanitizedOffline),
           variables: JSON.stringify(baseVariables),
-          defibrillateurs: JSON.stringify(baseDefibrillateurs.length > 250 ? [{ _isLargeCollection: true, length: baseDefibrillateurs.length }] : baseDefibrillateurs),
+          defibrillateurs: getCollectionFingerprint(baseDefibrillateurs),
           stocks: JSON.stringify(baseStocks),
           companyInfo: JSON.stringify(baseCompanyInfo),
           members: JSON.stringify(baseMembers),
@@ -3939,8 +3949,9 @@ export default function App() {
                 try {
                   idbSet(`defib_${activeRunTenantId}_${localStorageKeySuffix}`, finalData);
                 } catch (_) {}
-                loadedDataRef.current[localStorageKeySuffix] = JSON.stringify([{ _isLargeCollection: true, length: finalData.length }]);
-                loadedDataRef.current[collectionName] = loadedDataRef.current[localStorageKeySuffix];
+                const fp = getCollectionFingerprint(finalData);
+                loadedDataRef.current[localStorageKeySuffix] = fp;
+                loadedDataRef.current[collectionName] = fp;
               } else {
                 const strVal = JSON.stringify(finalData);
                 safeSetLocalStorage(`defib_${activeRunTenantId}_${localStorageKeySuffix}`, strVal);
@@ -4292,11 +4303,13 @@ export default function App() {
   // Save state changes back to Firebase
   useEffect(() => {
     if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
-      const str = JSON.stringify(clients);
-      if (loadedDataRef.current.clients === str) return;
-      saveCollectionToFirestore('clients', clients, tenantId);
-      safeSetLocalStorage(`defib_${tenantId}_clients`, str);
-      loadedDataRef.current.clients = str;
+      const fp = getCollectionFingerprint(clients);
+      if (loadedDataRef.current.clients === fp) return;
+      loadedDataRef.current.clients = fp;
+      if (clients.length <= 250) {
+        saveCollectionToFirestore('clients', clients, tenantId);
+        safeSetLocalStorage(`defib_${tenantId}_clients`, JSON.stringify(clients));
+      }
     }
   }, [clients, isFirebaseLoaded, tenantId, loadedTenantIdState]);
 
@@ -4312,15 +4325,17 @@ export default function App() {
 
   useEffect(() => {
     if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
-      const str = JSON.stringify(defibrillateurs);
-      if (loadedDataRef.current.defibrillateurs === str) return;
-      saveCollectionToFirestore('defibrillateurs', defibrillateurs, tenantId);
-      safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, str);
+      const fp = getCollectionFingerprint(defibrillateurs);
+      if (loadedDataRef.current.defibrillateurs === fp) return;
+      loadedDataRef.current.defibrillateurs = fp;
+      if (defibrillateurs.length <= 250) {
+        saveCollectionToFirestore('defibrillateurs', defibrillateurs, tenantId);
+        safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, JSON.stringify(defibrillateurs));
+      }
       try {
         idbSet(`defib_${tenantId}_defibrillateurs`, defibrillateurs);
         idbSet(`fs_cache_${tenantId}_defibrillateurs`, defibrillateurs);
       } catch (_) {}
-      loadedDataRef.current.defibrillateurs = str;
     }
   }, [defibrillateurs, isFirebaseLoaded, tenantId, loadedTenantIdState]);
 
@@ -5599,12 +5614,13 @@ export default function App() {
       return c;
     });
     setClients(sanitized);
-    const str = JSON.stringify(sanitized);
-    safeSetLocalStorage(`defib_${tenantId}_clients`, str);
+    if (sanitized.length <= 250) {
+      safeSetLocalStorage(`defib_${tenantId}_clients`, JSON.stringify(sanitized));
+    }
     try {
       await idbSet(`defib_${tenantId}_clients`, sanitized);
     } catch (_) {}
-    loadedDataRef.current.clients = str;
+    loadedDataRef.current.clients = getCollectionFingerprint(sanitized);
     if (tenantId) {
       await saveCollectionToFirestore('clients', sanitized, tenantId);
     }
@@ -5633,9 +5649,11 @@ export default function App() {
       return;
     }
     setDefibrillateurs(newDefibs);
-    const str = JSON.stringify(newDefibs);
-    safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, str);
-    safeSetLocalStorage(`fs_cache_${tenantId}_defibrillateurs`, str);
+    if (newDefibs.length <= 250) {
+      const str = JSON.stringify(newDefibs);
+      safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, str);
+      safeSetLocalStorage(`fs_cache_${tenantId}_defibrillateurs`, str);
+    }
     try {
       await idbSet(`defib_${tenantId}_defibrillateurs`, newDefibs);
       await idbSet(`${tenantId}_defibrillateurs`, newDefibs);
@@ -5644,9 +5662,9 @@ export default function App() {
     const isDNum = /^d\d+$/i.test(tenantId);
     if (isDNum) {
       const numOnly = tenantId.replace(/^d/i, '');
-      safeSetLocalStorage(`defib_D${numOnly}_defibrillateurs`, str);
-      safeSetLocalStorage(`fs_cache_D${numOnly}_defibrillateurs`, str);
       try {
+        localStorage.removeItem(`defib_D${numOnly}_defibrillateurs`);
+        localStorage.removeItem(`fs_cache_D${numOnly}_defibrillateurs`);
         localStorage.removeItem(`defib_d${numOnly}_defibrillateurs`);
         localStorage.removeItem(`defib_${numOnly}_defibrillateurs`);
         localStorage.removeItem(`fs_cache_d${numOnly}_defibrillateurs`);
@@ -5654,7 +5672,7 @@ export default function App() {
       } catch (_) {}
     }
 
-    loadedDataRef.current.defibrillateurs = str;
+    loadedDataRef.current.defibrillateurs = getCollectionFingerprint(newDefibs);
     if (tenantId) {
       await saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId);
     }

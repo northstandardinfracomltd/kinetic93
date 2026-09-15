@@ -362,7 +362,18 @@ export default function MapModal({
   executeAddTournee,
   isAnySelectedInTour = false
 }: MapModalProps) {
-  const activeList = useMemo(() => items || defibrillateurs || [], [items, defibrillateurs]);
+  // Sur l'affichage Plan, afficher uniquement les éléments avec Maintenance Autorisée = Oui (défibrillateurs "Avec.Main")
+  const activeList = useMemo(() => {
+    const rawList = items || defibrillateurs || [];
+    return rawList.filter((item: any) => {
+      // Pour les défibrillateurs ou tout équipement avec statut de maintenance autorisée
+      if (defibrillateurs || item?.fsmAutorise !== undefined || item?.maintenanceAutorisee !== undefined || item?.maintenance_autorisee !== undefined) {
+        const rawFsm = (item?.fsmAutorise ?? item?.maintenanceAutorisee ?? item?.maintenance_autorisee ?? '').toString().trim().toLowerCase();
+        return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1';
+      }
+      return true;
+    });
+  }, [items, defibrillateurs]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [isTourDropdownOpen, setIsTourDropdownOpen] = useState(false);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);

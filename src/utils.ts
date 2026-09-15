@@ -962,10 +962,18 @@ export function getCapsuleBgColor(dateStr: string): string {
 }
 
 export function safeSetLocalStorage(key: string, value: string): void {
+  if (!value) {
+    try { localStorage.removeItem(key); } catch (_) {}
+    return;
+  }
+  // Bypasses payloads > 250 KB or large collections (e.g. defibrillateurs) to prevent quota errors and UI freezes
+  if (value.length > 250000 || key.includes('defibrillateur') || (key.includes('clients') && value.length > 250000)) {
+    return;
+  }
   try {
     localStorage.setItem(key, value);
   } catch (e) {
-    console.warn(`localStorage quota exceeded for key "${key}". Value saved in memory/cloud.`, e);
+    // Gracefully ignore quota limits without spamming
   }
 }
 

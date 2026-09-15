@@ -1361,6 +1361,14 @@ export default function DefibTab({
   const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | 'postal_code_asc' | 'postal_code_desc' | null>(null);
   const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('oui');
 
+  // Défibrillateurs avec Maintenance Autorisée = Oui ("Avec.Main") pour l'affichage Plan
+  const planDefibrillateurs = useMemo(() => {
+    return defibrillateurs.filter(df => {
+      const rawFsm = (df.fsmAutorise ?? (df as any).maintenanceAutorisee ?? (df as any).maintenance_autorisee ?? '').toString().trim().toLowerCase();
+      return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1';
+    });
+  }, [defibrillateurs]);
+
   // --- LOOKUP INDEXES ---
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
   const variableMap = useMemo(() => new Map(variables.map(v => [v.id, v])), [variables]);
@@ -3317,7 +3325,7 @@ export default function DefibTab({
       <MapModal
         isOpen={isMapOpen}
         onClose={() => setIsMapOpen(false)}
-        defibrillateurs={defibrillateurs}
+        defibrillateurs={planDefibrillateurs}
         clients={clients}
         variables={variables}
         selectedIds={selectedIds}
