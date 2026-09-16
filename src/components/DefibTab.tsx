@@ -8,6 +8,7 @@ import { runMonthlyVigilanceCampaign } from '../utils/emailService';
 import { checkIfDefibIdentifiantExistsAnywhere, fetchCollectionFromFirestore } from '../firebase';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { DefibTablePreloader } from './DefibTablePreloader';
+import { SafeDateInput } from './SafeDateInput';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -1365,7 +1366,8 @@ export default function DefibTab({
   const planDefibrillateurs = useMemo(() => {
     return defibrillateurs.filter(df => {
       const rawFsm = (df.fsmAutorise ?? (df as any).maintenanceAutorisee ?? (df as any).maintenance_autorisee ?? '').toString().trim().toLowerCase();
-      return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1';
+      if (rawFsm === 'non' || rawFsm === 'false' || rawFsm === '0') return false;
+      return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || (!rawFsm && (df.fsmAutorise || 'Oui') === 'Oui');
     });
   }, [defibrillateurs]);
 
@@ -1450,7 +1452,7 @@ export default function DefibTab({
       }
 
       // 3. Maintenance autorisée (fsmAutorise) filter
-      if (maintenanceFilter !== 'tous') {
+      if (maintenanceFilter !== 'all' && (maintenanceFilter as string) !== 'tous') {
         const rawFsm = (df.fsmAutorise || "").trim().toLowerCase();
         const fsmVal = rawFsm === 'non' ? 'non' : 'oui';
         if (maintenanceFilter === 'oui' && fsmVal !== 'oui') return false;
@@ -3961,8 +3963,7 @@ export default function DefibTab({
                       </div>
                       <div className="space-y-1 font-sans">
                         <label className="block text-[10px] uppercase font-semibold text-slate-400 font-sans">Début du contrat.</label>
-                        <input
-                          type="date"
+                        <SafeDateInput
                           value={debutContrat}
                           disabled
                           className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-slate-100 text-slate-500 cursor-not-allowed font-sans"
@@ -3970,8 +3971,7 @@ export default function DefibTab({
                       </div>
                       <div className="space-y-1 font-sans">
                         <label className="block text-[10px] uppercase font-semibold text-slate-400 font-sans">Expiration du contrat.</label>
-                        <input
-                          type="date"
+                        <SafeDateInput
                           value={finContrat}
                           disabled
                           className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-slate-100 text-slate-500 cursor-not-allowed font-sans"
@@ -4116,8 +4116,7 @@ export default function DefibTab({
                         <label htmlFor="form-peremption-trousse" className="block text-[11px] font-bold text-slate-500 uppercase">
                           {t("Péremption de la trousse.")}
                         </label>
-                        <input
-                          type="date"
+                        <SafeDateInput
                           id="form-peremption-trousse"
                           value={peremptionTrousse}
                           onChange={(e) => setPeremptionTrousse(e.target.value)}
@@ -4196,8 +4195,7 @@ export default function DefibTab({
                           <label htmlFor="form-peremption-masque" className="block text-[11px] font-bold text-slate-500 uppercase">
                             {t("Péremption du masque.")}
                           </label>
-                          <input
-                            type="date"
+                          <SafeDateInput
                             id="form-peremption-masque"
                             value={kitPeremptionMasque}
                             onChange={(e) => setKitPeremptionMasque(e.target.value)}
@@ -4245,8 +4243,7 @@ export default function DefibTab({
                           <label htmlFor="form-peremption-serviettes" className="block text-[11px] font-bold text-slate-500 uppercase">
                             {t("Péremption des serviettes.")}
                           </label>
-                          <input
-                            type="date"
+                          <SafeDateInput
                             id="form-peremption-serviettes"
                             value={kitPeremptionServiettes}
                             onChange={(e) => setKitPeremptionServiettes(e.target.value)}
@@ -4695,8 +4692,7 @@ export default function DefibTab({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <label htmlFor="form-fin-garantie" className="block text-[10px] font-bold text-slate-400 uppercase">Expiration de garantie.</label>
-                        <input
-                          type="date"
+                        <SafeDateInput
                           id="form-fin-garantie"
                           value={finGarantie}
                           onChange={(e) => setFinGarantie(e.target.value)}
@@ -4705,8 +4701,7 @@ export default function DefibTab({
                       </div>
                       <div className="space-y-1">
                         <label htmlFor="form-fabrication" className="block text-[10px] font-bold text-slate-400 uppercase">Fabrication.</label>
-                        <input
-                          type="date"
+                        <SafeDateInput
                           id="form-fabrication"
                           value={fabrication}
                           onChange={(e) => setFabrication(e.target.value)}
@@ -4715,8 +4710,7 @@ export default function DefibTab({
                       </div>
                       <div className="space-y-1">
                         <label htmlFor="form-mise-service" className="block text-[10px] font-bold text-slate-400 uppercase">Mise en service.</label>
-                        <input
-                          type="date"
+                        <SafeDateInput
                           id="form-mise-service"
                           value={miseEnService}
                           onChange={(e) => setMiseEnService(e.target.value)}
@@ -4725,8 +4719,7 @@ export default function DefibTab({
                       </div>
                       <div className="space-y-1">
                         <label htmlFor="form-der-maint" className="block text-[10px] font-bold text-slate-400 uppercase">Dernière maintenance.</label>
-                        <input
-                          type="date"
+                        <SafeDateInput
                           id="form-der-maint"
                           value={derniereMaintenance}
                           onChange={(e) => setDerniereMaintenance(e.target.value)}
@@ -4738,8 +4731,7 @@ export default function DefibTab({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                       <div className="space-y-1">
                         <label htmlFor="form-sortie-fab" className="block text-[10px] font-bold text-slate-400 uppercase">Sortie d'usine.</label>
-                        <input
-                          type="date"
+                        <SafeDateInput
                           id="form-sortie-fab"
                           value={sortieFabricant}
                           onChange={(e) => setSortieFabricant(e.target.value)}
@@ -4852,8 +4844,7 @@ export default function DefibTab({
                       {isVisiblePadPakAdulte && (
                         <div className="space-y-1">
                           <label htmlFor="form-elec-a-ins" className="block text-[9px] font-bold text-slate-400 uppercase">Insertion.</label>
-                          <input
-                            type="date"
+                          <SafeDateInput
                             id="form-elec-a-ins"
                             value={insertionElectrodeA}
                             onChange={(e) => setInsertionElectrodeA(e.target.value)}
@@ -4864,8 +4855,7 @@ export default function DefibTab({
                       {isVisiblePeremptionPadPakA && (
                         <div className="space-y-1">
                           <label htmlFor="form-elec-a-per" className="block text-[9px] font-bold text-slate-400 uppercase">Péremption.</label>
-                          <input
-                            type="date"
+                          <SafeDateInput
                             id="form-elec-a-per"
                             value={peremptionElectrodeA}
                             onChange={(e) => setPeremptionElectrodeA(e.target.value)}
@@ -4875,8 +4865,7 @@ export default function DefibTab({
                       )}
                       <div className="space-y-1">
                         <label htmlFor="form-elec-a-liv" className="block text-[9px] font-bold text-slate-400 uppercase">Livraison.</label>
-                        <input
-                          type="date"
+                        <SafeDateInput
                           id="form-elec-a-liv"
                           value={livraisonElectrodeA}
                           onChange={(e) => setLivraisonElectrodeA(e.target.value)}
@@ -4950,8 +4939,7 @@ export default function DefibTab({
                         {isVisiblePeremptionPadPakA && (
                           <div className="space-y-1 bg-white">
                             <label htmlFor="form-elec-a-sec" className="block text-[10px] font-bold text-slate-400 uppercase">Péremption de l’électrode de secours.</label>
-                            <input
-                              type="date"
+                            <SafeDateInput
                               id="form-elec-a-sec"
                               value={peremptionSecoursElectrodeA}
                               onChange={(e) => setPeremptionSecoursElectrodeA(e.target.value)}
@@ -5046,8 +5034,7 @@ export default function DefibTab({
                             <label htmlFor="form-per-padpak-a" className="block text-[11px] font-bold text-slate-500 uppercase font-sans">
                               {t("Péremption PadPak A.")}
                             </label>
-                            <input
-                              type="date"
+                            <SafeDateInput
                               id="form-per-padpak-a"
                               value={peremptionPadpakA}
                               onChange={(e) => setPeremptionPadpakA(e.target.value)}
@@ -5152,8 +5139,7 @@ export default function DefibTab({
                       {isVisiblePadPakPediatrique && (
                         <div className="space-y-1">
                           <label htmlFor="form-elec-p-ins" className="block text-[9px] font-bold text-slate-400 uppercase">Insertion.</label>
-                          <input
-                            type="date"
+                          <SafeDateInput
                             id="form-elec-p-ins"
                             value={insertionElectrodeP}
                             onChange={(e) => setInsertionElectrodeP(e.target.value)}
@@ -5164,8 +5150,7 @@ export default function DefibTab({
                       {isVisiblePeremptionPadPakP && (
                         <div className="space-y-1">
                           <label htmlFor="form-elec-p-per" className="block text-[9px] font-bold text-slate-400 uppercase">Péremption.</label>
-                          <input
-                            type="date"
+                          <SafeDateInput
                             id="form-elec-p-per"
                             value={peremptionElectrodeP}
                             onChange={(e) => setPeremptionElectrodeP(e.target.value)}
@@ -5175,8 +5160,7 @@ export default function DefibTab({
                       )}
                       <div className="space-y-1">
                         <label htmlFor="form-elec-p-liv" className="block text-[9px] font-bold text-slate-400 uppercase">Livraison.</label>
-                        <input
-                          type="date"
+                        <SafeDateInput
                           id="form-elec-p-liv"
                           value={livraisonElectrodeP}
                           onChange={(e) => setLivraisonElectrodeP(e.target.value)}
@@ -5250,8 +5234,7 @@ export default function DefibTab({
                         {isVisiblePeremptionPadPakP && (
                           <div className="space-y-1 bg-white">
                             <label htmlFor="form-elec-p-sec" className="block text-[10px] font-bold text-slate-400 uppercase">Péremption de l’électrode de secours.</label>
-                            <input
-                              type="date"
+                            <SafeDateInput
                               id="form-elec-p-sec"
                               value={peremptionSecoursElectrodeP}
                               onChange={(e) => setPeremptionSecoursElectrodeP(e.target.value)}
@@ -5346,8 +5329,7 @@ export default function DefibTab({
                             <label htmlFor="form-per-padpak-p" className="block text-[11px] font-bold text-slate-500 uppercase font-sans">
                               {t("Péremption PadPak P.")}
                             </label>
-                            <input
-                              type="date"
+                            <SafeDateInput
                               id="form-per-padpak-p"
                               value={peremptionPadpakP}
                               onChange={(e) => setPeremptionPadpakP(e.target.value)}
@@ -5450,8 +5432,7 @@ export default function DefibTab({
                       {isVisiblePeremptionBatterie && (
                         <div className="space-y-1">
                           <label htmlFor="form-bat-per" className="block text-[9px] font-bold text-slate-400 uppercase">Péremption.</label>
-                          <input
-                            type="date"
+                          <SafeDateInput
                             id="form-bat-per"
                             value={peremptionBatterie}
                             onChange={(e) => setPeremptionBatterie(e.target.value)}
@@ -5462,8 +5443,7 @@ export default function DefibTab({
                       {isVisibleFabricationBatterie && (
                         <div className="space-y-1">
                           <label htmlFor="form-bat-fab" className="block text-[9px] font-bold text-slate-400 uppercase">Fabrication.</label>
-                          <input
-                            type="date"
+                          <SafeDateInput
                             id="form-bat-fab"
                             value={fabricationBatterie}
                             onChange={(e) => setFabricationBatterie(e.target.value)}
@@ -5474,8 +5454,7 @@ export default function DefibTab({
                       {isVisibleInsertionBatterie && (
                         <div className="space-y-1">
                           <label htmlFor="form-bat-ins" className="block text-[9px] font-bold text-slate-400 uppercase">Insertion.</label>
-                          <input
-                            type="date"
+                          <SafeDateInput
                             id="form-bat-ins"
                             value={insertionBatterie}
                             onChange={(e) => setInsertionBatterie(e.target.value)}
@@ -5485,8 +5464,7 @@ export default function DefibTab({
                       )}
                       <div className="space-y-1">
                         <label htmlFor="form-bat-liv" className="block text-[9px] font-bold text-slate-400 uppercase">Livraison.</label>
-                        <input
-                          type="date"
+                        <SafeDateInput
                           id="form-bat-liv"
                           value={livraisonBatterie}
                           onChange={(e) => setLivraisonBatterie(e.target.value)}
@@ -5560,8 +5538,7 @@ export default function DefibTab({
                         {isVisiblePeremptionBatterie && (
                           <div className="space-y-1 bg-white">
                             <label htmlFor="form-bat-sec-per" className="block text-[10px] font-bold text-slate-400 uppercase">Péremption de la batterie de secours.</label>
-                            <input
-                              type="date"
+                            <SafeDateInput
                               id="form-bat-sec-per"
                               value={peremptionBatterieSecours}
                               onChange={(e) => setPeremptionBatterieSecours(e.target.value)}
@@ -6198,8 +6175,7 @@ export default function DefibTab({
                 
                 {bulkApplyDerniereMaint && (
                   <div className="py-2">
-                    <input
-                      type="date"
+                    <SafeDateInput
                       value={bulkDerniereMaint}
                       onChange={(e) => setBulkDerniereMaint(e.target.value)}
                       style={filterInputStyle}
@@ -6233,8 +6209,7 @@ export default function DefibTab({
                 
                 {bulkApplyProchaineMaint && (
                   <div className="py-2">
-                    <input
-                      type="date"
+                    <SafeDateInput
                       value={bulkProchaineMaint}
                       onChange={(e) => setBulkProchaineMaint(e.target.value)}
                       style={filterInputStyle}

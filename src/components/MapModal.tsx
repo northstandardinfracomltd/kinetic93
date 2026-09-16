@@ -369,7 +369,8 @@ export default function MapModal({
       // Pour les défibrillateurs ou tout équipement avec statut de maintenance autorisée
       if (defibrillateurs || item?.fsmAutorise !== undefined || item?.maintenanceAutorisee !== undefined || item?.maintenance_autorisee !== undefined) {
         const rawFsm = (item?.fsmAutorise ?? item?.maintenanceAutorisee ?? item?.maintenance_autorisee ?? '').toString().trim().toLowerCase();
-        return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1';
+        if (rawFsm === 'non' || rawFsm === 'false' || rawFsm === '0') return false;
+        return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || (!rawFsm && (item?.fsmAutorise || 'Oui') === 'Oui');
       }
       return true;
     });
