@@ -21,9 +21,87 @@ const db = getFirestore(firebaseApp);
 const DATA_DIR = path.join(process.cwd(), '.data');
 const STORE_FILE = path.join(DATA_DIR, 'server-store.json');
 const COLLECTIONS_DIR = path.join(DATA_DIR, 'collections');
+const CHUNKS_DIR = path.join(DATA_DIR, 'chunks');
 
 const serverMemoryStore = new Map<string, any>();
 const serverStoreTimestamps = new Map<string, number>();
+
+// O(1) in-memory index for equipment and defibrillator lookups by ID, serial, or reference
+interface DefibIndexEntry {
+  defib: any;
+  tenant: string;
+}
+const fastDefibIndex = new Map<string, DefibIndexEntry>();
+
+function normalizeDefibLookupKey(val: any): string {
+  if (val === undefined || val === null) return '';
+  return String(val).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function indexDefibrillateur(defib: any, tenant: string = 'D58') {
+  if (!defib || typeof defib !== 'object') return;
+  const t = defib.tenantId || defib.envId || tenant || 'D58';
+  const entry: DefibIndexEntry = { defib, tenant: t };
+
+  const candidateValues = [
+    defib.id,
+    defib.identifiant,
+    defib.defibIdentifiant,
+    defib.identifiantDAE,
+    defib.identifiant_dae,
+    defib.identifiantUnique,
+    defib.identifiant_unique,
+    defib.id_dae,
+    defib.code,
+    defib.reference,
+    defib.ref,
+    defib.defibId,
+    defib.numeroSerie,
+    defib.num_serie,
+    defib.numero_serie,
+    defib.numSerie,
+    defib.numSerieDAE,
+    defib.serial,
+    defib.serialNumber,
+    defib.serial_number,
+    defib.sn,
+    defib.numeroAtlasante,
+    defib.numero_atlasante,
+    defib.defibSnapshot?.identifiant,
+    defib.defibSnapshot?.numeroSerie,
+    defib.defibSnapshot?.id
+  ];
+
+  for (const raw of candidateValues) {
+    if (raw === undefined || raw === null) continue;
+    const str = String(raw).trim();
+    if (!str) continue;
+    const stripped = str.replace(/^[:=]+/, '').replace(/^['"]|['"]$/g, '').trim();
+
+    fastDefibIndex.set(str, entry);
+    fastDefibIndex.set(`:${str}`, entry);
+    fastDefibIndex.set(str.toLowerCase(), entry);
+    fastDefibIndex.set(`:${str.toLowerCase()}`, entry);
+
+    if (stripped && stripped !== str) {
+      fastDefibIndex.set(stripped, entry);
+      fastDefibIndex.set(`:${stripped}`, entry);
+      fastDefibIndex.set(stripped.toLowerCase(), entry);
+      fastDefibIndex.set(`:${stripped.toLowerCase()}`, entry);
+    }
+
+    const norm = normalizeDefibLookupKey(str);
+    if (norm && norm.length >= 3) {
+      fastDefibIndex.set(norm, entry);
+    }
+    if (stripped && stripped !== str) {
+      const normStripped = normalizeDefibLookupKey(stripped);
+      if (normStripped && normStripped.length >= 3) {
+        fastDefibIndex.set(normStripped, entry);
+      }
+    }
+  }
+}
 
 // Chunked sync buffers for handling massive collections (18,000+ items)
 interface ChunkBuffer {
@@ -44,6 +122,9 @@ try {
   }
   if (!fs.existsSync(COLLECTIONS_DIR)) {
     fs.mkdirSync(COLLECTIONS_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(CHUNKS_DIR)) {
+    fs.mkdirSync(CHUNKS_DIR, { recursive: true });
   }
   if (fs.existsSync(STORE_FILE)) {
     const raw = fs.readFileSync(STORE_FILE, 'utf-8');
@@ -67,6 +148,11 @@ try {
           if (parsed !== undefined && parsed !== null) {
             serverMemoryStore.set(key, parsed);
             serverStoreTimestamps.set(key, Date.now());
+            if (key.includes('defibrillateurs') && Array.isArray(parsed)) {
+              for (const item of parsed) {
+                indexDefibrillateur(item, key.replace(/_defibrillateurs$/, ''));
+              }
+            }
           }
         } catch (colErr) {
           console.warn(`Failed to read collection file ${file}:`, colErr);
@@ -697,8 +783,10 @@ function matchesDefibWith(targetStr: string): (d: any) => boolean {
   return (d: any): boolean => {
     if (!d || typeof d !== 'object') return false;
     const raw = decodeURIComponent(targetStr).trim();
+    const stripped = raw.replace(/^[:=]+/, '').replace(/^['"]|['"]$/g, '').trim();
     const lower = raw.toLowerCase();
-    const clean = raw.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    const strippedLower = stripped.toLowerCase();
+    const clean = stripped.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
     const candidates = [
       d.id,
@@ -733,8 +821,9 @@ function matchesDefibWith(targetStr: string): (d: any) => boolean {
       if (val === undefined || val === null) continue;
       const sVal = String(val).trim();
       if (!sVal) continue;
-      if (sVal === raw) return true;
-      if (sVal.toLowerCase() === lower) return true;
+      const sValStripped = sVal.replace(/^[:=]+/, '').replace(/^['"]|['"]$/g, '').trim();
+      if (sVal === raw || sVal === stripped || sValStripped === stripped || sValStripped === raw) return true;
+      if (sVal.toLowerCase() === lower || sVal.toLowerCase() === strippedLower || sValStripped.toLowerCase() === strippedLower) return true;
       if (clean.length >= 3) {
         const cVal = sVal.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
         if (cVal === clean) return true;
@@ -1045,9 +1134,26 @@ async function findSingleDefibrillateur(
   tenantId: string,
   extraAliases: (string | undefined | null)[] = []
 ): Promise<{ defib: any; tenant: string } | null> {
-  const cleanSubId = decodeURIComponent(rawSubId).trim();
+  const unescaped = decodeURIComponent(rawSubId).trim();
+  const strippedSubId = unescaped.replace(/^[:=]+/, '').replace(/^['"]|['"]$/g, '').trim();
+  const cleanSubId = strippedSubId || unescaped;
   if (!cleanSubId) return null;
   const matcher = matchesDefibWith(cleanSubId);
+
+  // 0. FASTEST PATH: Check fastDefibIndex (0.001ms O(1) lookup)
+  const normKey = normalizeDefibLookupKey(cleanSubId);
+  const normUnescaped = normalizeDefibLookupKey(unescaped);
+  const indexed = fastDefibIndex.get(cleanSubId) || 
+                  fastDefibIndex.get(cleanSubId.toLowerCase()) || 
+                  fastDefibIndex.get(`:${cleanSubId}`) || 
+                  fastDefibIndex.get(`:${cleanSubId.toLowerCase()}`) || 
+                  fastDefibIndex.get(unescaped) || 
+                  fastDefibIndex.get(unescaped.toLowerCase()) || 
+                  (normKey ? fastDefibIndex.get(normKey) : null) ||
+                  (normUnescaped ? fastDefibIndex.get(normUnescaped) : null);
+  if (indexed && indexed.defib) {
+    return indexed;
+  }
 
   // 1. FAST PATH: Check in-memory store for tenant candidates and all cached defibrillateur collections (0.05ms)
   const normTenant = tenantId ? tenantId.trim().toLowerCase() : 'demo';
@@ -1068,9 +1174,13 @@ async function findSingleDefibrillateur(
     if (serverMemoryStore.has(k)) {
       const items = serverMemoryStore.get(k);
       if (Array.isArray(items)) {
+        const tName = k.replace(/_defibrillateurs$/, '');
+        for (const item of items) {
+          indexDefibrillateur(item, tName);
+        }
         const found = items.find(matcher);
         if (found) {
-          return { defib: found, tenant: k.replace(/_defibrillateurs$/, '') };
+          return { defib: found, tenant: tName };
         }
       }
     }
@@ -1079,9 +1189,13 @@ async function findSingleDefibrillateur(
   // Also check all other cached memory entries ending with _defibrillateurs
   for (const [k, items] of serverMemoryStore.entries()) {
     if (k.endsWith('_defibrillateurs') && Array.isArray(items)) {
+      const tName = k.replace(/_defibrillateurs$/, '');
+      for (const item of items) {
+        indexDefibrillateur(item, tName);
+      }
       const found = items.find(matcher);
       if (found) {
-        return { defib: found, tenant: k.replace(/_defibrillateurs$/, '') };
+        return { defib: found, tenant: tName };
       }
     }
   }
@@ -1095,11 +1209,14 @@ async function findSingleDefibrillateur(
           const filePath = path.join(COLLECTIONS_DIR, f);
           const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
           if (Array.isArray(content)) {
+            const tName = f.replace(/_defibrillateurs\.json$/, '');
+            serverMemoryStore.set(`${tName}_defibrillateurs`, content);
+            serverStoreTimestamps.set(`${tName}_defibrillateurs`, Date.now());
+            for (const item of content) {
+              indexDefibrillateur(item, tName);
+            }
             const found = content.find(matcher);
             if (found) {
-              const tName = f.replace(/_defibrillateurs\.json$/, '');
-              serverMemoryStore.set(`${tName}_defibrillateurs`, content);
-              serverStoreTimestamps.set(`${tName}_defibrillateurs`, Date.now());
               return { defib: found, tenant: tName };
             }
           }
@@ -1108,8 +1225,30 @@ async function findSingleDefibrillateur(
     }
   } catch (_) {}
 
-  // 3. IDENTIFIER ANALYSIS: Extract potential environment / tenant code directly from rawSubId
-  // Examples: 'DFY-D58-OZH' -> 'D58', 'DAE-D27-001' -> 'D27', 'D18-099' -> 'D18'
+  // 3. DISK CHUNK CACHE: Check cached chunk files in CHUNKS_DIR (1-2ms)
+  try {
+    if (fs.existsSync(CHUNKS_DIR)) {
+      const chunkFiles = fs.readdirSync(CHUNKS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
+      for (const cf of chunkFiles) {
+        try {
+          const chunkPath = path.join(CHUNKS_DIR, cf);
+          const arr = JSON.parse(fs.readFileSync(chunkPath, 'utf-8'));
+          if (Array.isArray(arr)) {
+            for (const item of arr) {
+              indexDefibrillateur(item, tenantId || 'D58');
+            }
+            const found = arr.find(matcher);
+            if (found) {
+              return { defib: found, tenant: tenantId || 'D58' };
+            }
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  // 4. IDENTIFIER ANALYSIS: Extract potential environment / tenant code directly from rawSubId
+  // Examples: 'DFY-D58-OZH' -> 'D58', 'KWM-D58-XKL' -> 'D58', 'DAE-D27-001' -> 'D27'
   const envMatch = cleanSubId.match(/(?:^|[^a-zA-Z0-9])([dD]\d+)(?:[^a-zA-Z0-9]|$)/);
   const detectedEnv = envMatch ? envMatch[1].toUpperCase() : null;
 
@@ -1125,9 +1264,9 @@ async function findSingleDefibrillateur(
     'demo'
   ].filter(Boolean) as string[]));
 
-  // 4. TARGETED FIRESTORE LOOKUP: Parallel chunk checks with early exit and strict 3.5s budget
+  // 5. TARGETED FIRESTORE LOOKUP: Parallel chunk checks with early exit and disk chunk caching
   const startTime = Date.now();
-  const MAX_SEARCH_TIME_MS = 3500;
+  const MAX_SEARCH_TIME_MS = 8000;
 
   for (const t of targetTenantsToTry) {
     if (Date.now() - startTime > MAX_SEARCH_TIME_MS) break;
@@ -1144,9 +1283,12 @@ async function findSingleDefibrillateur(
       // Single array document (non-chunked)
       if (!payload._chunked && Array.isArray(payload.value)) {
         const items = payload.value;
-        const found = items.find(matcher);
         serverMemoryStore.set(firestoreKey, items);
         serverStoreTimestamps.set(firestoreKey, Date.now());
+        for (const item of items) {
+          indexDefibrillateur(item, t);
+        }
+        const found = items.find(matcher);
         if (found) {
           return { defib: found, tenant: t };
         }
@@ -1168,11 +1310,34 @@ async function findSingleDefibrillateur(
             promises.push((async (idx) => {
               if (foundItem) return;
               try {
+                const chunkFile = path.join(CHUNKS_DIR, `${prefix}_chunk_${idx}.json`);
+                if (fs.existsSync(chunkFile)) {
+                  try {
+                    const localArr = JSON.parse(fs.readFileSync(chunkFile, 'utf-8'));
+                    if (Array.isArray(localArr)) {
+                      for (const it of localArr) {
+                        indexDefibrillateur(it, t);
+                      }
+                      const match = localArr.find(matcher);
+                      if (match && !foundItem) {
+                        foundItem = match;
+                      }
+                      return;
+                    }
+                  } catch (_) {}
+                }
+
                 const chunkRef = doc(db, 'appData', `${prefix}_chunk_${idx}`);
                 const cSnap = await withTimeout(getDoc(chunkRef), 3000, null);
                 if (cSnap && cSnap.exists()) {
                   const arr = cSnap.data()?.value;
                   if (Array.isArray(arr)) {
+                    try {
+                      fs.writeFileSync(chunkFile, JSON.stringify(arr), 'utf-8');
+                    } catch (_) {}
+                    for (const it of arr) {
+                      indexDefibrillateur(it, t);
+                    }
                     const match = arr.find(matcher);
                     if (match && !foundItem) {
                       foundItem = match;
@@ -1184,7 +1349,6 @@ async function findSingleDefibrillateur(
           }
           await Promise.all(promises);
           if (foundItem) {
-            // Found! Cache it and return immediately
             return { defib: foundItem, tenant: t };
           }
         }
@@ -1338,12 +1502,25 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
           for (let j = i; j < end; j++) {
             batchPromises.push((async (idx) => {
               try {
+                const chunkFile = path.join(CHUNKS_DIR, `${effectivePrefix}_chunk_${idx}.json`);
+                if (fs.existsSync(chunkFile)) {
+                  try {
+                    const localArr = JSON.parse(fs.readFileSync(chunkFile, 'utf-8'));
+                    if (Array.isArray(localArr)) {
+                      chunkResults[idx] = localArr;
+                      return;
+                    }
+                  } catch (_) {}
+                }
                 const chunkRef = doc(db, 'appData', `${effectivePrefix}_chunk_${idx}`);
                 const cSnap = await withTimeout(getDoc(chunkRef), 4000, null);
                 if (cSnap && cSnap.exists()) {
                   const cData = cSnap.data();
                   if (Array.isArray(cData?.value)) {
                     chunkResults[idx] = cData.value;
+                    try {
+                      fs.writeFileSync(chunkFile, JSON.stringify(cData.value), 'utf-8');
+                    } catch (_) {}
                   }
                 }
               } catch (_) {}
@@ -1352,6 +1529,11 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
           await Promise.all(batchPromises);
         }
         const combined = chunkResults.filter(Boolean).flat();
+        if (key.includes('defibrillateurs') || effectivePrefix.includes('defibrillateurs')) {
+          for (const it of combined) {
+            indexDefibrillateur(it, activeTenant);
+          }
+        }
         return { type: 'array', items: combined, isChunked: true };
       }
 
@@ -1583,6 +1765,11 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
     serverMemoryStore.set(k, items);
     serverStoreTimestamps.set(k, Date.now());
   }
+  if (colName === 'defibrillateurs' && Array.isArray(items)) {
+    for (const item of items) {
+      indexDefibrillateur(item, activeTenant);
+    }
+  }
   persistServerStoreToDisk();
 
   for (const k of uniqueKeys) {
@@ -1590,6 +1777,95 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       const docRef = doc(db, 'appData', k);
       withTimeout(setDoc(docRef, { value: items, _chunked: false, updatedAt: new Date().toISOString() }), 8000, null).catch(() => {});
     } catch (_) {}
+  }
+}
+
+async function warmupDefibrillateursStore() {
+  try {
+    const d58ColFile = path.join(COLLECTIONS_DIR, 'D58_defibrillateurs.json');
+    const d27ColFile = path.join(COLLECTIONS_DIR, 'D27_defibrillateurs.json');
+    const genericColFile = path.join(COLLECTIONS_DIR, 'defibrillateurs.json');
+    
+    // 1. If files already exist on disk, read and index them into memory
+    const existingFile = [d58ColFile, d27ColFile, genericColFile].find(f => fs.existsSync(f));
+    if (existingFile) {
+      const content = JSON.parse(fs.readFileSync(existingFile, 'utf-8'));
+      if (Array.isArray(content) && content.length > 0) {
+        serverMemoryStore.set('D58_defibrillateurs', content);
+        serverMemoryStore.set('D27_defibrillateurs', content);
+        serverMemoryStore.set('defibrillateurs', content);
+        serverStoreTimestamps.set('D58_defibrillateurs', Date.now());
+        serverStoreTimestamps.set('D27_defibrillateurs', Date.now());
+        serverStoreTimestamps.set('defibrillateurs', Date.now());
+        for (const item of content) {
+          indexDefibrillateur(item, 'D58');
+        }
+        console.log(`[Warmup] Pre-indexed ${content.length} defibrillateurs from disk into fastDefibIndex.`);
+        return;
+      }
+    }
+
+    // 2. Otherwise, fetch from Firestore in background
+    console.log('[Warmup] Pre-warming defibrillateurs dataset from Firestore in background...');
+    const metaSnap = await getDoc(doc(db, 'appData', 'D58_defibrillateurs'));
+    if (!metaSnap || !metaSnap.exists()) return;
+    const meta = metaSnap.data();
+    if (!meta?._chunked || typeof meta?.chunksCount !== 'number') return;
+    
+    const count = meta.chunksCount;
+    const prefix = meta.chunkPrefix || meta.chunkKeyPrefix || 'D27_defibrillateurs';
+    const chunkResults: any[][] = new Array(count);
+    const concurrency = 20;
+
+    for (let i = 0; i < count; i += concurrency) {
+      const end = Math.min(i + concurrency, count);
+      const promises = [];
+      for (let j = i; j < end; j++) {
+        promises.push((async (idx) => {
+          const chunkFile = path.join(CHUNKS_DIR, `${prefix}_chunk_${idx}.json`);
+          if (fs.existsSync(chunkFile)) {
+            try {
+              chunkResults[idx] = JSON.parse(fs.readFileSync(chunkFile, 'utf-8'));
+              return;
+            } catch (_) {}
+          }
+          try {
+            const snap = await getDoc(doc(db, 'appData', `${prefix}_chunk_${idx}`));
+            if (snap && snap.exists()) {
+              const arr = snap.data()?.value;
+              if (Array.isArray(arr)) {
+                chunkResults[idx] = arr;
+                try {
+                  fs.writeFileSync(chunkFile, JSON.stringify(arr), 'utf-8');
+                } catch (_) {}
+              }
+            }
+          } catch (_) {}
+        })(j));
+      }
+      await Promise.all(promises);
+    }
+
+    const allItems = chunkResults.filter(Boolean).flat();
+    if (allItems.length > 0) {
+      try {
+        fs.writeFileSync(d58ColFile, JSON.stringify(allItems), 'utf-8');
+        fs.writeFileSync(d27ColFile, JSON.stringify(allItems), 'utf-8');
+        fs.writeFileSync(genericColFile, JSON.stringify(allItems), 'utf-8');
+      } catch (_) {}
+      serverMemoryStore.set('D58_defibrillateurs', allItems);
+      serverMemoryStore.set('D27_defibrillateurs', allItems);
+      serverMemoryStore.set('defibrillateurs', allItems);
+      serverStoreTimestamps.set('D58_defibrillateurs', Date.now());
+      serverStoreTimestamps.set('D27_defibrillateurs', Date.now());
+      serverStoreTimestamps.set('defibrillateurs', Date.now());
+      for (const item of allItems) {
+        indexDefibrillateur(item, 'D58');
+      }
+      console.log(`[Warmup] Successfully pre-warmed ${allItems.length} defibrillateurs into memory & disk.`);
+    }
+  } catch (err) {
+    console.warn('[Warmup] Defibrillateurs prewarm error:', err);
   }
 }
 
@@ -2753,17 +3029,25 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           ).trim();
         }
 
+        // Clean subId: remove leading colon ':', '=', quotes, and surrounding whitespace
+        if (subId) {
+          subId = decodeURIComponent(subId)
+            .replace(/^[:=]+/, '')
+            .replace(/^['"]|['"]$/g, '')
+            .trim();
+        }
+
         // FAST-TRACK FOR SINGLE DEFIBRILLATEUR GET:
         // Avoid loading entire collections or running multi-alias full collection fetches.
         // Uses findSingleDefibrillateur with direct tenant targeting, chunk early-exit & strict timeout.
         if (req.method === 'GET' && subId) {
-          const rawSubId = decodeURIComponent(subId).trim();
+          const rawSubId = subId;
           const lookupResult = await findSingleDefibrillateur(rawSubId, tenantId, tenantAliases);
           if (lookupResult && lookupResult.defib) {
             const formattedFound = formatDefibrillateurOutput(lookupResult.defib);
             return sendOptimizedJson(req, res, {
               status: "success",
-              environnement: lookupResult.tenant || targetTenant.shortEnvId || tenantId,
+              environnement: targetTenant.shortEnvId || tenantId || lookupResult.tenant,
               defibrillateur: formattedFound,
               data: formattedFound
             });
@@ -3913,7 +4197,10 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
         }
 
         if (subId) {
-          const rawSubId = decodeURIComponent(subId).trim();
+          const rawSubId = decodeURIComponent(subId)
+            .replace(/^[:=]+/, '')
+            .replace(/^['"]|['"]$/g, '')
+            .trim();
           let found = defibs.find(matchesDefibWith(rawSubId));
 
           if (!found) {
@@ -3948,7 +4235,8 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
           : Math.max(1, parseInt(limitParam as string, 10) || (isPaginated ? 100 : defibs.length));
 
         let filteredDefibs = defibs;
-        const q = (req.query.search as string || req.query.q as string || '').trim().toLowerCase();
+        const rawQ = (req.query.search as string || req.query.q as string || '').trim();
+        const q = rawQ.replace(/^[:=]+/, '').replace(/^['"]|['"]$/g, '').trim().toLowerCase();
         if (q) {
           filteredDefibs = filteredDefibs.filter((d: any) => 
             (d.numeroSerie && String(d.numeroSerie).toLowerCase().includes(q)) ||
@@ -4357,6 +4645,10 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
+    // Non-blocking background warmup for defibrillateurs dataset
+    setTimeout(() => {
+      warmupDefibrillateursStore().catch(e => console.warn("[Warmup] Background init error:", e));
+    }, 100);
   });
 }
 
