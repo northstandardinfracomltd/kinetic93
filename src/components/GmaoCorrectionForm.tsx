@@ -1020,6 +1020,7 @@ export default function GmaoCorrectionForm({
 
   // New States for Points 0, 1, 3, 4, 5, 8, 10
   const [interventionReference, setInterventionReference] = useState(report?.interventionReference || '');
+  const [autreReference, setAutreReference] = useState(report?.autreReference || report?.customReference || '');
   const [isCreatingNewMaterial, setIsCreatingNewMaterial] = useState(false);
   const [isNewEquipmentDropdownOpen, setIsNewEquipmentDropdownOpen] = useState(false);
   const [newMaterialType, setNewMaterialType] = useState('');
@@ -1150,6 +1151,7 @@ export default function GmaoCorrectionForm({
       setPhotoArriereUrl(report.photoArriereUrl || '');
       setPhotoResultatTestUrl(report.photoResultatTestUrl || '');
       setInterventionReference(report.interventionReference || '');
+      setAutreReference(report.autreReference || report.customReference || '');
       setMaterielInterchangeClient(report.materielInterchangeClient || 'Non');
       setCommentaireChangement(report.commentaireChangement || '');
       setFournitureMaterielPret(report.fournitureMaterielPret || 'Non');
@@ -1271,6 +1273,35 @@ export default function GmaoCorrectionForm({
       }
     }
   }, [snapshot.identifiant, interventionDate]);
+
+  useEffect(() => {
+    if (!autreReference) {
+      try {
+        const tenant = localStorage.getItem('defib_tenant_id') || 'demo';
+        const savedToursStr = localStorage.getItem(`defib_${tenant}_fsm_tours`) || localStorage.getItem(`defib_${tenant}_tours`);
+        if (savedToursStr) {
+          const loadedTours = JSON.parse(savedToursStr);
+          if (Array.isArray(loadedTours)) {
+            for (const tour of loadedTours) {
+              const missions = tour.missions || tour.passages || [];
+              const matched = missions.find((m: any) => 
+                (report?.missionId && (m.id === report.missionId || m.missionId === report.missionId)) ||
+                (report?.interventionReference && m.interventionReference === report.interventionReference) ||
+                (interventionReference && m.interventionReference === interventionReference) ||
+                (snapshot?.identifiant && (m.defibIdentifiant === snapshot.identifiant || m.identifiant === snapshot.identifiant))
+              );
+              if (matched?.autreReference) {
+                setAutreReference(matched.autreReference);
+                break;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+  }, [report, snapshot?.identifiant, interventionReference]);
 
   useEffect(() => {
     // Load Google Drive credentials from Firestore
@@ -2143,6 +2174,7 @@ export default function GmaoCorrectionForm({
       
       // Points 0, 3, 4, 5, 8, 10
       interventionReference,
+      autreReference,
       materielInterchangeClient,
       commentaireChangement,
       fournitureMaterielPret,
@@ -2551,6 +2583,21 @@ export default function GmaoCorrectionForm({
                 value={interventionReference}
                 onChange={(e) => setInterventionReference(e.target.value)}
                 placeholder="Ex: DNB-D18-719-10102026"
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+            {/* Point 0: Autre référence */}
+            <div className="space-y-1 bg-white">
+              <label htmlFor="input-autre-reference" className="block text-[11px] font-bold text-black uppercase tracking-wider">
+                Autre référence.
+              </label>
+              <input
+                type="text"
+                id="input-autre-reference"
+                value={autreReference}
+                onChange={(e) => setAutreReference(e.target.value)}
+                placeholder="Saisir autre référence..."
                 className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 focus:ring-1 focus:ring-indigo-500"
               />
             </div>

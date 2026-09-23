@@ -264,6 +264,7 @@ interface Expense {
 interface GeneratedReport {
   id: string;
   interventionReference?: string;
+  autreReference?: string;
   date: string;
   techName: string;
   defibId: string;
@@ -1762,6 +1763,7 @@ export default function PublicPortal({
                     rejectionReason: m.rejectionReason || "",
                     rejectedAt: m.rejectedAt || "",
                     interventionReference: m.interventionReference || "",
+                    autreReference: m.autreReference || "",
                     clientId: m.clientId,
                     clientName: m.clientName,
                     formationId: m.formationId,
@@ -2164,6 +2166,7 @@ export default function PublicPortal({
                 rejectionReason: m.rejectionReason || "",
                 rejectedAt: m.rejectedAt || "",
                 interventionReference: m.interventionReference || "",
+                autreReference: m.autreReference || "",
                 clientId: m.clientId,
                 clientName: m.clientName,
                 formationId: m.formationId,
@@ -8022,6 +8025,18 @@ export default function PublicPortal({
                                             </p>
                                           )}
 
+                                          {p.autreReference && (
+                                            <p style={{ color: "#000000" }}>
+                                              Autre référence :{" "}
+                                              <span
+                                                className="font-semibold"
+                                                style={{ color: "#000000" }}
+                                              >
+                                                {p.autreReference}
+                                              </span>
+                                            </p>
+                                          )}
+
                                           {/* Bon de commande */}
                                           <p style={{ color: "#000000" }}>
                                             Bon de commande :{" "}
@@ -8205,6 +8220,17 @@ export default function PublicPortal({
                                                 setReportActivePassageNum(
                                                   p.num,
                                                 );
+                                                setReportToEdit({
+                                                  id: `REP-${Date.now()}`,
+                                                  defibId: matched.id,
+                                                  defibIdentifiant: p.identifiant,
+                                                  interventionReference: p.interventionReference || "",
+                                                  autreReference: p.autreReference || "",
+                                                  siteMission: "DÉPLACEMENT",
+                                                  title: "RAPPORT D’INTERVENTION",
+                                                  missionId: p.id,
+                                                  tourId: t.id,
+                                                });
                                                 setIsReportOverlayOpen(true);
                                               } else {
                                                 alert(

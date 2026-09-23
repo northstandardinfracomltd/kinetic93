@@ -1511,6 +1511,7 @@ export default function App() {
             missionId: m.id,
             defibIdentifiant: m.defibIdentifiant,
             interventionReference: m.interventionReference,
+            autreReference: m.autreReference || '',
             isUpcoming: true,
             status: 'À venir',
             validated: false,
@@ -1538,6 +1539,7 @@ export default function App() {
               existing.techName !== (tour.techName || 'Non assigné') ||
               existing.origin !== tourOrigin ||
               existing.defibIdentifiant !== m.defibIdentifiant ||
+              existing.autreReference !== (m.autreReference || '') ||
               existing.estimatedDate !== (m.estimatedDate || tour.startDate || tour.date || '') ||
               existing.estimatedSlot !== (m.estimatedSlot || '')
             ) {
@@ -1552,6 +1554,7 @@ export default function App() {
                 estimatedSlot: m.estimatedSlot || '',
                 origin: tourOrigin,
                 defibIdentifiant: m.defibIdentifiant,
+                autreReference: m.autreReference || '',
                 defibSnapshot: { ...existing.defibSnapshot, identifiant: m.defibIdentifiant }
               };
             }
@@ -1860,7 +1863,8 @@ export default function App() {
       status: 'Brouillon',
       priority: 'Normale',
       time: '14:00',
-      interventionReference: `INT-2026-${String(Date.now()).slice(-5)}`
+      interventionReference: `INT-2026-${String(Date.now()).slice(-5)}`,
+      autreReference: ''
     };
     const updatedTours = fsmTours.map(t => {
       if (t.id === tourId) {
@@ -2822,6 +2826,7 @@ export default function App() {
                     <div class="pdf-line"><span class="pdf-label">Version du logiciel :</span> <span class="pdf-bold">${snapshot.versionLogiciel || '—'}</span></div>
                     <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
                       <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Référence intervention :</span> <span class="pdf-bold">${report.interventionReference || '—'}</span></div>
+                      ${report.autreReference ? `<div class="pdf-line" style="flex: 1;"><span class="pdf-label">Autre référence :</span> <span class="pdf-bold">${report.autreReference}</span></div>` : ''}
                       <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Entête :</span> <span class="pdf-bold">${bonCommandeEntete || '—'}</span></div>
                     </div>
                     <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Sous contrat :</span> <span class="pdf-bold">${snapshot.contrat || 'Non'}</span></div>
@@ -3254,6 +3259,7 @@ export default function App() {
                   ${isVisibleVersionLogiciel ? `<div class="pdf-line"><span class="pdf-label">Version du logiciel :</span> <span class="pdf-bold">${snapshot.versionLogiciel || '—'}</span></div>` : ''}
                   <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Référence intervention :</span> <span class="pdf-bold">${report.interventionReference || '—'}</span></div>
+                    ${report.autreReference ? `<div class="pdf-line" style="flex: 1;"><span class="pdf-label">Autre référence :</span> <span class="pdf-bold">${report.autreReference}</span></div>` : ''}
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Entête :</span> <span class="pdf-bold">${bonCommandeEntete || '—'}</span></div>
                   </div>
                   <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
@@ -7842,14 +7848,39 @@ export default function App() {
                                             </div>
                                           </div>
 
-                                          {/* Raison/Prestation. */}
-                                          <div className="pt-2 space-y-1.5 relative font-sans w-full bg-transparent">
-                                            <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
-                                              Raison/Prestation.
-                                            </label>
-                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full items-center bg-transparent">
-                                              {/* Dropdown Select on the left */}
-                                              <div className="md:col-span-1 w-full bg-transparent">
+                                          {/* Autre référence & Raison/Prestation */}
+                                          <div className="pt-2 grid grid-cols-1 lg:grid-cols-4 gap-3 w-full items-start bg-transparent">
+                                            {/* Autre référence. */}
+                                            <div className="lg:col-span-1 space-y-1.5 font-sans w-full bg-transparent">
+                                              <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
+                                                {translate("Autre référence.")}
+                                              </label>
+                                              <input
+                                                type="text"
+                                                value={m.autreReference || ''}
+                                                onChange={(e) => updateFsmMission(t.id, m.id, { autreReference: e.target.value })}
+                                                placeholder={translate("Saisir autre référence...")}
+                                                className="w-full font-sans focus:outline-none"
+                                                style={{
+                                                  border: '1px solid #dedede',
+                                                  borderRadius: '13px',
+                                                  padding: '12px',
+                                                  fontSize: '16px',
+                                                  fontWeight: '100',
+                                                  color: '#000000',
+                                                  backgroundColor: '#ffffff'
+                                                }}
+                                              />
+                                            </div>
+
+                                            {/* Raison/Prestation. */}
+                                            <div className="lg:col-span-3 space-y-1.5 relative font-sans w-full bg-transparent">
+                                              <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
+                                                {translate("Raison/Prestation.")}
+                                              </label>
+                                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full items-center bg-transparent">
+                                                {/* Dropdown Select on the left */}
+                                                <div className="md:col-span-1 w-full bg-transparent">
                                                 <select
                                                   value=""
                                                   onChange={(e) => {
@@ -7903,7 +7934,7 @@ export default function App() {
                                               </div>
 
                                               {/* Selected Reasons Capsules listed on the right */}
-                                              <div className="md:col-span-3 w-full bg-transparent">
+                                              <div className="md:col-span-2 w-full bg-transparent">
                                                 {(() => {
                                                   const currentReasons: string[] = Array.isArray(m.reasons)
                                                     ? m.reasons
@@ -7946,6 +7977,7 @@ export default function App() {
                                                 })()}
                                               </div>
                                             </div>
+                                          </div>
                                           </div>
 
                                           {/* Info block displaying Commentaires of selected Bon de commande */}
@@ -9494,14 +9526,39 @@ export default function App() {
                                         
                                       </div>
 
-                                      {/* Raison/Prestation. (Stand-alone multi-selection with capsules on the right) */}
-                                      <div className="pt-2 space-y-1.5 relative font-sans w-full bg-transparent">
-                                        <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
-                                          Raison/Prestation.
-                                        </label>
-                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full items-center bg-transparent">
-                                          {/* Dropdown Select on the left */}
-                                          <div className="md:col-span-1 w-full bg-transparent">
+                                      {/* Autre référence & Raison/Prestation */}
+                                      <div className="pt-2 grid grid-cols-1 lg:grid-cols-4 gap-3 w-full items-start bg-transparent">
+                                        {/* Autre référence. */}
+                                        <div className="lg:col-span-1 space-y-1.5 font-sans w-full bg-transparent">
+                                          <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
+                                            {translate("Autre référence.")}
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={m.autreReference || ''}
+                                            onChange={(e) => updateFsmMission(t.id, m.id, { autreReference: e.target.value })}
+                                            placeholder={translate("Saisir autre référence...")}
+                                            className="w-full font-sans focus:outline-none"
+                                            style={{
+                                              border: '1px solid #dedede',
+                                              borderRadius: '13px',
+                                              padding: '12px',
+                                              fontSize: '16px',
+                                              fontWeight: '100',
+                                              color: '#000000',
+                                              backgroundColor: '#ffffff'
+                                            }}
+                                          />
+                                        </div>
+
+                                        {/* Raison/Prestation. */}
+                                        <div className="lg:col-span-3 space-y-1.5 relative font-sans w-full bg-transparent">
+                                          <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
+                                            {translate("Raison/Prestation.")}
+                                          </label>
+                                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full items-center bg-transparent">
+                                            {/* Dropdown Select on the left */}
+                                            <div className="md:col-span-1 w-full bg-transparent">
                                             <select
                                               value=""
                                               onChange={(e) => {
@@ -9554,8 +9611,8 @@ export default function App() {
                                             </select>
                                           </div>
 
-                                          {/* Selected Reasons Capsules listed on the right */}
-                                          <div className="md:col-span-3 w-full bg-transparent">
+                                            {/* Selected Reasons Capsules listed on the right */}
+                                            <div className="md:col-span-2 w-full bg-transparent">
                                             {(() => {
                                               const currentReasons: string[] = Array.isArray(m.reasons)
                                                 ? m.reasons
@@ -9598,6 +9655,7 @@ export default function App() {
                                                 </div>
                                               );
                                             })()}
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
@@ -10172,8 +10230,10 @@ export default function App() {
               const identifiantMatch = (rep.defibIdentifiant || '').toLowerCase().includes(query);
               const serieMatch = (rep.defibSnapshot?.numeroSerie || '').toLowerCase().includes(query);
               const techMatch = (rep.techName || '').toLowerCase().includes(query);
+              const refMatch = (rep.interventionReference || '').toLowerCase().includes(query);
+              const autreRefMatch = (rep.autreReference || '').toLowerCase().includes(query);
               
-              return titleMatch || identifiantMatch || serieMatch || techMatch;
+              return titleMatch || identifiantMatch || serieMatch || techMatch || refMatch || autreRefMatch;
             });
 
             return (
@@ -10541,6 +10601,7 @@ export default function App() {
                             <th className="px-4 py-3.5" style={thStyle}>Identifiant.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Technicien.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Réf. Intervention.</th>
+                            <th className="px-4 py-3.5" style={thStyle}>Autre référence</th>
                             <th className="px-4 py-3.5" style={thStyle}>Origine.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Planifié/Effectué.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Situation.</th>
@@ -10732,6 +10793,46 @@ export default function App() {
                                       {rep.interventionReference}
                                     </div>
                                   ) : null}
+                                </td>
+
+                                {/* Autre référence */}
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  {(() => {
+                                    let val = rep.autreReference || rep.customReference || '';
+                                    if (!val) {
+                                      for (const tour of fsmTours) {
+                                        for (const m of (tour.missions || [])) {
+                                          if ((rep.missionId && m.id === rep.missionId) ||
+                                              (rep.interventionReference && m.interventionReference === rep.interventionReference) ||
+                                              (rep.defibIdentifiant && m.defibIdentifiant === rep.defibIdentifiant)) {
+                                            if (m.autreReference) {
+                                              val = m.autreReference;
+                                              break;
+                                            }
+                                          }
+                                        }
+                                        if (val) break;
+                                      }
+                                    }
+                                    if (!val || !val.trim()) return null;
+                                    return (
+                                      <div 
+                                        style={{ 
+                                          display: 'inline-flex', 
+                                          alignItems: 'center', 
+                                          gap: '8px',
+                                          border: '1px solid rgb(231, 231, 231)',
+                                          borderRadius: '1000px',
+                                          padding: '4px 12px',
+                                          backgroundColor: '#ffffff',
+                                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                        }} 
+                                        className="whitespace-nowrap font-medium"
+                                      >
+                                        {val}
+                                      </div>
+                                    );
+                                  })()}
                                 </td>
 
                                 {/* Origine. */}
@@ -11303,7 +11404,24 @@ export default function App() {
                 {/* Side-bar popup for editing report correction form (Corriger) */}
                 {(() => {
                   if (!editingReportId) return null;
-                  const repToEdit = generatedReports.find(r => r.id === editingReportId);
+                  const repToEdit = (() => {
+                    const rep = generatedReports.find(r => r.id === editingReportId);
+                    if (!rep) return null;
+                    if (!rep.autreReference) {
+                      for (const tour of fsmTours) {
+                        for (const m of (tour.missions || [])) {
+                          if ((rep.missionId && m.id === rep.missionId) ||
+                              (rep.interventionReference && m.interventionReference === rep.interventionReference) ||
+                              (rep.defibIdentifiant && m.defibIdentifiant === rep.defibIdentifiant)) {
+                            if (m.autreReference) {
+                              return { ...rep, autreReference: m.autreReference };
+                            }
+                          }
+                        }
+                      }
+                    }
+                    return rep;
+                  })();
                   if (!repToEdit) return null;
 
                   return (
@@ -11331,6 +11449,33 @@ export default function App() {
                             onSave={(updatedReport) => {
                               const updatedReports = generatedReports.map(r => r.id === editingReportId ? updatedReport : r);
                               saveReports(updatedReports);
+                              if (updatedReport.autreReference !== undefined) {
+                                const targetMissionId = updatedReport.missionId;
+                                const targetRef = updatedReport.interventionReference;
+                                if (targetMissionId || targetRef) {
+                                  let toursChanged = false;
+                                  const updatedTours = fsmTours.map(t => {
+                                    let missionChanged = false;
+                                    const nextMissions = (t.missions || []).map((m: any) => {
+                                      if ((targetMissionId && m.id === targetMissionId) || (targetRef && m.interventionReference === targetRef)) {
+                                        if (m.autreReference !== updatedReport.autreReference) {
+                                          missionChanged = true;
+                                          return { ...m, autreReference: updatedReport.autreReference };
+                                        }
+                                      }
+                                      return m;
+                                    });
+                                    if (missionChanged) {
+                                      toursChanged = true;
+                                      return { ...t, missions: nextMissions };
+                                    }
+                                    return t;
+                                  });
+                                  if (toursChanged) {
+                                    saveFsmTours(updatedTours);
+                                  }
+                                }
+                              }
                               if (updatedReport.defibSnapshot) {
                                 handleUpdateDefib(updatedReport.defibSnapshot);
                               }
