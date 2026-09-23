@@ -769,6 +769,22 @@ export default function App() {
   const [gmaoSearchQuery, setGmaoSearchQuery] = useState('');
   const [gmaoFilter, setGmaoFilter] = useState<'upcoming' | 'moderation' | 'validated'>('moderation');
   const [gmaoIncludeAutresMateriels, setGmaoIncludeAutresMateriels] = useState<boolean>(true);
+  const [isGmaoFilterPaneOpen, setIsGmaoFilterPaneOpen] = useState<boolean>(false);
+  const [gmaoCurrentPage, setGmaoCurrentPage] = useState<number>(1);
+  const [draftGmaoFilters, setDraftGmaoFilters] = useState({
+    client: 'Tous',
+    technicien: 'Tous',
+    startDate: '',
+    endDate: '',
+    drapeau: 'Tous',
+  });
+  const [activeGmaoFilters, setActiveGmaoFilters] = useState({
+    client: 'Tous',
+    technicien: 'Tous',
+    startDate: '',
+    endDate: '',
+    drapeau: 'Tous',
+  });
   const [gmaoIsTableFitView, setGmaoIsTableFitView] = useState<boolean>(false);
   const [gmaoTableFitScale, setGmaoTableFitScale] = useState<number>(1);
   const gmaoNaturalTableWidthRef = useRef<number>(1500);
@@ -10171,6 +10187,71 @@ export default function App() {
               cursor: 'default',
             };
 
+            const filterInputStyle: React.CSSProperties = {
+              border: '1px solid #dedede',
+              borderRadius: '13px',
+              padding: '9px 19px',
+              fontSize: '16px',
+              fontWeight: '100',
+              color: '#000000',
+              backgroundColor: '#ffffff',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              outline: 'none',
+              width: '100%',
+            };
+
+            const cancelFiltersButtonStyle: React.CSSProperties = {
+              ...rowActionButtonStyle,
+              backgroundColor: '#000000',
+              color: '#ffffff',
+              width: '100%',
+            };
+
+            const applyFiltersButtonStyle: React.CSSProperties = {
+              ...rowActionButtonStyle,
+              backgroundColor: '#000000',
+              color: '#ffffff',
+              width: '100%',
+            };
+
+            const sortedClients = [...(clients || [])].sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'));
+
+            const availableTechnicians = (() => {
+              const memberTechs = (members || []).filter((m: any) => isTechnicianMember(m)).map((m: any) => m.name || m.email || '');
+              const reportTechs = (generatedReports || []).map((r: any) => r.techName).filter(Boolean);
+              return Array.from(new Set([...memberTechs, ...reportTechs])).filter(t => t && t.trim() !== '').sort((a, b) => a.localeCompare(b, 'fr'));
+            })();
+
+            const availableGmaoFlags = (() => {
+              const vars = (variables || []).filter(
+                (v: any) => v.category === 'Drapeau GMAO' || v.category === 'Drapeau post-intervention'
+              );
+              const flagMap = new Map<string, { id: string; nom: string; couleurHex?: string }>();
+              for (const v of vars) {
+                if (v.nom) {
+                  flagMap.set(v.id || v.nom, { id: v.id || v.nom, nom: v.nom, couleurHex: v.couleurHex });
+                }
+              }
+              for (const r of (generatedReports || [])) {
+                if (r.drapeaux && Array.isArray(r.drapeaux)) {
+                  for (const f of r.drapeaux) {
+                    if (f.nom && !flagMap.has(f.id || f.nom)) {
+                      flagMap.set(f.id || f.nom, { id: f.id || f.nom, nom: f.nom, couleurHex: f.couleurHex });
+                    }
+                  }
+                }
+              }
+              return Array.from(flagMap.values()).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+            })();
+
+            const activeGmaoFiltersCount = [
+              activeGmaoFilters.client !== 'Tous',
+              activeGmaoFilters.technicien !== 'Tous',
+              Boolean(activeGmaoFilters.startDate),
+              Boolean(activeGmaoFilters.endDate),
+              activeGmaoFilters.drapeau !== 'Tous',
+            ].filter(Boolean).length;
+
             const isGmaoController = (() => {
               if (!loggedUser || !loggedUser.email) return true;
               const m = members.find(lm => lm.email?.toLowerCase().trim() === loggedUser.email.toLowerCase().trim());
@@ -10223,6 +10304,71 @@ export default function App() {
                 if (rep.validated || isUpcoming) return false;
               }
 
+              // Sidepane Filters
+              // 1. Client filter
+              if (activeGmaoFilters.client !== 'Tous') {
+                const repClientId = rep.clientId || rep.defibSnapshot?.clientId;
+                const matchClient = clients.find((c: any) => c.id === activeGmaoFilters.client);
+                const targetClientName = matchClient?.nom?.trim().toLowerCase();
+                
+                let isClientMatch = false;
+                if (repClientId && repClientId === activeGmaoFilters.client) {
+                  isClientMatch = true;
+                } else if (rep.clientName && targetClientName && rep.clientName.trim().toLowerCase() === targetClientName) {
+                  isClientMatch = true;
+                } else if (rep.defibIdentifiant) {
+                  const d = defibrillateurs.find((item: any) => item.identifiant === rep.defibIdentifiant);
+                  if (d?.clientId === activeGmaoFilters.client) isClientMatch = true;
+                  const oe = otherEquipments.find((item: any) => item.identifiant === rep.defibIdentifiant);
+                  if (oe?.clientId === activeGmaoFilters.client) isClientMatch = true;
+                }
+                if (!isClientMatch) return false;
+              }
+
+              // 2. Technicien filter
+              if (activeGmaoFilters.technicien !== 'Tous') {
+                const targetTech = activeGmaoFilters.technicien.trim().toLowerCase();
+                const repTech = (rep.techName || rep.technicien || '').trim().toLowerCase();
+                if (!repTech || repTech !== targetTech) {
+                  return false;
+                }
+              }
+
+              // 3. Plage filter (dates)
+              if (activeGmaoFilters.startDate || activeGmaoFilters.endDate) {
+                const parseReportDate = (r: any): Date | null => {
+                  const dStr = r.date || r.createdAt || r.tourDate || r.estimatedDate;
+                  if (!dStr) return null;
+                  if (typeof dStr === 'string' && /^\d{1,2}\/\d{1,2}\/\d{4}/.test(dStr)) {
+                    const parts = dStr.split(/[\s/:]+/);
+                    const day = parseInt(parts[0], 10);
+                    const month = parseInt(parts[1], 10) - 1;
+                    const year = parseInt(parts[2], 10);
+                    return new Date(year, month, day);
+                  }
+                  const d = new Date(dStr);
+                  return isNaN(d.getTime()) ? null : d;
+                };
+                const repDate = parseReportDate(rep);
+                if (!repDate) return false;
+                if (activeGmaoFilters.startDate) {
+                  const start = new Date(activeGmaoFilters.startDate + 'T00:00:00');
+                  if (repDate < start) return false;
+                }
+                if (activeGmaoFilters.endDate) {
+                  const end = new Date(activeGmaoFilters.endDate + 'T23:59:59');
+                  if (repDate > end) return false;
+                }
+              }
+
+              // 4. Drapeau filter
+              if (activeGmaoFilters.drapeau !== 'Tous') {
+                const targetFlag = activeGmaoFilters.drapeau;
+                const flags = rep.drapeaux || [];
+                const hasFlag = flags.some((f: any) => f.id === targetFlag || f.nom === targetFlag);
+                if (!hasFlag) return false;
+              }
+
               const query = gmaoSearchQuery.toLowerCase().trim();
               if (!query) return true;
               
@@ -10232,9 +10378,15 @@ export default function App() {
               const techMatch = (rep.techName || '').toLowerCase().includes(query);
               const refMatch = (rep.interventionReference || '').toLowerCase().includes(query);
               const autreRefMatch = (rep.autreReference || '').toLowerCase().includes(query);
+              const clientMatch = (rep.clientName || '').toLowerCase().includes(query);
               
-              return titleMatch || identifiantMatch || serieMatch || techMatch || refMatch || autreRefMatch;
+              return titleMatch || identifiantMatch || serieMatch || techMatch || refMatch || autreRefMatch || clientMatch;
             });
+
+            const GMAO_ITEMS_PER_PAGE = 100;
+            const totalGmaoPages = Math.max(1, Math.ceil(filteredReports.length / GMAO_ITEMS_PER_PAGE));
+            const currentPageSafe = Math.min(gmaoCurrentPage, totalGmaoPages);
+            const paginatedReports = filteredReports.slice((currentPageSafe - 1) * GMAO_ITEMS_PER_PAGE, currentPageSafe * GMAO_ITEMS_PER_PAGE);
 
             return (
               <div className="space-y-6 animate-fadeIn" id="gmao-tab-container">
@@ -10435,6 +10587,25 @@ export default function App() {
                         </div>
                       </label>
 
+                      {/* Bouton Filtres */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraftGmaoFilters(activeGmaoFilters);
+                          setIsGmaoFilterPaneOpen(true);
+                        }}
+                        id="btn-trigger-gmao-filters"
+                        style={customButtonStyle}
+                        className="flex items-center gap-1.5 ml-2 cursor-pointer"
+                      >
+                        <span>{t('Filtres')}</span>
+                        {activeGmaoFiltersCount > 0 && (
+                          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#fe4eba] rounded-full ml-1">
+                            {activeGmaoFiltersCount}
+                          </span>
+                        )}
+                      </button>
+
                       {/* No Actualiser button */}
                     </div>
                   </div>
@@ -10597,6 +10768,7 @@ export default function App() {
                             <th className="px-4 py-3.5 w-10 text-center" style={thStyle}></th>
                             <th className="px-4 py-3.5" style={thStyle}>Horodatage.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Catégorie matériel.</th>
+                            <th className="px-4 py-3.5" style={thStyle}>Client.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Série.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Identifiant.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Technicien.</th>
@@ -10609,7 +10781,7 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody className="text-slate-700 text-xs">
-                          {filteredReports.map((rep) => {
+                          {paginatedReports.map((rep) => {
                             const isConforme = (rep.defibSnapshot?.conforme || 'Oui') === 'Oui';
                             const isEffectue = 
                               rep.missionStatus === 'Effectué' ||
@@ -10624,9 +10796,9 @@ export default function App() {
                             // Button states according to specifications:
                             // — À VENIR : Gérer (Enabled), Corriger (Disabled), Valider (Disabled), Télécharger (Disabled)
                             // — MODÉRATION : Gérer (Enabled), Corriger (Enabled), Valider (Enabled), Télécharger (Enabled)
-                            // — VALIDÉS : Gérer (Enabled), Corriger (Disabled), Valider (Disabled), Télécharger (Enabled)
+                            // — VALIDÉS : Gérer (Enabled), Corriger (Enabled), Valider (Disabled), Télécharger (Enabled)
                             const isGererDisabled = !isGmaoController;
-                            const isCorrigerDisabled = isUpcoming || isValidated || !isGmaoController;
+                            const isCorrigerDisabled = isUpcoming || !isGmaoController;
                             const isValiderDisabled = isUpcoming || isValidated || !isGmaoController;
                             const isTelechargerDisabled = isUpcoming;
 
@@ -10721,6 +10893,61 @@ export default function App() {
                                   >
                                     {getCategoryName(rep)}
                                   </div>
+                                </td>
+
+                                {/* Client. */}
+                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                  {(() => {
+                                    let clientNom = '';
+                                    if (rep.clientName && rep.clientName.trim()) {
+                                      clientNom = rep.clientName.trim();
+                                    } else {
+                                      const cId = rep.clientId || rep.defibSnapshot?.clientId;
+                                      if (cId) {
+                                        const found = clients.find((c: any) => c.id === cId);
+                                        if (found?.nom) clientNom = found.nom.trim();
+                                      }
+                                      if (!clientNom && rep.defibIdentifiant) {
+                                        const defib = defibrillateurs.find((d: any) => d.identifiant === rep.defibIdentifiant);
+                                        if (defib?.clientId) {
+                                          const found = clients.find((c: any) => c.id === defib.clientId);
+                                          if (found?.nom) clientNom = found.nom.trim();
+                                        }
+                                        if (!clientNom) {
+                                          const oe = otherEquipments.find((e: any) => e.identifiant === rep.defibIdentifiant);
+                                          if (oe?.clientId) {
+                                            const found = clients.find((c: any) => c.id === oe.clientId);
+                                            if (found?.nom) clientNom = found.nom.trim();
+                                          }
+                                        }
+                                      }
+                                      if (!clientNom && rep.siteMission && rep.siteMission !== 'DÉPLACEMENT' && rep.siteMission !== 'ATELIER SAV') {
+                                        clientNom = rep.siteMission.trim();
+                                      }
+                                    }
+
+                                    if (!clientNom) return '—';
+                                    const displayNom = clientNom.length > 35 ? clientNom.substring(0, 35) + '...' : clientNom;
+
+                                    return (
+                                      <div 
+                                        style={{ 
+                                          display: 'inline-flex', 
+                                          alignItems: 'center', 
+                                          gap: '8px',
+                                          border: '1px solid rgb(231, 231, 231)',
+                                          borderRadius: '1000px',
+                                          padding: '4px 12px',
+                                          backgroundColor: '#ffffff',
+                                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                        }} 
+                                        className="whitespace-nowrap font-medium"
+                                        title={clientNom}
+                                      >
+                                        {displayNom}
+                                      </div>
+                                    );
+                                  })()}
                                 </td>
 
                                 {/* Série */}
@@ -11152,6 +11379,49 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* GMAO Total Summary & Pagination */}
+                <div 
+                  className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4" 
+                  id="gmao-tab-total-summary"
+                >
+                  <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
+                    {`Total rapports PDF (Tous) : ${generatedReports.length.toLocaleString('en-US')} (${paginatedReports.length} sur cette page).`}
+                  </div>
+
+                  {/* Pagination Controls */}
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={currentPageSafe}
+                      onChange={(e) => {
+                        setGmaoCurrentPage(Number(e.target.value));
+                        gmaoTableContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      id="select-gmao-page"
+                      className="appearance-none cursor-pointer focus:outline-none px-5 py-2"
+                      style={{
+                        fontSize: '18px',
+                        borderRadius: '13px',
+                        boxShadow: 'none',
+                        backgroundColor: '#000000',
+                        borderColor: '#000000',
+                        borderWidth: '1px',
+                        borderStyle: 'solid',
+                        color: '#ffffff',
+                        textAlign: 'center',
+                        textAlignLast: 'center',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {Array.from({ length: totalGmaoPages }, (_, i) => i + 1).map((p) => (
+                        <option key={p} value={p} style={{ backgroundColor: '#000000', color: '#ffffff', textAlign: 'center' }}>
+                          Page {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 {/* Side-bar popup for managing report moderation flags & comments */}
                 {(() => {
                   const managingReport = generatedReports.find(r => r.id === managingReportId);
@@ -11534,6 +11804,173 @@ export default function App() {
                     </div>
                   );
                 })()}
+
+                {/* 🧭 GMAO FILTER SIDE PANE / DRAWER 🧭 */}
+                {isGmaoFilterPaneOpen && (
+                  <div 
+                    className="fixed inset-y-0 right-0 w-80 sm:w-96 bg-white shadow-2xl z-[9999] flex flex-col border-l border-slate-200 transform transition-transform" 
+                    id="gmao-filter-side-pane"
+                    style={{ height: '100%' }}
+                  >
+                    {/* Header */}
+                    <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                      <h3 className="text-xl font-bold text-black font-sans">
+                        {t("Filtres")}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setIsGmaoFilterPaneOpen(false)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-black hover:bg-slate-100 transition-all cursor-pointer"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    {/* Scroll Area containing all fields */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                      {/* Filter 1: Client */}
+                      <div className="space-y-1.5">
+                        <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                          Client.
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={draftGmaoFilters.client}
+                            onChange={(e) => setDraftGmaoFilters({ ...draftGmaoFilters, client: e.target.value })}
+                            style={filterInputStyle}
+                            className="cursor-pointer"
+                          >
+                            <option value="Tous">Tous clients.</option>
+                            {sortedClients.map(c => (
+                              <option key={c.id} value={c.id}>{c.nom}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Filter 2: Technicien */}
+                      <div className="space-y-1.5">
+                        <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                          Technicien.
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={draftGmaoFilters.technicien}
+                            onChange={(e) => setDraftGmaoFilters({ ...draftGmaoFilters, technicien: e.target.value })}
+                            style={filterInputStyle}
+                            className="cursor-pointer"
+                          >
+                            <option value="Tous">Tous techniciens.</option>
+                            {availableTechnicians.map(tech => (
+                              <option key={tech} value={tech}>{tech}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Filter 3: Plage (date début et fin) */}
+                      <div className="space-y-1.5">
+                        <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                          Plage.
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-1">Date début</span>
+                            <input
+                              type="date"
+                              value={draftGmaoFilters.startDate}
+                              onChange={(e) => setDraftGmaoFilters({ ...draftGmaoFilters, startDate: e.target.value })}
+                              style={filterInputStyle}
+                              className="cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-1">Date fin</span>
+                            <input
+                              type="date"
+                              value={draftGmaoFilters.endDate}
+                              onChange={(e) => setDraftGmaoFilters({ ...draftGmaoFilters, endDate: e.target.value })}
+                              style={filterInputStyle}
+                              className="cursor-pointer"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Filter 4: Drapeau */}
+                      <div className="space-y-1.5">
+                        <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                          Drapeau.
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={draftGmaoFilters.drapeau}
+                            onChange={(e) => setDraftGmaoFilters({ ...draftGmaoFilters, drapeau: e.target.value })}
+                            style={filterInputStyle}
+                            className="cursor-pointer"
+                          >
+                            <option value="Tous">Tous drapeaux.</option>
+                            {availableGmaoFlags.map(v => (
+                              <option key={v.id || v.nom} value={v.id || v.nom}>
+                                {v.nom} {v.couleurHex ? `(${v.couleurHex})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="p-6 bg-white flex gap-4 shrink-0 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const defaults = {
+                            client: 'Tous',
+                            technicien: 'Tous',
+                            startDate: '',
+                            endDate: '',
+                            drapeau: 'Tous',
+                          };
+                          setDraftGmaoFilters(defaults);
+                          setActiveGmaoFilters(defaults);
+                          setIsGmaoFilterPaneOpen(false);
+                          setGmaoCurrentPage(1);
+                        }}
+                        style={{ ...cancelFiltersButtonStyle, fontSize: '18px' }}
+                        className="flex-1 text-center font-sans cursor-pointer animate-none"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveGmaoFilters(draftGmaoFilters);
+                          setIsGmaoFilterPaneOpen(false);
+                          setGmaoCurrentPage(1);
+                        }}
+                        style={{
+                          ...applyFiltersButtonStyle,
+                          backgroundColor: 'rgb(53, 86, 236)',
+                          color: 'rgb(255, 255, 255)',
+                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                          fontSize: '18px',
+                        }}
+                        className="flex-1 text-center font-sans cursor-pointer animate-none"
+                      >
+                        Appliquer
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Drawer Overlay backdrop */}
+                {isGmaoFilterPaneOpen && (
+                  <div 
+                    onClick={() => setIsGmaoFilterPaneOpen(false)}
+                    className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-[9990]"
+                  />
+                )}
               </div>
             );
           })()}
