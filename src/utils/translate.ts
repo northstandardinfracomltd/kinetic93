@@ -981,6 +981,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Minimiser et ajuster l'affichage": "Minimize and fit display",
     "Retourner l’affichage standard": "Return to standard display",
     "Retourner l'affichage standard": "Return to standard display",
+    "Inclure Autres Matériels": "Include Other Equipment",
     "Télécharger la sélection en PDF": "Download selection as PDF",
 
     "Entrepôt A": "Warehouse A",

@@ -117,7 +117,9 @@ import {
   Download,
   Eye,
   ShoppingBag,
-  Bell
+  Bell,
+  Minimize2,
+  Maximize2
 } from 'lucide-react';
 
 export type AppTab = 
@@ -766,6 +768,13 @@ export default function App() {
   const [fsmSearchQuery, setFsmSearchQuery] = useState('');
   const [gmaoSearchQuery, setGmaoSearchQuery] = useState('');
   const [gmaoFilter, setGmaoFilter] = useState<'upcoming' | 'moderation' | 'validated'>('moderation');
+  const [gmaoIncludeAutresMateriels, setGmaoIncludeAutresMateriels] = useState<boolean>(true);
+  const [gmaoIsTableFitView, setGmaoIsTableFitView] = useState<boolean>(false);
+  const [gmaoTableFitScale, setGmaoTableFitScale] = useState<number>(1);
+  const gmaoNaturalTableWidthRef = useRef<number>(1500);
+  const gmaoTableContainerRef = useRef<HTMLDivElement>(null);
+  const gmaoTableRef = useRef<HTMLTableElement>(null);
+
   const [managingReportId, setManagingReportId] = useState<string | null>(null);
   const [fsmDateFilter, setFsmDateFilter] = useState<string>('Tous');
   const [fsmRegionFilter, setFsmRegionFilter] = useState<string>('Tous');
@@ -1306,6 +1315,61 @@ export default function App() {
     defibIdentifiant: string;
     siteMission: string;
   } | null>(null);
+
+  const toggleGmaoTableFitView = () => {
+    setGmaoIsTableFitView(prev => {
+      const next = !prev;
+      if (next) {
+        if (gmaoTableContainerRef.current) {
+          const sWidth = gmaoTableContainerRef.current.scrollWidth;
+          if (sWidth > 500) {
+            gmaoNaturalTableWidthRef.current = sWidth;
+          }
+          const clientW = gmaoTableContainerRef.current.clientWidth;
+          const naturalW = gmaoNaturalTableWidthRef.current || 1500;
+          const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
+          setGmaoTableFitScale(scale);
+        }
+      } else {
+        setGmaoTableFitScale(1);
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'gmao' || !gmaoTableContainerRef.current) return;
+
+    const updateWidth = () => {
+      if (!gmaoTableContainerRef.current) return;
+      const clientW = gmaoTableContainerRef.current.clientWidth;
+      if (!gmaoIsTableFitView) {
+        const sWidth = gmaoTableContainerRef.current.scrollWidth;
+        if (sWidth > 500) {
+          gmaoNaturalTableWidthRef.current = sWidth;
+        }
+        setGmaoTableFitScale(1);
+      } else {
+        const naturalW = gmaoNaturalTableWidthRef.current || 1500;
+        const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
+        setGmaoTableFitScale(scale);
+      }
+    };
+
+    updateWidth();
+    const timer = setTimeout(updateWidth, 150);
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(gmaoTableContainerRef.current);
+
+    window.addEventListener('resize', updateWidth);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, [activeTab, gmaoIsTableFitView, gmaoFilter, gmaoSearchQuery, gmaoIncludeAutresMateriels, generatedReports]);
 
   const saveReports = (updated: any[]) => {
     setGeneratedReports(updated);
@@ -10075,6 +10139,16 @@ export default function App() {
                 rep.defibIdentifiant === 'Formation';
               if (isFormation) return false;
 
+              if (!gmaoIncludeAutresMateriels) {
+                const isOtherEquipment = 
+                  (rep.equipmentType && !['défibrillateur', 'defibrillateur'].includes(rep.equipmentType.toLowerCase())) ||
+                  (rep.defibSnapshot?.categorie && !['défibrillateur', 'defibrillateur'].includes(rep.defibSnapshot.categorie.toLowerCase())) ||
+                  (rep.title && rep.title.trim().toUpperCase().startsWith("RAPPORT TECHNIQUE - ") && !rep.title.toUpperCase().includes("DÉFIBRILLATEUR") && !rep.title.toUpperCase().includes("DEFIBRILLATEUR")) ||
+                  (otherEquipments && otherEquipments.some((oe: any) => oe.identifiant && oe.identifiant === rep.defibIdentifiant));
+                
+                if (isOtherEquipment) return false;
+              }
+
               const isEffectue = 
                 rep.missionStatus === 'Effectué' ||
                 rep.conforme === 'Conforme' ||
@@ -10272,6 +10346,35 @@ export default function App() {
                         </button>
                       </div>
 
+                      {/* Apple-style toggle ON/OFF: Inclure Autres Matériels */}
+                      <label 
+                        className="inline-flex items-center gap-2 cursor-pointer select-none ml-1"
+                        style={{ cursor: 'pointer' }}
+                        title={t("Inclure Autres Matériels")}
+                      >
+                        <span 
+                          style={{ 
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", 
+                            fontSize: '16px', 
+                            fontWeight: 100, 
+                            color: '#000000',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {t("Inclure Autres Matériels")}
+                        </span>
+                        <div className="relative inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            id="toggle-gmao-include-autres-materiels"
+                            checked={gmaoIncludeAutresMateriels}
+                            onChange={(e) => setGmaoIncludeAutresMateriels(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                        </div>
+                      </label>
+
                       {/* No Actualiser button */}
                     </div>
                   </div>
@@ -10366,13 +10469,69 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard */}
+                <div 
+                  className="flex items-center justify-start"
+                  style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
+                >
+                  <button
+                    type="button"
+                    id="btn-toggle-fit-view-gmao"
+                    onClick={toggleGmaoTableFitView}
+                    style={{
+                      fontSize: '9px',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontWeight: 100,
+                      cursor: 'pointer',
+                      background: 'transparent',
+                      border: 'none',
+                      padding: '2px 4px',
+                      color: '#000000',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      textDecoration: 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                    className="hover:opacity-80 transition-all select-none cursor-pointer"
+                    title={gmaoIsTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
+                  >
+                    {gmaoIsTableFitView ? (
+                      <Maximize2 size={10} className="shrink-0 text-black" color="#000000" />
+                    ) : (
+                      <Minimize2 size={10} className="shrink-0 text-black" color="#000000" />
+                    )}
+                    <span style={{ color: '#000000' }}>{gmaoIsTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
+                  </button>
+                </div>
+
                 {/* Main Table Records Sheet */}
-                <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
-                  <div className="overflow-x-auto">
+                <div className="bg-white overflow-hidden mt-2 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
+                  <div 
+                    ref={gmaoTableContainerRef}
+                    className={gmaoIsTableFitView ? "overflow-x-hidden" : "overflow-x-auto"}
+                    style={gmaoIsTableFitView ? { width: '100%', overflowX: 'hidden' } : undefined}
+                  >
                     {filteredReports.length === 0 ? (
                       <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                     ) : (
-                      <table className="w-full text-left font-sans border-collapse text-xs" id="gmao-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+                      <table 
+                        ref={gmaoTableRef}
+                        className="w-full text-left font-sans border-collapse text-xs" 
+                        id="gmao-table" 
+                        style={{ 
+                          borderTop: '1px solid rgb(218, 218, 218)', 
+                          borderBottom: '1px solid rgb(218, 218, 218)',
+                          ...(gmaoIsTableFitView ? {
+                            zoom: gmaoTableFitScale,
+                            width: `${gmaoNaturalTableWidthRef.current || 1500}px`,
+                            minWidth: `${gmaoNaturalTableWidthRef.current || 1500}px`,
+                            transition: 'zoom 0.15s ease'
+                          } : {
+                            width: '100%'
+                          })
+                        }}
+                      >
                         <thead>
                           <tr className="bg-transparent">
                             <th className="px-4 py-3.5 w-10 text-center" style={thStyle}></th>
