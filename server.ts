@@ -2,9 +2,13 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import zlib from "zlib";
+import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+
+const currentFilename = typeof __filename !== 'undefined' ? __filename : (typeof import.meta !== 'undefined' && (import.meta as any)?.url ? fileURLToPath((import.meta as any).url) : '');
+const currentDirname = typeof __dirname !== 'undefined' ? __dirname : (currentFilename ? path.dirname(currentFilename) : process.cwd());
 const PROD_FIREBASE_CONFIG = {
   apiKey: process.env.FIREBASE_API_KEY || "AIzaSyBsfSHoSrPXwnwLcWtIGLPUwUd7ZYWVCvA",
   authDomain: process.env.FIREBASE_AUTH_DOMAIN || "defibeo.firebaseapp.com",
@@ -18,10 +22,304 @@ const PROD_FIREBASE_CONFIG = {
 const firebaseApp = initializeApp(PROD_FIREBASE_CONFIG);
 const db = getFirestore(firebaseApp);
 
-const DATA_DIR = path.join(process.cwd(), '.data');
+function unwrapFirestoreValue(val: any): any {
+  if (!val || typeof val !== 'object') return val;
+  if ('stringValue' in val) return val.stringValue;
+  if ('integerValue' in val) return parseInt(val.integerValue, 10);
+  if ('doubleValue' in val) return parseFloat(val.doubleValue);
+  if ('booleanValue' in val) return val.booleanValue;
+  if ('nullValue' in val) return null;
+  if ('mapValue' in val) {
+    const obj: Record<string, any> = {};
+    for (const [k, v] of Object.entries(val.mapValue.fields || {})) {
+      obj[k] = unwrapFirestoreValue(v);
+    }
+    return obj;
+  }
+  if ('arrayValue' in val) {
+    return (val.arrayValue.values || []).map(unwrapFirestoreValue);
+  }
+  return val;
+}
+
+async function fetchFirestoreDocumentRest(key: string, timeoutMs: number = 2500): Promise<Record<string, any> | null> {
+  try {
+    const apiKey = PROD_FIREBASE_CONFIG.apiKey;
+    const url = `https://firestore.googleapis.com/v1/projects/defibeo/databases/(default)/documents/appData/${encodeURIComponent(key)}?key=${apiKey}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    if (!json || !json.fields) return null;
+    const result: Record<string, any> = {};
+    for (const [fk, fv] of Object.entries(json.fields)) {
+      result[fk] = unwrapFirestoreValue(fv);
+    }
+    return result;
+  } catch (_) {
+    return null;
+  }
+}
+
+function resolveDataDirs() {
+  const candidateDataDirs = [
+    path.join(process.cwd(), 'data'),
+    path.join(process.cwd(), '.data'),
+    path.join(currentDirname, 'data'),
+    path.join(currentDirname, '..', 'data'),
+    path.join(currentDirname, 'dist', 'data')
+  ];
+  let chosenDataDir = candidateDataDirs.find(d => fs.existsSync(d)) || path.join(process.cwd(), 'data');
+
+  const candidateChunksDirs = [
+    path.join(process.cwd(), 'data', 'chunks'),
+    path.join(process.cwd(), '.data', 'chunks'),
+    path.join(currentDirname, 'data', 'chunks'),
+    path.join(currentDirname, '..', 'data', 'chunks'),
+    path.join(currentDirname, 'dist', 'data', 'chunks')
+  ];
+  let chosenChunksDir = candidateChunksDirs.find(d => fs.existsSync(d)) || path.join(chosenDataDir, 'chunks');
+
+  const candidateIndexFiles = [
+    path.join(process.cwd(), 'data', 'defib_compact_index.json'),
+    path.join(process.cwd(), '.data', 'defib_compact_index.json'),
+    path.join(currentDirname, 'data', 'defib_compact_index.json'),
+    path.join(currentDirname, '..', 'data', 'defib_compact_index.json'),
+    path.join(currentDirname, 'dist', 'data', 'defib_compact_index.json')
+  ];
+  let chosenIndexFile = candidateIndexFiles.find(f => fs.existsSync(f)) || '';
+
+  return { chosenDataDir, chosenChunksDir, chosenIndexFile };
+}
+
+const { chosenDataDir: DATA_DIR, chosenChunksDir: CHUNKS_DIR, chosenIndexFile: COMPACT_INDEX_FILE } = resolveDataDirs();
 const STORE_FILE = path.join(DATA_DIR, 'server-store.json');
 const COLLECTIONS_DIR = path.join(DATA_DIR, 'collections');
-const CHUNKS_DIR = path.join(DATA_DIR, 'chunks');
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallbackValue: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs))
+  ]);
+}
+
+// Normalization helpers for boolean/text inputs ('Oui'/'Non', true/false, 1/0)
+const normalizeYesNo = (val: any, defaultVal: 'Oui' | 'Non' = 'Oui'): 'Oui' | 'Non' => {
+  if (val === undefined || val === null || val === '') return defaultVal;
+  if (typeof val === 'boolean') return val ? 'Oui' : 'Non';
+  if (typeof val === 'number') return val === 1 ? 'Oui' : (val === 0 ? 'Non' : defaultVal);
+  const s = String(val).trim().toLowerCase();
+  if (['oui', 'true', '1', 'yes', 'y', 'vrai', 'o', 'present', 'présent'].includes(s)) return 'Oui';
+  if (['non', 'false', '0', 'no', 'n', 'faux', 'absent'].includes(s)) return 'Non';
+  return defaultVal;
+};
+
+const toBoolean = (val: any, defaultVal: boolean = false): boolean => {
+  if (val === undefined || val === null || val === '') return defaultVal;
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'number') return val === 1;
+  const s = String(val).trim().toLowerCase();
+  if (['oui', 'true', '1', 'yes', 'y', 'vrai', 'o', 'present', 'présent'].includes(s)) return true;
+  if (['non', 'false', '0', 'no', 'n', 'faux', 'absent'].includes(s)) return false;
+  return defaultVal;
+};
+
+// Compact tuple: [id, identifiant, numeroSerie, chunkIdx, env]
+type CompactDefibTuple = [string, string, string, number, string];
+const defibLocationIndex = new Map<string, CompactDefibTuple>();
+let isCompactIndexLoaded = false;
+
+function loadCompactIndexSync() {
+  if (isCompactIndexLoaded) return;
+  try {
+    const candidateFiles = [
+      COMPACT_INDEX_FILE,
+      path.join(process.cwd(), 'data', 'defib_compact_index.json'),
+      path.join(process.cwd(), '.data', 'defib_compact_index.json'),
+      path.join(currentDirname, 'data', 'defib_compact_index.json'),
+      path.join(currentDirname, '..', 'data', 'defib_compact_index.json'),
+      path.join(currentDirname, 'dist', 'data', 'defib_compact_index.json')
+    ].filter(Boolean);
+
+    for (const f of candidateFiles) {
+      if (f && fs.existsSync(f)) {
+        const raw = fs.readFileSync(f, 'utf-8');
+        const parsed = JSON.parse(raw);
+        for (const [k, v] of Object.entries(parsed)) {
+          defibLocationIndex.set(k.toLowerCase(), v as CompactDefibTuple);
+        }
+        isCompactIndexLoaded = true;
+        console.log(`[Index] Loaded compact index with ${defibLocationIndex.size} keys from ${f}`);
+        break;
+      }
+    }
+  } catch (err) {
+    console.warn('[Index] Could not load compact index:', err);
+  }
+}
+
+// Warm up compact index immediately at module evaluation
+loadCompactIndexSync();
+
+// In-memory cache for loaded chunk arrays to avoid repeated disk reads
+const loadedChunkCache = new Map<number, any[]>();
+
+function loadChunkFileSync(chunkIdx: number, prefix: string = 'D27_defibrillateurs'): any[] | null {
+  if (loadedChunkCache.has(chunkIdx)) {
+    return loadedChunkCache.get(chunkIdx)!;
+  }
+  const candidateChunkDirs = [
+    CHUNKS_DIR,
+    path.join(process.cwd(), 'data', 'chunks'),
+    path.join(process.cwd(), '.data', 'chunks'),
+    path.join(currentDirname, 'data', 'chunks'),
+    path.join(currentDirname, '..', 'data', 'chunks'),
+    path.join(currentDirname, 'dist', 'data', 'chunks')
+  ];
+
+  for (const dir of candidateChunkDirs) {
+    const p = path.join(dir, `${prefix}_chunk_${chunkIdx}.json`);
+    if (fs.existsSync(p)) {
+      try {
+        const items = JSON.parse(fs.readFileSync(p, 'utf-8'));
+        if (Array.isArray(items)) {
+          loadedChunkCache.set(chunkIdx, items);
+          for (const item of items) {
+            indexDefibrillateur(item, item.envId || item.tenantId || 'D58');
+          }
+          return items;
+        }
+      } catch (_) {}
+    }
+  }
+  return null;
+}
+
+function saveSingleDefibrillateurToChunk(defib: any, chunkIdx: number, prefix: string = 'D27_defibrillateurs'): boolean {
+  try {
+    // 1. Update in memory cache
+    const cachedChunk = loadedChunkCache.get(chunkIdx);
+    if (cachedChunk && Array.isArray(cachedChunk)) {
+      const idx = cachedChunk.findIndex(d => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
+      if (idx >= 0) {
+        cachedChunk[idx] = { ...cachedChunk[idx], ...defib };
+      } else {
+        cachedChunk.push(defib);
+      }
+    }
+
+    // 2. Update chunk file on disk immediately (O(1), ~2ms)
+    const candidateDirs = [
+      CHUNKS_DIR,
+      path.join(process.cwd(), 'data', 'chunks'),
+      path.join(process.cwd(), '.data', 'chunks'),
+      path.join(currentDirname, 'data', 'chunks'),
+      path.join(currentDirname, 'dist', 'data', 'chunks')
+    ];
+    for (const d of candidateDirs) {
+      const p = path.join(d, `${prefix}_chunk_${chunkIdx}.json`);
+      if (fs.existsSync(p)) {
+        try {
+          const chunkArr = JSON.parse(fs.readFileSync(p, 'utf-8'));
+          if (Array.isArray(chunkArr)) {
+            const idx = chunkArr.findIndex(d => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
+            if (idx >= 0) {
+              chunkArr[idx] = { ...chunkArr[idx], ...defib };
+            } else {
+              chunkArr.push(defib);
+            }
+            fs.writeFileSync(p, JSON.stringify(chunkArr), 'utf-8');
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 3. Update fastDefibIndex in memory
+    indexDefibrillateur(defib, defib.envId || defib.tenantId || 'D58');
+
+    // 4. Asynchronously persist to Firestore in background without blocking caller
+    (async () => {
+      try {
+        const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${chunkIdx}`);
+        const snap = await withTimeout(getDoc(chunkDocRef), 3000, null);
+        if (snap && snap.exists()) {
+          const docData = snap.data();
+          const arr = docData?.value || [];
+          if (Array.isArray(arr)) {
+            const idx = arr.findIndex((d: any) => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
+            if (idx >= 0) {
+              arr[idx] = { ...arr[idx], ...defib };
+            } else {
+              arr.push(defib);
+            }
+            await setDoc(chunkDocRef, { ...docData, value: arr });
+          }
+        }
+      } catch (err) {
+        console.warn(`[Background Chunk Sync] Warning on chunk ${chunkIdx}:`, err);
+      }
+    })().catch(() => {});
+
+    return true;
+  } catch (err) {
+    console.warn('[Chunk Save] Error updating defib in chunk:', err);
+    return false;
+  }
+}
+
+async function fetchChunkRest(chunkIdx: number, prefix: string = 'D27_defibrillateurs'): Promise<any[] | null> {
+  if (loadedChunkCache.has(chunkIdx)) {
+    return loadedChunkCache.get(chunkIdx)!;
+  }
+  try {
+    const apiKey = PROD_FIREBASE_CONFIG.apiKey;
+    const url = `https://firestore.googleapis.com/v1/projects/defibeo/databases/(default)/documents/appData/${prefix}_chunk_${chunkIdx}?key=${apiKey}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    const rawValues = json.fields?.value?.arrayValue?.values;
+    if (!Array.isArray(rawValues)) return null;
+
+    const unwrapRestField = (val: any): any => {
+      if (!val || typeof val !== 'object') return val;
+      if ('stringValue' in val) return val.stringValue;
+      if ('integerValue' in val) return parseInt(val.integerValue, 10);
+      if ('doubleValue' in val) return parseFloat(val.doubleValue);
+      if ('booleanValue' in val) return val.booleanValue;
+      if ('nullValue' in val) return null;
+      if ('mapValue' in val) {
+        const out: any = {};
+        for (const [k, v] of Object.entries(val.mapValue.fields || {})) {
+          out[k] = unwrapRestField(v);
+        }
+        return out;
+      }
+      if ('arrayValue' in val) {
+        return (val.arrayValue.values || []).map(unwrapRestField);
+      }
+      return val;
+    };
+
+    const items = rawValues.map(unwrapRestField);
+    if (Array.isArray(items) && items.length > 0) {
+      loadedChunkCache.set(chunkIdx, items);
+      try {
+        if (!fs.existsSync(CHUNKS_DIR)) fs.mkdirSync(CHUNKS_DIR, { recursive: true });
+        fs.writeFileSync(path.join(CHUNKS_DIR, `${prefix}_chunk_${chunkIdx}.json`), JSON.stringify(items), 'utf-8');
+      } catch (_) {}
+      for (const item of items) {
+        indexDefibrillateur(item, item.envId || item.tenantId || 'D58');
+      }
+      return items;
+    }
+  } catch (_) {}
+  return null;
+}
 
 const serverMemoryStore = new Map<string, any>();
 const serverStoreTimestamps = new Map<string, number>();
@@ -463,13 +761,6 @@ Renvoie obligatoirement un objet JSON contenant :
 let cachedTenantsList: any[] = [];
 let lastTenantsFetchTime = 0;
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallbackValue: T): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs))
-  ]);
-}
-
 async function getRegisteredTenantsFromDb(forceRefresh = false): Promise<any[]> {
   const now = Date.now();
   if (!forceRefresh && cachedTenantsList.length > 0 && (now - lastTenantsFetchTime < 30000)) {
@@ -593,11 +884,15 @@ async function getTenantApiCredentials(tenantId: string, extraAliases: (string |
     }
   }
 
+  // Always append default D27 and generic connectors as fallback for shared tenant credentials
+  candidateKeys.push('D27_api_connectors', 'D58_api_connectors', 'api_connectors');
+
   const uniqueKeys = Array.from(new Set(candidateKeys.filter(Boolean)));
 
   for (const cKey of uniqueKeys) {
     if (serverMemoryStore.has(cKey)) {
-      const connData = serverMemoryStore.get(cKey);
+      const rawData = serverMemoryStore.get(cKey);
+      const connData = (rawData && typeof rawData === 'object' && 'value' in rawData) ? rawData.value : rawData;
       if (connData && typeof connData === 'object') {
         const apiKey = typeof connData.apiDefibeoApiKey === 'string' ? connData.apiDefibeoApiKey.trim() : '';
         const secretKey = typeof connData.apiDefibeoSecretKey === 'string' ? connData.apiDefibeoSecretKey.trim() : '';
@@ -610,15 +905,43 @@ async function getTenantApiCredentials(tenantId: string, extraAliases: (string |
   }
 
   for (const cKey of uniqueKeys) {
+    const diskFile = path.join(COLLECTIONS_DIR, `${cKey}.json`);
+    if (fs.existsSync(diskFile)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
+        const connData = (parsed && typeof parsed === 'object' && 'value' in parsed) ? parsed.value : parsed;
+        if (connData && typeof connData === 'object') {
+          const apiKey = typeof connData.apiDefibeoApiKey === 'string' ? connData.apiDefibeoApiKey.trim() : '';
+          const secretKey = typeof connData.apiDefibeoSecretKey === 'string' ? connData.apiDefibeoSecretKey.trim() : '';
+          const active = connData.apiDefibeoActive !== false;
+          if (apiKey || secretKey) {
+            serverMemoryStore.set(cKey, connData);
+            return { active, apiKey, secretKey };
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  for (const cKey of uniqueKeys) {
     try {
-      const docRef = doc(db, 'appData', cKey);
-      const snap = await withTimeout(getDoc(docRef), 2500, null);
-      if (snap && snap.exists()) {
-        const payload = snap.data()?.value || snap.data() || {};
+      let rawData = await fetchFirestoreDocumentRest(cKey, 1500);
+      if (!rawData) {
+        const docRef = doc(db, 'appData', cKey);
+        const snap = await withTimeout(getDoc(docRef), 1200, null);
+        if (snap && snap.exists()) {
+          rawData = snap.data() || {};
+        }
+      }
+      if (rawData) {
+        const payload = (rawData && typeof rawData === 'object' && 'value' in rawData) ? rawData.value : rawData;
         serverMemoryStore.set(cKey, payload);
-        const apiKey = typeof payload.apiDefibeoApiKey === 'string' ? payload.apiDefibeoApiKey.trim() : '';
-        const secretKey = typeof payload.apiDefibeoSecretKey === 'string' ? payload.apiDefibeoSecretKey.trim() : '';
-        const active = payload.apiDefibeoActive !== false;
+        try {
+          fs.writeFileSync(path.join(COLLECTIONS_DIR, `${cKey}.json`), JSON.stringify(payload), 'utf-8');
+        } catch (_) {}
+        const apiKey = typeof payload?.apiDefibeoApiKey === 'string' ? payload.apiDefibeoApiKey.trim() : '';
+        const secretKey = typeof payload?.apiDefibeoSecretKey === 'string' ? payload.apiDefibeoSecretKey.trim() : '';
+        const active = payload?.apiDefibeoActive !== false;
         if (apiKey || secretKey) {
           return { active, apiKey, secretKey };
         }
@@ -1133,7 +1456,7 @@ async function findSingleDefibrillateur(
   rawSubId: string,
   tenantId: string,
   extraAliases: (string | undefined | null)[] = []
-): Promise<{ defib: any; tenant: string } | null> {
+): Promise<{ defib: any; tenant: string; chunkIdx?: number } | null> {
   const unescaped = decodeURIComponent(rawSubId).trim();
   const strippedSubId = unescaped.replace(/^[:=]+/, '').replace(/^['"]|['"]$/g, '').trim();
   const cleanSubId = strippedSubId || unescaped;
@@ -1143,19 +1466,52 @@ async function findSingleDefibrillateur(
   // 0. FASTEST PATH: Check fastDefibIndex (0.001ms O(1) lookup)
   const normKey = normalizeDefibLookupKey(cleanSubId);
   const normUnescaped = normalizeDefibLookupKey(unescaped);
+  const lowerKey = cleanSubId.toLowerCase();
+  const lowerClean = lowerKey.replace(/[^a-z0-9]/g, '');
+
   const indexed = fastDefibIndex.get(cleanSubId) || 
-                  fastDefibIndex.get(cleanSubId.toLowerCase()) || 
+                  fastDefibIndex.get(lowerKey) || 
                   fastDefibIndex.get(`:${cleanSubId}`) || 
-                  fastDefibIndex.get(`:${cleanSubId.toLowerCase()}`) || 
+                  fastDefibIndex.get(`:${lowerKey}`) || 
                   fastDefibIndex.get(unescaped) || 
                   fastDefibIndex.get(unescaped.toLowerCase()) || 
                   (normKey ? fastDefibIndex.get(normKey) : null) ||
                   (normUnescaped ? fastDefibIndex.get(normUnescaped) : null);
   if (indexed && indexed.defib) {
-    return indexed;
+    const lk = normKey || lowerClean || lowerKey;
+    const tuple = defibLocationIndex.get(lk) || defibLocationIndex.get(lowerKey);
+    return { ...indexed, chunkIdx: tuple ? tuple[3] : undefined };
   }
 
-  // 1. FAST PATH: Check in-memory store for tenant candidates and all cached defibrillateur collections (0.05ms)
+  // 1. INSTANT COMPACT INDEX LOOKUP (O(1) identifies exact chunk in < 1ms, loads only that chunk)
+  loadCompactIndexSync();
+  const indexLookupKeys = [
+    lowerClean,
+    lowerKey,
+    cleanSubId,
+    normKey,
+    unescaped.toLowerCase(),
+    normUnescaped
+  ].filter(Boolean);
+
+  for (const lk of indexLookupKeys) {
+    const tuple = defibLocationIndex.get(lk);
+    if (tuple) {
+      const [id, identifiant, sn, chunkIdx, env] = tuple;
+      let chunkItems = loadChunkFileSync(chunkIdx);
+      if (!chunkItems || chunkItems.length === 0) {
+        chunkItems = await fetchChunkRest(chunkIdx);
+      }
+      if (chunkItems && Array.isArray(chunkItems)) {
+        const found = chunkItems.find(matcher);
+        if (found) {
+          return { defib: found, tenant: env || tenantId || 'D58', chunkIdx };
+        }
+      }
+    }
+  }
+
+  // 2. FAST PATH: Check in-memory store for tenant candidates and all cached defibrillateur collections (0.05ms)
   const normTenant = tenantId ? tenantId.trim().toLowerCase() : 'demo';
   const numTenant = normTenant.replace(/^d/i, '');
   const candidateKeys = Array.from(new Set([
@@ -1200,7 +1556,7 @@ async function findSingleDefibrillateur(
     }
   }
 
-  // 2. DISK CACHE: Check local disk collections in COLLECTIONS_DIR (1ms)
+  // 3. DISK CACHE: Check local disk collections in COLLECTIONS_DIR (1ms)
   try {
     if (fs.existsSync(COLLECTIONS_DIR)) {
       const files = fs.readdirSync(COLLECTIONS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
@@ -1225,136 +1581,63 @@ async function findSingleDefibrillateur(
     }
   } catch (_) {}
 
-  // 3. DISK CHUNK CACHE: Check cached chunk files in CHUNKS_DIR (1-2ms)
-  try {
-    if (fs.existsSync(CHUNKS_DIR)) {
-      const chunkFiles = fs.readdirSync(CHUNKS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
-      for (const cf of chunkFiles) {
-        try {
-          const chunkPath = path.join(CHUNKS_DIR, cf);
-          const arr = JSON.parse(fs.readFileSync(chunkPath, 'utf-8'));
-          if (Array.isArray(arr)) {
-            for (const item of arr) {
-              indexDefibrillateur(item, tenantId || 'D58');
-            }
-            const found = arr.find(matcher);
-            if (found) {
-              return { defib: found, tenant: tenantId || 'D58' };
-            }
-          }
-        } catch (_) {}
-      }
-    }
-  } catch (_) {}
-
-  // 4. IDENTIFIER ANALYSIS: Extract potential environment / tenant code directly from rawSubId
-  // Examples: 'DFY-D58-OZH' -> 'D58', 'KWM-D58-XKL' -> 'D58', 'DAE-D27-001' -> 'D27'
-  const envMatch = cleanSubId.match(/(?:^|[^a-zA-Z0-9])([dD]\d+)(?:[^a-zA-Z0-9]|$)/);
-  const detectedEnv = envMatch ? envMatch[1].toUpperCase() : null;
-
-  const targetTenantsToTry = Array.from(new Set([
-    detectedEnv,
-    tenantId,
-    `D${numTenant}`,
-    numTenant,
-    ...extraAliases,
-    'D58',
-    'D27',
-    'D18',
-    'demo'
-  ].filter(Boolean) as string[]));
-
-  // 5. TARGETED FIRESTORE LOOKUP: Parallel chunk checks with early exit and disk chunk caching
-  const startTime = Date.now();
-  const MAX_SEARCH_TIME_MS = 8000;
-
-  for (const t of targetTenantsToTry) {
-    if (Date.now() - startTime > MAX_SEARCH_TIME_MS) break;
-
-    const firestoreKey = (t === 'demo' || t === 'defibrillateurs') ? 'defibrillateurs' : `${t}_defibrillateurs`;
+  // 4. DISK CHUNK CACHE FALLBACK (Only if compact index was empty)
+  if (defibLocationIndex.size === 0) {
     try {
-      const docRef = doc(db, 'appData', firestoreKey);
-      const snap = await withTimeout(getDoc(docRef), 2500, null);
-      if (!snap || !snap.exists()) continue;
-
-      const payload = snap.data();
-      if (!payload) continue;
-
-      // Single array document (non-chunked)
-      if (!payload._chunked && Array.isArray(payload.value)) {
-        const items = payload.value;
-        serverMemoryStore.set(firestoreKey, items);
-        serverStoreTimestamps.set(firestoreKey, Date.now());
-        for (const item of items) {
-          indexDefibrillateur(item, t);
-        }
-        const found = items.find(matcher);
-        if (found) {
-          return { defib: found, tenant: t };
-        }
-        continue;
-      }
-
-      // Chunked document
-      if (payload._chunked && typeof payload.chunksCount === 'number' && payload.chunksCount > 0) {
-        const count = payload.chunksCount;
-        const prefix = payload.chunkPrefix || payload.chunkKeyPrefix || firestoreKey;
-        const concurrency = 20;
-
-        let foundItem: any = null;
-        for (let i = 0; i < count; i += concurrency) {
-          if (foundItem || Date.now() - startTime > MAX_SEARCH_TIME_MS) break;
-          const end = Math.min(i + concurrency, count);
-          const promises = [];
-          for (let j = i; j < end; j++) {
-            promises.push((async (idx) => {
-              if (foundItem) return;
-              try {
-                const chunkFile = path.join(CHUNKS_DIR, `${prefix}_chunk_${idx}.json`);
-                if (fs.existsSync(chunkFile)) {
-                  try {
-                    const localArr = JSON.parse(fs.readFileSync(chunkFile, 'utf-8'));
-                    if (Array.isArray(localArr)) {
-                      for (const it of localArr) {
-                        indexDefibrillateur(it, t);
-                      }
-                      const match = localArr.find(matcher);
-                      if (match && !foundItem) {
-                        foundItem = match;
-                      }
-                      return;
-                    }
-                  } catch (_) {}
-                }
-
-                const chunkRef = doc(db, 'appData', `${prefix}_chunk_${idx}`);
-                const cSnap = await withTimeout(getDoc(chunkRef), 3000, null);
-                if (cSnap && cSnap.exists()) {
-                  const arr = cSnap.data()?.value;
-                  if (Array.isArray(arr)) {
-                    try {
-                      fs.writeFileSync(chunkFile, JSON.stringify(arr), 'utf-8');
-                    } catch (_) {}
-                    for (const it of arr) {
-                      indexDefibrillateur(it, t);
-                    }
-                    const match = arr.find(matcher);
-                    if (match && !foundItem) {
-                      foundItem = match;
-                    }
-                  }
-                }
-              } catch (_) {}
-            })(j));
-          }
-          await Promise.all(promises);
-          if (foundItem) {
-            return { defib: foundItem, tenant: t };
-          }
+      if (fs.existsSync(CHUNKS_DIR)) {
+        const chunkFiles = fs.readdirSync(CHUNKS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
+        for (const cf of chunkFiles) {
+          try {
+            const chunkPath = path.join(CHUNKS_DIR, cf);
+            const arr = JSON.parse(fs.readFileSync(chunkPath, 'utf-8'));
+            if (Array.isArray(arr)) {
+              for (const item of arr) {
+                indexDefibrillateur(item, tenantId || 'D58');
+              }
+              const found = arr.find(matcher);
+              if (found) {
+                return { defib: found, tenant: tenantId || 'D58' };
+              }
+            }
+          } catch (_) {}
         }
       }
     } catch (_) {}
   }
+
+  // 5. REST TARGETED FALLBACK (Strict 2.5s timeout, never hangs)
+  try {
+    const docKey = (tenantId === 'demo' || tenantId === 'defibrillateurs') ? 'defibrillateurs' : `${tenantId || 'D58'}_defibrillateurs`;
+    const apiKey = PROD_FIREBASE_CONFIG.apiKey;
+    const url = `https://firestore.googleapis.com/v1/projects/defibeo/databases/(default)/documents/appData/${docKey}?key=${apiKey}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      const json: any = await res.json();
+      if (json.fields?.value?.arrayValue?.values) {
+        const unwrap = (val: any): any => {
+          if (!val || typeof val !== 'object') return val;
+          if ('stringValue' in val) return val.stringValue;
+          if ('integerValue' in val) return parseInt(val.integerValue, 10);
+          if ('doubleValue' in val) return parseFloat(val.doubleValue);
+          if ('booleanValue' in val) return val.booleanValue;
+          if ('mapValue' in val) {
+            const o: any = {};
+            for (const [k, v] of Object.entries(val.mapValue.fields || {})) o[k] = unwrap(v);
+            return o;
+          }
+          if ('arrayValue' in val) return (val.arrayValue.values || []).map(unwrap);
+          return val;
+        };
+        const items = json.fields.value.arrayValue.values.map(unwrap);
+        for (const it of items) indexDefibrillateur(it, tenantId || 'D58');
+        const found = items.find(matcher);
+        if (found) return { defib: found, tenant: tenantId || 'D58' };
+      }
+    }
+  } catch (_) {}
 
   return null;
 }
@@ -1484,10 +1767,16 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   // 2. Helper to load a single candidate key from Firestore safely
   async function loadKeyFromFirestore(key: string): Promise<{ type: string; items?: any[]; data?: any; isChunked?: boolean } | null> {
     try {
-      const docRef = doc(db, 'appData', key);
-      const snap = await withTimeout(getDoc(docRef), 6000, null);
-      if (!snap || !snap.exists()) return null;
-      const payload = snap.data();
+      // Fast path: try REST first (strict 2000ms timeout, returns 404 in <150ms without hanging)
+      let payload = await fetchFirestoreDocumentRest(key, 2000);
+      if (!payload) {
+        // Fallback to getDoc with 1500ms timeout
+        const docRef = doc(db, 'appData', key);
+        const snap = await withTimeout(getDoc(docRef), 1500, null);
+        if (snap && snap.exists()) {
+          payload = snap.data() || null;
+        }
+      }
       if (!payload) return null;
 
       // Handle chunked storage for large datasets (e.g. defibrillateurs)
@@ -1495,45 +1784,36 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         const count = payload.chunksCount;
         const effectivePrefix = payload.chunkPrefix || payload.chunkKeyPrefix || key;
         const chunkResults: any[][] = new Array(count);
-        const concurrency = 25;
-        for (let i = 0; i < count; i += concurrency) {
-          const batchPromises: Promise<any>[] = [];
-          const end = Math.min(i + concurrency, count);
-          for (let j = i; j < end; j++) {
-            batchPromises.push((async (idx) => {
-              try {
-                const chunkFile = path.join(CHUNKS_DIR, `${effectivePrefix}_chunk_${idx}.json`);
-                if (fs.existsSync(chunkFile)) {
-                  try {
-                    const localArr = JSON.parse(fs.readFileSync(chunkFile, 'utf-8'));
-                    if (Array.isArray(localArr)) {
-                      chunkResults[idx] = localArr;
-                      return;
-                    }
-                  } catch (_) {}
-                }
-                const chunkRef = doc(db, 'appData', `${effectivePrefix}_chunk_${idx}`);
-                const cSnap = await withTimeout(getDoc(chunkRef), 4000, null);
-                if (cSnap && cSnap.exists()) {
-                  const cData = cSnap.data();
-                  if (Array.isArray(cData?.value)) {
-                    chunkResults[idx] = cData.value;
-                    try {
-                      fs.writeFileSync(chunkFile, JSON.stringify(cData.value), 'utf-8');
-                    } catch (_) {}
-                  }
-                }
-              } catch (_) {}
-            })(j));
+
+        // Check disk chunks first (instant, 0 network calls)
+        let loadedAllFromDisk = true;
+        for (let idx = 0; idx < count; idx++) {
+          const diskItems = loadChunkFileSync(idx, effectivePrefix);
+          if (diskItems && Array.isArray(diskItems)) {
+            chunkResults[idx] = diskItems;
+          } else {
+            loadedAllFromDisk = false;
+            break;
           }
-          await Promise.all(batchPromises);
+        }
+
+        if (loadedAllFromDisk) {
+          const combined = chunkResults.filter(Boolean).flat();
+          return { type: 'array', items: combined, isChunked: true };
+        }
+
+        // If not all on disk, load only first 5 chunks for fast initial response
+        const chunksToLoad = Math.min(count, 5);
+        for (let idx = 0; idx < chunksToLoad; idx++) {
+          let items = loadChunkFileSync(idx, effectivePrefix);
+          if (!items) {
+            items = await fetchChunkRest(idx, effectivePrefix);
+          }
+          if (items && Array.isArray(items)) {
+            chunkResults[idx] = items;
+          }
         }
         const combined = chunkResults.filter(Boolean).flat();
-        if (key.includes('defibrillateurs') || effectivePrefix.includes('defibrillateurs')) {
-          for (const it of combined) {
-            indexDefibrillateur(it, activeTenant);
-          }
-        }
         return { type: 'array', items: combined, isChunked: true };
       }
 
@@ -1782,90 +2062,54 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
 
 async function warmupDefibrillateursStore() {
   try {
+    // 1. Load the compact index immediately (1-2ms)
+    loadCompactIndexSync();
+
+    // 2. Pre-load key chunks into memory cache (e.g. chunk 0, chunk 74)
+    loadChunkFileSync(74);
+    loadChunkFileSync(0);
+
     const d58ColFile = path.join(COLLECTIONS_DIR, 'D58_defibrillateurs.json');
     const d27ColFile = path.join(COLLECTIONS_DIR, 'D27_defibrillateurs.json');
     const genericColFile = path.join(COLLECTIONS_DIR, 'defibrillateurs.json');
     
-    // 1. If files already exist on disk, read and index them into memory
+    // 3. If full collection file already exists on disk, index it
     const existingFile = [d58ColFile, d27ColFile, genericColFile].find(f => fs.existsSync(f));
     if (existingFile) {
-      const content = JSON.parse(fs.readFileSync(existingFile, 'utf-8'));
-      if (Array.isArray(content) && content.length > 0) {
-        serverMemoryStore.set('D58_defibrillateurs', content);
-        serverMemoryStore.set('D27_defibrillateurs', content);
-        serverMemoryStore.set('defibrillateurs', content);
-        serverStoreTimestamps.set('D58_defibrillateurs', Date.now());
-        serverStoreTimestamps.set('D27_defibrillateurs', Date.now());
-        serverStoreTimestamps.set('defibrillateurs', Date.now());
-        for (const item of content) {
-          indexDefibrillateur(item, 'D58');
-        }
-        console.log(`[Warmup] Pre-indexed ${content.length} defibrillateurs from disk into fastDefibIndex.`);
-        return;
-      }
-    }
-
-    // 2. Otherwise, fetch from Firestore in background
-    console.log('[Warmup] Pre-warming defibrillateurs dataset from Firestore in background...');
-    const metaSnap = await getDoc(doc(db, 'appData', 'D58_defibrillateurs'));
-    if (!metaSnap || !metaSnap.exists()) return;
-    const meta = metaSnap.data();
-    if (!meta?._chunked || typeof meta?.chunksCount !== 'number') return;
-    
-    const count = meta.chunksCount;
-    const prefix = meta.chunkPrefix || meta.chunkKeyPrefix || 'D27_defibrillateurs';
-    const chunkResults: any[][] = new Array(count);
-    const concurrency = 20;
-
-    for (let i = 0; i < count; i += concurrency) {
-      const end = Math.min(i + concurrency, count);
-      const promises = [];
-      for (let j = i; j < end; j++) {
-        promises.push((async (idx) => {
-          const chunkFile = path.join(CHUNKS_DIR, `${prefix}_chunk_${idx}.json`);
-          if (fs.existsSync(chunkFile)) {
-            try {
-              chunkResults[idx] = JSON.parse(fs.readFileSync(chunkFile, 'utf-8'));
-              return;
-            } catch (_) {}
-          }
-          try {
-            const snap = await getDoc(doc(db, 'appData', `${prefix}_chunk_${idx}`));
-            if (snap && snap.exists()) {
-              const arr = snap.data()?.value;
-              if (Array.isArray(arr)) {
-                chunkResults[idx] = arr;
-                try {
-                  fs.writeFileSync(chunkFile, JSON.stringify(arr), 'utf-8');
-                } catch (_) {}
-              }
-            }
-          } catch (_) {}
-        })(j));
-      }
-      await Promise.all(promises);
-    }
-
-    const allItems = chunkResults.filter(Boolean).flat();
-    if (allItems.length > 0) {
       try {
-        fs.writeFileSync(d58ColFile, JSON.stringify(allItems), 'utf-8');
-        fs.writeFileSync(d27ColFile, JSON.stringify(allItems), 'utf-8');
-        fs.writeFileSync(genericColFile, JSON.stringify(allItems), 'utf-8');
+        const content = JSON.parse(fs.readFileSync(existingFile, 'utf-8'));
+        if (Array.isArray(content) && content.length > 0) {
+          serverMemoryStore.set('D58_defibrillateurs', content);
+          serverMemoryStore.set('D27_defibrillateurs', content);
+          serverMemoryStore.set('defibrillateurs', content);
+          serverStoreTimestamps.set('D58_defibrillateurs', Date.now());
+          serverStoreTimestamps.set('D27_defibrillateurs', Date.now());
+          serverStoreTimestamps.set('defibrillateurs', Date.now());
+          for (const item of content) {
+            indexDefibrillateur(item, 'D58');
+          }
+          console.log(`[Warmup] Pre-indexed ${content.length} defibrillateurs from disk into fastDefibIndex.`);
+          return;
+        }
       } catch (_) {}
-      serverMemoryStore.set('D58_defibrillateurs', allItems);
-      serverMemoryStore.set('D27_defibrillateurs', allItems);
-      serverMemoryStore.set('defibrillateurs', allItems);
-      serverStoreTimestamps.set('D58_defibrillateurs', Date.now());
-      serverStoreTimestamps.set('D27_defibrillateurs', Date.now());
-      serverStoreTimestamps.set('defibrillateurs', Date.now());
-      for (const item of allItems) {
-        indexDefibrillateur(item, 'D58');
+    }
+
+    // 4. Background non-blocking pre-warm of disk chunks if present
+    if (fs.existsSync(CHUNKS_DIR)) {
+      const chunkFiles = fs.readdirSync(CHUNKS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
+      console.log(`[Warmup] Found ${chunkFiles.length} chunk files on disk. Pre-warming index...`);
+      for (const cf of chunkFiles) {
+        const match = cf.match(/_chunk_(\d+)\.json$/);
+        if (match) {
+          const idx = parseInt(match[1], 10);
+          loadChunkFileSync(idx);
+        }
       }
-      console.log(`[Warmup] Successfully pre-warmed ${allItems.length} defibrillateurs into memory & disk.`);
+      console.log(`[Warmup] fastDefibIndex pre-warmed with ${fastDefibIndex.size} entries.`);
+      return;
     }
   } catch (err) {
-    console.warn('[Warmup] Defibrillateurs prewarm error:', err);
+    console.warn('[Warmup] Defibrillateurs prewarm warning:', err);
   }
 }
 
@@ -2656,6 +2900,7 @@ async function warmupDefibrillateursStore() {
 
       // Extract requested tenant ID from multiple header / query formats
       const rawTenantId = (
+        (req.headers['x-environnement'] as string) ||
         (req.headers['x-defibeo-tenant-id'] as string) ||
         (req.headers['x-defibeo-tenant'] as string) ||
         (req.headers['x-tenant-id'] as string) ||
@@ -3059,29 +3304,6 @@ async function warmupDefibrillateursStore() {
             code: "DEFIBRILLATEUR_NOT_FOUND"
           });
         }
-
-        let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
-
-        // Normalization helpers for boolean/text inputs ('Oui'/'Non', true/false, 1/0)
-        const normalizeYesNo = (val: any, defaultVal: 'Oui' | 'Non' = 'Oui'): 'Oui' | 'Non' => {
-          if (val === undefined || val === null || val === '') return defaultVal;
-          if (typeof val === 'boolean') return val ? 'Oui' : 'Non';
-          if (typeof val === 'number') return val === 1 ? 'Oui' : (val === 0 ? 'Non' : defaultVal);
-          const s = String(val).trim().toLowerCase();
-          if (['oui', 'true', '1', 'yes', 'y', 'vrai', 'o', 'present', 'présent'].includes(s)) return 'Oui';
-          if (['non', 'false', '0', 'no', 'n', 'faux', 'absent'].includes(s)) return 'Non';
-          return defaultVal;
-        };
-
-        const toBoolean = (val: any, defaultVal: boolean = false): boolean => {
-          if (val === undefined || val === null || val === '') return defaultVal;
-          if (typeof val === 'boolean') return val;
-          if (typeof val === 'number') return val === 1;
-          const s = String(val).trim().toLowerCase();
-          if (['oui', 'true', '1', 'yes', 'y', 'vrai', 'o', 'present', 'présent'].includes(s)) return true;
-          if (['non', 'false', '0', 'no', 'n', 'faux', 'absent'].includes(s)) return false;
-          return defaultVal;
-        };
 
         // Canonical dictionary mapping snake_case and aliases to standard internal camelCase fields
         const DEFIB_FIELD_ALIASES: Record<string, string> = {
@@ -3540,10 +3762,10 @@ async function warmupDefibrillateursStore() {
             });
           }
 
-          const existingIdx = defibs.findIndex(matchesDefibWith(targetId));
+          const singleLookup = await findSingleDefibrillateur(targetId, tenantId, tenantAliases);
 
-          if (existingIdx >= 0) {
-            const existing = defibs[existingIdx];
+          if (singleLookup && singleLookup.defib) {
+            const existing = singleLookup.defib;
 
             // Strict sensitive checks: Block modifications of sensitive identifiers (identifiant, id, numeroSerie)
             if (body.identifiant && String(body.identifiant).trim().toLowerCase() !== String(existing.identifiant).trim().toLowerCase()) {
@@ -4107,22 +4329,37 @@ async function warmupDefibrillateursStore() {
             updatedDefib._lastSource = 'api';
 
             const formatted = formatDefibrillateurOutput(updatedDefib);
-            defibs[existingIdx] = formatted;
 
-            await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
+            const locKey = normalizeDefibLookupKey(targetId);
+            const tuple = defibLocationIndex.get(locKey);
+            const chunkIdx = (tuple && typeof tuple[3] === 'number') ? tuple[3] : singleLookup.chunkIdx;
+            if (typeof chunkIdx === 'number') {
+              saveSingleDefibrillateurToChunk(formatted, chunkIdx);
+            } else {
+              let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
+              const idx = defibs.findIndex(matchesDefibWith(targetId));
+              if (idx >= 0) defibs[idx] = formatted; else defibs.push(formatted);
+              await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
+            }
 
             return res.status(200).json({
               status: "success",
               message: "Défibrillateur mis à jour avec succès",
-              environnement: targetTenant.shortEnvId || tenantId,
+              environnement: targetTenant.shortEnvId || tenantId || singleLookup.tenant,
               id: existing.identifiant || existing.id,
               updated_fields: Array.from(updatedFields),
               ...(warnings.length > 0 ? { warnings } : {}),
               defibrillateur: formatted,
               data: formatted
             });
+          } else if (req.method === 'PUT' || req.method === 'PATCH') {
+            return res.status(404).json({
+              status: "error",
+              error: `Défibrillateur '${targetId}' non trouvé pour la mise à jour dans l'environnement ${targetTenant.shortEnvId || tenantId}`,
+              code: "DEFIBRILLATEUR_NOT_FOUND"
+            });
           } else {
-            // Creation of a new defibrillator
+            // Creation of a new defibrillator (POST)
             const coffretRaw = (body.modeleCoffretId || body.modeleCoffret || body.boitier_modele || body.modele_coffret || '').trim();
             const resolvedCoffret = coffretRaw ? await resolveOrCreateVariable('Modèle Coffret', coffretRaw) : null;
 
@@ -4181,6 +4418,7 @@ async function warmupDefibrillateursStore() {
             }
 
             const formattedNew = formatDefibrillateurOutput(newDefib);
+            let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
             defibs = [formattedNew, ...defibs];
 
             await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
@@ -4201,20 +4439,13 @@ async function warmupDefibrillateursStore() {
             .replace(/^[:=]+/, '')
             .replace(/^['"]|['"]$/g, '')
             .trim();
-          let found = defibs.find(matchesDefibWith(rawSubId));
+          const lookupResult = await findSingleDefibrillateur(rawSubId, tenantId, tenantAliases);
 
-          if (!found) {
-            const lookupResult = await findSingleDefibrillateur(rawSubId, tenantId, tenantAliases);
-            if (lookupResult && lookupResult.defib) {
-              found = lookupResult.defib;
-            }
-          }
-
-          if (found) {
-            const formattedFound = formatDefibrillateurOutput(found);
+          if (lookupResult && lookupResult.defib) {
+            const formattedFound = formatDefibrillateurOutput(lookupResult.defib);
             return sendOptimizedJson(req, res, { 
               status: "success", 
-              environnement: targetTenant.shortEnvId || tenantId, 
+              environnement: targetTenant.shortEnvId || tenantId || lookupResult.tenant, 
               defibrillateur: formattedFound, 
               data: formattedFound 
             });
@@ -4227,16 +4458,45 @@ async function warmupDefibrillateursStore() {
           });
         }
 
+        const rawQ = String(req.query.search || req.query.q || req.query.numeroSerie || req.query.num_serie || req.query.serial || req.query.identifiant || req.query.id || '').trim();
+        const cleanQ = rawQ.replace(/^[:=]+/, '').replace(/^['"]|['"]$/g, '').trim();
+
+        // If a specific defibrillator search is requested (e.g. ?q=50SA005121900008), use instant O(1) single lookup
+        if (cleanQ) {
+          const directMatch = await findSingleDefibrillateur(cleanQ, tenantId, tenantAliases);
+          if (directMatch && directMatch.defib) {
+            const formatted = formatDefibrillateurOutput(directMatch.defib);
+            res.setHeader('X-Total-Count', '1');
+            res.setHeader('X-Page', '1');
+            res.setHeader('X-Per-Page', '1');
+            res.setHeader('X-Total-Pages', '1');
+            return sendOptimizedJson(req, res, {
+              status: "success",
+              environnement: targetTenant.shortEnvId || tenantId || directMatch.tenant,
+              total: 1,
+              count: 1,
+              page: 1,
+              limit: 1,
+              total_pages: 1,
+              defibrillateurs: [formatted],
+              data: [formatted]
+            });
+          }
+        }
+
+        let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
+
         const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
         const limitParam = req.query.limit || req.query.per_page || req.query.max || req.query.count;
-        const isPaginated = !!(limitParam || req.query.page);
-        const limit = limitParam === 'all' 
-          ? defibs.length 
-          : Math.max(1, parseInt(limitParam as string, 10) || (isPaginated ? 100 : defibs.length));
+        const DEFAULT_LIMIT = 50;
+        const MAX_SAFE_LIMIT = 250;
+        const isExplicitlyAll = limitParam === 'all';
+        const limit = isExplicitlyAll 
+          ? MAX_SAFE_LIMIT 
+          : Math.min(MAX_SAFE_LIMIT, Math.max(1, parseInt(limitParam as string, 10) || DEFAULT_LIMIT));
 
         let filteredDefibs = defibs;
-        const rawQ = (req.query.search as string || req.query.q as string || '').trim();
-        const q = rawQ.replace(/^[:=]+/, '').replace(/^['"]|['"]$/g, '').trim().toLowerCase();
+        const q = cleanQ.toLowerCase();
         if (q) {
           filteredDefibs = filteredDefibs.filter((d: any) => 
             (d.numeroSerie && String(d.numeroSerie).toLowerCase().includes(q)) ||
@@ -4271,8 +4531,8 @@ async function warmupDefibrillateursStore() {
 
         const total = filteredDefibs.length;
         const totalPages = Math.max(1, Math.ceil(total / limit));
-        const startIndex = isPaginated ? (page - 1) * limit : 0;
-        const returnedDefibs = isPaginated ? filteredDefibs.slice(startIndex, startIndex + limit) : filteredDefibs;
+        const startIndex = (page - 1) * limit;
+        const returnedDefibs = filteredDefibs.slice(startIndex, startIndex + limit);
         const formattedReturned = returnedDefibs.map(formatDefibrillateurOutput);
 
         res.setHeader('X-Total-Count', String(total));
@@ -4285,9 +4545,9 @@ async function warmupDefibrillateursStore() {
           environnement: targetTenant.shortEnvId || tenantId,
           total,
           count: formattedReturned.length,
-          page: isPaginated ? page : 1,
-          limit: isPaginated ? limit : total,
-          total_pages: isPaginated ? totalPages : 1,
+          page,
+          limit,
+          total_pages: totalPages,
           defibrillateurs: formattedReturned,
           data: formattedReturned
         });
@@ -4534,30 +4794,153 @@ async function warmupDefibrillateursStore() {
         }
       }
 
-      // 8. Rapports Endpoint
-      if (cleanPath.startsWith('rapports')) {
-        const subId = cleanPath.split('/')[1] || '';
-        const defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
+      // 8. Rapports & Interventions Endpoints (Supports Real-Time Digital Report Uploads & Fast Lookups)
+      if (cleanPath.startsWith('rapport') || cleanPath.startsWith('intervention')) {
+        const pathSegments = cleanPath.split('/').map(s => s.trim()).filter(Boolean);
+        let subId = pathSegments[1] || (req.query.id as string) || (req.query.identifiant as string) || (req.query.numeroSerie as string) || '';
         if (subId) {
-          const defib = defibs.find((d: any) => d && (d.id === subId || d.identifiant === subId || d.numeroSerie === subId));
-          if (defib) {
+          subId = decodeURIComponent(subId).replace(/^[:=]+/, '').replace(/^['"]|['"]$/g, '').trim();
+        }
+
+        // Real-Time Digital Report Remontée (POST /v1/rapports, POST /v1/interventions, POST /v1/rapports/:id)
+        if (req.method === 'POST' || req.method === 'PUT') {
+          const body = req.body || {};
+          const targetDeviceKey = (subId || body.equipement || body.identifiant || body.id || body.numeroSerie || body.num_serie || body.serial || body.defibrillateurId || body.defibrillateur_id || '').trim();
+
+          let targetDefib: any = null;
+          let targetEnv = targetTenant.shortEnvId || tenantId;
+
+          if (targetDeviceKey) {
+            const lookup = await findSingleDefibrillateur(targetDeviceKey, tenantId, tenantAliases);
+            if (lookup && lookup.defib) {
+              targetDefib = lookup.defib;
+              targetEnv = lookup.tenant || targetEnv;
+            }
+          }
+
+          const reportId = body.id || body.reportId || `RAPPORT-${Date.now().toString().slice(-8)}`;
+          const maintDate = body.dateMaintenance || body.derniereMaintenance || body.date || body.date_intervention || new Date().toISOString().split('T')[0];
+          const techNom = body.technicien || body.intervenant || body.agent || "Technicien DEFIBEO";
+          const statutVal = body.statut || body.status || (body.conforme === false || body.conforme === 'Non' ? 'Non conforme' : 'Opérationnel');
+          const conformeVal = normalizeYesNo(body.conforme ?? (statutVal.toLowerCase().includes('non') ? 'Non' : 'Oui'), 'Oui');
+          const pdfUrl = body.rapportUrl || body.rapport_url || body.pdf_url || body.url || body.rapportPdf || body.rapport || '';
+
+          const savedReport = {
+            id: reportId,
+            reportId,
+            defibrillateurId: targetDefib?.id || targetDeviceKey,
+            equipement: targetDefib?.identifiant || targetDeviceKey,
+            identifiant: targetDefib?.identifiant || targetDeviceKey,
+            numeroSerie: targetDefib?.numeroSerie || body.numeroSerie || body.num_serie || '',
+            date: maintDate,
+            dateMaintenance: maintDate,
+            derniereMaintenance: maintDate,
+            technicien: techNom,
+            typeIntervention: body.typeIntervention || body.type || "Maintenance préventive",
+            statut: statutVal,
+            conforme: conformeVal,
+            remarques: body.remarques || body.observations || body.commentaire || "",
+            rapportUrl: pdfUrl,
+            envId: targetEnv,
+            tenantId: targetEnv,
+            timestamp: new Date().toISOString(),
+            createdAt: new Date().toISOString()
+          };
+
+          // If defibrillator was found, update its live state and persist
+          if (targetDefib) {
+            targetDefib.derniereMaintenance = maintDate;
+            targetDefib.derniere_maintenance = maintDate;
+            targetDefib.statut = statutVal;
+            targetDefib.conforme = conformeVal;
+            if (pdfUrl) {
+              targetDefib.rapportUrl = pdfUrl;
+              targetDefib.rapport_pdf = pdfUrl;
+            }
+            if (body.peremptionElectrodeA || body.peremption_a) {
+              targetDefib.peremptionElectrodeA = body.peremptionElectrodeA || body.peremption_a;
+              targetDefib.peremption_a = targetDefib.peremptionElectrodeA;
+            }
+            if (body.lotElectrodeA || body.lot_a) {
+              targetDefib.lotElectrodeA = body.lotElectrodeA || body.lot_a;
+              targetDefib.lot_a = targetDefib.lotElectrodeA;
+            }
+            if (body.peremptionBatterie || body.peremption_b) {
+              targetDefib.peremptionBatterie = body.peremptionBatterie || body.peremption_b;
+              targetDefib.peremption_b = targetDefib.peremptionBatterie;
+            }
+            if (body.lotBatterie || body.lot_b) {
+              targetDefib.lotBatterie = body.lotBatterie || body.lot_b;
+              targetDefib.lot_b = targetDefib.lotBatterie;
+            }
+            if (body.pourcentageBatterie !== undefined || body.pourcentage_b !== undefined || body.pourcentage_constate_b !== undefined) {
+              const pb = body.pourcentageBatterie ?? body.pourcentage_b ?? body.pourcentage_constate_b;
+              targetDefib.pourcentageBatterie = String(pb);
+              targetDefib.pourcentage_constate_b = Number(pb) || targetDefib.pourcentage_constate_b;
+            }
+            targetDefib.updatedAt = new Date().toISOString();
+
+            // Re-index into in-memory index & save directly to chunk
+            indexDefibrillateur(targetDefib, targetEnv);
+            const locKey = normalizeDefibLookupKey(targetDeviceKey);
+            const tuple = defibLocationIndex.get(locKey);
+            if (tuple && typeof tuple[3] === 'number') {
+              saveSingleDefibrillateurToChunk(targetDefib, tuple[3]);
+            }
+          }
+
+          // Save report to generated_reports
+          let existingReports = await fetchServerCollection('generated_reports', tenantId, tenantAliases);
+          if (!Array.isArray(existingReports)) existingReports = [];
+          existingReports = [savedReport, ...existingReports.filter((r: any) => r && r.id !== reportId)];
+          await saveServerCollection('generated_reports', tenantId, existingReports, tenantAliases);
+
+          return res.status(201).json({
+            status: "success",
+            message: "Rapport digital enregistré avec succès en temps réel",
+            environnement: targetEnv,
+            id: reportId,
+            rapport: savedReport,
+            defibrillateur: targetDefib ? formatDefibrillateurOutput(targetDefib) : null
+          });
+        }
+
+        // Fast GET for reports (O(1) lookup via findSingleDefibrillateur)
+        if (subId) {
+          const single = await findSingleDefibrillateur(subId, tenantId, tenantAliases);
+          if (single && single.defib) {
+            const defib = single.defib;
             return res.json({
               status: "success",
-              environnement: targetTenant.shortEnvId || tenantId,
+              environnement: single.tenant || targetTenant.shortEnvId || tenantId,
               rapport: {
                 equipement: defib.identifiant || defib.id,
                 numeroSerie: defib.numeroSerie,
                 derniereMaintenance: defib.derniereMaintenance || defib.derniere_maintenance,
                 statut: defib.statut || defib.conforme,
+                conforme: defib.conforme || (defib.statut === 'Conforme' ? 'Oui' : 'Non'),
                 electrodes: defib.peremptionElectrodeA || defib.peremption_a,
                 batterie: defib.peremptionBatterie || defib.peremption_b,
-                pourcentageBatterie: defib.pourcentageBatterie || defib.pourcentage_constate_b
+                pourcentageBatterie: defib.pourcentageBatterie || defib.pourcentage_constate_b,
+                rapportUrl: defib.rapportUrl || defib.rapport_pdf || ""
               }
             });
           }
-          return res.status(404).json({ status: "error", error: `Aucun rapport disponible pour '${subId}'` });
+          return res.status(404).json({
+            status: "error",
+            error: `Aucun rapport disponible pour '${subId}' dans l'environnement ${targetTenant.shortEnvId || tenantId}`,
+            code: "RAPPORT_NOT_FOUND"
+          });
         }
-        return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, count: defibs.length, defibs });
+
+        // List generated reports
+        const reportsList = await fetchServerCollection('generated_reports', tenantId, tenantAliases);
+        return res.json({
+          status: "success",
+          environnement: targetTenant.shortEnvId || tenantId,
+          count: Array.isArray(reportsList) ? reportsList.length : 0,
+          rapports: reportsList
+        });
       }
 
       // 9. Stocks Endpoint

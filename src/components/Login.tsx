@@ -1192,7 +1192,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center z-10">
         <img
-          src="https://datacenter64000pau.s3.eu-north-1.amazonaws.com/Defibeo_2026_Logo2.svg"
+          src="https://civilprom.s3.eu-north-1.amazonaws.com/DefibeoLogo.svg"
           alt="Défibeo"
           className="mx-auto object-contain font-sans"
           style={{ maxHeight: '140px', width: '100%' }}

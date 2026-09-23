@@ -6278,7 +6278,7 @@ export default function App() {
         >
           <div className="flex justify-center items-center">
             <img 
-              src="https://datacenter64000pau.s3.eu-north-1.amazonaws.com/Defibeo_2026_Logo2.svg" 
+              src="https://civilprom.s3.eu-north-1.amazonaws.com/DefibeoLogo.svg" 
               alt="Défibeo Logo" 
               style={{ width: '155px' }}
               className="h-auto object-contain"

@@ -12310,7 +12310,7 @@ export default function PublicPortal({
 
                         {/* Logo Top Right */}
                         <img
-                          src="https://datacenter64000pau.s3.eu-north-1.amazonaws.com/Defibeo_2026_Logo2.svg"
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/DefibeoLogo.svg"
                           alt="Logo"
                           style={{
                             position: "absolute",
@@ -12392,7 +12392,7 @@ export default function PublicPortal({
 
                         {/* Logo Defibeo Centré au verso */}
                         <img
-                          src="https://datacenter64000pau.s3.eu-north-1.amazonaws.com/Defibeo_2026_Logo2.svg"
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/DefibeoLogo.svg"
                           alt="Defibeo Logo"
                           style={{
                             maxHeight: "60px",
