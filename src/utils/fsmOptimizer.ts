@@ -437,7 +437,43 @@ function isDateOpenForEquipment(date: Date, eq: any, tech?: any): boolean {
   return getOverlappingIntervals(date, eq, tech).length > 0;
 }
 
-export function getMissionDurationInMinutes(reason: string): number {
+export function getMissionDurationInMinutes(reason: string, variables?: any[], mission?: any): number {
+  // 1. Direct dureePrestation on mission if present
+  if (mission && mission.dureePrestation !== undefined && !isNaN(Number(mission.dureePrestation)) && Number(mission.dureePrestation) > 0) {
+    return Number(mission.dureePrestation) + 30; // 30 minutes of travel time
+  }
+
+  // 2. Look up duration in variables for Modèle Raison Prestation
+  if (Array.isArray(variables) && variables.length > 0) {
+    const reasonsToCheck: string[] = [];
+    if (mission && Array.isArray(mission.reasons) && mission.reasons.length > 0) {
+      reasonsToCheck.push(...mission.reasons);
+    } else if (reason) {
+      reasonsToCheck.push(...reason.split(',').map((s: string) => s.trim()).filter(Boolean));
+    }
+
+    let foundDuration = 0;
+    let anyFound = false;
+    for (const r of reasonsToCheck) {
+      const matchVar = variables.find((v: any) => 
+        v.category === 'Modèle Raison Prestation' && 
+        (v.nom?.toLowerCase().trim() === r.toLowerCase().trim() || v.id === r)
+      );
+      if (matchVar && matchVar.dureePrestation !== undefined && matchVar.dureePrestation !== null && !isNaN(Number(matchVar.dureePrestation))) {
+        const d = Number(matchVar.dureePrestation);
+        if (d > 0) {
+          foundDuration += d;
+          anyFound = true;
+        }
+      }
+    }
+
+    if (anyFound && foundDuration > 0) {
+      return foundDuration + 30; // Prestation duration + 30 minutes of travel time
+    }
+  }
+
+  // 3. Fallback to existing text parsing
   if (!reason) return 75; // Default: 45 + 30 = 75
   const normalized = reason.toLowerCase();
   
@@ -464,7 +500,8 @@ export function scheduleMissions(
   tourStartDate: string,
   equipmentDetails: Record<string, any>,
   tech?: any,
-  firstMissionTravelHours: number = 0
+  firstMissionTravelHours: number = 0,
+  variables?: any[]
 ): any[] {
   if (!missions || missions.length === 0) return [];
 
@@ -490,7 +527,7 @@ export function scheduleMissions(
       // 1. FORCED MISSION: Keep exact user-specified date and slot
       const forcedDate = m.estimatedDate || tourStartDate;
       const forcedSlot = m.estimatedSlot || '8:00am';
-      const duration = getMissionDurationInMinutes(m.reason || '');
+      const duration = getMissionDurationInMinutes(m.reason || '', variables, m);
       const startMins = parseSlotToMinutes(forcedSlot);
 
       result[i] = {
@@ -519,7 +556,7 @@ export function scheduleMissions(
       if (nextForcedIdx === undefined) {
         // No remaining forced missions: standard forward scheduling
         const eq = equipmentDetails[m.defibIdentifiant];
-        const duration = getMissionDurationInMinutes(m.reason || '');
+        const duration = getMissionDurationInMinutes(m.reason || '', variables, m);
 
         let assignedStartMinutes = 0;
         let daysChecked = 0;
@@ -580,7 +617,7 @@ export function scheduleMissions(
         }
 
         const eq = equipmentDetails[m.defibIdentifiant];
-        const duration = getMissionDurationInMinutes(m.reason || '');
+        const duration = getMissionDurationInMinutes(m.reason || '', variables, m);
 
         let candidateStartMins = 0;
         let daysChecked = 0;
@@ -656,7 +693,7 @@ export function scheduleMissions(
 
           for (let k = nextForcedIdx - 1; k >= i; k--) {
             const mK = missions[k];
-            const durK = getMissionDurationInMinutes(mK.reason || '');
+            const durK = getMissionDurationInMinutes(mK.reason || '', variables, mK);
 
             let startMinsK = limitMins - durK;
             if (startMinsK < 480) {

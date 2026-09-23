@@ -311,6 +311,7 @@ export default function VariableTab({
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [couleurHex, setCouleurHex] = useState('');
+  const [dureePrestation, setDureePrestation] = useState('');
   const [identifiant, setIdentifiant] = useState('');
   const [error, setError] = useState('');
 
@@ -422,6 +423,7 @@ export default function VariableTab({
     setDescription('');
     setImageUrl('');
     setCouleurHex('');
+    setDureePrestation('');
     setIdentifiant('');
     setRappelAlerteOption('');
     setRappelDateDebut('');
@@ -471,6 +473,7 @@ export default function VariableTab({
     setDescription(v.description);
     setImageUrl(v.imageUrl || '');
     setCouleurHex(v.couleurHex || '');
+    setDureePrestation(v.dureePrestation !== undefined && v.dureePrestation !== null ? String(v.dureePrestation) : '');
     setIdentifiant(v.identifiant || '');
     setRappelAlerteOption(v.rappelAlerteOption || '');
     setRappelDateDebut(v.rappelDateDebut || '');
@@ -530,7 +533,7 @@ export default function VariableTab({
     const hideRappelAlerte = category === 'Modèle Contrat' || category === 'Modèle Service' || category === 'Fournisseur' || category === 'Modèle Raison Prestation' || category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Type Filtre Purificateur' || category === 'Modèle Filtre Purificateur' || category === 'Formation';
 
     let formattedHex = couleurHex.trim();
-    if ((category === 'Drapeau GMAO' || category === 'Drapeau post-intervention') && formattedHex) {
+    if ((category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Modèle Contrat') && formattedHex) {
       if (!formattedHex.startsWith('#')) {
         formattedHex = '#' + formattedHex;
       }
@@ -542,7 +545,8 @@ export default function VariableTab({
       marque: marque.trim() || 'Standard',
       description: description.trim(),
       imageUrl: category === 'Modèle Défibrillateur' ? imageUrl.trim() : undefined,
-      couleurHex: (category === 'Drapeau GMAO' || category === 'Drapeau post-intervention') ? (formattedHex || undefined) : undefined,
+      couleurHex: (category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Modèle Contrat') ? (formattedHex || undefined) : undefined,
+      dureePrestation: category === 'Modèle Raison Prestation' && dureePrestation !== '' ? parseInt(dureePrestation, 10) : undefined,
       identifiant: identifiant.trim() || undefined,
       rappelAlerteOption: hideRappelAlerte ? undefined : (rappelAlerteOption || undefined),
       rappelDateDebut: hideRappelAlerte ? undefined : (rappelDateDebut || undefined),
@@ -884,6 +888,47 @@ export default function VariableTab({
                       value={couleurHex}
                       onChange={(e) => setCouleurHex(e.target.value)}
                       placeholder="#3556EC"
+                      className="w-full"
+                    />
+                  </div>
+                )}
+
+                {/* Code couleur hexadécimal (spécifique à Modèle Contrat - pas de prévisualisation) */}
+                {category === 'Modèle Contrat' && (
+                  <div className="space-y-1">
+                    <label htmlFor="input-variable-couleur-hex-contrat" className="block text-[11px] font-bold text-slate-500 uppercase">
+                      Code couleur hexadécimal (ex: #ffffff)
+                    </label>
+                    <input
+                      type="text"
+                      id="input-variable-couleur-hex-contrat"
+                      value={couleurHex}
+                      onChange={(e) => setCouleurHex(e.target.value)}
+                      placeholder="#ffffff"
+                      className="w-full"
+                    />
+                  </div>
+                )}
+
+                {/* Durée de la prestation. (Minutes) (spécifique à Modèle Raison Prestation) */}
+                {category === 'Modèle Raison Prestation' && (
+                  <div className="space-y-1">
+                    <label htmlFor="input-variable-duree-prestation" className="block text-[11px] font-bold text-slate-500 uppercase">
+                      Durée de la prestation. (Minutes)
+                    </label>
+                    <input
+                      type="number"
+                      id="input-variable-duree-prestation"
+                      value={dureePrestation}
+                      onChange={(e) => setDureePrestation(e.target.value.replace(/[^0-9]/g, ''))}
+                      onKeyDown={(e) => {
+                        if (['e', 'E', '+', '-', '.'].includes(e.key)) {
+                          e.preventDefault();
+                        }
+                      }}
+                      min="0"
+                      step="1"
+                      placeholder="Ex: 60"
                       className="w-full"
                     />
                   </div>
@@ -1243,6 +1288,17 @@ export default function VariableTab({
                         <div className="font-semibold text-slate-950">
                           {v.nom}
                         </div>
+                        {v.category === 'Modèle Raison Prestation' && v.dureePrestation !== undefined && v.dureePrestation !== null && (
+                          <div className="text-[13px] text-slate-500 font-normal mt-0.5">
+                            Durée : {v.dureePrestation} min
+                          </div>
+                        )}
+                        {v.category === 'Modèle Contrat' && v.couleurHex && (
+                          <div className="text-[13px] text-slate-500 font-normal mt-0.5 flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0 border border-slate-300" style={{ backgroundColor: v.couleurHex }} />
+                            <span>Couleur : {v.couleurHex}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Catégorie technique */}

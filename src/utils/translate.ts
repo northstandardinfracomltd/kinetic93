@@ -477,6 +477,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Modèle Contrat": "Contract Model",
     "Modèle Service": "Service Model",
     "Modèle Raison Prestation": "Reason / Service Model",
+    "Durée de la prestation. (Minutes)": "Service duration. (Minutes)",
     "Drapeau GMAO": "GMAO Flag",
     "Drapeau post-intervention": "Post-intervention Flag",
     "Type Filtre Purificateur": "Purifier Filter Type",

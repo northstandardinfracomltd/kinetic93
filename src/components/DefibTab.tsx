@@ -3116,11 +3116,28 @@ export default function DefibTab({
                           const activeNomContrat = linkedClient ? (linkedClient.nomContrat === 'Sans contrat de maintenance' ? '' : linkedClient.nomContrat) : df.nomContrat;
                           const activeFinContrat = linkedClient ? linkedClient.finContrat : df.finContrat;
                           if (!activeContrat) return null;
+
+                          // Lookup matching contract model from variables (associated with the contract in client or defib)
+                          const contractModel = (variables || []).find(v =>
+                            v.category === 'Modèle Contrat' && (
+                              (activeNomContrat && (v.nom.trim().toLowerCase() === activeNomContrat.trim().toLowerCase() || v.id === activeNomContrat)) ||
+                              (linkedClient?.nomContrat && (v.nom.trim().toLowerCase() === linkedClient.nomContrat.trim().toLowerCase() || v.id === linkedClient.nomContrat)) ||
+                              (linkedClient?.redactionContrat && v.description && linkedClient.redactionContrat.includes(v.description))
+                            )
+                          );
+                          let dotColor = (contractModel && contractModel.couleurHex && contractModel.couleurHex.trim()) 
+                            ? contractModel.couleurHex.trim() 
+                            : '#94A3B8';
+                          if (!dotColor.startsWith('#')) {
+                            dotColor = '#' + dotColor;
+                          }
+
                           return (
                             <span style={{
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
+                              gap: '8px',
                               borderRadius: '1000px',
                               backgroundColor: '#ffffff',
                               border: '1px solid rgb(231, 231, 231)',
@@ -3130,11 +3147,17 @@ export default function DefibTab({
                               padding: '4px 12px',
                               whiteSpace: 'nowrap',
                             }}>
-                              {activeContrat === 'Oui' ? (
-                                `Oui${activeNomContrat ? `, ${activeNomContrat}` : ''}${activeFinContrat ? `, Expir.${formatDateToFR(activeFinContrat)}` : ''}`
-                              ) : (
-                                activeContrat
-                              )}
+                              <span 
+                                className="w-2 h-2 rounded-full shrink-0" 
+                                style={{ backgroundColor: dotColor }} 
+                              />
+                              <span>
+                                {activeContrat === 'Oui' ? (
+                                  `Oui${activeNomContrat ? `, ${activeNomContrat}` : ''}${activeFinContrat ? `, Expir.${formatDateToFR(activeFinContrat)}` : ''}`
+                                ) : (
+                                  activeContrat
+                                )}
+                              </span>
                             </span>
                           );
                         })()}

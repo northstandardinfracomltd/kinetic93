@@ -1060,7 +1060,7 @@ export default function FormationsTab({
                               const isSelected = reasons.includes(v.nom);
                               return (
                                 <option key={v.id} value={v.nom} disabled={isSelected}>
-                                  {v.nom} {isSelected ? '(Déjà ajoutée)' : ''}
+                                  {v.nom}{v.dureePrestation ? ` (${v.dureePrestation} min)` : ''} {isSelected ? '(Déjà ajoutée)' : ''}
                                 </option>
                               );
                             })}
@@ -1071,19 +1071,22 @@ export default function FormationsTab({
                       <div className="md:col-span-3 w-full bg-transparent">
                         <div className="flex flex-wrap gap-1.5 min-h-[42px] items-center bg-transparent">
                           {reasons.length > 0 ? (
-                            reasons.map((reasonStr) => (
-                              <span
-                                key={reasonStr}
-                                onClick={() => setReasons(reasons.filter((r) => r !== reasonStr))}
-                                style={{
-                                  fontFamily: 'DefibeoMain, Civilprom, sans-serif',
-                                }}
-                                className="cursor-pointer inline-flex items-center rounded-full bg-white border border-slate-200 text-slate-800 text-[15px] px-3.5 py-1.5 font-medium hover:bg-[#8e1010] hover:border-[#8e1010] hover:text-white transition-all duration-150 select-none"
-                                title="Cliquez pour supprimer"
-                              >
-                                {reasonStr}
-                              </span>
-                            ))
+                            reasons.map((reasonStr) => {
+                              const matchVar = variables.find((v) => v.category === 'Modèle Raison Prestation' && v.nom === reasonStr);
+                              return (
+                                <span
+                                  key={reasonStr}
+                                  onClick={() => setReasons(reasons.filter((r) => r !== reasonStr))}
+                                  style={{
+                                    fontFamily: 'DefibeoMain, Civilprom, sans-serif',
+                                  }}
+                                  className="cursor-pointer inline-flex items-center rounded-full bg-white border border-slate-200 text-slate-800 text-[15px] px-3.5 py-1.5 font-medium hover:bg-[#8e1010] hover:border-[#8e1010] hover:text-white transition-all duration-150 select-none"
+                                  title="Cliquez pour supprimer"
+                                >
+                                  {reasonStr}{matchVar?.dureePrestation ? ` (${matchVar.dureePrestation} min)` : ''}
+                                </span>
+                              );
+                            })
                           ) : null}
                         </div>
                       </div>

@@ -98,21 +98,32 @@ export const INITIAL_VARIABLES: Variable[] = [
     category: 'Modèle Raison Prestation',
     nom: 'Maintenance 1h Monôme',
     marque: 'Standard',
-    description: 'Prestation de maintenance 1h monôme'
+    description: 'Prestation de maintenance 1h monôme',
+    dureePrestation: 60
   },
   {
     id: 'MRP2',
     category: 'Modèle Raison Prestation',
     nom: 'Installation et formation',
     marque: 'Standard',
-    description: 'Prestation d’installation et formation'
+    description: 'Prestation d’installation et formation',
+    dureePrestation: 60
   },
   {
     id: 'MRP3',
     category: 'Modèle Raison Prestation',
     nom: 'Visite préventive annuelle',
     marque: 'Standard',
-    description: 'Prestation de visite préventive annuelle'
+    description: 'Prestation de visite préventive annuelle',
+    dureePrestation: 45
+  },
+  {
+    id: 'MC1',
+    category: 'Modèle Contrat',
+    nom: 'Abonnement Maintenance Premium',
+    marque: 'Standard',
+    description: 'Contrat d’abonnement maintenance premium avec visite annuelle et remplacement pièces.',
+    couleurHex: '#3556EC'
   }
 ];
 

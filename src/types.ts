@@ -83,6 +83,7 @@ export interface Variable {
   category: VariableCategory;
   imageUrl?: string; // Appliqué si category === 'Modèle Défibrillateur'
   couleurHex?: string; // Appliqué si category === 'Drapeau GMAO' ou 'Drapeau post-intervention'
+  dureePrestation?: number; // Durée de la prestation en minutes (Appliqué si category === 'Modèle Raison Prestation')
   identifiant?: string;
   rappelAlerteOption?: string;
   rappelDateDebut?: string;

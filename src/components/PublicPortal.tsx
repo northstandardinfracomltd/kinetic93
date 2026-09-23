@@ -1055,7 +1055,8 @@ export default function PublicPortal({
         tour.startDate,
         equipmentDetails,
         tech,
-        firstMissionTravelHours
+        firstMissionTravelHours,
+        variables
       );
 
       const updatedToursList = activeToursSource.map((t: any) => {
