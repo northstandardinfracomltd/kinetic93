@@ -1816,6 +1816,62 @@ export async function findTenantAndDefibGlobally(identifiant: string): Promise<{
 }
 
 /**
+ * Finds the tenant information owning a specified intervention reference.
+ */
+export async function findTenantByInterventionGlobally(interventionRef: string): Promise<{ tenantId: string; companyName: string; companyEmail: string; exists: boolean } | null> {
+  const checkRef = interventionRef.trim().toUpperCase();
+  if (!checkRef) return null;
+  try {
+    const tenants = await getRegisteredTenants();
+    const tenantIds = ['demo', ...tenants.map(t => t.id)];
+
+    const results = await Promise.all(
+      tenantIds.map(async (tid) => {
+        try {
+          const key = tid === 'demo' ? 'generatedReports' : `${tid}_generatedReports`;
+          const reportsList = await fetchRawCollectionFromFirestore<any[]>(key, 3000) || [];
+          if (Array.isArray(reportsList)) {
+            const hasMatch = reportsList.some(rep => 
+              (rep.interventionReference && rep.interventionReference.trim().toUpperCase() === checkRef) ||
+              (rep.id && rep.id.trim().toUpperCase() === checkRef)
+            );
+            if (hasMatch) {
+              if (tid === 'demo') {
+                return {
+                  tenantId: 'demo',
+                  companyName: 'Défibeo Solutions',
+                  companyEmail: 'contact@defibeo-solutions.com',
+                  exists: true
+                };
+              } else {
+                const tenantObj = tenants.find(t => t.id === tid);
+                return {
+                  tenantId: tid,
+                  companyName: tenantObj ? tenantObj.companyName : tid,
+                  companyEmail: tenantObj ? tenantObj.companyEmail : 'support@defibeo.com',
+                  exists: true
+                };
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`Error finding tenant by intervention globally for ${tid}:`, err);
+        }
+        return null;
+      })
+    );
+
+    const found = results.find(r => r !== null);
+    if (found) {
+      return found;
+    }
+  } catch (error) {
+    console.warn('Error finding tenant by intervention globally:', error);
+  }
+  return null;
+}
+
+/**
  * Updates the language of a specific tenant in the master registry.
  */
 export async function updateTenantLanguage(tenantId: string, lang: string): Promise<void> {

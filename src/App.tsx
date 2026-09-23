@@ -12430,6 +12430,10 @@ export default function App() {
             <SatisfactionTab
               customerReviews={customerReviews}
               onUpdateReviews={(updated) => saveReviews(updated)}
+              onShowInterventionDetails={(interventionRef) => {
+                setActiveTab('gmao');
+                setGmaoSearchQuery(interventionRef);
+              }}
             />
           )}
 

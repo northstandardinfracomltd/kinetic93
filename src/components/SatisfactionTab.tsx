@@ -9,6 +9,9 @@ interface Review {
   comment: string;
   label?: string;
   defibId?: string;
+  interventionReference?: string;
+  interventionRef?: string;
+  intervention?: string;
   qualite?: number;
   ponctualite?: number;
   politesse?: number;
@@ -23,6 +26,7 @@ interface Review {
 interface SatisfactionTabProps {
   customerReviews: Review[];
   onUpdateReviews: (updated: Review[]) => void;
+  onShowInterventionDetails?: (interventionRef: string) => void;
 }
 
 const FRENCH_MONTH_NAMES = [
@@ -134,6 +138,7 @@ const extractMonthFromDate = (dateStr?: string): { key: string; label: string; y
 export default function SatisfactionTab({
   customerReviews,
   onUpdateReviews,
+  onShowInterventionDetails,
 }: SatisfactionTabProps) {
   // Search States
   const [search, setSearch] = useState('');
@@ -213,6 +218,14 @@ export default function SatisfactionTab({
     setDeleteReviewId(null);
   };
 
+  const getPercentageFromNote = (noteStr: string): string => {
+    if (!noteStr || noteStr === '-') return '-';
+    const num = parseFloat(String(noteStr).replace(',', '.'));
+    if (isNaN(num)) return '-';
+    const pct = (num / 4) * 100;
+    return `${Math.round(pct)}%`;
+  };
+
   // Brand aesthetic styling constants matching other panels
   const thStyle: React.CSSProperties = {
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -230,12 +243,19 @@ export default function SatisfactionTab({
     backgroundColor: '#fe4eba',
     color: '#ffffff',
     fontWeight: 'bold',
-    fontSize: '15px',
+    fontSize: '14px',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-    margin: '0 auto',
+    flexShrink: 0,
+    userSelect: 'none',
+  };
+
+  const percentBadgeStyle: React.CSSProperties = {
+    ...roundBadgeStyle,
+    fontSize: '12px',
+    letterSpacing: '-0.3px',
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
@@ -287,6 +307,9 @@ export default function SatisfactionTab({
         (rev.clientName && rev.clientName.toLowerCase().includes(q)) ||
         (rev.comment && rev.comment.toLowerCase().includes(q)) ||
         (rev.label && rev.label.toLowerCase().includes(q)) ||
+        (rev.interventionReference && rev.interventionReference.toLowerCase().includes(q)) ||
+        (rev.interventionRef && rev.interventionRef.toLowerCase().includes(q)) ||
+        (rev.intervention && rev.intervention.toLowerCase().includes(q)) ||
         (rev.defibId && rev.defibId.toLowerCase().includes(q))
       );
     });
@@ -297,6 +320,7 @@ export default function SatisfactionTab({
     const headers = [
       "Note globale",
       "Date",
+      "Intervention",
       "Rédacteur",
       "Qualité",
       "Ponctualité",
@@ -310,6 +334,7 @@ export default function SatisfactionTab({
     const rows = filteredReviews.map(rev => {
       const note = getNoteGlobale(rev);
       const date = formatToDisplayDate(getReviewDate(rev)) || '';
+      const intervention = rev.interventionReference || rev.interventionRef || rev.intervention || '';
       const client = rev.clientName || '';
       const qualite = rev.qualite !== undefined && rev.qualite !== null ? rev.qualite : '';
       const ponctualite = rev.ponctualite !== undefined && rev.ponctualite !== null ? rev.ponctualite : '';
@@ -322,6 +347,7 @@ export default function SatisfactionTab({
       return [
         `"${note}"`,
         `"${date}"`,
+        `"${intervention.replace(/"/g, '""')}"`,
         `"${client.replace(/"/g, '""')}"`,
         `"${qualite}"`,
         `"${ponctualite}"`,
@@ -364,13 +390,43 @@ export default function SatisfactionTab({
       return avg % 1 === 0 ? avg.toFixed(0) : avg.toFixed(1);
     };
 
+    const allNoteGlobaleNums = filteredReviews
+      .map((r) => {
+        const ng = getNoteGlobale(r);
+        return ng !== '-' ? parseFloat(ng.replace(',', '.')) : null;
+      })
+      .filter((v): v is number => v !== null && !isNaN(v));
+
+    const noteGlobaleAvg = allNoteGlobaleNums.length > 0
+      ? (() => {
+          const sum = allNoteGlobaleNums.reduce((a, b) => a + b, 0);
+          const avg = sum / allNoteGlobaleNums.length;
+          return avg % 1 === 0 ? avg.toFixed(0) : avg.toFixed(1);
+        })()
+      : '-';
+
+    const qualite = calcAvg('qualite');
+    const ponctualite = calcAvg('ponctualite');
+    const politesse = calcAvg('politesse');
+    const clartePdf = calcAvg('clartePdf');
+    const explications = calcAvg('explications');
+    const sensibilisation = calcAvg('sensibilisation');
+
     return {
-      qualite: calcAvg('qualite'),
-      ponctualite: calcAvg('ponctualite'),
-      politesse: calcAvg('politesse'),
-      clartePdf: calcAvg('clartePdf'),
-      explications: calcAvg('explications'),
-      sensibilisation: calcAvg('sensibilisation'),
+      noteGlobale: noteGlobaleAvg,
+      noteGlobalePct: getPercentageFromNote(noteGlobaleAvg),
+      qualite,
+      qualitePct: getPercentageFromNote(qualite),
+      ponctualite,
+      ponctualitePct: getPercentageFromNote(ponctualite),
+      politesse,
+      politessePct: getPercentageFromNote(politesse),
+      clartePdf,
+      clartePdfPct: getPercentageFromNote(clartePdf),
+      explications,
+      explicationsPct: getPercentageFromNote(explications),
+      sensibilisation,
+      sensibilisationPct: getPercentageFromNote(sensibilisation),
     };
   }, [filteredReviews]);
 
@@ -539,51 +595,94 @@ export default function SatisfactionTab({
             <table className="w-full text-left font-sans border-collapse text-xs" id="satisfaction-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
               <thead>
                 <tr className="bg-transparent">
-                  <th className="px-4 pt-3 pb-1.5 text-center w-28 whitespace-nowrap" style={thStyle}>{t("Note globale.")}</th>
+                  <th className="px-3 pt-3 pb-1.5 text-center min-w-[120px] whitespace-nowrap" style={thStyle}>{t("Note globale.")}</th>
                   <th className="px-4 pt-3 pb-1.5 w-28 whitespace-nowrap" style={thStyle}>{t("Date.")}</th>
+                  <th className="px-4 pt-3 pb-1.5 w-36 whitespace-nowrap" style={thStyle}>{t("Intervention.")}</th>
                   <th className="px-4 pt-3 pb-1.5 w-40 whitespace-nowrap" style={thStyle}>{t("Rédacteur.")}</th>
-                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Qualité.")}</th>
-                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Ponctualité.")}</th>
-                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Politesse.")}</th>
-                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Clarté PDF.")}</th>
-                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Explications.")}</th>
-                  <th className="px-3 pt-3 pb-1.5 text-center whitespace-nowrap" style={thStyle}>{t("Sensibilisation.")}</th>
+                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Qualité.")}</th>
+                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Ponctualité.")}</th>
+                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Politesse.")}</th>
+                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Clarté PDF.")}</th>
+                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Explications.")}</th>
+                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Sensibilisation.")}</th>
                   <th className="px-4 pt-3 pb-1.5" style={thStyle}>{t("Évaluation.")}</th>
-                  <th className="px-4 pt-3 pb-1.5 text-right w-24 whitespace-nowrap" style={thStyle}>{t("Action.")}</th>
+                  <th className="px-4 pt-3 pb-1.5 text-right w-44 whitespace-nowrap" style={thStyle}>{t("Actions.")}</th>
                 </tr>
                 {/* Second header row: column averages */}
                 <tr className="bg-transparent" style={{ borderBottom: '1px solid rgb(218, 218, 218)' }}>
-                  <th className="px-4 pt-1.5 pb-3 text-center"></th>
+                  <th className="px-3 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                    {columnAverages.noteGlobale !== '-' ? (
+                      <div className="inline-flex items-center justify-center gap-1.5">
+                        <div style={roundBadgeStyle} title={t("Moyenne Note globale")}>
+                          {columnAverages.noteGlobale}
+                        </div>
+                        <div style={percentBadgeStyle} title={t("Moyenne Note globale (%)")}>
+                          {columnAverages.noteGlobalePct}
+                        </div>
+                      </div>
+                    ) : null}
+                  </th>
                   <th className="px-4 pt-1.5 pb-3"></th>
                   <th className="px-4 pt-1.5 pb-3"></th>
-                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
-                    <div style={roundBadgeStyle} title={t("Moyenne Qualité")}>
-                      {columnAverages.qualite}
+                  <th className="px-4 pt-1.5 pb-3"></th>
+                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                    <div className="inline-flex items-center justify-center gap-1.5">
+                      <div style={roundBadgeStyle} title={t("Moyenne Qualité")}>
+                        {columnAverages.qualite}
+                      </div>
+                      <div style={percentBadgeStyle} title={t("Moyenne Qualité (%)")}>
+                        {columnAverages.qualitePct}
+                      </div>
                     </div>
                   </th>
-                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
-                    <div style={roundBadgeStyle} title={t("Moyenne Ponctualité")}>
-                      {columnAverages.ponctualite}
+                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                    <div className="inline-flex items-center justify-center gap-1.5">
+                      <div style={roundBadgeStyle} title={t("Moyenne Ponctualité")}>
+                        {columnAverages.ponctualite}
+                      </div>
+                      <div style={percentBadgeStyle} title={t("Moyenne Ponctualité (%)")}>
+                        {columnAverages.ponctualitePct}
+                      </div>
                     </div>
                   </th>
-                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
-                    <div style={roundBadgeStyle} title={t("Moyenne Politesse")}>
-                      {columnAverages.politesse}
+                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                    <div className="inline-flex items-center justify-center gap-1.5">
+                      <div style={roundBadgeStyle} title={t("Moyenne Politesse")}>
+                        {columnAverages.politesse}
+                      </div>
+                      <div style={percentBadgeStyle} title={t("Moyenne Politesse (%)")}>
+                        {columnAverages.politessePct}
+                      </div>
                     </div>
                   </th>
-                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
-                    <div style={roundBadgeStyle} title={t("Moyenne Clarté PDF")}>
-                      {columnAverages.clartePdf}
+                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                    <div className="inline-flex items-center justify-center gap-1.5">
+                      <div style={roundBadgeStyle} title={t("Moyenne Clarté PDF")}>
+                        {columnAverages.clartePdf}
+                      </div>
+                      <div style={percentBadgeStyle} title={t("Moyenne Clarté PDF (%)")}>
+                        {columnAverages.clartePdfPct}
+                      </div>
                     </div>
                   </th>
-                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
-                    <div style={roundBadgeStyle} title={t("Moyenne Explications")}>
-                      {columnAverages.explications}
+                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                    <div className="inline-flex items-center justify-center gap-1.5">
+                      <div style={roundBadgeStyle} title={t("Moyenne Explications")}>
+                        {columnAverages.explications}
+                      </div>
+                      <div style={percentBadgeStyle} title={t("Moyenne Explications (%)")}>
+                        {columnAverages.explicationsPct}
+                      </div>
                     </div>
                   </th>
-                  <th className="px-3 pt-1.5 pb-3 text-center align-middle">
-                    <div style={roundBadgeStyle} title={t("Moyenne Sensibilisation")}>
-                      {columnAverages.sensibilisation}
+                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                    <div className="inline-flex items-center justify-center gap-1.5">
+                      <div style={roundBadgeStyle} title={t("Moyenne Sensibilisation")}>
+                        {columnAverages.sensibilisation}
+                      </div>
+                      <div style={percentBadgeStyle} title={t("Moyenne Sensibilisation (%)")}>
+                        {columnAverages.sensibilisationPct}
+                      </div>
                     </div>
                   </th>
                   <th className="px-4 pt-1.5 pb-3"></th>
@@ -606,10 +705,15 @@ export default function SatisfactionTab({
                   return (
                     <tr key={rev.id} className="group hover:bg-[#ffecf8] transition-all cursor-pointer">
                       
-                      {/* Round badge for Note globale */}
-                      <td className="px-4 py-4 align-middle text-center cursor-default">
-                        <div style={roundBadgeStyle}>
-                          {noteGlobale}
+                      {/* Round badges for Note globale (Note + Pourcentage) */}
+                      <td className="px-3 py-4 align-middle text-center cursor-default whitespace-nowrap">
+                        <div className="inline-flex items-center justify-center gap-1.5">
+                          <div style={roundBadgeStyle} title={`${noteGlobale}/4`}>
+                            {noteGlobale}
+                          </div>
+                          <div style={percentBadgeStyle} title={getPercentageFromNote(noteGlobale)}>
+                            {getPercentageFromNote(noteGlobale)}
+                          </div>
                         </div>
                       </td>
 
@@ -617,6 +721,13 @@ export default function SatisfactionTab({
                       <td className="px-4 py-4 font-sans align-middle cursor-default whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                         <div className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                           {formatToDisplayDate(getReviewDate(rev)) || '-'}
+                        </div>
+                      </td>
+
+                      {/* Intervention Reference */}
+                      <td className="px-4 py-4 font-sans align-middle cursor-default whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        <div className="font-bold text-black whitespace-nowrap" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          {rev.interventionReference || rev.interventionRef || rev.intervention || ''}
                         </div>
                       </td>
 
@@ -664,16 +775,37 @@ export default function SatisfactionTab({
                         </div>
                       </td>
 
-                      {/* Actions (Action) */}
+                      {/* Actions */}
                       <td className="px-4 py-4 text-right align-middle whitespace-nowrap bg-transparent" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteReview(rev.id)}
-                          style={rowActionButtonStyle}
-                          className="cursor-pointer font-sans bg-transparent hover:opacity-80 transition-all"
-                        >
-                          <span>{t("Supprimer")}</span>
-                        </button>
+                        <div className="inline-flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            disabled={!((rev.interventionReference || rev.interventionRef || rev.intervention || '').trim())}
+                            onClick={() => {
+                              const refVal = (rev.interventionReference || rev.interventionRef || rev.intervention || '').trim();
+                              if (refVal && onShowInterventionDetails) {
+                                onShowInterventionDetails(refVal);
+                              }
+                            }}
+                            style={{
+                              ...rowActionButtonStyle,
+                              opacity: ((rev.interventionReference || rev.interventionRef || rev.intervention || '').trim()) ? 1 : 0.4,
+                              cursor: ((rev.interventionReference || rev.interventionRef || rev.intervention || '').trim()) ? 'pointer' : 'not-allowed',
+                            }}
+                            className="font-sans bg-transparent hover:opacity-80 transition-all"
+                            title={((rev.interventionReference || rev.interventionRef || rev.intervention || '').trim()) ? t("Détails intervention") : t("Aucune référence intervention")}
+                          >
+                            <span>{t("Détails intervention")}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteReview(rev.id)}
+                            style={rowActionButtonStyle}
+                            className="cursor-pointer font-sans bg-transparent hover:opacity-80 transition-all"
+                          >
+                            <span>{t("Supprimer")}</span>
+                          </button>
+                        </div>
                       </td>
 
                     </tr>

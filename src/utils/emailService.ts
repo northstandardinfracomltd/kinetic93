@@ -274,7 +274,8 @@ export async function triggerEmail6RapportIntervention(
   defibIdentifiant: string, 
   dateStr: string, 
   companyName: string, 
-  companyEmail: string
+  companyEmail: string,
+  interventionReference?: string
 ): Promise<boolean> {
   const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
   const savedOption = localStorage.getItem(`defib_${tenantId}_enable_auto_emails`);
@@ -284,7 +285,18 @@ export async function triggerEmail6RapportIntervention(
   }
   const subject = `${companyName} : Document relatif à votre matériel.`;
   const enableAvis = localStorage.getItem(`defib_${tenantId}_enable_satisfaction_avis`) !== 'Non';
-  const body = `Un document a été généré pour l’intervention effectuée sur votre matériel ${defibIdentifiant} le ${dateStr}. Connectez-vous sur votre portail client https://defibeo.deroesch.com/ pour le télécharger.${enableAvis ? ' Nous vous invitons à laisser un avis sur : https://defibeo.deroesch.com/satisfaction/' : ''}`;
+  
+  const queryParams = new URLSearchParams();
+  if (interventionReference && interventionReference.trim()) {
+    queryParams.set('ref', interventionReference.trim());
+  }
+  if (tenantId && tenantId.trim()) {
+    queryParams.set('tenant', tenantId.trim());
+  }
+  const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const satisfactionUrl = `https://defibeo.deroesch.com/satisfaction/${queryString}`;
+
+  const body = `Un document a été généré pour l’intervention effectuée sur votre matériel ${defibIdentifiant} le ${dateStr}. Connectez-vous sur votre portail client https://defibeo.deroesch.com/ pour le télécharger.${enableAvis ? ` Nous vous invitons à laisser un avis sur : ${satisfactionUrl}` : ''}`;
   
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${clientEmail}`,

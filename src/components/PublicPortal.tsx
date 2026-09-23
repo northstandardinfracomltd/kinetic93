@@ -263,6 +263,7 @@ interface Expense {
 // Generated report log type
 interface GeneratedReport {
   id: string;
+  interventionReference?: string;
   date: string;
   techName: string;
   defibId: string;
@@ -4429,6 +4430,7 @@ export default function PublicPortal({
           newReportRecord.date,
           companyInfo.name || "Défibeo Suite",
           companyInfo.email || "",
+          newReportRecord.interventionReference || newReportRecord.id || ""
         ).catch((e) => console.error("Error triggering Email 6:", e));
       } else {
         console.warn(

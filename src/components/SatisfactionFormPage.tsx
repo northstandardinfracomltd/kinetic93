@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
-import { findTenantAndDefibGlobally, fetchRawCollectionFromFirestore, db } from '../firebase';
+import { findTenantByInterventionGlobally, fetchRawCollectionFromFirestore, db } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { t } from '../utils/translate';
 import { getParisTimestamp } from '../utils/dateUtils';
@@ -20,7 +20,28 @@ const CRITERIA_LIST: CriteriaConfig[] = [
 ];
 
 export default function SatisfactionFormPage() {
-  const [defibId, setDefibId] = useState('');
+  const getUrlParam = (paramKey: string): string => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const val = searchParams.get(paramKey);
+      if (val) return val;
+      if (window.location.hash.includes('?')) {
+        const hashParams = new URLSearchParams(window.location.hash.split('?')[1]);
+        const hVal = hashParams.get(paramKey);
+        if (hVal) return hVal;
+      }
+    } catch (_) {}
+    return '';
+  };
+
+  const [interventionRef] = useState<string>(() => {
+    return getUrlParam('ref') || getUrlParam('intervention') || getUrlParam('interventionRef') || '';
+  });
+
+  const [urlTenantId] = useState<string>(() => {
+    return getUrlParam('tenant') || getUrlParam('env') || '';
+  });
+
   const [nomPrenom, setNomPrenom] = useState('');
   const [commentaire, setCommentaire] = useState('');
 
@@ -31,9 +52,6 @@ export default function SatisfactionFormPage() {
   const [clartePdf, setClartePdf] = useState<number | null>(null);
   const [explications, setExplications] = useState<number | null>(null);
   const [sensibilisation, setSensibilisation] = useState<number | null>(null);
-  
-  const [isCheckingId, setIsCheckingId] = useState(false);
-  const [isIdValid, setIsIdValid] = useState<boolean | null>(null);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -57,34 +75,6 @@ export default function SatisfactionFormPage() {
     else if (key === 'sensibilisation') setSensibilisation(val);
   };
 
-  // Live lookup check of defibrillator identifier against main software's registry
-  useEffect(() => {
-    const trimmed = defibId.trim();
-    if (!trimmed) {
-      setIsIdValid(null);
-      return;
-    }
-
-    setIsCheckingId(true);
-    const delayDebounce = setTimeout(async () => {
-      try {
-        const result = await findTenantAndDefibGlobally(trimmed);
-        if (result && result.exists) {
-          setIsIdValid(true);
-        } else {
-          setIsIdValid(false);
-        }
-      } catch (err) {
-        console.error("Error checking ID on satisfaction form:", err);
-        setIsIdValid(false);
-      } finally {
-        setIsCheckingId(false);
-      }
-    }, 600); // 600ms debounce
-
-    return () => clearTimeout(delayDebounce);
-  }, [defibId]);
-
   // Combined validity check
   const isFormValid = useMemo(() => {
     const allCriteriaSelected = qualite !== null &&
@@ -94,13 +84,10 @@ export default function SatisfactionFormPage() {
                                 explications !== null &&
                                 sensibilisation !== null;
 
-    return defibId.trim().length > 0 &&
-           nomPrenom.trim().length > 0 &&
+    return nomPrenom.trim().length > 0 &&
            commentaire.trim().length > 0 &&
-           allCriteriaSelected &&
-           isIdValid === true &&
-           !isCheckingId;
-  }, [defibId, nomPrenom, commentaire, qualite, ponctualite, politesse, clartePdf, explications, sensibilisation, isIdValid, isCheckingId]);
+           allCriteriaSelected;
+  }, [nomPrenom, commentaire, qualite, ponctualite, politesse, clartePdf, explications, sensibilisation]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,15 +97,17 @@ export default function SatisfactionFormPage() {
     setErrorMessage('');
 
     try {
-      // 1. Locate the correct tenant owning the defibrillator identification
-      const tenantInfo = await findTenantAndDefibGlobally(defibId);
-      if (!tenantInfo) {
-        setErrorMessage("Erreur: Impossible de localiser le propriétaire de ce défibrillateur.");
-        setIsSubmitting(false);
-        return;
+      // 1. Locate tenant owning the intervention reference
+      let tenantId = urlTenantId.trim();
+      if (!tenantId && interventionRef.trim()) {
+        const tenantInfo = await findTenantByInterventionGlobally(interventionRef.trim());
+        if (tenantInfo) {
+          tenantId = tenantInfo.tenantId;
+        }
       }
-
-      const { tenantId } = tenantInfo;
+      if (!tenantId) {
+        tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+      }
 
       // 2. Add the customer review to that specific tenant's customerReviews partition in firestore
       const key = tenantId === 'demo' ? 'customerReviews' : `${tenantId}_customerReviews`;
@@ -131,7 +120,10 @@ export default function SatisfactionFormPage() {
         id: 'rev-' + Date.now(),
         clientName: nomPrenom.trim(),
         comment: commentaire.trim(),
-        defibId: defibId.trim(),
+        interventionReference: interventionRef.trim(),
+        interventionRef: interventionRef.trim(),
+        intervention: interventionRef.trim(),
+        defibId: interventionRef.trim(),
         qualite,
         ponctualite,
         politesse,
@@ -151,11 +143,12 @@ export default function SatisfactionFormPage() {
         const notifKey = tenantId === 'demo' ? 'notifications' : `${tenantId}_notifications`;
         const existingNotifications = await fetchRawCollectionFromFirestore<any[]>(notifKey) || [];
         const client_denomination = nomPrenom.trim() || "Un client anonyme";
-        const comment_text = commentaire.trim() ? ` (${commentaire.trim()})` : "";
+        const refSnippet = interventionRef.trim() ? ` (Réf: ${interventionRef.trim()})` : "";
+        const comment_text = commentaire.trim() ? ` - "${commentaire.trim()}"` : "";
         const newNotif = {
           id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
           category: 'Système',
-          title: `Le client ${client_denomination} a soumis un avis de satisfaction (Note globale : ${avgVal}/4)${comment_text}.`,
+          title: `Le client ${client_denomination}${refSnippet} a soumis un avis de satisfaction (Note globale : ${avgVal}/4)${comment_text}.`,
           timestamp: getParisTimestamp(),
           situation: 'Nouveau',
           envId: tenantId,
@@ -188,7 +181,6 @@ export default function SatisfactionFormPage() {
 
       setIsSubmitted(true);
       // Clear inputs
-      setDefibId('');
       setNomPrenom('');
       setCommentaire('');
       setQualite(null);
@@ -248,36 +240,24 @@ export default function SatisfactionFormPage() {
               </div>
             )}
 
-            {/* ID DEFIB FIELD */}
+            {/* RÉFÉRENCE INTERVENTION FIELD (Disabled, auto-populated, visible) */}
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="defib_id" className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
-                {t("Identifiant du matériel.")}
+              <label htmlFor="intervention_ref" className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
+                {t("Référence intervention.")}
               </label>
               <input
-                id="defib_id"
+                id="intervention_ref"
                 type="text"
-                required
-                placeholder={t("Ex: ABC-D00-123.")}
-                value={defibId}
-                onChange={(e) => setDefibId(e.target.value)}
-                className="w-full text-black"
+                disabled
+                placeholder={t("Référence intervention")}
+                value={interventionRef}
+                className="w-full text-black disabled:bg-slate-50 disabled:text-slate-700 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: '#f8fafc',
+                  color: '#1e293b',
+                  cursor: 'not-allowed',
+                }}
               />
-              
-              {isCheckingId && (
-                <p className="text-[16px] text-slate-500 font-bold font-sans mt-0.5">
-                  {t("Vérification de l'identifiant...")}
-                </p>
-              )}
-              {!isCheckingId && isIdValid === true && (
-                <p className="text-[16px] text-emerald-600 font-bold font-sans mt-0.5">
-                  {t("Identifiant matériel valide.")}
-                </p>
-              )}
-              {!isCheckingId && isIdValid === false && (
-                <p className="text-[16px] text-red-600 font-bold font-sans mt-0.5">
-                  {t("Identifiant matériel invalide.")}
-                </p>
-              )}
             </div>
 
             {/* NOM PRENOM */}
