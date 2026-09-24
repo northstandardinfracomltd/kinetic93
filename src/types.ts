@@ -282,12 +282,26 @@ export interface SupportTicket {
   envId?: string;
   tenantId?: string;
 
+  // Client / Contact fields
+  situationInterlocuteur?: 'Prospect' | 'Client';
+  typeStructure?: 'Collectivité' | 'Entreprise';
+  prenomNom?: string;
+  fonction?: string;
+  telephone?: string;
+
   // Commercial category specific fields
   marchePublic?: 'Oui' | 'Non';
   situationDevis?: 'Gagné' | 'Perdu' | 'Non renseigné';
   scorePotentielConversion?: number | null;
   referenceDevis?: string;
   totalAffaireHT?: number | string;
+  famille?: string;
+  indicatifPostal?: string;
+  origineLead?: 'Service Client' | 'Direct' | 'Internet' | 'Planification' | 'Autre.' | string;
+  descriptionOffreDevis?: string;
+  dateDevis?: string;
+  dateProchaineRelance?: string;
+  dateCommande?: string;
   lienStockagePartageDevis?: string;
   evenementsCommercial?: CommercialEvent[];
 }

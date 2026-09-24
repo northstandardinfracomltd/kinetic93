@@ -1,10 +1,50 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Maximize2, Minimize2, BarChart3, Download, Calendar } from 'lucide-react';
+import { Maximize2, Minimize2, BarChart3, Download, Calendar, Trash2 } from 'lucide-react';
 import { SupportTicket, Member, Client, CompanyInfo, CommercialEvent } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { INITIAL_TICKETS } from '../utils';
 import { sendScriptEmail } from '../utils/emailService';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore } from '../firebase';
+
+export const getWeekNumberString = (dateStr?: string): string => {
+  if (!dateStr) return '';
+  let d: Date | null = null;
+  const parts = dateStr.trim().split('/');
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+      d = new Date(year, month, day);
+    }
+  } else if (dateStr.includes('-')) {
+    const parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) d = parsed;
+  }
+  if (!d) return '';
+  const target = new Date(d.valueOf());
+  const dayNr = (d.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay() + 7) % 7));
+  }
+  const weekNumber = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+  return `S${weekNumber}`;
+};
+
+export const formatDateDisplay = (dateStr?: string): string => {
+  if (!dateStr) return '—';
+  const trimmed = dateStr.trim();
+  if (trimmed.includes('-')) {
+    const parts = trimmed.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+  }
+  return trimmed;
+};
 
 export const CRITICITE_OPTIONS: Array<{
   value: 'Urgent' | 'Semaine prochaine' | 'Ce mois' | 'Mois prochain' | 'Non renseigné';
@@ -49,7 +89,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   t
 }) => {
   const [ticketSearch, setTicketSearch] = useState('');
-  const [ticketCategoryFilter, setTicketCategoryFilter] = useState<'Tous' | 'Commercial' | 'Réclamation' | 'Technique' | 'Sans Catégorie'>('Tous');
+  const [ticketCategoryFilter, setTicketCategoryFilter] = useState<'Commercial' | 'Réclamation' | 'Technique' | 'Sans Catégorie'>('Commercial');
   const [ticketStatusFilter, setTicketStatusFilter] = useState<'Tous' | 'Nouveau' | 'En cours' | 'Terminé'>('Tous');
   
   // Selection state for rows
@@ -74,7 +114,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             naturalTableWidthRef.current = sWidth;
           }
           const clientW = bottomScrollRef.current.clientWidth;
-          const naturalW = naturalTableWidthRef.current || 1400;
+          const defaultW = ticketCategoryFilter === 'Commercial' ? 1650 : 1150;
+          const naturalW = (bottomScrollRef.current && bottomScrollRef.current.scrollWidth > 500)
+            ? bottomScrollRef.current.scrollWidth
+            : defaultW;
           const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
           setTableFitScale(scale);
         }
@@ -97,7 +140,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         }
         setTableFitScale(1);
       } else {
-        const naturalW = naturalTableWidthRef.current || 1400;
+        const defaultW = ticketCategoryFilter === 'Commercial' ? 1650 : 1150;
+        const naturalW = (bottomScrollRef.current && bottomScrollRef.current.scrollWidth > 500)
+          ? bottomScrollRef.current.scrollWidth
+          : (naturalTableWidthRef.current || defaultW);
         const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
         setTableFitScale(scale);
       }
@@ -113,7 +159,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       observer.disconnect();
       window.removeEventListener('resize', updateWidth);
     };
-  }, [isTableFitView, tickets]);
+  }, [isTableFitView, tickets, ticketCategoryFilter]);
 
   // Side-pane drawer state
   const [isPaneOpen, setIsPaneOpen] = useState(false);
@@ -190,12 +236,26 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formEmail, setFormEmail] = useState('');
   const [formDescription, setFormDescription] = useState('');
 
+  // Contact fields below Email
+  const [formSituationInterlocuteur, setFormSituationInterlocuteur] = useState<'Prospect' | 'Client'>('Prospect');
+  const [formTypeStructure, setFormTypeStructure] = useState<'Collectivité' | 'Entreprise'>('Entreprise');
+  const [formPrenomNom, setFormPrenomNom] = useState('');
+  const [formFonction, setFormFonction] = useState('');
+  const [formTelephone, setFormTelephone] = useState('');
+
   // Commercial category specific fields
   const [formMarchePublic, setFormMarchePublic] = useState<'Oui' | 'Non'>('Non');
   const [formSituationDevis, setFormSituationDevis] = useState<'Gagné' | 'Perdu' | 'Non renseigné'>('Non renseigné');
   const [formScoreConversion, setFormScoreConversion] = useState<number | null>(null);
   const [formReferenceDevis, setFormReferenceDevis] = useState('');
   const [formTotalAffaireHT, setFormTotalAffaireHT] = useState('');
+  const [formFamille, setFormFamille] = useState('');
+  const [formIndicatifPostal, setFormIndicatifPostal] = useState('');
+  const [formOrigineLead, setFormOrigineLead] = useState<'Service Client' | 'Direct' | 'Internet' | 'Planification' | 'Autre.' | string>('Service Client');
+  const [formDescriptionOffreDevis, setFormDescriptionOffreDevis] = useState('');
+  const [formDateDevis, setFormDateDevis] = useState('');
+  const [formDateProchaineRelance, setFormDateProchaineRelance] = useState('');
+  const [formDateCommande, setFormDateCommande] = useState('');
   const [formLienDevis, setFormLienDevis] = useState('');
   const [formCommercialEvents, setFormCommercialEvents] = useState<CommercialEvent[]>([]);
 
@@ -285,12 +345,26 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormEmail('');
     setFormDescription('');
 
+    // Reset contact fields
+    setFormSituationInterlocuteur('Prospect');
+    setFormTypeStructure('Entreprise');
+    setFormPrenomNom('');
+    setFormFonction('');
+    setFormTelephone('');
+
     // Reset commercial fields
     setFormMarchePublic('Non');
     setFormSituationDevis('Non renseigné');
     setFormScoreConversion(null);
     setFormReferenceDevis('');
     setFormTotalAffaireHT('');
+    setFormFamille('');
+    setFormIndicatifPostal('');
+    setFormOrigineLead('Service Client');
+    setFormDescriptionOffreDevis('');
+    setFormDateDevis('');
+    setFormDateProchaineRelance('');
+    setFormDateCommande('');
     setFormLienDevis('');
     setFormCommercialEvents([]);
 
@@ -334,19 +408,33 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
     setFormDescription(ticket.description || ticket.message || '');
 
+    // Contact fields
+    setFormSituationInterlocuteur(ticket.situationInterlocuteur || 'Prospect');
+    setFormTypeStructure(ticket.typeStructure || 'Entreprise');
+    setFormPrenomNom(ticket.prenomNom || '');
+    setFormFonction(ticket.fonction || '');
+    setFormTelephone(ticket.telephone || ticket.phone || '');
+
     // Commercial fields
     setFormMarchePublic(ticket.marchePublic || 'Non');
     setFormSituationDevis(ticket.situationDevis || 'Non renseigné');
     setFormScoreConversion(typeof ticket.scorePotentielConversion === 'number' ? ticket.scorePotentielConversion : null);
     setFormReferenceDevis(ticket.referenceDevis || '');
     setFormTotalAffaireHT(ticket.totalAffaireHT !== undefined && ticket.totalAffaireHT !== null ? String(ticket.totalAffaireHT) : '');
+    setFormFamille(ticket.famille || '');
+    setFormIndicatifPostal(ticket.indicatifPostal || '');
+    setFormOrigineLead(ticket.origineLead || 'Service Client');
+    setFormDescriptionOffreDevis(ticket.descriptionOffreDevis || '');
+    setFormDateDevis(ticket.dateDevis || '');
+    setFormDateProchaineRelance(ticket.dateProchaineRelance || '');
+    setFormDateCommande(ticket.dateCommande || '');
     setFormLienDevis(ticket.lienStockagePartageDevis || '');
     setFormCommercialEvents(Array.isArray(ticket.evenementsCommercial) ? ticket.evenementsCommercial : []);
 
     setIsPaneOpen(true);
   };
 
-  // Client dropdown change handler: auto-populate email
+  // Client dropdown change handler: auto-populate email & contact info
   const handleClientChange = (val: string) => {
     setFormClientSelect(val);
     if (val !== 'Autre') {
@@ -356,7 +444,19 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         if (clientEmail) {
           setFormEmail(clientEmail);
         }
+        setFormSituationInterlocuteur('Client');
+        if (found.phone || found.telephoneSite) {
+          setFormTelephone(found.phone || found.telephoneSite || '');
+        }
+        if (found.nomPrenomSite) {
+          setFormPrenomNom(found.nomPrenomSite);
+        }
+        if (found.codePostal) {
+          setFormIndicatifPostal(found.codePostal.slice(0, 2));
+        }
       }
+    } else {
+      setFormSituationInterlocuteur('Prospect');
     }
   };
 
@@ -385,12 +485,27 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       ? (formCustomClientName.trim() || 'Client Autre')
       : formClientSelect;
 
+    const contactData = {
+      situationInterlocuteur: formSituationInterlocuteur,
+      typeStructure: formTypeStructure,
+      prenomNom: formPrenomNom.trim(),
+      fonction: formFonction.trim(),
+      telephone: formTelephone.trim(),
+    };
+
     const commercialData = formCategorie === 'Commercial' ? {
       marchePublic: formMarchePublic,
       situationDevis: formSituationDevis,
       scorePotentielConversion: formScoreConversion,
       referenceDevis: formReferenceDevis.trim(),
       totalAffaireHT: formTotalAffaireHT.trim() ? parseFloat(formTotalAffaireHT.trim()) : undefined,
+      famille: formFamille.trim().toUpperCase(),
+      indicatifPostal: formIndicatifPostal.trim(),
+      origineLead: formOrigineLead,
+      descriptionOffreDevis: formDescriptionOffreDevis.trim(),
+      dateDevis: formDateDevis.trim(),
+      dateProchaineRelance: formDateProchaineRelance.trim(),
+      dateCommande: formDateCommande.trim(),
       lienStockagePartageDevis: formLienDevis.trim(),
       evenementsCommercial: formCommercialEvents,
     } : {};
@@ -418,6 +533,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             message: formDescription,
             envId: t.envId || activeTenant,
             tenantId: t.tenantId || activeTenant,
+            ...contactData,
             ...commercialData,
           };
         }
@@ -444,10 +560,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         email: formEmail.trim(),
         description: formDescription,
         message: formDescription,
-        phone: '',
+        phone: formTelephone.trim(),
         date: formOuverture || today,
         envId: activeTenant,
         tenantId: activeTenant,
+        ...contactData,
         ...commercialData,
       };
       onSaveTickets([newTicket, ...tickets]);
@@ -558,13 +675,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const filteredTickets = tickets.filter((t) => {
     // 1. Category filter
     const cat = t.categorie || 'Sans Catégorie';
-    let matchesCat = true;
-    if (ticketCategoryFilter !== 'Tous') {
-      if (ticketCategoryFilter === 'Sans Catégorie') {
-        matchesCat = !t.categorie || t.categorie === 'Sans Catégorie';
-      } else {
-        matchesCat = t.categorie === ticketCategoryFilter;
-      }
+    let matchesCat = false;
+    if (ticketCategoryFilter === 'Sans Catégorie') {
+      matchesCat = !t.categorie || t.categorie === 'Sans Catégorie';
+    } else {
+      matchesCat = t.categorie === ticketCategoryFilter;
     }
 
     // 2. Situation / Status filter
@@ -724,7 +839,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     csvContent += ';;;;;;;;;;;;;;;\n';
 
     // Detailed table header
-    csvContent += 'Référence;Date Ouverture;Dernière Actualisation;Collaborateur;Client ou Prospect;Email;Catégorie;Situation;Criticité;Objet;Total Affaire HT;Situation Devis;Marché Public;Score Potentiel Conversion;Référence Devis;Lien Stockage Partagé Devis;Description\n';
+    csvContent += 'Référence;Date Ouverture;Dernière Actualisation;Collaborateur;Client ou Prospect;Email;Situation Interlocuteur;Type Structure;Prénom Nom;Fonction;Téléphone;Catégorie;Situation;Criticité;Objet;Total Affaire HT;Situation Devis;Marché Public;Score Potentiel Conversion;Référence Devis;Famille;Indicatif Postal;Origine Lead;Description Offre Devis;Date Devis;Date Prochaine Relance;Date Commande;Lien Stockage Partagé Devis;Description\n';
 
     // Rows
     filteredPerfTickets.forEach(t => {
@@ -736,6 +851,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         escapeCsv(t.collaborateur || ''),
         escapeCsv(t.client || t.customClientName || ''),
         escapeCsv(t.email || ''),
+        escapeCsv(t.situationInterlocuteur || ''),
+        escapeCsv(t.typeStructure || ''),
+        escapeCsv(t.prenomNom || ''),
+        escapeCsv(t.fonction || ''),
+        escapeCsv(t.telephone || t.phone || ''),
         escapeCsv(t.categorie || 'Sans Catégorie'),
         escapeCsv(sit),
         escapeCsv(t.criticite || 'Non renseigné'),
@@ -745,6 +865,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         escapeCsv(t.marchePublic || ''),
         escapeCsv(t.scorePotentielConversion !== undefined && t.scorePotentielConversion !== null ? `${t.scorePotentielConversion}/8` : ''),
         escapeCsv(t.referenceDevis || ''),
+        escapeCsv(t.famille || ''),
+        escapeCsv(t.indicatifPostal || ''),
+        escapeCsv(t.origineLead || ''),
+        escapeCsv(t.descriptionOffreDevis || ''),
+        escapeCsv(t.dateDevis || ''),
+        escapeCsv(t.dateProchaineRelance || ''),
+        escapeCsv(t.dateCommande || ''),
         escapeCsv(t.lienStockagePartageDevis || ''),
         escapeCsv(t.description || t.message || '')
       ];
@@ -1093,10 +1220,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
       {/* Header Pills: Categories first, then Situation */}
       <div className="px-4 space-y-3 mt-4" id="crm-filter-pills-wrapper">
-        {/* Row 1: Gélules de catégories : « Tous » / « Commercial » / « Réclamation » / « Technique » / « Sans Catégorie » */}
+        {/* Row 1: Gélules de catégories : « Commercial » / « Réclamation » / « Technique » / « Sans Catégorie » */}
         <div className="flex flex-wrap gap-2.5 items-center justify-center sm:justify-start" id="crm-category-pills">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-sans mr-1 select-none">Catégories :</span>
-          {(['Tous', 'Commercial', 'Réclamation', 'Technique', 'Sans Catégorie'] as const).map((catOpt) => {
+          {(['Commercial', 'Réclamation', 'Technique', 'Sans Catégorie'] as const).map((catOpt) => {
             const isSelected = ticketCategoryFilter === catOpt;
             return (
               <button
@@ -1117,7 +1243,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 }}
               >
                 {catOpt}
-                {catOpt === 'Tous' && ` (${countCatTous})`}
                 {catOpt === 'Commercial' && ` (${countCatCommercial})`}
                 {catOpt === 'Réclamation' && ` (${countCatReclamation})`}
                 {catOpt === 'Technique' && ` (${countCatTechnique})`}
@@ -1129,7 +1254,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
         {/* Row 2: Gélules de situation : « Tous » / « Nouveau » / « En cours » / « Terminé » */}
         <div className="flex flex-wrap gap-2.5 items-center justify-center sm:justify-start" id="crm-situation-pills">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-sans mr-1 select-none">Situation :</span>
           {(['Tous', 'Nouveau', 'En cours', 'Terminé'] as const).map((filterOpt) => {
             const isSelected = ticketStatusFilter === filterOpt;
             return (
@@ -1326,13 +1450,29 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </th>
                   <th className="px-4 py-3.5" style={thStyle}>Référence.</th>
                   <th className="px-4 py-3.5" style={thStyle}>Criticité.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Catégorie.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Situation.</th>
                   <th className="px-4 py-3.5" style={thStyle}>Ouverture.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Der.Actual.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Objet.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Collaborateur.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Client / Prospect.</th>
+                  <th className="px-4 py-3.5" style={thStyle}>Situation.</th>
+                  <th className="px-4 py-3.5 text-center" style={thStyle}>Indicatif Postal.</th>
+                  <th className="px-4 py-3.5" style={thStyle}>Client.</th>
+
+                  {ticketCategoryFilter === 'Commercial' ? (
+                    <>
+                      <th className="px-4 py-3.5" style={thStyle}>Interlocuteur.</th>
+                      <th className="px-4 py-3.5" style={thStyle}>Type.</th>
+                      <th className="px-4 py-3.5 text-center" style={thStyle}>Famille.</th>
+                      <th className="px-4 py-3.5" style={thStyle}>Origine Lead.</th>
+                      <th className="px-4 py-3.5" style={thStyle}>Date Devis.</th>
+                      <th className="px-4 py-3.5" style={thStyle}>Référence Devis.</th>
+                      <th className="px-4 py-3.5" style={thStyle}>Date Pro. Relance.</th>
+                      <th className="px-4 py-3.5" style={thStyle}>Collaborateur.</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="px-4 py-3.5" style={thStyle}>Objet.</th>
+                      <th className="px-4 py-3.5" style={thStyle}>Collaborateur.</th>
+                    </>
+                  )}
+
                   <th className="px-4 py-3.5 text-right" style={thStyle}>Actions.</th>
                 </tr>
               </thead>
@@ -1341,14 +1481,15 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   const isChecked = selectedTicketIds.includes(t.id);
                   const refVal = t.reference || t.id;
                   const critVal = t.criticite || 'Non renseigné';
-                  const catVal = t.categorie || 'Sans Catégorie';
                   const sitVal = t.situation || (t.status === 'Résolu' ? 'Terminé' : t.status) || 'Nouveau';
-                  const ouvVal = t.dateOuverture || t.date || '—';
-                  const derVal = t.dateDerniereActualisation || t.dateOuverture || t.date || '—';
+                  const rawOuvVal = t.dateOuverture || t.date || '';
+                  const ouvVal = formatDateDisplay(rawOuvVal);
+                  const weekNum = getWeekNumberString(rawOuvVal);
+                  const indicatifPostalVal = t.indicatifPostal || (t.client ? clients.find(c => (c.denomination || (c as any).name || c.id) === t.client)?.codePostal?.slice(0, 2) : '') || '—';
+                  const cliVal = t.client || t.customClientName || 'Autre';
+                  const colVal = t.collaborateur || 'Non attribué';
                   const rawObjet = t.objet || '';
                   const truncatedObjet = rawObjet.length > 40 ? rawObjet.substring(0, 40) + '...' : rawObjet;
-                  const colVal = t.collaborateur || 'Non attribué';
-                  const cliVal = t.client || t.customClientName || 'Autre';
 
                   return (
                     <tr 
@@ -1400,9 +1541,20 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </span>
                       </td>
 
-                      {/* Catégorie. */}
+                      {/* Ouverture. (Date + rond numéro Semaine) */}
                       <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                        {catVal}
+                        <div className="inline-flex items-center gap-2">
+                          <span>{ouvVal}</span>
+                          {weekNum && (
+                            <span 
+                              className="inline-flex items-center justify-center rounded-full bg-slate-900 text-white font-bold font-sans text-[11px] select-none shadow-2xs"
+                              style={{ width: '25px', height: '25px', minWidth: '25px', minHeight: '25px' }}
+                              title={`Semaine ${weekNum}`}
+                            >
+                              {weekNum}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Situation. (in gelule) */}
@@ -1412,32 +1564,86 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </span>
                       </td>
 
-                      {/* Ouverture. */}
-                      <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                        {ouvVal}
+                      {/* Indicatif Postal. */}
+                      <td className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
+                        <span className="font-semibold text-slate-800">{indicatifPostalVal}</span>
                       </td>
 
-                      {/* Der.Actual. */}
-                      <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                        {derVal}
-                      </td>
-
-                      {/* Objet. (max 40 chars) */}
-                      <td className="px-4 py-4 whitespace-nowrap max-w-[220px] truncate" style={cellTextStyle} title={rawObjet}>
-                        {truncatedObjet}
-                      </td>
-
-                      {/* Collaborateur. */}
-                      <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                        {colVal}
-                      </td>
-
-                      {/* Client / Prospect. (in gelule) */}
+                      {/* Client. (Dénomination) */}
                       <td className="px-4 py-4 whitespace-nowrap">
                         <span style={geluleStyle} title={t.email ? `Email : ${t.email}` : undefined}>
                           {cliVal}
                         </span>
                       </td>
+
+                      {ticketCategoryFilter === 'Commercial' ? (
+                        <>
+                          {/* Interlocuteur. (Prospect/client) */}
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {t.situationInterlocuteur ? (
+                              <span 
+                                className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                                style={{
+                                  backgroundColor: t.situationInterlocuteur === 'Client' ? '#dcfce7' : '#fef3c7',
+                                  color: t.situationInterlocuteur === 'Client' ? '#166534' : '#92400e',
+                                  border: t.situationInterlocuteur === 'Client' ? '1px solid #bbf7d0' : '1px solid #fde68a',
+                                }}
+                              >
+                                {t.situationInterlocuteur}
+                              </span>
+                            ) : '—'}
+                          </td>
+
+                          {/* Type. (Collectivité/entreprise) */}
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {t.typeStructure || '—'}
+                          </td>
+
+                          {/* Famille. */}
+                          <td className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
+                            <span className="font-bold text-slate-900">{t.famille || '—'}</span>
+                          </td>
+
+                          {/* Origine Lead. */}
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {t.origineLead || '—'}
+                          </td>
+
+                          {/* Date Devis. */}
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {formatDateDisplay(t.dateDevis)}
+                          </td>
+
+                          {/* Référence Devis. */}
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {t.referenceDevis ? (
+                              <span style={geluleStyle}>{t.referenceDevis}</span>
+                            ) : '—'}
+                          </td>
+
+                          {/* Date Pro. Relance */}
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {formatDateDisplay(t.dateProchaineRelance)}
+                          </td>
+
+                          {/* Collaborateur. */}
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {colVal}
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          {/* Objet. (max 40 chars) */}
+                          <td className="px-4 py-4 whitespace-nowrap max-w-[260px] truncate" style={cellTextStyle} title={rawObjet}>
+                            {truncatedObjet}
+                          </td>
+
+                          {/* Collaborateur. */}
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {colVal}
+                          </td>
+                        </>
+                      )}
 
                       {/* Actions. */}
                       <td className="px-4 py-4 whitespace-nowrap text-right">
@@ -1547,13 +1753,35 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
                     <div>
                       <label>Ouverture.</label>
-                      <input
-                        type="text"
-                        value={formOuverture}
-                        disabled
-                        readOnly
-                        style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#000000', cursor: 'not-allowed' }}
-                      />
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          value={formOuverture}
+                          onChange={(e) => setFormOuverture(e.target.value)}
+                          placeholder="DD/MM/YYYY"
+                          style={{
+                            fontSize: '18px',
+                            backgroundColor: '#ffffff',
+                            color: '#000000',
+                            paddingRight: getWeekNumberString(formOuverture) ? '54px' : undefined
+                          }}
+                        />
+                        {getWeekNumberString(formOuverture) && (
+                          <div 
+                            className="absolute right-2.5 flex items-center justify-center rounded-full bg-slate-900 text-white font-bold font-sans pointer-events-none select-none shadow-xs"
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              minWidth: '32px',
+                              minHeight: '32px',
+                              fontSize: '12px'
+                            }}
+                            title={`Semaine ${getWeekNumberString(formOuverture)}`}
+                          >
+                            {getWeekNumberString(formOuverture)}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -1658,6 +1886,111 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       />
                     </div>
 
+                    {/* Situation Interlocuteur (Prospect / Client - choix unique) */}
+                    <div>
+                      <label>Situation Interlocuteur.</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {(['Prospect', 'Client'] as const).map((sit) => {
+                          const isSelected = formSituationInterlocuteur === sit;
+                          return (
+                            <div
+                              key={sit}
+                              onClick={() => setFormSituationInterlocuteur(sit)}
+                              className="flex items-center justify-start gap-2.5 p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                            >
+                              <span 
+                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                style={{
+                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                  width: '20px',
+                                  height: '20px',
+                                  minWidth: '20px',
+                                  minHeight: '20px',
+                                  backgroundColor: '#ffffff'
+                                }}
+                              >
+                                {isSelected && (
+                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                                )}
+                              </span>
+                              <span className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
+                                {sit}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Type Structure (Collectivité / Entreprise - choix unique) */}
+                    <div>
+                      <label>Type Structure.</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {(['Collectivité', 'Entreprise'] as const).map((typ) => {
+                          const isSelected = formTypeStructure === typ;
+                          return (
+                            <div
+                              key={typ}
+                              onClick={() => setFormTypeStructure(typ)}
+                              className="flex items-center justify-start gap-2.5 p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                            >
+                              <span 
+                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                style={{
+                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                  width: '20px',
+                                  height: '20px',
+                                  minWidth: '20px',
+                                  minHeight: '20px',
+                                  backgroundColor: '#ffffff'
+                                }}
+                              >
+                                {isSelected && (
+                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                                )}
+                              </span>
+                              <span className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
+                                {typ}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Prénom Nom. */}
+                    <div>
+                      <label>Prénom Nom.</label>
+                      <input
+                        type="text"
+                        placeholder="Prénom Nom"
+                        value={formPrenomNom}
+                        onChange={(e) => setFormPrenomNom(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Fonction. */}
+                    <div>
+                      <label>Fonction.</label>
+                      <input
+                        type="text"
+                        placeholder="Fonction"
+                        value={formFonction}
+                        onChange={(e) => setFormFonction(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Téléphone. */}
+                    <div>
+                      <label>Téléphone.</label>
+                      <input
+                        type="tel"
+                        placeholder="Ex: 06 12 34 56 78"
+                        value={formTelephone}
+                        onChange={(e) => setFormTelephone(e.target.value)}
+                      />
+                    </div>
+
                     {/* Objet */}
                     <div>
                       <label>Objet.</label>
@@ -1719,20 +2052,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   {/* 5. SPECIFIC FIELDS WHEN CATEGORY IS « Commercial » */}
                   {formCategorie === 'Commercial' && (
                     <div 
-                      className="space-y-5 p-5 animate-fadeIn"
+                      className="space-y-4 p-5 animate-fadeIn"
                       style={{
-                        border: '1.5px solid #cbd5e1',
+                        border: '1px solid #e2e8f0',
                         borderRadius: '16px',
-                        backgroundColor: '#f8fafc'
+                        backgroundColor: '#ffffff'
                       }}
                       id="crm-commercial-section"
                     >
-                      <div className="border-b border-slate-200 pb-2">
-                        <span className="text-base font-bold text-slate-900 font-sans tracking-tight">
-                          Détails du Suivi Commercial
-                        </span>
-                      </div>
-
                       {/* Marché Public (Radio-check Oui/Non) */}
                       <div>
                         <label>Marché Public.</label>
@@ -1840,11 +2167,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               </button>
                             );
                           })}
-                          {formScoreConversion !== null && (
-                            <span className="text-sm text-slate-600 font-sans ml-2">
-                              Sélection : <strong>{formScoreConversion} / 8</strong>
-                            </span>
-                          )}
                         </div>
                       </div>
 
@@ -1875,6 +2197,87 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           <span className="absolute right-3.5 text-sm font-semibold text-slate-500 font-sans pointer-events-none">
                             € HT
                           </span>
+                        </div>
+                      </div>
+
+                      {/* Famille. (1 lettre uppercase) & Indicatif Postal. (2 chiffres) */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label>Famille.</label>
+                          <input
+                            type="text"
+                            maxLength={1}
+                            placeholder="A"
+                            value={formFamille}
+                            onChange={(e) => setFormFamille(e.target.value.slice(0, 1).toUpperCase())}
+                            style={{ textTransform: 'uppercase', textAlign: 'center', fontSize: '18px', fontWeight: 600 }}
+                          />
+                        </div>
+                        <div>
+                          <label>Indicatif Postal.</label>
+                          <input
+                            type="text"
+                            maxLength={2}
+                            placeholder="75"
+                            value={formIndicatifPostal}
+                            onChange={(e) => setFormIndicatifPostal(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                            style={{ textAlign: 'center', fontSize: '18px', fontWeight: 600 }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Origine Lead. (dropdown liste : Service Client, Direct, Internet, Planification, Autre.) */}
+                      <div>
+                        <label>Origine Lead.</label>
+                        <select
+                          value={formOrigineLead}
+                          onChange={(e) => setFormOrigineLead(e.target.value)}
+                          style={selectStyle}
+                        >
+                          <option value="Service Client">Service Client</option>
+                          <option value="Direct">Direct</option>
+                          <option value="Internet">Internet</option>
+                          <option value="Planification">Planification</option>
+                          <option value="Autre.">Autre.</option>
+                        </select>
+                      </div>
+
+                      {/* Description Offre Devis. (one line field) */}
+                      <div>
+                        <label>Description Offre Devis.</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Remplacement électrodes et pack batterie..."
+                          value={formDescriptionOffreDevis}
+                          onChange={(e) => setFormDescriptionOffreDevis(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Dates commerciales : Date Devis., Date Prochaine Relance., Date Commande. */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label>Date Devis.</label>
+                          <input
+                            type="date"
+                            value={formDateDevis}
+                            onChange={(e) => setFormDateDevis(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label>Date Prochaine Relance.</label>
+                          <input
+                            type="date"
+                            value={formDateProchaineRelance}
+                            onChange={(e) => setFormDateProchaineRelance(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label>Date Commande.</label>
+                          <input
+                            type="date"
+                            value={formDateCommande}
+                            onChange={(e) => setFormDateCommande(e.target.value)}
+                          />
                         </div>
                       </div>
 
@@ -1927,29 +2330,25 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             }}
                             className="hover:bg-zinc-800 transition-colors"
                           >
-                            + Nouvel événement
+                            Nouvel événement
                           </button>
                         </div>
 
-                        {formCommercialEvents.length === 0 ? (
-                          <p className="text-xs text-slate-500 italic p-3 bg-white border border-dashed border-slate-200 rounded-xl">
-                            Aucun événement consigné pour le moment. Cliquez sur « Nouvel événement » pour ajouter une note, un appel ou une relance.
-                          </p>
-                        ) : (
+                        {formCommercialEvents.length > 0 && (
                           <div className="space-y-3">
                             {formCommercialEvents.map((evt) => (
-                              <div key={evt.id} className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2.5">
+                              <div key={evt.id} className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2.5 shadow-xs">
                                 <div className="flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-semibold text-slate-600 font-sans">Date :</span>
+                                  <div>
+                                    <label className="text-xs !font-semibold text-slate-600 !mb-1">Date.</label>
                                     <input
                                       type="text"
                                       value={evt.date}
                                       onChange={(e) => handleUpdateCommercialEvent(evt.id, 'date', e.target.value)}
                                       placeholder="DD/MM/YYYY"
                                       style={{
-                                        width: '130px !important',
-                                        padding: '4px 8px !important',
+                                        width: '140px !important',
+                                        padding: '6px 10px !important',
                                         fontSize: '14px !important',
                                         borderRadius: '8px !important',
                                       }}
@@ -1958,9 +2357,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveCommercialEvent(evt.id)}
-                                    className="text-xs text-red-600 hover:text-red-800 font-semibold cursor-pointer"
+                                    className="p-1.5 px-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                    title="Supprimer l'événement"
                                   >
-                                    Supprimer
+                                    <Trash2 size={13} />
+                                    <span>Supprimer</span>
                                   </button>
                                 </div>
                                 <div>
@@ -1988,10 +2389,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   )}
                 </div>
 
-                {/* Floating Action Buttons: Side-by-side Enregistrer & Fermer */}
+                {/* Floating Action Buttons: Side-by-side Enregistrer & Fermer without any background */}
                 <div 
-                  className="sticky bottom-0 bg-white/95 backdrop-blur-xs pt-4 pb-2 border-t border-slate-100 flex items-center gap-3 mt-6 z-20"
-                  style={{ boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.03)' }}
+                  className="sticky bottom-0 pt-4 pb-2 flex items-center gap-3 mt-6 z-20"
+                  style={{ background: 'transparent' }}
                 >
                   <button
                     type="submit"
@@ -2006,7 +2407,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       cursor: 'pointer',
                       flex: 1,
                     }}
-                    className="hover:bg-[#2b48cc] transition-colors"
+                    className="hover:bg-[#2b48cc] transition-colors shadow-lg"
                   >
                     Enregistrer
                   </button>
@@ -2025,7 +2426,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       cursor: 'pointer',
                       flex: 1,
                     }}
-                    className="hover:bg-zinc-800 transition-colors"
+                    className="hover:bg-zinc-800 transition-colors shadow-lg"
                   >
                     Fermer
                   </button>
@@ -2049,71 +2450,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
             <div className="w-screen max-w-md sm:max-w-2xl lg:max-w-3xl bg-white shadow-2xl flex flex-col p-6 sm:p-8 overflow-y-auto justify-between">
               <div className="space-y-6">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center">
-                      <BarChart3 size={20} />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold font-gochi text-black">
-                        Performance Commerciale & Support
-                      </h3>
-                      <p className="text-xs text-slate-500 font-sans">
-                        Statistiques de suivi, volume d'affaires et export des données
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Section FILTRES (Plage date à date & Employé) */}
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4 text-left">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-sm font-semibold text-slate-700 font-sans flex items-center gap-1.5">
-                      <Calendar size={16} /> Filtres d'analyse
-                    </span>
-                    {/* Quick shortcuts */}
-                    <div className="flex items-center gap-1.5 text-xs font-sans">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPerfStartDate('');
-                          setPerfEndDate('');
-                        }}
-                        className={`px-2 py-1 rounded-md border text-xs cursor-pointer ${
-                          !perfStartDate && !perfEndDate ? 'bg-black text-white border-black' : 'bg-white text-slate-700 border-slate-300 hover:border-black'
-                        }`}
-                      >
-                        Tout
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const now = new Date();
-                          const y = now.getFullYear();
-                          const m = String(now.getMonth() + 1).padStart(2, '0');
-                          setPerfStartDate(`${y}-${m}-01`);
-                          const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
-                          setPerfEndDate(`${y}-${m}-${String(lastDay).padStart(2, '0')}`);
-                        }}
-                        className="px-2 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:border-black text-xs cursor-pointer"
-                      >
-                        Ce mois
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const now = new Date();
-                          const y = now.getFullYear();
-                          setPerfStartDate(`${y}-01-01`);
-                          setPerfEndDate(`${y}-12-31`);
-                        }}
-                        className="px-2 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:border-black text-xs cursor-pointer"
-                      >
-                        Cette année
-                      </button>
-                    </div>
-                  </div>
-
                   {/* Plage date à date */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -2346,10 +2684,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             <div className="w-screen max-w-md sm:max-w-2xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto justify-between">
               <div>
                 <div className="space-y-6">
-                  <h3 className="text-xl font-bold font-gochi text-black">
-                    Réglages Suivi Commercial & Support
-                  </h3>
-
                   {/* Section 1: Modèle Texte de l'email de relance avec variables */}
                   <div 
                     className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
