@@ -3,7 +3,7 @@ import { Defibrillateur, Client, Variable } from '../types';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { REGIONS_BY_COUNTRY } from '../utils/regions';
 
 interface MapModalProps {
@@ -927,33 +927,72 @@ export default function MapModal({
       `}</style>
 
       <div className="relative w-full h-full flex-1">
-        
-        {/* Top-Bar Red Loading Banner (Visible as long as points are batch loading) */}
+        {/* Real OpenStreetMap Leaflet Container rendered first */}
+        <MapContainer 
+          center={[46.603354, 1.888334]} 
+          zoom={6} 
+          style={{ width: '100%', height: '100%' }}
+          zoomControl={true}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          
+          <ChangeMapView viewTarget={viewTarget} />
+
+          {/* Plot Markers */}
+          {displayedItems.map(({ item, coords }) => {
+            const isFocused = item.id === selectedItemId;
+            const isChecked = selectedIds.includes(item.id);
+            const statusColor = getSafetyStatusColor(item);
+            const clientDenomination = clientMap.get(item.clientId)?.denomination || '';
+
+            return (
+              <DefibMarker
+                key={item.id}
+                item={item}
+                coords={coords}
+                isFocused={isFocused}
+                isChecked={isChecked}
+                statusColor={statusColor}
+                clientDenomination={clientDenomination}
+                onSelect={setSelectedItemId}
+                onToggleSelect={onToggleSelect}
+              />
+            );
+          })}
+        </MapContainer>
+
+        {/* Top-Center Non-Intrusive Floating Loading Pill */}
         {isMapBatchLoading && isOpen && (
           <div 
-            className="absolute top-0 left-0 right-0 z-[2000] py-2.5 px-4 text-center font-bold shadow-lg flex items-center justify-center gap-3 transition-all animate-fadeIn"
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-[3500] py-2 px-5 rounded-full shadow-lg flex items-center justify-center gap-2.5 pointer-events-none transition-all animate-fadeIn"
             style={{
               backgroundColor: '#ef4444',
               color: '#ffffff',
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              fontSize: '17px',
+              fontSize: '15px',
               letterSpacing: '0.01em',
               boxShadow: '0 4px 15px rgba(239, 68, 68, 0.4)'
             }}
             id="map-loading-topbar"
           >
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin flex-shrink-0" />
-            <span>Veuillez patienter, chargement en cours.</span>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin flex-shrink-0" />
+            <span>Chargement des points...</span>
             {itemsWithCoords.length > 0 && (
-              <span className="text-sm bg-red-800/60 text-white px-2.5 py-0.5 rounded-full ml-1 font-mono">
+              <span className="text-xs bg-red-800/70 text-white px-2 py-0.5 rounded-full font-mono font-bold">
                 {Math.min(renderedCount, itemsWithCoords.length)} / {itemsWithCoords.length}
               </span>
             )}
           </div>
         )}
 
-        {/* Top-Right Header Container: Tournée button (visible only when selectedIds > 0) + Fermer button */}
-        <div className="absolute top-4 right-4 z-[1000] flex items-center gap-3">
+        {/* Top-Right Header Controls: Tournée (if items selected) + Filtres + Fermer */}
+        <div 
+          className="absolute top-4 right-4 z-[4000] flex items-center gap-3"
+          id="map-header-actions"
+        >
           {/* Tournée Dropdown Container */}
           {selectedIds && selectedIds.length > 0 && (
             <div className="relative">
@@ -1005,7 +1044,7 @@ export default function MapModal({
               {/* Dropdown Menu */}
               {isTourDropdownOpen && !isAnySelectedInTour && (
                 <div 
-                  className="absolute right-0 mt-1 w-72 bg-white rounded-lg z-[1050] py-2.5 font-sans animate-fadeIn"
+                  className="absolute right-0 mt-1 w-72 bg-white rounded-lg z-[4500] py-2.5 font-sans animate-fadeIn"
                   style={{ 
                     fontSize: '18px',
                     border: '1px solid rgb(218 218 218)',
@@ -1112,7 +1151,7 @@ export default function MapModal({
                           onClick={() => {
                             setSelectedDraftId(isSelected ? null : t.id);
                           }}
-                          className="w-full text-left px-4 py-2 font-semibold truncate cursor-pointer border-0 bg-transparent hover:bg-slate-50 font-sans"
+                          className="w-full text-left px-4 py-2 font-semibold truncate cursor-pointer border-0 bg-transparent hover:bg-transparent"
                           style={{ 
                             fontSize: '16px',
                             color: isSelected ? 'rgb(254, 78, 186)' : '#000000',
@@ -1129,7 +1168,7 @@ export default function MapModal({
             </div>
           )}
 
-          {/* Bouton Filtres - à côté à gauche du bouton « Fermer » */}
+          {/* Bouton Filtres - positionné à gauche du bouton « Fermer » avec badge dynamique */}
           <button
             type="button"
             onClick={() => {
@@ -1174,6 +1213,7 @@ export default function MapModal({
 
           {/* Floating Close Button in signature blue style */}
           <button
+            type="button"
             onClick={onClose}
             id="btn-map-close"
             style={{
@@ -1198,7 +1238,7 @@ export default function MapModal({
         {isFilterPaneOpen && (
           <div 
             onClick={() => setIsFilterPaneOpen(false)}
-            className="absolute inset-0 bg-black/40 backdrop-blur-xs z-[1090] animate-fadeIn cursor-pointer"
+            className="absolute inset-0 bg-black/40 backdrop-blur-xs z-[4900] animate-fadeIn cursor-pointer"
           />
         )}
 
@@ -1206,9 +1246,24 @@ export default function MapModal({
         {isFilterPaneOpen && (
           <div
             id="map-filter-side-pane"
-            className="absolute inset-y-0 right-0 w-80 sm:w-96 bg-white shadow-2xl z-[1100] flex flex-col border-l border-slate-200"
+            className="absolute inset-y-0 right-0 w-80 sm:w-96 bg-white shadow-2xl z-[5000] flex flex-col border-l border-slate-200"
             style={{ height: '100%' }}
           >
+            {/* Header with Title and Close icon */}
+            <div className="p-6 pb-4 flex items-center justify-between border-b border-slate-100">
+              <h2 className="text-xl font-bold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                Filtres
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsFilterPaneOpen(false)}
+                className="text-slate-400 hover:text-black cursor-pointer p-1 rounded-lg transition-colors"
+                title="Fermer le volet des filtres"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
             {/* Scroll Area containing all fields */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Filter 1: Toggle Inclure Autres Matériels */}
@@ -1329,7 +1384,7 @@ export default function MapModal({
         {!isHelpsDisabled && isInfoPopupVisible && (
           <div 
             id="map-info-popup"
-            className="absolute bottom-6 left-6 z-[1000] max-w-xl bg-white/95 backdrop-blur-xs p-4 rounded-xl border border-slate-200 text-black animate-fadeIn flex flex-col md:flex-row md:items-center justify-between gap-4"
+            className="absolute bottom-6 left-6 z-[3000] max-w-xl bg-white/95 backdrop-blur-xs p-4 rounded-xl border border-slate-200 text-black animate-fadeIn flex flex-col md:flex-row md:items-center justify-between gap-4"
             style={{
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
               borderColor: 'rgb(218, 218, 218)',
@@ -1356,43 +1411,6 @@ export default function MapModal({
             </button>
           </div>
         )}
-
-        {/* Real OpenStreetMap Leaflet Container */}
-        <MapContainer 
-          center={[46.603354, 1.888334]} 
-          zoom={6} 
-          style={{ width: '100%', height: '100%' }}
-          zoomControl={true}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          
-          <ChangeMapView viewTarget={viewTarget} />
-
-          {/* Plot Markers */}
-          {displayedItems.map(({ item, coords }) => {
-            const isFocused = item.id === selectedItemId;
-            const isChecked = selectedIds.includes(item.id);
-            const statusColor = getSafetyStatusColor(item);
-            const clientDenomination = clientMap.get(item.clientId)?.denomination || '';
-
-            return (
-              <DefibMarker
-                key={item.id}
-                item={item}
-                coords={coords}
-                isFocused={isFocused}
-                isChecked={isChecked}
-                statusColor={statusColor}
-                clientDenomination={clientDenomination}
-                onSelect={setSelectedItemId}
-                onToggleSelect={onToggleSelect}
-              />
-            );
-          })}
-        </MapContainer>
       </div>
     </div>
   );
