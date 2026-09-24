@@ -5,7 +5,7 @@ import { idbSet, idbGet } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
-import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText } from './types';
+import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, TeamWorkGroup, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText } from './types';
 import {
   INITIAL_CLIENTS,
   INITIAL_VARIABLES,
@@ -820,6 +820,40 @@ export default function App() {
   const [fsmTourDrafts, setFsmTourDrafts] = useState<Record<string, any>>({});
   const [savingTourIds, setSavingTourIds] = useState<Record<string, boolean>>({});
   const [fsmExpandedMissions, setFsmExpandedMissions] = useState<Record<string, boolean>>({});
+
+  const [fsmClientFilter, setFsmClientFilter] = useState<string>('Tous');
+  const [fsmRejectedOrRefusedFilter, setFsmRejectedOrRefusedFilter] = useState<boolean>(false);
+  const [isFsmFilterSidePaneOpen, setIsFsmFilterSidePaneOpen] = useState<boolean>(false);
+
+  // Bulk selection of missions
+  const [selectedFsmMissionIds, setSelectedFsmMissionIds] = useState<string[]>([]);
+  const [isFsmBulkTourDropdownOpen, setIsFsmBulkTourDropdownOpen] = useState<boolean>(false);
+
+  // Team Work Groups by Zone
+  const [isFsmTeamPaneOpen, setIsFsmTeamPaneOpen] = useState<boolean>(false);
+  const [teamWorkGroups, setTeamWorkGroups] = useState<TeamWorkGroup[]>(() => {
+    try {
+      const curTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      const saved = localStorage.getItem(`defib_${curTenant}_team_work_groups`);
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return [];
+  });
+  const [isCreatingGroup, setIsCreatingGroup] = useState<boolean>(false);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [groupTitle, setGroupTitle] = useState<string>('');
+  const [groupPlanners, setGroupPlanners] = useState<string[]>([]);
+  const [groupTechnicians, setGroupTechnicians] = useState<string[]>([]);
+  const [groupRegions, setGroupRegions] = useState<string[]>([]);
+
+  const saveTeamWorkGroups = (updated: TeamWorkGroup[]) => {
+    setTeamWorkGroups(updated);
+    const curTenant = tenantId || 'demo';
+    saveCollectionToFirestore('teamWorkGroups', updated, curTenant);
+    try {
+      localStorage.setItem(`defib_${curTenant}_team_work_groups`, JSON.stringify(updated));
+    } catch (_) {}
+  };
 
   const toggleFsmMissionExpanded = (missionKey: string) => {
     setFsmExpandedMissions(prev => ({
@@ -2008,6 +2042,208 @@ export default function App() {
     saveFsmTours(updatedTours);
   };
 
+  const toggleSelectFsmMission = (missionId: string) => {
+    setSelectedFsmMissionIds(prev =>
+      prev.includes(missionId) ? prev.filter(id => id !== missionId) : [...prev, missionId]
+    );
+  };
+
+  const bulkMoveFsmMissionsToATrier = () => {
+    if (selectedFsmMissionIds.length === 0) return;
+    const missionsToMove: any[] = [];
+    fsmTours.forEach(tour => {
+      (tour.missions || []).forEach((m: any) => {
+        if (selectedFsmMissionIds.includes(m.id)) {
+          missionsToMove.push(m);
+        }
+      });
+    });
+
+    if (missionsToMove.length === 0) {
+      setSelectedFsmMissionIds([]);
+      return;
+    }
+
+    let aTrierExists = false;
+    let updatedTours = fsmTours.map(tour => {
+      if (tour.id === 'a-trier') {
+        aTrierExists = true;
+        const existingIds = new Set((tour.missions || []).map((m: any) => m.id));
+        const newMissions = missionsToMove.filter(m => !existingIds.has(m.id));
+        return {
+          ...tour,
+          missions: [...(tour.missions || []), ...newMissions],
+          calculated: false
+        };
+      }
+      return {
+        ...tour,
+        missions: (tour.missions || []).filter((m: any) => !selectedFsmMissionIds.includes(m.id)),
+        calculated: false
+      };
+    });
+
+    if (!aTrierExists) {
+      updatedTours.push({
+        id: 'a-trier',
+        title: 'Missions à trier',
+        startDate: 'A trier',
+        status: 'Brouillon',
+        missions: missionsToMove
+      });
+    }
+
+    saveFsmTours(updatedTours);
+    setSelectedFsmMissionIds([]);
+    setIsFsmBulkTourDropdownOpen(false);
+  };
+
+  const bulkAssignFsmMissionsToTour = (targetTourId: string) => {
+    if (selectedFsmMissionIds.length === 0) return;
+    const missionsToMove: any[] = [];
+    fsmTours.forEach(tour => {
+      (tour.missions || []).forEach((m: any) => {
+        if (selectedFsmMissionIds.includes(m.id)) {
+          missionsToMove.push(m);
+        }
+      });
+    });
+
+    if (missionsToMove.length === 0) {
+      setSelectedFsmMissionIds([]);
+      return;
+    }
+
+    const updatedTours = fsmTours.map(tour => {
+      if (tour.id === targetTourId) {
+        const existingIds = new Set((tour.missions || []).map((m: any) => m.id));
+        const newMissions = missionsToMove.filter(m => !existingIds.has(m.id));
+        return {
+          ...tour,
+          missions: [...(tour.missions || []), ...newMissions],
+          calculated: false
+        };
+      }
+      return {
+        ...tour,
+        missions: (tour.missions || []).filter((m: any) => !selectedFsmMissionIds.includes(m.id)),
+        calculated: false
+      };
+    });
+
+    saveFsmTours(updatedTours);
+    setSelectedFsmMissionIds([]);
+    setIsFsmBulkTourDropdownOpen(false);
+  };
+
+  const bulkCreateTourWithMissions = () => {
+    if (selectedFsmMissionIds.length === 0) return;
+    const missionsToMove: any[] = [];
+    fsmTours.forEach(tour => {
+      (tour.missions || []).forEach((m: any) => {
+        if (selectedFsmMissionIds.includes(m.id)) {
+          missionsToMove.push(m);
+        }
+      });
+    });
+
+    const newId = `fsm-tour-${Date.now()}`;
+    const newTour = {
+      id: newId,
+      title: 'Nouvelle Tournée',
+      techName: '',
+      startDate: new Date().toISOString().split('T')[0],
+      status: 'Brouillon',
+      vehicule: 'Aucun',
+      missions: missionsToMove,
+      calculated: false
+    };
+
+    const updatedTours = fsmTours.map(tour => ({
+      ...tour,
+      missions: (tour.missions || []).filter((m: any) => !selectedFsmMissionIds.includes(m.id)),
+      calculated: false
+    }));
+    updatedTours.push(newTour);
+
+    saveFsmTours(updatedTours);
+    setSelectedFsmMissionIds([]);
+    setIsFsmBulkTourDropdownOpen(false);
+  };
+
+  const bulkCancelFsmMissions = () => {
+    if (selectedFsmMissionIds.length === 0) return;
+    if (!window.confirm(`Êtes-vous sûr de vouloir annuler et supprimer les ${selectedFsmMissionIds.length} mission(s) sélectionnée(s) ?`)) {
+      return;
+    }
+
+    const updatedTours = fsmTours.map(tour => ({
+      ...tour,
+      missions: (tour.missions || []).filter((m: any) => !selectedFsmMissionIds.includes(m.id)),
+      calculated: false
+    }));
+
+    saveFsmTours(updatedTours);
+    setSelectedFsmMissionIds([]);
+    setIsFsmBulkTourDropdownOpen(false);
+  };
+
+  const handleSaveTeamWorkGroup = () => {
+    const trimmedTitle = groupTitle.trim().slice(0, 30);
+    if (!trimmedTitle) {
+      alert("Veuillez saisir un titre pour le groupe (max 30 caractères).");
+      return;
+    }
+
+    if (editingGroupId) {
+      const updated = teamWorkGroups.map(g =>
+        g.id === editingGroupId
+          ? {
+              ...g,
+              title: trimmedTitle,
+              planners: groupPlanners,
+              technicians: groupTechnicians,
+              regions: groupRegions,
+              updatedAt: new Date().toISOString()
+            }
+          : g
+      );
+      saveTeamWorkGroups(updated);
+    } else {
+      const newGroup: TeamWorkGroup = {
+        id: `twg-${Date.now()}`,
+        title: trimmedTitle,
+        planners: groupPlanners,
+        technicians: groupTechnicians,
+        regions: groupRegions,
+        createdAt: new Date().toISOString()
+      };
+      saveTeamWorkGroups([...teamWorkGroups, newGroup]);
+    }
+
+    setEditingGroupId(null);
+    setIsCreatingGroup(false);
+    setGroupTitle('');
+    setGroupPlanners([]);
+    setGroupTechnicians([]);
+    setGroupRegions([]);
+  };
+
+  const handleDeleteTeamWorkGroup = (groupId: string) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce groupe de travail ?")) return;
+    const updated = teamWorkGroups.filter(g => g.id !== groupId);
+    saveTeamWorkGroups(updated);
+  };
+
+  const handleEditTeamWorkGroup = (group: TeamWorkGroup) => {
+    setEditingGroupId(group.id);
+    setIsCreatingGroup(true);
+    setGroupTitle(group.title || '');
+    setGroupPlanners(group.planners || []);
+    setGroupTechnicians(group.technicians || []);
+    setGroupRegions(group.regions || []);
+  };
+
   const changeFsmMissionParts = (tourId: string, missionId: string, oldParts: string[], newParts: string[], extraFieldsToUpdate?: any) => {
     const added = newParts.filter(p => !oldParts.includes(p));
     const removed = oldParts.filter(p => !newParts.includes(p));
@@ -2408,12 +2644,33 @@ export default function App() {
 
   const handleSoumettreAuClient = async (m: any, tour: any) => {
     const defib = defibrillateurs.find(df => df.identifiant === m.defibIdentifiant);
-    const client = defib ? clients.find(c => c.id === defib.clientId) : clients.find(c => c.id === m.clientId);
+    const otherEq = otherEquipments.find((oe: any) => oe.identifiant === m.defibIdentifiant);
+
+    let client: any = null;
+    if (m.clientId) {
+      client = clients.find(c => c.id === m.clientId || c.denomination === m.clientId);
+    }
+    if (!client && defib?.clientId) {
+      client = clients.find(c => c.id === defib.clientId || c.denomination === defib.clientId);
+    }
+    if (!client && otherEq?.clientId) {
+      client = clients.find(c => c.id === otherEq.clientId || c.denomination === otherEq.clientId);
+    }
+    if (!client && m.clientName) {
+      const cName = m.clientName.trim().toLowerCase();
+      client = clients.find(c => c.denomination && c.denomination.trim().toLowerCase() === cName);
+    }
 
     const recipientEmails: string[] = [];
 
     if (defib && defib.emailSite && defib.emailSite.trim()) {
       recipientEmails.push(defib.emailSite.trim());
+    }
+    if (otherEq && otherEq.emailSite && otherEq.emailSite.trim()) {
+      recipientEmails.push(otherEq.emailSite.trim());
+    }
+    if (m.emailSite && m.emailSite.trim()) {
+      recipientEmails.push(m.emailSite.trim());
     }
 
     if (client) {
@@ -2435,8 +2692,15 @@ export default function App() {
       if (recipientEmails.length === 0) {
         if (client.emailSite && client.emailSite.trim()) {
           recipientEmails.push(client.emailSite.trim());
-        } else if (client.email && client.email.trim()) {
+        }
+        if (client.email && client.email.trim()) {
           recipientEmails.push(client.email.trim());
+        }
+        if (client.emailSite2 && client.emailSite2.trim()) {
+          recipientEmails.push(client.emailSite2.trim());
+        }
+        if (client.emailSite3 && client.emailSite3.trim()) {
+          recipientEmails.push(client.emailSite3.trim());
         }
       }
     }
@@ -2478,7 +2742,7 @@ export default function App() {
     const validationUrl = `${origin}/validation-passage?ref=${encodeURIComponent(interventionRef)}&tenant=${encodeURIComponent(tenantId)}`;
 
     try {
-      await triggerEmailSoumettreAuClient(
+      const isSent = await triggerEmailSoumettreAuClient(
         uniqueEmails,
         companyName,
         companyEmail,
@@ -2491,11 +2755,16 @@ export default function App() {
           actionUrl: validationUrl
         }
       );
-      updateFsmMission(tour.id, m.id, { 
-        status: 'Attente Client',
-        interventionReference: interventionRef
-      });
-      alert("La proposition a été soumise au client par email avec succès.");
+
+      if (isSent) {
+        updateFsmMission(tour.id, m.id, { 
+          status: 'Attente Client',
+          interventionReference: interventionRef
+        });
+        alert("La proposition a été soumise au client par email avec succès.");
+      } else {
+        alert("Une erreur est survenue lors de l'envoi de l'email.");
+      }
     } catch (err) {
       console.error("Erreur lors de la soumission au client:", err);
       alert("Une erreur est survenue lors de l'envoi de l'email.");
@@ -4279,6 +4548,7 @@ export default function App() {
         syncTasks.push(syncBackground<FormationRecord[]>('formations', 'formations', setFormations));
         syncTasks.push(syncBackground<StagiaireRecord[]>('stagiaires', 'stagiaires', setStagiaires));
         syncTasks.push(syncBackground<EmargementRecord[]>('emargements', 'emargements', setEmargements));
+        syncTasks.push(syncBackground<TeamWorkGroup[]>('teamWorkGroups', 'team_work_groups', setTeamWorkGroups));
 
         const currentEmail = loggedUser?.email?.trim().toLowerCase();
         if (currentEmail && tenantId && tenantId !== 'demo') {
@@ -6147,6 +6417,15 @@ export default function App() {
     saveDefibs(updatedList);
   };
 
+  // Public standalone portals accessible without authentication
+  if (isMissionValidationPage) {
+    return <MissionValidationPage />;
+  }
+
+  if (isSatisfactionFormPage) {
+    return <SatisfactionFormPage />;
+  }
+
   if (isLoggedIn && (loggedUser?.email === 'tech.ouest@defibeo.com' || localStorage.getItem('defib_logged_user_role') === 'technicien')) {
     return (
       <PublicPortal
@@ -6223,14 +6502,6 @@ export default function App() {
         onAddNotification={addNotification}
       />
     );
-  }
-
-  if (isMissionValidationPage) {
-    return <MissionValidationPage />;
-  }
-
-  if (isSatisfactionFormPage) {
-    return <SatisfactionFormPage />;
   }
 
   if (isClientPortalOpen) {
@@ -6935,8 +7206,44 @@ export default function App() {
                 }
               }
 
+              // Filter by Client
+              if (fsmClientFilter !== 'Tous') {
+                const matchesClient = (tour.missions || []).some((m: any) => {
+                  if (m.clientId === fsmClientFilter) return true;
+                  const defib = defibrillateurs?.find((d: any) => d.identifiant === m.defibIdentifiant || d.id === m.defibId);
+                  if (defib && defib.clientId === fsmClientFilter) return true;
+                  const other = !defib ? otherEquipments?.find((o: any) => o.identifiant === m.defibIdentifiant || o.id === m.defibId) : null;
+                  if (other && other.clientId === fsmClientFilter) return true;
+                  return false;
+                });
+                if (!matchesClient) return false;
+              }
+
+              // Filter: Rejeté Technicien ou Refus Client
+              if (fsmRejectedOrRefusedFilter) {
+                const hasRejectedOrRefused = (tour.missions || []).some((m: any) => {
+                  const sitNorm = (m.status || '').toLowerCase().trim();
+                  return sitNorm === 'refusé client' || sitNorm === 'refuse client' || sitNorm === 'rejet mission' || sitNorm === 'rejet';
+                });
+                if (!hasRejectedOrRefused) return false;
+              }
+
               const query = fsmSearchQuery.toLowerCase().trim();
               if (!query) return true;
+
+              // Pre-match clients for Payeur ID / Client ID / denomination
+              const matchingClientIds = new Set<string>();
+              (clients || []).forEach((c: any) => {
+                if (
+                  (c.id || '').toLowerCase().includes(query) ||
+                  (c.payeurId || '').toLowerCase().includes(query) ||
+                  (c.clientIdField || '').toLowerCase().includes(query) ||
+                  (c.codeClient || '').toLowerCase().includes(query) ||
+                  (c.denomination || '').toLowerCase().includes(query)
+                ) {
+                  matchingClientIds.add(c.id);
+                }
+              });
 
               // 1. Tour level fields
               const titleMatch = (tour.title || '').toLowerCase().includes(query);
@@ -6957,6 +7264,9 @@ export default function App() {
               const missionMatch = missions.some((m: any) => {
                 if (!m) return false;
 
+                // Client ID / Payeur ID match on mission
+                if (m.clientId && matchingClientIds.has(m.clientId)) return true;
+
                 // Mission direct fields
                 if ((m.clientName || '').toLowerCase().includes(query)) return true;
                 if ((m.defibIdentifiant || m.identifiant || '').toLowerCase().includes(query)) return true;
@@ -6972,6 +7282,7 @@ export default function App() {
                 // Lookup linked defibrillateur
                 const matchedDefib = defibrillateurs?.find((d: any) => d.identifiant === m.defibIdentifiant || d.id === m.defibId);
                 if (matchedDefib) {
+                  if (matchedDefib.clientId && matchingClientIds.has(matchedDefib.clientId)) return true;
                   if ((matchedDefib.numeroSerie || '').toLowerCase().includes(query)) return true;
                   if ((matchedDefib.identifiant || '').toLowerCase().includes(query)) return true;
                   if ((matchedDefib.nomSite || '').toLowerCase().includes(query)) return true;
@@ -6982,12 +7293,16 @@ export default function App() {
                   if (clientObj) {
                     if ((clientObj.denomination || '').toLowerCase().includes(query)) return true;
                     if ((clientObj.codeClient || '').toLowerCase().includes(query)) return true;
+                    if ((clientObj.payeurId || '').toLowerCase().includes(query)) return true;
+                    if ((clientObj.clientIdField || '').toLowerCase().includes(query)) return true;
+                    if ((clientObj.id || '').toLowerCase().includes(query)) return true;
                   }
                 }
 
                 // Lookup linked other equipment
                 const matchedOther = !matchedDefib ? otherEquipments?.find((o: any) => o.identifiant === m.defibIdentifiant || o.id === m.defibId) : null;
                 if (matchedOther) {
+                  if (matchedOther.clientId && matchingClientIds.has(matchedOther.clientId)) return true;
                   if ((matchedOther.numeroSerie || '').toLowerCase().includes(query)) return true;
                   if ((matchedOther.identifiant || '').toLowerCase().includes(query)) return true;
                   if ((matchedOther.nomPrenomSite || '').toLowerCase().includes(query)) return true;
@@ -6998,6 +7313,9 @@ export default function App() {
                   if (clientObj) {
                     if ((clientObj.denomination || '').toLowerCase().includes(query)) return true;
                     if ((clientObj.codeClient || '').toLowerCase().includes(query)) return true;
+                    if ((clientObj.payeurId || '').toLowerCase().includes(query)) return true;
+                    if ((clientObj.clientIdField || '').toLowerCase().includes(query)) return true;
+                    if ((clientObj.id || '').toLowerCase().includes(query)) return true;
                   }
                 }
 
@@ -7111,90 +7429,6 @@ export default function App() {
                         />
                       </div>
 
-                      {/* Filter: Région */}
-                      <div className="relative w-full sm:w-44">
-                        <select
-                          value={fsmRegionFilter}
-                          onChange={(e) => setFsmRegionFilter(e.target.value)}
-                          className="w-full text-black focus:outline-none cursor-pointer"
-                          style={{
-                            border: '1px solid #dedede',
-                            borderRadius: '13px',
-                            padding: '9px 12px',
-                            fontSize: '14px',
-                            fontWeight: '100',
-                            color: '#000000',
-                            backgroundColor: '#ffffff',
-                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
-                          }}
-                        >
-                          <option value="Tous">Filtrer par région</option>
-                          {getRegionsForCountry('France').map(r => (
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Filter: Technicien */}
-                      <div className="relative w-full sm:w-44">
-                        <select
-                          value={fsmTechFilter}
-                          onChange={(e) => setFsmTechFilter(e.target.value)}
-                          className="w-full text-black focus:outline-none cursor-pointer"
-                          style={{
-                            border: '1px solid #dedede',
-                            borderRadius: '13px',
-                            padding: '9px 12px',
-                            fontSize: '14px',
-                            fontWeight: '100',
-                            color: '#000000',
-                            backgroundColor: '#ffffff',
-                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
-                          }}
-                        >
-                          <option value="Tous">Filtrer par technicien</option>
-                          {(() => {
-                            const techList = members.filter(m => isTechnicianMember(m)).map(m => m.name);
-                            const allTechs = Array.from(new Set<string>(techList)).filter((name: string) => name && name.trim() !== '');
-                            return allTechs.map(tech => (
-                              <option key={tech} value={tech}>{tech}</option>
-                            ));
-                          })()}
-                        </select>
-                      </div>
-
-                      {/* Filter: Employé */}
-                      <div className="relative w-full sm:w-44">
-                        <select
-                          value={fsmPlannerFilter}
-                          onChange={(e) => setFsmPlannerFilter(e.target.value)}
-                          className="w-full text-black focus:outline-none cursor-pointer"
-                          style={{
-                            border: '1px solid #dedede',
-                            borderRadius: '13px',
-                            padding: '9px 12px',
-                            fontSize: '14px',
-                            fontWeight: '100',
-                            color: '#000000',
-                            backgroundColor: '#ffffff',
-                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
-                          }}
-                        >
-                          <option value="Tous">Filtrer par employé</option>
-                          {(() => {
-                            const nonTechList = members.filter(m => {
-                              const roleLower = (m.role || '').toLowerCase();
-                              return !(m.role === 'Technicien' || m.role === 'Maintenance Terrain' || roleLower.includes('tech'));
-                            }).map(m => m.name);
-                            const tourPlanners = fsmTours.map((t: any) => t.plannerName || t.planner).filter(Boolean);
-                            const allPlanners = Array.from(new Set([...nonTechList, ...tourPlanners])).filter(name => name.trim() !== '');
-                            return allPlanners.map(planner => (
-                              <option key={planner} value={planner}>{planner}</option>
-                            ));
-                          })()}
-                        </select>
-                      </div>
-
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={addFsmTour}
@@ -7221,9 +7455,223 @@ export default function App() {
                         >
                           Plannings
                         </button>
+                        <button
+                          onClick={() => setIsFsmFilterSidePaneOpen(true)}
+                          id="btn-fsm-filtres"
+                          style={{
+                            backgroundColor: '#ffffff',
+                            color: '#000000',
+                            border: '1px solid #dedede',
+                            borderRadius: '13px',
+                            padding: '9px 18px',
+                            fontSize: '18px',
+                            fontWeight: '600',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            cursor: 'pointer',
+                            position: 'relative',
+                          }}
+                          className="hover:bg-neutral-50 transition-colors"
+                        >
+                          Filtres
+                          {(fsmRegionFilter !== 'Tous' || fsmTechFilter !== 'Tous' || fsmPlannerFilter !== 'Tous' || fsmClientFilter !== 'Tous' || fsmRejectedOrRefusedFilter) && (
+                            <span
+                              className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#fe4eba]"
+                              title="Filtres actifs"
+                            />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setIsFsmTeamPaneOpen(true)}
+                          id="btn-fsm-team-settings"
+                          style={{
+                            backgroundColor: '#ffffff',
+                            color: '#000000',
+                            border: '1px solid #dedede',
+                            borderRadius: '13px',
+                            padding: '9px 18px',
+                            fontSize: '18px',
+                            fontWeight: '600',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            cursor: 'pointer',
+                          }}
+                          className="hover:bg-neutral-50 transition-colors"
+                        >
+                          Réglages de l’équipe
+                        </button>
                       </div>
                     </div>
                   </div>
+
+                  {/* Bulk Selection Action Status Bar */}
+                  {selectedFsmMissionIds.length > 0 && (
+                    <div 
+                      className="p-4 flex flex-wrap items-center justify-between gap-4 animate-fadeIn w-full" 
+                      id="fsm-bulk-actions-status-bar"
+                      style={{
+                        backgroundColor: '#ffffff',
+                        border: '1px solid rgb(231, 231, 231)',
+                        borderRadius: '16px',
+                        marginTop: '12px',
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span 
+                          className="w-6 h-6 text-white rounded-full flex items-center justify-center text-xs font-bold font-sans shrink-0"
+                          style={{ backgroundColor: '#fe4eba' }}
+                        >
+                          {selectedFsmMissionIds.length}
+                        </span>
+                        <span 
+                          className="font-sans"
+                          style={{ fontSize: '18px', color: '#000000', fontWeight: '100', cursor: 'default' }}
+                        >
+                          Sélectionné(s)
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Placer ADV/À trier */}
+                        <button
+                          type="button"
+                          onClick={bulkMoveFsmMissionsToATrier}
+                          id="btn-bulk-a-trier"
+                          style={{
+                            backgroundColor: '#000000',
+                            color: '#ffffff',
+                            border: '1px solid #000000',
+                            borderRadius: '13px',
+                            padding: '8px 16px',
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            cursor: 'pointer',
+                          }}
+                          className="hover:opacity-90 transition-opacity"
+                        >
+                          Placer ADV/À trier
+                        </button>
+                        
+                        {/* Attribuer à une tournée */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsFsmBulkTourDropdownOpen(!isFsmBulkTourDropdownOpen)}
+                            id="btn-bulk-assign-tour"
+                            style={{
+                              backgroundColor: '#ffffff',
+                              color: '#000000',
+                              border: '1px solid #dedede',
+                              borderRadius: '13px',
+                              padding: '8px 16px',
+                              fontSize: '16px',
+                              fontWeight: '600',
+                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                              cursor: 'pointer',
+                            }}
+                            className="hover:bg-neutral-50 transition-colors"
+                          >
+                            Attribuer à une tournée
+                          </button>
+
+                          {isFsmBulkTourDropdownOpen && (
+                            <div 
+                              className="absolute right-0 mt-1 w-72 bg-white rounded-xl z-50 py-2.5 font-sans animate-fadeIn"
+                              style={{ 
+                                fontSize: '16px',
+                                border: '1px solid rgb(218 218 218)',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
+                              }}
+                            >
+                              <div className="px-3 pb-2 bg-transparent flex flex-col gap-2">
+                                <button
+                                  type="button"
+                                  onClick={bulkCreateTourWithMissions}
+                                  style={{
+                                    backgroundColor: '#ffffff',
+                                    color: '#000000',
+                                    border: '1px solid #dedede',
+                                    borderRadius: '10px',
+                                    padding: '8px 12px',
+                                    fontSize: '15px',
+                                    fontWeight: '600',
+                                    cursor: 'pointer'
+                                  }}
+                                  className="w-full text-center transition-colors cursor-pointer hover:bg-neutral-50"
+                                >
+                                  Nouvelle Tournée
+                                </button>
+                              </div>
+
+                              <div className="px-3 py-1 font-semibold text-xs text-neutral-500 uppercase tracking-wider">
+                                Tournées existantes
+                              </div>
+                              <div className="max-h-48 overflow-y-auto px-2 space-y-1">
+                                {fsmTours.filter(t => t.id !== 'a-trier').length === 0 ? (
+                                  <div className="px-3 py-2 text-xs text-neutral-400 text-center">
+                                    Aucune tournée disponible
+                                  </div>
+                                ) : (
+                                  fsmTours.filter(t => t.id !== 'a-trier').map(t => (
+                                    <button
+                                      key={t.id}
+                                      type="button"
+                                      onClick={() => bulkAssignFsmMissionsToTour(t.id)}
+                                      className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-neutral-100 transition-colors truncate block font-sans"
+                                      title={t.title || `Tournée ${t.id}`}
+                                    >
+                                      {t.title || `Tournée ${t.id}`} ({t.startDate || 'Date non définie'})
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Annuler l’intervention */}
+                        <button
+                          type="button"
+                          onClick={bulkCancelFsmMissions}
+                          id="btn-bulk-cancel-intervention"
+                          style={{
+                            backgroundColor: '#fee2e2',
+                            color: '#dc2626',
+                            border: '1px solid #fecaca',
+                            borderRadius: '13px',
+                            padding: '8px 16px',
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            cursor: 'pointer',
+                          }}
+                          className="hover:bg-red-200 transition-colors"
+                        >
+                          Annuler l’intervention
+                        </button>
+
+                        {/* Désélectionner */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedFsmMissionIds([]);
+                            setIsFsmBulkTourDropdownOpen(false);
+                          }}
+                          style={{
+                            backgroundColor: 'transparent',
+                            color: '#737373',
+                            border: 'none',
+                            padding: '8px 12px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                          }}
+                          className="hover:text-black transition-colors font-sans"
+                        >
+                          Désélectionner
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Side-pane popup pour le planning */}
@@ -7284,6 +7732,577 @@ export default function App() {
                       >
                         Fermer
                       </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Side-pane popup pour les Filtres (sans divider, sans icône croix) */}
+                {isFsmFilterSidePaneOpen && (
+                  <div 
+                    className="fixed inset-0 z-[9999] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+                    style={{ top: 0, left: 0, right: 0, bottom: 0, height: '100vh', width: '100vw' }}
+                    onClick={() => setIsFsmFilterSidePaneOpen(false)}
+                  >
+                    <div 
+                      className="relative w-full max-w-md bg-white flex flex-col overflow-hidden animate-slideLeft"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        height: '100vh',
+                        boxShadow: 'none',
+                        borderRadius: '16px 0px 0px 16px',
+                        borderLeft: '1px solid #e2e8f0',
+                      }}
+                    >
+                      {/* Body side-pane : Filtres */}
+                      <div className="flex-1 overflow-y-auto p-6 bg-white space-y-6 pb-28 font-sans">
+                        <div>
+                          <h3 style={{ fontSize: '22px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', color: '#000000' }}>
+                            Filtres
+                          </h3>
+                        </div>
+
+                        {/* Filter: Région */}
+                        <div>
+                          <label className="block text-[16px] font-semibold text-black mb-1.5 font-sans">
+                            Région
+                          </label>
+                          <select
+                            value={fsmRegionFilter}
+                            onChange={(e) => setFsmRegionFilter(e.target.value)}
+                            className="w-full text-black focus:outline-none cursor-pointer"
+                            style={{
+                              border: '1px solid #dedede',
+                              borderRadius: '13px',
+                              padding: '10px 14px',
+                              fontSize: '15px',
+                              fontWeight: '100',
+                              color: '#000000',
+                              backgroundColor: '#ffffff',
+                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
+                            }}
+                          >
+                            <option value="Tous">Toutes les régions</option>
+                            {getRegionsForCountry('France').map(r => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Filter: Technicien */}
+                        <div>
+                          <label className="block text-[16px] font-semibold text-black mb-1.5 font-sans">
+                            Technicien
+                          </label>
+                          <select
+                            value={fsmTechFilter}
+                            onChange={(e) => setFsmTechFilter(e.target.value)}
+                            className="w-full text-black focus:outline-none cursor-pointer"
+                            style={{
+                              border: '1px solid #dedede',
+                              borderRadius: '13px',
+                              padding: '10px 14px',
+                              fontSize: '15px',
+                              fontWeight: '100',
+                              color: '#000000',
+                              backgroundColor: '#ffffff',
+                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
+                            }}
+                          >
+                            <option value="Tous">Tous les techniciens</option>
+                            {(() => {
+                              const techList = members.filter(m => isTechnicianMember(m)).map(m => m.name);
+                              const allTechs = Array.from(new Set<string>(techList)).filter((name: string) => name && name.trim() !== '');
+                              return allTechs.map(tech => (
+                                <option key={tech} value={tech}>{tech}</option>
+                              ));
+                            })()}
+                          </select>
+                        </div>
+
+                        {/* Filter: Employé */}
+                        <div>
+                          <label className="block text-[16px] font-semibold text-black mb-1.5 font-sans">
+                            Employé
+                          </label>
+                          <select
+                            value={fsmPlannerFilter}
+                            onChange={(e) => setFsmPlannerFilter(e.target.value)}
+                            className="w-full text-black focus:outline-none cursor-pointer"
+                            style={{
+                              border: '1px solid #dedede',
+                              borderRadius: '13px',
+                              padding: '10px 14px',
+                              fontSize: '15px',
+                              fontWeight: '100',
+                              color: '#000000',
+                              backgroundColor: '#ffffff',
+                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
+                            }}
+                          >
+                            <option value="Tous">Tous les employés</option>
+                            {(() => {
+                              const nonTechList = members.filter(m => {
+                                const roleLower = (m.role || '').toLowerCase();
+                                return !(m.role === 'Technicien' || m.role === 'Maintenance Terrain' || roleLower.includes('tech'));
+                              }).map(m => m.name);
+                              const tourPlanners = fsmTours.map((t: any) => t.plannerName || t.planner).filter(Boolean);
+                              const allPlanners = Array.from(new Set([...nonTechList, ...tourPlanners])).filter(name => name.trim() !== '');
+                              return allPlanners.map(planner => (
+                                <option key={planner} value={planner}>{planner}</option>
+                              ));
+                            })()}
+                          </select>
+                        </div>
+
+                        {/* Filter: Client. */}
+                        <div>
+                          <label className="block text-[16px] font-semibold text-black mb-1.5 font-sans">
+                            Client.
+                          </label>
+                          <select
+                            value={fsmClientFilter}
+                            onChange={(e) => setFsmClientFilter(e.target.value)}
+                            className="w-full text-black focus:outline-none cursor-pointer"
+                            style={{
+                              border: '1px solid #dedede',
+                              borderRadius: '13px',
+                              padding: '10px 14px',
+                              fontSize: '15px',
+                              fontWeight: '100',
+                              color: '#000000',
+                              backgroundColor: '#ffffff',
+                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
+                            }}
+                          >
+                            <option value="Tous">Tous les clients</option>
+                            {clients.map(c => (
+                              <option key={c.id} value={c.id}>{c.denomination || c.id}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Filter: Rejeté Technicien ou Refus Client (Apple-like toggle) */}
+                        <div className="pt-2">
+                          <label className="flex items-center justify-between cursor-pointer select-none">
+                            <span className="text-[16px] text-black font-sans font-semibold">
+                              Rejeté Technicien ou Refus Client
+                            </span>
+                            <div
+                              onClick={() => setFsmRejectedOrRefusedFilter(!fsmRejectedOrRefusedFilter)}
+                              className={`w-12 h-7 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out ${
+                                fsmRejectedOrRefusedFilter ? 'bg-[#34c759]' : 'bg-neutral-300'
+                              }`}
+                            >
+                              <div
+                                className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                                  fsmRejectedOrRefusedFilter ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </div>
+                          </label>
+                        </div>
+
+                        {/* Reset button if any filter is active */}
+                        {(fsmRegionFilter !== 'Tous' || fsmTechFilter !== 'Tous' || fsmPlannerFilter !== 'Tous' || fsmClientFilter !== 'Tous' || fsmRejectedOrRefusedFilter) && (
+                          <div className="pt-4">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFsmRegionFilter('Tous');
+                                setFsmTechFilter('Tous');
+                                setFsmPlannerFilter('Tous');
+                                setFsmClientFilter('Tous');
+                                setFsmRejectedOrRefusedFilter(false);
+                              }}
+                              className="w-full text-center py-2 text-sm text-neutral-500 hover:text-black cursor-pointer font-sans underline"
+                            >
+                              Réinitialiser tous les filtres
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Bouton noir floating full width Fermer */}
+                      <button
+                        onClick={() => setIsFsmFilterSidePaneOpen(false)}
+                        style={{
+                          position: 'absolute',
+                          bottom: '16px',
+                          left: '16px',
+                          right: '16px',
+                          width: 'calc(100% - 32px)',
+                          backgroundColor: '#000000',
+                          color: '#ffffff',
+                          fontSize: '18px',
+                          fontWeight: '600',
+                          padding: '14px 20px',
+                          borderRadius: '12px',
+                          cursor: 'pointer',
+                          zIndex: 50,
+                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)',
+                          border: 'none',
+                        }}
+                        className="hover:bg-neutral-800 transition-colors"
+                      >
+                        Fermer
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Side-pane popup pour Réglages de l’équipe (Groupes de travail par zone) */}
+                {isFsmTeamPaneOpen && (
+                  <div 
+                    className="fixed inset-0 z-[9999] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+                    style={{ top: 0, left: 0, right: 0, bottom: 0, height: '100vh', width: '100vw' }}
+                    onClick={() => {
+                      setIsFsmTeamPaneOpen(false);
+                      setIsCreatingGroup(false);
+                      setEditingGroupId(null);
+                    }}
+                  >
+                    <div 
+                      className="relative w-full max-w-lg bg-white flex flex-col overflow-hidden animate-slideLeft"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        height: '100vh',
+                        boxShadow: 'none',
+                        borderRadius: '16px 0px 0px 16px',
+                        borderLeft: '1px solid #e2e8f0',
+                      }}
+                    >
+                      {/* Body side-pane : Réglages de l’équipe */}
+                      <div className="flex-1 overflow-y-auto p-6 bg-white space-y-6 pb-32 font-sans">
+                        <div>
+                          <h3 style={{ fontSize: '22px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', color: '#000000' }}>
+                            Réglages de l’équipe
+                          </h3>
+                          <p style={{ fontSize: '14px', color: '#666666', marginTop: '4px' }}>
+                            Groupes de travail par zone
+                          </p>
+                        </div>
+
+                        {/* If in creation or edit mode, show form */}
+                        {(isCreatingGroup || editingGroupId) ? (
+                          <div className="space-y-5 bg-neutral-50 p-5 rounded-2xl border border-neutral-200 animate-fadeIn">
+                            <h4 style={{ fontSize: '17px', fontWeight: 'bold', color: '#000000' }}>
+                              {editingGroupId ? "Modifier le groupe" : "Nouveau groupe et zone"}
+                            </h4>
+
+                            {/* Titre du groupe (one line max 30 car.) */}
+                            <div>
+                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans">
+                                Titre du groupe.
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={30}
+                                value={groupTitle}
+                                onChange={(e) => setGroupTitle(e.target.value.slice(0, 30))}
+                                placeholder="Titre du groupe."
+                                className="w-full text-black outline-none"
+                                style={{
+                                  border: '1px solid #dedede',
+                                  borderRadius: '13px',
+                                  padding: '10px 14px',
+                                  fontSize: '15px',
+                                  backgroundColor: '#ffffff',
+                                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
+                                }}
+                              />
+                              <div className="text-right text-xs text-neutral-400 mt-1">
+                                {groupTitle.length} / 30
+                              </div>
+                            </div>
+
+                            {/* Planificateur(s) (exclure techniciens) */}
+                            <div>
+                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans">
+                                Planificateur(s)
+                              </label>
+                              {(() => {
+                                const nonTechMembers = members.filter(m => !isTechnicianMember(m));
+                                if (nonTechMembers.length === 0) {
+                                  return (
+                                    <div className="text-xs text-neutral-400 italic">
+                                      Aucun planificateur disponible
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div className="flex flex-wrap gap-2">
+                                    {nonTechMembers.map(m => {
+                                      const isSelected = groupPlanners.includes(m.name);
+                                      return (
+                                        <button
+                                          key={m.id || m.name}
+                                          type="button"
+                                          onClick={() => {
+                                            setGroupPlanners(prev =>
+                                              isSelected ? prev.filter(n => n !== m.name) : [...prev, m.name]
+                                            );
+                                          }}
+                                          style={{
+                                            borderRadius: '1000px',
+                                            padding: '6px 14px',
+                                            fontSize: '13px',
+                                            fontWeight: isSelected ? '600' : '400',
+                                            backgroundColor: isSelected ? '#000000' : '#ffffff',
+                                            color: isSelected ? '#ffffff' : '#000000',
+                                            border: isSelected ? '1px solid #000000' : '1px solid #dedede',
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          {m.name}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+
+                            {/* Technicien(s) (exclure membres classiques) */}
+                            <div>
+                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans">
+                                Technicien(s)
+                              </label>
+                              {(() => {
+                                const techMembers = members.filter(m => isTechnicianMember(m));
+                                if (techMembers.length === 0) {
+                                  return (
+                                    <div className="text-xs text-neutral-400 italic">
+                                      Aucun technicien disponible
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div className="flex flex-wrap gap-2">
+                                    {techMembers.map(m => {
+                                      const isSelected = groupTechnicians.includes(m.name);
+                                      return (
+                                        <button
+                                          key={m.id || m.name}
+                                          type="button"
+                                          onClick={() => {
+                                            setGroupTechnicians(prev =>
+                                              isSelected ? prev.filter(n => n !== m.name) : [...prev, m.name]
+                                            );
+                                          }}
+                                          style={{
+                                            borderRadius: '1000px',
+                                            padding: '6px 14px',
+                                            fontSize: '13px',
+                                            fontWeight: isSelected ? '600' : '400',
+                                            backgroundColor: isSelected ? '#000000' : '#ffffff',
+                                            color: isSelected ? '#ffffff' : '#000000',
+                                            border: isSelected ? '1px solid #000000' : '1px solid #dedede',
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          {m.name}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+
+                            {/* Région(s) */}
+                            <div>
+                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans">
+                                Région(s)
+                              </label>
+                              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1 bg-white border border-neutral-200 rounded-xl">
+                                {getRegionsForCountry('France').map(r => {
+                                  const isSelected = groupRegions.includes(r);
+                                  return (
+                                    <button
+                                      key={r}
+                                      type="button"
+                                      onClick={() => {
+                                        setGroupRegions(prev =>
+                                          isSelected ? prev.filter(x => x !== r) : [...prev, r]
+                                        );
+                                      }}
+                                      style={{
+                                        borderRadius: '1000px',
+                                        padding: '5px 12px',
+                                        fontSize: '12px',
+                                        fontWeight: isSelected ? '600' : '400',
+                                        backgroundColor: isSelected ? '#000000' : '#ffffff',
+                                        color: isSelected ? '#ffffff' : '#000000',
+                                        border: isSelected ? '1px solid #000000' : '1px solid #dedede',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      {r}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Buttons Enregistrer / Annuler */}
+                            <div className="flex items-center gap-3 pt-2">
+                              <button
+                                type="button"
+                                onClick={handleSaveTeamWorkGroup}
+                                style={{
+                                  backgroundColor: '#000000',
+                                  color: '#ffffff',
+                                  borderRadius: '12px',
+                                  padding: '10px 18px',
+                                  fontSize: '15px',
+                                  fontWeight: '600',
+                                  cursor: 'pointer',
+                                  border: 'none',
+                                }}
+                                className="hover:bg-neutral-800 transition-colors"
+                              >
+                                {editingGroupId ? "Enregistrer" : "Créer le groupe"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsCreatingGroup(false);
+                                  setEditingGroupId(null);
+                                  setGroupTitle('');
+                                  setGroupPlanners([]);
+                                  setGroupTechnicians([]);
+                                  setGroupRegions([]);
+                                }}
+                                style={{
+                                  backgroundColor: 'transparent',
+                                  color: '#000000',
+                                  borderRadius: '12px',
+                                  padding: '10px 14px',
+                                  fontSize: '15px',
+                                  fontWeight: '500',
+                                  cursor: 'pointer',
+                                  border: 'none',
+                                }}
+                                className="hover:bg-neutral-100 transition-colors"
+                              >
+                                Annuler
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {/* List of groups */}
+                        <div className="space-y-4">
+                          {teamWorkGroups.length === 0 && !isCreatingGroup ? (
+                            <div className="p-8 text-center text-neutral-400 font-sans text-[15px]">
+                              Aucun groupe de travail créé.
+                            </div>
+                          ) : (
+                            teamWorkGroups.map((g) => (
+                              <div
+                                key={g.id}
+                                className="p-4 rounded-xl border border-neutral-200 bg-white space-y-3 font-sans"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <h4 style={{ fontSize: '17px', fontWeight: 'bold', color: '#000000' }}>
+                                    {g.title}
+                                  </h4>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditTeamWorkGroup(g)}
+                                      className="text-xs text-neutral-600 hover:text-black font-semibold cursor-pointer underline"
+                                    >
+                                      Modifier
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteTeamWorkGroup(g.id)}
+                                      className="text-xs text-red-600 hover:text-red-800 font-semibold cursor-pointer underline"
+                                    >
+                                      Supprimer
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1.5 text-xs text-neutral-700">
+                                  <div>
+                                    <span className="font-semibold text-neutral-900">Planificateur(s) : </span>
+                                    <span>{g.planners && g.planners.length > 0 ? g.planners.join(', ') : 'Aucun'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-neutral-900">Technicien(s) : </span>
+                                    <span>{g.technicians && g.technicians.length > 0 ? g.technicians.join(', ') : 'Aucun'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-neutral-900">Région(s) : </span>
+                                    <span>{g.regions && g.regions.length > 0 ? g.regions.join(', ') : 'Aucune'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Bouton fixe en bas */}
+                      {!isCreatingGroup && !editingGroupId ? (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: '16px',
+                            left: '16px',
+                            right: '16px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                            zIndex: 50,
+                          }}
+                        >
+                          <button
+                            onClick={() => {
+                              setIsCreatingGroup(true);
+                              setEditingGroupId(null);
+                              setGroupTitle('');
+                              setGroupPlanners([]);
+                              setGroupTechnicians([]);
+                              setGroupRegions([]);
+                            }}
+                            style={{
+                              width: '100%',
+                              backgroundColor: '#000000',
+                              color: '#ffffff',
+                              fontSize: '17px',
+                              fontWeight: '600',
+                              padding: '14px 20px',
+                              borderRadius: '12px',
+                              cursor: 'pointer',
+                              border: 'none',
+                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)',
+                            }}
+                            className="hover:bg-neutral-800 transition-colors"
+                          >
+                            Nouveau groupe et zone
+                          </button>
+                          <button
+                            onClick={() => setIsFsmTeamPaneOpen(false)}
+                            style={{
+                              width: '100%',
+                              backgroundColor: '#ffffff',
+                              color: '#000000',
+                              fontSize: '15px',
+                              fontWeight: '500',
+                              padding: '10px 20px',
+                              borderRadius: '12px',
+                              cursor: 'pointer',
+                              border: '1px solid #dedede',
+                            }}
+                            className="hover:bg-neutral-50 transition-colors"
+                          >
+                            Fermer
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 )}
@@ -7470,6 +8489,28 @@ export default function App() {
                                         {/* Row 1: Gélules & Bouton Dérouler / Réduire */}
                                         <div className="flex flex-wrap items-center justify-between gap-2 bg-transparent pb-0.5">
                                           <div className="flex flex-wrap items-center gap-2 bg-transparent flex-1">
+                                          {/* Radio-check pour sélectionner la mission */}
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleSelectFsmMission(m.id);
+                                            }}
+                                            id={`radio-check-mission-${m.id}`}
+                                            className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
+                                              selectedFsmMissionIds.includes(m.id)
+                                                ? 'border-[#fe4eba] bg-transparent'
+                                                : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                            }`}
+                                            style={{ borderWidth: '2.5px' }}
+                                            role="checkbox"
+                                            aria-checked={selectedFsmMissionIds.includes(m.id)}
+                                            title="Sélectionner la mission"
+                                          >
+                                            {selectedFsmMissionIds.includes(m.id) && (
+                                              <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                            )}
+                                          </button>
                                           <span
                                             style={{
                                               backgroundColor: 'rgb(77, 21, 83)',
@@ -9103,6 +10144,29 @@ export default function App() {
                                       {/* Ligne 1: Numéro de passage & Gélules & Bouton Dérouler / Réduire */}
                                       <div className="flex flex-wrap items-center justify-between gap-2 bg-transparent pb-0.5">
                                         <div className="flex flex-wrap items-center gap-2 bg-transparent flex-1">
+                                        {/* Radio-check pour sélectionner la mission */}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleSelectFsmMission(m.id);
+                                          }}
+                                          id={`radio-check-mission-${m.id}`}
+                                          className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
+                                            selectedFsmMissionIds.includes(m.id)
+                                              ? 'border-[#fe4eba] bg-transparent'
+                                              : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                          }`}
+                                          style={{ borderWidth: '2.5px' }}
+                                          role="checkbox"
+                                          aria-checked={selectedFsmMissionIds.includes(m.id)}
+                                          title="Sélectionner la mission"
+                                        >
+                                          {selectedFsmMissionIds.includes(m.id) && (
+                                            <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                          )}
+                                        </button>
+
                                         {/* Pictogramme situation style Rapports PDF avec '!' selon la Situation */}
                                         {(() => {
                                           const sitNorm = (m.status || "Brouillon").toLowerCase().trim();
@@ -10154,6 +11218,16 @@ export default function App() {
                                         >
                                           <span className="font-bold text-red-700 block">Commentaire client (Refus) :</span>
                                           <p className="italic m-0">{m.refusalComment || m.clientRefusalComment}</p>
+                                        </div>
+                                      )}
+                                      {/* Show technician rejection reason underneath Situation if Rejet mission */}
+                                      {((m.status || '').toLowerCase().trim() === 'rejet mission' || (m.status || '').toLowerCase().trim() === 'rejet') && m.rejectionReason && (
+                                        <div 
+                                          className="mt-2 p-2.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-xs font-sans space-y-0.5"
+                                          style={{ wordBreak: 'break-word' }}
+                                        >
+                                          <span className="font-bold text-amber-700 block">Motif de rejet technicien :</span>
+                                          <p className="italic m-0">{m.rejectionReason}</p>
                                         </div>
                                       )}
                                     </div>

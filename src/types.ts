@@ -696,6 +696,17 @@ export interface EmargementRecord {
   updatedAt?: string;
 }
 
+export interface TeamWorkGroup {
+  id: string;
+  title: string;
+  planners: string[];
+  technicians: string[];
+  regions: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+
 
 
 

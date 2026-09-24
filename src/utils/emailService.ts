@@ -102,17 +102,42 @@ export async function sendScriptEmail(payload: {
       return false;
     }
 
-    console.log(`[Email Service] Dispatching payload to Apps Script:`, scriptUrl, payload);
+    console.log(`[Email Service] Dispatching email "${payload.subject}" to: ${payload.to}`);
 
+    // 1. Try backend server-side proxy route first (bypasses browser CORS & extensions, handles redirects)
+    try {
+      const serverResp = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...payload,
+          scriptUrl
+        })
+      });
+
+      if (serverResp.ok) {
+        const resultJson = await serverResp.json().catch(() => ({}));
+        console.log('[Email Service] Successfully sent email via /api/send-email:', resultJson);
+        return true;
+      }
+      console.warn('[Email Service] Backend /api/send-email non-OK status, falling back to direct browser fetch:', serverResp.status);
+    } catch (proxyError) {
+      console.warn('[Email Service] Backend /api/send-email fetch failed, trying direct browser fetch:', proxyError);
+    }
+
+    // 2. Direct browser fetch fallback (using text/plain to comply with CORS safelist in no-cors mode)
     await fetch(scriptUrl, {
       method: 'POST',
-      mode: 'no-cors', // standard Apps Script POST request requires no-cors when executed from browser sandbox
+      mode: 'no-cors',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'text/plain;charset=utf-8'
       },
       body: JSON.stringify(payload)
     });
 
+    console.log('[Email Service] Dispatched directly to Apps Script via no-cors fallback.');
     return true;
   } catch (error) {
     console.warn('[Email Service] Warning: sendScriptEmail fetch completed with warning (usually due to CORS or sandbox limits):', error);
@@ -420,14 +445,8 @@ export async function triggerEmailSoumettreAuClient(
     actionUrl?: string;
   }
 ): Promise<boolean> {
-  const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
-  const savedOption = localStorage.getItem(`defib_${tenantId}_enable_auto_emails`);
-  if (savedOption === 'Non') {
-    console.log(`[Soumettre Client] Skipped because automatic emails are disabled.`);
-    return false;
-  }
-  
-  const to = Array.from(new Set(['defibeo@gmail.com', ...recipientEmails].filter(Boolean))).join(', ');
+  const cleanRecipients = Array.from(new Set(['defibeo@gmail.com', ...recipientEmails].filter(Boolean)));
+  const to = cleanRecipients.join(', ');
   const subject = `${companyName} : (Attention requise) Proposition de date et créneau.`;
   
   const refText = missionDetails?.interventionRef ? `Référence de l'intervention : ${missionDetails.interventionRef}\n` : '';

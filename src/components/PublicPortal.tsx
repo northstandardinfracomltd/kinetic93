@@ -1884,9 +1884,10 @@ export default function PublicPortal({
                   p.num === idx + 1 || p.identifiant === m.defibIdentifiant,
               );
               if (matchedPassage) {
+                const isRejet = matchedPassage.status === "Rejet mission" || (matchedPassage.rejectionReason && matchedPassage.status !== "Effectué");
                 return {
                   ...m,
-                  status: matchedPassage.status,
+                  status: isRejet ? "Rejet mission" : matchedPassage.status,
                   rejectionReason: matchedPassage.rejectionReason || "",
                   rejectedAt: matchedPassage.rejectedAt || "",
                 };
@@ -1933,9 +1934,10 @@ export default function PublicPortal({
                       p.num === idx + 1 || p.identifiant === m.defibIdentifiant,
                   );
                   if (matchedPassage) {
+                    const isRejet = matchedPassage.status === "Rejet mission" || (matchedPassage.rejectionReason && matchedPassage.status !== "Effectué");
                     return {
                       ...m,
-                      status: matchedPassage.status,
+                      status: isRejet ? "Rejet mission" : matchedPassage.status,
                       rejectionReason: matchedPassage.rejectionReason || "",
                       rejectedAt: matchedPassage.rejectedAt || "",
                     };
@@ -8323,15 +8325,14 @@ export default function PublicPortal({
                                                             if (
                                                               pass.num === p.num
                                                             ) {
+                                                              const isReject = val.trim().length > 0;
                                                               return {
                                                                 ...pass,
+                                                                status: isReject ? "Rejet mission" : (pass.status === "Rejet mission" ? "À faire" : pass.status),
                                                                 rejectionReason:
                                                                   val,
                                                                 rejectedAt:
-                                                                  pass.rejectedAt ||
-                                                                  new Date().toLocaleDateString(
-                                                                    "fr-FR",
-                                                                  ),
+                                                                  isReject ? (pass.rejectedAt || new Date().toLocaleDateString("fr-FR")) : "",
                                                               };
                                                             }
                                                             return pass;
@@ -8435,6 +8436,7 @@ export default function PublicPortal({
                                               ) {
                                                 return {
                                                   ...pass,
+                                                  status: "Rejet mission",
                                                   rejectedAt:
                                                     new Date().toLocaleDateString(
                                                       "fr-FR",

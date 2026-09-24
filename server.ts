@@ -2688,6 +2688,51 @@ async function warmupDefibrillateursStore() {
     res.json({ status: "ok" });
   });
 
+  // Dedicated email dispatch proxy via Google Apps Script (handles redirections, logs, avoids browser CORS/extensions)
+  app.post("/api/send-email", async (req, res) => {
+    try {
+      const { to, subject, body, htmlBody, replyTo, scriptUrl } = req.body || {};
+      if (!to || !subject) {
+        return res.status(400).json({ status: "error", message: "Missing recipient (to) or subject" });
+      }
+
+      const targetUrl = (scriptUrl && String(scriptUrl).trim()) ||
+        process.env.VITE_APPS_SCRIPT_URL ||
+        'https://script.google.com/macros/s/AKfycbzx6ElCSC7A5dWvE5fdBJMAQOmYbsnjVs1ttQ0g9ktrJtln7ei9Pl3Em3ine99CrI0/exec';
+
+      const payload: any = {
+        to: String(to).trim(),
+        subject: String(subject).trim(),
+        body: body || '',
+        replyTo: replyTo || 'defibeo@gmail.com'
+      };
+      if (htmlBody) {
+        payload.htmlBody = htmlBody;
+      }
+
+      console.log(`[API /api/send-email] Dispatching email to "${payload.to}" with subject "${payload.subject}" via Apps Script: ${targetUrl}`);
+
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        redirect: 'follow'
+      });
+
+      const responseText = await response.text();
+      console.log(`[API /api/send-email] Google Apps Script responded (status ${response.status}):`, responseText.slice(0, 200));
+
+      return res.json({
+        status: "success",
+        serverStatus: response.status,
+        result: responseText
+      });
+    } catch (err: any) {
+      console.error("[API /api/send-email] Error:", err);
+      return res.status(500).json({ status: "error", message: err?.message || String(err) });
+    }
+  });
+
   const SENSITIVE_REQUEST_ERROR = "Requête sensible, veuillez contacter le support.";
 
   function checkSensitiveOrNonCompliantRequest(req: express.Request, targetTenant: any, cleanPath: string): { isBlocked: boolean; reason: string } {

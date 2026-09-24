@@ -3242,25 +3242,6 @@ export default function DefibTab({
                                 >
                                   {latestTour.title}
                                 </span>
-                                {isRejected && (
-                                  <span 
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      borderRadius: '1000px',
-                                      backgroundColor: '#dc2626',
-                                      color: '#ffffff',
-                                      fontSize: '16px',
-                                      fontWeight: 100,
-                                      padding: '6px 14px',
-                                      whiteSpace: 'nowrap',
-                                      width: 'fit-content',
-                                      textTransform: 'none'
-                                    }}
-                                  >
-                                    Rejeté {rejectedDateFormatted} : {matchMission.rejectionReason}
-                                  </span>
-                                )}
                               </div>
                             );
                           }

@@ -30,7 +30,7 @@
           try {
             isLogged = localStorage.getItem('defib_admin_logged_in') === 'true';
           } catch(e) {}
-          var isExcluded = p.indexOf('/satisfaction') !== -1 || p.indexOf('/api') !== -1 || p.indexOf('/v1') !== -1;
+          var isExcluded = p.indexOf('/satisfaction') !== -1 || p.indexOf('/validation') !== -1 || p.indexOf('/api') !== -1 || p.indexOf('/v1') !== -1;
           var isDatacenter = p.indexOf('datacenter') !== -1 || p.indexOf('y26m8v105') !== -1;
           if (!isExcluded && (isDatacenter || !isLogged)) {
             var digits = Math.floor(Math.random() * 1000).toString();
