@@ -252,6 +252,12 @@ export interface Defibrillateur {
   id_record?: string;
 }
 
+export interface CommercialEvent {
+  id: string;
+  date: string;
+  commentaire: string;
+}
+
 export interface SupportTicket {
   id: string; // e.g. 00001-DEFIB-0826 or #123456
   reference?: string;
@@ -275,6 +281,14 @@ export interface SupportTicket {
   reponse?: string;
   envId?: string;
   tenantId?: string;
+
+  // Commercial category specific fields
+  marchePublic?: 'Oui' | 'Non';
+  situationDevis?: 'Gagné' | 'Perdu' | 'Non renseigné';
+  scorePotentielConversion?: number | null;
+  referenceDevis?: string;
+  lienStockagePartageDevis?: string;
+  evenementsCommercial?: CommercialEvent[];
 }
 
 export interface MemberSchedule {
