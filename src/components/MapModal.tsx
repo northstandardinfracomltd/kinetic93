@@ -3,12 +3,15 @@ import { Defibrillateur, Client, Variable } from '../types';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { ChevronDown } from 'lucide-react';
+import { REGIONS_BY_COUNTRY } from '../utils/regions';
 
 interface MapModalProps {
   isOpen: boolean;
   onClose: () => void;
   defibrillateurs?: any[];
   items?: any[];
+  otherEquipments?: any[];
   clients: Client[];
   variables?: Variable[];
   selectedIds?: string[];
@@ -24,6 +27,7 @@ interface ViewTarget {
   center: [number, number];
   zoom: number;
   id: number;
+  bounds?: [[number, number], [number, number]];
 }
 
 // Sub-component to programmatically handle centering and zooming the Leaflet map ONLY when viewTarget changes
@@ -34,11 +38,113 @@ function ChangeMapView({ viewTarget }: { viewTarget: ViewTarget | null }) {
   useEffect(() => {
     if (viewTarget && viewTarget.id !== lastHandledId.current) {
       lastHandledId.current = viewTarget.id;
-      map.setView(viewTarget.center, viewTarget.zoom, { animate: true });
+      if (viewTarget.bounds) {
+        map.fitBounds(viewTarget.bounds, { padding: [60, 60], maxZoom: 11, animate: true });
+      } else {
+        map.setView(viewTarget.center, viewTarget.zoom, { animate: true });
+      }
     }
   }, [viewTarget, map]);
 
   return null;
+}
+
+// Predefined region coordinates and bounds for France
+const REGION_CENTERS: Record<string, { center: [number, number]; zoom: number; bounds?: [[number, number], [number, number]] }> = {
+  'Auvergne-Rhône-Alpes': { center: [45.5, 4.8], zoom: 8, bounds: [[44.1, 2.0], [46.8, 7.2]] },
+  'Bourgogne-Franche-Comté': { center: [47.2, 4.8], zoom: 8, bounds: [[46.1, 2.8], [48.4, 7.1]] },
+  'Bretagne': { center: [48.2, -2.8], zoom: 8, bounds: [[47.2, -4.8], [48.9, -1.0]] },
+  'Centre-Val de Loire': { center: [47.5, 1.7], zoom: 8, bounds: [[46.3, 0.0], [48.9, 3.2]] },
+  'Corse': { center: [42.1, 9.1], zoom: 9, bounds: [[41.3, 8.5], [43.1, 9.6]] },
+  'Grand Est': { center: [48.7, 5.5], zoom: 8, bounds: [[47.4, 3.3], [50.2, 8.3]] },
+  'Hauts-de-France': { center: [50.1, 2.8], zoom: 8, bounds: [[48.8, 1.3], [51.1, 4.3]] },
+  'Île-de-France': { center: [48.7, 2.5], zoom: 9, bounds: [[48.1, 1.4], [49.2, 3.6]] },
+  'Normandie': { center: [49.1, 0.2], zoom: 8, bounds: [[48.3, -1.9], [50.1, 1.8]] },
+  'Nouvelle-Aquitaine': { center: [45.3, 0.2], zoom: 7, bounds: [[42.7, -1.8], [47.2, 2.6]] },
+  'Occitanie': { center: [43.6, 2.2], zoom: 8, bounds: [[42.3, -0.3], [45.0, 4.9]] },
+  'Pays de la Loire': { center: [47.5, -0.8], zoom: 8, bounds: [[46.2, -2.6], [48.6, 0.9]] },
+  'Provence-Alpes-Côte d\'Azur': { center: [43.9, 6.0], zoom: 8, bounds: [[42.9, 4.2], [45.3, 7.8]] },
+  'Guadeloupe': { center: [16.25, -61.55], zoom: 10, bounds: [[15.8, -61.8], [16.6, -61.0]] },
+  'Martinique': { center: [14.65, -61.0], zoom: 10, bounds: [[14.3, -61.3], [14.9, -60.8]] },
+  'Guyane': { center: [3.9, -53.1], zoom: 7, bounds: [[2.1, -54.6], [5.8, -51.6]] },
+  'La Réunion': { center: [-21.1, 55.5], zoom: 10, bounds: [[-21.4, 55.2], [-20.8, 55.9]] },
+  'Mayotte': { center: [-12.8, 45.1], zoom: 11, bounds: [[-13.0, 45.0], [-12.6, 45.3]] },
+};
+
+// Department to French region lookup table
+const DEPT_TO_REGION: Record<string, string> = {
+  '01': 'Auvergne-Rhône-Alpes', '03': 'Auvergne-Rhône-Alpes', '07': 'Auvergne-Rhône-Alpes', '15': 'Auvergne-Rhône-Alpes', '26': 'Auvergne-Rhône-Alpes', '38': 'Auvergne-Rhône-Alpes', '42': 'Auvergne-Rhône-Alpes', '43': 'Auvergne-Rhône-Alpes', '63': 'Auvergne-Rhône-Alpes', '69': 'Auvergne-Rhône-Alpes', '73': 'Auvergne-Rhône-Alpes', '74': 'Auvergne-Rhône-Alpes',
+  '21': 'Bourgogne-Franche-Comté', '25': 'Bourgogne-Franche-Comté', '39': 'Bourgogne-Franche-Comté', '58': 'Bourgogne-Franche-Comté', '70': 'Bourgogne-Franche-Comté', '71': 'Bourgogne-Franche-Comté', '89': 'Bourgogne-Franche-Comté', '90': 'Bourgogne-Franche-Comté',
+  '22': 'Bretagne', '29': 'Bretagne', '35': 'Bretagne', '56': 'Bretagne',
+  '18': 'Centre-Val de Loire', '28': 'Centre-Val de Loire', '36': 'Centre-Val de Loire', '37': 'Centre-Val de Loire', '41': 'Centre-Val de Loire', '45': 'Centre-Val de Loire',
+  '2A': 'Corse', '2B': 'Corse',
+  '08': 'Grand Est', '10': 'Grand Est', '51': 'Grand Est', '52': 'Grand Est', '54': 'Grand Est', '55': 'Grand Est', '57': 'Grand Est', '67': 'Grand Est', '68': 'Grand Est', '88': 'Grand Est',
+  '02': 'Hauts-de-France', '59': 'Hauts-de-France', '60': 'Hauts-de-France', '62': 'Hauts-de-France', '80': 'Hauts-de-France',
+  '75': 'Île-de-France', '77': 'Île-de-France', '78': 'Île-de-France', '91': 'Île-de-France', '92': 'Île-de-France', '93': 'Île-de-France', '94': 'Île-de-France', '95': 'Île-de-France',
+  '14': 'Normandie', '27': 'Normandie', '50': 'Normandie', '61': 'Normandie', '76': 'Normandie',
+  '16': 'Nouvelle-Aquitaine', '17': 'Nouvelle-Aquitaine', '19': 'Nouvelle-Aquitaine', '23': 'Nouvelle-Aquitaine', '24': 'Nouvelle-Aquitaine', '33': 'Nouvelle-Aquitaine', '40': 'Nouvelle-Aquitaine', '47': 'Nouvelle-Aquitaine', '64': 'Nouvelle-Aquitaine', '79': 'Nouvelle-Aquitaine', '86': 'Nouvelle-Aquitaine', '87': 'Nouvelle-Aquitaine',
+  '09': 'Occitanie', '11': 'Occitanie', '12': 'Occitanie', '30': 'Occitanie', '31': 'Occitanie', '32': 'Occitanie', '34': 'Occitanie', '46': 'Occitanie', '48': 'Occitanie', '65': 'Occitanie', '81': 'Occitanie', '82': 'Occitanie',
+  '44': 'Pays de la Loire', '49': 'Pays de la Loire', '53': 'Pays de la Loire', '72': 'Pays de la Loire', '85': 'Pays de la Loire',
+  '04': 'Provence-Alpes-Côte d\'Azur', '05': 'Provence-Alpes-Côte d\'Azur', '06': 'Provence-Alpes-Côte d\'Azur', '13': 'Provence-Alpes-Côte d\'Azur', '83': 'Provence-Alpes-Côte d\'Azur', '84': 'Provence-Alpes-Côte d\'Azur',
+  '971': 'Guadeloupe', '972': 'Martinique', '973': 'Guyane', '974': 'La Réunion', '976': 'Mayotte'
+};
+
+// Check if a mission is active (not cancelled, done, or deleted)
+function isMissionActive(mission: any, tour: any): boolean {
+  if (!mission) return false;
+  const mStatus = String(mission.status || mission.missionStatus || mission.situation || '').trim().toLowerCase();
+  const tStatus = String(tour?.status || '').trim().toLowerCase();
+
+  // If tour is inactive
+  if (['annulée', 'annulee', 'annulé', 'annule', 'terminée', 'terminee', 'terminé', 'termine', 'supprimée', 'supprimee', 'supprimé', 'supprime', 'fait'].includes(tStatus)) {
+    return false;
+  }
+  // If mission is inactive
+  if (['annulée', 'annulee', 'annulé', 'annule', 'fait', 'effectué', 'effectue', 'terminée', 'terminee', 'terminé', 'termine', 'validé', 'valide', 'supprimé', 'supprime'].includes(mStatus)) {
+    return false;
+  }
+
+  return true;
+}
+
+// Check if item is included in any planned/active mission in fsmTours
+function hasPlannedMission(item: any, fsmTours: any[]): boolean {
+  if (!item || !fsmTours || fsmTours.length === 0) return false;
+  const itemIdent = (item.identifiant || '').trim().toLowerCase();
+  const itemId = (item.id || '').trim();
+
+  return fsmTours.some(tour => {
+    const missions = tour.missions || tour.passages || [];
+    return missions.some((m: any) => {
+      const mIdent = String(m.defibIdentifiant || m.identifiant || '').trim().toLowerCase();
+      const mEquipId = String(m.equipmentId || m.defibId || m.id || '').trim();
+
+      const isMatch = (itemIdent && mIdent && itemIdent === mIdent) ||
+                      (itemId && (mEquipId === itemId || m.equipmentId === itemId || m.defibId === itemId));
+
+      if (!isMatch) return false;
+      return isMissionActive(m, tour);
+    });
+  });
+}
+
+// Helper to determine the region of an item
+function getItemRegion(item: any, clientMap: Map<string, Client>): string {
+  if (item.region && item.region.trim()) {
+    return item.region.trim();
+  }
+  const client = item.clientId ? clientMap.get(item.clientId) : null;
+  if (client?.region && client.region.trim()) {
+    return client.region.trim();
+  }
+  const cp = (item.cp || item.codePostal || client?.codePostal || '').trim();
+  if (cp.length >= 2) {
+    const dept = cp.startsWith('97') ? cp.substring(0, 3) : cp.substring(0, 2);
+    if (DEPT_TO_REGION[dept]) {
+      return DEPT_TO_REGION[dept];
+    }
+  }
+  return '';
 }
 
 // Helper functions for date parsing to match getSafetyStatus from DefibTab
@@ -352,6 +458,7 @@ export default function MapModal({
   onClose,
   defibrillateurs,
   items,
+  otherEquipments = [],
   clients,
   variables,
   selectedIds = [],
@@ -362,10 +469,81 @@ export default function MapModal({
   executeAddTournee,
   isAnySelectedInTour = false
 }: MapModalProps) {
-  // Sur l'affichage Plan, afficher uniquement les éléments avec Maintenance Autorisée = Oui (défibrillateurs "Avec.Main")
-  const activeList = useMemo(() => {
+  // Maps configurations (client lookup)
+  const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+
+  // Filter state for Map Modal side pane
+  const [isFilterPaneOpen, setIsFilterPaneOpen] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<{
+    includeAutresMateriels: boolean;
+    situation: 'Toutes' | 'Sans mission' | 'Avec mission';
+    region: string;
+  }>({
+    includeAutresMateriels: false,
+    situation: 'Toutes',
+    region: 'Tous',
+  });
+  const [draftFilters, setDraftFilters] = useState(activeFilters);
+
+  // Close filter pane if modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsFilterPaneOpen(false);
+    }
+  }, [isOpen]);
+
+  const activeFiltersCount = (activeFilters.includeAutresMateriels ? 1 : 0) +
+    (activeFilters.situation !== 'Toutes' ? 1 : 0) +
+    (activeFilters.region !== 'Tous' ? 1 : 0);
+
+  // Filter input styling matching application design
+  const filterInputStyle: React.CSSProperties = {
+    border: '1px solid #dedede',
+    borderRadius: '13px',
+    padding: '9px 19px',
+    fontSize: '16px',
+    fontWeight: '100',
+    color: '#000000',
+    backgroundColor: '#ffffff',
+    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+    outline: 'none',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    width: '100%',
+  };
+
+  const cancelFiltersButtonStyle: React.CSSProperties = {
+    backgroundColor: '#000000',
+    borderRadius: '12px',
+    fontSize: '18px',
+    padding: '9px 19px',
+    fontWeight: 'normal',
+    color: '#ffffff',
+    border: 'none',
+    cursor: 'pointer',
+    width: '100%',
+    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
+  };
+
+  const applyFiltersButtonStyle: React.CSSProperties = {
+    backgroundColor: 'rgb(53, 86, 236)',
+    borderRadius: '12px',
+    fontSize: '18px',
+    padding: '9px 19px',
+    fontWeight: 'normal',
+    color: '#ffffff',
+    border: 'none',
+    cursor: 'pointer',
+    width: '100%',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
+  };
+
+  // Sur l'affichage Plan, base active list (avec toggle Inclure Autres Matériels)
+  const baseActiveList = useMemo(() => {
     const rawList = items || defibrillateurs || [];
-    return rawList.filter((item: any) => {
+    let list = rawList.filter((item: any) => {
       // Pour les défibrillateurs ou tout équipement avec statut de maintenance autorisée
       if (defibrillateurs || item?.fsmAutorise !== undefined || item?.maintenanceAutorisee !== undefined || item?.maintenance_autorisee !== undefined) {
         const rawFsm = (item?.fsmAutorise ?? item?.maintenanceAutorisee ?? item?.maintenance_autorisee ?? '').toString().trim().toLowerCase();
@@ -374,7 +552,57 @@ export default function MapModal({
       }
       return true;
     });
-  }, [items, defibrillateurs]);
+
+    if (activeFilters.includeAutresMateriels && otherEquipments && otherEquipments.length > 0) {
+      const existingIds = new Set(list.map((i: any) => i.id));
+      const validOthers = otherEquipments.filter((o: any) => {
+        if (existingIds.has(o.id)) return false;
+        const rawFsm = (o?.fsmAutorise ?? o?.maintenanceAutorisee ?? o?.maintenance_autorisee ?? '').toString().trim().toLowerCase();
+        if (rawFsm === 'non' || rawFsm === 'false' || rawFsm === '0') return false;
+        return true;
+      });
+      list = [...list, ...validOthers];
+    }
+
+    return list;
+  }, [items, defibrillateurs, otherEquipments, activeFilters.includeAutresMateriels]);
+
+  // Filtrage selon situation et région
+  const activeList = useMemo(() => {
+    return baseActiveList.filter((item: any) => {
+      // 1. Situation filter: "Sans mission planifiée" ou "Avec mission planifiée"
+      if (activeFilters.situation === 'Sans mission') {
+        if (hasPlannedMission(item, fsmTours)) return false;
+      } else if (activeFilters.situation === 'Avec mission') {
+        if (!hasPlannedMission(item, fsmTours)) return false;
+      }
+
+      // 2. Region filter
+      if (activeFilters.region !== 'Tous') {
+        const itemReg = getItemRegion(item, clientMap);
+        if (itemReg.toLowerCase() !== activeFilters.region.toLowerCase()) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [baseActiveList, activeFilters.situation, activeFilters.region, fsmTours, clientMap]);
+
+  // Liste ordonnée de toutes les régions françaises et personnalisées
+  const availableRegions = useMemo(() => {
+    const regionSet = new Set<string>();
+    (REGIONS_BY_COUNTRY["France"] || []).forEach(r => regionSet.add(r));
+    (defibrillateurs || []).forEach((d: any) => {
+      const r = getItemRegion(d, clientMap);
+      if (r) regionSet.add(r);
+    });
+    (otherEquipments || []).forEach((o: any) => {
+      const r = getItemRegion(o, clientMap);
+      if (r) regionSet.add(r);
+    });
+    return Array.from(regionSet).sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [defibrillateurs, otherEquipments, clientMap]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [isTourDropdownOpen, setIsTourDropdownOpen] = useState(false);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
@@ -425,9 +653,6 @@ export default function MapModal({
   // Real coordinates configuration
   const [viewTarget, setViewTarget] = useState<ViewTarget | null>(null);
   const [geocodedCoords, setGeocodedCoords] = useState<Record<string, [number, number]>>({});
-
-  // Maps configurations
-  const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
 
   // Comprehensive department center mapping for France
   const DEPT_COORDS: Record<string, [number, number]> = useMemo(() => ({
@@ -549,16 +774,67 @@ export default function MapModal({
     return itemsWithCoords.slice(0, renderedCount);
   }, [itemsWithCoords, renderedCount]);
 
-  // Trigger initial map view target once when opened
+  // Trigger map view target or auto-zoom to region when opened or when region changes
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return;
+
+    if (activeFilters.region === 'Tous') {
       setViewTarget({
         center: [46.603354, 1.888334],
         zoom: 6,
         id: Date.now()
       });
+      return;
     }
-  }, [isOpen]);
+
+    const regionItems = itemsWithCoords.filter(({ item }) => {
+      const r = getItemRegion(item, clientMap);
+      return r.toLowerCase() === activeFilters.region.toLowerCase();
+    });
+
+    if (regionItems.length > 0) {
+      if (regionItems.length === 1) {
+        setViewTarget({
+          center: regionItems[0].coords,
+          zoom: 12,
+          id: Date.now()
+        });
+      } else {
+        let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+        regionItems.forEach(({ coords }) => {
+          if (coords[0] < minLat) minLat = coords[0];
+          if (coords[0] > maxLat) maxLat = coords[0];
+          if (coords[1] < minLng) minLng = coords[1];
+          if (coords[1] > maxLng) maxLng = coords[1];
+        });
+
+        if (Math.abs(maxLat - minLat) < 0.005 && Math.abs(maxLng - minLng) < 0.005) {
+          setViewTarget({
+            center: [(minLat + maxLat) / 2, (minLng + maxLng) / 2],
+            zoom: 12,
+            id: Date.now()
+          });
+        } else {
+          setViewTarget({
+            center: [(minLat + maxLat) / 2, (minLng + maxLng) / 2],
+            zoom: 8,
+            bounds: [[minLat, minLng], [maxLat, maxLng]],
+            id: Date.now()
+          });
+        }
+      }
+    } else {
+      const regConfig = REGION_CENTERS[activeFilters.region];
+      if (regConfig) {
+        setViewTarget({
+          center: regConfig.center,
+          zoom: regConfig.zoom,
+          bounds: regConfig.bounds,
+          id: Date.now()
+        });
+      }
+    }
+  }, [isOpen, activeFilters.region, itemsWithCoords, clientMap]);
 
   // Set initial selected item when opened
   useEffect(() => {
@@ -853,9 +1129,53 @@ export default function MapModal({
             </div>
           )}
 
+          {/* Bouton Filtres - à côté à gauche du bouton « Fermer » */}
+          <button
+            type="button"
+            onClick={() => {
+              setDraftFilters(activeFilters);
+              setIsFilterPaneOpen(true);
+            }}
+            id="btn-map-filters"
+            style={{
+              backgroundColor: '#000000',
+              borderRadius: '12px',
+              fontSize: '18px',
+              padding: '9px 19px',
+              fontWeight: 'normal',
+              color: '#ffffff',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+              transition: 'all 0.1s ease-in-out'
+            }}
+          >
+            <span>Filtres</span>
+            {activeFiltersCount > 0 && (
+              <span
+                style={{
+                  backgroundColor: '#fe4eba',
+                  color: '#ffffff',
+                  borderRadius: '9999px',
+                  padding: '2px 8px',
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  lineHeight: '1'
+                }}
+              >
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
+
           {/* Floating Close Button in signature blue style */}
           <button
             onClick={onClose}
+            id="btn-map-close"
             style={{
               backgroundColor: 'rgb(53, 86, 236)',
               boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
@@ -873,6 +1193,137 @@ export default function MapModal({
             Fermer
           </button>
         </div>
+
+        {/* Backdrop for filter side pane */}
+        {isFilterPaneOpen && (
+          <div 
+            onClick={() => setIsFilterPaneOpen(false)}
+            className="absolute inset-0 bg-black/40 backdrop-blur-xs z-[1090] animate-fadeIn cursor-pointer"
+          />
+        )}
+
+        {/* Filter Side Pane */}
+        {isFilterPaneOpen && (
+          <div
+            id="map-filter-side-pane"
+            className="absolute inset-y-0 right-0 w-80 sm:w-96 bg-white shadow-2xl z-[1100] flex flex-col border-l border-slate-200"
+            style={{ height: '100%' }}
+          >
+            {/* Scroll Area containing all fields */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Filter 1: Toggle Inclure Autres Matériels */}
+              <div className="py-2">
+                <label className="flex items-center justify-between cursor-pointer select-none">
+                  <span 
+                    className="text-[16px] text-black font-sans" 
+                    style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", fontWeight: 100 }}
+                  >
+                    Inclure Autres Matériels
+                  </span>
+                  <div className="relative inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      id="toggle-map-include-autres-materiels"
+                      checked={draftFilters.includeAutresMateriels}
+                      onChange={(e) => setDraftFilters({ ...draftFilters, includeAutresMateriels: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                  </div>
+                </label>
+              </div>
+
+              {/* Filter 2: Situation Dropdown */}
+              <div className="space-y-1.5">
+                <label 
+                  className="block text-[15px] font-semibold text-black" 
+                  style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                >
+                  Situation.
+                </label>
+                <div className="relative">
+                  <select
+                    value={draftFilters.situation}
+                    onChange={(e) => setDraftFilters({ ...draftFilters, situation: e.target.value as any })}
+                    style={filterInputStyle}
+                    className="cursor-pointer"
+                  >
+                    <option value="Toutes">Toutes situations</option>
+                    <option value="Sans mission">Sans mission planifiée</option>
+                    <option value="Avec mission">Avec mission planifiée</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                    <ChevronDown size={16} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter 3: Région Dropdown */}
+              <div className="space-y-1.5">
+                <label 
+                  className="block text-[15px] font-semibold text-black" 
+                  style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                >
+                  Région.
+                </label>
+                <div className="relative">
+                  <select
+                    value={draftFilters.region}
+                    onChange={(e) => setDraftFilters({ ...draftFilters, region: e.target.value })}
+                    style={filterInputStyle}
+                    className="cursor-pointer"
+                  >
+                    <option value="Tous">Toutes régions</option>
+                    {availableRegions.map(reg => (
+                      <option key={reg} value={reg}>{reg}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                    <ChevronDown size={16} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-6 bg-white flex gap-4 shrink-0 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  const defaults = {
+                    includeAutresMateriels: false,
+                    situation: 'Toutes' as const,
+                    region: 'Tous',
+                  };
+                  setDraftFilters(defaults);
+                  setActiveFilters(defaults);
+                  setIsFilterPaneOpen(false);
+                }}
+                style={{ ...cancelFiltersButtonStyle, fontSize: '18px' }}
+                className="flex-1 text-center font-sans cursor-pointer animate-none"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveFilters(draftFilters);
+                  setIsFilterPaneOpen(false);
+                }}
+                style={{
+                  ...applyFiltersButtonStyle,
+                  backgroundColor: 'rgb(53, 86, 236)',
+                  color: 'rgb(255, 255, 255)',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  fontSize: '18px',
+                }}
+                className="flex-1 text-center font-sans cursor-pointer animate-none"
+              >
+                Appliquer
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Bottom-Left Information Popup Overlay */}
         {!isHelpsDisabled && isInfoPopupVisible && (

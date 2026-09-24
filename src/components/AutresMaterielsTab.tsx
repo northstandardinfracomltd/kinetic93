@@ -2849,6 +2849,7 @@ export default function AutresMaterielsTab({
         isOpen={isMapOpen}
         onClose={() => setIsMapOpen(false)}
         items={filteredList}
+        otherEquipments={otherEquipments}
         clients={clients}
         selectedIds={selectedIds}
         onToggleSelect={(id) => {

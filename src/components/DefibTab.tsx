@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Defibrillateur, Client, Variable, CompanyInfo } from '../types';
+import { Defibrillateur, Client, Variable, CompanyInfo, OtherEquipment } from '../types';
 import { t } from '../utils/translate';
 import MapModal from './MapModal';
 import HelpBubble from './HelpBubble';
@@ -363,6 +363,7 @@ function getDateColor(dStr: string | undefined | null): string {
 interface DefibTabProps {
   currentLang?: string;
   defibrillateurs: Defibrillateur[];
+  otherEquipments?: OtherEquipment[];
   clients: Client[];
   variables: Variable[];
   onAddDefib: (defib: Omit<Defibrillateur, 'id'>) => void;
@@ -419,6 +420,7 @@ const getPostalIndicatif = (rawCp: any): number | null => {
 export default function DefibTab({
   currentLang,
   defibrillateurs,
+  otherEquipments = [],
   clients,
   variables,
   onAddDefib,
@@ -3351,6 +3353,7 @@ export default function DefibTab({
         isOpen={isMapOpen}
         onClose={() => setIsMapOpen(false)}
         defibrillateurs={planDefibrillateurs}
+        otherEquipments={otherEquipments}
         clients={clients}
         variables={variables}
         selectedIds={selectedIds}

@@ -6013,6 +6013,16 @@ export default function App() {
       ...defibData,
     };
     saveDefibs([...defibrillateurs, newDefib]);
+    try {
+      fetch('/api/sync-single-defib', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: tenantId || newDefib.envId || newDefib.tenantId || 'D27',
+          defib: newDefib
+        })
+      }).catch(() => {});
+    } catch (_) {}
   };
 
   const handleUpdateDefib = (updated: Defibrillateur) => {
@@ -6026,16 +6036,32 @@ export default function App() {
       return idMatch || identifiantMatch;
     });
 
+    let finalMerged: Defibrillateur = updated;
     if (exists) {
       saveDefibs(defibrillateurs.map((df) => {
         const isMatch = !!((df.id && updated.id && df.id === updated.id) ||
                         (df.identifiant && updated.identifiant && df.identifiant.toUpperCase() === updated.identifiant.toUpperCase()));
-        return isMatch ? { ...df, ...updated, id: df.id } : df;
+        if (isMatch) {
+          finalMerged = { ...df, ...updated, id: df.id };
+          return finalMerged;
+        }
+        return df;
       }));
     } else {
-      const newDefib = { ...updated, id: updated.id || 'df_' + Date.now() };
-      saveDefibs([...defibrillateurs, newDefib]);
+      finalMerged = { ...updated, id: updated.id || 'df_' + Date.now() };
+      saveDefibs([...defibrillateurs, finalMerged]);
     }
+
+    try {
+      fetch('/api/sync-single-defib', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: tenantId || finalMerged.envId || finalMerged.tenantId || 'D27',
+          defib: finalMerged
+        })
+      }).catch(() => {});
+    } catch (_) {}
   };
 
   const handleDeleteDefib = (id: string) => {
@@ -6687,6 +6713,7 @@ export default function App() {
             <DefibTab
               currentLang={currentLang}
               defibrillateurs={defibrillateurs}
+              otherEquipments={otherEquipments}
               clients={clients}
               variables={variables}
               onAddDefib={handleAddDefib}
@@ -10214,7 +10241,11 @@ export default function App() {
               width: '100%',
             };
 
-            const sortedClients = [...(clients || [])].sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'));
+            const sortedClients = [...(clients || [])].sort((a, b) => {
+              const nameA = (a.denomination || a.nom || a.name || '').trim();
+              const nameB = (b.denomination || b.nom || b.name || '').trim();
+              return nameA.localeCompare(nameB, 'fr');
+            });
 
             const availableTechnicians = (() => {
               const memberTechs = (members || []).filter((m: any) => isTechnicianMember(m)).map((m: any) => m.name || m.email || '');
@@ -10905,19 +10936,19 @@ export default function App() {
                                       const cId = rep.clientId || rep.defibSnapshot?.clientId;
                                       if (cId) {
                                         const found = clients.find((c: any) => c.id === cId);
-                                        if (found?.nom) clientNom = found.nom.trim();
+                                        if (found) clientNom = (found.denomination || found.nom || found.name || '').trim();
                                       }
                                       if (!clientNom && rep.defibIdentifiant) {
                                         const defib = defibrillateurs.find((d: any) => d.identifiant === rep.defibIdentifiant);
                                         if (defib?.clientId) {
                                           const found = clients.find((c: any) => c.id === defib.clientId);
-                                          if (found?.nom) clientNom = found.nom.trim();
+                                          if (found) clientNom = (found.denomination || found.nom || found.name || '').trim();
                                         }
                                         if (!clientNom) {
                                           const oe = otherEquipments.find((e: any) => e.identifiant === rep.defibIdentifiant);
                                           if (oe?.clientId) {
                                             const found = clients.find((c: any) => c.id === oe.clientId);
-                                            if (found?.nom) clientNom = found.nom.trim();
+                                            if (found) clientNom = (found.denomination || found.nom || found.name || '').trim();
                                           }
                                         }
                                       }
@@ -11812,20 +11843,6 @@ export default function App() {
                     id="gmao-filter-side-pane"
                     style={{ height: '100%' }}
                   >
-                    {/* Header */}
-                    <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                      <h3 className="text-xl font-bold text-black font-sans">
-                        {t("Filtres")}
-                      </h3>
-                      <button
-                        type="button"
-                        onClick={() => setIsGmaoFilterPaneOpen(false)}
-                        className="p-1 rounded-lg text-slate-400 hover:text-black hover:bg-slate-100 transition-all cursor-pointer"
-                      >
-                        <X size={20} />
-                      </button>
-                    </div>
-
                     {/* Scroll Area containing all fields */}
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
                       {/* Filter 1: Client */}
@@ -11842,7 +11859,9 @@ export default function App() {
                           >
                             <option value="Tous">Tous clients.</option>
                             {sortedClients.map(c => (
-                              <option key={c.id} value={c.id}>{c.nom}</option>
+                              <option key={c.id} value={c.id}>
+                                {c.denomination || c.nom || c.name || c.id}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -11912,7 +11931,7 @@ export default function App() {
                             <option value="Tous">Tous drapeaux.</option>
                             {availableGmaoFlags.map(v => (
                               <option key={v.id || v.nom} value={v.id || v.nom}>
-                                {v.nom} {v.couleurHex ? `(${v.couleurHex})` : ''}
+                                {v.nom}
                               </option>
                             ))}
                           </select>
