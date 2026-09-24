@@ -287,6 +287,7 @@ export interface SupportTicket {
   situationDevis?: 'Gagné' | 'Perdu' | 'Non renseigné';
   scorePotentielConversion?: number | null;
   referenceDevis?: string;
+  totalAffaireHT?: number | string;
   lienStockagePartageDevis?: string;
   evenementsCommercial?: CommercialEvent[];
 }

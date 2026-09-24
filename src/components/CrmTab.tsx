@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2, BarChart3, Download, Calendar } from 'lucide-react';
 import { SupportTicket, Member, Client, CompanyInfo, CommercialEvent } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { INITIAL_TICKETS } from '../utils';
@@ -119,7 +119,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [isPaneOpen, setIsPaneOpen] = useState(false);
   const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
   const [isSettingsPaneOpen, setIsSettingsPaneOpen] = useState(false);
+  const [isPerformancePaneOpen, setIsPerformancePaneOpen] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
+
+  // Performance Pane State: date range and employee
+  const [perfStartDate, setPerfStartDate] = useState('');
+  const [perfEndDate, setPerfEndDate] = useState('');
+  const [perfCollaborateur, setPerfCollaborateur] = useState('Tous');
 
   // Settings: Texte de l'email de relance
   const activeTenant = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
@@ -189,6 +195,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formSituationDevis, setFormSituationDevis] = useState<'Gagné' | 'Perdu' | 'Non renseigné'>('Non renseigné');
   const [formScoreConversion, setFormScoreConversion] = useState<number | null>(null);
   const [formReferenceDevis, setFormReferenceDevis] = useState('');
+  const [formTotalAffaireHT, setFormTotalAffaireHT] = useState('');
   const [formLienDevis, setFormLienDevis] = useState('');
   const [formCommercialEvents, setFormCommercialEvents] = useState<CommercialEvent[]>([]);
 
@@ -283,6 +290,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormSituationDevis('Non renseigné');
     setFormScoreConversion(null);
     setFormReferenceDevis('');
+    setFormTotalAffaireHT('');
     setFormLienDevis('');
     setFormCommercialEvents([]);
 
@@ -331,6 +339,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormSituationDevis(ticket.situationDevis || 'Non renseigné');
     setFormScoreConversion(typeof ticket.scorePotentielConversion === 'number' ? ticket.scorePotentielConversion : null);
     setFormReferenceDevis(ticket.referenceDevis || '');
+    setFormTotalAffaireHT(ticket.totalAffaireHT !== undefined && ticket.totalAffaireHT !== null ? String(ticket.totalAffaireHT) : '');
     setFormLienDevis(ticket.lienStockagePartageDevis || '');
     setFormCommercialEvents(Array.isArray(ticket.evenementsCommercial) ? ticket.evenementsCommercial : []);
 
@@ -381,6 +390,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       situationDevis: formSituationDevis,
       scorePotentielConversion: formScoreConversion,
       referenceDevis: formReferenceDevis.trim(),
+      totalAffaireHT: formTotalAffaireHT.trim() ? parseFloat(formTotalAffaireHT.trim()) : undefined,
       lienStockagePartageDevis: formLienDevis.trim(),
       evenementsCommercial: formCommercialEvents,
     } : {};
@@ -544,7 +554,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     }, 6000);
   };
 
-  // Filtered tickets list
+  // Filtered tickets list for main table
   const filteredTickets = tickets.filter((t) => {
     // 1. Category filter
     const cat = t.categorie || 'Sans Catégorie';
@@ -604,6 +614,154 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setSelectedTicketIds(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
+  };
+
+  // ==========================================
+  // PERFORMANCE & STATS LOGIC
+  // ==========================================
+  const filteredPerfTickets = tickets.filter((t) => {
+    // 1. Filter by employee
+    if (perfCollaborateur !== 'Tous' && t.collaborateur !== perfCollaborateur) {
+      return false;
+    }
+
+    // 2. Filter by date range (DD/MM/YYYY parsed to timestamp)
+    if (perfStartDate || perfEndDate) {
+      const rawDate = t.dateOuverture || t.date;
+      if (!rawDate) return false;
+
+      let ticketTime: number | null = null;
+      const parts = rawDate.trim().split('/');
+      if (parts.length === 3) {
+        const d = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const y = parseInt(parts[2], 10);
+        if (!isNaN(d) && !isNaN(m) && !isNaN(y)) {
+          ticketTime = new Date(y, m, d).getTime();
+        }
+      } else {
+        const parsed = new Date(rawDate).getTime();
+        if (!isNaN(parsed)) ticketTime = parsed;
+      }
+
+      if (ticketTime === null) return false;
+
+      if (perfStartDate) {
+        const start = new Date(perfStartDate);
+        start.setHours(0, 0, 0, 0);
+        if (ticketTime < start.getTime()) return false;
+      }
+
+      if (perfEndDate) {
+        const end = new Date(perfEndDate);
+        end.setHours(23, 59, 59, 999);
+        if (ticketTime > end.getTime()) return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Bloc stat 1: « Tickets ouverts » (Nouveau / En cours)
+  const statTicketsOuverts = filteredPerfTickets.filter(t => {
+    const s = t.situation || t.status;
+    return s === 'Nouveau' || s === 'En cours';
+  }).length;
+
+  // Bloc stat 2: « Tickets fermés » (Terminé / Résolu)
+  const statTicketsFermes = filteredPerfTickets.filter(t => {
+    const s = t.situation || t.status;
+    return s === 'Terminé' || s === 'Résolu';
+  }).length;
+
+  // Bloc stat 3: « Volume affaires »
+  // Sum of totalAffaireHT for category 'Commercial' where situationDevis is null, Non renseigné, or Gagné
+  const statVolumeAffaires = filteredPerfTickets.reduce((acc, t) => {
+    if (t.categorie === 'Commercial') {
+      const sitDev = t.situationDevis;
+      if (!sitDev || sitDev === 'Non renseigné' || sitDev === 'Gagné') {
+        const val = typeof t.totalAffaireHT === 'number'
+          ? t.totalAffaireHT
+          : parseFloat(String(t.totalAffaireHT || '').replace(/[^\d.-]/g, '')) || 0;
+        return acc + val;
+      }
+    }
+    return acc;
+  }, 0);
+
+  // Bloc stat 4: « Score closing »
+  // Tickets category 'Commercial' with situationDevis 'Gagné' / 'Perdu'
+  const commercialDeals = filteredPerfTickets.filter(t => 
+    t.categorie === 'Commercial' && (t.situationDevis === 'Gagné' || t.situationDevis === 'Perdu')
+  );
+  const dealsGagnes = commercialDeals.filter(t => t.situationDevis === 'Gagné').length;
+  const dealsPerdus = commercialDeals.filter(t => t.situationDevis === 'Perdu').length;
+  const totalDeals = dealsGagnes + dealsPerdus;
+  const scoreClosingVal = totalDeals > 0 ? (dealsGagnes / totalDeals) * 10 : null;
+  const scoreClosingText = scoreClosingVal !== null ? `${scoreClosingVal.toFixed(1)}/10` : '—/10';
+
+  // Export CSV
+  const handleExportPerformanceCSV = () => {
+    let csvContent = '\uFEFF'; // UTF-8 BOM for Excel
+
+    const escapeCsv = (val: any) => {
+      if (val === undefined || val === null) return '';
+      const str = String(val).replace(/"/g, '""');
+      if (str.includes(';') || str.includes('\n') || str.includes('"')) {
+        return `"${str}"`;
+      }
+      return str;
+    };
+
+    // Header section with stats summary
+    csvContent += 'RÉSUMÉ DES PERFORMANCES CRM;;;;;;;;;;;;;;;\n';
+    csvContent += `Période d'analyse;${perfStartDate ? 'Du ' + perfStartDate : 'Depuis le début'}${perfEndDate ? ' au ' + perfEndDate : ''};;;;;;;;;;;;;;;\n`;
+    csvContent += `Employé sélectionné;${perfCollaborateur};;;;;;;;;;;;;;;\n`;
+    csvContent += `Tickets ouverts;${statTicketsOuverts};;;;;;;;;;;;;;;\n`;
+    csvContent += `Tickets fermés;${statTicketsFermes};;;;;;;;;;;;;;;\n`;
+    csvContent += `Volume affaires;${statVolumeAffaires.toFixed(2)} €;;;;;;;;;;;;;;;\n`;
+    csvContent += `Score closing;${scoreClosingText};;;;;;;;;;;;;;;\n`;
+    csvContent += ';;;;;;;;;;;;;;;\n';
+
+    // Detailed table header
+    csvContent += 'Référence;Date Ouverture;Dernière Actualisation;Collaborateur;Client ou Prospect;Email;Catégorie;Situation;Criticité;Objet;Total Affaire HT;Situation Devis;Marché Public;Score Potentiel Conversion;Référence Devis;Lien Stockage Partagé Devis;Description\n';
+
+    // Rows
+    filteredPerfTickets.forEach(t => {
+      const sit = t.situation || (t.status === 'Résolu' ? 'Terminé' : t.status) || 'Nouveau';
+      const row = [
+        escapeCsv(t.reference || t.id),
+        escapeCsv(t.dateOuverture || t.date || ''),
+        escapeCsv(t.dateDerniereActualisation || ''),
+        escapeCsv(t.collaborateur || ''),
+        escapeCsv(t.client || t.customClientName || ''),
+        escapeCsv(t.email || ''),
+        escapeCsv(t.categorie || 'Sans Catégorie'),
+        escapeCsv(sit),
+        escapeCsv(t.criticite || 'Non renseigné'),
+        escapeCsv(t.objet || ''),
+        escapeCsv(t.totalAffaireHT !== undefined && t.totalAffaireHT !== null && t.totalAffaireHT !== '' ? `${t.totalAffaireHT} €` : ''),
+        escapeCsv(t.situationDevis || ''),
+        escapeCsv(t.marchePublic || ''),
+        escapeCsv(t.scorePotentielConversion !== undefined && t.scorePotentielConversion !== null ? `${t.scorePotentielConversion}/8` : ''),
+        escapeCsv(t.referenceDevis || ''),
+        escapeCsv(t.lienStockagePartageDevis || ''),
+        escapeCsv(t.description || t.message || '')
+      ];
+      csvContent += row.join(';') + '\n';
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+    link.href = url;
+    link.setAttribute('download', `performance_crm_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const customButtonStyle: React.CSSProperties = {
@@ -896,6 +1054,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 width: '260px',
               }}
             />
+
+            {/* Performance Button (entre la search-bar et Réglages) */}
+            <button
+              type="button"
+              onClick={() => setIsPerformancePaneOpen(true)}
+              id="btn-crm-performance"
+              style={blackButtonStyle}
+              className="hover:bg-zinc-800 transition-colors"
+            >
+              Performance
+            </button>
 
             {/* Réglages Button (renamed from Réglages CRM) */}
             <button
@@ -1690,6 +1859,25 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         />
                       </div>
 
+                      {/* Total Affaire HT (en dessous de Référence Devis.) */}
+                      <div>
+                        <label>Total Affaire HT.</label>
+                        <div className="relative flex items-center">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            value={formTotalAffaireHT}
+                            onChange={(e) => setFormTotalAffaireHT(e.target.value)}
+                            style={{ paddingRight: '50px' }}
+                          />
+                          <span className="absolute right-3.5 text-sm font-semibold text-slate-500 font-sans pointer-events-none">
+                            € HT
+                          </span>
+                        </div>
+                      </div>
+
                       {/* Lien Stockage Partagé Devis. avec bouton "Ouvrir" infield si value */}
                       <div>
                         <label>Lien Stockage Partagé Devis.</label>
@@ -1843,6 +2031,302 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PERFORMANCE & STATS / EXPORT SIDE PANE DRAWER */}
+      {isPerformancePaneOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden" id="crm-performance-drawer-modal">
+          {/* Overlay backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity cursor-pointer"
+            onClick={() => setIsPerformancePaneOpen(false)}
+          />
+
+          {/* Drawer container */}
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
+            <div className="w-screen max-w-md sm:max-w-2xl lg:max-w-3xl bg-white shadow-2xl flex flex-col p-6 sm:p-8 overflow-y-auto justify-between">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center">
+                      <BarChart3 size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold font-gochi text-black">
+                        Performance Commerciale & Support
+                      </h3>
+                      <p className="text-xs text-slate-500 font-sans">
+                        Statistiques de suivi, volume d'affaires et export des données
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section FILTRES (Plage date à date & Employé) */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4 text-left">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-sm font-semibold text-slate-700 font-sans flex items-center gap-1.5">
+                      <Calendar size={16} /> Filtres d'analyse
+                    </span>
+                    {/* Quick shortcuts */}
+                    <div className="flex items-center gap-1.5 text-xs font-sans">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPerfStartDate('');
+                          setPerfEndDate('');
+                        }}
+                        className={`px-2 py-1 rounded-md border text-xs cursor-pointer ${
+                          !perfStartDate && !perfEndDate ? 'bg-black text-white border-black' : 'bg-white text-slate-700 border-slate-300 hover:border-black'
+                        }`}
+                      >
+                        Tout
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          const y = now.getFullYear();
+                          const m = String(now.getMonth() + 1).padStart(2, '0');
+                          setPerfStartDate(`${y}-${m}-01`);
+                          const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+                          setPerfEndDate(`${y}-${m}-${String(lastDay).padStart(2, '0')}`);
+                        }}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:border-black text-xs cursor-pointer"
+                      >
+                        Ce mois
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          const y = now.getFullYear();
+                          setPerfStartDate(`${y}-01-01`);
+                          setPerfEndDate(`${y}-12-31`);
+                        }}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:border-black text-xs cursor-pointer"
+                      >
+                        Cette année
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Plage date à date */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs !font-semibold text-slate-600 !mb-1">Date début.</label>
+                      <input
+                        type="date"
+                        value={perfStartDate}
+                        onChange={(e) => setPerfStartDate(e.target.value)}
+                        style={{
+                          padding: '8px 12px !important',
+                          fontSize: '15px !important',
+                          borderRadius: '10px !important',
+                          background: '#ffffff !important',
+                          border: '1px solid #cbd5e0 !important'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs !font-semibold text-slate-600 !mb-1">Date fin.</label>
+                      <input
+                        type="date"
+                        value={perfEndDate}
+                        onChange={(e) => setPerfEndDate(e.target.value)}
+                        style={{
+                          padding: '8px 12px !important',
+                          fontSize: '15px !important',
+                          borderRadius: '10px !important',
+                          background: '#ffffff !important',
+                          border: '1px solid #cbd5e0 !important'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Choix Employé avec 'Tous' en première option */}
+                  <div>
+                    <label className="text-xs !font-semibold text-slate-600 !mb-1">Employé.</label>
+                    <select
+                      value={perfCollaborateur}
+                      onChange={(e) => setPerfCollaborateur(e.target.value)}
+                      style={{
+                        padding: '8px 12px !important',
+                        fontSize: '15px !important',
+                        borderRadius: '10px !important',
+                        background: '#ffffff !important',
+                        border: '1px solid #cbd5e0 !important'
+                      }}
+                    >
+                      <option value="Tous">Tous</option>
+                      {members.map((m) => (
+                        <option key={m.id || m.name} value={m.name}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* PARTIE 1 : STATISTIQUES (4 blocs statistiques) */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-base font-bold text-slate-900 font-sans tracking-tight">
+                      Statistiques
+                    </span>
+                    <span className="text-xs text-slate-500 font-sans">
+                      {filteredPerfTickets.length} ticket(s) analysé(s)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* Bloc stat 1: « Tickets ouverts » (count Nouveau + En cours) */}
+                    <div 
+                      className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1 shadow-xs"
+                      id="stat-block-tickets-ouverts"
+                    >
+                      <span className="text-xs font-semibold uppercase tracking-wider text-amber-700 font-sans block">
+                        Tickets ouverts
+                      </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-bold font-sans text-slate-900">
+                          {statTicketsOuverts}
+                        </span>
+                        <span className="text-xs text-slate-500 font-sans">
+                          (Nouveau / En cours)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bloc stat 2: « Tickets fermés » (count Terminé) */}
+                    <div 
+                      className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1 shadow-xs"
+                      id="stat-block-tickets-fermes"
+                    >
+                      <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 font-sans block">
+                        Tickets fermés
+                      </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-bold font-sans text-slate-900">
+                          {statTicketsFermes}
+                        </span>
+                        <span className="text-xs text-slate-500 font-sans">
+                          (Terminé / Résolu)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bloc stat 3: « Volume affaires » (sum Total Affaire HT pour catégorie Commercial, situation devis nul, non renseigné ou gagné) */}
+                    <div 
+                      className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1 shadow-xs"
+                      id="stat-block-volume-affaires"
+                    >
+                      <span className="text-xs font-semibold uppercase tracking-wider text-blue-700 font-sans block">
+                        Volume affaires
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl sm:text-3xl font-bold font-sans text-slate-900">
+                          {statVolumeAffaires.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        </span>
+                        <span className="text-xl font-bold font-sans text-slate-900">
+                          €
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-sans block">
+                        Devis gagnés ou en cours (HT)
+                      </span>
+                    </div>
+
+                    {/* Bloc stat 4: « Score closing » (note sur 10 selon devis Gagné / Perdu) */}
+                    <div 
+                      className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1 shadow-xs"
+                      id="stat-block-score-closing"
+                    >
+                      <span className="text-xs font-semibold uppercase tracking-wider text-purple-700 font-sans block">
+                        Score closing
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-bold font-sans text-slate-900">
+                          {scoreClosingText}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-sans block">
+                        {totalDeals > 0 
+                          ? `${dealsGagnes} gagné(s) / ${totalDeals} traité(s) (${Math.round((dealsGagnes / totalDeals) * 100)}%)`
+                          : 'Aucun devis clos sur la période'
+                        }
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* PARTIE 2 : EXPORT */}
+                <div className="space-y-3 pt-2">
+                  <span className="text-base font-bold text-slate-900 font-sans tracking-tight">
+                    Export
+                  </span>
+                  
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-3 text-left">
+                    <p className="text-sm text-slate-600 font-sans leading-relaxed">
+                      Téléchargez un fichier CSV contenant l'ensemble des tickets filtrés selon la période et l'employé sélectionnés, précédé du résumé complet des indicateurs statistiques.
+                    </p>
+
+                    <button
+                      type="button"
+                      id="btn-export-crm-performance-csv"
+                      onClick={handleExportPerformanceCSV}
+                      style={{
+                        backgroundColor: '#3556ec',
+                        color: '#ffffff',
+                        fontSize: '18px',
+                        fontWeight: 'normal',
+                        borderRadius: '13px',
+                        padding: '12px 24px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        width: '100%',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                      className="hover:bg-[#2b48cc] transition-colors"
+                    >
+                      <Download size={18} />
+                      Exporter en CSV ({filteredPerfTickets.length} lignes)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Full-width Fermer button at bottom */}
+              <div className="pt-6">
+                <button
+                  type="button"
+                  id="btn-close-crm-performance-bottom"
+                  onClick={() => setIsPerformancePaneOpen(false)}
+                  style={{
+                    backgroundColor: '#000000',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    padding: '14px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    width: '100%',
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                  className="hover:bg-zinc-800 transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
             </div>
           </div>
         </div>
