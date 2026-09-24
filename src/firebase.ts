@@ -1923,4 +1923,204 @@ export async function updateTenantAdminProfile(tenantId: string, adminEmail: str
   }
 }
 
+/**
+ * Finds a tour mission by intervention reference or ID globally across all tenants in Firestore.
+ */
+export async function findMissionByInterventionGlobally(
+  interventionRef: string,
+  tenantHint?: string
+): Promise<{
+  tenantId: string;
+  tour: any;
+  mission: any;
+  tours: any[];
+} | null> {
+  const checkRef = (interventionRef || '').trim().toUpperCase();
+  if (!checkRef) return null;
+
+  try {
+    const tenants = await getRegisteredTenants();
+    const allTenantIds = ['demo', ...tenants.map(t => t.id)];
+    const prioritizedTenants = tenantHint 
+      ? Array.from(new Set([tenantHint, ...allTenantIds]))
+      : allTenantIds;
+
+    // Search across tenants
+    for (const tid of prioritizedTenants) {
+      try {
+        const candidateKeys = getCollectionKeyCandidates('fsmTours', tid);
+        let toursList: any[] | null = null;
+
+        for (const ck of candidateKeys) {
+          toursList = await fetchRawCollectionFromFirestore<any[]>(ck, 4000);
+          if (Array.isArray(toursList) && toursList.length > 0) break;
+        }
+
+        if (!Array.isArray(toursList) || toursList.length === 0) {
+          const directKey = tid === 'demo' ? 'fsmTours' : `${tid}_fsmTours`;
+          toursList = await fetchRawCollectionFromFirestore<any[]>(directKey, 4000);
+        }
+
+        if (Array.isArray(toursList)) {
+          for (const tour of toursList) {
+            const missions = tour.missions || [];
+            const foundMission = missions.find((m: any) => 
+              (m.interventionReference && m.interventionReference.trim().toUpperCase() === checkRef) ||
+              (m.id && String(m.id).trim().toUpperCase() === checkRef)
+            );
+            if (foundMission) {
+              return {
+                tenantId: tid,
+                tour,
+                mission: foundMission,
+                tours: toursList
+              };
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`Error searching fsmTours for tenant ${tid}:`, err);
+      }
+    }
+
+    // Secondary check: If not found in fsmTours, check generatedReports for pending report line
+    for (const tid of prioritizedTenants) {
+      try {
+        const repKey = tid === 'demo' ? 'generatedReports' : `${tid}_generatedReports`;
+        const reportsList = await fetchRawCollectionFromFirestore<any[]>(repKey, 3000);
+        if (Array.isArray(reportsList)) {
+          const matchedReport = reportsList.find((r: any) => 
+            (r.interventionReference && r.interventionReference.trim().toUpperCase() === checkRef) ||
+            (r.id && String(r.id).trim().toUpperCase() === checkRef) ||
+            (r.missionId && String(r.missionId).trim().toUpperCase() === checkRef)
+          );
+          if (matchedReport) {
+            // Synthesize mission object from report
+            const synthMission = {
+              id: matchedReport.missionId || matchedReport.id,
+              interventionReference: matchedReport.interventionReference || checkRef,
+              estimatedDate: matchedReport.estimatedDate || matchedReport.date || '',
+              estimatedSlot: matchedReport.estimatedSlot || '',
+              status: matchedReport.missionStatus || 'Brouillon',
+              refusalComment: matchedReport.refusalComment || '',
+              clientName: matchedReport.clientName || matchedReport.siteMission || '',
+              defibIdentifiant: matchedReport.defibIdentifiant || '',
+            };
+            return {
+              tenantId: tid,
+              tour: { id: matchedReport.origin || 'Tour', title: matchedReport.tourName || 'Tour' },
+              mission: synthMission,
+              tours: []
+            };
+          }
+        }
+      } catch (_) {}
+    }
+  } catch (err) {
+    console.warn('Error in findMissionByInterventionGlobally:', err);
+  }
+
+  return null;
+}
+
+/**
+ * Updates a tour mission status ('Accepté Client' or 'Refusé Client') and optional refusal comment in Firestore DB.
+ */
+export async function updateMissionStatusByIntervention(
+  interventionRef: string,
+  newStatus: 'Accepté Client' | 'Refusé Client' | string,
+  comment?: string,
+  tenantHint?: string
+): Promise<{ success: boolean; tenantId?: string; mission?: any }> {
+  const checkRef = (interventionRef || '').trim().toUpperCase();
+  if (!checkRef) return { success: false };
+
+  try {
+    const searchResult = await findMissionByInterventionGlobally(checkRef, tenantHint);
+    if (!searchResult) {
+      console.warn(`Could not locate mission with interventionReference ${checkRef}`);
+      return { success: false };
+    }
+
+    const { tenantId, tours } = searchResult;
+    const nowIso = new Date().toISOString();
+    let updatedMission: any = null;
+
+    if (Array.isArray(tours) && tours.length > 0) {
+      const updatedTours = tours.map((tour) => {
+        let tourChanged = false;
+        const nextMissions = (tour.missions || []).map((m: any) => {
+          if (
+            (m.interventionReference && m.interventionReference.trim().toUpperCase() === checkRef) ||
+            (m.id && String(m.id).trim().toUpperCase() === checkRef)
+          ) {
+            tourChanged = true;
+            updatedMission = {
+              ...m,
+              status: newStatus,
+              refusalComment: comment !== undefined ? comment : (m.refusalComment || ''),
+              clientRefusalComment: comment !== undefined ? comment : (m.clientRefusalComment || ''),
+              clientDecisionDate: nowIso,
+              updatedAt: nowIso
+            };
+            return updatedMission;
+          }
+          return m;
+        });
+
+        if (tourChanged) {
+          return { ...tour, missions: nextMissions, updatedAt: nowIso };
+        }
+        return tour;
+      });
+
+      // Save updated tours to Firestore
+      await saveCollectionToFirestore('fsmTours', updatedTours, tenantId);
+
+      // Save to local cache
+      try {
+        localStorage.setItem(`defib_${tenantId}_fsm_tours`, JSON.stringify(updatedTours));
+      } catch (_) {}
+    }
+
+    // Also synchronize generatedReports for that tenant so GMAO stays up to date
+    try {
+      const repKey = tenantId === 'demo' ? 'generatedReports' : `${tenantId}_generatedReports`;
+      const reportsList = await fetchRawCollectionFromFirestore<any[]>(repKey, 3000);
+      if (Array.isArray(reportsList)) {
+        let reportsChanged = false;
+        const updatedReports = reportsList.map((rep) => {
+          if (
+            (rep.interventionReference && rep.interventionReference.trim().toUpperCase() === checkRef) ||
+            (updatedMission && rep.missionId && String(rep.missionId) === String(updatedMission.id))
+          ) {
+            reportsChanged = true;
+            return {
+              ...rep,
+              missionStatus: newStatus,
+              refusalComment: comment !== undefined ? comment : rep.refusalComment,
+              updatedAt: nowIso
+            };
+          }
+          return rep;
+        });
+
+        if (reportsChanged) {
+          await saveCollectionToFirestore('generatedReports', updatedReports, tenantId);
+          try {
+            localStorage.setItem(`defib_${tenantId}_generated_reports`, JSON.stringify(updatedReports));
+          } catch (_) {}
+        }
+      }
+    } catch (repErr) {
+      console.warn('Failed to sync report status with mission decision:', repErr);
+    }
+
+    return { success: true, tenantId, mission: updatedMission };
+  } catch (error) {
+    console.error('Error updating mission status by intervention:', error);
+    return { success: false };
+  }
+}
+
 

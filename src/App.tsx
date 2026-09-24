@@ -67,6 +67,7 @@ import GmaoCorrectionForm from './components/GmaoCorrectionForm';
 import ImportExportTab from './components/ImportExportTab';
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from './utils/fsmOptimizer';
 import SatisfactionFormPage from './components/SatisfactionFormPage';
+import MissionValidationPage from './components/MissionValidationPage';
 import NotificationsTab from './components/NotificationsTab';
 import { PlanningTab } from './components/PlanningTab';
 import FeedbackDrawer from './components/FeedbackDrawer';
@@ -266,6 +267,25 @@ export default function App() {
       const path = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
       return path.includes('/satisfaction') || hash.includes('/satisfaction') || hash.includes('#satisfaction');
+    }
+    return false;
+  });
+
+  const [isMissionValidationPage] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      return (
+        path.includes('/validation-passage') ||
+        hash.includes('/validation-passage') ||
+        hash.includes('#validation-passage') ||
+        path.includes('/validation-mission') ||
+        hash.includes('/validation-mission') ||
+        hash.includes('#validation-mission') ||
+        path.includes('/validation') ||
+        hash.includes('/validation') ||
+        hash.includes('#validation')
+      );
     }
     return false;
   });
@@ -2433,15 +2453,48 @@ export default function App() {
     const companyName = companyInfo.name || 'Défibeo Suite';
     const companyEmail = companyInfo.email || 'defibeo@gmail.com';
 
+    // Ensure interventionReference is set
+    const interventionRef = m.interventionReference || (() => {
+      const matchedReport = generatedReports.find((r: any) => 
+        (r.missionId && r.missionId === m.id) || 
+        (r.defibIdentifiant && r.defibIdentifiant === m.defibIdentifiant)
+      );
+      return matchedReport?.interventionReference || `INT-2026-${String(m.id || Date.now()).replace('fsm-m-', '').slice(-5)}`;
+    })();
+
+    const estDate = m.estimatedDate || tour.startDate || tour.date || '';
+    let estDateFormatted = estDate;
+    if (estDate && estDate.includes('-')) {
+      const parts = estDate.split('-');
+      if (parts.length === 3) {
+        estDateFormatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+    }
+    const estSlot = m.estimatedSlot || 'Non défini';
+
+    const origin = typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+      ? window.location.origin
+      : 'https://consoledefibeo.deroesch.com';
+    const validationUrl = `${origin}/validation-passage?ref=${encodeURIComponent(interventionRef)}&tenant=${encodeURIComponent(tenantId)}`;
+
     try {
       await triggerEmailSoumettreAuClient(
         uniqueEmails,
         companyName,
         companyEmail,
         customerMainEmail,
-        customerPassword
+        customerPassword,
+        {
+          interventionRef,
+          estimatedDate: estDateFormatted,
+          estimatedSlot: estSlot,
+          actionUrl: validationUrl
+        }
       );
-      updateFsmMission(tour.id, m.id, { status: 'Attente Client' });
+      updateFsmMission(tour.id, m.id, { 
+        status: 'Attente Client',
+        interventionReference: interventionRef
+      });
       alert("La proposition a été soumise au client par email avec succès.");
     } catch (err) {
       console.error("Erreur lors de la soumission au client:", err);
@@ -6172,6 +6225,10 @@ export default function App() {
     );
   }
 
+  if (isMissionValidationPage) {
+    return <MissionValidationPage />;
+  }
+
   if (isSatisfactionFormPage) {
     return <SatisfactionFormPage />;
   }
@@ -9046,6 +9103,47 @@ export default function App() {
                                       {/* Ligne 1: Numéro de passage & Gélules & Bouton Dérouler / Réduire */}
                                       <div className="flex flex-wrap items-center justify-between gap-2 bg-transparent pb-0.5">
                                         <div className="flex flex-wrap items-center gap-2 bg-transparent flex-1">
+                                        {/* Pictogramme situation style Rapports PDF avec '!' selon la Situation */}
+                                        {(() => {
+                                          const sitNorm = (m.status || "Brouillon").toLowerCase().trim();
+                                          let borderColor = "#B8B8B8";
+                                          if (sitNorm === "brouillon") borderColor = "#B8B8B8";
+                                          else if (sitNorm === "attente client") borderColor = "#B1C400";
+                                          else if (sitNorm === "accepté client" || sitNorm === "accepte client") borderColor = "#67CF11";
+                                          else if (sitNorm === "refusé client" || sitNorm === "refuse client") borderColor = "#CF2411";
+                                          else if (sitNorm === "rejet mission" || sitNorm === "rejet") borderColor = "#CF6011";
+                                          else if (sitNorm === "à faire" || sitNorm === "a faire") borderColor = "#1176CF";
+                                          else if (sitNorm === "attente") borderColor = "#CCCF11";
+                                          else if (sitNorm === "effectué" || sitNorm === "effectue" || sitNorm === "effectuée") borderColor = "#9611CF";
+
+                                          return (
+                                            <div
+                                              className="relative inline-flex items-center justify-center shrink-0"
+                                              style={{ width: '20px', height: '20px' }}
+                                              title={`Situation : ${m.status || 'Brouillon'}`}
+                                            >
+                                              <div
+                                                className="absolute inset-0"
+                                                style={{
+                                                  border: `3px solid ${borderColor}`,
+                                                  backgroundColor: 'transparent',
+                                                  transform: 'rotate(45deg)',
+                                                  borderRadius: '6px',
+                                                }}
+                                              />
+                                              <span
+                                                className="relative z-10 font-bold leading-none select-none"
+                                                style={{
+                                                  fontSize: '16px',
+                                                  color: '#000000',
+                                                  fontFamily: 'sans-serif',
+                                                }}
+                                              >
+                                                !
+                                              </span>
+                                            </div>
+                                          );
+                                        })()}
                                         <div
                                           style={{
                                             backgroundColor: '#fa53d5',
@@ -10048,6 +10146,16 @@ export default function App() {
                                           <option value="Effectué">Effectué</option>
                                         </select>
                                       </div>
+                                      {/* Show client refusal comment underneath Situation if Refusé Client */}
+                                      {((m.status || '').toLowerCase().trim() === 'refusé client' || (m.status || '').toLowerCase().trim() === 'refuse client') && (m.refusalComment || m.clientRefusalComment) && (
+                                        <div 
+                                          className="mt-2 p-2.5 bg-red-50 text-red-900 border border-red-200 rounded-xl text-xs font-sans space-y-0.5"
+                                          style={{ wordBreak: 'break-word' }}
+                                        >
+                                          <span className="font-bold text-red-700 block">Commentaire client (Refus) :</span>
+                                          <p className="italic m-0">{m.refusalComment || m.clientRefusalComment}</p>
+                                        </div>
+                                      )}
                                     </div>
 
                                     {/* Soumettre au client button */}

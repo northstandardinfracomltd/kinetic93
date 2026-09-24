@@ -92,6 +92,7 @@ export async function sendScriptEmail(payload: {
   to: string;
   subject: string;
   body: string;
+  htmlBody?: string;
   replyTo: string;
 }): Promise<boolean> {
   try {
@@ -411,7 +412,13 @@ export async function triggerEmailSoumettreAuClient(
   companyName: string,
   companyEmail: string,
   customerMainEmail: string,
-  customerPassword: string
+  customerPassword: string,
+  missionDetails?: {
+    interventionRef: string;
+    estimatedDate?: string;
+    estimatedSlot?: string;
+    actionUrl?: string;
+  }
 ): Promise<boolean> {
   const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
   const savedOption = localStorage.getItem(`defib_${tenantId}_enable_auto_emails`);
@@ -422,17 +429,67 @@ export async function triggerEmailSoumettreAuClient(
   
   const to = Array.from(new Set(['defibeo@gmail.com', ...recipientEmails].filter(Boolean))).join(', ');
   const subject = `${companyName} : (Attention requise) Proposition de date et créneau.`;
+  
+  const refText = missionDetails?.interventionRef ? `Référence de l'intervention : ${missionDetails.interventionRef}\n` : '';
+  const dateText = missionDetails?.estimatedDate ? `Date estimée : ${missionDetails.estimatedDate}\n` : '';
+  const slotText = missionDetails?.estimatedSlot ? `Créneau estimé : ${missionDetails.estimatedSlot}\n` : '';
+  const urlLink = missionDetails?.actionUrl || 'https://consoledefibeo.deroesch.com';
+
   const body = `Bonjour,
 
-Une date et un créneau est proposé pour une intervention sur votre site. Accédez à votre portail client pour consulter les détails, et valider ou refuser le passage. Votre email de connexion est : ${customerMainEmail} et votre mot de passe est ${customerPassword} : accédez à defibeo.com puis cliquez sur Connexion, en tant que Client.
+Une date et un créneau sont proposés pour une intervention sur votre site.
+${refText}${dateText}${slotText}
+Pour valider ou refuser cette proposition de passage, veuillez cliquer sur le bouton ou lien ci-dessous :
+Valider ou Refuser : ${urlLink}
+
+Vous pouvez également accéder à votre portail client pour consulter les détails. Votre email de connexion est : ${customerMainEmail} et votre mot de passe est : ${customerPassword} (accédez à defibeo.com puis cliquez sur Connexion, en tant que Client).
 
 Vous remerciant pour votre retour.
 L’équipe ${companyName}.`;
+
+  const htmlBody = `
+<div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; line-height: 1.6; padding: 20px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;">
+  <h2 style="color: #000000; font-size: 20px; margin-top: 0; margin-bottom: 16px;">Proposition de passage pour intervention</h2>
+  <p>Bonjour,</p>
+  <p>Une date et un créneau sont proposés pour une intervention sur votre site :</p>
+  
+  <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background-color: #f8fafc; border-radius: 8px; overflow: hidden;">
+    ${missionDetails?.interventionRef ? `<tr><td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0; width: 40%;">Référence intervention :</td><td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${missionDetails.interventionRef}</td></tr>` : ''}
+    ${missionDetails?.estimatedDate ? `<tr><td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0;">Date estimée :</td><td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${missionDetails.estimatedDate}</td></tr>` : ''}
+    ${missionDetails?.estimatedSlot ? `<tr><td style="padding: 10px 14px; font-weight: bold;">Créneau estimé :</td><td style="padding: 10px 14px;">${missionDetails.estimatedSlot}</td></tr>` : ''}
+  </table>
+
+  <div style="text-align: center; margin: 30px 0;">
+    <a href="${urlLink}" style="background-color: #3556ec; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+      Valider ou Refuser
+    </a>
+  </div>
+
+  <p style="font-size: 13px; color: #64748b; margin-top: 15px;">
+    Si le bouton ci-dessus ne fonctionne pas, vous pouvez copier et ouvrir ce lien directement :<br/>
+    <a href="${urlLink}" style="color: #3556ec; word-break: break-all;">${urlLink}</a>
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+
+  <p style="font-size: 13px; color: #475569; margin-bottom: 8px;">
+    <strong>Accès direct au portail client :</strong><br/>
+    Identifiant : <strong>${customerMainEmail}</strong><br/>
+    Mot de passe : <strong>${customerPassword}</strong>
+  </p>
+
+  <p style="margin-top: 20px; font-size: 14px; color: #000000;">
+    Vous remerciant pour votre retour.<br/>
+    <strong>L’équipe ${companyName}</strong>
+  </p>
+</div>
+`;
 
   return sendScriptEmail({
     to,
     subject,
     body,
+    htmlBody,
     replyTo: companyEmail || "defibeo@gmail.com"
   });
 }

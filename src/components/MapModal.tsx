@@ -3,7 +3,6 @@ import { Defibrillateur, Client, Variable } from '../types';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ChevronDown, X } from 'lucide-react';
 import { REGIONS_BY_COUNTRY } from '../utils/regions';
 
 interface MapModalProps {
@@ -405,17 +404,6 @@ function PopupContent({
               whiteSpace: 'nowrap'
             }}
           >
-            <span 
-              style={{ 
-                width: '6px', 
-                height: '6px', 
-                borderRadius: '50%', 
-                backgroundColor: '#fe4eba', 
-                marginRight: '6px',
-                display: 'inline-block',
-                flexShrink: 0
-              }} 
-            />
             {categorie}
           </span>
         </div>
@@ -1249,21 +1237,6 @@ export default function MapModal({
             className="absolute inset-y-0 right-0 w-80 sm:w-96 bg-white shadow-2xl z-[5000] flex flex-col border-l border-slate-200"
             style={{ height: '100%' }}
           >
-            {/* Header with Title and Close icon */}
-            <div className="p-6 pb-4 flex items-center justify-between border-b border-slate-100">
-              <h2 className="text-xl font-bold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
-                Filtres
-              </h2>
-              <button
-                type="button"
-                onClick={() => setIsFilterPaneOpen(false)}
-                className="text-slate-400 hover:text-black cursor-pointer p-1 rounded-lg transition-colors"
-                title="Fermer le volet des filtres"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
             {/* Scroll Area containing all fields */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Filter 1: Toggle Inclure Autres Matériels */}
@@ -1296,21 +1269,16 @@ export default function MapModal({
                 >
                   Situation.
                 </label>
-                <div className="relative">
-                  <select
-                    value={draftFilters.situation}
-                    onChange={(e) => setDraftFilters({ ...draftFilters, situation: e.target.value as any })}
-                    style={filterInputStyle}
-                    className="cursor-pointer"
-                  >
-                    <option value="Toutes">Toutes situations</option>
-                    <option value="Sans mission">Sans mission planifiée</option>
-                    <option value="Avec mission">Avec mission planifiée</option>
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                    <ChevronDown size={16} />
-                  </div>
-                </div>
+                <select
+                  value={draftFilters.situation}
+                  onChange={(e) => setDraftFilters({ ...draftFilters, situation: e.target.value as any })}
+                  style={filterInputStyle}
+                  className="cursor-pointer"
+                >
+                  <option value="Toutes">Toutes situations</option>
+                  <option value="Sans mission">Sans mission planifiée</option>
+                  <option value="Avec mission">Avec mission planifiée</option>
+                </select>
               </div>
 
               {/* Filter 3: Région Dropdown */}
@@ -1321,27 +1289,22 @@ export default function MapModal({
                 >
                   Région.
                 </label>
-                <div className="relative">
-                  <select
-                    value={draftFilters.region}
-                    onChange={(e) => setDraftFilters({ ...draftFilters, region: e.target.value })}
-                    style={filterInputStyle}
-                    className="cursor-pointer"
-                  >
-                    <option value="Tous">Toutes régions</option>
-                    {availableRegions.map(reg => (
-                      <option key={reg} value={reg}>{reg}</option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                    <ChevronDown size={16} />
-                  </div>
-                </div>
+                <select
+                  value={draftFilters.region}
+                  onChange={(e) => setDraftFilters({ ...draftFilters, region: e.target.value })}
+                  style={filterInputStyle}
+                  className="cursor-pointer"
+                >
+                  <option value="Tous">Toutes régions</option>
+                  {availableRegions.map(reg => (
+                    <option key={reg} value={reg}>{reg}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
             {/* Footer Actions */}
-            <div className="p-6 bg-white flex gap-4 shrink-0 border-t border-slate-100">
+            <div className="p-6 bg-white flex gap-4 shrink-0">
               <button
                 type="button"
                 onClick={() => {
