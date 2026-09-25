@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X } from 'lucide-react';
 import { t } from '../utils/translate';
 import { Defibrillateur, Client, Variable, StockRecord, PointageLog } from '../types';
@@ -317,6 +317,100 @@ export default function StatsModal({
     }).length;
   }, [resolvedFsmTours]);
 
+  // 10. Score NPS (avec filtrage par période date début / date fin, par défaut all time)
+  const [npsStartDate, setNpsStartDate] = useState<string>('');
+  const [npsEndDate, setNpsEndDate] = useState<string>('');
+
+  const npsData = useMemo(() => {
+    let reviewsWithNps = resolvedReviews.filter((rev: any) => {
+      const score = typeof rev.npsScore === 'number' 
+        ? rev.npsScore 
+        : (typeof rev.nps === 'number' 
+          ? rev.nps 
+          : (rev.npsScore !== undefined && rev.npsScore !== null && rev.npsScore !== '' ? parseFloat(rev.npsScore) : (rev.nps !== undefined && rev.nps !== null && rev.nps !== '' ? parseFloat(rev.nps) : null)));
+      return score !== null && !isNaN(score);
+    });
+
+    if (npsStartDate || npsEndDate) {
+      let startTs = -Infinity;
+      let endTs = Infinity;
+      if (npsStartDate) {
+        const sMatch = npsStartDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (sMatch) {
+          startTs = new Date(parseInt(sMatch[1], 10), parseInt(sMatch[2], 10) - 1, parseInt(sMatch[3], 10), 0, 0, 0, 0).getTime();
+        }
+      }
+      if (npsEndDate) {
+        const eMatch = npsEndDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (eMatch) {
+          endTs = new Date(parseInt(eMatch[1], 10), parseInt(eMatch[2], 10) - 1, parseInt(eMatch[3], 10), 23, 59, 59, 999).getTime();
+        }
+      }
+
+      reviewsWithNps = reviewsWithNps.filter((rev: any) => {
+        const rawDate = rev.dateStr || rev.date || (rev.createdAt ? String(rev.createdAt) : '');
+        if (!rawDate) return false;
+        const d = parseTimestamp(rawDate);
+        if (!d) return false;
+        const t = d.getTime();
+        return t >= startTs && t <= endTs;
+      });
+    }
+
+    const totalCount = reviewsWithNps.length;
+    if (totalCount === 0) {
+      return {
+        scoreDisplay: "Aucun avis",
+        npsInt: null,
+        totalCount: 0,
+        promotersCount: 0,
+        passivesCount: 0,
+        detractorsCount: 0,
+        pctPromoters: 0,
+        pctPassives: 0,
+        pctDetractors: 0,
+      };
+    }
+
+    let promoters = 0;
+    let passives = 0;
+    let detractors = 0;
+
+    reviewsWithNps.forEach((rev: any) => {
+      const score = typeof rev.npsScore === 'number' 
+        ? rev.npsScore 
+        : (typeof rev.nps === 'number' ? rev.nps : parseFloat(rev.npsScore || rev.nps || 0));
+      if (score >= 9) {
+        promoters++;
+      } else if (score >= 7) {
+        passives++;
+      } else {
+        detractors++;
+      }
+    });
+
+    const pctPromoters = (promoters / totalCount) * 100;
+    const pctDetractors = (detractors / totalCount) * 100;
+    const pctPassives = (passives / totalCount) * 100;
+
+    // NPS = % Promoteurs - % Détracteurs (entier compris entre -100 et +100)
+    const npsValue = Math.round(pctPromoters - pctDetractors);
+    const clampedNps = Math.max(-100, Math.min(100, npsValue));
+    const scoreDisplay = clampedNps > 0 ? `+${clampedNps}` : `${clampedNps}`;
+
+    return {
+      scoreDisplay,
+      npsInt: clampedNps,
+      totalCount,
+      promotersCount: promoters,
+      passivesCount: passives,
+      detractorsCount: detractors,
+      pctPromoters: Math.round(pctPromoters),
+      pctPassives: Math.round(pctPassives),
+      pctDetractors: Math.round(pctDetractors),
+    };
+  }, [resolvedReviews, npsStartDate, npsEndDate]);
+
   // Stats items structure for mapping
   const statsList = [
     { value: totalDefibs, label: "Volume Défibrillateur(s)." },
@@ -327,6 +421,7 @@ export default function StatsModal({
     { value: totalStockValueStr, label: "Valeur pièce(s) stocké(s)." },
     { value: avgMaintenanceDuration, label: "Temps moyen durée d’une maintenance." },
     { value: avgSatisfaction, label: "Satisfaction moyenne." },
+    { value: npsData.scoreDisplay, label: "Score NPS.", isNps: true },
     { value: openToursCount, label: "Tournée(s) ouverte(s)." }
   ];
 
@@ -380,7 +475,69 @@ export default function StatsModal({
             <h3 className="text-2xl font-bold text-black font-gochi cursor-default" style={{ cursor: 'default' }}>{t("Statistiques")}</h3>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Période Score NPS */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-sans text-gray-700 whitespace-nowrap">
+              {t("Période Score NPS :")}
+            </span>
+            <input
+              type="date"
+              value={npsStartDate}
+              onChange={(e) => setNpsStartDate(e.target.value)}
+              title={t("Date début")}
+              style={{
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                padding: '5px 8px',
+                fontSize: '12px',
+                color: '#000000',
+                backgroundColor: '#ffffff',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                outline: 'none',
+              }}
+              className="cursor-pointer"
+            />
+            <span className="text-gray-400 text-xs">-</span>
+            <input
+              type="date"
+              value={npsEndDate}
+              onChange={(e) => setNpsEndDate(e.target.value)}
+              title={t("Date fin")}
+              style={{
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                padding: '5px 8px',
+                fontSize: '12px',
+                color: '#000000',
+                backgroundColor: '#ffffff',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                outline: 'none',
+              }}
+              className="cursor-pointer"
+            />
+            {(npsStartDate || npsEndDate) && (
+              <button
+                type="button"
+                onClick={() => { setNpsStartDate(''); setNpsEndDate(''); }}
+                style={{
+                  backgroundColor: '#f1f5f9',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                  padding: '5px 9px',
+                  cursor: 'pointer',
+                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                }}
+                className="hover:bg-slate-200 transition-colors"
+                title={t("Réinitialiser (all time)")}
+              >
+                {t("Tout")}
+              </button>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={() => window.location.reload()}
@@ -404,38 +561,149 @@ export default function StatsModal({
       <div 
         className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6 pb-12 w-full"
         style={{ 
-          maxWidth: '98%', 
-          margin: '24px auto auto auto',
-          padding: '0 4px'
+            maxWidth: '98%', 
+            margin: '24px auto auto auto',
+            padding: '0 4px'
         }}
         id="stats-cards-grid"
       >
-        {statsList.map((item, index) => (
-          <div 
-            key={index}
-            style={{
-              border: '1px solid rgb(218, 218, 218)',
-              borderRadius: '18px',
-              padding: '28px 20px',
-              backgroundColor: 'transparent',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              textAlign: 'center',
-              minHeight: '140px',
-              cursor: 'default'
-            }}
-            className="shadow-3xs transition-all hover:border-slate-350"
-          >
-            <div style={{ fontSize: '30px', fontWeight: 900, color: '#000000', fontFamily: "'Gochi', cursive, sans-serif", cursor: 'default' }}>
-              {item.value}
+        {statsList.map((item: any, index) => {
+          if (item.isNps) {
+            return (
+              <div 
+                key={index}
+                style={{
+                  border: '1px solid rgb(218, 218, 218)',
+                  borderRadius: '18px',
+                  padding: '24px 16px',
+                  backgroundColor: 'transparent',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  minHeight: '140px',
+                  cursor: 'default',
+                  position: 'relative'
+                }}
+                className="shadow-3xs transition-all hover:border-slate-350"
+              >
+                <div style={{ fontSize: '32px', fontWeight: 900, color: '#000000', fontFamily: "'Gochi', cursive, sans-serif", cursor: 'default' }}>
+                  {item.value}
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: 500, color: '#000000', marginTop: '4px', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", cursor: 'default', letterSpacing: 'normal' }}>
+                  {t(item.label)}
+                </div>
+
+                {/* Inline Date Selector */}
+                <div className="mt-2.5 flex items-center justify-center gap-1.5 flex-wrap w-full">
+                  <input
+                    type="date"
+                    value={npsStartDate}
+                    onChange={(e) => setNpsStartDate(e.target.value)}
+                    title={t("Date début")}
+                    style={{
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      padding: '3px 6px',
+                      fontSize: '11px',
+                      color: '#000000',
+                      backgroundColor: '#ffffff',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      outline: 'none',
+                    }}
+                    className="cursor-pointer"
+                  />
+                  <span className="text-gray-400 text-xs">-</span>
+                  <input
+                    type="date"
+                    value={npsEndDate}
+                    onChange={(e) => setNpsEndDate(e.target.value)}
+                    title={t("Date fin")}
+                    style={{
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      padding: '3px 6px',
+                      fontSize: '11px',
+                      color: '#000000',
+                      backgroundColor: '#ffffff',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      outline: 'none',
+                    }}
+                    className="cursor-pointer"
+                  />
+                  {(npsStartDate || npsEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => { setNpsStartDate(''); setNpsEndDate(''); }}
+                      style={{
+                        backgroundColor: '#f1f5f9',
+                        color: '#334155',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        padding: '3px 6px',
+                        cursor: 'pointer',
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      }}
+                      className="hover:bg-slate-200 transition-colors"
+                      title={t("Réinitialiser (all time)")}
+                    >
+                      {t("Tout")}
+                    </button>
+                  )}
+                </div>
+
+                {/* Categories breakdown */}
+                {npsData.totalCount > 0 ? (
+                  <div className="mt-2.5 flex flex-col gap-0.5 text-[11px] font-sans text-slate-600 w-full px-1">
+                    <div className="flex items-center justify-center gap-1.5 flex-wrap font-medium text-[11px]">
+                      <span className="text-emerald-700">{t("Promoteurs (9-10)")} : {npsData.pctPromoters}% ({npsData.promotersCount})</span>
+                      <span>·</span>
+                      <span className="text-amber-700">{t("Passifs (7-8)")} : {npsData.pctPassives}% ({npsData.passivesCount})</span>
+                      <span>·</span>
+                      <span className="text-rose-700">{t("Détracteurs (0-6)")} : {npsData.pctDetractors}% ({npsData.detractorsCount})</span>
+                    </div>
+                    <div className="text-[10.5px] text-slate-500 mt-0.5">
+                      {t("Total avis NPS")} : {npsData.totalCount}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 text-[11px] text-slate-400 font-sans">
+                    {npsStartDate || npsEndDate ? t("Aucun avis sur cette période") : t("Par défaut : all time")}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          return (
+            <div 
+              key={index}
+              style={{
+                border: '1px solid rgb(218, 218, 218)',
+                borderRadius: '18px',
+                padding: '28px 20px',
+                backgroundColor: 'transparent',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                textAlign: 'center',
+                minHeight: '140px',
+                cursor: 'default'
+              }}
+              className="shadow-3xs transition-all hover:border-slate-350"
+            >
+              <div style={{ fontSize: '30px', fontWeight: 900, color: '#000000', fontFamily: "'Gochi', cursive, sans-serif", cursor: 'default' }}>
+                {item.value}
+              </div>
+              <div style={{ fontSize: '16px', fontWeight: 500, color: '#000000', marginTop: '8px', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", cursor: 'default', letterSpacing: 'normal' }}>
+                {t(item.label)}
+              </div>
             </div>
-            <div style={{ fontSize: '16px', fontWeight: 500, color: '#000000', marginTop: '8px', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", cursor: 'default', letterSpacing: 'normal' }}>
-              {t(item.label)}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

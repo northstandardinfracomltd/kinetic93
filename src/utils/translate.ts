@@ -640,6 +640,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Début.": "Start.",
     "Clôture.": "Closing.",
     "Commentaire pour la période.": "Comment for the period.",
+    "Titre de la période.": "Period Title.",
+    "Entrez un titre de période.": "Enter a period title.",
     "Entrez un commentaire.": "Enter a comment.",
 
     "Sélection d’un stock distribué.": "Selection of a distributed stock.",
@@ -1333,7 +1335,19 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Tournée(s) ouverte(s).": "Open tour(s).",
     "Le relevé concurrentiel vous permet d’enregistrer des informations sur les parcs de défibrillateurs de communes ou d'entreprises qui ne sont pas encore vos clients. Notez qui est le mainteneur actuel, la date d’échéance de leur marché public, et les coordonnées du contact. Cela vous permettra de les relancer au bon moment pour leur proposer une offre concurrente.": "The competitive review allows you to record information on the defibrillator fleets of municipalities or businesses that are not yet your clients. Note who the current maintainer is, the expiration date of their public contract, and the contact details. This will allow you to follow up with them at the right time to offer them a competitive offer.",
     "Gmail Partage Localisation.": "Gmail Location Sharing.",
-    "Ex: partage@gmail.com": "Ex: sharing@gmail.com"
+    "Ex: partage@gmail.com": "Ex: sharing@gmail.com",
+    "Quelle est la probabilité que vous nous recommandiez?": "How likely are you to recommend us?",
+    "NPS Score /10.": "NPS Score /10.",
+    "Moyenne NPS Score": "Average NPS Score",
+    "Moyenne NPS Score (%)": "Average NPS Score (%)",
+    "Score NPS.": "NPS Score.",
+    "Période Score NPS :": "NPS Score Period:",
+    "Promoteurs (9-10)": "Promoters (9-10)",
+    "Passifs (7-8)": "Passives (7-8)",
+    "Détracteurs (0-6)": "Detractors (0-6)",
+    "Total avis NPS": "Total NPS reviews",
+    "Aucun avis sur cette période": "No reviews in this period",
+    "Par défaut : all time": "Default: all time"
   },
   Deutsch: {
     "Bienvenue! Pour commencer, vous devez planifier un appel de présentation avec un spécialiste Défibeo afin d'être guidé dans vos premiers pas.": "Willkommen! Um zu beginnen, müssen Sie ein Einführungsgespräch mit einem Défibeo-Spezialisten vereinbaren, der Sie bei Ihren ersten Schritten begleitet.",
@@ -2127,7 +2141,19 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Tournée(s) ouverte(s).": "Offene Tour(en).",
     "Le relevé concurrentiel vous permet d’enregistrer des informations sur les parcs de défibrillateurs de communes ou d'entreprises qui ne sont pas encore vos clients. Notez qui est le mainteneur actuel, la date d’échéance de leur marché public, et les coordonnées du contact. Cela vous permettra de les relancer au bon moment pour leur proposer une offre concurrente.": "Die Wettbewerbsanalyse ermöglicht es Ihnen, Informationen über den Defibrillatorenbestand von Gemeinden oder Unternehmen zu erfassen, die noch nicht Ihre Kunden sind. Notieren Sie, wer der aktuelle Wartungsdienstleister ist, das Ablaufdatum ihres öffentlichen Auftrags und die Kontaktdaten des Ansprechpartners. So können Sie sie zum richtigen Zeitpunkt kontaktieren, um ihnen ein konkurrierendes Angebot zu unterbreiten.",
     "Gmail Partage Localisation.": "Gmail Standortfreigabe.",
-    "Ex: partage@gmail.com": "Z. B. freigabe@gmail.com"
+    "Ex: partage@gmail.com": "Z. B. freigabe@gmail.com",
+    "Quelle est la probabilité que vous nous recommandiez?": "Wie wahrscheinlich ist es, dass Sie uns weiterempfehlen?",
+    "NPS Score /10.": "NPS-Wert /10.",
+    "Moyenne NPS Score": "Durchschnittlicher NPS-Wert",
+    "Moyenne NPS Score (%)": "Durchschnittlicher NPS-Wert (%)",
+    "Score NPS.": "NPS-Wert.",
+    "Période Score NPS :": "NPS-Zeitraum:",
+    "Promoteurs (9-10)": "Promotoren (9-10)",
+    "Passifs (7-8)": "Passive (7-8)",
+    "Détracteurs (0-6)": "Detraktoren (0-6)",
+    "Total avis NPS": "Gesamte NPS-Bewertungen",
+    "Aucun avis sur cette période": "Keine Bewertungen in diesem Zeitraum",
+    "Par défaut : all time": "Standard: Gesamter Zeitraum"
   },
   Português: {
     "Bienvenue! Pour commencer, vous devez planifier un appel de présentation avec un spécialiste Défibeo afin d'être guidé dans vos premiers pas.": "Bem-vindo! Para começar, deve agendar uma chamada de apresentação com um especialista Défibeo para o orientar nos seus primeiros passos.",
@@ -2922,7 +2948,19 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Tournée(s) ouverte(s).": "Tour(s) aberta(s).",
     "Le relevé concurrentiel vous permet d’enregistrer des informations sur les parcs de défibrillateurs de communes ou d'entreprises qui ne sont pas encore vos clients. Notez qui est le mainteneur actuel, la date d’échéance de leur marché public, et les coordonnées du contact. Cela vous permettra de les relancer au bon moment pour leur proposer une offre concurrente.": "O levantamento concorrencial permite-lhe registar informações sobre os parques de desfibrilhadores de municípios ou empresas que ainda não são seus clientes. Registe quem é o atual técnico de manutenção, a data de expiração do seu contrato público e os dados de contacto. Isto permitir-lhe-á contactá-los no momento certo para lhes propor uma oferta concorrente.",
     "Gmail Partage Localisation.": "Partilha de localização do Gmail.",
-    "Ex: partage@gmail.com": "Ex: partilha@gmail.com"
+    "Ex: partage@gmail.com": "Ex: partilha@gmail.com",
+    "Quelle est la probabilité que vous nous recommandiez?": "Qual é a probabilidade de você nos recomendar?",
+    "NPS Score /10.": "Pontuação NPS /10.",
+    "Moyenne NPS Score": "Média da pontuação NPS",
+    "Moyenne NPS Score (%)": "Média da pontuação NPS (%)",
+    "Score NPS.": "Pontuação NPS.",
+    "Période Score NPS :": "Período Pontuação NPS:",
+    "Promoteurs (9-10)": "Promotores (9-10)",
+    "Passifs (7-8)": "Passivos (7-8)",
+    "Détracteurs (0-6)": "Detratores (0-6)",
+    "Total avis NPS": "Total de avaliações NPS",
+    "Aucun avis sur cette période": "Nenhuma avaliação neste período",
+    "Par défaut : all time": "Padrão: all time"
   },
   Español: {
     "Bienvenue! Pour commencer, vous devez planifier un appel de présentation avec un spécialiste Défibeo afin d'être guidé dans vos premiers pas.": "¡Bienvenido! Para empezar, debe programar una llamada de presentación con un especialista de Défibeo para que le guíe en sus primeros pasos.",
@@ -3717,7 +3755,19 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Tournée(s) ouverte(s).": "Ruta(s) abierta(s).",
     "Le relevé concurrentiel vous permet d’enregistrer des informations sur les parcs de défibrillateurs de communes ou d'entreprises qui ne sont pas encore vos clients. Notez qui est le mainteneur actuel, la date d’échéance de leur marché public, et les coordonnées du contact. Cela vous permettra de les relancer au bon moment pour leur proposer une offre concurrente.": "El estudio de la competencia le permite registrar información sobre el parque de desfibriladores de municipios o empresas que aún no son sus clientes. Anote quién es el mantenedor actual, la fecha de vencimiento de su contrato público y los datos de contacto. Esto le permitirá volver a ponerse en contacto con ellos en el momento adecuado para ofrecerles una oferta competidora.",
     "Gmail Partage Localisation.": "Compartir ubicación de Gmail.",
-    "Ex: partage@gmail.com": "Ej: compartir@gmail.com"
+    "Ex: partage@gmail.com": "Ej: compartir@gmail.com",
+    "Quelle est la probabilité que vous nous recommandiez?": "¿Cuál es la probabilidad de que nos recomiende?",
+    "NPS Score /10.": "Puntuación NPS /10.",
+    "Moyenne NPS Score": "Puntuación media de NPS",
+    "Moyenne NPS Score (%)": "Puntuación media de NPS (%)",
+    "Score NPS.": "Puntuación NPS.",
+    "Période Score NPS :": "Período Puntuación NPS:",
+    "Promoteurs (9-10)": "Promotores (9-10)",
+    "Passifs (7-8)": "Pasivos (7-8)",
+    "Détracteurs (0-6)": "Detractores (0-6)",
+    "Total avis NPS": "Total de reseñas NPS",
+    "Aucun avis sur cette période": "Sin reseñas en este período",
+    "Par défaut : all time": "Por defecto: all time"
   }
 };
 

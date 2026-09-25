@@ -182,6 +182,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     return local || defaultRelanceTemplate;
   });
 
+  const [relanceEmailReplyTo, setRelanceEmailReplyTo] = useState<string>(() => {
+    const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_relance_replyto`) : null;
+    return local || '';
+  });
+
   // Settings: Modèle initial email de support technique
   const defaultSupportEmailSubject = "Suivi de votre dossier {Référence.}";
   const defaultSupportEmailBody = `Bonjour {Client.},\n\nNous faisons suite à votre demande concernant : {Objet.}.\nNotre service technique a bien pris en compte votre dossier référence {Référence.}.\n\nRestant à votre entière disposition pour toute information complémentaire.\n\nBien cordialement,`;
@@ -194,6 +199,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [supportEmailBody, setSupportEmailBody] = useState<string>(() => {
     const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_support_template`) : null;
     return local || defaultSupportEmailBody;
+  });
+
+  const [supportEmailReplyTo, setSupportEmailReplyTo] = useState<string>(() => {
+    const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_support_replyto`) : null;
+    return local || '';
   });
 
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -215,6 +225,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               setRelanceEmailBody(settingsObj.relanceEmailBody);
               localStorage.setItem(`defib_${activeTenant}_crm_relance_template`, settingsObj.relanceEmailBody);
             }
+            if (settingsObj.relanceEmailReplyTo !== undefined) {
+              setRelanceEmailReplyTo(settingsObj.relanceEmailReplyTo || '');
+              localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto`, settingsObj.relanceEmailReplyTo || '');
+            }
             if (settingsObj.supportEmailSubject) {
               setSupportEmailSubject(settingsObj.supportEmailSubject);
               localStorage.setItem(`defib_${activeTenant}_crm_support_subject`, settingsObj.supportEmailSubject);
@@ -222,6 +236,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             if (settingsObj.supportEmailBody) {
               setSupportEmailBody(settingsObj.supportEmailBody);
               localStorage.setItem(`defib_${activeTenant}_crm_support_template`, settingsObj.supportEmailBody);
+            }
+            if (settingsObj.supportEmailReplyTo !== undefined) {
+              setSupportEmailReplyTo(settingsObj.supportEmailReplyTo || '');
+              localStorage.setItem(`defib_${activeTenant}_crm_support_replyto`, settingsObj.supportEmailReplyTo || '');
             }
           }
         }
@@ -235,13 +253,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setIsSavingSettings(true);
     try {
       localStorage.setItem(`defib_${activeTenant}_crm_relance_template`, relanceEmailBody);
+      localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto`, relanceEmailReplyTo);
       localStorage.setItem(`defib_${activeTenant}_crm_support_subject`, supportEmailSubject);
       localStorage.setItem(`defib_${activeTenant}_crm_support_template`, supportEmailBody);
+      localStorage.setItem(`defib_${activeTenant}_crm_support_replyto`, supportEmailReplyTo);
       if (activeTenant) {
         await saveCollectionToFirestore('crm_settings', {
           relanceEmailBody,
+          relanceEmailReplyTo,
           supportEmailSubject,
-          supportEmailBody
+          supportEmailBody,
+          supportEmailReplyTo
         }, activeTenant);
       }
       setSettingsSavedToast(true);
@@ -578,7 +600,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
     setIsSendingSupportMessage(true);
     try {
-      const replyTo = companyInfo?.email || 'contact@defibeo.com';
+      const replyTo = supportEmailReplyTo.trim() || companyInfo?.email || 'contact@defibeo.com';
       await sendScriptEmail({
         to: targetEmail,
         subject: newMessageObjet.trim(),
@@ -794,7 +816,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         .replace(/{Lien Stockage Partagé Devis\.}|Lien Stockage Partagé Devis\./g, lienStockage);
 
       const subject = `Relance - ${refDevis}`;
-      const replyTo = companyInfo?.email || 'contact@defibeo.com';
+      const replyTo = relanceEmailReplyTo.trim() || companyInfo?.email || 'contact@defibeo.com';
 
       try {
         await sendScriptEmail({
@@ -3066,6 +3088,30 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         Ce texte sera utilisé lors de l'envoi d'emails de relance aux devis ou tickets sélectionnés dans la table.
                       </p>
 
+                      {/* Champ Email ReplyTo. */}
+                      <div className="mb-3">
+                        <label style={{ fontSize: '15px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
+                          Email ReplyTo.
+                        </label>
+                        <input
+                          type="email"
+                          value={relanceEmailReplyTo}
+                          onChange={(e) => setRelanceEmailReplyTo(e.target.value)}
+                          placeholder="Ex: commercial@votre-entreprise.com"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            border: '1px solid #cbd5e0',
+                            borderRadius: '11px',
+                            fontSize: '15px',
+                            color: '#000000',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                          }}
+                        />
+                      </div>
+
                       {/* Liste des variables insérables */}
                       <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 mb-3">
                         <span className="font-semibold text-slate-800 block text-xs uppercase tracking-wider font-sans">
@@ -3160,6 +3206,30 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       <p className="text-xs text-slate-500 font-sans mb-3">
                         Ce texte et son objet par défaut seront pré-remplis lors de l'envoi d'un nouveau message au client sur les tickets Technique, Réclamation ou Sans Catégorie.
                       </p>
+
+                      {/* Champ Email ReplyTo. */}
+                      <div className="mb-3">
+                        <label style={{ fontSize: '15px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
+                          Email ReplyTo.
+                        </label>
+                        <input
+                          type="email"
+                          value={supportEmailReplyTo}
+                          onChange={(e) => setSupportEmailReplyTo(e.target.value)}
+                          placeholder="Ex: support@votre-entreprise.com"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            border: '1px solid #cbd5e0',
+                            borderRadius: '11px',
+                            fontSize: '15px',
+                            color: '#000000',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                          }}
+                        />
+                      </div>
 
                       {/* Champ Objet */}
                       <div className="mb-3">

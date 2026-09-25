@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
-import { findTenantByInterventionGlobally, fetchRawCollectionFromFirestore, db } from '../firebase';
+import { findTenantByInterventionGlobally, fetchRawCollectionFromFirestore, saveCollectionToFirestore, db } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { t } from '../utils/translate';
 import { getParisTimestamp } from '../utils/dateUtils';
@@ -52,6 +52,16 @@ export default function SatisfactionFormPage() {
   const [clartePdf, setClartePdf] = useState<number | null>(null);
   const [explications, setExplications] = useState<number | null>(null);
   const [sensibilisation, setSensibilisation] = useState<number | null>(null);
+  const [npsScore, setNpsScore] = useState<number | null>(() => {
+    const raw = getUrlParam('nps') || getUrlParam('npsScore') || getUrlParam('score') || getUrlParam('note');
+    if (raw) {
+      const parsed = parseInt(raw, 10);
+      if (!isNaN(parsed) && parsed >= 1 && parsed <= 10) {
+        return parsed;
+      }
+    }
+    return null;
+  });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -82,12 +92,13 @@ export default function SatisfactionFormPage() {
                                 politesse !== null &&
                                 clartePdf !== null &&
                                 explications !== null &&
-                                sensibilisation !== null;
+                                sensibilisation !== null &&
+                                npsScore !== null;
 
     return nomPrenom.trim().length > 0 &&
            commentaire.trim().length > 0 &&
            allCriteriaSelected;
-  }, [nomPrenom, commentaire, qualite, ponctualite, politesse, clartePdf, explications, sensibilisation]);
+  }, [nomPrenom, commentaire, qualite, ponctualite, politesse, clartePdf, explications, sensibilisation, npsScore]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,6 +141,8 @@ export default function SatisfactionFormPage() {
         clartePdf,
         explications,
         sensibilisation,
+        npsScore,
+        nps: npsScore,
         dateStr: new Date().toISOString().split('T')[0]
       };
 
@@ -138,6 +151,19 @@ export default function SatisfactionFormPage() {
       // Update firestore doc
       await setDoc(doc(db, 'appData', key), { value: updatedList });
 
+      // Also persist under normalized D-prefixed and d-prefixed keys if applicable
+      if (/^d\d+$/i.test(tenantId)) {
+        const numOnly = tenantId.replace(/^d/i, '');
+        try {
+          await setDoc(doc(db, 'appData', `D${numOnly}_customerReviews`), { value: updatedList });
+          await setDoc(doc(db, 'appData', `d${numOnly}_customerReviews`), { value: updatedList });
+        } catch (_) {}
+      }
+
+      try {
+        await saveCollectionToFirestore('customerReviews', updatedList, tenantId);
+      } catch (_) {}
+
       // Generate a corresponding notification for the tenant
       try {
         const notifKey = tenantId === 'demo' ? 'notifications' : `${tenantId}_notifications`;
@@ -145,10 +171,11 @@ export default function SatisfactionFormPage() {
         const client_denomination = nomPrenom.trim() || "Un client anonyme";
         const refSnippet = interventionRef.trim() ? ` (Réf: ${interventionRef.trim()})` : "";
         const comment_text = commentaire.trim() ? ` - "${commentaire.trim()}"` : "";
+        const npsSnippet = npsScore !== null ? ` | NPS : ${npsScore}/10` : '';
         const newNotif = {
           id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
           category: 'Système',
-          title: `Le client ${client_denomination}${refSnippet} a soumis un avis de satisfaction (Note globale : ${avgVal}/4)${comment_text}.`,
+          title: `Le client ${client_denomination}${refSnippet} a soumis un avis de satisfaction (Note globale : ${avgVal}/4${npsSnippet})${comment_text}.`,
           timestamp: getParisTimestamp(),
           situation: 'Nouveau',
           envId: tenantId,
@@ -189,6 +216,7 @@ export default function SatisfactionFormPage() {
       setClartePdf(null);
       setExplications(null);
       setSensibilisation(null);
+      setNpsScore(null);
     } catch (err: any) {
       console.error("Error submitting review:", err);
       setErrorMessage("Une erreur est survenue lors de l'enregistrement de votre évaluation.");
@@ -349,6 +377,57 @@ export default function SatisfactionFormPage() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* QUESTION RECOMMANDATION / NPS (1 à 10) */}
+            <div className="flex flex-col gap-2 pt-2">
+              <label className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
+                {t("Quelle est la probabilité que vous nous recommandiez?")}
+              </label>
+              <div className="grid grid-cols-10 gap-1 sm:gap-1.5 text-center">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                  const isSelected = npsScore === num;
+
+                  const btnStyle: React.CSSProperties = isSelected
+                    ? {
+                        backgroundColor: 'rgb(53, 86, 236)',
+                        color: '#ffffff',
+                        boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                        border: 'none',
+                        borderRadius: '12px',
+                        fontSize: '18px',
+                        padding: '10px 0px',
+                        fontWeight: 'bold',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        cursor: 'pointer',
+                        transition: '0s',
+                      }
+                    : {
+                        backgroundColor: '#f1f5f9',
+                        color: '#475569',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '12px',
+                        fontSize: '18px',
+                        padding: '10px 0px',
+                        fontWeight: 'bold',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        cursor: 'pointer',
+                        transition: '0s',
+                      };
+
+                  return (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setNpsScore(num)}
+                      style={btnStyle}
+                      className="active:scale-98 min-w-0"
+                    >
+                      {num}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* COMMENTAIRE */}

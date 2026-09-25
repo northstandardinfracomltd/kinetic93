@@ -18,6 +18,8 @@ interface Review {
   clartePdf?: number;
   explications?: number;
   sensibilisation?: number;
+  npsScore?: number;
+  nps?: number;
   dateStr?: string;
   date?: string;
   createdAt?: string | number;
@@ -328,6 +330,7 @@ export default function SatisfactionTab({
       "Clarté PDF",
       "Explications",
       "Sensibilisation",
+      "NPS Score /10",
       "Évaluation"
     ];
 
@@ -342,6 +345,7 @@ export default function SatisfactionTab({
       const clartePdf = rev.clartePdf !== undefined && rev.clartePdf !== null ? rev.clartePdf : '';
       const explications = rev.explications !== undefined && rev.explications !== null ? rev.explications : '';
       const sensibilisation = rev.sensibilisation !== undefined && rev.sensibilisation !== null ? rev.sensibilisation : '';
+      const npsScore = rev.npsScore !== undefined && rev.npsScore !== null ? rev.npsScore : (rev.nps !== undefined && rev.nps !== null ? rev.nps : '');
       const evaluation = (rev.comment || '').replace(/"/g, '""').replace(/\r?\n|\r/g, ' ');
 
       return [
@@ -355,6 +359,7 @@ export default function SatisfactionTab({
         `"${clartePdf}"`,
         `"${explications}"`,
         `"${sensibilisation}"`,
+        `"${npsScore}"`,
         `"${evaluation}"`
       ].join(';');
     });
@@ -412,6 +417,26 @@ export default function SatisfactionTab({
     const explications = calcAvg('explications');
     const sensibilisation = calcAvg('sensibilisation');
 
+    const npsNums = filteredReviews
+      .map((r) => (typeof r.npsScore === 'number' ? r.npsScore : (typeof r.nps === 'number' ? r.nps : null)))
+      .filter((v): v is number => v !== null && !isNaN(v));
+
+    const npsScoreAvg = npsNums.length > 0
+      ? (() => {
+          const sum = npsNums.reduce((a, b) => a + b, 0);
+          const avg = sum / npsNums.length;
+          return avg % 1 === 0 ? avg.toFixed(0) : avg.toFixed(1);
+        })()
+      : '-';
+
+    const getNpsPercentage = (scoreStr: string): string => {
+      if (!scoreStr || scoreStr === '-') return '-';
+      const num = parseFloat(String(scoreStr).replace(',', '.'));
+      if (isNaN(num)) return '-';
+      const pct = (num / 10) * 100;
+      return `${Math.round(pct)}%`;
+    };
+
     return {
       noteGlobale: noteGlobaleAvg,
       noteGlobalePct: getPercentageFromNote(noteGlobaleAvg),
@@ -427,6 +452,8 @@ export default function SatisfactionTab({
       explicationsPct: getPercentageFromNote(explications),
       sensibilisation,
       sensibilisationPct: getPercentageFromNote(sensibilisation),
+      npsScore: npsScoreAvg,
+      npsScorePct: getNpsPercentage(npsScoreAvg),
     };
   }, [filteredReviews]);
 
@@ -605,6 +632,7 @@ export default function SatisfactionTab({
                   <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Clarté PDF.")}</th>
                   <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Explications.")}</th>
                   <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Sensibilisation.")}</th>
+                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[110px] whitespace-nowrap" style={thStyle}>{t("NPS Score /10.")}</th>
                   <th className="px-4 pt-3 pb-1.5" style={thStyle}>{t("Évaluation.")}</th>
                   <th className="px-4 pt-3 pb-1.5 text-right w-44 whitespace-nowrap" style={thStyle}>{t("Actions.")}</th>
                 </tr>
@@ -684,6 +712,18 @@ export default function SatisfactionTab({
                         {columnAverages.sensibilisationPct}
                       </div>
                     </div>
+                  </th>
+                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                    {columnAverages.npsScore !== '-' ? (
+                      <div className="inline-flex items-center justify-center gap-1.5">
+                        <div style={roundBadgeStyle} title={t("Moyenne NPS Score")}>
+                          {columnAverages.npsScore}
+                        </div>
+                        <div style={percentBadgeStyle} title={t("Moyenne NPS Score (%)")}>
+                          {columnAverages.npsScorePct}
+                        </div>
+                      </div>
+                    ) : null}
                   </th>
                   <th className="px-4 pt-1.5 pb-3"></th>
                   <th className="px-4 pt-1.5 pb-3 text-right"></th>
@@ -766,6 +806,11 @@ export default function SatisfactionTab({
                       {/* Sensibilisation */}
                       <td className="px-3 py-4 text-center align-middle font-medium" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                         {rev.sensibilisation ?? '-'}
+                      </td>
+
+                      {/* NPS Score /10 */}
+                      <td className="px-3 py-4 text-center align-middle font-medium" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                        {rev.npsScore ?? rev.nps ?? '-'}
                       </td>
 
                       {/* Comment (Évaluation) */}

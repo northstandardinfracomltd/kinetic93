@@ -11198,7 +11198,7 @@ export default function PublicPortal({
 
                             {/* Main Fields Grid */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full min-w-0 max-w-full">
-                              {/* Date Journée. (Always visible) */}
+                              {/* Date Journée. (Always visible, Disabled) */}
                               <div className="space-y-1 min-w-0 w-full">
                                 <label
                                   style={{ fontSize: "16px", color: "#000000" }}
@@ -11208,6 +11208,8 @@ export default function PublicPortal({
                                 </label>
                                 <input
                                   type="date"
+                                  disabled
+                                  readOnly
                                   value={getIsoDate(p.startDate)}
                                   style={{
                                     fontSize: "18px",
@@ -11216,7 +11218,7 @@ export default function PublicPortal({
                                     border: "1px solid rgb(201, 191, 205)",
                                     outline: "none",
                                     color: "rgb(0, 0, 0)",
-                                    backgroundColor: "#ffffff",
+                                    backgroundColor: "#e2d9e6",
                                     boxSizing: "border-box",
                                     width: "100%",
                                     maxWidth: "100%",
@@ -11224,18 +11226,13 @@ export default function PublicPortal({
                                     WebkitAppearance: "none",
                                     appearance: "none",
                                   }}
-                                  className="w-full min-w-0 max-w-full box-border block"
-                                  onChange={(e) =>
-                                    handleEditPointageField(p.id, {
-                                      startDate: getFrenchDate(e.target.value),
-                                    })
-                                  }
+                                  className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
                                 />
                               </div>
 
                               {isExpanded && (
                                 <>
-                                  {/* Début Journée. */}
+                                  {/* Début Journée. (Disabled) */}
                                   <div className="space-y-1 min-w-0 w-full">
                                     <label
                                       style={{ fontSize: "16px", color: "#000000" }}
@@ -11245,6 +11242,8 @@ export default function PublicPortal({
                                     </label>
                                     <input
                                       type="time"
+                                      disabled
+                                      readOnly
                                       value={p.startTime}
                                       style={{
                                         fontSize: "18px",
@@ -11253,7 +11252,7 @@ export default function PublicPortal({
                                         border: "1px solid rgb(201, 191, 205)",
                                         outline: "none",
                                         color: "rgb(0, 0, 0)",
-                                        backgroundColor: "#ffffff",
+                                        backgroundColor: "#e2d9e6",
                                         boxSizing: "border-box",
                                         width: "100%",
                                         maxWidth: "100%",
@@ -11261,16 +11260,11 @@ export default function PublicPortal({
                                         WebkitAppearance: "none",
                                         appearance: "none",
                                       }}
-                                      className="w-full min-w-0 max-w-full box-border block"
-                                      onChange={(e) =>
-                                        handleEditPointageField(p.id, {
-                                          startTime: e.target.value,
-                                        })
-                                      }
+                                      className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
                                     />
                                   </div>
 
-                                  {/* Fin Journée. */}
+                                  {/* Fin Journée. (Disabled) */}
                                   <div className="space-y-1 min-w-0 w-full">
                                     <label
                                       style={{ fontSize: "16px", color: "#000000" }}
@@ -11280,6 +11274,8 @@ export default function PublicPortal({
                                     </label>
                                     <input
                                       type="time"
+                                      disabled
+                                      readOnly
                                       value={endTime}
                                       style={{
                                         fontSize: "18px",
@@ -11288,7 +11284,7 @@ export default function PublicPortal({
                                         border: "1px solid rgb(201, 191, 205)",
                                         outline: "none",
                                         color: "rgb(0, 0, 0)",
-                                        backgroundColor: "#ffffff",
+                                        backgroundColor: "#e2d9e6",
                                         boxSizing: "border-box",
                                         width: "100%",
                                         maxWidth: "100%",
@@ -11296,12 +11292,7 @@ export default function PublicPortal({
                                         WebkitAppearance: "none",
                                         appearance: "none",
                                       }}
-                                      className="w-full min-w-0 max-w-full box-border block"
-                                      onChange={(e) =>
-                                        handleEditPointageField(p.id, {
-                                          endTime: e.target.value,
-                                        })
-                                      }
+                                      className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
                                     />
                                   </div>
 
@@ -11337,18 +11328,18 @@ export default function PublicPortal({
                                     />
                                   </div>
 
-                                  {/* Commentaire Journée. */}
+                                  {/* Titre / Naming de la période. (Editable) */}
                                   <div className="space-y-1 sm:col-span-2 lg:col-span-2 min-w-0 w-full">
                                     <label
                                       style={{ fontSize: "16px", color: "#000000" }}
                                       className="block font-bold"
                                     >
-                                      {t("Commentaire Journée.")}
+                                      {t("Titre de la période.")}
                                     </label>
                                     <input
                                       type="text"
                                       maxLength={100}
-                                      placeholder={t("Entrez un commentaire.")}
+                                      placeholder={t("Entrez un titre de période.")}
                                       value={p.comment || ""}
                                       style={{
                                         fontSize: "18px",
@@ -11422,7 +11413,7 @@ export default function PublicPortal({
                                     {t("Trajet")}
                                   </h4>
                                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full min-w-0 max-w-full">
-                                    {/* Temps Trajet Matin. */}
+                                    {/* Temps Trajet Matin. (Disabled) */}
                                     <div className="space-y-1 min-w-0 w-full">
                                       <label
                                         style={{ fontSize: "16px", color: "#000000" }}
@@ -11432,6 +11423,8 @@ export default function PublicPortal({
                                       </label>
                                       <input
                                         type="text"
+                                        disabled
+                                        readOnly
                                         placeholder="00:00"
                                         value={p.trajetMatin ?? "00:00"}
                                         style={{
@@ -11441,7 +11434,7 @@ export default function PublicPortal({
                                           border: "1px solid rgb(201, 191, 205)",
                                           outline: "none",
                                           color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#ffffff",
+                                          backgroundColor: "#e2d9e6",
                                           boxSizing: "border-box",
                                           width: "100%",
                                           maxWidth: "100%",
@@ -11449,16 +11442,11 @@ export default function PublicPortal({
                                           WebkitAppearance: "none",
                                           appearance: "none",
                                         }}
-                                        className="w-full min-w-0 max-w-full box-border block"
-                                        onChange={(e) =>
-                                          handleEditPointageField(p.id, {
-                                            trajetMatin: e.target.value,
-                                          })
-                                        }
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
                                       />
                                     </div>
 
-                                    {/* Temps Trajet Soir. */}
+                                    {/* Temps Trajet Soir. (Disabled) */}
                                     <div className="space-y-1 min-w-0 w-full">
                                       <label
                                         style={{ fontSize: "16px", color: "#000000" }}
@@ -11468,6 +11456,8 @@ export default function PublicPortal({
                                       </label>
                                       <input
                                         type="text"
+                                        disabled
+                                        readOnly
                                         placeholder="00:00"
                                         value={p.trajetSoir ?? "00:00"}
                                         style={{
@@ -11477,7 +11467,7 @@ export default function PublicPortal({
                                           border: "1px solid rgb(201, 191, 205)",
                                           outline: "none",
                                           color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#ffffff",
+                                          backgroundColor: "#e2d9e6",
                                           boxSizing: "border-box",
                                           width: "100%",
                                           maxWidth: "100%",
@@ -11485,12 +11475,7 @@ export default function PublicPortal({
                                           WebkitAppearance: "none",
                                           appearance: "none",
                                         }}
-                                        className="w-full min-w-0 max-w-full box-border block"
-                                        onChange={(e) =>
-                                          handleEditPointageField(p.id, {
-                                            trajetSoir: e.target.value,
-                                          })
-                                        }
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
                                       />
                                     </div>
 
@@ -11542,7 +11527,7 @@ export default function PublicPortal({
                                     {t("Repas")}
                                   </h4>
                                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full min-w-0 max-w-full">
-                                    {/* Temps de repas. */}
+                                    {/* Temps de repas. (Disabled) */}
                                     <div className="space-y-1 min-w-0 w-full">
                                       <label
                                         style={{ fontSize: "16px", color: "#000000" }}
@@ -11552,6 +11537,8 @@ export default function PublicPortal({
                                       </label>
                                       <input
                                         type="text"
+                                        disabled
+                                        readOnly
                                         placeholder="00:00"
                                         value={p.tempsRepas ?? "00:00"}
                                         style={{
@@ -11561,7 +11548,7 @@ export default function PublicPortal({
                                           border: "1px solid rgb(201, 191, 205)",
                                           outline: "none",
                                           color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#ffffff",
+                                          backgroundColor: "#e2d9e6",
                                           boxSizing: "border-box",
                                           width: "100%",
                                           maxWidth: "100%",
@@ -11569,12 +11556,7 @@ export default function PublicPortal({
                                           WebkitAppearance: "none",
                                           appearance: "none",
                                         }}
-                                        className="w-full min-w-0 max-w-full box-border block"
-                                        onChange={(e) =>
-                                          handleEditPointageField(p.id, {
-                                            tempsRepas: e.target.value,
-                                          })
-                                        }
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
                                       />
                                     </div>
                                   </div>
@@ -11626,7 +11608,7 @@ export default function PublicPortal({
                                       />
                                     </div>
 
-                                    {/* Temps Administratif/Autres. */}
+                                    {/* Temps Administratif/Autres. (Disabled) */}
                                     <div className="space-y-1 min-w-0 w-full">
                                       <label
                                         style={{ fontSize: "16px", color: "#000000" }}
@@ -11636,6 +11618,8 @@ export default function PublicPortal({
                                       </label>
                                       <input
                                         type="text"
+                                        disabled
+                                        readOnly
                                         placeholder="00:00"
                                         value={p.tempsAdmin ?? "00:00"}
                                         style={{
@@ -11645,7 +11629,7 @@ export default function PublicPortal({
                                           border: "1px solid rgb(201, 191, 205)",
                                           outline: "none",
                                           color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#ffffff",
+                                          backgroundColor: "#e2d9e6",
                                           boxSizing: "border-box",
                                           width: "100%",
                                           maxWidth: "100%",
@@ -11653,12 +11637,7 @@ export default function PublicPortal({
                                           WebkitAppearance: "none",
                                           appearance: "none",
                                         }}
-                                        className="w-full min-w-0 max-w-full box-border block"
-                                        onChange={(e) =>
-                                          handleEditPointageField(p.id, {
-                                            tempsAdmin: e.target.value,
-                                          })
-                                        }
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
                                       />
                                     </div>
                                   </div>
