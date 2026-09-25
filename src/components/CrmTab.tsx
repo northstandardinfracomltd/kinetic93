@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Maximize2, Minimize2, BarChart3, Download, Calendar, Trash2 } from 'lucide-react';
-import { SupportTicket, Member, Client, CompanyInfo, CommercialEvent } from '../types';
+import { SupportTicket, Member, Client, CompanyInfo, CommercialEvent, SupportMessage } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { INITIAL_TICKETS } from '../utils';
 import { sendScriptEmail } from '../utils/emailService';
@@ -181,6 +181,21 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_relance_template`) : null;
     return local || defaultRelanceTemplate;
   });
+
+  // Settings: Modèle initial email de support technique
+  const defaultSupportEmailSubject = "Suivi de votre dossier {Référence.}";
+  const defaultSupportEmailBody = `Bonjour {Client.},\n\nNous faisons suite à votre demande concernant : {Objet.}.\nNotre service technique a bien pris en compte votre dossier référence {Référence.}.\n\nRestant à votre entière disposition pour toute information complémentaire.\n\nBien cordialement,`;
+
+  const [supportEmailSubject, setSupportEmailSubject] = useState<string>(() => {
+    const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_support_subject`) : null;
+    return local || defaultSupportEmailSubject;
+  });
+
+  const [supportEmailBody, setSupportEmailBody] = useState<string>(() => {
+    const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_support_template`) : null;
+    return local || defaultSupportEmailBody;
+  });
+
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsSavedToast, setSettingsSavedToast] = useState(false);
 
@@ -189,15 +204,25 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     if (activeTenant) {
       fetchCollectionFromFirestore<any>('crm_settings', activeTenant).then(data => {
         if (data) {
-          let body = '';
-          if (typeof data === 'object' && !Array.isArray(data) && data.relanceEmailBody) {
-            body = data.relanceEmailBody;
-          } else if (Array.isArray(data) && data[0]?.relanceEmailBody) {
-            body = data[0].relanceEmailBody;
+          let settingsObj: any = null;
+          if (typeof data === 'object' && !Array.isArray(data)) {
+            settingsObj = data;
+          } else if (Array.isArray(data) && data[0]) {
+            settingsObj = data[0];
           }
-          if (body) {
-            setRelanceEmailBody(body);
-            localStorage.setItem(`defib_${activeTenant}_crm_relance_template`, body);
+          if (settingsObj) {
+            if (settingsObj.relanceEmailBody) {
+              setRelanceEmailBody(settingsObj.relanceEmailBody);
+              localStorage.setItem(`defib_${activeTenant}_crm_relance_template`, settingsObj.relanceEmailBody);
+            }
+            if (settingsObj.supportEmailSubject) {
+              setSupportEmailSubject(settingsObj.supportEmailSubject);
+              localStorage.setItem(`defib_${activeTenant}_crm_support_subject`, settingsObj.supportEmailSubject);
+            }
+            if (settingsObj.supportEmailBody) {
+              setSupportEmailBody(settingsObj.supportEmailBody);
+              localStorage.setItem(`defib_${activeTenant}_crm_support_template`, settingsObj.supportEmailBody);
+            }
           }
         }
       }).catch((err) => {
@@ -210,8 +235,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setIsSavingSettings(true);
     try {
       localStorage.setItem(`defib_${activeTenant}_crm_relance_template`, relanceEmailBody);
+      localStorage.setItem(`defib_${activeTenant}_crm_support_subject`, supportEmailSubject);
+      localStorage.setItem(`defib_${activeTenant}_crm_support_template`, supportEmailBody);
       if (activeTenant) {
-        await saveCollectionToFirestore('crm_settings', { relanceEmailBody }, activeTenant);
+        await saveCollectionToFirestore('crm_settings', {
+          relanceEmailBody,
+          supportEmailSubject,
+          supportEmailBody
+        }, activeTenant);
       }
       setSettingsSavedToast(true);
       setTimeout(() => setSettingsSavedToast(false), 2500);
@@ -258,6 +289,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formDateCommande, setFormDateCommande] = useState('');
   const [formLienDevis, setFormLienDevis] = useState('');
   const [formCommercialEvents, setFormCommercialEvents] = useState<CommercialEvent[]>([]);
+
+  // Support messages (Technique / Réclamation / Sans Catégorie)
+  const [formSupportMessages, setFormSupportMessages] = useState<SupportMessage[]>([]);
+  const [isNewMessageOpen, setIsNewMessageOpen] = useState(false);
+  const [newMessageObjet, setNewMessageObjet] = useState('');
+  const [newMessageBody, setNewMessageBody] = useState('');
+  const [isSendingSupportMessage, setIsSendingSupportMessage] = useState(false);
+  const [supportMessageSentToast, setSupportMessageSentToast] = useState<string | null>(null);
 
   // Auto-expand vertical textarea ref for Description
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -367,6 +406,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormDateCommande('');
     setFormLienDevis('');
     setFormCommercialEvents([]);
+    setFormSupportMessages([]);
+    setIsNewMessageOpen(false);
+    setNewMessageObjet('');
+    setNewMessageBody('');
+    setSupportMessageSentToast(null);
 
     setIsPaneOpen(true);
   };
@@ -431,6 +475,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormLienDevis(ticket.lienStockagePartageDevis || '');
     setFormCommercialEvents(Array.isArray(ticket.evenementsCommercial) ? ticket.evenementsCommercial : []);
 
+    // Support messages
+    setFormSupportMessages(Array.isArray(ticket.messagesSupport) ? ticket.messagesSupport : []);
+    setIsNewMessageOpen(false);
+    setNewMessageObjet('');
+    setNewMessageBody('');
+    setSupportMessageSentToast(null);
+
     setIsPaneOpen(true);
   };
 
@@ -476,6 +527,105 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
   const handleRemoveCommercialEvent = (id: string) => {
     setFormCommercialEvents(prev => prev.filter(e => e.id !== id));
+  };
+
+  // Support Message Handlers (Technique / Réclamation / Sans Catégorie)
+  const handleOpenNewMessage = () => {
+    if (!isNewMessageOpen) {
+      const clientName = formClientSelect === 'Autre' ? (formCustomClientName.trim() || 'Client') : formClientSelect;
+      const ref = formRef || 'SUPPORT';
+      const obj = formObjet || 'Assistance';
+      const collab = formCollaborateur || '';
+
+      const filledSubject = supportEmailSubject
+        .replace(/{Référence\.}|Référence\./g, ref)
+        .replace(/{Client\.}|Client\./g, clientName)
+        .replace(/{Objet\.}|Objet\./g, obj)
+        .replace(/{Collaborateur\.}|Collaborateur\./g, collab);
+
+      const filledBody = supportEmailBody
+        .replace(/{Référence\.}|Référence\./g, ref)
+        .replace(/{Client\.}|Client\./g, clientName)
+        .replace(/{Objet\.}|Objet\./g, obj)
+        .replace(/{Collaborateur\.}|Collaborateur\./g, collab);
+
+      setNewMessageObjet(filledSubject);
+      setNewMessageBody(filledBody);
+      setIsNewMessageOpen(true);
+    } else {
+      setIsNewMessageOpen(false);
+    }
+  };
+
+  const handleSendSupportMessage = async () => {
+    let targetEmail = formEmail.trim();
+    if (!targetEmail && formClientSelect !== 'Autre') {
+      const found = clients.find(c => (c.denomination || (c as any).name || c.id) === formClientSelect);
+      if (found) {
+        targetEmail = (found.email || found.emailSite || '').trim();
+      }
+    }
+
+    if (!targetEmail) {
+      alert("Veuillez renseigner une adresse email dans la fiche client ou le champ Email pour envoyer ce message.");
+      return;
+    }
+
+    if (!newMessageObjet.trim() || !newMessageBody.trim()) {
+      alert("Veuillez saisir un objet et un message.");
+      return;
+    }
+
+    setIsSendingSupportMessage(true);
+    try {
+      const replyTo = companyInfo?.email || 'contact@defibeo.com';
+      await sendScriptEmail({
+        to: targetEmail,
+        subject: newMessageObjet.trim(),
+        body: newMessageBody.trim(),
+        replyTo
+      });
+
+      const now = new Date();
+      const dateStr = getTodayFormatted();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const newMsg: SupportMessage = {
+        id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        date: dateStr,
+        heure: timeStr,
+        objet: newMessageObjet.trim(),
+        message: newMessageBody.trim(),
+        destinataire: targetEmail,
+        expediteur: formCollaborateur || companyInfo?.name || 'Support Technique'
+      };
+
+      const updatedMessages = [newMsg, ...formSupportMessages];
+      setFormSupportMessages(updatedMessages);
+
+      // Persist directly to Firebase via onSaveTickets if editing existing ticket
+      if (editingTicketId) {
+        const updatedTickets = tickets.map(t => {
+          if (t.id === editingTicketId) {
+            return {
+              ...t,
+              messagesSupport: updatedMessages,
+              dateDerniereActualisation: dateStr
+            };
+          }
+          return t;
+        });
+        onSaveTickets(updatedTickets);
+      }
+
+      setIsNewMessageOpen(false);
+      setSupportMessageSentToast(`✓ Message envoyé avec succès à ${targetEmail}`);
+      setTimeout(() => setSupportMessageSentToast(null), 4000);
+    } catch (err: any) {
+      console.error("Erreur envoi message support:", err);
+      alert("Une erreur est survenue lors de l'envoi de l'email : " + (err?.message || 'Erreur inconnue'));
+    } finally {
+      setIsSendingSupportMessage(false);
+    }
   };
 
   const handleSaveForm = (e: React.FormEvent) => {
@@ -535,6 +685,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             tenantId: t.tenantId || activeTenant,
             ...contactData,
             ...commercialData,
+            messagesSupport: formSupportMessages,
           };
         }
         return t;
@@ -566,6 +717,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         tenantId: activeTenant,
         ...contactData,
         ...commercialData,
+        messagesSupport: formSupportMessages,
       };
       onSaveTickets([newTicket, ...tickets]);
     }
@@ -933,6 +1085,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     color: '#000000',
     cursor: 'default',
     fontSize: '15px',
+    whiteSpace: 'nowrap',
   };
 
   const geluleStyle: React.CSSProperties = {
@@ -1428,7 +1581,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   {/* Select All Radio-Check Column */}
-                  <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default' }}>
+                  <th className="px-4 py-3.5 w-12 text-center select-none whitespace-nowrap" style={{ cursor: 'default', whiteSpace: 'nowrap' }}>
                     <button
                       type="button"
                       onClick={toggleSelectAll}
@@ -1448,32 +1601,32 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       )}
                     </button>
                   </th>
-                  <th className="px-4 py-3.5" style={thStyle}>Référence.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Criticité.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Ouverture.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Situation.</th>
-                  <th className="px-4 py-3.5 text-center" style={thStyle}>Indicatif Postal.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Client.</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Référence.</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Criticité.</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Ouverture.</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Situation.</th>
+                  <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Indicatif Postal.</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Client.</th>
 
                   {ticketCategoryFilter === 'Commercial' ? (
                     <>
-                      <th className="px-4 py-3.5" style={thStyle}>Interlocuteur.</th>
-                      <th className="px-4 py-3.5" style={thStyle}>Type.</th>
-                      <th className="px-4 py-3.5 text-center" style={thStyle}>Famille.</th>
-                      <th className="px-4 py-3.5" style={thStyle}>Origine Lead.</th>
-                      <th className="px-4 py-3.5" style={thStyle}>Date Devis.</th>
-                      <th className="px-4 py-3.5" style={thStyle}>Référence Devis.</th>
-                      <th className="px-4 py-3.5" style={thStyle}>Date Pro. Relance.</th>
-                      <th className="px-4 py-3.5" style={thStyle}>Collaborateur.</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Interlocuteur.</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Type.</th>
+                      <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Famille.</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Origine Lead.</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Date Devis.</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Référence Devis.</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Date Pro. Relance.</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Collaborateur.</th>
                     </>
                   ) : (
                     <>
-                      <th className="px-4 py-3.5" style={thStyle}>Objet.</th>
-                      <th className="px-4 py-3.5" style={thStyle}>Collaborateur.</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Objet.</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Collaborateur.</th>
                     </>
                   )}
 
-                  <th className="px-4 py-3.5 text-right" style={thStyle}>Actions.</th>
+                  <th className="px-4 py-3.5 text-right whitespace-nowrap" style={thStyle}>Actions.</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1494,13 +1647,20 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   return (
                     <tr 
                       key={t.id} 
-                      className={`hover:bg-slate-50 transition-colors ${isChecked ? 'bg-pink-50/20' : ''}`}
+                      onClick={() => openEditTicketPane(t)}
+                      className={`hover:bg-slate-50 transition-colors cursor-pointer ${isChecked ? 'bg-pink-50/20' : ''}`}
                     >
                       {/* Row selection Radio Check */}
-                      <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <td 
+                        className="px-4 py-4 whitespace-nowrap text-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <button
                           type="button"
-                          onClick={(e) => toggleSelectOne(t.id, e)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelectOne(t.id, e);
+                          }}
                           className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer mx-auto ${
                             isChecked
                               ? 'border-[#fe4eba] bg-transparent'
@@ -1646,11 +1806,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       )}
 
                       {/* Actions. */}
-                      <td className="px-4 py-4 whitespace-nowrap text-right">
+                      <td 
+                        className="px-4 py-4 whitespace-nowrap text-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="inline-flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => openEditTicketPane(t)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditTicketPane(t);
+                            }}
                             style={rowActionButtonStyle}
                             className="hover:bg-zinc-800 transition-colors"
                           >
@@ -1659,7 +1825,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           {sitVal !== 'Terminé' && (
                             <button
                               type="button"
-                              onClick={() => handleQuickTerminate(t.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickTerminate(t.id);
+                              }}
                               style={rowActionButtonStyle}
                               className="hover:bg-zinc-800 transition-colors"
                             >
@@ -1668,7 +1837,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           )}
                           <button
                             type="button"
-                            onClick={() => handleDeleteTicket(t.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTicket(t.id);
+                            }}
                             style={rowActionButtonStyle}
                             className="hover:bg-zinc-800 transition-colors"
                           >
@@ -1804,8 +1976,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         id="crm-form-categorie-select"
                         value={formCategorie}
                         onChange={(e: any) => setFormCategorie(e.target.value)}
-                        style={{ ...selectStyle, textAlign: 'center', textAlignLast: 'center' }}
+                        disabled={Boolean(editingTicketId && (tickets.find(t => t.id === editingTicketId)?.categorie === 'Commercial' || formCategorie === 'Commercial'))}
+                        style={{
+                          ...selectStyle,
+                          textAlign: 'center',
+                          textAlignLast: 'center',
+                          ...(Boolean(editingTicketId && (tickets.find(t => t.id === editingTicketId)?.categorie === 'Commercial' || formCategorie === 'Commercial'))
+                            ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed', color: '#64748b', opacity: 0.85 }
+                            : {})
+                        }}
                         className="text-center"
+                        title={Boolean(editingTicketId && formCategorie === 'Commercial') ? "La catégorie d'un ticket Commercial ne peut pas être modifiée." : undefined}
                       >
                         <option value="Technique">Technique</option>
                         <option value="Commercial">Commercial</option>
@@ -2357,11 +2538,21 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveCommercialEvent(evt.id)}
-                                    className="p-1.5 px-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                    style={{
+                                      backgroundColor: '#dc2626',
+                                      color: '#ffffff',
+                                      borderRadius: '8px',
+                                      padding: '6px 14px',
+                                      fontSize: '13px',
+                                      fontWeight: 600,
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                    }}
+                                    className="hover:bg-red-700 transition-colors shadow-xs"
                                     title="Supprimer l'événement"
                                   >
-                                    <Trash2 size={13} />
-                                    <span>Supprimer</span>
+                                    Supprimer
                                   </button>
                                 </div>
                                 <div>
@@ -2385,6 +2576,184 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           </div>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {/* 5-bis. SPECIFIC BLOCK WHEN CATEGORY IS TECHNIQUE / RÉCLAMATION / SANS CATÉGORIE: ENVOI DE MESSAGE AU CLIENT & HISTORIQUE */}
+                  {formCategorie !== 'Commercial' && (
+                    <div 
+                      className="space-y-4 p-5 animate-fadeIn"
+                      style={{
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #cbd5e0',
+                        borderRadius: '16px'
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <label className="!mb-0" style={{ fontSize: '18px', fontWeight: 600, color: '#000000' }}>
+                          Messages au client.
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleOpenNewMessage}
+                          style={{
+                            backgroundColor: '#000000',
+                            color: '#ffffff',
+                            borderRadius: '10px',
+                            fontSize: '14px',
+                            padding: '6px 14px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                          }}
+                          className="hover:bg-zinc-800 transition-colors"
+                        >
+                          {isNewMessageOpen ? 'Fermer le formulaire' : 'Nouveau message'}
+                        </button>
+                      </div>
+
+                      {supportMessageSentToast && (
+                        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm font-medium animate-fadeIn">
+                          {supportMessageSentToast}
+                        </div>
+                      )}
+
+                      {/* Sub-form: Nouveau message */}
+                      {isNewMessageOpen && (
+                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3.5 shadow-xs animate-fadeIn">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs !font-semibold text-slate-600 !mb-0">Destinataire.</label>
+                              <span className="text-xs text-slate-500 font-sans">
+                                {formEmail.trim() ? (
+                                  <span className="font-mono text-slate-700">{formEmail.trim()}</span>
+                                ) : (
+                                  <span className="text-amber-600">Aucun email renseigné (veuillez saisir le champ Email au-dessus)</span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-xs !font-semibold text-slate-600 !mb-1">Objet.</label>
+                            <input
+                              type="text"
+                              value={newMessageObjet}
+                              onChange={(e) => setNewMessageObjet(e.target.value)}
+                              placeholder="Objet du message..."
+                              style={{
+                                fontSize: '15px !important',
+                                padding: '8px 12px !important',
+                                borderRadius: '8px !important',
+                                width: '100%'
+                              }}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs !font-semibold text-slate-600 !mb-1">Message.</label>
+                            <textarea
+                              rows={5}
+                              value={newMessageBody}
+                              onChange={(e) => setNewMessageBody(e.target.value)}
+                              placeholder="Rédigez votre message au client..."
+                              style={{
+                                fontSize: '15px !important',
+                                padding: '10px 12px !important',
+                                borderRadius: '8px !important',
+                                resize: 'vertical',
+                                width: '100%',
+                                lineHeight: '1.5'
+                              }}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2.5 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setIsNewMessageOpen(false)}
+                              style={{
+                                backgroundColor: '#f1f5f9',
+                                color: '#475569',
+                                borderRadius: '8px',
+                                padding: '8px 16px',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                border: '1px solid #cbd5e1',
+                                cursor: 'pointer'
+                              }}
+                              className="hover:bg-slate-200 transition-colors"
+                            >
+                              Annuler
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleSendSupportMessage}
+                              disabled={isSendingSupportMessage || !newMessageObjet.trim() || !newMessageBody.trim()}
+                              style={{
+                                backgroundColor: isSendingSupportMessage ? '#94a3b8' : '#3556ec',
+                                color: '#ffffff',
+                                borderRadius: '8px',
+                                padding: '8px 20px',
+                                fontSize: '14px',
+                                fontWeight: 600,
+                                border: 'none',
+                                cursor: isSendingSupportMessage ? 'wait' : 'pointer',
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                              }}
+                              className="hover:bg-[#2b48cc] transition-colors shadow-xs"
+                            >
+                              {isSendingSupportMessage ? 'Envoi en cours...' : 'Envoyer'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Fil d'ariane des messages envoyés (historique) */}
+                      {formSupportMessages.length > 0 && (
+                        <div className="space-y-3 pt-2">
+                          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider font-sans block">
+                            Historique des messages envoyés ({formSupportMessages.length})
+                          </span>
+
+                          <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+                            {formSupportMessages.map((msg) => (
+                              <div key={msg.id} className="relative group">
+                                {/* Pastille sur la ligne de fil d'ariane */}
+                                <div 
+                                  className="absolute -left-6 top-1.5 rounded-full bg-blue-600 border-2 border-white shadow-xs"
+                                  style={{ width: '12px', height: '12px' }}
+                                />
+                                
+                                <div className="p-3.5 bg-slate-50 hover:bg-slate-100/90 border border-slate-200 rounded-xl space-y-2 transition-colors">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 font-sans">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-semibold text-slate-800">
+                                        {msg.date} à {msg.heure}
+                                      </span>
+                                      <span>•</span>
+                                      <span>À : <span className="font-mono text-slate-700">{msg.destinataire}</span></span>
+                                    </div>
+                                    {msg.expediteur && (
+                                      <span className="text-slate-500 font-sans">
+                                        Par : {msg.expediteur}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="text-[15px] font-semibold text-slate-900 font-sans">
+                                    {msg.objet}
+                                  </div>
+
+                                  <div className="text-[14px] text-slate-700 font-sans whitespace-pre-wrap leading-relaxed">
+                                    {msg.message}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2776,6 +3145,133 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       className="hover:bg-[#2b48cc] transition-colors font-sans"
                     >
                       {isSavingSettings ? 'Enregistrement dans la base...' : settingsSavedToast ? '✓ Réglages enregistrés !' : 'Enregistrer le texte de relance'}
+                    </button>
+                  </div>
+
+                  {/* Section 1-bis: Modèle Texte initial email de support avec options & champ Objet */}
+                  <div 
+                    className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
+                    id="crm-settings-section-support-email"
+                  >
+                    <div>
+                      <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
+                        Texte initial email de support.
+                      </label>
+                      <p className="text-xs text-slate-500 font-sans mb-3">
+                        Ce texte et son objet par défaut seront pré-remplis lors de l'envoi d'un nouveau message au client sur les tickets Technique, Réclamation ou Sans Catégorie.
+                      </p>
+
+                      {/* Champ Objet */}
+                      <div className="mb-3">
+                        <label style={{ fontSize: '15px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
+                          Objet.
+                        </label>
+                        <input
+                          type="text"
+                          value={supportEmailSubject}
+                          onChange={(e) => setSupportEmailSubject(e.target.value)}
+                          placeholder="Ex: Suivi de votre dossier {Référence.}"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            border: '1px solid #cbd5e0',
+                            borderRadius: '11px',
+                            fontSize: '15px',
+                            color: '#000000',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                          }}
+                        />
+                      </div>
+
+                      {/* Liste des variables insérables */}
+                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 mb-3">
+                        <span className="font-semibold text-slate-800 block text-xs uppercase tracking-wider font-sans">
+                          Variables insérables :
+                        </span>
+                        <div className="flex flex-wrap gap-2 pt-1 font-mono text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setSupportEmailBody(prev => prev + '{Client.}')}
+                            className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:border-black transition-colors cursor-pointer text-slate-800"
+                            title="Insérer {Client.}"
+                          >
+                            Client.
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSupportEmailBody(prev => prev + '{Référence.}')}
+                            className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:border-black transition-colors cursor-pointer text-slate-800"
+                            title="Insérer {Référence.}"
+                          >
+                            Référence.
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSupportEmailBody(prev => prev + '{Objet.}')}
+                            className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:border-black transition-colors cursor-pointer text-slate-800"
+                            title="Insérer {Objet.}"
+                          >
+                            Objet.
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSupportEmailBody(prev => prev + '{Collaborateur.}')}
+                            className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:border-black transition-colors cursor-pointer text-slate-800"
+                            title="Insérer {Collaborateur.}"
+                          >
+                            Collaborateur.
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-sans mt-1">
+                          Cliquez sur un bouton pour ajouter la variable ou insérez-la manuellement dans le texte ci-dessous.
+                        </p>
+                      </div>
+
+                      {/* Multiline textarea */}
+                      <textarea
+                        id="crm-support-email-textarea"
+                        rows={7}
+                        value={supportEmailBody}
+                        onChange={(e) => setSupportEmailBody(e.target.value)}
+                        placeholder="Écrivez le modèle d'email initial de support..."
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          border: '1px solid #cbd5e0',
+                          borderRadius: '13px',
+                          fontSize: '16px',
+                          color: '#000000',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                          resize: 'vertical',
+                          lineHeight: '1.5',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                        }}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveCrmSettings}
+                      disabled={isSavingSettings}
+                      style={{
+                        backgroundColor: '#3556ec',
+                        color: '#ffffff',
+                        fontSize: '18px',
+                        fontWeight: 'normal',
+                        borderRadius: '12px',
+                        padding: '12px 24px',
+                        border: 'none',
+                        cursor: isSavingSettings ? 'wait' : 'pointer',
+                        width: '100%',
+                        display: 'block',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                      className="hover:bg-[#2b48cc] transition-colors font-sans"
+                    >
+                      {isSavingSettings ? 'Enregistrement dans la base...' : settingsSavedToast ? '✓ Réglages enregistrés !' : 'Enregistrer le texte de support'}
                     </button>
                   </div>
 

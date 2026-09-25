@@ -258,6 +258,16 @@ export interface CommercialEvent {
   commentaire: string;
 }
 
+export interface SupportMessage {
+  id: string;
+  date: string;
+  heure: string;
+  objet: string;
+  message: string;
+  destinataire: string;
+  expediteur?: string;
+}
+
 export interface SupportTicket {
   id: string; // e.g. 00001-DEFIB-0826 or #123456
   reference?: string;
@@ -304,6 +314,7 @@ export interface SupportTicket {
   dateCommande?: string;
   lienStockagePartageDevis?: string;
   evenementsCommercial?: CommercialEvent[];
+  messagesSupport?: SupportMessage[];
 }
 
 export interface MemberSchedule {
