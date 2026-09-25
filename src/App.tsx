@@ -1670,7 +1670,34 @@ export default function App() {
     return null;
   };
 
-  // Temps moyen d'une intervention en minutes
+  // Clé du mois en cours par défaut (ex: "2026-09" ou "2026-02")
+  const currentMonthKey = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }, []);
+
+  // Mois sélectionné pour les statistiques FSM (Temps moyen & CO2 préservé)
+  const [selectedFsmMonth, setSelectedFsmMonth] = useState<string>(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  });
+
+  // Helper pour extraire le mois YYYY-MM d'un rapport
+  const getReportMonthKey = (rep: any): string => {
+    const dStr = rep.date || rep.interventionDate || rep.horodatage || rep.startTimeStamp || rep.dateIntervention || rep.horodatageEntrant || rep.tourDate;
+    if (!dStr) return '';
+    const d = parseTimestampHelper(dStr);
+    if (d && !isNaN(d.getTime())) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+    return '';
+  };
+
+  // Temps moyen d'une intervention en minutes (filtré par le mois sélectionné)
   const avgInterventionMinutesStr = useMemo(() => {
     const validReports = (generatedReports || []).filter((rep: any) => {
       const isFormation = 
@@ -1690,7 +1717,15 @@ export default function App() {
         !!rep.validated;
 
       const isUpcoming = !isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture);
-      return !isUpcoming;
+      if (isUpcoming) return false;
+
+      // Filtrer sur le mois FSM sélectionné
+      if (selectedFsmMonth) {
+        const mKey = getReportMonthKey(rep);
+        if (mKey && mKey !== selectedFsmMonth) return false;
+      }
+
+      return true;
     });
 
     let totalSeconds = 0;
@@ -1716,8 +1751,14 @@ export default function App() {
     });
 
     if (countedReports === 0) {
-      // Fallback to pointages if no reports present
-      const finished = (pointages || []).filter(p => !p.isOngoing);
+      // Fallback aux pointages du mois sélectionné
+      const finished = (pointages || []).filter(p => {
+        if (p.isOngoing) return false;
+        if (selectedFsmMonth && p.startDate && p.startDate.includes('-')) {
+          if (p.startDate.slice(0, 7) !== selectedFsmMonth) return false;
+        }
+        return true;
+      });
       if (finished.length === 0) return "N/A";
       const totalSecs = finished.reduce((sum, p) => {
         if (p.durationSeconds !== undefined) return sum + p.durationSeconds;
@@ -1740,7 +1781,7 @@ export default function App() {
 
     const avgMinutes = Math.round((totalSeconds / countedReports) / 60);
     return `${avgMinutes} min(s)`;
-  }, [generatedReports, pointages]);
+  }, [generatedReports, pointages, selectedFsmMonth]);
 
   // Extraction de la clé mois YYYY-MM pour une tournée ou ses missions
   const getTourMonthKey = (tour: any): string => {
@@ -1761,22 +1802,6 @@ export default function App() {
     }
     return '';
   };
-
-  // Clé du mois en cours par défaut (ex: "2026-09" ou "2026-02")
-  const currentMonthKey = useMemo(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    return `${y}-${m}`;
-  }, []);
-
-  // Mois sélectionné pour la statistique CO2 (par défaut le mois en cours)
-  const [selectedCo2Month, setSelectedCo2Month] = useState<string>(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    return `${y}-${m}`;
-  });
 
   // Historique persistant des valeurs CO2 des tournées faites / effectuées (conservé même en cas de suppression)
   const [fsmCo2History, setFsmCo2History] = useState<{
@@ -1832,7 +1857,7 @@ export default function App() {
   };
 
   // Liste des mois disponibles pour le sélecteur (ex: "Février 2026", "Septembre 2026", etc.)
-  const availableCo2Months = useMemo(() => {
+  const availableFsmMonths = useMemo(() => {
     const monthsMap = new Map<string, string>();
     const FRENCH_MONTH_NAMES = [
       'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -1865,6 +1890,12 @@ export default function App() {
       if (k) addMonth(k);
     });
 
+    // Ajouter les mois présents dans generatedReports
+    (generatedReports || []).forEach(r => {
+      const k = getReportMonthKey(r);
+      if (k) addMonth(k);
+    });
+
     // Ajouter les mois présents dans l'historique
     (fsmCo2History || []).forEach(h => {
       if (h.monthKey) addMonth(h.monthKey);
@@ -1873,7 +1904,7 @@ export default function App() {
     const entries = Array.from(monthsMap.entries()).map(([key, label]) => ({ key, label }));
     entries.sort((a, b) => b.key.localeCompare(a.key)); // Plus récent en premier
     return entries;
-  }, [fsmTours, fsmCo2History]);
+  }, [fsmTours, generatedReports, fsmCo2History]);
 
   // Calcul du CO2 préservé (émissions évitées) pour le mois sélectionné
   // Basé sur le calcul des divs bleues des missions (1.2 kg par mission)
@@ -1882,7 +1913,7 @@ export default function App() {
     const activeToursInMonth = (fsmTours || []).filter(t => {
       if (t.id === 'a-trier') return false;
       const mKey = getTourMonthKey(t);
-      return mKey === selectedCo2Month;
+      return mKey === selectedFsmMonth;
     });
 
     const activeTourIds = new Set(activeToursInMonth.map(t => t.id));
@@ -1893,11 +1924,11 @@ export default function App() {
 
     // Tournées supprimées mais qui ont été effectuées et conservées en historique
     const archivedCo2 = (fsmCo2History || [])
-      .filter(rec => rec.monthKey === selectedCo2Month && !activeTourIds.has(rec.tourId))
+      .filter(rec => rec.monthKey === selectedFsmMonth && !activeTourIds.has(rec.tourId))
       .reduce((sum, rec) => sum + (rec.co2Saved || 0), 0);
 
     return Number((activeCo2 + archivedCo2).toFixed(2));
-  }, [fsmTours, fsmCo2History, selectedCo2Month]);
+  }, [fsmTours, fsmCo2History, selectedFsmMonth]);
 
   const formattedCo2Str = useMemo(() => {
     if (totalPreservedCo2 === 0) return '0';
@@ -7477,7 +7508,46 @@ export default function App() {
               border: 'none',
             };
 
-            const uniqueDates = Array.from(new Set(fsmTours.map((t: any) => t.startDate).filter(Boolean))).filter(d => d !== 'A trier').sort() as string[];
+            const formatFrenchDate = (dateStr: string): string => {
+              if (!dateStr) return '';
+              const parts = dateStr.split('-');
+              if (parts.length === 3) {
+                const d = parseInt(parts[2], 10);
+                const m = parseInt(parts[1], 10);
+                const y = parts[0];
+                const months = [
+                  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+                  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+                ];
+                const monthName = months[m - 1] || '';
+                return `${d} ${monthName} ${y}`;
+              }
+              return dateStr;
+            };
+
+            // 1 tournée par gélule : "Tournée 1 du ...", "Tournée 2 du ..."
+            const scheduledTours = fsmTours.filter((t: any) => t.id !== 'a-trier' && t.startDate !== 'A trier');
+            scheduledTours.sort((a: any, b: any) => {
+              const dateA = a.startDate || '';
+              const dateB = b.startDate || '';
+              if (dateA !== dateB) return dateA.localeCompare(dateB);
+              return (a.id || '').localeCompare(b.id || '');
+            });
+
+            const dateTourCounts: { [date: string]: number } = {};
+            const tourPills = scheduledTours.map((t: any) => {
+              const dKey = t.startDate || 'sans-date';
+              dateTourCounts[dKey] = (dateTourCounts[dKey] || 0) + 1;
+              const tourNum = dateTourCounts[dKey];
+              const formattedDate = formatFrenchDate(t.startDate);
+              const label = formattedDate ? `Tournée ${tourNum} du ${formattedDate}` : `Tournée ${tourNum} (Date non définie)`;
+              return {
+                tourId: t.id,
+                startDate: t.startDate,
+                label
+              };
+            });
+
             const activeDateFilter = fsmDateFilter === 'Tous' ? 'A trier' : fsmDateFilter;
 
             const filteredTours = fsmTours.filter((tour) => {
@@ -7486,8 +7556,13 @@ export default function App() {
                   if (!(tour.id === 'a-trier' || tour.startDate === 'A trier')) {
                     return false;
                   }
-                } else if (tour.startDate !== activeDateFilter) {
-                  return false;
+                } else {
+                  // Filtrer par ID de la tournée ou fallback sur la date si activeDateFilter est une date
+                  const matchesId = tour.id === activeDateFilter;
+                  const isDateOnlyFallback = !fsmTours.some((x: any) => x.id === activeDateFilter) && tour.startDate === activeDateFilter;
+                  if (!matchesId && !isDateOnlyFallback) {
+                    return false;
+                  }
                 }
               }
 
@@ -8650,19 +8725,46 @@ export default function App() {
                   ))}
                 </datalist>
 
-                {/* Indicateurs FSM : Temps moyen d’une intervention & CO2 préservé */}
+                {/* Statistiques FSM du mois : Sélecteur mois/année + 2 gélules (Temps moyen & CO2 préservé) */}
                 <div 
-                  id="fsm-indicators-container"
-                  className="px-4 pt-4 flex flex-wrap items-center justify-start select-none gap-3"
+                  id="fsm-stats-container"
+                  className="px-4 pt-4 flex flex-wrap items-center justify-start gap-3 select-none"
                 >
-                  {/* Indicateur Temps moyen d’une intervention */}
+                  {/* Field de choix de mois/année */}
+                  <div className="flex items-center">
+                    <select
+                      value={selectedFsmMonth}
+                      onChange={(e) => setSelectedFsmMonth(e.target.value)}
+                      title={t("Sélectionner le mois")}
+                      style={{
+                        backgroundColor: '#ffffff',
+                        border: '1px solid rgb(218, 218, 218)',
+                        borderRadius: '13px',
+                        padding: '9px 16px',
+                        fontSize: '15px',
+                        fontWeight: 600,
+                        color: '#000000',
+                        cursor: 'pointer',
+                        outline: 'none',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                    >
+                      {availableFsmMonths.map((m) => (
+                        <option key={m.key} value={m.key}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Gélule 1 : Temps moyen d’une intervention */}
                   <div 
                     id="fsm-avg-intervention-time-indicator"
                     style={{
-                      padding: '10px 18px',
+                      padding: '9px 20px',
                       backgroundColor: '#f8fafc',
                       border: '1px solid rgb(218, 218, 218)',
-                      borderRadius: '13px',
+                      borderRadius: '1000px',
                       display: 'inline-flex',
                       alignItems: 'center',
                       fontSize: '15px',
@@ -8679,79 +8781,43 @@ export default function App() {
                     </span>
                   </div>
 
-                  {/* Indicateur CO2 préservé */}
+                  {/* Gélule 2 : CO2 préservé */}
                   <div 
                     id="fsm-co2-preserved-indicator"
                     style={{
-                      padding: '10px 18px',
+                      padding: '9px 20px',
                       backgroundColor: '#f8fafc',
                       border: '1px solid rgb(218, 218, 218)',
-                      borderRadius: '13px',
+                      borderRadius: '1000px',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '12px',
                       fontSize: '15px',
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                       color: '#000000',
+                      cursor: 'default',
                     }}
                   >
-                    <div style={{ display: 'inline-flex', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, color: '#000000', marginRight: '6px' }}>
-                        {formattedCo2Str} kg
-                      </span>
-                      <span style={{ fontWeight: 400, color: '#475569' }}>
-                        {t("Co2e d’émissions préservée(s)")}
-                      </span>
-                    </div>
-
-                    <div style={{ height: '16px', width: '1px', backgroundColor: 'rgb(218, 218, 218)' }} />
-
-                    <select
-                      value={selectedCo2Month}
-                      onChange={(e) => setSelectedCo2Month(e.target.value)}
-                      title={t("Sélectionner le mois")}
-                      style={{
-                        backgroundColor: '#ffffff',
-                        border: '1px solid rgb(218, 218, 218)',
-                        borderRadius: '8px',
-                        padding: '2px 8px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: '#000000',
-                        cursor: 'pointer',
-                        outline: 'none',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      }}
-                    >
-                      {availableCo2Months.map((m) => (
-                        <option key={m.key} value={m.key}>
-                          {m.label}
-                        </option>
-                      ))}
-                    </select>
+                    <span style={{ fontWeight: 700, color: '#000000', marginRight: '6px' }}>
+                      {formattedCo2Str} kg
+                    </span>
+                    <span style={{ fontWeight: 400, color: '#475569' }}>
+                      {t("Co2e d’émissions préservée(s)")}
+                    </span>
                   </div>
                 </div>
 
                 {fsmTours.length > 0 && (() => {
-                  const formatFrenchDate = (dateStr: string): string => {
-                    if (!dateStr) return '';
-                    const parts = dateStr.split('-');
-                    if (parts.length === 3) {
-                      const d = parseInt(parts[2], 10);
-                      const m = parseInt(parts[1], 10);
-                      const y = parts[0];
-                      const months = [
-                        'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-                        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
-                      ];
-                      const monthName = months[m - 1] || '';
-                      return `${d} ${monthName} ${y}`;
-                    }
-                    return dateStr;
-                  };
-
                   return (
-                    <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-3" id="fsm-dates-pills">
+                    <div 
+                      className="px-4 flex items-center gap-2.5 pt-3 overflow-x-auto whitespace-nowrap select-none scrollbar-thin pb-2" 
+                      id="fsm-dates-pills"
+                      style={{
+                        flexWrap: 'nowrap',
+                        WebkitOverflowScrolling: 'touch',
+                        scrollbarWidth: 'thin',
+                        scrollbarColor: '#cbd5e1 transparent'
+                      }}
+                    >
                       <button
                         type="button"
                         onClick={() => setFsmDateFilter('A trier')}
@@ -8765,35 +8831,42 @@ export default function App() {
                           backgroundColor: activeDateFilter === 'A trier' ? '#fa53d5' : '#ffffff',
                           color: activeDateFilter === 'A trier' ? '#ffffff' : '#000000',
                           border: activeDateFilter === 'A trier' ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
-                          transition: 'all 0.15s ease'
+                          transition: 'all 0.15s ease',
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0
                         }}
-                        className="transition-all"
+                        className="transition-all flex-shrink-0"
                       >
                         {t("À trier / Ordres ADV")}
                       </button>
 
-                      {uniqueDates.map(dateStr => (
-                        <button
-                          key={dateStr}
-                          type="button"
-                          onClick={() => setFsmDateFilter(dateStr)}
-                          style={{
-                            borderRadius: '1000px',
-                            padding: '10px 20px',
-                            fontSize: '15px',
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            backgroundColor: activeDateFilter === dateStr ? '#fa53d5' : '#ffffff',
-                            color: activeDateFilter === dateStr ? '#ffffff' : '#000000',
-                            border: activeDateFilter === dateStr ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
-                            transition: 'all 0.15s ease'
-                          }}
-                          className="transition-all"
-                        >
-                          Tournée(s) {formatFrenchDate(dateStr)}
-                        </button>
-                      ))}
+                      {tourPills.map(p => {
+                        const isPillActive = activeDateFilter === p.tourId || (!fsmTours.some((x: any) => x.id === activeDateFilter) && activeDateFilter === p.startDate);
+                        return (
+                          <button
+                            key={p.tourId}
+                            type="button"
+                            onClick={() => setFsmDateFilter(p.tourId)}
+                            style={{
+                              borderRadius: '1000px',
+                              padding: '10px 20px',
+                              fontSize: '15px',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              backgroundColor: isPillActive ? '#fa53d5' : '#ffffff',
+                              color: isPillActive ? '#ffffff' : '#000000',
+                              border: isPillActive ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
+                              transition: 'all 0.15s ease',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0
+                            }}
+                            className="transition-all flex-shrink-0"
+                          >
+                            {p.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   );
                 })()}

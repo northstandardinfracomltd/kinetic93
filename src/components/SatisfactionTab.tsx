@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
@@ -186,6 +185,13 @@ export default function SatisfactionTab({
     }
   }, [availableMonths, selectedMonth]);
 
+  // Label du mois sélectionné pour ajuster automatiquement la largeur du select
+  const selectedMonthLabel = useMemo(() => {
+    if (selectedMonth === 'all') return t("Tous les mois") || "Tous les mois";
+    const found = availableMonths.find((m) => m.key === selectedMonth);
+    return found ? found.label : selectedMonth;
+  }, [selectedMonth, availableMonths]);
+
   // Helper date formatter
   const formatToDisplayDate = (dateStr?: string): string => {
     if (!dateStr) return '';
@@ -260,7 +266,7 @@ export default function SatisfactionTab({
 
     if (validNotes.length === 0) {
       return {
-        scoreDisplay: "Aucun avis",
+        scoreDisplay: "-",
         totalCount: 0,
         pctScore: "-",
       };
@@ -307,7 +313,7 @@ export default function SatisfactionTab({
     const totalCount = reviews.length;
     if (totalCount === 0) {
       return {
-        scoreDisplay: "Aucun avis",
+        scoreDisplay: "-",
         npsInt: null,
         totalCount: 0,
         promotersCount: 0,
@@ -399,13 +405,13 @@ export default function SatisfactionTab({
   };
 
   const roundBadgeStyle: React.CSSProperties = {
-    width: '38px',
-    height: '38px',
+    width: '27px',
+    height: '27px',
     borderRadius: '50%',
     backgroundColor: '#fe4eba',
     color: '#ffffff',
     fontWeight: 'bold',
-    fontSize: '14px',
+    fontSize: '11px',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -416,7 +422,9 @@ export default function SatisfactionTab({
 
   const percentBadgeStyle: React.CSSProperties = {
     ...roundBadgeStyle,
-    fontSize: '12px',
+    width: '46px',
+    height: '46px',
+    fontSize: '13.5px',
     letterSpacing: '-0.3px',
   };
 
@@ -660,34 +668,6 @@ export default function SatisfactionTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
-            {/* Native System Dropdown for Month Filter */}
-            <select
-              id="filter-month-satisfaction"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              style={{
-                ...rowActionButtonStyle,
-                appearance: 'none',
-                WebkitAppearance: 'none',
-                MozAppearance: 'none',
-                backgroundColor: '#000000',
-                boxShadow: rowActionButtonStyle.boxShadow,
-                textAlign: 'center',
-                textAlignLast: 'center',
-              }}
-              className="cursor-pointer font-sans whitespace-nowrap hover:opacity-85 transition-all outline-none"
-              title={t("Filtrer par mois")}
-            >
-              <option value="all" className="bg-white text-black font-normal">
-                {t("Tous les mois")}
-              </option>
-              {availableMonths.map((m) => (
-                <option key={m.key} value={m.key} className="bg-white text-black font-normal">
-                  {m.label}
-                </option>
-              ))}
-            </select>
-
             {/* Search Bar Input */}
             <div className="relative w-full sm:w-80 bg-white">
               <input
@@ -703,6 +683,37 @@ export default function SatisfactionTab({
                 onFocus={() => setIsSearchFocused(true)}
                 onBlur={() => setIsSearchFocused(false)}
               />
+            </div>
+
+            {/* Filter Month Button / Native Dropdown (Largeur auto selon le texte affiché) */}
+            <div className="relative inline-flex items-center">
+              <button
+                type="button"
+                style={{
+                  ...rowActionButtonStyle,
+                  width: 'auto',
+                  whiteSpace: 'nowrap',
+                }}
+                className="cursor-pointer font-sans hover:opacity-80 transition-all select-none"
+              >
+                <span>{selectedMonthLabel}</span>
+              </button>
+              <select
+                id="filter-month-satisfaction"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                title={t("Filtrer par mois")}
+              >
+                <option value="all" className="bg-white text-black font-normal">
+                  {t("Tous les mois")}
+                </option>
+                {availableMonths.map((m) => (
+                  <option key={m.key} value={m.key} className="bg-white text-black font-normal">
+                    {m.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Performance Button */}
@@ -787,121 +798,121 @@ export default function SatisfactionTab({
       {/* Main Table Content */}
       <div className="bg-white overflow-hidden mt-6 rounded-none animate-fadeIn" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         <div className="overflow-x-auto">
-          {filteredReviews.length === 0 ? (
-            <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
-          ) : (
-            <table className="w-full text-left font-sans border-collapse text-xs" id="satisfaction-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
-              <thead>
-                <tr className="bg-transparent">
-                  <th className="px-3 pt-3 pb-1.5 text-center min-w-[120px] whitespace-nowrap" style={thStyle}>{t("Note globale.")}</th>
-                  <th className="px-4 pt-3 pb-1.5 w-28 whitespace-nowrap" style={thStyle}>{t("Date.")}</th>
-                  <th className="px-4 pt-3 pb-1.5 w-36 whitespace-nowrap" style={thStyle}>{t("Intervention.")}</th>
-                  <th className="px-4 pt-3 pb-1.5 w-40 whitespace-nowrap" style={thStyle}>{t("Rédacteur.")}</th>
-                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Qualité.")}</th>
-                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Ponctualité.")}</th>
-                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Politesse.")}</th>
-                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Clarté PDF.")}</th>
-                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Explications.")}</th>
-                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Sensibilisation.")}</th>
-                  <th className="px-2 pt-3 pb-1.5 text-center min-w-[110px] whitespace-nowrap" style={thStyle}>{t("NPS Score /10.")}</th>
-                  <th className="px-4 pt-3 pb-1.5" style={thStyle}>{t("Évaluation.")}</th>
-                  <th className="px-4 pt-3 pb-1.5 text-right w-44 whitespace-nowrap" style={thStyle}>{t("Actions.")}</th>
+          <table className="w-full text-left font-sans border-collapse text-xs" id="satisfaction-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+            <thead>
+              <tr className="bg-transparent">
+                <th className="px-3 pt-3 pb-1.5 text-center min-w-[120px] whitespace-nowrap" style={thStyle}>{t("Note globale.")}</th>
+                <th className="px-4 pt-3 pb-1.5 w-28 whitespace-nowrap" style={thStyle}>{t("Date.")}</th>
+                <th className="px-4 pt-3 pb-1.5 w-36 whitespace-nowrap" style={thStyle}>{t("Intervention.")}</th>
+                <th className="px-4 pt-3 pb-1.5 w-40 whitespace-nowrap" style={thStyle}>{t("Rédacteur.")}</th>
+                <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Qualité.")}</th>
+                <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Ponctualité.")}</th>
+                <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Politesse.")}</th>
+                <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Clarté PDF.")}</th>
+                <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Explications.")}</th>
+                <th className="px-2 pt-3 pb-1.5 text-center min-w-[105px] whitespace-nowrap" style={thStyle}>{t("Sensibilisation.")}</th>
+                <th className="px-2 pt-3 pb-1.5 text-center min-w-[110px] whitespace-nowrap" style={thStyle}>{t("NPS Score /10.")}</th>
+                <th className="px-4 pt-3 pb-1.5" style={thStyle}>{t("Évaluation.")}</th>
+                <th className="px-4 pt-3 pb-1.5 text-right w-44 whitespace-nowrap" style={thStyle}>{t("Actions.")}</th>
+              </tr>
+              {/* Second header row: column averages */}
+              <tr className="bg-transparent" style={{ borderBottom: '1px solid rgb(218, 218, 218)' }}>
+                <th className="px-3 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                  <div className="inline-flex items-center justify-center gap-[2px]">
+                    <div style={roundBadgeStyle} title={t("Moyenne Note globale")}>
+                      {columnAverages.noteGlobale === '-' ? '-' : columnAverages.noteGlobale}
+                    </div>
+                    <div style={percentBadgeStyle} title={t("Moyenne Note globale (%)")}>
+                      {columnAverages.noteGlobalePct === '-' ? '-' : columnAverages.noteGlobalePct}
+                    </div>
+                  </div>
+                </th>
+                <th className="px-4 pt-1.5 pb-3"></th>
+                <th className="px-4 pt-1.5 pb-3"></th>
+                <th className="px-4 pt-1.5 pb-3"></th>
+                <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                  <div className="inline-flex items-center justify-center gap-[2px]">
+                    <div style={roundBadgeStyle} title={t("Moyenne Qualité")}>
+                      {columnAverages.qualite === '-' ? '-' : columnAverages.qualite}
+                    </div>
+                    <div style={percentBadgeStyle} title={t("Moyenne Qualité (%)")}>
+                      {columnAverages.qualitePct === '-' ? '-' : columnAverages.qualitePct}
+                    </div>
+                  </div>
+                </th>
+                <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                  <div className="inline-flex items-center justify-center gap-[2px]">
+                    <div style={roundBadgeStyle} title={t("Moyenne Ponctualité")}>
+                      {columnAverages.ponctualite === '-' ? '-' : columnAverages.ponctualite}
+                    </div>
+                    <div style={percentBadgeStyle} title={t("Moyenne Ponctualité (%)")}>
+                      {columnAverages.ponctualitePct === '-' ? '-' : columnAverages.ponctualitePct}
+                    </div>
+                  </div>
+                </th>
+                <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                  <div className="inline-flex items-center justify-center gap-[2px]">
+                    <div style={roundBadgeStyle} title={t("Moyenne Politesse")}>
+                      {columnAverages.politesse === '-' ? '-' : columnAverages.politesse}
+                    </div>
+                    <div style={percentBadgeStyle} title={t("Moyenne Politesse (%)")}>
+                      {columnAverages.politessePct === '-' ? '-' : columnAverages.politessePct}
+                    </div>
+                  </div>
+                </th>
+                <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                  <div className="inline-flex items-center justify-center gap-[2px]">
+                    <div style={roundBadgeStyle} title={t("Moyenne Clarté PDF")}>
+                      {columnAverages.clartePdf === '-' ? '-' : columnAverages.clartePdf}
+                    </div>
+                    <div style={percentBadgeStyle} title={t("Moyenne Clarté PDF (%)")}>
+                      {columnAverages.clartePdfPct === '-' ? '-' : columnAverages.clartePdfPct}
+                    </div>
+                  </div>
+                </th>
+                <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                  <div className="inline-flex items-center justify-center gap-[2px]">
+                    <div style={roundBadgeStyle} title={t("Moyenne Explications")}>
+                      {columnAverages.explications === '-' ? '-' : columnAverages.explications}
+                    </div>
+                    <div style={percentBadgeStyle} title={t("Moyenne Explications (%)")}>
+                      {columnAverages.explicationsPct === '-' ? '-' : columnAverages.explicationsPct}
+                    </div>
+                  </div>
+                </th>
+                <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                  <div className="inline-flex items-center justify-center gap-[2px]">
+                    <div style={roundBadgeStyle} title={t("Moyenne Sensibilisation")}>
+                      {columnAverages.sensibilisation === '-' ? '-' : columnAverages.sensibilisation}
+                    </div>
+                    <div style={percentBadgeStyle} title={t("Moyenne Sensibilisation (%)")}>
+                      {columnAverages.sensibilisationPct === '-' ? '-' : columnAverages.sensibilisationPct}
+                    </div>
+                  </div>
+                </th>
+                <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
+                  <div className="inline-flex items-center justify-center gap-[2px]">
+                    <div style={roundBadgeStyle} title={t("Moyenne NPS Score")}>
+                      {columnAverages.npsScore === '-' ? '-' : columnAverages.npsScore}
+                    </div>
+                    <div style={percentBadgeStyle} title={t("Moyenne NPS Score (%)")}>
+                      {columnAverages.npsScorePct === '-' ? '-' : columnAverages.npsScorePct}
+                    </div>
+                  </div>
+                </th>
+                <th className="px-4 pt-1.5 pb-3"></th>
+                <th className="px-4 pt-1.5 pb-3 text-right"></th>
+              </tr>
+            </thead>
+            <tbody className="text-slate-700 text-xs text-black">
+              {filteredReviews.length === 0 ? (
+                <tr>
+                  <td colSpan={13} className="py-12">
+                    <EmptyTablePlaceholder className="p-12 text-center font-sans lg:py-16" />
+                  </td>
                 </tr>
-                {/* Second header row: column averages */}
-                <tr className="bg-transparent" style={{ borderBottom: '1px solid rgb(218, 218, 218)' }}>
-                  <th className="px-3 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
-                    {columnAverages.noteGlobale !== '-' ? (
-                      <div className="inline-flex items-center justify-center gap-1.5">
-                        <div style={roundBadgeStyle} title={t("Moyenne Note globale")}>
-                          {columnAverages.noteGlobale}
-                        </div>
-                        <div style={percentBadgeStyle} title={t("Moyenne Note globale (%)")}>
-                          {columnAverages.noteGlobalePct}
-                        </div>
-                      </div>
-                    ) : null}
-                  </th>
-                  <th className="px-4 pt-1.5 pb-3"></th>
-                  <th className="px-4 pt-1.5 pb-3"></th>
-                  <th className="px-4 pt-1.5 pb-3"></th>
-                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
-                    <div className="inline-flex items-center justify-center gap-1.5">
-                      <div style={roundBadgeStyle} title={t("Moyenne Qualité")}>
-                        {columnAverages.qualite}
-                      </div>
-                      <div style={percentBadgeStyle} title={t("Moyenne Qualité (%)")}>
-                        {columnAverages.qualitePct}
-                      </div>
-                    </div>
-                  </th>
-                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
-                    <div className="inline-flex items-center justify-center gap-1.5">
-                      <div style={roundBadgeStyle} title={t("Moyenne Ponctualité")}>
-                        {columnAverages.ponctualite}
-                      </div>
-                      <div style={percentBadgeStyle} title={t("Moyenne Ponctualité (%)")}>
-                        {columnAverages.ponctualitePct}
-                      </div>
-                    </div>
-                  </th>
-                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
-                    <div className="inline-flex items-center justify-center gap-1.5">
-                      <div style={roundBadgeStyle} title={t("Moyenne Politesse")}>
-                        {columnAverages.politesse}
-                      </div>
-                      <div style={percentBadgeStyle} title={t("Moyenne Politesse (%)")}>
-                        {columnAverages.politessePct}
-                      </div>
-                    </div>
-                  </th>
-                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
-                    <div className="inline-flex items-center justify-center gap-1.5">
-                      <div style={roundBadgeStyle} title={t("Moyenne Clarté PDF")}>
-                        {columnAverages.clartePdf}
-                      </div>
-                      <div style={percentBadgeStyle} title={t("Moyenne Clarté PDF (%)")}>
-                        {columnAverages.clartePdfPct}
-                      </div>
-                    </div>
-                  </th>
-                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
-                    <div className="inline-flex items-center justify-center gap-1.5">
-                      <div style={roundBadgeStyle} title={t("Moyenne Explications")}>
-                        {columnAverages.explications}
-                      </div>
-                      <div style={percentBadgeStyle} title={t("Moyenne Explications (%)")}>
-                        {columnAverages.explicationsPct}
-                      </div>
-                    </div>
-                  </th>
-                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
-                    <div className="inline-flex items-center justify-center gap-1.5">
-                      <div style={roundBadgeStyle} title={t("Moyenne Sensibilisation")}>
-                        {columnAverages.sensibilisation}
-                      </div>
-                      <div style={percentBadgeStyle} title={t("Moyenne Sensibilisation (%)")}>
-                        {columnAverages.sensibilisationPct}
-                      </div>
-                    </div>
-                  </th>
-                  <th className="px-2 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
-                    {columnAverages.npsScore !== '-' ? (
-                      <div className="inline-flex items-center justify-center gap-1.5">
-                        <div style={roundBadgeStyle} title={t("Moyenne NPS Score")}>
-                          {columnAverages.npsScore}
-                        </div>
-                        <div style={percentBadgeStyle} title={t("Moyenne NPS Score (%)")}>
-                          {columnAverages.npsScorePct}
-                        </div>
-                      </div>
-                    ) : null}
-                  </th>
-                  <th className="px-4 pt-1.5 pb-3"></th>
-                  <th className="px-4 pt-1.5 pb-3 text-right"></th>
-                </tr>
-              </thead>
-              <tbody className="text-slate-700 text-xs text-black">
-                {filteredReviews.map((rev) => {
+              ) : (
+                filteredReviews.map((rev) => {
                   const truncatedClientName = rev.clientName && rev.clientName.length > 15 
                     ? `${rev.clientName.substring(0, 15)}...` 
                     : rev.clientName || '-';
@@ -918,12 +929,12 @@ export default function SatisfactionTab({
                       
                       {/* Round badges for Note globale (Note + Pourcentage) */}
                       <td className="px-3 py-4 align-middle text-center cursor-default whitespace-nowrap">
-                        <div className="inline-flex items-center justify-center gap-1.5">
+                        <div className="inline-flex items-center justify-center gap-[2px]">
                           <div style={roundBadgeStyle} title={`${noteGlobale}/4`}>
-                            {noteGlobale}
+                            {noteGlobale === '-' ? '-' : noteGlobale}
                           </div>
                           <div style={percentBadgeStyle} title={getPercentageFromNote(noteGlobale)}>
-                            {getPercentageFromNote(noteGlobale)}
+                            {getPercentageFromNote(noteGlobale) === '-' ? '-' : getPercentageFromNote(noteGlobale)}
                           </div>
                         </div>
                       </td>
@@ -1026,10 +1037,9 @@ export default function SatisfactionTab({
 
                     </tr>
                   );
-                })}
+                }))}
               </tbody>
             </table>
-          )}
         </div>
       </div>
 
@@ -1044,25 +1054,8 @@ export default function SatisfactionTab({
             className="relative w-full max-w-xl bg-white flex flex-col overflow-hidden animate-slideLeft h-full shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-[#dadada] bg-white">
-              <div>
-                <h3 className="text-2xl font-bold text-black font-gochi" style={{ cursor: 'default' }}>
-                  {t("Performance")}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsPerformancePaneOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-black transition-colors cursor-pointer"
-                title={t("Fermer")}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
             {/* Scrollable content area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28 pt-8">
               
               {/* BLOC 1 : Satisfaction Moyenne */}
               <div 
@@ -1159,10 +1152,10 @@ export default function SatisfactionTab({
                   className="pt-2 flex flex-col items-center justify-center text-center p-4 rounded-xl"
                   style={{ backgroundColor: '#fafafa', border: '1px solid #f0f0f0' }}
                 >
-                  <div className="flex items-center justify-center gap-3">
+                  <div className="flex items-center justify-center gap-[2px]">
                     <div 
                       style={{ 
-                        fontSize: '38px', 
+                        fontSize: '34px', 
                         fontWeight: 900, 
                         color: '#000000', 
                         fontFamily: "'Gochi', cursive, sans-serif",
@@ -1171,25 +1164,18 @@ export default function SatisfactionTab({
                     >
                       {perfSatisfaction.scoreDisplay}
                     </div>
-                    {perfSatisfaction.totalCount > 0 && perfSatisfaction.pctScore !== '-' && (
-                      <div 
-                        style={{
-                          ...roundBadgeStyle,
-                          width: '42px',
-                          height: '42px',
-                          fontSize: '14px',
-                        }}
-                      >
-                        {perfSatisfaction.pctScore}
-                      </div>
-                    )}
+                    <div 
+                      style={percentBadgeStyle}
+                    >
+                      {perfSatisfaction.pctScore === '-' ? '-' : perfSatisfaction.pctScore}
+                    </div>
                   </div>
                   <div 
                     className="text-sm text-slate-600 mt-2"
                     style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
                   >
                     {perfSatisfaction.totalCount === 0
-                      ? t("Aucun avis sur cette période")
+                      ? "-"
                       : `${perfSatisfaction.totalCount} ${perfSatisfaction.totalCount > 1 ? t("avis enregistrés") : t("avis enregistré")}`}
                   </div>
                 </div>
@@ -1306,7 +1292,7 @@ export default function SatisfactionTab({
                     style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
                   >
                     {perfNps.totalCount === 0 
-                      ? t("Aucun avis sur cette période") 
+                      ? "-" 
                       : (perfNps.npsInt !== null ? `${t("Indice NPS")} (${perfNps.scoreDisplay})` : '')}
                   </div>
                 </div>
@@ -1315,23 +1301,22 @@ export default function SatisfactionTab({
                 <div className="space-y-2 pt-1 font-sans">
                   {/* Promoteurs */}
                   <div 
-                    className="p-3 rounded-xl border flex items-center justify-between"
-                    style={{ borderColor: '#d1fae5', backgroundColor: '#f0fdf4' }}
+                    className="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between"
                   >
                     <div className="space-y-0.5">
-                      <div className="font-semibold text-emerald-900 text-sm flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                      <div className="font-semibold text-black text-sm flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] inline-block shrink-0"></span>
                         <span>{t("Promoteurs (9-10)")}</span>
                       </div>
-                      <div className="text-xs text-emerald-700">
+                      <div className="text-xs text-slate-500">
                         {t("Clients très enthousiastes")}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-emerald-900 text-base">
+                      <div className="font-bold text-black text-base">
                         {perfNps.pctPromoters}%
                       </div>
-                      <div className="text-xs text-emerald-700">
+                      <div className="text-xs text-slate-500">
                         {perfNps.promotersCount} {perfNps.promotersCount > 1 ? t("avis") : t("avis")}
                       </div>
                     </div>
@@ -1339,23 +1324,22 @@ export default function SatisfactionTab({
 
                   {/* Passifs */}
                   <div 
-                    className="p-3 rounded-xl border flex items-center justify-between"
-                    style={{ borderColor: '#fef3c7', backgroundColor: '#fffbeb' }}
+                    className="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between"
                   >
                     <div className="space-y-0.5">
-                      <div className="font-semibold text-amber-900 text-sm flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                      <div className="font-semibold text-black text-sm flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b] inline-block shrink-0"></span>
                         <span>{t("Passifs (7-8)")}</span>
                       </div>
-                      <div className="text-xs text-amber-700">
+                      <div className="text-xs text-slate-500">
                         {t("Clients neutres (exclus du calcul direct)")}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-amber-900 text-base">
+                      <div className="font-bold text-black text-base">
                         {perfNps.pctPassives}%
                       </div>
-                      <div className="text-xs text-amber-700">
+                      <div className="text-xs text-slate-500">
                         {perfNps.passivesCount} {perfNps.passivesCount > 1 ? t("avis") : t("avis")}
                       </div>
                     </div>
@@ -1363,35 +1347,26 @@ export default function SatisfactionTab({
 
                   {/* Détracteurs */}
                   <div 
-                    className="p-3 rounded-xl border flex items-center justify-between"
-                    style={{ borderColor: '#fee2e2', backgroundColor: '#fef2f2' }}
+                    className="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between"
                   >
                     <div className="space-y-0.5">
-                      <div className="font-semibold text-rose-900 text-sm flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+                      <div className="font-semibold text-black text-sm flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444] inline-block shrink-0"></span>
                         <span>{t("Détracteurs (0-6)")}</span>
                       </div>
-                      <div className="text-xs text-rose-700">
+                      <div className="text-xs text-slate-500">
                         {t("Clients insatisfaits ou à risque")}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-rose-900 text-base">
+                      <div className="font-bold text-black text-base">
                         {perfNps.pctDetractors}%
                       </div>
-                      <div className="text-xs text-rose-700">
+                      <div className="text-xs text-slate-500">
                         {perfNps.detractorsCount} {perfNps.detractorsCount > 1 ? t("avis") : t("avis")}
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Formula note */}
-                <div 
-                  className="text-[12px] text-slate-500 text-center pt-1"
-                  style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
-                >
-                  {t("NPS = % Promoteurs - % Détracteurs")} • {perfNps.totalCount} {perfNps.totalCount > 1 ? t("avis comptabilisés") : t("avis comptabilisé")}
                 </div>
               </div>
 

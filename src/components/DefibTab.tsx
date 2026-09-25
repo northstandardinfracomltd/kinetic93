@@ -1613,27 +1613,81 @@ export default function DefibTab({
   }, [filteredDefibs, currentPage]);
 
   // Indicateur "Conforme et à jour"
-  const { conformeEtAJourCount, compliancePercent, totalDefibsCount } = useMemo(() => {
+  const { conformeEtAJourCount, compliancePercent, projectedCompliancePercent, totalDefibsCount } = useMemo(() => {
     const total = defibrillateurs.length;
     if (total === 0) {
-      return { conformeEtAJourCount: 0, compliancePercent: 100, totalDefibsCount: 0 };
+      return { conformeEtAJourCount: 0, compliancePercent: 100, projectedCompliancePercent: 100, totalDefibsCount: 0 };
     }
-    const compliantCount = defibrillateurs.filter(df => {
+
+    // Identifiants et IDs des défibrillateurs présents dans des tournées actives (brouillon, à faire, en cours...)
+    // Exclut les tournées supprimées ou terminées
+    const inTourDefibKeys = new Set<string>();
+    if (Array.isArray(fsmTours)) {
+      for (const t of fsmTours) {
+        if (!t || t.deleted || t.isDeleted) continue;
+        const statusLower = String(t.status || 'brouillon').trim().toLowerCase();
+        if (
+          statusLower === 'terminé' ||
+          statusLower === 'termine' ||
+          statusLower === 'completed' ||
+          statusLower === 'done' ||
+          statusLower === 'supprimé' ||
+          statusLower === 'supprime' ||
+          statusLower === 'deleted'
+        ) {
+          continue;
+        }
+
+        if (Array.isArray(t.missions)) {
+          for (const m of t.missions) {
+            if (m?.defibIdentifiant) inTourDefibKeys.add(String(m.defibIdentifiant).trim().toLowerCase());
+            if (m?.defibId) inTourDefibKeys.add(String(m.defibId).trim().toLowerCase());
+            if (m?.id) inTourDefibKeys.add(String(m.id).trim().toLowerCase());
+          }
+        }
+      }
+    }
+
+    let compliantCount = 0;
+    let projectedCount = 0;
+
+    for (const df of defibrillateurs) {
       // 1. Statut de conformité
-      if (df.conforme === 'Non') return false;
-      // 2. Statut à jour (aucune date expirée)
-      const status = getSafetyStatus(df);
-      if (status.colorClass === 'bg-[#ef4444]') return false;
-      return true;
-    }).length;
+      let isCompliant = true;
+      if (df.conforme === 'Non') {
+        isCompliant = false;
+      } else {
+        // 2. Statut à jour (aucune date expirée)
+        const status = getSafetyStatus(df);
+        if (status.colorClass === 'bg-[#ef4444]') {
+          isCompliant = false;
+        }
+      }
+
+      if (isCompliant) {
+        compliantCount++;
+        projectedCount++;
+      } else {
+        const identKey = df.identifiant ? String(df.identifiant).trim().toLowerCase() : '';
+        const idKey = df.id ? String(df.id).trim().toLowerCase() : '';
+        if ((identKey && inTourDefibKeys.has(identKey)) || (idKey && inTourDefibKeys.has(idKey))) {
+          projectedCount++;
+        }
+      }
+    }
 
     const pct = Math.round((compliantCount / total) * 100);
+    const projPct = Math.round((projectedCount / total) * 100);
+    const safeCompliance = Math.max(0, Math.min(100, pct));
+    const safeProjected = Math.max(safeCompliance, Math.min(100, projPct));
+
     return {
       conformeEtAJourCount: compliantCount,
-      compliancePercent: Math.max(0, Math.min(100, pct)),
+      compliancePercent: safeCompliance,
+      projectedCompliancePercent: safeProjected,
       totalDefibsCount: total
     };
-  }, [defibrillateurs]);
+  }, [defibrillateurs, fsmTours]);
 
   // Synchronization components for top and bottom horizontal scrollbars
   const topScrollRef = React.useRef<HTMLDivElement>(null);
@@ -2729,58 +2783,66 @@ export default function DefibTab({
             text="Bon à savoir concernant le code des couleurs des valeurs dans le tableau : Le rouge correspond à une action requise expirée (critique), l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois." 
           />
 
-          {/* Indicateur Conforme et à jour */}
+          {/* Indicateur Conforme et à jour (sur une seule ligne, sans count) */}
           <div 
             id="defib-compliance-indicator"
-            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '20px', marginBottom: '4px' }}
-            className="w-full"
+            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '16px', marginBottom: '6px' }}
+            className="w-full flex items-center gap-3 select-none"
           >
-            <div className="flex items-center justify-between mb-1.5 px-0.5">
-              <span 
-                style={{ 
-                  fontSize: '15px', 
-                  fontWeight: 600, 
-                  color: '#000000', 
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  cursor: 'default'
-                }}
-              >
-                {t("Conforme et à jour")}
-              </span>
-              <span 
-                style={{ 
-                  fontSize: '13px', 
-                  fontWeight: 400, 
-                  color: '#64748b', 
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  cursor: 'default'
-                }}
-              >
-                {conformeEtAJourCount} / {totalDefibsCount} {totalDefibsCount > 1 ? t("défibrillateurs") : t("défibrillateur")}
-              </span>
-            </div>
+            <span 
+              style={{ 
+                fontSize: '15px', 
+                fontWeight: 600, 
+                color: '#000000', 
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                cursor: 'default',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {t("Conforme et à jour")}
+            </span>
 
             <div 
-              className="relative w-full overflow-hidden select-none" 
+              className="relative flex-1 overflow-hidden select-none" 
               style={{ 
-                height: '24px', 
+                height: '22px', 
                 backgroundColor: '#e5e7eb', 
-                borderRadius: '12px',
+                borderRadius: '11px',
                 boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.06)'
               }}
             >
+              {/* Layer bleu semi-opaque: ce qui va devenir conforme et à jour (conformes + tournées actives) */}
               <div 
                 style={{ 
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  height: '100%',
+                  width: `${projectedCompliancePercent}%`, 
+                  backgroundColor: 'rgba(59, 130, 246, 0.42)', 
+                  borderRadius: '11px',
+                  transition: 'width 0.4s ease-in-out',
+                  zIndex: 1
+                }}
+              />
+              {/* Layer bleu plein: conforme et à jour actuel */}
+              <div 
+                style={{ 
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  height: '100%',
                   width: `${compliancePercent}%`, 
                   backgroundColor: '#3b82f6', 
-                  height: '100%', 
-                  borderRadius: '12px',
-                  transition: 'width 0.4s ease-in-out'
+                  borderRadius: '11px',
+                  transition: 'width 0.4s ease-in-out',
+                  zIndex: 2
                 }}
               />
               <div 
                 className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
                 style={{ 
+                  zIndex: 3,
                   fontSize: '13px', 
                   fontWeight: 700, 
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
