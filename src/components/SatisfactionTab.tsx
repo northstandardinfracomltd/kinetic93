@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
@@ -151,6 +152,13 @@ export default function SatisfactionTab({
   // Month filter state
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
 
+  // Performance Drawer & Period States
+  const [isPerformancePaneOpen, setIsPerformancePaneOpen] = useState(false);
+  const [satStartDate, setSatStartDate] = useState<string>('');
+  const [satEndDate, setSatEndDate] = useState<string>('');
+  const [npsStartDate, setNpsStartDate] = useState<string>('');
+  const [npsEndDate, setNpsEndDate] = useState<string>('');
+
   // Dynamically extract only months that actually exist in the reviews list
   const availableMonths = useMemo<MonthOption[]>(() => {
     const map = new Map<string, MonthOption>();
@@ -194,6 +202,158 @@ export default function SatisfactionTab({
     }
     return clean;
   };
+
+  const parseReviewTimestamp = (rev: Review): Date | null => {
+    const raw = getReviewDate(rev);
+    if (!raw) return null;
+    const s = raw.trim();
+    const matchISO = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (matchISO) {
+      return new Date(parseInt(matchISO[1], 10), parseInt(matchISO[2], 10) - 1, parseInt(matchISO[3], 10));
+    }
+    const matchFR = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (matchFR) {
+      return new Date(parseInt(matchFR[3], 10), parseInt(matchFR[2], 10) - 1, parseInt(matchFR[1], 10));
+    }
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+    return null;
+  };
+
+  // Performance Side-Pane: Satisfaction Moyenne with Date Range filter
+  const perfSatisfaction = useMemo(() => {
+    let reviews = customerReviews;
+    if (satStartDate || satEndDate) {
+      let startTs = -Infinity;
+      let endTs = Infinity;
+      if (satStartDate) {
+        const m = satStartDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) startTs = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 0, 0, 0, 0).getTime();
+      }
+      if (satEndDate) {
+        const m = satEndDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) endTs = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 23, 59, 59, 999).getTime();
+      }
+      reviews = reviews.filter((r) => {
+        const d = parseReviewTimestamp(r);
+        if (!d) return false;
+        const t = d.getTime();
+        return t >= startTs && t <= endTs;
+      });
+    }
+
+    const validNotes: number[] = [];
+    reviews.forEach((rev) => {
+      const nums = [rev.qualite, rev.ponctualite, rev.politesse, rev.clartePdf, rev.explications, rev.sensibilisation].filter(
+        (v): v is number => typeof v === 'number' && !isNaN(v)
+      );
+      if (nums.length > 0) {
+        const sum = nums.reduce((a, b) => a + b, 0);
+        validNotes.push(sum / nums.length);
+      } else if (rev.label) {
+        if (rev.label === 'Excellent' || rev.label === 'Parfait') validNotes.push(4);
+        else if (rev.label === 'Moyen') validNotes.push(2.5);
+        else if (rev.label === 'Décevant') validNotes.push(1.5);
+        else if (rev.label === 'Médiocre') validNotes.push(1);
+      }
+    });
+
+    if (validNotes.length === 0) {
+      return {
+        scoreDisplay: "Aucun avis",
+        totalCount: 0,
+        pctScore: "-",
+      };
+    }
+
+    const totalSum = validNotes.reduce((a, b) => a + b, 0);
+    const avg = totalSum / validNotes.length;
+    const formatted = avg % 1 === 0 ? avg.toFixed(0) : avg.toFixed(1);
+    const pct = Math.round((avg / 4) * 100);
+
+    return {
+      scoreDisplay: `${formatted}/4`,
+      totalCount: validNotes.length,
+      pctScore: `${pct}%`,
+    };
+  }, [customerReviews, satStartDate, satEndDate]);
+
+  // Performance Side-Pane: Score NPS with Date Range filter
+  const perfNps = useMemo(() => {
+    let reviews = customerReviews.filter((rev) => {
+      const score = typeof rev.npsScore === 'number' ? rev.npsScore : (typeof rev.nps === 'number' ? rev.nps : null);
+      return score !== null && !isNaN(score);
+    });
+
+    if (npsStartDate || npsEndDate) {
+      let startTs = -Infinity;
+      let endTs = Infinity;
+      if (npsStartDate) {
+        const m = npsStartDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) startTs = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 0, 0, 0, 0).getTime();
+      }
+      if (npsEndDate) {
+        const m = npsEndDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) endTs = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 23, 59, 59, 999).getTime();
+      }
+      reviews = reviews.filter((r) => {
+        const d = parseReviewTimestamp(r);
+        if (!d) return false;
+        const t = d.getTime();
+        return t >= startTs && t <= endTs;
+      });
+    }
+
+    const totalCount = reviews.length;
+    if (totalCount === 0) {
+      return {
+        scoreDisplay: "Aucun avis",
+        npsInt: null,
+        totalCount: 0,
+        promotersCount: 0,
+        passivesCount: 0,
+        detractorsCount: 0,
+        pctPromoters: 0,
+        pctPassives: 0,
+        pctDetractors: 0,
+      };
+    }
+
+    let promoters = 0;
+    let passives = 0;
+    let detractors = 0;
+
+    reviews.forEach((rev) => {
+      const score = typeof rev.npsScore === 'number' ? rev.npsScore : (typeof rev.nps === 'number' ? rev.nps : 0);
+      if (score >= 9) {
+        promoters++;
+      } else if (score >= 7) {
+        passives++;
+      } else {
+        detractors++;
+      }
+    });
+
+    const pctPromoters = (promoters / totalCount) * 100;
+    const pctDetractors = (detractors / totalCount) * 100;
+    const pctPassives = (passives / totalCount) * 100;
+
+    const npsValue = Math.round(pctPromoters - pctDetractors);
+    const clampedNps = Math.max(-100, Math.min(100, npsValue));
+    const scoreDisplay = clampedNps > 0 ? `+${clampedNps}` : `${clampedNps}`;
+
+    return {
+      scoreDisplay,
+      npsInt: clampedNps,
+      totalCount,
+      promotersCount: promoters,
+      passivesCount: passives,
+      detractorsCount: detractors,
+      pctPromoters: Math.round(pctPromoters),
+      pctPassives: Math.round(pctPassives),
+      pctDetractors: Math.round(pctDetractors),
+    };
+  }, [customerReviews, npsStartDate, npsEndDate]);
 
   const getNoteGlobale = (rev: Review): string => {
     const nums = [rev.qualite, rev.ponctualite, rev.politesse, rev.clartePdf, rev.explications, rev.sensibilisation].filter(
@@ -545,6 +705,17 @@ export default function SatisfactionTab({
               />
             </div>
 
+            {/* Performance Button */}
+            <button
+              type="button"
+              id="btn-satisfaction-performance"
+              onClick={() => setIsPerformancePaneOpen(true)}
+              style={rowActionButtonStyle}
+              className="cursor-pointer font-sans whitespace-nowrap hover:opacity-80 transition-all"
+            >
+              <span>{t("Performance")}</span>
+            </button>
+
             {/* Export CSV Button */}
             <button
               type="button"
@@ -861,6 +1032,398 @@ export default function SatisfactionTab({
           )}
         </div>
       </div>
+
+      {/* Side-pane Performance */}
+      {isPerformancePaneOpen && (
+        <div 
+          className="fixed inset-0 z-[9999] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, height: '100vh', width: '100vw' }}
+          onClick={() => setIsPerformancePaneOpen(false)}
+        >
+          <div 
+            className="relative w-full max-w-xl bg-white flex flex-col overflow-hidden animate-slideLeft h-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-[#dadada] bg-white">
+              <div>
+                <h3 className="text-2xl font-bold text-black font-gochi" style={{ cursor: 'default' }}>
+                  {t("Performance")}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPerformancePaneOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-black transition-colors cursor-pointer"
+                title={t("Fermer")}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable content area */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28">
+              
+              {/* BLOC 1 : Satisfaction Moyenne */}
+              <div 
+                style={{
+                  border: '1px solid rgb(218, 218, 218)',
+                  borderRadius: '18px',
+                  padding: '24px',
+                  backgroundColor: '#ffffff',
+                }}
+                className="space-y-4 shadow-3xs"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 
+                    style={{ fontSize: '18px', fontWeight: 600, color: '#000000', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                    className="cursor-default"
+                  >
+                    {t("Satisfaction Moyenne.") || "Satisfaction Moyenne."}
+                  </h4>
+                  {(satStartDate || satEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => { setSatStartDate(''); setSatEndDate(''); }}
+                      className="text-xs text-slate-500 hover:text-black underline cursor-pointer font-sans"
+                    >
+                      {t("Réinitialiser")}
+                    </button>
+                  )}
+                </div>
+
+                {/* Date range filter fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label 
+                      htmlFor="input-sat-start-date" 
+                      className="block text-xs font-semibold text-slate-600 uppercase"
+                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                    >
+                      {t("Début.") || "Début."}
+                    </label>
+                    <input
+                      type="date"
+                      id="input-sat-start-date"
+                      value={satStartDate}
+                      onChange={(e) => setSatStartDate(e.target.value)}
+                      style={{
+                        padding: '10px 14px',
+                        border: '1px solid #dedede',
+                        borderRadius: '13px',
+                        fontSize: '16px',
+                        fontWeight: 100,
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                        width: '100%',
+                      }}
+                      className="hover:border-slate-400 focus:border-[#fa53d5] transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label 
+                      htmlFor="input-sat-end-date" 
+                      className="block text-xs font-semibold text-slate-600 uppercase"
+                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                    >
+                      {t("Fin.") || "Fin."}
+                    </label>
+                    <input
+                      type="date"
+                      id="input-sat-end-date"
+                      value={satEndDate}
+                      onChange={(e) => setSatEndDate(e.target.value)}
+                      style={{
+                        padding: '10px 14px',
+                        border: '1px solid #dedede',
+                        borderRadius: '13px',
+                        fontSize: '16px',
+                        fontWeight: 100,
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                        width: '100%',
+                      }}
+                      className="hover:border-slate-400 focus:border-[#fa53d5] transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* Metric results */}
+                <div 
+                  className="pt-2 flex flex-col items-center justify-center text-center p-4 rounded-xl"
+                  style={{ backgroundColor: '#fafafa', border: '1px solid #f0f0f0' }}
+                >
+                  <div className="flex items-center justify-center gap-3">
+                    <div 
+                      style={{ 
+                        fontSize: '38px', 
+                        fontWeight: 900, 
+                        color: '#000000', 
+                        fontFamily: "'Gochi', cursive, sans-serif",
+                        lineHeight: 1
+                      }}
+                    >
+                      {perfSatisfaction.scoreDisplay}
+                    </div>
+                    {perfSatisfaction.totalCount > 0 && perfSatisfaction.pctScore !== '-' && (
+                      <div 
+                        style={{
+                          ...roundBadgeStyle,
+                          width: '42px',
+                          height: '42px',
+                          fontSize: '14px',
+                        }}
+                      >
+                        {perfSatisfaction.pctScore}
+                      </div>
+                    )}
+                  </div>
+                  <div 
+                    className="text-sm text-slate-600 mt-2"
+                    style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                  >
+                    {perfSatisfaction.totalCount === 0
+                      ? t("Aucun avis sur cette période")
+                      : `${perfSatisfaction.totalCount} ${perfSatisfaction.totalCount > 1 ? t("avis enregistrés") : t("avis enregistré")}`}
+                  </div>
+                </div>
+              </div>
+
+              {/* BLOC 2 : Score NPS */}
+              <div 
+                style={{
+                  border: '1px solid rgb(218, 218, 218)',
+                  borderRadius: '18px',
+                  padding: '24px',
+                  backgroundColor: '#ffffff',
+                }}
+                className="space-y-4 shadow-3xs"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 
+                    style={{ fontSize: '18px', fontWeight: 600, color: '#000000', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                    className="cursor-default"
+                  >
+                    {t("Score NPS.") || "Score NPS."}
+                  </h4>
+                  {(npsStartDate || npsEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => { setNpsStartDate(''); setNpsEndDate(''); }}
+                      className="text-xs text-slate-500 hover:text-black underline cursor-pointer font-sans"
+                    >
+                      {t("Réinitialiser")}
+                    </button>
+                  )}
+                </div>
+
+                {/* Date range filter fields without any mention of 'Par défaut : all time' */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label 
+                      htmlFor="input-nps-start-date" 
+                      className="block text-xs font-semibold text-slate-600 uppercase"
+                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                    >
+                      {t("Début.") || "Début."}
+                    </label>
+                    <input
+                      type="date"
+                      id="input-nps-start-date"
+                      value={npsStartDate}
+                      onChange={(e) => setNpsStartDate(e.target.value)}
+                      style={{
+                        padding: '10px 14px',
+                        border: '1px solid #dedede',
+                        borderRadius: '13px',
+                        fontSize: '16px',
+                        fontWeight: 100,
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                        width: '100%',
+                      }}
+                      className="hover:border-slate-400 focus:border-[#fa53d5] transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label 
+                      htmlFor="input-nps-end-date" 
+                      className="block text-xs font-semibold text-slate-600 uppercase"
+                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                    >
+                      {t("Fin.") || "Fin."}
+                    </label>
+                    <input
+                      type="date"
+                      id="input-nps-end-date"
+                      value={npsEndDate}
+                      onChange={(e) => setNpsEndDate(e.target.value)}
+                      style={{
+                        padding: '10px 14px',
+                        border: '1px solid #dedede',
+                        borderRadius: '13px',
+                        fontSize: '16px',
+                        fontWeight: 100,
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                        width: '100%',
+                      }}
+                      className="hover:border-slate-400 focus:border-[#fa53d5] transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* Score Big Display */}
+                <div 
+                  className="pt-2 flex flex-col items-center justify-center text-center p-4 rounded-xl"
+                  style={{ backgroundColor: '#fafafa', border: '1px solid #f0f0f0' }}
+                >
+                  <div 
+                    style={{ 
+                      fontSize: '44px', 
+                      fontWeight: 900, 
+                      color: perfNps.npsInt === null ? '#000000' : (perfNps.npsInt > 0 ? '#10b981' : (perfNps.npsInt < 0 ? '#ef4444' : '#000000')), 
+                      fontFamily: "'Gochi', cursive, sans-serif",
+                      lineHeight: 1
+                    }}
+                  >
+                    {perfNps.scoreDisplay}
+                  </div>
+                  <div 
+                    className="text-xs text-slate-500 mt-1"
+                    style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                  >
+                    {perfNps.totalCount === 0 
+                      ? t("Aucun avis sur cette période") 
+                      : (perfNps.npsInt !== null ? `${t("Indice NPS")} (${perfNps.scoreDisplay})` : '')}
+                  </div>
+                </div>
+
+                {/* Breakdown Categories: Promoteurs, Passifs, Détracteurs */}
+                <div className="space-y-2 pt-1 font-sans">
+                  {/* Promoteurs */}
+                  <div 
+                    className="p-3 rounded-xl border flex items-center justify-between"
+                    style={{ borderColor: '#d1fae5', backgroundColor: '#f0fdf4' }}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="font-semibold text-emerald-900 text-sm flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                        <span>{t("Promoteurs (9-10)")}</span>
+                      </div>
+                      <div className="text-xs text-emerald-700">
+                        {t("Clients très enthousiastes")}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-emerald-900 text-base">
+                        {perfNps.pctPromoters}%
+                      </div>
+                      <div className="text-xs text-emerald-700">
+                        {perfNps.promotersCount} {perfNps.promotersCount > 1 ? t("avis") : t("avis")}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Passifs */}
+                  <div 
+                    className="p-3 rounded-xl border flex items-center justify-between"
+                    style={{ borderColor: '#fef3c7', backgroundColor: '#fffbeb' }}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="font-semibold text-amber-900 text-sm flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                        <span>{t("Passifs (7-8)")}</span>
+                      </div>
+                      <div className="text-xs text-amber-700">
+                        {t("Clients neutres (exclus du calcul direct)")}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-amber-900 text-base">
+                        {perfNps.pctPassives}%
+                      </div>
+                      <div className="text-xs text-amber-700">
+                        {perfNps.passivesCount} {perfNps.passivesCount > 1 ? t("avis") : t("avis")}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Détracteurs */}
+                  <div 
+                    className="p-3 rounded-xl border flex items-center justify-between"
+                    style={{ borderColor: '#fee2e2', backgroundColor: '#fef2f2' }}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="font-semibold text-rose-900 text-sm flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+                        <span>{t("Détracteurs (0-6)")}</span>
+                      </div>
+                      <div className="text-xs text-rose-700">
+                        {t("Clients insatisfaits ou à risque")}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-rose-900 text-base">
+                        {perfNps.pctDetractors}%
+                      </div>
+                      <div className="text-xs text-rose-700">
+                        {perfNps.detractorsCount} {perfNps.detractorsCount > 1 ? t("avis") : t("avis")}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Formula note */}
+                <div 
+                  className="text-[12px] text-slate-500 text-center pt-1"
+                  style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                >
+                  {t("NPS = % Promoteurs - % Détracteurs")} • {perfNps.totalCount} {perfNps.totalCount > 1 ? t("avis comptabilisés") : t("avis comptabilisé")}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Floating Bottom Fermer Button (hors de div scrollable) */}
+            <div className="absolute bottom-5 left-5 right-5 z-20">
+              <button
+                type="button"
+                id="btn-close-performance-pane"
+                onClick={() => setIsPerformancePaneOpen(false)}
+                style={{
+                  width: '100%',
+                  backgroundColor: '#000000',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  padding: '13px 20px',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  border: 'none',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+                className="hover:bg-neutral-800 transition-colors"
+              >
+                <span>{t("Fermer")}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

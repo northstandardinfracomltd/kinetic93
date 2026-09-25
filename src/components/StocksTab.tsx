@@ -886,6 +886,16 @@ export default function StocksTab({
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
+  // Valeur (HT) des stocks disponibles
+  const totalStockValueHT = useMemo(() => {
+    const sum = stocks.reduce((acc, item) => {
+      const qty = typeof item.quantite === 'number' ? item.quantite : parseFloat(item.quantite as any) || 0;
+      const price = typeof item.valeurAchat === 'number' ? item.valeurAchat : parseFloat(item.valeurAchat as any) || 0;
+      return acc + (qty * price);
+    }, 0);
+    return `${sum.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
+  }, [stocks]);
+
   // Helper to dynamically calculate prevoiance for any variable id
   const getPrevoianceForVariable = useMemo(() => {
     return (denomId: string, qty: number) => {
@@ -1448,8 +1458,36 @@ export default function StocksTab({
             text="Le compartiment de la centrale des stocks vous permet de créer et gérer des pièces et services tous emplacements confondus. Retrouvez ensuite dans l’onglet des stocks distribués la répartition des pièces et services pour chaque emplacement. Pour rappel, un seul emplacement peut être dédié à un technicien par exemple, comme un véhicule ; il est aussi possible de gérer des emplacements de type entrepôt afin de savoir où est placé chaque élément." 
           />
 
+          {/* Indicateur Valeur (HT) des stocks disponibles */}
+          <div 
+            id="stocks-available-value-indicator"
+            className="px-4 pt-4 flex flex-wrap items-center justify-start select-none"
+          >
+            <div 
+              style={{
+                padding: '10px 18px',
+                backgroundColor: '#f8fafc',
+                border: '1px solid rgb(218, 218, 218)',
+                borderRadius: '13px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                fontSize: '15px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                color: '#000000',
+                cursor: 'default',
+              }}
+            >
+              <span style={{ fontWeight: 400, color: '#475569', marginRight: '6px' }}>
+                {t("Valeur (HT) des stocks disponibles :")}
+              </span>
+              <span style={{ fontWeight: 700, color: '#000000' }}>
+                {totalStockValueHT}
+              </span>
+            </div>
+          </div>
+
           {/* Filters Pills Row */}
-          <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" id="stocks-storage-pills">
+          <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-3" id="stocks-storage-pills">
             {[
               { value: 'Tous', label: 'Tous' },
               { value: 'ReqPrev2M', label: 'Besoin 2 mois' },

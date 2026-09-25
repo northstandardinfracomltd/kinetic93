@@ -46,7 +46,6 @@ import ClientTab from './components/ClientTab';
 import VariableTab from './components/VariableTab';
 import SettingsModal from './components/SettingsModal';
 import { CrmTab } from './components/CrmTab';
-import StatsModal from './components/StatsModal';
 import PublicPortal from './components/PublicPortal';
 import ClientPortal from './components/ClientPortal';
 import Login from './components/Login';
@@ -90,7 +89,6 @@ import {
   ThumbsUp,
   Inbox,
   AlertOctagon,
-  TrendingUp,
   ChevronRight,
   ShieldCheck,
   CheckCircle,
@@ -141,7 +139,6 @@ export type AppTab =
   | 'veilles'
   | 'localisations'
   | 'satisfaction'
-  | 'statistiques'
   | 'formations'
   | 'stagiaires'
   | 'emargements'
@@ -750,7 +747,6 @@ export default function App() {
       }
     } catch (_) {}
   }, []);
-  const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isPublicPortalOpen, setIsPublicPortalOpen] = useState(false);
   const [isClientPortalOpen, setIsClientPortalOpen ] = useState(false);
   const [activePortalClient, setActivePortalClient] = useState<Client | null>(null);
@@ -1638,6 +1634,276 @@ export default function App() {
     }
   }, [fsmTours, generatedReports]);
 
+  // Helper to parse dates and timestamps in various standard and French formats
+  const parseTimestampHelper = (str: any): Date | null => {
+    if (!str || typeof str !== 'string') return null;
+    const s = str.trim();
+    if (!s) return null;
+
+    const matchFR = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:[ ,Tà@]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/i);
+    if (matchFR) {
+      const day = parseInt(matchFR[1], 10);
+      const month = parseInt(matchFR[2], 10) - 1;
+      const year = parseInt(matchFR[3], 10);
+      const hours = matchFR[4] ? parseInt(matchFR[4], 10) : 0;
+      const minutes = matchFR[5] ? parseInt(matchFR[5], 10) : 0;
+      const seconds = matchFR[6] ? parseInt(matchFR[6], 10) : 0;
+      const d = new Date(year, month, day, hours, minutes, seconds);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    const matchISO = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[ ,Tà@]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/i);
+    if (matchISO) {
+      const year = parseInt(matchISO[1], 10);
+      const month = parseInt(matchISO[2], 10) - 1;
+      const day = parseInt(matchISO[3], 10);
+      const hours = matchISO[4] ? parseInt(matchISO[4], 10) : 0;
+      const minutes = matchISO[5] ? parseInt(matchISO[5], 10) : 0;
+      const seconds = matchISO[6] ? parseInt(matchISO[6], 10) : 0;
+      const d = new Date(year, month, day, hours, minutes, seconds);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    const standard = new Date(s);
+    if (!isNaN(standard.getTime())) return standard;
+
+    return null;
+  };
+
+  // Temps moyen d'une intervention en minutes
+  const avgInterventionMinutesStr = useMemo(() => {
+    const validReports = (generatedReports || []).filter((rep: any) => {
+      const isFormation = 
+        rep.equipmentType === 'Formation' ||
+        rep.equipmentType?.toLowerCase()?.includes('formation') ||
+        rep.defibSnapshot?.categorie === 'Formation' ||
+        rep.defibSnapshot?.categorie?.toLowerCase()?.includes('formation') ||
+        !!rep.formationId ||
+        rep.defibIdentifiant === 'Formation';
+      if (isFormation) return false;
+
+      const isEffectue = 
+        rep.missionStatus === 'Effectué' ||
+        rep.conforme === 'Conforme' ||
+        rep.conforme === 'Non Conforme' ||
+        rep.conforme === 'Intervention impossible' ||
+        !!rep.validated;
+
+      const isUpcoming = !isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture);
+      return !isUpcoming;
+    });
+
+    let totalSeconds = 0;
+    let countedReports = 0;
+
+    validReports.forEach((rep: any) => {
+      const startStr = rep.date || rep.interventionDate || rep.horodatage || rep.startTimeStamp || rep.dateIntervention || rep.horodatageEntrant;
+      const endStr = rep.endTimeStamp || rep.horodatageCloture || rep.heureFin || rep.horodatageSortant || rep.dateCloture;
+
+      const start = parseTimestampHelper(startStr);
+      const end = parseTimestampHelper(endStr);
+
+      if (start && end) {
+        const diffMs = end.getTime() - start.getTime();
+        if (diffMs >= 0) {
+          totalSeconds += Math.floor(diffMs / 1000);
+          countedReports++;
+        }
+      } else if (typeof rep.durationSeconds === 'number' && rep.durationSeconds > 0) {
+        totalSeconds += rep.durationSeconds;
+        countedReports++;
+      }
+    });
+
+    if (countedReports === 0) {
+      // Fallback to pointages if no reports present
+      const finished = (pointages || []).filter(p => !p.isOngoing);
+      if (finished.length === 0) return "N/A";
+      const totalSecs = finished.reduce((sum, p) => {
+        if (p.durationSeconds !== undefined) return sum + p.durationSeconds;
+        if (p.startDate && p.startTime && p.endDate && p.endTime) {
+          try {
+            const start = new Date(`${p.startDate}T${p.startTime}`);
+            const end = new Date(`${p.endDate}T${p.endTime}`);
+            const diff = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
+            return sum + diff;
+          } catch {
+            return sum;
+          }
+        }
+        return sum;
+      }, 0);
+      const avgSecs = totalSecs / finished.length;
+      const minutes = Math.round(avgSecs / 60);
+      return `${minutes} min(s)`;
+    }
+
+    const avgMinutes = Math.round((totalSeconds / countedReports) / 60);
+    return `${avgMinutes} min(s)`;
+  }, [generatedReports, pointages]);
+
+  // Extraction de la clé mois YYYY-MM pour une tournée ou ses missions
+  const getTourMonthKey = (tour: any): string => {
+    if (!tour) return '';
+    if (tour.startDate && tour.startDate !== 'A trier' && tour.startDate.includes('-')) {
+      return tour.startDate.slice(0, 7);
+    }
+    if (tour.date && tour.date !== 'A trier' && tour.date.includes('-')) {
+      return tour.date.slice(0, 7);
+    }
+    if (tour.missions && Array.isArray(tour.missions)) {
+      for (const m of tour.missions) {
+        const d = m.estimatedDate || m.date || m.scheduledDate;
+        if (d && d.includes('-') && d !== 'A trier') {
+          return d.slice(0, 7);
+        }
+      }
+    }
+    return '';
+  };
+
+  // Clé du mois en cours par défaut (ex: "2026-09" ou "2026-02")
+  const currentMonthKey = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }, []);
+
+  // Mois sélectionné pour la statistique CO2 (par défaut le mois en cours)
+  const [selectedCo2Month, setSelectedCo2Month] = useState<string>(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  });
+
+  // Historique persistant des valeurs CO2 des tournées faites / effectuées (conservé même en cas de suppression)
+  const [fsmCo2History, setFsmCo2History] = useState<{
+    tourId: string;
+    monthKey: string;
+    co2Saved: number;
+    tourDate?: string;
+    missionsCount?: number;
+    status?: string;
+  }[]>(() => {
+    try {
+      const raw = localStorage.getItem(`defib_${tenantId}_fsm_co2_history`) || localStorage.getItem('defib_fsm_co2_history');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      console.warn("Failed to parse fsmCo2History:", e);
+    }
+    return [];
+  });
+
+  // Recharger l'historique CO2 si le tenant change
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`defib_${tenantId}_fsm_co2_history`);
+      if (raw) {
+        setFsmCo2History(JSON.parse(raw));
+      } else {
+        setFsmCo2History([]);
+      }
+    } catch {
+      setFsmCo2History([]);
+    }
+  }, [tenantId]);
+
+  // Sauvegarde un enregistrement CO2 dans l'historique persistant
+  const saveCo2HistoryRecord = (record: {
+    tourId: string;
+    monthKey: string;
+    co2Saved: number;
+    tourDate?: string;
+    missionsCount?: number;
+    status?: string;
+  }) => {
+    setFsmCo2History(prev => {
+      const filtered = prev.filter(r => r.tourId !== record.tourId);
+      const updated = [...filtered, record];
+      try {
+        localStorage.setItem(`defib_${tenantId}_fsm_co2_history`, JSON.stringify(updated));
+      } catch (e) {
+        console.warn("Storage quota exceeded in fsmCo2History:", e);
+      }
+      return updated;
+    });
+  };
+
+  // Liste des mois disponibles pour le sélecteur (ex: "Février 2026", "Septembre 2026", etc.)
+  const availableCo2Months = useMemo(() => {
+    const monthsMap = new Map<string, string>();
+    const FRENCH_MONTH_NAMES = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+
+    const addMonth = (key: string) => {
+      if (!key || !key.includes('-')) return;
+      const [yStr, mStr] = key.split('-');
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10);
+      if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return;
+      const label = `${FRENCH_MONTH_NAMES[m - 1]} ${y}`;
+      monthsMap.set(key, label);
+    };
+
+    // Période courante étendue (-12 mois à +6 mois)
+    const now = new Date();
+    const curY = now.getFullYear();
+    const curM = now.getMonth();
+    for (let i = -12; i <= 6; i++) {
+      const d = new Date(curY, curM + i, 1);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      addMonth(k);
+    }
+
+    // Ajouter les mois présents dans fsmTours
+    (fsmTours || []).forEach(t => {
+      const k = getTourMonthKey(t);
+      if (k) addMonth(k);
+    });
+
+    // Ajouter les mois présents dans l'historique
+    (fsmCo2History || []).forEach(h => {
+      if (h.monthKey) addMonth(h.monthKey);
+    });
+
+    const entries = Array.from(monthsMap.entries()).map(([key, label]) => ({ key, label }));
+    entries.sort((a, b) => b.key.localeCompare(a.key)); // Plus récent en premier
+    return entries;
+  }, [fsmTours, fsmCo2History]);
+
+  // Calcul du CO2 préservé (émissions évitées) pour le mois sélectionné
+  // Basé sur le calcul des divs bleues des missions (1.2 kg par mission)
+  // Conserve en mémoire les tournées supprimées si elles ont été faites
+  const totalPreservedCo2 = useMemo(() => {
+    const activeToursInMonth = (fsmTours || []).filter(t => {
+      if (t.id === 'a-trier') return false;
+      const mKey = getTourMonthKey(t);
+      return mKey === selectedCo2Month;
+    });
+
+    const activeTourIds = new Set(activeToursInMonth.map(t => t.id));
+    const activeCo2 = activeToursInMonth.reduce((sum, t) => {
+      const mLength = t.missions ? t.missions.length : 0;
+      return sum + (mLength * 1.2);
+    }, 0);
+
+    // Tournées supprimées mais qui ont été effectuées et conservées en historique
+    const archivedCo2 = (fsmCo2History || [])
+      .filter(rec => rec.monthKey === selectedCo2Month && !activeTourIds.has(rec.tourId))
+      .reduce((sum, rec) => sum + (rec.co2Saved || 0), 0);
+
+    return Number((activeCo2 + archivedCo2).toFixed(2));
+  }, [fsmTours, fsmCo2History, selectedCo2Month]);
+
+  const formattedCo2Str = useMemo(() => {
+    if (totalPreservedCo2 === 0) return '0';
+    return totalPreservedCo2 % 1 === 0 ? totalPreservedCo2.toFixed(0) : totalPreservedCo2.toFixed(1).replace('.', ',');
+  }, [totalPreservedCo2]);
+
   const optimizeFsmTour = async (
     tourId: string,
     currentToursList: any[] = fsmTours,
@@ -1790,6 +2056,29 @@ export default function App() {
       alert("Impossible de supprimer une tournée dont le statut est À faire ou En cours.");
       return;
     }
+
+    // Conserver en mémoire les émissions préservées (CO2) si la tournée a été faite / effectuée
+    const wasDone = 
+      currentStatus === 'Effectué' || 
+      currentStatus === 'Terminé' ||
+      (tour.missions && tour.missions.some((m: any) => m.status === 'Effectué' || m.validated)) ||
+      (generatedReports && generatedReports.some((r: any) => r.tourId === tour.id || (tour.missions && tour.missions.some((m: any) => m.interventionReference === r.interventionReference))));
+
+    if (wasDone) {
+      const mLength = tour.missions ? tour.missions.length : 0;
+      const co2 = Number((mLength * 1.2).toFixed(2));
+      const mKey = getTourMonthKey(tour) || (tour.startDate && tour.startDate.includes('-') ? tour.startDate.slice(0, 7) : '') || currentMonthKey;
+      if (co2 > 0 && mKey) {
+        saveCo2HistoryRecord({
+          tourId: tour.id,
+          monthKey: mKey,
+          co2Saved: co2,
+          tourDate: tour.startDate || tour.date || '',
+          missionsCount: mLength,
+          status: currentStatus
+        });
+      }
+    }
     if (tour.missions) {
       let updatedStocks = stocks.map(st => ({
         ...st,
@@ -1885,6 +2174,24 @@ export default function App() {
 
     const updatedTours = fsmTours.map(t => t.id === tourId ? { ...t, ...fields, calculated: isCalculatedValue } : t);
     saveFsmTours(updatedTours);
+
+    if (newStatus === 'Effectué' && existingTour) {
+      const tourMissions = fields.missions !== undefined ? fields.missions : existingTour.missions;
+      const mLength = tourMissions ? tourMissions.length : 0;
+      const co2 = Number((mLength * 1.2).toFixed(2));
+      const sDate = fields.startDate !== undefined ? fields.startDate : existingTour.startDate;
+      const mKey = (sDate && sDate.includes('-')) ? sDate.slice(0, 7) : currentMonthKey;
+      if (co2 > 0 && mKey) {
+        saveCo2HistoryRecord({
+          tourId,
+          monthKey: mKey,
+          co2Saved: co2,
+          tourDate: sDate || '',
+          missionsCount: mLength,
+          status: 'Effectué'
+        });
+      }
+    }
 
     if (newStatus === 'À faire' && oldStatus !== 'À faire' && existingTour) {
       const companyName = companyInfo.name || 'Défibeo Suite';
@@ -6754,7 +7061,6 @@ export default function App() {
               { id: 'formations', label: t('Formations'), icon: Layers },
               { id: 'stagiaires', label: t('Stagiaires'), icon: User },
               { id: 'emargements', label: t('Émargements'), icon: ClipboardList },
-              { id: 'statistiques', label: t('Statistiques'), icon: TrendingUp },
               { id: 'variables', label: t('Variables'), icon: Layers },
               { id: 'import-export', label: t('Importer Exporter'), icon: Download },
               { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -8344,6 +8650,88 @@ export default function App() {
                   ))}
                 </datalist>
 
+                {/* Indicateurs FSM : Temps moyen d’une intervention & CO2 préservé */}
+                <div 
+                  id="fsm-indicators-container"
+                  className="px-4 pt-4 flex flex-wrap items-center justify-start select-none gap-3"
+                >
+                  {/* Indicateur Temps moyen d’une intervention */}
+                  <div 
+                    id="fsm-avg-intervention-time-indicator"
+                    style={{
+                      padding: '10px 18px',
+                      backgroundColor: '#f8fafc',
+                      border: '1px solid rgb(218, 218, 218)',
+                      borderRadius: '13px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      fontSize: '15px',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      color: '#000000',
+                      cursor: 'default',
+                    }}
+                  >
+                    <span style={{ fontWeight: 400, color: '#475569', marginRight: '6px' }}>
+                      {t("Temps moyen d’une intervention :")}
+                    </span>
+                    <span style={{ fontWeight: 700, color: '#000000' }}>
+                      {avgInterventionMinutesStr}
+                    </span>
+                  </div>
+
+                  {/* Indicateur CO2 préservé */}
+                  <div 
+                    id="fsm-co2-preserved-indicator"
+                    style={{
+                      padding: '10px 18px',
+                      backgroundColor: '#f8fafc',
+                      border: '1px solid rgb(218, 218, 218)',
+                      borderRadius: '13px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      fontSize: '15px',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      color: '#000000',
+                    }}
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 700, color: '#000000', marginRight: '6px' }}>
+                        {formattedCo2Str} kg
+                      </span>
+                      <span style={{ fontWeight: 400, color: '#475569' }}>
+                        {t("Co2e d’émissions préservée(s)")}
+                      </span>
+                    </div>
+
+                    <div style={{ height: '16px', width: '1px', backgroundColor: 'rgb(218, 218, 218)' }} />
+
+                    <select
+                      value={selectedCo2Month}
+                      onChange={(e) => setSelectedCo2Month(e.target.value)}
+                      title={t("Sélectionner le mois")}
+                      style={{
+                        backgroundColor: '#ffffff',
+                        border: '1px solid rgb(218, 218, 218)',
+                        borderRadius: '8px',
+                        padding: '2px 8px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        color: '#000000',
+                        cursor: 'pointer',
+                        outline: 'none',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                    >
+                      {availableCo2Months.map((m) => (
+                        <option key={m.key} value={m.key}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 {fsmTours.length > 0 && (() => {
                   const formatFrenchDate = (dateStr: string): string => {
                     if (!dateStr) return '';
@@ -8363,7 +8751,7 @@ export default function App() {
                   };
 
                   return (
-                    <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" id="fsm-dates-pills">
+                    <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-3" id="fsm-dates-pills">
                       <button
                         type="button"
                         onClick={() => setFsmDateFilter('A trier')}
@@ -9768,7 +10156,7 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* Indication of missions and estimated travel duration */}
+                          {/* Indication of missions and estimated travel duration (Masqué selon la demande utilisateur) */}
                           {(() => {
                             if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
                               return null;
@@ -9778,12 +10166,13 @@ export default function App() {
                             return (
                               <div 
                                 style={{
+                                  display: 'none',
                                   color: '#3b5bf0',
                                   backgroundColor: '#e7ebff',
                                   border: 'none',
                                   cursor: 'default'
                                 }}
-                                className="font-semibold text-sm px-4 py-3 rounded-xl flex items-center gap-2.5 mx-0.5"
+                                className="hidden font-semibold text-sm px-4 py-3 rounded-xl items-center gap-2.5 mx-0.5"
                               >
                                 <span>
                                   La tournée comporte <strong className="font-extrabold">{mLength} {mLength > 1 ? 'missions' : 'mission'}</strong>, nous estimons à <strong className="font-extrabold">{daysEstimate} {daysEstimate > 1 ? 'jours' : 'jour'}</strong> la durée du déplacement. <strong className="font-extrabold">{(mLength * 1.2).toFixed(1).replace('.', ',')} kg d’émissions de CO₂ (dioxyde de carbone)</strong> ont été évités grâce à l’optimisation du trajet (Source: MyClimate).
@@ -14411,22 +14800,6 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'statistiques' && (
-            <StatsModal
-              isPage={true}
-              isOpen={true}
-              onClose={() => {}}
-              defibrillateurs={defibrillateurs}
-              clients={clients}
-              variables={variables}
-              stocks={stocks}
-              pointages={pointages}
-              customerReviews={customerReviews}
-              fsmTours={fsmTours}
-              generatedReports={generatedReports}
-            />
-          )}
-
           {activeTab === 'formations' && (
             <FormationsTab
               formations={formations}
@@ -14601,19 +14974,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      <StatsModal
-        isOpen={isStatsOpen}
-        onClose={() => setIsStatsOpen(false)}
-        defibrillateurs={defibrillateurs}
-        clients={clients}
-        variables={variables}
-        stocks={stocks}
-        pointages={pointages}
-        customerReviews={customerReviews}
-        fsmTours={fsmTours}
-        generatedReports={generatedReports}
-      />
 
       <FeedbackDrawer companyName={companyInfo?.name} />
     </div>

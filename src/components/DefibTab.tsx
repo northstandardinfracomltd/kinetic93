@@ -1612,6 +1612,29 @@ export default function DefibTab({
     return filteredDefibs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredDefibs, currentPage]);
 
+  // Indicateur "Conforme et à jour"
+  const { conformeEtAJourCount, compliancePercent, totalDefibsCount } = useMemo(() => {
+    const total = defibrillateurs.length;
+    if (total === 0) {
+      return { conformeEtAJourCount: 0, compliancePercent: 100, totalDefibsCount: 0 };
+    }
+    const compliantCount = defibrillateurs.filter(df => {
+      // 1. Statut de conformité
+      if (df.conforme === 'Non') return false;
+      // 2. Statut à jour (aucune date expirée)
+      const status = getSafetyStatus(df);
+      if (status.colorClass === 'bg-[#ef4444]') return false;
+      return true;
+    }).length;
+
+    const pct = Math.round((compliantCount / total) * 100);
+    return {
+      conformeEtAJourCount: compliantCount,
+      compliancePercent: Math.max(0, Math.min(100, pct)),
+      totalDefibsCount: total
+    };
+  }, [defibrillateurs]);
+
   // Synchronization components for top and bottom horizontal scrollbars
   const topScrollRef = React.useRef<HTMLDivElement>(null);
   const bottomScrollRef = React.useRef<HTMLDivElement>(null);
@@ -2706,11 +2729,75 @@ export default function DefibTab({
             text="Bon à savoir concernant le code des couleurs des valeurs dans le tableau : Le rouge correspond à une action requise expirée (critique), l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois." 
           />
 
+          {/* Indicateur Conforme et à jour */}
+          <div 
+            id="defib-compliance-indicator"
+            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '20px', marginBottom: '4px' }}
+            className="w-full"
+          >
+            <div className="flex items-center justify-between mb-1.5 px-0.5">
+              <span 
+                style={{ 
+                  fontSize: '15px', 
+                  fontWeight: 600, 
+                  color: '#000000', 
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  cursor: 'default'
+                }}
+              >
+                {t("Conforme et à jour")}
+              </span>
+              <span 
+                style={{ 
+                  fontSize: '13px', 
+                  fontWeight: 400, 
+                  color: '#64748b', 
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  cursor: 'default'
+                }}
+              >
+                {conformeEtAJourCount} / {totalDefibsCount} {totalDefibsCount > 1 ? t("défibrillateurs") : t("défibrillateur")}
+              </span>
+            </div>
+
+            <div 
+              className="relative w-full overflow-hidden select-none" 
+              style={{ 
+                height: '24px', 
+                backgroundColor: '#e5e7eb', 
+                borderRadius: '12px',
+                boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.06)'
+              }}
+            >
+              <div 
+                style={{ 
+                  width: `${compliancePercent}%`, 
+                  backgroundColor: '#3b82f6', 
+                  height: '100%', 
+                  borderRadius: '12px',
+                  transition: 'width 0.4s ease-in-out'
+                }}
+              />
+              <div 
+                className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+                style={{ 
+                  fontSize: '13px', 
+                  fontWeight: 700, 
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  color: compliancePercent >= 50 ? '#ffffff' : '#0f172a',
+                  textShadow: compliancePercent >= 50 ? '0 1px 2px rgba(0,0,0,0.25)' : 'none'
+                }}
+              >
+                {compliancePercent}%
+              </div>
+            </div>
+          </div>
+
           {/* Filters Pills Row (placed between div-infos and the table) */}
           <div 
             className="flex flex-wrap gap-2.5 justify-start" 
             id="defibrillateurs-sort-pills"
-            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '35px', padding: '0px' }}
+            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '14px', padding: '0px' }}
           >
             <button
               type="button"
