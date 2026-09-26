@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Client, Variable, StockRecord } from '../types';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
 import { getRegionsForCountry } from '../utils/regions';
+import { playTechSound3 } from '../utils/technicianAudio';
 
 interface GmaoOtherEquipmentCorrectionFormProps {
   otherEquipment: any;
@@ -707,6 +708,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
             type="submit"
             form="other-eq-core-form"
             disabled={saving}
+            onClick={() => playTechSound3()}
             style={{
               ...rowActionButton18Style,
               backgroundColor: 'rgb(53, 86, 236)',

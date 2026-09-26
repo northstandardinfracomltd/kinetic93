@@ -769,7 +769,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setSelectedTicketIds(prev => prev.filter(id => id !== ticketId));
   };
 
-  // Bulk actions: Supprimer and Email Relance
+  // Bulk actions: Supprimer, Email Relance, and Export CSV
+  const selectedTickets = tickets.filter(t => selectedTicketIds.includes(t.id));
+  const isRelanceEnabled = selectedTickets.length > 0 && !isSendingRelance && selectedTickets.every(t => 
+    t.categorie === 'Commercial' && Boolean(t.email && t.email.trim().length > 0)
+  );
+
   const handleBulkDelete = () => {
     if (selectedTicketIds.length === 0) return;
     const count = selectedTicketIds.length;
@@ -782,7 +787,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   const handleBulkRelanceEmail = async () => {
-    if (selectedTicketIds.length === 0) return;
+    if (!isRelanceEnabled || selectedTicketIds.length === 0) return;
     setIsSendingRelance(true);
     setRelanceBannerMsg(null);
     let sentCount = 0;
@@ -792,14 +797,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       const ticket = tickets.find(t => t.id === ticketId);
       if (!ticket) continue;
 
-      let targetEmail = ticket.email?.trim() || '';
-      if (!targetEmail && ticket.client) {
-        const found = clients.find(c => (c.denomination || (c as any).name || '') === ticket.client);
-        if (found) {
-          targetEmail = (found.email || found.emailSite || '').trim();
-        }
-      }
-
+      const targetEmail = ticket.email?.trim() || '';
       if (!targetEmail) {
         missingEmailCount++;
         continue;
@@ -843,6 +841,142 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setTimeout(() => {
       setRelanceBannerMsg(null);
     }, 6000);
+  };
+
+  // Bulk CSV Export of all selected tickets
+  const handleBulkExportCSV = () => {
+    if (selectedTicketIds.length === 0) return;
+    const selectedTicketsList = tickets.filter(t => selectedTicketIds.includes(t.id));
+    if (selectedTicketsList.length === 0) return;
+
+    let csvContent = '\uFEFF'; // UTF-8 BOM for Excel
+
+    const escapeCsv = (val: any) => {
+      if (val === undefined || val === null) return '';
+      const str = String(val).replace(/"/g, '""');
+      if (str.includes(';') || str.includes('\n') || str.includes('\r') || str.includes('"')) {
+        return `"${str}"`;
+      }
+      return str;
+    };
+
+    const headers = [
+      'Référence',
+      'Date Ouverture',
+      'Dernière Actualisation',
+      'Catégorie',
+      'Situation',
+      'Criticité',
+      'Objet',
+      'Collaborateur',
+      'Client ou Prospect',
+      'Situation Interlocuteur',
+      'Type Structure',
+      'Prénom Nom',
+      'Fonction',
+      'Email',
+      'Téléphone',
+      'Indicatif Postal',
+      'Description',
+      'Total Affaire HT',
+      'Situation Devis',
+      'Marché Public',
+      'Score Potentiel Conversion',
+      'Référence Devis',
+      'Famille',
+      'Origine Lead',
+      'Description Offre Devis',
+      'Date Devis',
+      'Date Prochaine Relance',
+      'Date Commande',
+      'Lien Stockage Partagé Devis',
+      'Historique Événements (Commercial)',
+      'Messages Support'
+    ];
+
+    csvContent += headers.join(';') + '\n';
+
+    selectedTicketsList.forEach(t => {
+      const sit = t.situation || (t.status === 'Résolu' ? 'Terminé' : t.status) || 'Nouveau';
+
+      // Events history for Commercial tickets
+      const eventsHistory = Array.isArray(t.evenementsCommercial) && t.evenementsCommercial.length > 0
+        ? t.evenementsCommercial
+            .map(e => {
+              const d = e.date ? `[${e.date}] ` : '';
+              return `${d}${e.commentaire || ''}`.trim();
+            })
+            .filter(Boolean)
+            .join(' | ')
+        : '';
+
+      // Messages Support
+      const supportHistory = Array.isArray(t.messagesSupport) && t.messagesSupport.length > 0
+        ? t.messagesSupport
+            .map(m => {
+              const d = m.date ? `[${m.date}${m.heure ? ' ' + m.heure : ''}] ` : '';
+              return `${d}${m.expediteur ? m.expediteur + ': ' : ''}${m.objet ? m.objet + ' - ' : ''}${m.message || ''}`.trim();
+            })
+            .filter(Boolean)
+            .join(' | ')
+        : '';
+
+      const totalHTStr = t.totalAffaireHT !== undefined && t.totalAffaireHT !== null && t.totalAffaireHT !== ''
+        ? (typeof t.totalAffaireHT === 'number' ? `${t.totalAffaireHT.toFixed(2)} €` : `${t.totalAffaireHT} €`)
+        : '';
+
+      const scoreStr = t.scorePotentielConversion !== undefined && t.scorePotentielConversion !== null
+        ? `${t.scorePotentielConversion}/8`
+        : '';
+
+      const row = [
+        escapeCsv(t.reference || t.id),
+        escapeCsv(t.dateOuverture || t.date || ''),
+        escapeCsv(t.dateDerniereActualisation || ''),
+        escapeCsv(t.categorie || 'Sans Catégorie'),
+        escapeCsv(sit),
+        escapeCsv(t.criticite || 'Non renseigné'),
+        escapeCsv(t.objet || ''),
+        escapeCsv(t.collaborateur || ''),
+        escapeCsv(t.client || t.customClientName || ''),
+        escapeCsv(t.situationInterlocuteur || ''),
+        escapeCsv(t.typeStructure || ''),
+        escapeCsv(t.prenomNom || ''),
+        escapeCsv(t.fonction || ''),
+        escapeCsv(t.email || ''),
+        escapeCsv(t.telephone || t.phone || ''),
+        escapeCsv(t.indicatifPostal || ''),
+        escapeCsv(t.description || t.message || ''),
+        escapeCsv(totalHTStr),
+        escapeCsv(t.situationDevis || ''),
+        escapeCsv(t.marchePublic || ''),
+        escapeCsv(scoreStr),
+        escapeCsv(t.referenceDevis || ''),
+        escapeCsv(t.famille || ''),
+        escapeCsv(t.origineLead || ''),
+        escapeCsv(t.descriptionOffreDevis || ''),
+        escapeCsv(t.dateDevis || ''),
+        escapeCsv(t.dateProchaineRelance || ''),
+        escapeCsv(t.dateCommande || ''),
+        escapeCsv(t.lienStockagePartageDevis || ''),
+        escapeCsv(eventsHistory),
+        escapeCsv(supportHistory)
+      ];
+
+      csvContent += row.join(';') + '\n';
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+    link.href = url;
+    link.setAttribute('download', `crm_export_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Filtered tickets list for main table
@@ -1539,16 +1673,33 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             <button
               type="button"
               onClick={handleBulkRelanceEmail}
-              disabled={isSendingRelance}
+              disabled={!isRelanceEnabled}
               style={{
                 ...rowActionButtonStyle,
-                backgroundColor: '#3556ec',
-                cursor: isSendingRelance ? 'wait' : 'pointer'
+                backgroundColor: isRelanceEnabled ? '#3556ec' : '#cbd5e1',
+                color: isRelanceEnabled ? '#ffffff' : '#64748b',
+                cursor: isRelanceEnabled ? (isSendingRelance ? 'wait' : 'pointer') : 'not-allowed',
+                opacity: isRelanceEnabled ? 1 : 0.65,
               }}
-              className="hover:bg-[#2b48cc] transition-colors cursor-pointer"
-              title="Envoyer un email de relance aux adresses renseignées dans les lignes sélectionnées"
+              className={isRelanceEnabled ? "hover:bg-[#2b48cc] transition-colors cursor-pointer" : "cursor-not-allowed"}
+              title={
+                !isRelanceEnabled
+                  ? "Email Relance est disponible uniquement pour les tickets de type Commercial ayant une adresse renseignée dans le champ email."
+                  : "Envoyer un email de relance aux adresses renseignées dans les lignes sélectionnées"
+              }
             >
               {isSendingRelance ? 'Envoi en cours...' : 'Email Relance'}
+            </button>
+
+            {/* Export CSV button */}
+            <button
+              type="button"
+              onClick={handleBulkExportCSV}
+              style={rowActionButtonStyle}
+              className="hover:bg-zinc-800 transition-colors cursor-pointer"
+              title="Télécharger un fichier CSV avec toutes les colonnes des tickets sélectionnés"
+            >
+              Export CSV
             </button>
           </div>
         </div>

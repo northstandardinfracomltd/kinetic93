@@ -3,6 +3,7 @@ import { CompanyInfo, Member, MemberSchedule, MemberAbsence } from '../types';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
 import { getActiveTenantCountry, getHolidaysForYear, SupportedCountry } from '../utils/holidays';
 import { PlanningExtendedViewModal } from './PlanningExtendedViewModal';
+import { playTechSound2 } from '../utils/technicianAudio';
 
 export interface SpontaneousEvent {
   id: string;
@@ -813,6 +814,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             if (isSpontaneousFormOpen) {
               handleSaveSpontaneousEvent();
             } else {
+              playTechSound2();
               setIsSpontaneousFormOpen(true);
             }
           }}

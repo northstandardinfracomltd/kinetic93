@@ -10,6 +10,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { fetchCollectionFromFirestore } from '../firebase';
 import { generateReportModerationComment } from '../utils/moderationComment';
+import { playTechSound3 } from '../utils/technicianAudio';
 
 interface GmaoCorrectionFormProps {
   key?: React.Key;
@@ -5516,6 +5517,7 @@ export default function GmaoCorrectionForm({
             type="submit"
             disabled={isSaving}
             form="gmao-correction-form"
+            onClick={() => playTechSound3()}
             className="w-full text-white font-medium focus:outline-none cursor-pointer text-center"
             style={{ 
               fontSize: '18px', 

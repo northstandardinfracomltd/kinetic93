@@ -240,6 +240,44 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // Mouse drag-to-scroll support for horizontal panning
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const scrollLeftRef = useRef(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, select, textarea, [data-interactive="true"]')) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    isDraggingRef.current = true;
+    startXRef.current = e.pageX - container.offsetLeft;
+    scrollLeftRef.current = container.scrollLeft;
+    container.style.cursor = 'grabbing';
+    container.style.userSelect = 'none';
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingRef.current) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    e.preventDefault();
+    const x = e.pageX - container.offsetLeft;
+    const walk = x - startXRef.current;
+    container.scrollLeft = scrollLeftRef.current - walk;
+  };
+
+  const handleMouseUpOrLeave = () => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.style.cursor = 'default';
+      container.style.removeProperty('user-select');
+    }
+  };
+
   const scrollToToday = useCallback((smooth = true) => {
     setTimeout(() => {
       const container = scrollContainerRef.current;
@@ -525,6 +563,22 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     });
   }, [techniciansList, localTours, localEvents, currentYear, currentMonth]);
 
+  // Keep technician intercalaire label sticky on horizontal scroll
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const updateStickyLabels = () => {
+      const sl = container.scrollLeft;
+      const labels = container.querySelectorAll<HTMLElement>('.tech-intercalaire-label');
+      labels.forEach((label) => {
+        label.style.transform = `translateX(${sl}px)`;
+      });
+    };
+    container.addEventListener('scroll', updateStickyLabels, { passive: true });
+    updateStickyLabels();
+    return () => container.removeEventListener('scroll', updateStickyLabels);
+  }, [techniciansData, currentMonth, currentYear, isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -681,7 +735,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       </div>
 
       {/* Main Matrix Gantt Container */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-auto bg-white">
+      <div 
+        ref={scrollContainerRef} 
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUpOrLeave}
+        onMouseLeave={handleMouseUpOrLeave}
+        className="flex-1 overflow-auto bg-white"
+      >
         <div className="inline-block min-w-full align-top">
           {/* Timeline Table Grid */}
           <table className="border-collapse text-left" style={{ minWidth: `${daysInMonth.length * 200}px`, width: '100%' }}>
@@ -751,9 +812,20 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                     <tr className="bg-neutral-100/90 border-t-2 border-b border-neutral-300">
                       <td
                         colSpan={daysInMonth.length}
-                        className="px-4 py-2 font-bold text-sm text-neutral-900 bg-neutral-100 select-none shadow-2xs"
+                        className="p-0 font-bold text-sm text-neutral-900 bg-neutral-100 select-none shadow-2xs overflow-visible"
+                        style={{ backgroundColor: '#f5f5f5' }}
                       >
-                        <div className="flex items-center">
+                        <div 
+                          className="tech-intercalaire-label inline-flex items-center z-20"
+                          style={{
+                            position: 'sticky',
+                            left: 0,
+                            padding: '8px 16px',
+                            backgroundColor: '#f5f5f5',
+                            willChange: 'transform',
+                            width: 'max-content'
+                          }}
+                        >
                           <span className="text-base text-neutral-950 font-bold tracking-tight">{tech.name}</span>
                         </div>
                       </td>

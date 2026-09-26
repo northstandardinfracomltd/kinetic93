@@ -118,6 +118,7 @@ import {
   Eye,
   ShoppingBag,
   Bell,
+  Info,
   Minimize2,
   Maximize2
 } from 'lucide-react';
@@ -841,6 +842,19 @@ export default function App() {
   // Bulk selection of missions
   const [selectedFsmMissionIds, setSelectedFsmMissionIds] = useState<string[]>([]);
   const [isFsmBulkTourDropdownOpen, setIsFsmBulkTourDropdownOpen] = useState<boolean>(false);
+
+  // FSM Stats hidden state (saved in localStorage)
+  const [isFsmStatsHidden, setIsFsmStatsHidden] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('defib_hide_fsm_stats') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // FSM System Info Message
+  const [fsmSystemInfoMessage, setFsmSystemInfoMessage] = useState<string | null>(null);
+  const fsmSystemInfoTimeoutRef = useRef<any>(null);
 
   // Team Work Groups by Zone
   const [isFsmTeamPaneOpen, setIsFsmTeamPaneOpen] = useState<boolean>(false);
@@ -2203,6 +2217,14 @@ export default function App() {
       calculated: false
     };
     saveFsmTours([newTour, ...fsmTours]);
+    setFsmDateFilter(newId);
+    setFsmSystemInfoMessage("La tournée est créée, elle est accessible via la sélection de la tournée.");
+    if (fsmSystemInfoTimeoutRef.current) {
+      clearTimeout(fsmSystemInfoTimeoutRef.current);
+    }
+    fsmSystemInfoTimeoutRef.current = setTimeout(() => {
+      setFsmSystemInfoMessage(null);
+    }, 8000);
   };
 
   const deleteFsmTour = (tourId: string) => {
@@ -8122,9 +8144,9 @@ export default function App() {
                             onClick={() => setIsFsmBulkTourDropdownOpen(!isFsmBulkTourDropdownOpen)}
                             id="btn-bulk-assign-tour"
                             style={{
-                              backgroundColor: '#ffffff',
-                              color: '#000000',
-                              border: '1px solid #dedede',
+                              backgroundColor: '#000000',
+                              color: '#ffffff',
+                              border: 'none',
                               borderRadius: '13px',
                               padding: '8px 16px',
                               fontSize: '16px',
@@ -8132,7 +8154,7 @@ export default function App() {
                               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                               cursor: 'pointer',
                             }}
-                            className="hover:bg-neutral-50 transition-colors"
+                            className="hover:opacity-90 transition-opacity"
                           >
                             Attribuer à une tournée
                           </button>
@@ -8192,15 +8214,15 @@ export default function App() {
                           )}
                         </div>
 
-                        {/* Annuler l’intervention */}
+                        {/* Annuler et supprimer l’intervention */}
                         <button
                           type="button"
                           onClick={bulkCancelFsmMissions}
                           id="btn-bulk-cancel-intervention"
                           style={{
-                            backgroundColor: '#fee2e2',
-                            color: '#dc2626',
-                            border: '1px solid #fecaca',
+                            backgroundColor: '#dc2626',
+                            color: '#ffffff',
+                            border: 'none',
                             borderRadius: '13px',
                             padding: '8px 16px',
                             fontSize: '16px',
@@ -8208,9 +8230,9 @@ export default function App() {
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                             cursor: 'pointer',
                           }}
-                          className="hover:bg-red-200 transition-colors"
+                          className="hover:opacity-90 transition-opacity"
                         >
-                          Annuler l’intervention
+                          Annuler et supprimer l’intervention
                         </button>
 
                         {/* Désélectionner */}
@@ -8222,14 +8244,14 @@ export default function App() {
                           }}
                           style={{
                             backgroundColor: 'transparent',
-                            color: '#737373',
+                            color: '#000000',
                             border: 'none',
                             padding: '8px 12px',
                             fontSize: '14px',
-                            fontWeight: '500',
+                            fontWeight: '600',
                             cursor: 'pointer',
                           }}
-                          className="hover:text-black transition-colors font-sans"
+                          className="hover:opacity-75 transition-colors font-sans"
                         >
                           Désélectionner
                         </button>
@@ -8537,15 +8559,6 @@ export default function App() {
                     >
                       {/* Body side-pane : Réglages de l’équipe */}
                       <div className="flex-1 overflow-y-auto p-6 bg-white space-y-6 pb-32 font-sans">
-                        <div>
-                          <h3 style={{ fontSize: '22px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', color: '#000000' }}>
-                            Réglages de l’équipe
-                          </h3>
-                          <p style={{ fontSize: '14px', color: '#666666', marginTop: '4px' }}>
-                            Groupes de travail par zone
-                          </p>
-                        </div>
-
                         {/* If in creation or edit mode, show form */}
                         {(isCreatingGroup || editingGroupId) ? (
                           <div className="space-y-5 bg-neutral-50 p-5 rounded-2xl border border-neutral-200 animate-fadeIn">
@@ -8775,14 +8788,36 @@ export default function App() {
                                     <button
                                       type="button"
                                       onClick={() => handleEditTeamWorkGroup(g)}
-                                      className="text-xs text-neutral-600 hover:text-black font-semibold cursor-pointer underline"
+                                      style={{
+                                        backgroundColor: '#000000',
+                                        color: '#ffffff',
+                                        borderRadius: '8px',
+                                        padding: '4px 12px',
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                      }}
+                                      className="hover:opacity-90 active:scale-95 transition-all"
                                     >
                                       Modifier
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteTeamWorkGroup(g.id)}
-                                      className="text-xs text-red-600 hover:text-red-800 font-semibold cursor-pointer underline"
+                                      style={{
+                                        backgroundColor: '#dc2626',
+                                        color: '#ffffff',
+                                        borderRadius: '8px',
+                                        padding: '4px 12px',
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                      }}
+                                      className="hover:opacity-90 active:scale-95 transition-all"
                                     >
                                       Supprimer
                                     </button>
@@ -8834,17 +8869,18 @@ export default function App() {
                             }}
                             style={{
                               width: '100%',
-                              backgroundColor: '#000000',
+                              backgroundColor: '#3556ec',
                               color: '#ffffff',
-                              fontSize: '17px',
+                              fontSize: '16px',
                               fontWeight: '600',
-                              padding: '14px 20px',
+                              padding: '12px 20px',
                               borderRadius: '12px',
                               cursor: 'pointer',
                               border: 'none',
-                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)',
+                              boxShadow: '0 4px 12px rgba(53, 86, 236, 0.25)',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                             }}
-                            className="hover:bg-neutral-800 transition-colors"
+                            className="hover:opacity-90 transition-all"
                           >
                             Nouveau groupe et zone
                           </button>
@@ -8852,16 +8888,18 @@ export default function App() {
                             onClick={() => setIsFsmTeamPaneOpen(false)}
                             style={{
                               width: '100%',
-                              backgroundColor: '#ffffff',
-                              color: '#000000',
-                              fontSize: '15px',
-                              fontWeight: '500',
-                              padding: '10px 20px',
+                              backgroundColor: '#000000',
+                              color: '#ffffff',
+                              fontSize: '16px',
+                              fontWeight: '600',
+                              padding: '12px 20px',
                               borderRadius: '12px',
                               cursor: 'pointer',
-                              border: '1px solid #dedede',
+                              border: 'none',
+                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                             }}
-                            className="hover:bg-neutral-50 transition-colors"
+                            className="hover:opacity-90 transition-all"
                           >
                             Fermer
                           </button>
@@ -8910,97 +8948,149 @@ export default function App() {
                 {/* Statistiques FSM du mois : Sélecteur mois/année + 2 gélules (Temps moyen & CO2 préservé) */}
                 <div 
                   id="fsm-stats-wrapper"
-                  className="px-4 pt-4 select-none"
+                  className="px-4 pt-4 select-none flex flex-wrap items-center gap-3"
                 >
-                  <div 
-                    id="fsm-stats-container"
-                    style={{
-                      display: 'inline-flex',
-                      flexWrap: 'wrap',
-                      alignItems: 'center',
-                      gap: '12px',
-                      padding: '10px 14px',
-                      backgroundColor: '#ffffff',
-                      border: '1px solid rgb(218, 218, 218)',
-                      borderRadius: '16px',
-                    }}
-                  >
-                    {/* Field de choix de mois/année */}
-                    <div className="flex items-center">
-                      <select
-                        value={selectedFsmMonth}
-                        onChange={(e) => setSelectedFsmMonth(e.target.value)}
-                        title={t("Sélectionner le mois")}
+                  {!isFsmStatsHidden && (
+                    <div 
+                      id="fsm-stats-container"
+                      style={{
+                        display: 'inline-flex',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '10px 14px',
+                        backgroundColor: '#ffffff',
+                        border: '1px solid rgb(218, 218, 218)',
+                        borderRadius: '16px',
+                      }}
+                    >
+                      {/* Field de choix de mois/année */}
+                      <div className="flex items-center">
+                        <select
+                          value={selectedFsmMonth}
+                          onChange={(e) => setSelectedFsmMonth(e.target.value)}
+                          title={t("Sélectionner le mois")}
+                          style={{
+                            backgroundColor: '#f8fafc',
+                            border: '1px solid rgb(218, 218, 218)',
+                            borderRadius: '13px',
+                            padding: '9px 16px',
+                            fontSize: '15px',
+                            fontWeight: 600,
+                            color: '#000000',
+                            cursor: 'pointer',
+                            outline: 'none',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          }}
+                        >
+                          {availableFsmMonths.map((m) => (
+                            <option key={m.key} value={m.key}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Gélule 1 : Temps moyen d’une intervention */}
+                      <div 
+                        id="fsm-avg-intervention-time-indicator"
                         style={{
+                          padding: '9px 20px',
                           backgroundColor: '#f8fafc',
                           border: '1px solid rgb(218, 218, 218)',
-                          borderRadius: '13px',
-                          padding: '9px 16px',
+                          borderRadius: '1000px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
                           fontSize: '15px',
-                          fontWeight: 600,
-                          color: '#000000',
-                          cursor: 'pointer',
-                          outline: 'none',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          color: '#000000',
+                          cursor: 'default',
                         }}
                       >
-                        {availableFsmMonths.map((m) => (
-                          <option key={m.key} value={m.key}>
-                            {m.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                        <span style={{ fontWeight: 400, color: '#475569', marginRight: '6px' }}>
+                          {t("Temps moyen d’une intervention :")}
+                        </span>
+                        <span style={{ fontWeight: 700, color: '#000000' }}>
+                          {avgInterventionMinutesStr}
+                        </span>
+                      </div>
 
-                    {/* Gélule 1 : Temps moyen d’une intervention */}
-                    <div 
-                      id="fsm-avg-intervention-time-indicator"
-                      style={{
-                        padding: '9px 20px',
-                        backgroundColor: '#f8fafc',
-                        border: '1px solid rgb(218, 218, 218)',
-                        borderRadius: '1000px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        fontSize: '15px',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        color: '#000000',
-                        cursor: 'default',
-                      }}
-                    >
-                      <span style={{ fontWeight: 400, color: '#475569', marginRight: '6px' }}>
-                        {t("Temps moyen d’une intervention :")}
-                      </span>
-                      <span style={{ fontWeight: 700, color: '#000000' }}>
-                        {avgInterventionMinutesStr}
-                      </span>
+                      {/* Gélule 2 : CO2 préservé */}
+                      <div 
+                        id="fsm-co2-preserved-indicator"
+                        style={{
+                          padding: '9px 20px',
+                          backgroundColor: '#f8fafc',
+                          border: '1px solid rgb(218, 218, 218)',
+                          borderRadius: '1000px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          fontSize: '15px',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        <span style={{ fontWeight: 700, color: '#000000', marginRight: '6px' }}>
+                          {formattedCo2Str} kg
+                        </span>
+                        <span style={{ fontWeight: 400, color: '#475569' }}>
+                          {t("Co2e d’émissions préservée(s)")}
+                        </span>
+                      </div>
                     </div>
+                  )}
 
-                    {/* Gélule 2 : CO2 préservé */}
-                    <div 
-                      id="fsm-co2-preserved-indicator"
-                      style={{
-                        padding: '9px 20px',
-                        backgroundColor: '#f8fafc',
-                        border: '1px solid rgb(218, 218, 218)',
-                        borderRadius: '1000px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        fontSize: '15px',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        color: '#000000',
-                        cursor: 'default',
-                      }}
-                    >
-                      <span style={{ fontWeight: 700, color: '#000000', marginRight: '6px' }}>
-                        {formattedCo2Str} kg
-                      </span>
-                      <span style={{ fontWeight: 400, color: '#475569' }}>
-                        {t("Co2e d’émissions préservée(s)")}
-                      </span>
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsFsmStatsHidden(prev => {
+                        const next = !prev;
+                        try {
+                          localStorage.setItem('defib_hide_fsm_stats', String(next));
+                        } catch (_) {}
+                        return next;
+                      });
+                    }}
+                    style={{
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontSize: '15px',
+                      color: '#475569',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '6px 10px',
+                      textDecoration: 'underline'
+                    }}
+                    className="hover:text-black transition-colors select-none"
+                    id="btn-toggle-fsm-stats"
+                  >
+                    {isFsmStatsHidden ? t("Afficher les statistiques") : t("Masquer les statistiques")}
+                  </button>
                 </div>
+
+                {/* Info message système lors de la création d'une tournée */}
+                {fsmSystemInfoMessage && (
+                  <div 
+                    className="mx-4 mt-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-blue-900 font-sans animate-fadeIn shadow-xs"
+                    style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Info className="w-5 h-5 text-[#3556ec] shrink-0" />
+                      <span className="text-[15px] font-semibold text-black">
+                        {fsmSystemInfoMessage}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFsmSystemInfoMessage(null)}
+                      className="text-neutral-400 hover:text-black p-1 transition-colors cursor-pointer"
+                      title="Fermer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
 
                 {fsmTours.length > 0 && (() => {
                   return (
@@ -10800,6 +10890,199 @@ export default function App() {
                           })()}
                         </div>
 
+                        {/* INDICATEURS DE PROGRESSION */}
+                        {(() => {
+                          const tourMissions = t.missions || [];
+                          const total = tourMissions.length;
+
+                          // 1. Progression de planification
+                          // Layer bleu 1 (avec %): Accepté client / À faire
+                          const planifL1Count = tourMissions.filter((m: any) => {
+                            const sit = (m.status || 'Brouillon').toLowerCase();
+                            return sit.includes('accepté') || sit.includes('accepte') || sit === 'à faire' || sit === 'a faire';
+                          }).length;
+
+                          // Layer 2 semi-opaque bleu (sans %): Attente client / Refusé / Attente (cumulative with L1)
+                          const planifL2Count = tourMissions.filter((m: any) => {
+                            const sit = (m.status || 'Brouillon').toLowerCase();
+                            return (
+                              sit.includes('accepté') || sit.includes('accepte') || sit === 'à faire' || sit === 'a faire' ||
+                              sit.includes('attente') || sit.includes('refusé') || sit.includes('refuse')
+                            );
+                          }).length;
+
+                          const planifL1Percent = total > 0 ? Math.round((planifL1Count / total) * 100) : 0;
+                          const planifL2Percent = total > 0 ? Math.round((planifL2Count / total) * 100) : 0;
+
+                          // 2. Progression de complétion
+                          // Layer rose 1 (avec %): Effectué
+                          const compL1Count = tourMissions.filter((m: any) => {
+                            const sit = (m.status || 'Brouillon').toLowerCase();
+                            return sit.includes('effectué') || sit.includes('effectue') || sit.includes('terminé') || sit.includes('termine');
+                          }).length;
+
+                          // Layer 2 semi-opaque bleu (sans %): Accepté client / À faire / Rejet mission (cumulative with L1)
+                          const compL2Count = tourMissions.filter((m: any) => {
+                            const sit = (m.status || 'Brouillon').toLowerCase();
+                            return (
+                              sit.includes('effectué') || sit.includes('effectue') || sit.includes('terminé') || sit.includes('termine') ||
+                              sit.includes('accepté') || sit.includes('accepte') || sit === 'à faire' || sit === 'a faire' ||
+                              sit.includes('rejet')
+                            );
+                          }).length;
+
+                          const compL1Percent = total > 0 ? Math.round((compL1Count / total) * 100) : 0;
+                          const compL2Percent = total > 0 ? Math.round((compL2Count / total) * 100) : 0;
+
+                          return (
+                            <div 
+                              className="px-5 py-3.5 flex flex-col gap-3 select-none"
+                              style={{ 
+                                borderBottom: '1px solid rgb(218, 218, 218)',
+                                backgroundColor: '#ffffff'
+                              }}
+                            >
+                              {/* Barre 1 : Progression de planification */}
+                              <div className="w-full flex items-center gap-3">
+                                <span 
+                                  style={{ 
+                                    fontSize: '15px', 
+                                    fontWeight: 600, 
+                                    color: '#000000', 
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    cursor: 'default',
+                                    whiteSpace: 'nowrap',
+                                    minWidth: '225px'
+                                  }}
+                                >
+                                  {t("Progression de planification")}
+                                </span>
+
+                                <div 
+                                  className="relative flex-1 overflow-hidden select-none" 
+                                  style={{ 
+                                    height: '22px', 
+                                    backgroundColor: '#e5e7eb', 
+                                    borderRadius: '11px',
+                                    boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.06)'
+                                  }}
+                                >
+                                  {/* Layer 2 : semi-opaque bleu */}
+                                  <div 
+                                    style={{ 
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0,
+                                      height: '100%',
+                                      width: `${planifL2Percent}%`, 
+                                      backgroundColor: 'rgba(53, 86, 236, 0.35)', 
+                                      borderRadius: '11px',
+                                      transition: 'width 0.4s ease-in-out',
+                                      zIndex: 1
+                                    }}
+                                  />
+                                  {/* Layer 1 : bleu (#3556ec) avec pourcentage */}
+                                  <div 
+                                    style={{ 
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0,
+                                      height: '100%',
+                                      width: `${planifL1Percent}%`, 
+                                      backgroundColor: '#3556ec', 
+                                      borderRadius: '11px',
+                                      transition: 'width 0.4s ease-in-out',
+                                      zIndex: 2
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+                                    style={{ 
+                                      zIndex: 3,
+                                      fontSize: '13px', 
+                                      fontWeight: 700, 
+                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                      color: planifL1Percent >= 50 ? '#ffffff' : '#0f172a',
+                                      textShadow: planifL1Percent >= 50 ? '0 1px 2px rgba(0,0,0,0.25)' : 'none'
+                                    }}
+                                  >
+                                    {planifL1Percent}%
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Barre 2 : Progression de complétion */}
+                              <div className="w-full flex items-center gap-3">
+                                <span 
+                                  style={{ 
+                                    fontSize: '15px', 
+                                    fontWeight: 600, 
+                                    color: '#000000', 
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    cursor: 'default',
+                                    whiteSpace: 'nowrap',
+                                    minWidth: '225px'
+                                  }}
+                                >
+                                  {t("Progression de complétion")}
+                                </span>
+
+                                <div 
+                                  className="relative flex-1 overflow-hidden select-none" 
+                                  style={{ 
+                                    height: '22px', 
+                                    backgroundColor: '#e5e7eb', 
+                                    borderRadius: '11px',
+                                    boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.06)'
+                                  }}
+                                >
+                                  {/* Layer 2 : semi-opaque bleu */}
+                                  <div 
+                                    style={{ 
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0,
+                                      height: '100%',
+                                      width: `${compL2Percent}%`, 
+                                      backgroundColor: 'rgba(53, 86, 236, 0.35)', 
+                                      borderRadius: '11px',
+                                      transition: 'width 0.4s ease-in-out',
+                                      zIndex: 1
+                                    }}
+                                  />
+                                  {/* Layer 1 : rose (#fe4eba) avec pourcentage */}
+                                  <div 
+                                    style={{ 
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0,
+                                      height: '100%',
+                                      width: `${compL1Percent}%`, 
+                                      backgroundColor: '#fe4eba', 
+                                      borderRadius: '11px',
+                                      transition: 'width 0.4s ease-in-out',
+                                      zIndex: 2
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+                                    style={{ 
+                                      zIndex: 3,
+                                      fontSize: '13px', 
+                                      fontWeight: 700, 
+                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                      color: compL1Percent >= 50 ? '#ffffff' : '#0f172a',
+                                      textShadow: compL1Percent >= 50 ? '0 1px 2px rgba(0,0,0,0.25)' : 'none'
+                                    }}
+                                  >
+                                    {compL1Percent}%
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {/* TOUR MISSIONS LIST */}
                         <div className="p-4 space-y-4">
                           {t.missions.length === 0 ? (
@@ -11942,7 +12225,7 @@ export default function App() {
                                             }}
                                             className={canSubmitToClient ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}
                                           >
-                                            Soumettre au client (email)
+                                            Avisage email au client
                                           </button>
                                         </div>
                                       );

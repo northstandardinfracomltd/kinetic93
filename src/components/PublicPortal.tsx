@@ -80,6 +80,11 @@ import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFir
 import { PlanningTab } from "./PlanningTab";
 import HelpBubble from "./HelpBubble";
 import TopBarProgress from "./TopBarProgress";
+import {
+  triggerPublicPortalOpenSound,
+  playTechSound2,
+  playTechSound3,
+} from "../utils/technicianAudio";
 
 
 // Helper functions for French date <-> ISO date picker compatibility
@@ -457,9 +462,14 @@ export default function PublicPortal({
     };
     window.addEventListener("defib-theme-changed", handleThemeChange);
     window.addEventListener("defib-favicon-changed", handleFaviconChange);
+
+    // Play Sound1 on webapp open (login or reload)
+    const cleanupSound = triggerPublicPortalOpenSound();
+
     return () => {
       window.removeEventListener("defib-theme-changed", handleThemeChange);
       window.removeEventListener("defib-favicon-changed", handleFaviconChange);
+      cleanupSound();
     };
   }, []);
 
@@ -4295,6 +4305,7 @@ export default function PublicPortal({
       if (matched) {
         setPinError("");
         setAuthenticatedUser(matched);
+        triggerPublicPortalOpenSound();
         localStorage.setItem(
           "defib_active_tech_session",
           JSON.stringify(matched),
@@ -7636,7 +7647,12 @@ export default function PublicPortal({
                       <div className="px-1 select-none pb-4">
                         <select
                           value={selectedTourId}
-                          onChange={(e) => setSelectedTourId(e.target.value)}
+                          onChange={(e) => {
+                            setSelectedTourId(e.target.value);
+                            if (e.target.value) {
+                              playTechSound2();
+                            }
+                          }}
                           className="w-full bg-white text-black cursor-pointer appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center"
                           style={{
                             border: "1px solid rgb(201, 190, 205)",
@@ -8145,9 +8161,10 @@ export default function PublicPortal({
                                         <button
                                           type="button"
                                           disabled={isCompleted}
-                                          onClick={() =>
-                                            handleNavigateToAddress(p.address)
-                                          }
+                                          onClick={() => {
+                                            playTechSound2();
+                                            handleNavigateToAddress(p.address);
+                                          }}
                                           style={{
                                             backgroundColor: isCompleted
                                               ? "#e2e8f0"
@@ -8179,6 +8196,7 @@ export default function PublicPortal({
                                           type="button"
                                           disabled={isFormationMission ? (isCompleted || !matchedEmargement) : isCompleted}
                                           onClick={() => {
+                                            playTechSound2();
                                             if (isFormationMission) {
                                               if (matchedEmargement) {
                                                 setEmargementModalRecordId(matchedEmargement.id);
@@ -8539,6 +8557,7 @@ export default function PublicPortal({
                   <button
                     type="button"
                     onClick={() => {
+                      playTechSound2();
                       setSelectedOtherEquipmentUnique(null);
                       setSelectedDefibId("");
                       setSelectedDefibData(null);
@@ -11106,7 +11125,14 @@ export default function PublicPortal({
                       <div className="space-y-4">
                         <button
                           type="button"
-                          onClick={handleTogglePointage}
+                          onClick={() => {
+                            if (isTracking) {
+                              playTechSound3();
+                            } else {
+                              playTechSound2();
+                            }
+                            handleTogglePointage();
+                          }}
                           style={{
                             backgroundColor: isTracking ? "#dc2626" : "rgb(39, 78, 255)",
                             color: "#fff",
@@ -11962,6 +11988,7 @@ export default function PublicPortal({
 
                     <button
                       type="submit"
+                      onClick={() => playTechSound2()}
                       style={{
                         backgroundColor: "rgb(53, 86, 236)",
                         color: "#fff",
@@ -12213,6 +12240,7 @@ export default function PublicPortal({
 
                     <button
                       type="submit"
+                      onClick={() => playTechSound2()}
                       style={{
                         backgroundColor: "rgb(53, 86, 236)",
                         color: "#fff",
