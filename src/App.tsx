@@ -7710,8 +7710,22 @@ export default function App() {
             const getTourDisplayLabel = (tour: any): string => {
               if (!tour) return '';
               const title = (tour.title || 'Tournée').trim();
+              const status = (tour.status || 'Brouillon').trim();
               const dateFormatted = tour.startDate ? formatFrenchDate(tour.startDate) : '';
-              return dateFormatted ? `${title} - ${dateFormatted}` : title;
+              const plannerName = (tour.plannerName || tour.planner || '').trim();
+              const techName = (tour.techName || tour.technicien || '').trim();
+
+              let label = `${title} (${status})`;
+              if (dateFormatted) {
+                label += ` • Le: ${dateFormatted}`;
+              }
+              if (plannerName) {
+                label += ` • Par: ${plannerName}`;
+              }
+              if (techName) {
+                label += ` • Pour: ${techName}`;
+              }
+              return label;
             };
 
             const displayedTour = scheduledTours.find((t: any) => t.id === activeDateFilter) || closestTour || scheduledTours[0];
@@ -8991,7 +9005,7 @@ export default function App() {
                 {fsmTours.length > 0 && (() => {
                   return (
                     <div 
-                      className="px-4 flex flex-wrap items-center gap-2.5 pt-3 select-none pb-2 relative" 
+                      className="px-4 flex items-end gap-3 pt-3 select-none pb-2 relative w-full" 
                       id="fsm-dates-pills"
                       style={{ overflow: 'visible' }}
                     >
@@ -8999,7 +9013,6 @@ export default function App() {
                         type="button"
                         onClick={() => {
                           setFsmDateFilter('A trier');
-                          setIsFsmTourDropdownOpen(false);
                         }}
                         style={{
                           borderRadius: '1000px',
@@ -9021,106 +9034,50 @@ export default function App() {
                       </button>
 
                       {scheduledTours.length > 0 && displayedTour && (
-                        <div className="relative inline-block" ref={fsmTourDropdownRef}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (activeDateFilter === 'A trier') {
-                                setFsmDateFilter(displayedTour.id);
+                        <div className="flex-1 min-w-0 flex flex-col justify-end">
+                          <label 
+                            htmlFor="select-fsm-tour-manage"
+                            className="block text-[14px] font-semibold text-black mb-1 font-sans truncate"
+                            style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                          >
+                            {t("Sélection de la tournée à gérer:")}
+                          </label>
+                          <select
+                            id="select-fsm-tour-manage"
+                            value={activeDateFilter === 'A trier' ? '' : activeDateFilter}
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                setFsmDateFilter(e.target.value);
                               }
-                              setIsFsmTourDropdownOpen(prev => !prev);
                             }}
                             style={{
-                              borderRadius: '1000px',
-                              padding: '10px 20px',
+                              width: '100%',
+                              appearance: 'none',
+                              WebkitAppearance: 'none',
+                              MozAppearance: 'none',
+                              border: '1px solid rgb(218, 218, 218)',
+                              borderRadius: '13px',
+                              padding: '10px 16px',
                               fontSize: '15px',
-                              fontWeight: 500,
-                              cursor: 'pointer',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              backgroundColor: activeDateFilter !== 'A trier' ? '#fa53d5' : '#ffffff',
-                              color: activeDateFilter !== 'A trier' ? '#ffffff' : '#000000',
-                              border: activeDateFilter !== 'A trier' ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
-                              transition: 'all 0.15s ease',
-                              whiteSpace: 'nowrap',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              flexShrink: 0
+                              backgroundColor: '#ffffff',
+                              color: '#000000',
+                              cursor: 'pointer',
+                              outline: 'none',
                             }}
-                            className="transition-all flex-shrink-0"
+                            className="w-full truncate focus:outline-none"
                           >
-                            <span>
-                              {t("Gérer la tournée : ")}{getTourDisplayLabel(displayedTour)}
-                            </span>
-                            <ChevronDown 
-                              className={`w-4 h-4 transition-transform duration-200 ${isFsmTourDropdownOpen ? 'rotate-180' : ''}`} 
-                              style={{ color: activeDateFilter !== 'A trier' ? '#ffffff' : '#000000' }}
-                            />
-                          </button>
-
-                          {isFsmTourDropdownOpen && (
-                            <div
-                              style={{
-                                position: 'absolute',
-                                top: 'calc(100% + 6px)',
-                                left: 0,
-                                minWidth: '320px',
-                                maxWidth: '440px',
-                                backgroundColor: '#ffffff',
-                                border: '1px solid rgb(218, 218, 218)',
-                                borderRadius: '16px',
-                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08)',
-                                zIndex: 60,
-                                overflow: 'hidden',
-                                padding: '6px'
-                              }}
-                              className="animate-fadeIn font-sans"
-                            >
-                              <div 
-                                style={{ maxHeight: '280px', overflowY: 'auto' }}
-                                className="scrollbar-thin space-y-1"
-                              >
-                                {scheduledTours.map((st: any) => {
-                                  const isSelected = activeDateFilter === st.id;
-                                  return (
-                                    <button
-                                      key={st.id}
-                                      type="button"
-                                      onClick={() => {
-                                        setFsmDateFilter(st.id);
-                                        setIsFsmTourDropdownOpen(false);
-                                      }}
-                                      style={{
-                                        width: '100%',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        padding: '9px 14px',
-                                        borderRadius: '10px',
-                                        fontSize: '14px',
-                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                        textAlign: 'left',
-                                        backgroundColor: isSelected ? '#fdf2f8' : 'transparent',
-                                        color: isSelected ? '#be185d' : '#1e293b',
-                                        fontWeight: isSelected ? 600 : 400,
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        transition: 'background-color 0.15s'
-                                      }}
-                                      className="hover:bg-slate-100 transition-colors"
-                                    >
-                                      <span className="truncate mr-2">
-                                        {getTourDisplayLabel(st)}
-                                      </span>
-                                      {isSelected && (
-                                        <Check className="w-4 h-4 text-[#fa53d5] shrink-0" />
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
+                            {activeDateFilter === 'A trier' && (
+                              <option value="" disabled hidden>
+                                {getTourDisplayLabel(displayedTour)}
+                              </option>
+                            )}
+                            {scheduledTours.map((st: any) => (
+                              <option key={st.id} value={st.id}>
+                                {getTourDisplayLabel(st)}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       )}
                     </div>
@@ -13898,12 +13855,18 @@ export default function App() {
                           setGmaoCurrentPage(1);
                         }}
                         style={{
-                          ...cancelFiltersButtonStyle,
-                          fontSize: '18px',
+                          backgroundColor: '#000000',
+                          color: '#ffffff',
                           borderRadius: '13px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
                           padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
                         }}
-                        className="flex-1 text-center font-sans font-semibold cursor-pointer animate-none"
+                        className="flex-1 text-center cursor-pointer animate-none"
                       >
                         Annuler
                       </button>
@@ -13915,15 +13878,18 @@ export default function App() {
                           setGmaoCurrentPage(1);
                         }}
                         style={{
-                          ...applyFiltersButtonStyle,
                           backgroundColor: 'rgb(53, 86, 236)',
                           color: 'rgb(255, 255, 255)',
                           boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                           fontSize: '18px',
+                          fontWeight: 'bold',
                           borderRadius: '13px',
                           padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         }}
-                        className="flex-1 text-center font-sans font-semibold cursor-pointer animate-none"
+                        className="flex-1 text-center cursor-pointer animate-none"
                       >
                         Appliquer
                       </button>

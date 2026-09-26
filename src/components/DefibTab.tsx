@@ -571,25 +571,126 @@ export default function DefibTab({
   // Selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
+  // Pinned items state (persisted in localStorage)
+  const [pinnedDefibIds, setPinnedDefibIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('pinned_defibs');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleTogglePinSelected = () => {
+    if (selectedIds.length === 0) return;
+    setPinnedDefibIds(prev => {
+      const nextSet = new Set(prev);
+      for (const id of selectedIds) {
+        if (nextSet.has(id)) {
+          nextSet.delete(id);
+        } else {
+          nextSet.add(id);
+        }
+      }
+      const updated = Array.from(nextSet);
+      try {
+        localStorage.setItem('pinned_defibs', JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+      return updated;
+    });
+  };
+
   // GÉODAE Atlasanté State
-  const [atlasanteActive, setAtlasanteActive] = useState(false);
+  const [atlasanteActive, setAtlasanteActive] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('defib_atlasante_active');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [atlasanteUrlAuth, setAtlasanteUrlAuth] = useState('');
   const [atlasanteDeclarantId, setAtlasanteDeclarantId] = useState('');
   const [isAtlasantePaneOpen, setIsAtlasantePaneOpen] = useState(false);
   const [isAtlasanteUploading, setIsAtlasanteUploading] = useState(false);
   const [atlasanteUploadResults, setAtlasanteUploadResults] = useState<any[]>([]);
 
+  // GÉODAE Dummy Sync Side Pane State
+  const [isGeoDaeSyncPaneOpen, setIsGeoDaeSyncPaneOpen] = useState(false);
+  const [isGeoDaeSyncing, setIsGeoDaeSyncing] = useState(false);
+  const [isGeoDaeSyncSuccess, setIsGeoDaeSyncSuccess] = useState(false);
+  const [geoDaeSyncCount, setGeoDaeSyncCount] = useState(0);
+  const geoDaeTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (geoDaeTimerRef.current) {
+        clearTimeout(geoDaeTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleStartGeoDaeSync = () => {
+    const count = selectedIds.length;
+    setGeoDaeSyncCount(count);
+    setIsGeoDaeSyncing(true);
+    setIsGeoDaeSyncSuccess(false);
+    setIsGeoDaeSyncPaneOpen(true);
+
+    if (geoDaeTimerRef.current) {
+      clearTimeout(geoDaeTimerRef.current);
+    }
+    geoDaeTimerRef.current = setTimeout(() => {
+      setIsGeoDaeSyncing(false);
+      setIsGeoDaeSyncSuccess(true);
+    }, 10000);
+  };
+
+  const handleCancelOrCloseGeoDaeSync = () => {
+    if (geoDaeTimerRef.current) {
+      clearTimeout(geoDaeTimerRef.current);
+      geoDaeTimerRef.current = null;
+    }
+    setIsGeoDaeSyncing(false);
+    setIsGeoDaeSyncSuccess(false);
+    setIsGeoDaeSyncPaneOpen(false);
+  };
+
   useEffect(() => {
     const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
     fetchCollectionFromFirestore<any>('api_connectors', activeTenant).then(data => {
       if (data) {
-        if (data.atlasanteActive !== undefined) setAtlasanteActive(data.atlasanteActive);
+        if (data.atlasanteActive !== undefined) {
+          setAtlasanteActive(data.atlasanteActive);
+          try {
+            localStorage.setItem('defib_atlasante_active', String(data.atlasanteActive));
+          } catch (e) {
+            console.error(e);
+          }
+        }
         if (data.atlasanteUrlAuth !== undefined) setAtlasanteUrlAuth(data.atlasanteUrlAuth);
         if (data.atlasanteDeclarantId !== undefined) setAtlasanteDeclarantId(data.atlasanteDeclarantId);
       }
     }).catch(err => {
       console.error("Error fetching api_connectors inside DefibTab:", err);
     });
+
+    const handleAtlasanteStatusChange = () => {
+      try {
+        const saved = localStorage.getItem('defib_atlasante_active');
+        setAtlasanteActive(saved === 'true');
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    window.addEventListener('atlasante-status-changed', handleAtlasanteStatusChange);
+    window.addEventListener('storage', handleAtlasanteStatusChange);
+    return () => {
+      window.removeEventListener('atlasante-status-changed', handleAtlasanteStatusChange);
+      window.removeEventListener('storage', handleAtlasanteStatusChange);
+    };
   }, []);
 
   // Modals state
@@ -1383,6 +1484,48 @@ export default function DefibTab({
   const modelesElectrode = useMemo(() => variables.filter(v => v.category === 'Modèle Électrode'), [variables]);
   const modelesBatterie = useMemo(() => variables.filter(v => v.category === 'Modèle Batterie'), [variables]);
 
+  // Validation state for Atlasanté GeoDAE bulk synchronization
+  const isSyncAtlasanteDisabled = useMemo(() => {
+    if (!atlasanteActive) return true;
+    if (selectedIds.length === 0) return true;
+
+    const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
+    if (selectedDefibs.length === 0) return true;
+
+    return selectedDefibs.some(df => {
+      const cl = clientMap.get(df.clientId);
+      const lat = (df.latitude || '').trim();
+      const lng = (df.longitude || '').trim();
+      const tel = (df.telephoneSite || cl?.telephoneSite || cl?.phone || '').trim();
+      const email = (df.emailSite || cl?.emailSite || cl?.email || '').trim();
+      const modele = (df.modeleId || '').trim();
+      const serie = (df.numeroSerie || '').trim();
+
+      return !lat || !lng || !tel || !email || !modele || modele === 'Tous' || !serie;
+    });
+  }, [atlasanteActive, selectedIds, defibrillateurs, clientMap]);
+
+  const syncAtlasanteDisabledReason = useMemo(() => {
+    if (!atlasanteActive) {
+      return "Action impossible : 'Atlasanté GEODAE' est désactivé dans les paramètres du tenant.";
+    }
+    const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
+    const hasMissingFields = selectedDefibs.some(df => {
+      const cl = clientMap.get(df.clientId);
+      const lat = (df.latitude || '').trim();
+      const lng = (df.longitude || '').trim();
+      const tel = (df.telephoneSite || cl?.telephoneSite || cl?.phone || '').trim();
+      const email = (df.emailSite || cl?.emailSite || cl?.email || '').trim();
+      const modele = (df.modeleId || '').trim();
+      const serie = (df.numeroSerie || '').trim();
+      return !lat || !lng || !tel || !email || !modele || modele === 'Tous' || !serie;
+    });
+    if (hasMissingFields) {
+      return "Action impossible : au moins 1 défibrillateur sélectionné a un ou plusieurs champs manquants (Latitude, Longitude, Téléphone, Email, Modèle, Numéro Série).";
+    }
+    return "";
+  }, [atlasanteActive, selectedIds, defibrillateurs, clientMap]);
+
   // Autopopulate site / contract fields on Client lookup change
   const handleClientChange = (selectedClientId: string) => {
     setClientId(selectedClientId);
@@ -1588,8 +1731,15 @@ export default function DefibTab({
       });
     }
 
+    if (pinnedDefibIds.length > 0) {
+      const pinnedSet = new Set(pinnedDefibIds);
+      const pinnedItems = result.filter(df => pinnedSet.has(df.id));
+      const unpinnedItems = result.filter(df => !pinnedSet.has(df.id));
+      result = [...pinnedItems, ...unpinnedItems];
+    }
+
     return result;
-  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, rejectedDefibSet, sortFilter, maintenanceFilter]);
+  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, rejectedDefibSet, sortFilter, maintenanceFilter, pinnedDefibIds]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -2586,6 +2736,16 @@ export default function DefibTab({
                   >
                     Corriger
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTogglePinSelected}
+                    id="btn-bulk-pin"
+                    style={rowActionButton18Style}
+                    className="cursor-pointer"
+                  >
+                    Dés/Épingler
+                  </button>
                   
                   {/* Action Tournee Dropdown */}
                   <div className="relative">
@@ -2740,18 +2900,21 @@ export default function DefibTab({
                       CSV Atlasanté
                     </button>
                   )}
-                  {typeof window !== 'undefined' && ((localStorage.getItem('defib_lang') || 'Français, France') === 'Français, France' || localStorage.getItem('defib_lang') === 'Français') && atlasanteActive && (
+                  {typeof window !== 'undefined' && ((localStorage.getItem('defib_lang') || 'Français, France') === 'Français, France' || localStorage.getItem('defib_lang') === 'Français') && (
                     <button
-                      onClick={handleTransmitToAtlasante}
-                      disabled={isAtlasanteUploading}
+                      type="button"
+                      onClick={handleStartGeoDaeSync}
+                      disabled={isSyncAtlasanteDisabled}
+                      id="btn-sync-atlasante"
                       style={{
                         ...rowActionButton18Style,
-                        opacity: isAtlasanteUploading ? 0.6 : 1,
-                        cursor: isAtlasanteUploading ? 'not-allowed' : 'pointer'
+                        opacity: isSyncAtlasanteDisabled ? 0.4 : 1,
+                        cursor: isSyncAtlasanteDisabled ? 'not-allowed' : 'pointer'
                       }}
+                      title={syncAtlasanteDisabledReason || "Synchroniser avec Atlasanté GÉODAE"}
                       className="cursor-pointer"
                     >
-                      Envoyer vers Atlasanté
+                      Sync. Atlasanté
                     </button>
                   )}
                   <button
@@ -3089,6 +3252,7 @@ export default function DefibTab({
                   const linkedClient = clientMap.get(df.clientId);
                   const linkedModel = variableMap.get(df.modeleId);
                   const isChecked = selectedIds.includes(df.id);
+                  const isPinned = pinnedDefibIds.includes(df.id);
                   const prochaineMaint = computeProchaineMaintenance(df.derniereMaintenance);
 
                   const activeAlerts: any[] = [];
@@ -3121,9 +3285,16 @@ export default function DefibTab({
                       className={`group hover:bg-[#ffecf8] transition-all cursor-pointer ${
                         isChecked ? 'bg-[#ffecf8]/60' : ''
                       }`}
+                      style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #3556ec' } : undefined}
                     >
                       {/* Checkbox column */}
-                      <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-5 text-center relative" onClick={(e) => e.stopPropagation()}>
+                        {isPinned && (
+                          <div 
+                            className="absolute left-0 top-0 bottom-0 pointer-events-none" 
+                            style={{ width: '3px', backgroundColor: '#3556ec', zIndex: 2 }} 
+                          />
+                        )}
                         <button
                           type="button"
                           onClick={(e) => handleSelectRow(df.id, e)}
@@ -6667,6 +6838,114 @@ export default function DefibTab({
       )}
 
       {/* ============================================== */}
+      {/* 📡 GÉODAE ATLASANTÉ SYNC SIDE PANE (DUMMY)   📡 */}
+      {/* ============================================== */}
+      {isGeoDaeSyncPaneOpen && (
+        <div 
+          className="fixed inset-y-0 right-0 w-80 sm:w-96 md:w-[420px] bg-white shadow-2xl z-[90] flex flex-col border-l border-slate-200" 
+          id="geodae-sync-side-pane"
+          style={{ height: '100%' }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-slate-100">
+            <h3 
+              className="text-lg font-bold font-sans text-black"
+              style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+            >
+              Atlasanté GeoDAE
+            </h3>
+            <button 
+              type="button"
+              onClick={handleCancelOrCloseGeoDaeSync}
+              className="text-slate-400 hover:text-black transition-colors p-1.5 rounded-lg cursor-pointer"
+              title={isGeoDaeSyncSuccess ? "Fermer" : "Annuler"}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Center Body */}
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            {isGeoDaeSyncing && !isGeoDaeSyncSuccess && (
+              <div className="flex flex-col items-center justify-center animate-fadeIn">
+                {/* Circle Preloader */}
+                <div className="relative w-16 h-16 flex items-center justify-center">
+                  <div 
+                    className="w-16 h-16 rounded-full border-4 border-slate-200 border-t-[#3556ec] animate-spin"
+                    style={{ borderTopColor: '#3556ec' }}
+                  />
+                </div>
+                <div 
+                  className="mt-6 text-black font-sans text-[18px] font-semibold tracking-normal"
+                  style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                >
+                  Ajouter et actualisation dans GeoDAE...
+                </div>
+              </div>
+            )}
+
+            {isGeoDaeSyncSuccess && (
+              <div className="flex flex-col items-center justify-center animate-fadeIn">
+                <div 
+                  className="w-16 h-16 rounded-full flex items-center justify-center mb-6 shadow-sm"
+                  style={{ backgroundColor: '#eef2ff', color: '#3556ec' }}
+                >
+                  <Check className="w-9 h-9 stroke-[3]" />
+                </div>
+                <div 
+                  className="text-black font-sans text-[18px] font-semibold max-w-xs leading-relaxed"
+                  style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                >
+                  Les {geoDaeSyncCount} défibrillateur(s) ont été ajoutés ou actualisés dans GeoDAE.
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Floating Bottom Action */}
+          <div 
+            className="p-6 border-t border-slate-100 bg-white shrink-0"
+            style={{
+              boxShadow: '0 -4px 16px rgba(0,0,0,0.04)'
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleCancelOrCloseGeoDaeSync}
+              style={{
+                backgroundColor: '#000000',
+                color: '#ffffff',
+                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                borderRadius: '13px',
+                fontSize: '18px',
+                padding: '10px 20px',
+                fontWeight: '600',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                border: 'none',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                width: '100%'
+              }}
+              className="hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+              id={isGeoDaeSyncSuccess ? "btn-close-geodae-sync" : "btn-cancel-geodae-sync"}
+            >
+              {isGeoDaeSyncSuccess ? 'Fermer' : 'Annuler la synchronisation'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* GÉODAE Sync Backdrop */}
+      {isGeoDaeSyncPaneOpen && (
+        <div 
+          onClick={handleCancelOrCloseGeoDaeSync}
+          className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-[85]"
+        />
+      )}
+
+      {/* ============================================== */}
       {/* 📡 GÉODAE ATLASANTÉ TRANSMISSION SIDE PANE 📡 */}
       {/* ============================================== */}
       {isAtlasantePaneOpen && (
@@ -7048,12 +7327,18 @@ export default function DefibTab({
                 setIsFilterPaneOpen(false);
               }}
               style={{
-                ...cancelFiltersButtonStyle,
-                fontSize: '18px',
+                backgroundColor: '#000000',
+                color: '#ffffff',
                 borderRadius: '13px',
+                fontSize: '18px',
+                fontWeight: 'bold',
                 padding: '11px 22px',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
               }}
-              className="flex-1 text-center font-sans font-semibold cursor-pointer animate-none"
+              className="flex-1 text-center cursor-pointer animate-none"
             >
               Annuler
             </button>
@@ -7063,15 +7348,18 @@ export default function DefibTab({
                 setIsFilterPaneOpen(false);
               }}
               style={{
-                ...applyFiltersButtonStyle,
                 backgroundColor: 'rgb(53, 86, 236)',
                 color: 'rgb(255, 255, 255)',
                 boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                 fontSize: '18px',
+                fontWeight: 'bold',
                 borderRadius: '13px',
                 padding: '11px 22px',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
               }}
-              className="flex-1 text-center font-sans font-semibold cursor-pointer animate-none"
+              className="flex-1 text-center cursor-pointer animate-none"
             >
               Appliquer
             </button>

@@ -1270,6 +1270,8 @@ export default function SettingsModal({
         googleDriveEmail,
         googleDriveAccessToken
       };
+      localStorage.setItem('defib_atlasante_active', String(atlasanteActive));
+      window.dispatchEvent(new Event('atlasante-status-changed'));
       localStorage.setItem('defib_google_drive_active', String(googleDriveActive));
       if (googleDriveEmail) localStorage.setItem('defib_google_drive_email', googleDriveEmail);
       else localStorage.removeItem('defib_google_drive_email');

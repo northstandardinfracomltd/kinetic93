@@ -252,6 +252,37 @@ export default function AutresMaterielsTab({
   isReadOnly = false,
 }: AutresMaterielsTabProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Pinned items state (persisted in localStorage)
+  const [pinnedOtherIds, setPinnedOtherIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('pinned_autres_materiels');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleTogglePinSelected = () => {
+    if (selectedIds.length === 0) return;
+    setPinnedOtherIds(prev => {
+      const nextSet = new Set(prev);
+      for (const id of selectedIds) {
+        if (nextSet.has(id)) {
+          nextSet.delete(id);
+        } else {
+          nextSet.add(id);
+        }
+      }
+      const updated = Array.from(nextSet);
+      try {
+        localStorage.setItem('pinned_autres_materiels', JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+      return updated;
+    });
+  };
   const [isTourDropdownOpen, setIsTourDropdownOpen] = useState(false);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
 
@@ -825,7 +856,7 @@ export default function AutresMaterielsTab({
 
   // Filtered List
   const filteredList = useMemo(() => {
-    return otherEquipments.filter(item => {
+    const baseList = otherEquipments.filter(item => {
       // 1. Category Filter
       const matchesCategory = categoryFilter === 'Tous' || item.categorie === categoryFilter;
       if (!matchesCategory) return false;
@@ -852,7 +883,16 @@ export default function AutresMaterielsTab({
         Boolean(matchesSpecifiques)
       );
     });
-  }, [otherEquipments, searchQuery, categoryFilter, clientMap]);
+
+    if (pinnedOtherIds.length > 0) {
+      const pinnedSet = new Set(pinnedOtherIds);
+      const pinnedItems = baseList.filter(item => pinnedSet.has(item.id));
+      const unpinnedItems = baseList.filter(item => !pinnedSet.has(item.id));
+      return [...pinnedItems, ...unpinnedItems];
+    }
+
+    return baseList;
+  }, [otherEquipments, searchQuery, categoryFilter, clientMap, pinnedOtherIds]);
 
   // Color mappings for Category badge
   const getCategorieBadgeStyle = (cat: string) => {
@@ -1090,6 +1130,16 @@ export default function AutresMaterielsTab({
               </div>
               
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleTogglePinSelected}
+                  id="btn-bulk-pin-autres-materiels"
+                  style={rowActionButton18Style}
+                  className="cursor-pointer"
+                >
+                  Dés/Épingler
+                </button>
+
                 {/* Action Tournee Dropdown */}
                 <div className="relative">
                   <button
@@ -1262,14 +1312,22 @@ export default function AutresMaterielsTab({
                     filteredList.map((item) => {
                       const clientData = clientMap.get(item.clientId);
                       const isRowChecked = selectedIds.includes(item.id);
+                      const isPinned = pinnedOtherIds.includes(item.id);
                       return (
                         <tr 
                           key={item.id} 
                           onClick={() => handleOpenEditForm(item)}
                           className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
+                          style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #3556ec' } : undefined}
                         >
                           {/* Checkbox column */}
-                          <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-4 py-5 text-center relative" onClick={(e) => e.stopPropagation()}>
+                            {isPinned && (
+                              <div 
+                                className="absolute left-0 top-0 bottom-0 pointer-events-none" 
+                                style={{ width: '3px', backgroundColor: '#3556ec', zIndex: 2 }} 
+                              />
+                            )}
                             <button
                               type="button"
                               onClick={(e) => handleSelectRow(item.id, e)}
