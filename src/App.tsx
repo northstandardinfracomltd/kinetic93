@@ -8969,7 +8969,7 @@ export default function App() {
                         <select
                           value={selectedFsmMonth}
                           onChange={(e) => setSelectedFsmMonth(e.target.value)}
-                          title={t("Sélectionner le mois")}
+                          title={translate("Sélectionner le mois")}
                           style={{
                             backgroundColor: '#f8fafc',
                             border: '1px solid rgb(218, 218, 218)',
@@ -9008,7 +9008,7 @@ export default function App() {
                         }}
                       >
                         <span style={{ fontWeight: 400, color: '#475569', marginRight: '6px' }}>
-                          {t("Temps moyen d’une intervention :")}
+                          {translate("Temps moyen d’une intervention :")}
                         </span>
                         <span style={{ fontWeight: 700, color: '#000000' }}>
                           {avgInterventionMinutesStr}
@@ -9035,7 +9035,7 @@ export default function App() {
                           {formattedCo2Str} kg
                         </span>
                         <span style={{ fontWeight: 400, color: '#475569' }}>
-                          {t("Co2e d’émissions préservée(s)")}
+                          {translate("Co2e d’émissions préservée(s)")}
                         </span>
                       </div>
                     </div>
@@ -9065,7 +9065,7 @@ export default function App() {
                     className="hover:text-black transition-colors select-none"
                     id="btn-toggle-fsm-stats"
                   >
-                    {isFsmStatsHidden ? t("Afficher les statistiques") : t("Masquer les statistiques")}
+                    {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer les statistiques")}
                   </button>
                 </div>
 
@@ -9120,7 +9120,7 @@ export default function App() {
                         }}
                         className="transition-all flex-shrink-0"
                       >
-                        {t("À trier / Ordres ADV")}
+                        {translate("À trier / Ordres ADV")}
                       </button>
 
                       {scheduledTours.length > 0 && displayedTour && (
@@ -9130,7 +9130,7 @@ export default function App() {
                             className="block text-[14px] font-semibold text-black mb-1 font-sans truncate"
                             style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                           >
-                            {t("Sélection de la tournée à gérer:")}
+                            {translate("Sélection de la tournée à gérer:")}
                           </label>
                           <select
                             id="select-fsm-tour-manage"
@@ -10955,7 +10955,7 @@ export default function App() {
                                     minWidth: '225px'
                                   }}
                                 >
-                                  {t("Progression de planification")}
+                                  {translate("Progression de planification")}
                                 </span>
 
                                 <div 
@@ -11024,7 +11024,7 @@ export default function App() {
                                     minWidth: '225px'
                                   }}
                                 >
-                                  {t("Progression de complétion")}
+                                  {translate("Progression de complétion")}
                                 </span>
 
                                 <div 
