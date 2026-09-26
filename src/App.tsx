@@ -90,6 +90,7 @@ import {
   Inbox,
   AlertOctagon,
   ChevronRight,
+  ChevronDown,
   ShieldCheck,
   CheckCircle,
   FileCheck,
@@ -809,6 +810,22 @@ export default function App() {
 
   const [managingReportId, setManagingReportId] = useState<string | null>(null);
   const [fsmDateFilter, setFsmDateFilter] = useState<string>('Tous');
+  const [isFsmTourDropdownOpen, setIsFsmTourDropdownOpen] = useState<boolean>(false);
+  const fsmTourDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (fsmTourDropdownRef.current && !fsmTourDropdownRef.current.contains(event.target as Node)) {
+        setIsFsmTourDropdownOpen(false);
+      }
+    };
+    if (isFsmTourDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isFsmTourDropdownOpen]);
   const [fsmRegionFilter, setFsmRegionFilter] = useState<string>('Tous');
   const [fsmTechFilter, setFsmTechFilter] = useState<string>('Tous');
   const [fsmPlannerFilter, setFsmPlannerFilter] = useState<string>('Tous');
@@ -1688,8 +1705,12 @@ export default function App() {
 
   // Helper pour extraire le mois YYYY-MM d'un rapport
   const getReportMonthKey = (rep: any): string => {
-    const dStr = rep.date || rep.interventionDate || rep.horodatage || rep.startTimeStamp || rep.dateIntervention || rep.horodatageEntrant || rep.tourDate;
+    if (!rep) return '';
+    const dStr = rep.date || rep.interventionDate || rep.horodatage || rep.startTimeStamp || rep.dateIntervention || rep.horodatageEntrant || rep.tourDate || rep.dateRapport || rep.scheduledDate || rep.createdAt;
     if (!dStr) return '';
+    if (typeof dStr === 'string' && /^\d{4}-\d{2}/.test(dStr.trim())) {
+      return dStr.trim().slice(0, 7);
+    }
     const d = parseTimestampHelper(dStr);
     if (d && !isNaN(d.getTime())) {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -1697,19 +1718,138 @@ export default function App() {
     return '';
   };
 
-  // Temps moyen d'une intervention en minutes (filtré par le mois sélectionné)
+  // Extraction robuste de la clé mois YYYY-MM pour une tournée ou ses missions
+  const getTourMonthKey = (tour: any): string => {
+    if (!tour) return '';
+    const rawDates: any[] = [
+      tour.startDate,
+      tour.date,
+      ...(Array.isArray(tour.missions) ? tour.missions.map((m: any) => m?.estimatedDate || m?.date || m?.scheduledDate) : [])
+    ].filter(Boolean);
+
+    for (const raw of rawDates) {
+      if (typeof raw !== 'string') continue;
+      const s = raw.trim();
+      if (!s || s === 'A trier' || s === 'a-trier' || s === '--' || s === 'NC') continue;
+
+      // Format ISO YYYY-MM...
+      if (/^\d{4}-\d{2}/.test(s)) {
+        return s.slice(0, 7);
+      }
+      // Format FR DD/MM/YYYY ou DD-MM-YYYY
+      const frMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+      if (frMatch) {
+        const month = String(parseInt(frMatch[2], 10)).padStart(2, '0');
+        const year = frMatch[3];
+        return `${year}-${month}`;
+      }
+      // Helper Date
+      const d = parseTimestampHelper(s);
+      if (d && !isNaN(d.getTime())) {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      }
+    }
+    return '';
+  };
+
+  // Temps moyen d'une intervention en minutes (dynamique, recalculé selon le mois FSM sélectionné)
   const avgInterventionMinutesStr = useMemo(() => {
-    const validReports = (generatedReports || []).filter((rep: any) => {
-      const isFormation = 
+    if (!selectedFsmMonth) return "N/A";
+
+    let totalDurationMinutes = 0;
+    let countedInterventions = 0;
+    const handledReportIds = new Set<string>();
+
+    // 1. Interventions des missions dans les tournées FSM du mois sélectionné
+    const activeToursInMonth = (fsmTours || []).filter(t => {
+      if (!t || t.id === 'a-trier') return false;
+      const mKey = getTourMonthKey(t);
+      return mKey === selectedFsmMonth;
+    });
+
+    activeToursInMonth.forEach(t => {
+      if (!Array.isArray(t.missions)) return;
+      t.missions.forEach((m: any) => {
+        let missionMinutes = 0;
+
+        // A. Vérifier si un rapport GMAO a été généré pour cette mission avec des horaires réels
+        const matchedReport = (generatedReports || []).find((rep: any) => {
+          if (!rep) return false;
+          if (rep.id && (rep.id === m.reportId || rep.id === m.id)) return true;
+          if (rep.missionId && rep.missionId === m.id) return true;
+          if (rep.tourId === t.id && rep.defibIdentifiant && m.defibIdentifiant && rep.defibIdentifiant === m.defibIdentifiant) return true;
+          return false;
+        });
+
+        if (matchedReport) {
+          handledReportIds.add(matchedReport.id);
+          const startStr = matchedReport.date || matchedReport.interventionDate || matchedReport.horodatage || matchedReport.startTimeStamp || matchedReport.dateIntervention || matchedReport.horodatageEntrant;
+          const endStr = matchedReport.endTimeStamp || matchedReport.horodatageCloture || matchedReport.heureFin || matchedReport.horodatageSortant || matchedReport.dateCloture;
+          const start = parseTimestampHelper(startStr);
+          const end = parseTimestampHelper(endStr);
+          if (start && end) {
+            const diffMin = Math.round((end.getTime() - start.getTime()) / 60000);
+            if (diffMin > 0) missionMinutes = diffMin;
+          } else if (typeof matchedReport.durationSeconds === 'number' && matchedReport.durationSeconds > 0) {
+            missionMinutes = Math.round(matchedReport.durationSeconds / 60);
+          } else if (matchedReport.dureePrestation && Number(matchedReport.dureePrestation) > 0) {
+            missionMinutes = Number(matchedReport.dureePrestation);
+          }
+        }
+
+        // B. Si pas de durée effective via rapport, utiliser la durée configurée sur la mission FSM
+        if (missionMinutes <= 0) {
+          if (m.dureePrestation !== undefined && !isNaN(Number(m.dureePrestation)) && Number(m.dureePrestation) > 0) {
+            missionMinutes = Number(m.dureePrestation);
+          } else {
+            // Chercher dans les variables pour la durée des prestations
+            const reasonsList: string[] = Array.isArray(m.reasons) && m.reasons.length > 0
+              ? m.reasons
+              : (m.reason ? String(m.reason).split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+            
+            let reasonsSum = 0;
+            for (const r of reasonsList) {
+              const matchVar = (variables || []).find((v: any) =>
+                v.category === 'Modèle Raison Prestation' &&
+                (v.nom?.toLowerCase().trim() === r.toLowerCase().trim() || v.id === r)
+              );
+              if (matchVar?.dureePrestation && !isNaN(Number(matchVar.dureePrestation))) {
+                reasonsSum += Number(matchVar.dureePrestation);
+              }
+            }
+
+            if (reasonsSum > 0) {
+              missionMinutes = reasonsSum;
+            } else if (m.duration && !isNaN(Number(m.duration)) && Number(m.duration) > 0) {
+              missionMinutes = Number(m.duration);
+            } else {
+              // Durée standard d'une intervention de maintenance si non précisée
+              missionMinutes = 45;
+            }
+          }
+        }
+
+        if (missionMinutes > 0) {
+          totalDurationMinutes += missionMinutes;
+          countedInterventions++;
+        }
+      });
+    });
+
+    // 2. Rapports GMAO indépendants du mois sélectionné (non déjà pris en compte avec les tournées)
+    (generatedReports || []).forEach((rep: any) => {
+      if (!rep || handledReportIds.has(rep.id)) return;
+
+      const isFormation =
         rep.equipmentType === 'Formation' ||
         rep.equipmentType?.toLowerCase()?.includes('formation') ||
         rep.defibSnapshot?.categorie === 'Formation' ||
         rep.defibSnapshot?.categorie?.toLowerCase()?.includes('formation') ||
         !!rep.formationId ||
         rep.defibIdentifiant === 'Formation';
-      if (isFormation) return false;
+      if (isFormation) return;
 
-      const isEffectue = 
+      const isEffectue =
         rep.missionStatus === 'Effectué' ||
         rep.conforme === 'Conforme' ||
         rep.conforme === 'Non Conforme' ||
@@ -1717,51 +1857,55 @@ export default function App() {
         !!rep.validated;
 
       const isUpcoming = !isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture);
-      if (isUpcoming) return false;
+      if (isUpcoming) return;
 
-      // Filtrer sur le mois FSM sélectionné
-      if (selectedFsmMonth) {
-        const mKey = getReportMonthKey(rep);
-        if (mKey && mKey !== selectedFsmMonth) return false;
-      }
+      // Filtrage strict par le mois sélectionné
+      const mKey = getReportMonthKey(rep);
+      if (!mKey || mKey !== selectedFsmMonth) return;
 
-      return true;
-    });
-
-    let totalSeconds = 0;
-    let countedReports = 0;
-
-    validReports.forEach((rep: any) => {
       const startStr = rep.date || rep.interventionDate || rep.horodatage || rep.startTimeStamp || rep.dateIntervention || rep.horodatageEntrant;
       const endStr = rep.endTimeStamp || rep.horodatageCloture || rep.heureFin || rep.horodatageSortant || rep.dateCloture;
-
       const start = parseTimestampHelper(startStr);
       const end = parseTimestampHelper(endStr);
 
+      let repMinutes = 0;
       if (start && end) {
         const diffMs = end.getTime() - start.getTime();
-        if (diffMs >= 0) {
-          totalSeconds += Math.floor(diffMs / 1000);
-          countedReports++;
-        }
+        if (diffMs > 0) repMinutes = Math.round(diffMs / 60000);
       } else if (typeof rep.durationSeconds === 'number' && rep.durationSeconds > 0) {
-        totalSeconds += rep.durationSeconds;
-        countedReports++;
+        repMinutes = Math.round(rep.durationSeconds / 60);
+      } else if (rep.dureePrestation && Number(rep.dureePrestation) > 0) {
+        repMinutes = Number(rep.dureePrestation);
+      }
+
+      if (repMinutes > 0) {
+        totalDurationMinutes += repMinutes;
+        countedInterventions++;
       }
     });
 
-    if (countedReports === 0) {
-      // Fallback aux pointages du mois sélectionné
+    // 3. Fallback aux pointages du mois sélectionné si aucune tournée ou rapport avec durée
+    if (countedInterventions === 0) {
       const finished = (pointages || []).filter(p => {
-        if (p.isOngoing) return false;
-        if (selectedFsmMonth && p.startDate && p.startDate.includes('-')) {
-          if (p.startDate.slice(0, 7) !== selectedFsmMonth) return false;
+        if (!p || p.isOngoing) return false;
+        const pDateStr = p.startDate || p.date;
+        if (!pDateStr) return false;
+        let pMonth = '';
+        if (/^\d{4}-\d{2}/.test(pDateStr)) {
+          pMonth = pDateStr.slice(0, 7);
+        } else {
+          const d = parseTimestampHelper(pDateStr);
+          if (d && !isNaN(d.getTime())) {
+            pMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          }
         }
-        return true;
+        return pMonth === selectedFsmMonth;
       });
+
       if (finished.length === 0) return "N/A";
+
       const totalSecs = finished.reduce((sum, p) => {
-        if (p.durationSeconds !== undefined) return sum + p.durationSeconds;
+        if (p.durationSeconds !== undefined && p.durationSeconds > 0) return sum + p.durationSeconds;
         if (p.startDate && p.startTime && p.endDate && p.endTime) {
           try {
             const start = new Date(`${p.startDate}T${p.startTime}`);
@@ -1774,34 +1918,15 @@ export default function App() {
         }
         return sum;
       }, 0);
+
       const avgSecs = totalSecs / finished.length;
       const minutes = Math.round(avgSecs / 60);
-      return `${minutes} min(s)`;
+      return minutes > 0 ? `${minutes} min(s)` : "N/A";
     }
 
-    const avgMinutes = Math.round((totalSeconds / countedReports) / 60);
+    const avgMinutes = Math.round(totalDurationMinutes / countedInterventions);
     return `${avgMinutes} min(s)`;
-  }, [generatedReports, pointages, selectedFsmMonth]);
-
-  // Extraction de la clé mois YYYY-MM pour une tournée ou ses missions
-  const getTourMonthKey = (tour: any): string => {
-    if (!tour) return '';
-    if (tour.startDate && tour.startDate !== 'A trier' && tour.startDate.includes('-')) {
-      return tour.startDate.slice(0, 7);
-    }
-    if (tour.date && tour.date !== 'A trier' && tour.date.includes('-')) {
-      return tour.date.slice(0, 7);
-    }
-    if (tour.missions && Array.isArray(tour.missions)) {
-      for (const m of tour.missions) {
-        const d = m.estimatedDate || m.date || m.scheduledDate;
-        if (d && d.includes('-') && d !== 'A trier') {
-          return d.slice(0, 7);
-        }
-      }
-    }
-    return '';
-  };
+  }, [fsmTours, generatedReports, variables, pointages, selectedFsmMonth]);
 
   // Historique persistant des valeurs CO2 des tournées faites / effectuées (conservé même en cas de suppression)
   const [fsmCo2History, setFsmCo2History] = useState<{
@@ -1835,7 +1960,7 @@ export default function App() {
     }
   }, [tenantId]);
 
-  // Sauvegarde un enregistrement CO2 dans l'historique persistant
+  // Sauvegarde un enregistrement CO2 dans l'historique persistant et Firestore
   const saveCo2HistoryRecord = (record: {
     tourId: string;
     monthKey: string;
@@ -1852,6 +1977,7 @@ export default function App() {
       } catch (e) {
         console.warn("Storage quota exceeded in fsmCo2History:", e);
       }
+      saveCollectionToFirestore('fsmCo2History', updated, tenantId);
       return updated;
     });
   };
@@ -4523,6 +4649,9 @@ export default function App() {
         const baseTours = getLocalTenantValue<any[]>('fsm_tours', activeRunTenantId === 'demo' ? INITIAL_TOURS : []);
         setFsmTours(baseTours);
 
+        const baseCo2History = getLocalTenantValue<any[]>('fsm_co2_history', []);
+        setFsmCo2History(baseCo2History);
+
         const baseExpenses = getLocalTenantValue<any[]>('expenses', activeRunTenantId === 'demo' ? INITIAL_EXPENSES : []);
         setExpenses(baseExpenses);
 
@@ -4635,6 +4764,7 @@ export default function App() {
           veilles: JSON.stringify(baseVeilles),
           generatedReports: JSON.stringify(baseReports),
           fsmTours: JSON.stringify(baseTours),
+          fsmCo2History: JSON.stringify(baseCo2History),
           memos: JSON.stringify(baseMemos),
           otherEquipments: JSON.stringify(baseOtherEquip),
           achats_fournisseurs: JSON.stringify(baseAchats),
@@ -4879,6 +5009,7 @@ export default function App() {
           if (tenantId === 'demo') return tours;
           return tours.filter(t => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo');
         }));
+        syncTasks.push(syncBackground<any[]>('fsmCo2History', 'fsm_co2_history', setFsmCo2History));
         syncTasks.push(syncBackground<Memo[]>('memos', 'memos', setMemos));
         syncTasks.push(syncBackground<OtherEquipment[]>('otherEquipments', 'other_equipments', setOtherEquipments));
         syncTasks.push(syncBackground<PointageAutoVigilance[]>('pointagesAutoVigilance', 'pointages_auto_vigilance', setPointagesAutoVigilance));
@@ -5252,6 +5383,20 @@ export default function App() {
       loadedDataRef.current.fsmTours = str;
     }
   }, [fsmTours, isFirebaseLoaded, tenantId, loadedTenantIdState]);
+
+  useEffect(() => {
+    if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
+      const str = JSON.stringify(fsmCo2History);
+      if (loadedDataRef.current.fsmCo2History === str) return;
+      saveCollectionToFirestore('fsmCo2History', fsmCo2History, tenantId);
+      try {
+        localStorage.setItem(`defib_${tenantId}_fsm_co2_history`, str);
+      } catch (e) {
+        console.warn('Storage quota exceeded for fsmCo2History:', e);
+      }
+      loadedDataRef.current.fsmCo2History = str;
+    }
+  }, [fsmCo2History, isFirebaseLoaded, tenantId, loadedTenantIdState]);
 
   useEffect(() => {
     if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
@@ -7525,8 +7670,7 @@ export default function App() {
               return dateStr;
             };
 
-            // 1 tournée par gélule : "Tournée 1 du ...", "Tournée 2 du ..."
-            const scheduledTours = fsmTours.filter((t: any) => t.id !== 'a-trier' && t.startDate !== 'A trier');
+            const scheduledTours = fsmTours.filter((t: any) => t.id !== 'a-trier' && t.startDate && t.startDate !== 'A trier');
             scheduledTours.sort((a: any, b: any) => {
               const dateA = a.startDate || '';
               const dateB = b.startDate || '';
@@ -7534,21 +7678,43 @@ export default function App() {
               return (a.id || '').localeCompare(b.id || '');
             });
 
-            const dateTourCounts: { [date: string]: number } = {};
-            const tourPills = scheduledTours.map((t: any) => {
-              const dKey = t.startDate || 'sans-date';
-              dateTourCounts[dKey] = (dateTourCounts[dKey] || 0) + 1;
-              const tourNum = dateTourCounts[dKey];
-              const formattedDate = formatFrenchDate(t.startDate);
-              const label = formattedDate ? `Tournée ${tourNum} du ${formattedDate}` : `Tournée ${tourNum} (Date non définie)`;
-              return {
-                tourId: t.id,
-                startDate: t.startDate,
-                label
-              };
-            });
+            // Trouver la tournée la plus proche en date d'aujourd'hui
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayTime = today.getTime();
 
-            const activeDateFilter = fsmDateFilter === 'Tous' ? 'A trier' : fsmDateFilter;
+            let closestTour: any = null;
+            let minDiff = Infinity;
+            for (const t of scheduledTours) {
+              let tTime = 0;
+              if (typeof t.startDate === 'string') {
+                const parts = t.startDate.split('-');
+                if (parts.length === 3) {
+                  tTime = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)).getTime();
+                } else {
+                  const d = parseTimestampHelper(t.startDate);
+                  if (d && !isNaN(d.getTime())) tTime = d.getTime();
+                }
+              }
+              const diff = tTime > 0 ? Math.abs(tTime - todayTime) : Infinity;
+              if (diff < minDiff) {
+                minDiff = diff;
+                closestTour = t;
+              }
+            }
+
+            // Déterminer la tournée active : auto-sélection de la plus proche en date si 'Tous', ou 'A trier' si aucune tournée
+            const defaultTourId = closestTour ? closestTour.id : 'A trier';
+            const activeDateFilter = fsmDateFilter === 'Tous' ? defaultTourId : fsmDateFilter;
+
+            const getTourDisplayLabel = (tour: any): string => {
+              if (!tour) return '';
+              const title = (tour.title || 'Tournée').trim();
+              const dateFormatted = tour.startDate ? formatFrenchDate(tour.startDate) : '';
+              return dateFormatted ? `${title} - ${dateFormatted}` : title;
+            };
+
+            const displayedTour = scheduledTours.find((t: any) => t.id === activeDateFilter) || closestTour || scheduledTours[0];
 
             const filteredTours = fsmTours.filter((tour) => {
               if (activeDateFilter !== 'Tous') {
@@ -7841,18 +8007,19 @@ export default function App() {
                           onClick={() => setIsFsmFilterSidePaneOpen(true)}
                           id="btn-fsm-filtres"
                           style={{
-                            backgroundColor: '#ffffff',
-                            color: '#000000',
-                            border: '1px solid #dedede',
+                            backgroundColor: '#000000',
+                            color: '#ffffff',
                             borderRadius: '13px',
                             padding: '9px 18px',
                             fontSize: '18px',
                             fontWeight: '600',
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                             cursor: 'pointer',
+                            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+                            border: 'none',
                             position: 'relative',
                           }}
-                          className="hover:bg-neutral-50 transition-colors"
+                          className="hover:bg-neutral-800 transition-colors"
                         >
                           Filtres
                           {(fsmRegionFilter !== 'Tous' || fsmTechFilter !== 'Tous' || fsmPlannerFilter !== 'Tous' || fsmClientFilter !== 'Tous' || fsmRejectedOrRefusedFilter) && (
@@ -7866,17 +8033,18 @@ export default function App() {
                           onClick={() => setIsFsmTeamPaneOpen(true)}
                           id="btn-fsm-team-settings"
                           style={{
-                            backgroundColor: '#ffffff',
-                            color: '#000000',
-                            border: '1px solid #dedede',
+                            backgroundColor: '#000000',
+                            color: '#ffffff',
                             borderRadius: '13px',
                             padding: '9px 18px',
                             fontSize: '18px',
                             fontWeight: '600',
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                             cursor: 'pointer',
+                            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+                            border: 'none',
                           }}
-                          className="hover:bg-neutral-50 transition-colors"
+                          className="hover:bg-neutral-800 transition-colors"
                         >
                           Réglages de l’équipe
                         </button>
@@ -8727,100 +8895,112 @@ export default function App() {
 
                 {/* Statistiques FSM du mois : Sélecteur mois/année + 2 gélules (Temps moyen & CO2 préservé) */}
                 <div 
-                  id="fsm-stats-container"
-                  className="px-4 pt-4 flex flex-wrap items-center justify-start gap-3 select-none"
+                  id="fsm-stats-wrapper"
+                  className="px-4 pt-4 select-none"
                 >
-                  {/* Field de choix de mois/année */}
-                  <div className="flex items-center">
-                    <select
-                      value={selectedFsmMonth}
-                      onChange={(e) => setSelectedFsmMonth(e.target.value)}
-                      title={t("Sélectionner le mois")}
+                  <div 
+                    id="fsm-stats-container"
+                    style={{
+                      display: 'inline-flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '10px 14px',
+                      backgroundColor: '#ffffff',
+                      border: '1px solid rgb(218, 218, 218)',
+                      borderRadius: '16px',
+                    }}
+                  >
+                    {/* Field de choix de mois/année */}
+                    <div className="flex items-center">
+                      <select
+                        value={selectedFsmMonth}
+                        onChange={(e) => setSelectedFsmMonth(e.target.value)}
+                        title={t("Sélectionner le mois")}
+                        style={{
+                          backgroundColor: '#f8fafc',
+                          border: '1px solid rgb(218, 218, 218)',
+                          borderRadius: '13px',
+                          padding: '9px 16px',
+                          fontSize: '15px',
+                          fontWeight: 600,
+                          color: '#000000',
+                          cursor: 'pointer',
+                          outline: 'none',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        }}
+                      >
+                        {availableFsmMonths.map((m) => (
+                          <option key={m.key} value={m.key}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Gélule 1 : Temps moyen d’une intervention */}
+                    <div 
+                      id="fsm-avg-intervention-time-indicator"
                       style={{
-                        backgroundColor: '#ffffff',
+                        padding: '9px 20px',
+                        backgroundColor: '#f8fafc',
                         border: '1px solid rgb(218, 218, 218)',
-                        borderRadius: '13px',
-                        padding: '9px 16px',
+                        borderRadius: '1000px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
                         fontSize: '15px',
-                        fontWeight: 600,
-                        color: '#000000',
-                        cursor: 'pointer',
-                        outline: 'none',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        color: '#000000',
+                        cursor: 'default',
                       }}
                     >
-                      {availableFsmMonths.map((m) => (
-                        <option key={m.key} value={m.key}>
-                          {m.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      <span style={{ fontWeight: 400, color: '#475569', marginRight: '6px' }}>
+                        {t("Temps moyen d’une intervention :")}
+                      </span>
+                      <span style={{ fontWeight: 700, color: '#000000' }}>
+                        {avgInterventionMinutesStr}
+                      </span>
+                    </div>
 
-                  {/* Gélule 1 : Temps moyen d’une intervention */}
-                  <div 
-                    id="fsm-avg-intervention-time-indicator"
-                    style={{
-                      padding: '9px 20px',
-                      backgroundColor: '#f8fafc',
-                      border: '1px solid rgb(218, 218, 218)',
-                      borderRadius: '1000px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      fontSize: '15px',
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      color: '#000000',
-                      cursor: 'default',
-                    }}
-                  >
-                    <span style={{ fontWeight: 400, color: '#475569', marginRight: '6px' }}>
-                      {t("Temps moyen d’une intervention :")}
-                    </span>
-                    <span style={{ fontWeight: 700, color: '#000000' }}>
-                      {avgInterventionMinutesStr}
-                    </span>
-                  </div>
-
-                  {/* Gélule 2 : CO2 préservé */}
-                  <div 
-                    id="fsm-co2-preserved-indicator"
-                    style={{
-                      padding: '9px 20px',
-                      backgroundColor: '#f8fafc',
-                      border: '1px solid rgb(218, 218, 218)',
-                      borderRadius: '1000px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      fontSize: '15px',
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      color: '#000000',
-                      cursor: 'default',
-                    }}
-                  >
-                    <span style={{ fontWeight: 700, color: '#000000', marginRight: '6px' }}>
-                      {formattedCo2Str} kg
-                    </span>
-                    <span style={{ fontWeight: 400, color: '#475569' }}>
-                      {t("Co2e d’émissions préservée(s)")}
-                    </span>
+                    {/* Gélule 2 : CO2 préservé */}
+                    <div 
+                      id="fsm-co2-preserved-indicator"
+                      style={{
+                        padding: '9px 20px',
+                        backgroundColor: '#f8fafc',
+                        border: '1px solid rgb(218, 218, 218)',
+                        borderRadius: '1000px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        fontSize: '15px',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      <span style={{ fontWeight: 700, color: '#000000', marginRight: '6px' }}>
+                        {formattedCo2Str} kg
+                      </span>
+                      <span style={{ fontWeight: 400, color: '#475569' }}>
+                        {t("Co2e d’émissions préservée(s)")}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {fsmTours.length > 0 && (() => {
                   return (
                     <div 
-                      className="px-4 flex items-center gap-2.5 pt-3 overflow-x-auto whitespace-nowrap select-none scrollbar-thin pb-2" 
+                      className="px-4 flex flex-wrap items-center gap-2.5 pt-3 select-none pb-2 relative" 
                       id="fsm-dates-pills"
-                      style={{
-                        flexWrap: 'nowrap',
-                        WebkitOverflowScrolling: 'touch',
-                        scrollbarWidth: 'thin',
-                        scrollbarColor: '#cbd5e1 transparent'
-                      }}
+                      style={{ overflow: 'visible' }}
                     >
                       <button
                         type="button"
-                        onClick={() => setFsmDateFilter('A trier')}
+                        onClick={() => {
+                          setFsmDateFilter('A trier');
+                          setIsFsmTourDropdownOpen(false);
+                        }}
                         style={{
                           borderRadius: '1000px',
                           padding: '10px 20px',
@@ -8840,13 +9020,16 @@ export default function App() {
                         {t("À trier / Ordres ADV")}
                       </button>
 
-                      {tourPills.map(p => {
-                        const isPillActive = activeDateFilter === p.tourId || (!fsmTours.some((x: any) => x.id === activeDateFilter) && activeDateFilter === p.startDate);
-                        return (
+                      {scheduledTours.length > 0 && displayedTour && (
+                        <div className="relative inline-block" ref={fsmTourDropdownRef}>
                           <button
-                            key={p.tourId}
                             type="button"
-                            onClick={() => setFsmDateFilter(p.tourId)}
+                            onClick={() => {
+                              if (activeDateFilter === 'A trier') {
+                                setFsmDateFilter(displayedTour.id);
+                              }
+                              setIsFsmTourDropdownOpen(prev => !prev);
+                            }}
                             style={{
                               borderRadius: '1000px',
                               padding: '10px 20px',
@@ -8854,19 +9037,92 @@ export default function App() {
                               fontWeight: 500,
                               cursor: 'pointer',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              backgroundColor: isPillActive ? '#fa53d5' : '#ffffff',
-                              color: isPillActive ? '#ffffff' : '#000000',
-                              border: isPillActive ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
+                              backgroundColor: activeDateFilter !== 'A trier' ? '#fa53d5' : '#ffffff',
+                              color: activeDateFilter !== 'A trier' ? '#ffffff' : '#000000',
+                              border: activeDateFilter !== 'A trier' ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
                               transition: 'all 0.15s ease',
                               whiteSpace: 'nowrap',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '8px',
                               flexShrink: 0
                             }}
                             className="transition-all flex-shrink-0"
                           >
-                            {p.label}
+                            <span>
+                              {t("Gérer la tournée : ")}{getTourDisplayLabel(displayedTour)}
+                            </span>
+                            <ChevronDown 
+                              className={`w-4 h-4 transition-transform duration-200 ${isFsmTourDropdownOpen ? 'rotate-180' : ''}`} 
+                              style={{ color: activeDateFilter !== 'A trier' ? '#ffffff' : '#000000' }}
+                            />
                           </button>
-                        );
-                      })}
+
+                          {isFsmTourDropdownOpen && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: 'calc(100% + 6px)',
+                                left: 0,
+                                minWidth: '320px',
+                                maxWidth: '440px',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid rgb(218, 218, 218)',
+                                borderRadius: '16px',
+                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08)',
+                                zIndex: 60,
+                                overflow: 'hidden',
+                                padding: '6px'
+                              }}
+                              className="animate-fadeIn font-sans"
+                            >
+                              <div 
+                                style={{ maxHeight: '280px', overflowY: 'auto' }}
+                                className="scrollbar-thin space-y-1"
+                              >
+                                {scheduledTours.map((st: any) => {
+                                  const isSelected = activeDateFilter === st.id;
+                                  return (
+                                    <button
+                                      key={st.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setFsmDateFilter(st.id);
+                                        setIsFsmTourDropdownOpen(false);
+                                      }}
+                                      style={{
+                                        width: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: '9px 14px',
+                                        borderRadius: '10px',
+                                        fontSize: '14px',
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                        textAlign: 'left',
+                                        backgroundColor: isSelected ? '#fdf2f8' : 'transparent',
+                                        color: isSelected ? '#be185d' : '#1e293b',
+                                        fontWeight: isSelected ? 600 : 400,
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        transition: 'background-color 0.15s'
+                                      }}
+                                      className="hover:bg-slate-100 transition-colors"
+                                    >
+                                      <span className="truncate mr-2">
+                                        {getTourDisplayLabel(st)}
+                                      </span>
+                                      {isSelected && (
+                                        <Check className="w-4 h-4 text-[#fa53d5] shrink-0" />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -8891,46 +9147,52 @@ export default function App() {
 
                               <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
                                 {/* Enregistrer button */}
-                                <button
-                                  type="button"
-                                  disabled={!!savingTourIds[t.id]}
-                                  onClick={() => {
-                                    if (savingTourIds[t.id]) return;
+                                {(() => {
+                                  const isSaveDisabled = !!savingTourIds[t.id] || !t.missions || t.missions.length === 0;
+                                  return (
+                                    <button
+                                      type="button"
+                                      disabled={isSaveDisabled}
+                                      onClick={() => {
+                                        if (isSaveDisabled) return;
 
-                                    // Disable button and lower opacity
-                                    setSavingTourIds(prev => ({ ...prev, [t.id]: true }));
+                                        // Disable button and lower opacity
+                                        setSavingTourIds(prev => ({ ...prev, [t.id]: true }));
 
-                                    // Save fsmTours
-                                    saveFsmTours([...fsmTours]);
-                                    alert("Les missions à trier ont été enregistrées avec succès !");
+                                        // Save fsmTours
+                                        saveFsmTours([...fsmTours]);
+                                        alert("Les missions à trier ont été enregistrées avec succès !");
 
-                                    // Re-enable after 3 seconds
-                                    setTimeout(() => {
-                                      setSavingTourIds(prev => {
-                                        const copy = { ...prev };
-                                        delete copy[t.id];
-                                        return copy;
-                                      });
-                                    }, 3000);
-                                  }}
-                                  style={{
-                                    ...blueButtonStyle,
-                                    padding: '12px 24px',
-                                    borderRadius: '13px',
-                                    fontSize: '18px',
-                                    fontWeight: '100',
-                                    height: '50px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    width: '100%',
-                                    opacity: savingTourIds[t.id] ? 0.7 : 1,
-                                    pointerEvents: savingTourIds[t.id] ? 'none' : 'auto'
-                                  }}
-                                  className={`${savingTourIds[t.id] ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} sm:w-auto flex-1 sm:flex-initial`}
-                                >
-                                  Enregistrer
-                                </button>
+                                        // Re-enable after 3 seconds
+                                        setTimeout(() => {
+                                          setSavingTourIds(prev => {
+                                            const copy = { ...prev };
+                                            delete copy[t.id];
+                                            return copy;
+                                          });
+                                        }, 3000);
+                                      }}
+                                      style={{
+                                        ...blueButtonStyle,
+                                        padding: '12px 24px',
+                                        borderRadius: '13px',
+                                        fontSize: '18px',
+                                        fontWeight: '100',
+                                        height: '50px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: '100%',
+                                        opacity: isSaveDisabled ? 0.45 : 1,
+                                        pointerEvents: isSaveDisabled ? 'none' : 'auto',
+                                        cursor: isSaveDisabled ? 'not-allowed' : 'pointer'
+                                      }}
+                                      className={`${isSaveDisabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer'} sm:w-auto flex-1 sm:flex-initial`}
+                                    >
+                                      Enregistrer
+                                    </button>
+                                  );
+                                })()}
                               </div>
                             </div>
 
@@ -11877,6 +12139,9 @@ export default function App() {
               backgroundColor: '#000000',
               color: '#ffffff',
               width: '100%',
+              borderRadius: '13px',
+              fontSize: '18px',
+              padding: '11px 22px',
             };
 
             const applyFiltersButtonStyle: React.CSSProperties = {
@@ -11884,6 +12149,9 @@ export default function App() {
               backgroundColor: '#000000',
               color: '#ffffff',
               width: '100%',
+              borderRadius: '13px',
+              fontSize: '18px',
+              padding: '11px 22px',
             };
 
             const sortedClients = [...(clients || [])].sort((a, b) => {
@@ -12068,7 +12336,7 @@ export default function App() {
               <div className="space-y-6 animate-fadeIn" id="gmao-tab-container">
                 <style>{`
                   #gmao-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-gmao-input),
-                  #gmao-tab-container select,
+                  #gmao-tab-container select:not(#select-gmao-page),
                   #gmao-tab-container textarea {
                     padding: 12px !important;
                     border: 1px solid #dedede !important;
@@ -12084,8 +12352,8 @@ export default function App() {
                   }
                   #gmao-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-gmao-input),
                   #gmao-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-gmao-input),
-                  #gmao-tab-container select:hover:not(:disabled),
-                  #gmao-tab-container select:focus:not(:disabled),
+                  #gmao-tab-container select:not(#select-gmao-page):hover:not(:disabled),
+                  #gmao-tab-container select:not(#select-gmao-page):focus:not(:disabled),
                   #gmao-tab-container textarea:hover:not(:disabled),
                   #gmao-tab-container textarea:focus:not(:disabled),
                   #gmao-tab-container #search-gmao-input:hover,
@@ -12094,16 +12362,44 @@ export default function App() {
                     outline-offset: 2px !important;
                     transition: all 0s !important;
                   }
-                  #gmao-tab-container select {
+                  #gmao-tab-container select:not(#select-gmao-page) {
                     appearance: none !important;
                     -webkit-appearance: none !important;
                     -moz-appearance: none !important;
                     background-image: none !important;
                   }
-                  #gmao-tab-container select option {
+                  #gmao-tab-container select:not(#select-gmao-page) option {
                     color: #000000 !important;
                     background: #ffffff !important;
                     font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                  }
+                  #gmao-tab-container #select-gmao-page {
+                    font-size: 18px !important;
+                    border-radius: 13px !important;
+                    box-shadow: none !important;
+                    background-color: #000000 !important;
+                    border: 1px solid #000000 !important;
+                    color: #ffffff !important;
+                    text-align: center !important;
+                    text-align-last: center !important;
+                    font-weight: bold !important;
+                    cursor: pointer !important;
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    padding: 8px 20px !important;
+                    font-family: "Civilprom", sans-serif !important;
+                  }
+                  #gmao-tab-container #select-gmao-page:hover,
+                  #gmao-tab-container #select-gmao-page:focus {
+                    background-color: #000000 !important;
+                    color: #ffffff !important;
+                    border-color: #000000 !important;
+                    outline: none !important;
+                  }
+                  #gmao-tab-container #select-gmao-page option {
+                    background-color: #000000 !important;
+                    color: #ffffff !important;
+                    text-align: center !important;
                   }
                   #gmao-tab-container input[type="date"]::-webkit-calendar-picker-indicator {
                     display: none !important;
@@ -13585,7 +13881,7 @@ export default function App() {
                     </div>
 
                     {/* Footer Actions */}
-                    <div className="p-6 bg-white flex gap-4 shrink-0 border-t border-slate-100">
+                    <div className="p-6 bg-white flex gap-4 shrink-0 border-0 border-t-0" style={{ borderTop: 'none', border: 'none', boxShadow: 'none' }}>
                       <button
                         type="button"
                         onClick={() => {
@@ -13601,8 +13897,13 @@ export default function App() {
                           setIsGmaoFilterPaneOpen(false);
                           setGmaoCurrentPage(1);
                         }}
-                        style={{ ...cancelFiltersButtonStyle, fontSize: '18px' }}
-                        className="flex-1 text-center font-sans cursor-pointer animate-none"
+                        style={{
+                          ...cancelFiltersButtonStyle,
+                          fontSize: '18px',
+                          borderRadius: '13px',
+                          padding: '11px 22px',
+                        }}
+                        className="flex-1 text-center font-sans font-semibold cursor-pointer animate-none"
                       >
                         Annuler
                       </button>
@@ -13619,8 +13920,10 @@ export default function App() {
                           color: 'rgb(255, 255, 255)',
                           boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                           fontSize: '18px',
+                          borderRadius: '13px',
+                          padding: '11px 22px',
                         }}
-                        className="flex-1 text-center font-sans cursor-pointer animate-none"
+                        className="flex-1 text-center font-sans font-semibold cursor-pointer animate-none"
                       >
                         Appliquer
                       </button>

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Maximize2, Minimize2, BarChart3, Download, Calendar, Trash2 } from 'lucide-react';
+import { Maximize2, Minimize2, BarChart3, Calendar, Trash2 } from 'lucide-react';
 import { SupportTicket, Member, Client, CompanyInfo, CommercialEvent, SupportMessage } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { INITIAL_TICKETS } from '../utils';
@@ -1997,7 +1997,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       <select
                         id="crm-form-categorie-select"
                         value={formCategorie}
-                        onChange={(e: any) => setFormCategorie(e.target.value)}
+                        onChange={(e: any) => {
+                          const val = e.target.value;
+                          setFormCategorie(val);
+                          if (val === 'Commercial' && formTypeStructure === 'Collectivité') {
+                            setFormMarchePublic('Oui');
+                          }
+                        }}
                         disabled={Boolean(editingTicketId && (tickets.find(t => t.id === editingTicketId)?.categorie === 'Commercial' || formCategorie === 'Commercial'))}
                         style={{
                           ...selectStyle,
@@ -2134,7 +2140,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           return (
                             <div
                               key={typ}
-                              onClick={() => setFormTypeStructure(typ)}
+                              onClick={() => {
+                                setFormTypeStructure(typ);
+                                if (typ === 'Collectivité' && formCategorie === 'Commercial') {
+                                  setFormMarchePublic('Oui');
+                                }
+                              }}
                               className="flex items-center justify-start gap-2.5 p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
                             >
                               <span 
@@ -2514,10 +2525,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </div>
                       </div>
 
-                      {/* Sub-form: Événements du suivi commercial */}
+                      {/* Sub-form: Événement(s) suivi pré-vente */}
                       <div className="space-y-3 pt-2">
                         <div className="flex items-center justify-between">
-                          <label className="!mb-0">Événements de suivi commercial.</label>
+                          <label className="!mb-0">Événement(s) suivi pré-vente.</label>
                           <button
                             type="button"
                             onClick={handleAddCommercialEvent}
@@ -2877,6 +2888,33 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     </div>
                   </div>
 
+                  {/* Bouton Export déplacé juste au-dessus du champ Employé, sans icône download */}
+                  <div>
+                    <button
+                      type="button"
+                      id="btn-export-crm-performance-csv"
+                      onClick={handleExportPerformanceCSV}
+                      style={{
+                        backgroundColor: '#3556ec',
+                        color: '#ffffff',
+                        fontSize: '18px',
+                        fontWeight: 'normal',
+                        borderRadius: '13px',
+                        padding: '12px 24px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        width: '100%',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                      className="hover:bg-[#2b48cc] transition-colors"
+                    >
+                      Exporter en CSV ({filteredPerfTickets.length} lignes)
+                    </button>
+                  </div>
+
                   {/* Choix Employé avec 'Tous' en première option */}
                   <div>
                     <label className="text-xs !font-semibold text-slate-600 !mb-1">Employé.</label>
@@ -2901,63 +2939,50 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </div>
                 </div>
 
-                {/* PARTIE 1 : STATISTIQUES (4 blocs statistiques) */}
+                {/* STATISTIQUES (4 blocs statistiques) */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-base font-bold text-slate-900 font-sans tracking-tight">
-                      Statistiques
-                    </span>
-                    <span className="text-xs text-slate-500 font-sans">
-                      {filteredPerfTickets.length} ticket(s) analysé(s)
-                    </span>
-                  </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {/* Bloc stat 1: « Tickets ouverts » (count Nouveau + En cours) */}
                     <div 
-                      className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1 shadow-xs"
+                      className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-1"
                       id="stat-block-tickets-ouverts"
                     >
-                      <span className="text-xs font-semibold uppercase tracking-wider text-amber-700 font-sans block">
+                      <span className="text-xs font-semibold text-amber-700 font-sans block">
                         Tickets ouverts
                       </span>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-bold font-sans text-slate-900">
-                          {statTicketsOuverts}
-                        </span>
-                        <span className="text-xs text-slate-500 font-sans">
-                          (Nouveau / En cours)
-                        </span>
+                      <div className="text-3xl font-bold font-sans text-slate-900">
+                        {statTicketsOuverts}
                       </div>
+                      <span className="text-xs text-black font-sans block">
+                        (Nouveau / En cours)
+                      </span>
                     </div>
 
                     {/* Bloc stat 2: « Tickets fermés » (count Terminé) */}
                     <div 
-                      className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1 shadow-xs"
+                      className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-1"
                       id="stat-block-tickets-fermes"
                     >
-                      <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 font-sans block">
+                      <span className="text-xs font-semibold text-emerald-700 font-sans block">
                         Tickets fermés
                       </span>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-bold font-sans text-slate-900">
-                          {statTicketsFermes}
-                        </span>
-                        <span className="text-xs text-slate-500 font-sans">
-                          (Terminé / Résolu)
-                        </span>
+                      <div className="text-3xl font-bold font-sans text-slate-900">
+                        {statTicketsFermes}
                       </div>
+                      <span className="text-xs text-black font-sans block">
+                        (Terminé / Résolu)
+                      </span>
                     </div>
 
                     {/* Bloc stat 3: « Volume affaires » (sum Total Affaire HT pour catégorie Commercial, situation devis nul, non renseigné ou gagné) */}
                     <div 
-                      className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1 shadow-xs"
+                      className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-1"
                       id="stat-block-volume-affaires"
                     >
-                      <span className="text-xs font-semibold uppercase tracking-wider text-blue-700 font-sans block">
+                      <span className="text-xs font-semibold text-blue-700 font-sans block">
                         Volume affaires
                       </span>
-                      <div className="flex items-baseline gap-1">
+                      <div className="flex items-baseline justify-center gap-1">
                         <span className="text-2xl sm:text-3xl font-bold font-sans text-slate-900">
                           {statVolumeAffaires.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
@@ -2965,70 +2990,29 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           €
                         </span>
                       </div>
-                      <span className="text-[11px] text-slate-400 font-sans block">
+                      <span className="text-xs text-black font-sans block">
                         Devis gagnés ou en cours (HT)
                       </span>
                     </div>
 
                     {/* Bloc stat 4: « Score closing » (note sur 10 selon devis Gagné / Perdu) */}
                     <div 
-                      className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1 shadow-xs"
+                      className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-1"
                       id="stat-block-score-closing"
                     >
-                      <span className="text-xs font-semibold uppercase tracking-wider text-purple-700 font-sans block">
+                      <span className="text-xs font-semibold text-purple-700 font-sans block">
                         Score closing
                       </span>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-bold font-sans text-slate-900">
-                          {scoreClosingText}
-                        </span>
+                      <div className="text-3xl font-bold font-sans text-slate-900">
+                        {scoreClosingText}
                       </div>
-                      <span className="text-[11px] text-slate-400 font-sans block">
+                      <span className="text-xs text-black font-sans block">
                         {totalDeals > 0 
                           ? `${dealsGagnes} gagné(s) / ${totalDeals} traité(s) (${Math.round((dealsGagnes / totalDeals) * 100)}%)`
                           : 'Aucun devis clos sur la période'
                         }
                       </span>
                     </div>
-                  </div>
-                </div>
-
-                {/* PARTIE 2 : EXPORT */}
-                <div className="space-y-3 pt-2">
-                  <span className="text-base font-bold text-slate-900 font-sans tracking-tight">
-                    Export
-                  </span>
-                  
-                  <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-3 text-left">
-                    <p className="text-sm text-slate-600 font-sans leading-relaxed">
-                      Téléchargez un fichier CSV contenant l'ensemble des tickets filtrés selon la période et l'employé sélectionnés, précédé du résumé complet des indicateurs statistiques.
-                    </p>
-
-                    <button
-                      type="button"
-                      id="btn-export-crm-performance-csv"
-                      onClick={handleExportPerformanceCSV}
-                      style={{
-                        backgroundColor: '#3556ec',
-                        color: '#ffffff',
-                        fontSize: '18px',
-                        fontWeight: 'normal',
-                        borderRadius: '13px',
-                        padding: '12px 24px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        width: '100%',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      }}
-                      className="hover:bg-[#2b48cc] transition-colors"
-                    >
-                      <Download size={18} />
-                      Exporter en CSV ({filteredPerfTickets.length} lignes)
-                    </button>
                   </div>
                 </div>
               </div>
