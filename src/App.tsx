@@ -2005,6 +2005,160 @@ export default function App() {
     });
   };
 
+  // Comptage persistant et inaltérable des missions Effectuée et Rejet mission par mois
+  // Enregistré en DB/Firebase et localStorage pour ne jamais perdre l'historique même si une mission rejetée est retraitée
+  const [fsmMissionCounts, setFsmMissionCounts] = useState<{
+    monthKey: string;
+    effectueesCount: number;
+    rejeteesCount: number;
+    recordedEvents?: string[];
+  }[]>(() => {
+    try {
+      const raw = localStorage.getItem(`defib_${tenantId}_fsm_mission_counts`) || localStorage.getItem('defib_fsm_mission_counts');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      console.warn("Failed to parse fsmMissionCounts:", e);
+    }
+    return [];
+  });
+
+  // Recharger le comptage persistant des missions si le tenant change
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`defib_${tenantId}_fsm_mission_counts`);
+      if (raw) {
+        setFsmMissionCounts(JSON.parse(raw));
+      } else {
+        setFsmMissionCounts([]);
+      }
+    } catch {
+      setFsmMissionCounts([]);
+    }
+  }, [tenantId]);
+
+  // Enregistre de manière inaltérable le comptage d'une mission (Effectuée ou Rejet mission)
+  const recordMissionOutcome = (monthKey: string, outcome: 'effectue' | 'rejet', eventId: string) => {
+    if (!monthKey) return;
+    setFsmMissionCounts(prev => {
+      const month = monthKey;
+      let monthIdx = prev.findIndex(item => item.monthKey === month);
+      let existing = monthIdx !== -1 ? { ...prev[monthIdx] } : {
+        monthKey: month,
+        effectueesCount: 0,
+        rejeteesCount: 0,
+        recordedEvents: []
+      };
+
+      const recordedEvents = Array.isArray(existing.recordedEvents) ? [...existing.recordedEvents] : [];
+      if (eventId && recordedEvents.includes(eventId)) {
+        return prev;
+      }
+      if (eventId) {
+        recordedEvents.push(eventId);
+      }
+
+      const updatedItem = {
+        ...existing,
+        effectueesCount: outcome === 'effectue' ? (existing.effectueesCount || 0) + 1 : (existing.effectueesCount || 0),
+        rejeteesCount: outcome === 'rejet' ? (existing.rejeteesCount || 0) + 1 : (existing.rejeteesCount || 0),
+        recordedEvents
+      };
+
+      let updated: typeof prev;
+      if (monthIdx !== -1) {
+        updated = [...prev];
+        updated[monthIdx] = updatedItem;
+      } else {
+        updated = [...prev, updatedItem];
+      }
+
+      try {
+        localStorage.setItem(`defib_${tenantId}_fsm_mission_counts`, JSON.stringify(updated));
+      } catch (e) {
+        console.warn("Storage quota exceeded in fsmMissionCounts:", e);
+      }
+      saveCollectionToFirestore('fsmMissionCounts', updated, tenantId);
+      return updated;
+    });
+  };
+
+  // Auto-synchronisation des missions effectuées et rejetées dans le comptage persistant fsmMissionCounts
+  useEffect(() => {
+    if (!fsmTours || fsmTours.length === 0) return;
+
+    setFsmMissionCounts(prevCounts => {
+      let hasChanges = false;
+      const nextCounts = [...prevCounts];
+
+      fsmTours.forEach(tour => {
+        if (!tour || tour.id === 'a-trier') return;
+        const monthKey = getTourMonthKey(tour);
+        if (!monthKey) return;
+        if (!Array.isArray(tour.missions)) return;
+
+        tour.missions.forEach((m: any) => {
+          if (!m || !m.id) return;
+          const sit = String(m.status || '').trim().toLowerCase();
+
+          if (sit === 'effectué' || sit === 'effectue' || sit === 'effectuée') {
+            const eventId = `sync_${tour.id}_${m.id}_effectue`;
+            let monthIdx = nextCounts.findIndex(c => c.monthKey === monthKey);
+            if (monthIdx === -1) {
+              nextCounts.push({
+                monthKey,
+                effectueesCount: 0,
+                rejeteesCount: 0,
+                recordedEvents: []
+              });
+              monthIdx = nextCounts.length - 1;
+            }
+            const recEvents = nextCounts[monthIdx].recordedEvents || [];
+            const alreadyRecorded = recEvents.some(e => e.includes(`${m.id}_effectue`));
+            if (!alreadyRecorded) {
+              hasChanges = true;
+              nextCounts[monthIdx] = {
+                ...nextCounts[monthIdx],
+                effectueesCount: (nextCounts[monthIdx].effectueesCount || 0) + 1,
+                recordedEvents: [...recEvents, eventId]
+              };
+            }
+          } else if (sit === 'rejet mission' || sit === 'rejet' || sit === 'rejeté' || sit === 'rejetée') {
+            const eventId = `sync_${tour.id}_${m.id}_rejet`;
+            let monthIdx = nextCounts.findIndex(c => c.monthKey === monthKey);
+            if (monthIdx === -1) {
+              nextCounts.push({
+                monthKey,
+                effectueesCount: 0,
+                rejeteesCount: 0,
+                recordedEvents: []
+              });
+              monthIdx = nextCounts.length - 1;
+            }
+            const recEvents = nextCounts[monthIdx].recordedEvents || [];
+            const alreadyRecorded = recEvents.some(e => e.includes(`${m.id}_rejet`));
+            if (!alreadyRecorded) {
+              hasChanges = true;
+              nextCounts[monthIdx] = {
+                ...nextCounts[monthIdx],
+                rejeteesCount: (nextCounts[monthIdx].rejeteesCount || 0) + 1,
+                recordedEvents: [...recEvents, eventId]
+              };
+            }
+          }
+        });
+      });
+
+      if (hasChanges) {
+        try {
+          localStorage.setItem(`defib_${tenantId}_fsm_mission_counts`, JSON.stringify(nextCounts));
+        } catch (_) {}
+        saveCollectionToFirestore('fsmMissionCounts', nextCounts, tenantId);
+        return nextCounts;
+      }
+      return prevCounts;
+    });
+  }, [fsmTours, tenantId]);
+
   // Liste des mois disponibles pour le sélecteur (ex: "Février 2026", "Septembre 2026", etc.)
   const availableFsmMonths = useMemo(() => {
     const monthsMap = new Map<string, string>();
@@ -2050,10 +2204,15 @@ export default function App() {
       if (h.monthKey) addMonth(h.monthKey);
     });
 
+    // Ajouter les mois présents dans l'historique de comptage des missions
+    (fsmMissionCounts || []).forEach(mc => {
+      if (mc.monthKey) addMonth(mc.monthKey);
+    });
+
     const entries = Array.from(monthsMap.entries()).map(([key, label]) => ({ key, label }));
     entries.sort((a, b) => b.key.localeCompare(a.key)); // Plus récent en premier
     return entries;
-  }, [fsmTours, generatedReports, fsmCo2History]);
+  }, [fsmTours, generatedReports, fsmCo2History, fsmMissionCounts]);
 
   // Calcul du CO2 préservé (émissions évitées) pour le mois sélectionné
   // Basé sur le calcul des divs bleues des missions (1.2 kg par mission)
@@ -2083,6 +2242,45 @@ export default function App() {
     if (totalPreservedCo2 === 0) return '0';
     return totalPreservedCo2 % 1 === 0 ? totalPreservedCo2.toFixed(0) : totalPreservedCo2.toFixed(1).replace('.', ',');
   }, [totalPreservedCo2]);
+
+  // Taux de complétion des missions pour le mois sélectionné (comparaison Effectuée vs Rejet mission)
+  // Comptage persistant et inaltérable dans DB/firebase même si une mission rejetée est retraitée
+  const missionCompletionRateStr = useMemo(() => {
+    if (!selectedFsmMonth) return "N/A";
+
+    const monthRecord = (fsmMissionCounts || []).find(r => r.monthKey === selectedFsmMonth);
+    let effectuees = monthRecord?.effectueesCount || 0;
+    let rejetees = monthRecord?.rejeteesCount || 0;
+
+    // Compter également les missions actuelles des tournées actives du mois
+    const activeToursInMonth = (fsmTours || []).filter(t => {
+      if (!t || t.id === 'a-trier') return false;
+      return getTourMonthKey(t) === selectedFsmMonth;
+    });
+
+    let liveEffectuees = 0;
+    let liveRejetees = 0;
+    activeToursInMonth.forEach(t => {
+      if (!Array.isArray(t.missions)) return;
+      t.missions.forEach((m: any) => {
+        const sit = String(m.status || '').trim().toLowerCase();
+        if (sit === 'effectué' || sit === 'effectue' || sit === 'effectuée') {
+          liveEffectuees++;
+        } else if (sit === 'rejet mission' || sit === 'rejet' || sit === 'rejeté' || sit === 'rejetée') {
+          liveRejetees++;
+        }
+      });
+    });
+
+    const finalEffectuees = Math.max(effectuees, liveEffectuees);
+    const finalRejetees = Math.max(rejetees, liveRejetees);
+
+    const total = finalEffectuees + finalRejetees;
+    if (total === 0) return "N/A";
+
+    const pct = (finalEffectuees / total) * 100;
+    return pct % 1 === 0 ? `${pct.toFixed(0)} %` : `${pct.toFixed(1).replace('.', ',')} %`;
+  }, [selectedFsmMonth, fsmMissionCounts, fsmTours]);
 
   const optimizeFsmTour = async (
     tourId: string,
@@ -2684,9 +2882,9 @@ export default function App() {
   };
 
   const handleSaveTeamWorkGroup = () => {
-    const trimmedTitle = groupTitle.trim().slice(0, 30);
+    const trimmedTitle = groupTitle.trim().slice(0, 20);
     if (!trimmedTitle) {
-      alert("Veuillez saisir un titre pour le groupe (max 30 caractères).");
+      alert("Veuillez saisir un titre pour le groupe (max 20 caractères).");
       return;
     }
 
@@ -3068,6 +3266,17 @@ export default function App() {
       }
       return t;
     });
+
+    if (fields.status) {
+      const sitNorm = String(fields.status).trim().toLowerCase();
+      const tour = fsmTours.find(t => t.id === tourId);
+      const mKey = (tour ? getTourMonthKey(tour) : '') || selectedFsmMonth || currentMonthKey;
+      if (sitNorm === 'effectué' || sitNorm === 'effectue' || sitNorm === 'effectuée') {
+        recordMissionOutcome(mKey, 'effectue', `event_${tourId}_${missionId}_effectue_${Date.now()}`);
+      } else if (sitNorm === 'rejet mission' || sitNorm === 'rejet' || sitNorm === 'rejeté' || sitNorm === 'rejetée') {
+        recordMissionOutcome(mKey, 'rejet', `event_${tourId}_${missionId}_rejet_${Date.now()}`);
+      }
+    }
 
     saveFsmTours(updatedTours);
   };
@@ -4683,6 +4892,9 @@ export default function App() {
         const baseCo2History = getLocalTenantValue<any[]>('fsm_co2_history', []);
         setFsmCo2History(baseCo2History);
 
+        const baseMissionCounts = getLocalTenantValue<any[]>('fsm_mission_counts', []);
+        setFsmMissionCounts(baseMissionCounts);
+
         const baseExpenses = getLocalTenantValue<any[]>('expenses', activeRunTenantId === 'demo' ? INITIAL_EXPENSES : []);
         setExpenses(baseExpenses);
 
@@ -4796,6 +5008,7 @@ export default function App() {
           generatedReports: JSON.stringify(baseReports),
           fsmTours: JSON.stringify(baseTours),
           fsmCo2History: JSON.stringify(baseCo2History),
+          fsmMissionCounts: JSON.stringify(baseMissionCounts),
           memos: JSON.stringify(baseMemos),
           otherEquipments: JSON.stringify(baseOtherEquip),
           achats_fournisseurs: JSON.stringify(baseAchats),
@@ -5041,6 +5254,7 @@ export default function App() {
           return tours.filter(t => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo');
         }));
         syncTasks.push(syncBackground<any[]>('fsmCo2History', 'fsm_co2_history', setFsmCo2History));
+        syncTasks.push(syncBackground<any[]>('fsmMissionCounts', 'fsm_mission_counts', setFsmMissionCounts));
         syncTasks.push(syncBackground<Memo[]>('memos', 'memos', setMemos));
         syncTasks.push(syncBackground<OtherEquipment[]>('otherEquipments', 'other_equipments', setOtherEquipments));
         syncTasks.push(syncBackground<PointageAutoVigilance[]>('pointagesAutoVigilance', 'pointages_auto_vigilance', setPointagesAutoVigilance));
@@ -5428,6 +5642,20 @@ export default function App() {
       loadedDataRef.current.fsmCo2History = str;
     }
   }, [fsmCo2History, isFirebaseLoaded, tenantId, loadedTenantIdState]);
+
+  useEffect(() => {
+    if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
+      const str = JSON.stringify(fsmMissionCounts);
+      if (loadedDataRef.current.fsmMissionCounts === str) return;
+      saveCollectionToFirestore('fsmMissionCounts', fsmMissionCounts, tenantId);
+      try {
+        localStorage.setItem(`defib_${tenantId}_fsm_mission_counts`, str);
+      } catch (e) {
+        console.warn('Storage quota exceeded for fsmMissionCounts:', e);
+      }
+      loadedDataRef.current.fsmMissionCounts = str;
+    }
+  }, [fsmMissionCounts, isFirebaseLoaded, tenantId, loadedTenantIdState]);
 
   useEffect(() => {
     if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
@@ -8077,32 +8305,63 @@ export default function App() {
                         >
                           Plannings
                         </button>
-                        <button
-                          onClick={() => setIsFsmFilterSidePaneOpen(true)}
-                          id="btn-fsm-filtres"
-                          style={{
-                            backgroundColor: '#000000',
-                            color: '#ffffff',
-                            borderRadius: '13px',
-                            padding: '9px 18px',
-                            fontSize: '18px',
-                            fontWeight: '600',
-                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
-                            border: 'none',
-                            position: 'relative',
-                          }}
-                          className="hover:bg-neutral-800 transition-colors"
-                        >
-                          Filtres
-                          {(fsmRegionFilter !== 'Tous' || fsmTechFilter !== 'Tous' || fsmPlannerFilter !== 'Tous' || fsmClientFilter !== 'Tous' || fsmRejectedOrRefusedFilter || (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0)) && (
-                            <span
-                              className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#fe4eba]"
-                              title="Filtres actifs"
-                            />
-                          )}
-                        </button>
+                        {(() => {
+                          const fsmActiveFiltersCount = [
+                            fsmRegionFilter !== 'Tous',
+                            fsmTechFilter !== 'Tous',
+                            fsmPlannerFilter !== 'Tous',
+                            fsmClientFilter !== 'Tous',
+                            fsmRejectedOrRefusedFilter,
+                            (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0)
+                          ].filter(Boolean).length;
+
+                          return (
+                            <button
+                              onClick={() => setIsFsmFilterSidePaneOpen(true)}
+                              id="btn-fsm-filtres"
+                              style={{
+                                backgroundColor: '#000000',
+                                color: '#ffffff',
+                                borderRadius: '13px',
+                                padding: '9px 18px',
+                                fontSize: '18px',
+                                fontWeight: '600',
+                                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                cursor: 'pointer',
+                                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+                                border: 'none',
+                                position: 'relative',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}
+                              className="hover:bg-neutral-800 transition-colors"
+                            >
+                              <span>Filtres</span>
+                              {fsmActiveFiltersCount > 0 && (
+                                <span
+                                  style={{
+                                    minWidth: '22px',
+                                    height: '22px',
+                                    borderRadius: '9999px',
+                                    backgroundColor: '#fe4eba',
+                                    color: '#ffffff',
+                                    fontSize: '12px',
+                                    fontWeight: 'bold',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '0 6px',
+                                    lineHeight: 1
+                                  }}
+                                  title={`${fsmActiveFiltersCount} filtre(s) actif(s)`}
+                                >
+                                  {fsmActiveFiltersCount}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })()}
                         <button
                           onClick={() => setIsFsmTeamPaneOpen(true)}
                           id="btn-fsm-team-settings"
@@ -8650,20 +8909,20 @@ export default function App() {
                         {/* If in creation or edit mode, show form */}
                         {(isCreatingGroup || editingGroupId) ? (
                           <div className="space-y-5 bg-neutral-50 p-5 rounded-2xl border border-neutral-200 animate-fadeIn">
-                            <h4 style={{ fontSize: '17px', fontWeight: 'bold', color: '#000000' }}>
+                            <h4 style={{ fontSize: '18px', fontWeight: 'bold', color: '#000000', fontFamily: "'Civilprom', 'DefibeoMain', sans-serif" }}>
                               {editingGroupId ? "Modifier le groupe" : "Nouveau groupe et zone"}
                             </h4>
 
-                            {/* Titre du groupe (one line max 30 car.) */}
+                            {/* Titre du groupe (one line max 20 car.) */}
                             <div>
-                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans">
+                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans" style={{ cursor: 'default' }}>
                                 Titre du groupe.
                               </label>
                               <input
                                 type="text"
-                                maxLength={30}
+                                maxLength={20}
                                 value={groupTitle}
-                                onChange={(e) => setGroupTitle(e.target.value.slice(0, 30))}
+                                onChange={(e) => setGroupTitle(e.target.value.slice(0, 20))}
                                 placeholder="Titre du groupe."
                                 className="w-full text-black outline-none"
                                 style={{
@@ -8675,21 +8934,21 @@ export default function App() {
                                   fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                                 }}
                               />
-                              <div className="text-right text-xs text-neutral-400 mt-1">
-                                {groupTitle.length} / 30
+                              <div className="text-right text-xs text-neutral-400 mt-1" style={{ cursor: 'default' }}>
+                                {groupTitle.length} / 20
                               </div>
                             </div>
 
                             {/* Planificateur(s) (exclure techniciens) */}
                             <div>
-                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans">
+                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans" style={{ cursor: 'default' }}>
                                 Planificateur(s)
                               </label>
                               {(() => {
                                 const nonTechMembers = members.filter(m => !isTechnicianMember(m));
                                 if (nonTechMembers.length === 0) {
                                   return (
-                                    <div className="text-xs text-neutral-400 italic">
+                                    <div className="text-xs text-neutral-400 italic" style={{ cursor: 'default' }}>
                                       Aucun planificateur disponible
                                     </div>
                                   );
@@ -8709,13 +8968,14 @@ export default function App() {
                                           }}
                                           style={{
                                             borderRadius: '1000px',
-                                            padding: '6px 14px',
-                                            fontSize: '13px',
+                                            padding: '8px 18px',
+                                            fontSize: '16px',
                                             fontWeight: isSelected ? '600' : '400',
                                             backgroundColor: isSelected ? '#000000' : '#ffffff',
                                             color: isSelected ? '#ffffff' : '#000000',
                                             border: isSelected ? '1px solid #000000' : '1px solid #dedede',
-                                            cursor: 'pointer'
+                                            cursor: 'pointer',
+                                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                                           }}
                                         >
                                           {m.name}
@@ -8729,14 +8989,14 @@ export default function App() {
 
                             {/* Technicien(s) (exclure membres classiques) */}
                             <div>
-                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans">
+                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans" style={{ cursor: 'default' }}>
                                 Technicien(s)
                               </label>
                               {(() => {
                                 const techMembers = members.filter(m => isTechnicianMember(m));
                                 if (techMembers.length === 0) {
                                   return (
-                                    <div className="text-xs text-neutral-400 italic">
+                                    <div className="text-xs text-neutral-400 italic" style={{ cursor: 'default' }}>
                                       Aucun technicien disponible
                                     </div>
                                   );
@@ -8756,13 +9016,14 @@ export default function App() {
                                           }}
                                           style={{
                                             borderRadius: '1000px',
-                                            padding: '6px 14px',
-                                            fontSize: '13px',
+                                            padding: '8px 18px',
+                                            fontSize: '16px',
                                             fontWeight: isSelected ? '600' : '400',
                                             backgroundColor: isSelected ? '#000000' : '#ffffff',
                                             color: isSelected ? '#ffffff' : '#000000',
                                             border: isSelected ? '1px solid #000000' : '1px solid #dedede',
-                                            cursor: 'pointer'
+                                            cursor: 'pointer',
+                                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                                           }}
                                         >
                                           {m.name}
@@ -8776,10 +9037,10 @@ export default function App() {
 
                             {/* Région(s) */}
                             <div>
-                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans">
+                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans" style={{ cursor: 'default' }}>
                                 Région(s)
                               </label>
-                              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1 bg-white border border-neutral-200 rounded-xl">
+                              <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-1 bg-white border border-neutral-200 rounded-xl">
                                 {getRegionsForCountry('France').map(r => {
                                   const isSelected = groupRegions.includes(r);
                                   return (
@@ -8793,13 +9054,14 @@ export default function App() {
                                       }}
                                       style={{
                                         borderRadius: '1000px',
-                                        padding: '5px 12px',
-                                        fontSize: '12px',
+                                        padding: '8px 18px',
+                                        fontSize: '16px',
                                         fontWeight: isSelected ? '600' : '400',
                                         backgroundColor: isSelected ? '#000000' : '#ffffff',
                                         color: isSelected ? '#ffffff' : '#000000',
                                         border: isSelected ? '1px solid #000000' : '1px solid #dedede',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
+                                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                                       }}
                                     >
                                       {r}
@@ -8809,48 +9071,26 @@ export default function App() {
                               </div>
                             </div>
 
-                            {/* Buttons Enregistrer / Annuler */}
+                            {/* Button Enregistrer (Bleu, 18px) */}
                             <div className="flex items-center gap-3 pt-2">
                               <button
                                 type="button"
                                 onClick={handleSaveTeamWorkGroup}
                                 style={{
-                                  backgroundColor: '#000000',
+                                  ...blueButtonStyle,
+                                  backgroundColor: 'rgb(53, 86, 236)',
                                   color: '#ffffff',
                                   borderRadius: '12px',
-                                  padding: '10px 18px',
-                                  fontSize: '15px',
+                                  padding: '12px 24px',
+                                  fontSize: '18px',
                                   fontWeight: '600',
                                   cursor: 'pointer',
                                   border: 'none',
+                                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                                 }}
-                                className="hover:bg-neutral-800 transition-colors"
+                                className="hover:opacity-95 transition-opacity"
                               >
                                 {editingGroupId ? "Enregistrer" : "Créer le groupe"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setIsCreatingGroup(false);
-                                  setEditingGroupId(null);
-                                  setGroupTitle('');
-                                  setGroupPlanners([]);
-                                  setGroupTechnicians([]);
-                                  setGroupRegions([]);
-                                }}
-                                style={{
-                                  backgroundColor: 'transparent',
-                                  color: '#000000',
-                                  borderRadius: '12px',
-                                  padding: '10px 14px',
-                                  fontSize: '15px',
-                                  fontWeight: '500',
-                                  cursor: 'pointer',
-                                  border: 'none',
-                                }}
-                                className="hover:bg-neutral-100 transition-colors"
-                              >
-                                Annuler
                               </button>
                             </div>
                           </div>
@@ -8858,18 +9098,18 @@ export default function App() {
 
                         {/* List of groups */}
                         <div className="space-y-4">
-                          {teamWorkGroups.length === 0 && !isCreatingGroup ? (
-                            <div className="p-8 text-center text-neutral-400 font-sans text-[15px]">
-                              Aucun groupe de travail créé.
-                            </div>
-                          ) : (
+                          {teamWorkGroups.length === 0 && !isCreatingGroup ? null : (
                             teamWorkGroups.map((g) => (
                               <div
                                 key={g.id}
-                                className="p-4 rounded-xl border border-neutral-200 bg-white space-y-3 font-sans"
+                                className="p-4 rounded-xl border border-neutral-200 bg-white space-y-3 font-sans select-none"
+                                style={{
+                                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+                                  cursor: 'default'
+                                }}
                               >
-                                <div className="flex items-center justify-between gap-2">
-                                  <h4 style={{ fontSize: '17px', fontWeight: 'bold', color: '#000000' }}>
+                                <div className="flex items-center justify-between gap-2" style={{ cursor: 'default' }}>
+                                  <h4 style={{ fontSize: '17px', fontWeight: 'bold', color: '#000000', cursor: 'default' }}>
                                     {g.title}
                                   </h4>
                                   <div className="flex items-center gap-2">
@@ -8879,9 +9119,9 @@ export default function App() {
                                       style={{
                                         backgroundColor: '#000000',
                                         color: '#ffffff',
-                                        borderRadius: '8px',
-                                        padding: '4px 12px',
-                                        fontSize: '13px',
+                                        borderRadius: '11px',
+                                        padding: '7px 16px',
+                                        fontSize: '16px',
                                         fontWeight: 600,
                                         border: 'none',
                                         cursor: 'pointer',
@@ -8897,9 +9137,9 @@ export default function App() {
                                       style={{
                                         backgroundColor: '#dc2626',
                                         color: '#ffffff',
-                                        borderRadius: '8px',
-                                        padding: '4px 12px',
-                                        fontSize: '13px',
+                                        borderRadius: '11px',
+                                        padding: '7px 16px',
+                                        fontSize: '16px',
                                         fontWeight: 600,
                                         border: 'none',
                                         cursor: 'pointer',
@@ -8912,18 +9152,18 @@ export default function App() {
                                   </div>
                                 </div>
 
-                                <div className="space-y-1.5 text-xs text-neutral-700">
-                                  <div>
-                                    <span className="font-semibold text-neutral-900">Planificateur(s) : </span>
-                                    <span>{g.planners && g.planners.length > 0 ? g.planners.join(', ') : 'Aucun'}</span>
+                                <div className="space-y-1.5 text-xs text-neutral-700" style={{ cursor: 'default' }}>
+                                  <div style={{ cursor: 'default' }}>
+                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default' }}>Planificateur(s) : </span>
+                                    <span style={{ cursor: 'default' }}>{g.planners && g.planners.length > 0 ? g.planners.join(', ') : 'Aucun'}</span>
                                   </div>
-                                  <div>
-                                    <span className="font-semibold text-neutral-900">Technicien(s) : </span>
-                                    <span>{g.technicians && g.technicians.length > 0 ? g.technicians.join(', ') : 'Aucun'}</span>
+                                  <div style={{ cursor: 'default' }}>
+                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default' }}>Technicien(s) : </span>
+                                    <span style={{ cursor: 'default' }}>{g.technicians && g.technicians.length > 0 ? g.technicians.join(', ') : 'Aucun'}</span>
                                   </div>
-                                  <div>
-                                    <span className="font-semibold text-neutral-900">Région(s) : </span>
-                                    <span>{g.regions && g.regions.length > 0 ? g.regions.join(', ') : 'Aucune'}</span>
+                                  <div style={{ cursor: 'default' }}>
+                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default' }}>Région(s) : </span>
+                                    <span style={{ cursor: 'default' }}>{g.regions && g.regions.length > 0 ? g.regions.join(', ') : 'Aucune'}</span>
                                   </div>
                                 </div>
                               </div>
@@ -8959,9 +9199,9 @@ export default function App() {
                               width: '100%',
                               backgroundColor: '#3556ec',
                               color: '#ffffff',
-                              fontSize: '16px',
+                              fontSize: '18px',
                               fontWeight: '600',
-                              padding: '12px 20px',
+                              padding: '14px 20px',
                               borderRadius: '12px',
                               cursor: 'pointer',
                               border: 'none',
@@ -8978,9 +9218,9 @@ export default function App() {
                               width: '100%',
                               backgroundColor: '#000000',
                               color: '#ffffff',
-                              fontSize: '16px',
+                              fontSize: '18px',
                               fontWeight: '600',
-                              padding: '12px 20px',
+                              padding: '14px 20px',
                               borderRadius: '12px',
                               cursor: 'pointer',
                               border: 'none',
@@ -9126,6 +9366,30 @@ export default function App() {
                           {translate("Co2e d’émissions préservée(s)")}
                         </span>
                       </div>
+
+                      {/* Gélule 3 : Taux de complétion des missions */}
+                      <div 
+                        id="fsm-mission-completion-rate-indicator"
+                        style={{
+                          padding: '9px 20px',
+                          backgroundColor: '#f8fafc',
+                          border: '1px solid rgb(218, 218, 218)',
+                          borderRadius: '1000px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          fontSize: '15px',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        <span style={{ fontWeight: 400, color: '#475569', marginRight: '6px' }}>
+                          {translate("Taux de complétion des missions :")}
+                        </span>
+                        <span style={{ fontWeight: 700, color: '#000000' }}>
+                          {missionCompletionRateStr}
+                        </span>
+                      </div>
                     </div>
                   )}
 
@@ -9142,18 +9406,18 @@ export default function App() {
                     }}
                     style={{
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontSize: '15px',
-                      color: '#475569',
+                      fontSize: '13px',
+                      color: '#000000',
                       background: 'none',
                       border: 'none',
                       cursor: 'pointer',
-                      padding: '6px 10px',
-                      textDecoration: 'underline'
+                      padding: '4px 8px',
+                      textDecoration: 'none'
                     }}
-                    className="hover:text-black transition-colors select-none"
+                    className="hover:opacity-70 transition-opacity select-none cursor-pointer"
                     id="btn-toggle-fsm-stats"
                   >
-                    {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer les statistiques")}
+                    {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer")}
                   </button>
                 </div>
 
@@ -9257,11 +9521,48 @@ export default function App() {
                             }}
                             className="w-full truncate focus:outline-none"
                           >
-                            {scheduledTours.map((st: any) => (
-                              <option key={st.id} value={st.id}>
-                                {getTourDisplayLabel(st)}
-                              </option>
-                            ))}
+                            {(() => {
+                              const STATUS_ORDER = ['Brouillon', 'À faire', 'En cours', 'Effectué', 'Terminé'];
+                              const grouped = new Map<string, any[]>();
+
+                              for (const st of scheduledTours) {
+                                const rawStatus = String(st.status || 'Brouillon').trim();
+                                const matchedStatus = STATUS_ORDER.find(s => s.toLowerCase() === rawStatus.toLowerCase()) || rawStatus;
+                                if (!grouped.has(matchedStatus)) {
+                                  grouped.set(matchedStatus, []);
+                                }
+                                grouped.get(matchedStatus)!.push(st);
+                              }
+
+                              // Tri par date croissante dans chaque situation
+                              grouped.forEach((list) => {
+                                list.sort((a, b) => {
+                                  const dateA = a.startDate || '';
+                                  const dateB = b.startDate || '';
+                                  if (dateA !== dateB) return dateA.localeCompare(dateB);
+                                  return (a.id || '').localeCompare(b.id || '');
+                                });
+                              });
+
+                              const orderedStatuses = [
+                                ...STATUS_ORDER.filter(s => grouped.has(s)),
+                                ...Array.from(grouped.keys()).filter(s => !STATUS_ORDER.includes(s))
+                              ];
+
+                              return orderedStatuses.map(statusName => {
+                                const toursInStatus = grouped.get(statusName) || [];
+                                if (toursInStatus.length === 0) return null;
+                                return (
+                                  <optgroup key={statusName} label={`- ${statusName}`}>
+                                    {toursInStatus.map((st: any) => (
+                                      <option key={st.id} value={st.id}>
+                                        {getTourDisplayLabel(st)}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                );
+                              });
+                            })()}
                           </select>
                         </div>
                       )}
@@ -10417,29 +10718,47 @@ export default function App() {
 
                             <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
                               {/* Supprimer button */}
-                              <button
-                                type="button"
-                                disabled={tourStatus === 'À faire' || tourStatus === 'En cours'}
-                                onClick={() => deleteFsmTour(t.id)}
-                                style={{
-                                  ...rowActionButtonStyle,
-                                  padding: '12px 24px',
-                                  borderRadius: '13px',
-                                  fontSize: '18px',
-                                  fontWeight: '100',
-                                  height: '50px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  width: '100%',
-                                  opacity: (tourStatus === 'À faire' || tourStatus === 'En cours') ? 0.4 : 1,
-                                  cursor: (tourStatus === 'À faire' || tourStatus === 'En cours') ? 'not-allowed' : 'pointer'
-                                }}
-                                className={`${(tourStatus === 'À faire' || tourStatus === 'En cours') ? '' : 'cursor-pointer'} md:w-auto flex-1 md:flex-initial`}
-                                title={(tourStatus === 'À faire' || tourStatus === 'En cours') ? "Impossible de supprimer une tournée dont le statut est À faire ou En cours" : ""}
-                              >
-                                Supprimer
-                              </button>
+                              {(() => {
+                                const missions = t.missions || [];
+                                const isDeleteEnabled = missions.length === 0 || missions.every((m: any) => {
+                                  const sit = String(m.status || 'Brouillon').trim().toLowerCase();
+                                  return (
+                                    sit === 'brouillon' ||
+                                    sit.includes('effectu') ||
+                                    sit.includes('termin') ||
+                                    sit.includes('rejet')
+                                  );
+                                });
+
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={!isDeleteEnabled}
+                                    onClick={() => {
+                                      if (!isDeleteEnabled) return;
+                                      deleteFsmTour(t.id);
+                                    }}
+                                    style={{
+                                      ...rowActionButtonStyle,
+                                      padding: '12px 24px',
+                                      borderRadius: '13px',
+                                      fontSize: '18px',
+                                      fontWeight: '100',
+                                      height: '50px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      width: '100%',
+                                      opacity: isDeleteEnabled ? 1 : 0.4,
+                                      cursor: isDeleteEnabled ? 'pointer' : 'not-allowed'
+                                    }}
+                                    className={`${isDeleteEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} md:w-auto flex-1 md:flex-initial`}
+                                    title={!isDeleteEnabled ? "Le bouton Supprimer est désactivé (une ou plusieurs missions ne sont pas en situation Brouillon, Effectué ou Rejet mission)" : undefined}
+                                  >
+                                    Supprimer
+                                  </button>
+                                );
+                              })()}
 
                               {/* Calculer button */}
                               <button

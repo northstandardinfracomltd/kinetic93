@@ -1362,7 +1362,10 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Temps moyen d’une intervention :": "Average intervention time:",
     "Temps moyen d'une intervention :": "Average intervention time:",
     "Co2e d’émissions préservée(s)": "CO2e emissions preserved",
-    "Sélectionner le mois": "Select month"
+    "Sélectionner le mois": "Select month",
+    "Taux de complétion des missions :": "Mission completion rate:",
+    "Masquer": "Hide",
+    "Afficher les statistiques": "Show statistics"
   },
   Deutsch: {
     "Bienvenue! Pour commencer, vous devez planifier un appel de présentation avec un spécialiste Défibeo afin d'être guidé dans vos premiers pas.": "Willkommen! Um zu beginnen, müssen Sie ein Einführungsgespräch mit einem Défibeo-Spezialisten vereinbaren, der Sie bei Ihren ersten Schritten begleitet.",
@@ -2183,7 +2186,10 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Temps moyen d’une intervention :": "Durchschnittliche Einsatzdauer:",
     "Temps moyen d'une intervention :": "Durchschnittliche Einsatzdauer:",
     "Co2e d’émissions préservée(s)": "CO2e vermiedene Emissionen",
-    "Sélectionner le mois": "Monat auswählen"
+    "Sélectionner le mois": "Monat auswählen",
+    "Taux de complétion des missions :": "Missionsabschlussrate:",
+    "Masquer": "Ausblenden",
+    "Afficher les statistiques": "Statistiken anzeigen"
   },
   Português: {
     "Bienvenue! Pour commencer, vous devez planifier un appel de présentation avec un spécialiste Défibeo afin d'être guidé dans vos premiers pas.": "Bem-vindo! Para começar, deve agendar uma chamada de apresentação com um especialista Défibeo para o orientar nos seus primeiros passos.",
@@ -3005,7 +3011,10 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Temps moyen d’une intervention :": "Tempo médio de intervenção:",
     "Temps moyen d'une intervention :": "Tempo médio de intervenção:",
     "Co2e d’émissions préservée(s)": "de emissões CO2e preservadas",
-    "Sélectionner le mois": "Selecionar o mês"
+    "Sélectionner le mois": "Selecionar o mês",
+    "Taux de complétion des missions :": "Taxa de conclusão das missões:",
+    "Masquer": "Ocultar",
+    "Afficher les statistiques": "Mostrar estatísticas"
   },
   Español: {
     "Bienvenue! Pour commencer, vous devez planifier un appel de présentation avec un spécialiste Défibeo afin d'être guidé dans vos premiers pas.": "¡Bienvenido! Para empezar, debe programar una llamada de presentación con un especialista de Défibeo para que le guíe en sus primeros pasos.",
@@ -3827,7 +3836,10 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Temps moyen d’une intervention :": "Tiempo medio de intervención:",
     "Temps moyen d'une intervention :": "Tiempo medio de intervención:",
     "Co2e d’émissions préservée(s)": "de emisiones CO2e preservadas",
-    "Sélectionner le mois": "Seleccionar el mes"
+    "Sélectionner le mois": "Seleccionar el mes",
+    "Taux de complétion des missions :": "Tasa de finalización de misiones:",
+    "Masquer": "Ocultar",
+    "Afficher les statistiques": "Mostrar estadísticas"
   }
 };
 
