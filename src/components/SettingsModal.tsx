@@ -115,6 +115,33 @@ export default function SettingsModal({
   const envIdDisplay = shortEnvId || (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || 'D18';
   const [localMembers, setLocalMembers] = React.useState<Member[]>(members);
 
+  type SettingsSectionKey = 
+    | 'reglages'
+    | 'pdf'
+    | 'apparence'
+    | 'emplacements'
+    | 'connecteurs'
+    | 'boutique'
+    | 'assistance'
+    | 'parrainage'
+    | 'membres'
+    | 'communication';
+
+  const [activeSection, setActiveSection] = React.useState<SettingsSectionKey | null>(null);
+
+  const SETTINGS_SECTIONS: { key: SettingsSectionKey; label: string }[] = [
+    { key: 'reglages', label: 'Réglages' },
+    { key: 'pdf', label: 'Apparence des rapports PDF' },
+    { key: 'apparence', label: 'Apparence du logiciel pour votre session' },
+    { key: 'emplacements', label: 'Intitulés des emplacements' },
+    { key: 'connecteurs', label: 'Connecteurs' },
+    { key: 'boutique', label: 'Boutique' },
+    { key: 'assistance', label: 'Assistance Defibeo' },
+    { key: 'parrainage', label: 'Parrainage' },
+    { key: 'membres', label: 'Membres de l’environnement' },
+    { key: 'communication', label: 'Communication portail client' },
+  ];
+
   const isCurrentUserSuperAdmin = React.useMemo(() => {
     if (isReadOnly || isDeveloper) return false;
 
@@ -636,10 +663,11 @@ export default function SettingsModal({
   }, [propEnableOtherEquipments, isOpen]);
 
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen || isPage) {
       const shouldScroll = localStorage.getItem('scroll_to_members') === 'true';
       if (shouldScroll) {
         localStorage.removeItem('scroll_to_members');
+        setActiveSection('membres');
         setTimeout(() => {
           const container = document.getElementById('settings-tab-container-harmonized');
           const target = document.getElementById('settings-section-members');
@@ -653,7 +681,7 @@ export default function SettingsModal({
           } else if (target) {
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
-        }, 600);
+        }, 300);
       }
     }
   }, [isOpen, isPage]);
@@ -2136,9 +2164,61 @@ export default function SettingsModal({
           id="settings-tab-container-harmonized"
           style={isPage ? { maxWidth: '98%', margin: '0 auto', width: '100%' } : {}}
         >
+          {/* HUB ACCORDION: QUE SOUHAITEZ-VOUS FAIRE ? */}
+          <div className="space-y-4 select-none" id="settings-accordion-hub">
+            <h2 
+              className="font-bold text-black select-none text-left"
+              style={{
+                fontSize: '28px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                color: '#000000',
+                cursor: 'default',
+                letterSpacing: '-0.02em',
+                margin: 0
+              }}
+            >
+              {t("Que souhaitez-vous faire ?")}
+            </h2>
+
+            <div className="flex flex-wrap gap-3 sm:gap-3.5 items-center">
+              {SETTINGS_SECTIONS.map((sec) => {
+                const isSelected = activeSection === sec.key;
+                return (
+                  <button
+                    key={sec.key}
+                    type="button"
+                    onClick={() => setActiveSection(prev => prev === sec.key ? null : sec.key)}
+                    style={{
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontSize: '18px',
+                      fontWeight: 600,
+                      borderRadius: '14px',
+                      padding: '14px 22px',
+                      backgroundColor: isSelected ? '#000000' : '#ffffff',
+                      color: isSelected ? '#ffffff' : '#000000',
+                      border: isSelected ? '1.5px solid #000000' : '1.5px solid #cbd5e1',
+                      boxShadow: isSelected 
+                        ? '0 4px 12px rgba(0,0,0,0.18)' 
+                        : '0 1px 3px rgba(0,0,0,0.06)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease-in-out',
+                      textAlign: 'center',
+                      whiteSpace: 'normal',
+                      lineHeight: '1.3'
+                    }}
+                    className="hover:scale-[1.02] active:scale-[0.98] select-none"
+                  >
+                    {t(sec.label)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* SECTION 1: RÉGLAGES */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left" id="settings-section-company">
-            {renderSectionHeader(t("Réglages"))}
+          {activeSection === 'reglages' && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left animate-fadeIn" id="settings-section-company">
+              {renderSectionHeader(t("Réglages"))}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -2728,10 +2808,13 @@ export default function SettingsModal({
               })}
             </div>
           </div>
+        </div>
+      )}
 
-          {/* APPALENCE DES RAPPORTS PDF */}
-          <div className="pt-6 mt-6 space-y-4">
-            {renderSectionHeader(t("Apparence des rapports PDF"), false)}
+      {/* SECTION 2: APPARENCE DES RAPPORTS PDF (DIV DÉDIÉE INDÉPENDANTE) */}
+      {activeSection === 'pdf' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left animate-fadeIn" id="settings-section-pdf">
+          {renderSectionHeader(t("Apparence des rapports PDF"), false)}
 
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1">
@@ -2891,9 +2974,11 @@ export default function SettingsModal({
               </div>
             </div>
           </div>
+        )}
 
-          {/* APPARENCE DU LOGICIEL POUR VOTRE SESSION */}
-          <div className="pt-6 mt-6 space-y-4" id="settings-section-software-theme">
+        {/* SECTION 3: APPARENCE DU LOGICIEL POUR VOTRE SESSION (DIV DÉDIÉE INDÉPENDANTE, Y COMPRIS LE FAVICON) */}
+        {activeSection === 'apparence' && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-6 text-left animate-fadeIn" id="settings-section-appearance">
             {renderSectionHeader(t("Apparence du logiciel pour votre session"), false)}
 
             <div className="space-y-3">
@@ -2936,13 +3021,12 @@ export default function SettingsModal({
                 })}
               </div>
             </div>
-          </div>
 
-          {/* CHOIX DU FAVICON DU LOGICIEL */}
-          <div className="pt-6 mt-6 space-y-4" id="settings-section-software-favicon">
-            {renderSectionHeader(t("Choix du favicon du logiciel"), false)}
+            {/* CHOIX DU FAVICON DU LOGICIEL (INCLUS DANS LA SECTION APPARENCE) */}
+            <div className="pt-6 mt-6 border-t border-slate-100 space-y-4" id="settings-section-software-favicon">
+              {renderSectionHeader(t("Choix du favicon du logiciel"), false)}
 
-            <div className="space-y-3">
+              <div className="space-y-3">
               <label className="block text-[16px] font-bold text-black font-sans">
                 {t("Il s’agit de l’icône montré dans l’onglet de votre navigateur.")}
               </label>
@@ -2989,12 +3073,13 @@ export default function SettingsModal({
               </div>
             </div>
           </div>
-          </div>
+        </div>
+      )}
 
-
-          {/* SECTION 2: INTITULÉS DES EMPLACEMENTS */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 mt-4 text-left" id="settings-section-location-names">
-            {renderSectionHeader(t("Intitulés des emplacements"))}
+      {/* SECTION 4: INTITULÉS DES EMPLACEMENTS */}
+      {activeSection === 'emplacements' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 mt-4 text-left animate-fadeIn" id="settings-section-location-names">
+          {renderSectionHeader(t("Intitulés des emplacements"))}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
               {(['Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'] as const).map(loc => (
@@ -3021,9 +3106,11 @@ export default function SettingsModal({
               ))}
             </div>
           </div>
+        )}
           
-          {/* SECTION 6: MEMBRES DE L'ENVIRONNEMENT */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left" id="settings-section-members" style={{ order: 98 }}>
+        {/* SECTION 6: MEMBRES DE L'ENVIRONNEMENT */}
+        {activeSection === 'membres' && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-members" style={{ order: 98 }}>
             {renderSectionHeader(t("Membres de l’environnement"))}
 
             {/* Formulaire d'ajout rapide de collaborateur */}
@@ -3965,9 +4052,11 @@ export default function SettingsModal({
               </table>
             </div>
           </div>
+        )}
 
-          {/* SECTION: COMMUNICATION PORTAIL CLIENT */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left" id="settings-section-communication-portail" style={{ order: 99 }}>
+        {/* SECTION: COMMUNICATION PORTAIL CLIENT */}
+        {activeSection === 'communication' && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-communication-portail" style={{ order: 99 }}>
             {renderSectionHeader(t("Communication portail client"))}
 
             <div className="space-y-2">
@@ -3984,8 +4073,10 @@ export default function SettingsModal({
               />
             </div>
           </div>
+        )}
 
-          {/* SECTION 3: CONNECTIONS */}
+        {/* SECTION 3: CONNECTIONS */}
+        {activeSection === 'connecteurs' && (
           <div className="border border-slate-200 rounded-2xl p-5 space-y-4 bg-white animate-fadeIn" id="settings-section-connectors">
             <div className="flex items-center justify-between w-full mb-3 select-none bg-transparent">
               <span 
@@ -4587,13 +4678,15 @@ export default function SettingsModal({
 
             </div>
           </div>
+        )}
 
-          {/* BANNIÈRE BOUTIQUE EN LIGNE */}
+        {/* BANNIÈRE BOUTIQUE EN LIGNE */}
+        {activeSection === 'boutique' && (
           <div 
-            className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
+            className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left bg-white"
             style={{
               borderColor: 'rgb(218, 218, 218)',
-              background: '#ffffff00',
+              background: '#ffffff',
               boxShadow: 'none',
               width: '100%',
               margin: '0 auto',
@@ -4637,9 +4730,11 @@ export default function SettingsModal({
               {t("Ouvrir la boutique")}
             </button>
           </div>
+        )}
 
-          {/* SECTION 5: ASSISTANCE DEFIBEO */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left mt-4" id="settings-section-assistance-group">
+        {/* SECTION 5: ASSISTANCE DEFIBEO */}
+        {activeSection === 'assistance' && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left mt-4 animate-fadeIn" id="settings-section-assistance-group">
             {renderSectionHeader(t("Assistance Defibeo"), false)}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* SECTION 2: SUBSCRIPTION */}
@@ -4759,13 +4854,15 @@ export default function SettingsModal({
 
             </div>
           </div>
+        )}
 
-          {/* SECTION: PARRAINAGE */}
+        {/* SECTION: PARRAINAGE */}
+        {activeSection === 'parrainage' && (
           <div 
-            className="p-5 rounded-xl border flex flex-col gap-4 mt-4 text-left"
+            className="p-5 rounded-xl border flex flex-col gap-4 mt-4 text-left animate-fadeIn bg-white"
             style={{
               borderColor: 'rgb(218, 218, 218)',
-              background: '#ffffff00',
+              background: '#ffffff',
               boxShadow: 'none',
               maxWidth: '100%',
               margin: '16px 0px 16px 0px',
@@ -4840,6 +4937,40 @@ export default function SettingsModal({
               </p>
             )}
           </div>
+        )}
+
+        {/* BOUTON TERMINÉ PLEINE LARGEUR */}
+        {activeSection !== null && (
+          <div className="pt-2 w-full animate-fadeIn" style={{ order: 99 }}>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSection(null);
+                const hub = document.getElementById('settings-accordion-hub');
+                if (hub) {
+                  hub.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              }}
+              style={{
+                ...rowActionButtonStyle,
+                backgroundColor: '#000000',
+                color: '#ffffff',
+                width: '100%',
+                fontSize: '18px',
+                padding: '14px 22px',
+                borderRadius: '13px',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                fontWeight: 600,
+                cursor: 'pointer',
+                border: 'none',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+              }}
+              className="transition-all hover:opacity-90 active:scale-[0.99] text-white"
+            >
+              {t("Terminé")}
+            </button>
+          </div>
+        )}
 
           {onLogout && (
             <div className="pt-4" style={{ order: 100 }}>

@@ -3653,6 +3653,25 @@ export default function App() {
     const bcDoc = bonCommandeId && bonCommandeId !== 'custom' ? (commercialDocs || []).find((doc: any) => doc.id === bonCommandeId) : null;
     const bonCommandeEntete = bcDoc?.bonCommandeEntete || (bonCommandeId === 'custom' ? matchedMission?.customBonCommande : '') || '';
 
+    // Unified « Autre référence » lookup (identique au parcours Tournées > Rapports)
+    let autreReferenceVal = report.autreReference || report.customReference || '';
+    if (!autreReferenceVal) {
+      for (const tour of (fsmTours || [])) {
+        for (const m of (tour.missions || [])) {
+          if ((report.missionId && m.id === report.missionId) ||
+              (report.interventionReference && m.interventionReference === report.interventionReference) ||
+              (report.defibIdentifiant && m.defibIdentifiant === report.defibIdentifiant) ||
+              (snapshot.identifiant && m.defibIdentifiant === snapshot.identifiant)) {
+            if (m.autreReference) {
+              autreReferenceVal = m.autreReference;
+              break;
+            }
+          }
+        }
+        if (autreReferenceVal) break;
+      }
+    }
+
     const renderHeader = () => {
       const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
       const showHeaderLogo = pdfLogo ? `<img src="${pdfLogo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
@@ -3869,8 +3888,7 @@ export default function App() {
                     <div class="pdf-line"><span class="pdf-label">Version du logiciel :</span> <span class="pdf-bold">${snapshot.versionLogiciel || '—'}</span></div>
                     <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
                       <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Référence intervention :</span> <span class="pdf-bold">${report.interventionReference || '—'}</span></div>
-                      ${report.autreReference ? `<div class="pdf-line" style="flex: 1;"><span class="pdf-label">Autre référence :</span> <span class="pdf-bold">${report.autreReference}</span></div>` : ''}
-                      <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Entête :</span> <span class="pdf-bold">${bonCommandeEntete || '—'}</span></div>
+                      <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Autre référence :</span> <span class="pdf-bold">${autreReferenceVal || '—'}</span></div>
                     </div>
                     <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Sous contrat :</span> <span class="pdf-bold">${snapshot.contrat || 'Non'}</span></div>
                     ${snapshot.contrat === 'Oui' ? `
@@ -4302,8 +4320,7 @@ export default function App() {
                   ${isVisibleVersionLogiciel ? `<div class="pdf-line"><span class="pdf-label">Version du logiciel :</span> <span class="pdf-bold">${snapshot.versionLogiciel || '—'}</span></div>` : ''}
                   <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Référence intervention :</span> <span class="pdf-bold">${report.interventionReference || '—'}</span></div>
-                    ${report.autreReference ? `<div class="pdf-line" style="flex: 1;"><span class="pdf-label">Autre référence :</span> <span class="pdf-bold">${report.autreReference}</span></div>` : ''}
-                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Entête :</span> <span class="pdf-bold">${bonCommandeEntete || '—'}</span></div>
+                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Autre référence :</span> <span class="pdf-bold">${autreReferenceVal || '—'}</span></div>
                   </div>
                   <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Identifiant :</span> <span class="pdf-bold">${snapshot.identifiant || ''}</span></div>

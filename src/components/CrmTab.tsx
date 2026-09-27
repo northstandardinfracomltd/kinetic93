@@ -2271,8 +2271,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     </div>
                   </div>
 
-                  {/* 3. Catégorie & Criticité (Side-by-side 50% 50%) */}
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* 3. Catégorie, Criticité & Collaborateur (Side-by-side 33% 33% 33%) */}
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label>Catégorie.</label>
                       <select
@@ -2320,9 +2320,26 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         ))}
                       </select>
                     </div>
+
+                    <div>
+                      <label>Collaborateur.</label>
+                      <select
+                        value={formCollaborateur}
+                        onChange={(e) => setFormCollaborateur(e.target.value)}
+                        style={{ ...selectStyle, textAlign: 'center', textAlignLast: 'center' }}
+                        className="text-center"
+                      >
+                        <option value="Non attribué">Non attribué</option>
+                        {members.map((m) => (
+                          <option key={m.id || m.email || m.name} value={m.name}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
-                  {/* 4. Encart: Client ou Prospect, Email, Objet, Description, Collaborateur */}
+                  {/* 4. Encart: Client ou Prospect, Email, Situation/Structure, Contact, Objet, Description */}
                   <div 
                     className="space-y-4 p-5"
                     style={{
@@ -2331,7 +2348,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       backgroundColor: '#ffffff'
                     }}
                   >
-                    {/* Client ou Prospect (renamed from Client.) */}
+                    {/* Client ou Prospect */}
                     <div>
                       <label>Client ou Prospect.</label>
                       <select
@@ -2376,114 +2393,117 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       />
                     </div>
 
-                    {/* Situation Interlocuteur (Prospect / Client - choix unique) */}
-                    <div>
-                      <label>Situation Interlocuteur.</label>
-                      <div className="grid grid-cols-2 gap-3">
-                        {(['Prospect', 'Client'] as const).map((sit) => {
-                          const isSelected = formSituationInterlocuteur === sit;
-                          return (
-                            <div
-                              key={sit}
-                              onClick={() => setFormSituationInterlocuteur(sit)}
-                              className="flex items-center justify-start gap-2.5 p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
-                            >
-                              <span 
-                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                                style={{
-                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
-                                  width: '20px',
-                                  height: '20px',
-                                  minWidth: '20px',
-                                  minHeight: '20px',
-                                  backgroundColor: '#ffffff'
-                                }}
+                    {/* Situation Interlocuteur & Type Structure (4 options sur la même ligne : 2 options + 2 options) */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Situation Interlocuteur (Prospect / Client) */}
+                      <div>
+                        <label>Situation Interlocuteur.</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['Prospect', 'Client'] as const).map((sit) => {
+                            const isSelected = formSituationInterlocuteur === sit;
+                            return (
+                              <div
+                                key={sit}
+                                onClick={() => setFormSituationInterlocuteur(sit)}
+                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
                               >
-                                {isSelected && (
-                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
-                                )}
-                              </span>
-                              <span className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
-                                {sit}
-                              </span>
-                            </div>
-                          );
-                        })}
+                                <span 
+                                  className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                  style={{
+                                    border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                    width: '18px',
+                                    height: '18px',
+                                    minWidth: '18px',
+                                    minHeight: '18px',
+                                    backgroundColor: '#ffffff'
+                                  }}
+                                >
+                                  {isSelected && (
+                                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
+                                  )}
+                                </span>
+                                <span className="text-[15px] sm:text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
+                                  {sit}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Type Structure (Collectivité / Entreprise) */}
+                      <div>
+                        <label>Type Structure.</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['Collectivité', 'Entreprise'] as const).map((typ) => {
+                            const isSelected = formTypeStructure === typ;
+                            return (
+                              <div
+                                key={typ}
+                                onClick={() => {
+                                  setFormTypeStructure(typ);
+                                  if (typ === 'Collectivité' && formCategorie === 'Commercial') {
+                                    setFormMarchePublic('Oui');
+                                  }
+                                }}
+                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                              >
+                                <span 
+                                  className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                  style={{
+                                    border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                    width: '18px',
+                                    height: '18px',
+                                    minWidth: '18px',
+                                    minHeight: '18px',
+                                    backgroundColor: '#ffffff'
+                                  }}
+                                >
+                                  {isSelected && (
+                                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
+                                  )}
+                                </span>
+                                <span className="text-[15px] sm:text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
+                                  {typ}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Type Structure (Collectivité / Entreprise - choix unique) */}
-                    <div>
-                      <label>Type Structure.</label>
-                      <div className="grid grid-cols-2 gap-3">
-                        {(['Collectivité', 'Entreprise'] as const).map((typ) => {
-                          const isSelected = formTypeStructure === typ;
-                          return (
-                            <div
-                              key={typ}
-                              onClick={() => {
-                                setFormTypeStructure(typ);
-                                if (typ === 'Collectivité' && formCategorie === 'Commercial') {
-                                  setFormMarchePublic('Oui');
-                                }
-                              }}
-                              className="flex items-center justify-start gap-2.5 p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
-                            >
-                              <span 
-                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                                style={{
-                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
-                                  width: '20px',
-                                  height: '20px',
-                                  minWidth: '20px',
-                                  minHeight: '20px',
-                                  backgroundColor: '#ffffff'
-                                }}
-                              >
-                                {isSelected && (
-                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
-                                )}
-                              </span>
-                              <span className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
-                                {typ}
-                              </span>
-                            </div>
-                          );
-                        })}
+                    {/* Prénom Nom, Fonction & Téléphone sur la même ligne (3 colonnes) */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label>Prénom Nom.</label>
+                        <input
+                          type="text"
+                          placeholder="Prénom Nom"
+                          value={formPrenomNom}
+                          onChange={(e) => setFormPrenomNom(e.target.value)}
+                        />
                       </div>
-                    </div>
 
-                    {/* Prénom Nom. */}
-                    <div>
-                      <label>Prénom Nom.</label>
-                      <input
-                        type="text"
-                        placeholder="Prénom Nom"
-                        value={formPrenomNom}
-                        onChange={(e) => setFormPrenomNom(e.target.value)}
-                      />
-                    </div>
+                      <div>
+                        <label>Fonction.</label>
+                        <input
+                          type="text"
+                          placeholder="Fonction"
+                          value={formFonction}
+                          onChange={(e) => setFormFonction(e.target.value)}
+                        />
+                      </div>
 
-                    {/* Fonction. */}
-                    <div>
-                      <label>Fonction.</label>
-                      <input
-                        type="text"
-                        placeholder="Fonction"
-                        value={formFonction}
-                        onChange={(e) => setFormFonction(e.target.value)}
-                      />
-                    </div>
-
-                    {/* Téléphone. */}
-                    <div>
-                      <label>Téléphone.</label>
-                      <input
-                        type="tel"
-                        placeholder="Ex: 06 12 34 56 78"
-                        value={formTelephone}
-                        onChange={(e) => setFormTelephone(e.target.value)}
-                      />
+                      <div>
+                        <label>Téléphone.</label>
+                        <input
+                          type="tel"
+                          placeholder="Ex: 06 12 34 56 78"
+                          value={formTelephone}
+                          onChange={(e) => setFormTelephone(e.target.value)}
+                        />
+                      </div>
                     </div>
 
                     {/* Objet */}
@@ -2525,23 +2545,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         }}
                       />
                     </div>
-
-                    {/* Collaborateur */}
-                    <div>
-                      <label>Collaborateur.</label>
-                      <select
-                        value={formCollaborateur}
-                        onChange={(e) => setFormCollaborateur(e.target.value)}
-                        style={selectStyle}
-                      >
-                        <option value="Non attribué">Non attribué</option>
-                        {members.map((m) => (
-                          <option key={m.id || m.email || m.name} value={m.name}>
-                            {m.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
                   </div>
 
                   {/* 5. SPECIFIC FIELDS WHEN CATEGORY IS « Commercial » */}
@@ -2555,75 +2558,78 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       }}
                       id="crm-commercial-section"
                     >
-                      {/* Marché Public (Radio-check Oui/Non) */}
-                      <div>
-                        <label>Marché Public.</label>
-                        <div className="grid grid-cols-2 gap-3">
-                          {(['Oui', 'Non'] as const).map((opt) => {
-                            const isSelected = formMarchePublic === opt;
-                            return (
-                              <div
-                                key={opt}
-                                onClick={() => setFormMarchePublic(opt)}
-                                className="flex items-center justify-start gap-2.5 p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
-                              >
-                                <span 
-                                  className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                                  style={{
-                                    border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
-                                    width: '20px',
-                                    height: '20px',
-                                    minWidth: '20px',
-                                    minHeight: '20px',
-                                    backgroundColor: '#ffffff'
-                                  }}
+                      {/* Marché Public (40%) & Situation Devis (60%) sur la même ligne (2 + 3 options = 5 options) */}
+                      <div className="grid grid-cols-5 gap-3">
+                        {/* Marché Public (2 cols = 40%) */}
+                        <div className="col-span-2">
+                          <label>Marché Public.</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {(['Oui', 'Non'] as const).map((opt) => {
+                              const isSelected = formMarchePublic === opt;
+                              return (
+                                <div
+                                  key={opt}
+                                  onClick={() => setFormMarchePublic(opt)}
+                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
                                 >
-                                  {isSelected && (
-                                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
-                                  )}
-                                </span>
-                                <span className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
-                                  {opt}
-                                </span>
-                              </div>
-                            );
-                          })}
+                                  <span 
+                                    className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                    style={{
+                                      border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                      width: '18px',
+                                      height: '18px',
+                                      minWidth: '18px',
+                                      minHeight: '18px',
+                                      backgroundColor: '#ffffff'
+                                    }}
+                                  >
+                                    {isSelected && (
+                                      <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
+                                    )}
+                                  </span>
+                                  <span className="text-[15px] sm:text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
+                                    {opt}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Situation Devis (Toggle de trois options « Gagné » / « Perdu » / « Non renseigné ») */}
-                      <div>
-                        <label>Situation Devis.</label>
-                        <div className="grid grid-cols-3 gap-3">
-                          {(['Gagné', 'Perdu', 'Non renseigné'] as const).map((sitDevis) => {
-                            const isSelected = formSituationDevis === sitDevis;
-                            return (
-                              <div
-                                key={sitDevis}
-                                onClick={() => setFormSituationDevis(sitDevis)}
-                                className="flex items-center justify-start gap-2.5 p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
-                              >
-                                <span 
-                                  className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                                  style={{
-                                    border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
-                                    width: '20px',
-                                    height: '20px',
-                                    minWidth: '20px',
-                                    minHeight: '20px',
-                                    backgroundColor: '#ffffff'
-                                  }}
+                        {/* Situation Devis (3 cols = 60%) */}
+                        <div className="col-span-3">
+                          <label>Situation Devis.</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {(['Gagné', 'Perdu', 'Non renseigné'] as const).map((sitDevis) => {
+                              const isSelected = formSituationDevis === sitDevis;
+                              return (
+                                <div
+                                  key={sitDevis}
+                                  onClick={() => setFormSituationDevis(sitDevis)}
+                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
                                 >
-                                  {isSelected && (
-                                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
-                                  )}
-                                </span>
-                                <span className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
-                                  {sitDevis}
-                                </span>
-                              </div>
-                            );
-                          })}
+                                  <span 
+                                    className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                    style={{
+                                      border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                      width: '18px',
+                                      height: '18px',
+                                      minWidth: '18px',
+                                      minHeight: '18px',
+                                      backgroundColor: '#ffffff'
+                                    }}
+                                  >
+                                    {isSelected && (
+                                      <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
+                                    )}
+                                  </span>
+                                  <span className="text-[15px] sm:text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
+                                    {sitDevis}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
 
@@ -2665,38 +2671,79 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </div>
                       </div>
 
-                      {/* Référence Devis. */}
-                      <div>
-                        <label>Référence Devis.</label>
-                        <input
-                          type="text"
-                          placeholder="Ex: DEV-2026-081"
-                          value={formReferenceDevis}
-                          onChange={(e) => setFormReferenceDevis(e.target.value)}
-                        />
-                      </div>
-
-                      {/* Total Affaire HT (en dessous de Référence Devis.) */}
-                      <div>
-                        <label>Total Affaire HT.</label>
-                        <div className="relative flex items-center">
+                      {/* Référence Devis & Lien Stockage Partagé Devis (50% 50% sur la même ligne) */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label>Référence Devis.</label>
                           <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="0.00"
-                            value={formTotalAffaireHT}
-                            onChange={(e) => setFormTotalAffaireHT(e.target.value)}
-                            style={{ paddingRight: '50px' }}
+                            type="text"
+                            placeholder="Ex: DEV-2026-081"
+                            value={formReferenceDevis}
+                            onChange={(e) => setFormReferenceDevis(e.target.value)}
                           />
-                          <span className="absolute right-3.5 text-sm font-semibold text-slate-500 font-sans pointer-events-none">
-                            € HT
-                          </span>
+                        </div>
+
+                        <div>
+                          <label>Lien Stockage Partagé Devis.</label>
+                          <div className="relative flex items-center">
+                            <input
+                              type="url"
+                              placeholder="https://drive.google.com/... ou lien partagé"
+                              value={formLienDevis}
+                              onChange={(e) => setFormLienDevis(e.target.value)}
+                              style={{ paddingRight: formLienDevis.trim() ? '90px' : undefined }}
+                            />
+                            {formLienDevis.trim() && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  let targetUrl = formLienDevis.trim();
+                                  if (!/^https?:\/\//i.test(targetUrl)) {
+                                    targetUrl = 'https://' + targetUrl;
+                                  }
+                                  window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                                }}
+                                className="absolute right-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-black text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                                title="Ouvrir le lien dans un nouvel onglet"
+                              >
+                                Ouvrir
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Famille. (1 lettre uppercase) & Indicatif Postal. (2 chiffres) */}
-                      <div className="grid grid-cols-2 gap-3">
+                      {/* Description Offre Devis. (remonté en dessous de Référence Devis) */}
+                      <div>
+                        <label>Description Offre Devis.</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Remplacement électrodes et pack batterie..."
+                          value={formDescriptionOffreDevis}
+                          onChange={(e) => setFormDescriptionOffreDevis(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Total Affaire / Famille / Indicatif Postal / Origine Lead (4 cols équitables sur la même ligne) */}
+                      <div className="grid grid-cols-4 gap-3">
+                        <div>
+                          <label>Total Affaire HT.</label>
+                          <div className="relative flex items-center">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              value={formTotalAffaireHT}
+                              onChange={(e) => setFormTotalAffaireHT(e.target.value)}
+                              style={{ paddingRight: '48px' }}
+                            />
+                            <span className="absolute right-3 text-xs font-semibold text-slate-500 font-sans pointer-events-none">
+                              € HT
+                            </span>
+                          </div>
+                        </div>
+
                         <div>
                           <label>Famille.</label>
                           <input
@@ -2708,6 +2755,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             style={{ textTransform: 'uppercase', textAlign: 'center', fontSize: '18px', fontWeight: 600 }}
                           />
                         </div>
+
                         <div>
                           <label>Indicatif Postal.</label>
                           <input
@@ -2719,33 +2767,21 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             style={{ textAlign: 'center', fontSize: '18px', fontWeight: 600 }}
                           />
                         </div>
-                      </div>
 
-                      {/* Origine Lead. (dropdown liste : Service Client, Direct, Internet, Planification, Autre.) */}
-                      <div>
-                        <label>Origine Lead.</label>
-                        <select
-                          value={formOrigineLead}
-                          onChange={(e) => setFormOrigineLead(e.target.value)}
-                          style={selectStyle}
-                        >
-                          <option value="Service Client">Service Client</option>
-                          <option value="Direct">Direct</option>
-                          <option value="Internet">Internet</option>
-                          <option value="Planification">Planification</option>
-                          <option value="Autre.">Autre.</option>
-                        </select>
-                      </div>
-
-                      {/* Description Offre Devis. (one line field) */}
-                      <div>
-                        <label>Description Offre Devis.</label>
-                        <input
-                          type="text"
-                          placeholder="Ex: Remplacement électrodes et pack batterie..."
-                          value={formDescriptionOffreDevis}
-                          onChange={(e) => setFormDescriptionOffreDevis(e.target.value)}
-                        />
+                        <div>
+                          <label>Origine Lead.</label>
+                          <select
+                            value={formOrigineLead}
+                            onChange={(e) => setFormOrigineLead(e.target.value)}
+                            style={selectStyle}
+                          >
+                            <option value="Service Client">Service Client</option>
+                            <option value="Direct">Direct</option>
+                            <option value="Internet">Internet</option>
+                            <option value="Planification">Planification</option>
+                            <option value="Autre.">Autre.</option>
+                          </select>
+                        </div>
                       </div>
 
                       {/* Dates commerciales : Date Devis., Date Prochaine Relance., Date Commande. */}
@@ -2776,36 +2812,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </div>
                       </div>
 
-                      {/* Lien Stockage Partagé Devis. avec bouton "Ouvrir" infield si value */}
-                      <div>
-                        <label>Lien Stockage Partagé Devis.</label>
-                        <div className="relative flex items-center">
-                          <input
-                            type="url"
-                            placeholder="https://drive.google.com/... ou lien partagé"
-                            value={formLienDevis}
-                            onChange={(e) => setFormLienDevis(e.target.value)}
-                            style={{ paddingRight: formLienDevis.trim() ? '90px' : undefined }}
-                          />
-                          {formLienDevis.trim() && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                let targetUrl = formLienDevis.trim();
-                                if (!/^https?:\/\//i.test(targetUrl)) {
-                                  targetUrl = 'https://' + targetUrl;
-                                }
-                                window.open(targetUrl, '_blank', 'noopener,noreferrer');
-                              }}
-                              className="absolute right-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-black text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-                              title="Ouvrir le lien dans un nouvel onglet"
-                            >
-                              Ouvrir
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
                       {/* Sub-form: Événement(s) suivi pré-vente */}
                       <div className="space-y-3 pt-2">
                         <div className="flex items-center justify-between">
@@ -2817,8 +2823,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               backgroundColor: '#000000',
                               color: '#ffffff',
                               borderRadius: '10px',
-                              fontSize: '14px',
-                              padding: '6px 14px',
+                              fontSize: '16px',
+                              padding: '8px 16px',
                               border: 'none',
                               cursor: 'pointer',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
@@ -2856,8 +2862,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                       backgroundColor: '#dc2626',
                                       color: '#ffffff',
                                       borderRadius: '8px',
-                                      padding: '6px 14px',
-                                      fontSize: '13px',
+                                      padding: '8px 16px',
+                                      fontSize: '16px',
                                       fontWeight: 600,
                                       border: 'none',
                                       cursor: 'pointer',
@@ -2914,8 +2920,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             backgroundColor: '#000000',
                             color: '#ffffff',
                             borderRadius: '10px',
-                            fontSize: '14px',
-                            padding: '6px 14px',
+                            fontSize: '16px',
+                            padding: '8px 16px',
                             border: 'none',
                             cursor: 'pointer',
                             fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
@@ -2987,16 +2993,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               type="button"
                               onClick={() => setIsNewMessageOpen(false)}
                               style={{
-                                backgroundColor: '#f1f5f9',
-                                color: '#475569',
-                                borderRadius: '8px',
-                                padding: '8px 16px',
-                                fontSize: '14px',
+                                backgroundColor: '#000000',
+                                color: '#ffffff',
+                                borderRadius: '12px',
+                                padding: '8px 18px',
+                                fontSize: '16px',
                                 fontWeight: 500,
-                                border: '1px solid #cbd5e1',
-                                cursor: 'pointer'
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                               }}
-                              className="hover:bg-slate-200 transition-colors"
+                              className="hover:bg-zinc-800 transition-colors shadow-xs"
                             >
                               Annuler
                             </button>
@@ -3007,9 +3014,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               style={{
                                 backgroundColor: isSendingSupportMessage ? '#94a3b8' : '#3556ec',
                                 color: '#ffffff',
-                                borderRadius: '8px',
-                                padding: '8px 20px',
-                                fontSize: '14px',
+                                borderRadius: '12px',
+                                padding: '8px 22px',
+                                fontSize: '16px',
                                 fontWeight: 600,
                                 border: 'none',
                                 cursor: isSendingSupportMessage ? 'wait' : 'pointer',
@@ -3023,49 +3030,24 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </div>
                       )}
 
-                      {/* Fil d'ariane des messages envoyés (historique) */}
+                      {/* Messages envoyés (historique épuré) */}
                       {formSupportMessages.length > 0 && (
-                        <div className="space-y-3 pt-2">
-                          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider font-sans block">
-                            Historique des messages envoyés ({formSupportMessages.length})
-                          </span>
-
-                          <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
-                            {formSupportMessages.map((msg) => (
-                              <div key={msg.id} className="relative group">
-                                {/* Pastille sur la ligne de fil d'ariane */}
-                                <div 
-                                  className="absolute -left-6 top-1.5 rounded-full bg-blue-600 border-2 border-white shadow-xs"
-                                  style={{ width: '12px', height: '12px' }}
-                                />
-                                
-                                <div className="p-3.5 bg-slate-50 hover:bg-slate-100/90 border border-slate-200 rounded-xl space-y-2 transition-colors">
-                                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 font-sans">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="font-semibold text-slate-800">
-                                        {msg.date} à {msg.heure}
-                                      </span>
-                                      <span>•</span>
-                                      <span>À : <span className="font-mono text-slate-700">{msg.destinataire}</span></span>
-                                    </div>
-                                    {msg.expediteur && (
-                                      <span className="text-slate-500 font-sans">
-                                        Par : {msg.expediteur}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  <div className="text-[15px] font-semibold text-slate-900 font-sans">
-                                    {msg.objet}
-                                  </div>
-
-                                  <div className="text-[14px] text-slate-700 font-sans whitespace-pre-wrap leading-relaxed">
-                                    {msg.message}
-                                  </div>
-                                </div>
+                        <div className="space-y-3 pt-1">
+                          {formSupportMessages.map((msg) => (
+                            <div key={msg.id} className="p-3.5 bg-slate-50 hover:bg-slate-100/90 border border-slate-200 rounded-xl space-y-2 transition-colors">
+                              <div className="text-xs font-semibold text-slate-800 font-sans">
+                                {msg.date} à {msg.heure}
                               </div>
-                            ))}
-                          </div>
+
+                              <div className="text-[15px] font-semibold text-slate-900 font-sans">
+                                {msg.objet}
+                              </div>
+
+                              <div className="text-[14px] text-slate-700 font-sans whitespace-pre-wrap leading-relaxed">
+                                {msg.message}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
