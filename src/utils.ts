@@ -915,8 +915,8 @@ export const INITIAL_MEMBERS: Member[] = [
   }
 ];
 
-export function getLocationCustomName(originalName: string, customMap?: Record<string, string>): string {
-  if (!originalName) return originalName || '';
+export function getLocationCustomName(originalName: any, customMap?: Record<string, string>): string {
+  if (!originalName || typeof originalName !== 'string') return typeof originalName === 'string' ? originalName : (originalName ? String(originalName) : '');
   if (customMap && customMap[originalName]) return customMap[originalName];
   if (typeof window === 'undefined') return originalName;
   const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';

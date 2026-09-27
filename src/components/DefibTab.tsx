@@ -417,6 +417,19 @@ const getPostalIndicatif = (rawCp: any): number | null => {
   return null;
 };
 
+const FRENCH_DEPARTMENTS = [
+  "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
+  "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+  "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
+  "31", "32", "33", "34", "35", "36", "37", "38", "39", "40",
+  "41", "42", "43", "44", "45", "46", "47", "48", "49", "50",
+  "51", "52", "53", "54", "55", "56", "57", "58", "59", "60",
+  "61", "62", "63", "64", "65", "66", "67", "68", "69", "70",
+  "71", "72", "73", "74", "75", "76", "77", "78", "79", "80",
+  "81", "82", "83", "84", "85", "86", "87", "88", "89", "90",
+  "91", "92", "93", "94", "95", "96", "97", "98", "99", "2A", "2B"
+];
+
 export default function DefibTab({
   currentLang,
   defibrillateurs,
@@ -1462,7 +1475,24 @@ export default function DefibTab({
 
   const [bulkApplyRappelMensuelAuto, setBulkApplyRappelMensuelAuto] = useState(false);
   const [bulkRappelMensuelAuto, setBulkRappelMensuelAuto] = useState<'Oui' | 'Non'>('Non');
-  const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | 'postal_code_asc' | 'postal_code_desc' | null>(null);
+  const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | null>(null);
+  const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
+  const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
+  const deptDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (deptDropdownRef.current && !deptDropdownRef.current.contains(e.target as Node)) {
+        setIsDeptDropdownOpen(false);
+      }
+    };
+    if (isDeptDropdownOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isDeptDropdownOpen]);
   const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('oui');
 
   // Défibrillateurs avec Maintenance Autorisée = Oui ("Avec.Main") pour l'affichage Plan
@@ -1675,6 +1705,26 @@ export default function DefibTab({
         }
       }
 
+      // 8. Department filter (Indicatif postal court)
+      if (selectedDepartment) {
+        const rawCp = ((df as any).codePostal || df.cp || '').toString().trim().replace(/\s+/g, '').toUpperCase();
+        if (!rawCp) return false;
+        if (selectedDepartment === '2A') {
+          if (!rawCp.startsWith('2A') && !rawCp.startsWith('200') && !rawCp.startsWith('201')) {
+            return false;
+          }
+        } else if (selectedDepartment === '2B') {
+          if (!rawCp.startsWith('2B') && !rawCp.startsWith('202') && !rawCp.startsWith('206')) {
+            return false;
+          }
+        } else {
+          const normalized = /^\d{4}$/.test(rawCp) ? '0' + rawCp : rawCp;
+          if (!normalized.startsWith(selectedDepartment)) {
+            return false;
+          }
+        }
+      }
+
       return true;
     });
 
@@ -1701,34 +1751,6 @@ export default function DefibTab({
         }
         return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
       });
-    } else if (sortFilter === 'postal_code_asc' || sortFilter === 'postal_code_desc') {
-      const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, idx]));
-      const isAsc = sortFilter === 'postal_code_asc';
-      result = [...result].sort((a, b) => {
-        const prefixA = getPostalIndicatif(a.cp);
-        const prefixB = getPostalIndicatif(b.cp);
-
-        // If one or both are null (no valid postal code)
-        if (prefixA === null && prefixB === null) {
-          return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
-        }
-        if (prefixA === null) return 1;
-        if (prefixB === null) return -1;
-
-        if (prefixA !== prefixB) {
-          return isAsc ? prefixA - prefixB : prefixB - prefixA;
-        }
-
-        // Secondary sort: compare full cleaned postal codes
-        const cleanA = (a.cp || "").trim();
-        const cleanB = (b.cp || "").trim();
-        if (cleanA !== cleanB) {
-          const comp = cleanA.localeCompare(cleanB, undefined, { numeric: true });
-          return isAsc ? comp : -comp;
-        }
-
-        return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
-      });
     }
 
     if (pinnedDefibIds.length > 0) {
@@ -1739,7 +1761,7 @@ export default function DefibTab({
     }
 
     return result;
-  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, rejectedDefibSet, sortFilter, maintenanceFilter, pinnedDefibIds]);
+  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, rejectedDefibSet, sortFilter, maintenanceFilter, pinnedDefibIds, selectedDepartment]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -1747,7 +1769,7 @@ export default function DefibTab({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, activeFilters, sortFilter, maintenanceFilter]);
+  }, [search, activeFilters, sortFilter, maintenanceFilter, selectedDepartment]);
 
   const totalPages = Math.max(1, Math.ceil(filteredDefibs.length / ITEMS_PER_PAGE));
 
@@ -2539,6 +2561,8 @@ export default function DefibTab({
   // Safe search resetting helper
   const clearFilters = () => {
     setSearch('');
+    setSelectedDepartment(null);
+    setSortFilter(null);
     const defaults = {
       region: 'Tous',
       modeleId: 'Tous',
@@ -2917,20 +2941,6 @@ export default function DefibTab({
                       Sync. Atlasanté
                     </button>
                   )}
-                  <button
-                    onClick={handleBulkDeleteAction}
-                    id="btn-bulk-delete"
-                    disabled={isAnySelectedInTour}
-                    style={{
-                      ...rowActionButton18Style,
-                      opacity: isAnySelectedInTour ? 0.4 : 1,
-                      cursor: isAnySelectedInTour ? 'not-allowed' : 'pointer'
-                    }}
-                    title={isAnySelectedInTour ? "Action impossible : l'un des défibrillateurs sélectionnés fait déjà partie d'une tournée." : "Supprimer"}
-                    className="cursor-pointer"
-                  >
-                    Supprimer
-                  </button>
                 </div>
               </div>
             )}
@@ -3066,49 +3076,97 @@ export default function DefibTab({
               {t("Pro.Main au plus proche")}
             </button>
 
-            <button
-              type="button"
-              id="filter-sort-postal-asc"
-              onClick={() => setSortFilter(prev => prev === 'postal_code_asc' ? null : 'postal_code_asc')}
-              style={{
-                borderRadius: '1000px',
-                padding: '8px 16px',
-                fontSize: '18px',
-                fontWeight: 100,
-                cursor: 'pointer',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: sortFilter === 'postal_code_asc' ? '#fe4eba' : '#ffffff',
-                color: sortFilter === 'postal_code_asc' ? '#ffffff' : '#000000',
-                border: sortFilter === 'postal_code_asc' ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
-                boxShadow: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              className="transition-all"
-            >
-              {t("Indicatif postal croissant")}
-            </button>
+            {/* Filter: Indicatif postal court */}
+            <div className="relative inline-block" ref={deptDropdownRef}>
+              <button
+                type="button"
+                id="filter-postal-court-btn"
+                onClick={() => setIsDeptDropdownOpen(prev => !prev)}
+                style={{
+                  borderRadius: '1000px',
+                  padding: '8px 16px',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  backgroundColor: selectedDepartment ? '#fe4eba' : '#ffffff',
+                  color: selectedDepartment ? '#ffffff' : '#000000',
+                  border: selectedDepartment ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
+                  boxShadow: 'none',
+                  transition: 'all 0.15s ease',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                className="transition-all select-none"
+              >
+                <span>{selectedDepartment ? `${t("Indicatif postal court")} (${selectedDepartment})` : t("Indicatif postal court")}</span>
+                <span style={{ fontSize: '11px', transition: 'transform 0.15s ease', transform: isDeptDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+              </button>
 
-            <button
-              type="button"
-              id="filter-sort-postal-desc"
-              onClick={() => setSortFilter(prev => prev === 'postal_code_desc' ? null : 'postal_code_desc')}
-              style={{
-                borderRadius: '1000px',
-                padding: '8px 16px',
-                fontSize: '18px',
-                fontWeight: 100,
-                cursor: 'pointer',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: sortFilter === 'postal_code_desc' ? '#fe4eba' : '#ffffff',
-                color: sortFilter === 'postal_code_desc' ? '#ffffff' : '#000000',
-                border: sortFilter === 'postal_code_desc' ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
-                boxShadow: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              className="transition-all"
-            >
-              {t("Indicatif postal décroissant")}
-            </button>
+              {isDeptDropdownOpen && (
+                <div
+                  className="absolute left-0 mt-2 bg-white rounded-xl shadow-xl z-50 p-2.5 font-sans animate-fadeIn"
+                  style={{
+                    width: '320px',
+                    maxHeight: '340px',
+                    overflowY: 'auto',
+                    border: '1px solid rgb(218, 218, 218)',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
+                  }}
+                >
+                  <div className="px-1.5 py-1 mb-2 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      {t("Départements")} ({FRENCH_DEPARTMENTS.length})
+                    </span>
+                    {selectedDepartment && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDepartment(null);
+                          setIsDeptDropdownOpen(false);
+                        }}
+                        className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
+                      >
+                        {t("Effacer")}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-1.5 pt-0.5">
+                    {FRENCH_DEPARTMENTS.map((dept) => {
+                      const isSelected = selectedDepartment === dept;
+                      return (
+                        <button
+                          key={dept}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDepartment(isSelected ? null : dept);
+                            setIsDeptDropdownOpen(false);
+                          }}
+                          style={{
+                            backgroundColor: isSelected ? '#fe4eba' : '#f8fafc',
+                            color: isSelected ? '#ffffff' : '#000000',
+                            border: isSelected ? '1px solid #fe4eba' : '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            padding: '6px 2px',
+                            fontSize: '15px',
+                            fontWeight: isSelected ? 600 : 400,
+                            cursor: 'pointer',
+                            textAlign: 'center',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            transition: 'all 0.1s ease'
+                          }}
+                          className="hover:border-[#fe4eba] hover:scale-105 active:scale-95 transition-all"
+                        >
+                          {dept}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard */}
@@ -3587,6 +3645,27 @@ export default function DefibTab({
                             style={rowActionButton18Style}
                           >
                             Modifier
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const inTour = (fsmTours || []).some(t =>
+                                (t.missions || []).some((m: any) => m.defibIdentifiant === df.identifiant)
+                              );
+                              if (inTour) {
+                                alert(t("Action impossible : ce défibrillateur fait déjà partie d'une tournée."));
+                                return;
+                              }
+                              if (window.confirm(t("Êtes-vous sûr de vouloir supprimer ce défibrillateur ?"))) {
+                                onDeleteDefib(df.id);
+                                setSelectedIds(prev => prev.filter(id => id !== df.id));
+                              }
+                            }}
+                            style={rowActionButton18Style}
+                            className="cursor-pointer"
+                            title={t("Supprimer")}
+                          >
+                            {t("Supprimer")}
                           </button>
                         </div>
                       </td>

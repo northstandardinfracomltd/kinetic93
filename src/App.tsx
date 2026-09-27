@@ -7731,11 +7731,11 @@ export default function App() {
 
             const getTourDisplayLabel = (tour: any): string => {
               if (!tour) return '';
-              const title = (tour.title || 'Tournée').trim();
-              const status = (tour.status || 'Brouillon').trim();
+              const title = String(tour.title || 'Tournée').trim();
+              const status = String(tour.status || 'Brouillon').trim();
               const dateFormatted = tour.startDate ? formatFrenchDate(tour.startDate) : '';
-              const plannerName = (tour.plannerName || tour.planner || '').trim();
-              const techName = (tour.techName || tour.technicien || '').trim();
+              const plannerName = String(tour.plannerName || (typeof tour.planner === 'string' ? tour.planner : tour.planner?.name) || '').trim();
+              const techName = String(tour.techName || (typeof tour.technicien === 'string' ? tour.technicien : tour.technicien?.name) || '').trim();
 
               let label = `${title} (${status})`;
               if (dateFormatted) {
@@ -8397,7 +8397,7 @@ export default function App() {
                             <option value="Tous">Tous les techniciens</option>
                             {(() => {
                               const techList = members.filter(m => isTechnicianMember(m)).map(m => m.name);
-                              const allTechs = Array.from(new Set<string>(techList)).filter((name: string) => name && name.trim() !== '');
+                              const allTechs = Array.from(new Set<string>(techList)).filter((name: any) => typeof name === 'string' && name.trim() !== '');
                               return allTechs.map(tech => (
                                 <option key={tech} value={tech}>{tech}</option>
                               ));
@@ -8431,8 +8431,8 @@ export default function App() {
                                 const roleLower = (m.role || '').toLowerCase();
                                 return !(m.role === 'Technicien' || m.role === 'Maintenance Terrain' || roleLower.includes('tech'));
                               }).map(m => m.name);
-                              const tourPlanners = fsmTours.map((t: any) => t.plannerName || t.planner).filter(Boolean);
-                              const allPlanners = Array.from(new Set([...nonTechList, ...tourPlanners])).filter(name => name.trim() !== '');
+                              const tourPlanners = fsmTours.map((t: any) => typeof t.plannerName === 'string' ? t.plannerName : (typeof t.planner === 'string' ? t.planner : (t.planner?.name || ''))).filter(Boolean);
+                              const allPlanners = Array.from(new Set([...nonTechList, ...tourPlanners])).filter((name: any) => typeof name === 'string' && name.trim() !== '');
                               return allPlanners.map(planner => (
                                 <option key={planner} value={planner}>{planner}</option>
                               ));
@@ -8934,7 +8934,7 @@ export default function App() {
                 </datalist>
 
                 <datalist id="fsm-clients-list">
-                  {clients.map(c => c.name).map((name, idx) => (
+                  {clients.map(c => c.denomination || c.id).filter(Boolean).map((name, idx) => (
                     <option key={idx} value={name} />
                   ))}
                 </datalist>
@@ -10700,7 +10700,7 @@ export default function App() {
                                   const regionList = Array.from(new Set([
                                     ...getRegionsForCountry('France'),
                                     tourRegion
-                                  ].filter(Boolean).filter(r => r.trim() !== '')));
+                                  ].filter(Boolean).filter((r: any) => typeof r === 'string' && r.trim() !== '')));
                                   return regionList.map((r) => (
                                     <option key={r} value={r}>
                                       {r}
@@ -10745,7 +10745,7 @@ export default function App() {
                                   const plannerOptions = Array.from(new Set([
                                     ...nonTechMembers,
                                     tourPlannerName
-                                  ].filter(Boolean).filter(n => n.trim() !== '')));
+                                  ].filter(Boolean).filter((n: any) => typeof n === 'string' && n.trim() !== '')));
                                   return plannerOptions.map((name) => (
                                     <option key={name} value={name}>
                                       {name}
