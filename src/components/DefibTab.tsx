@@ -1477,22 +1477,6 @@ export default function DefibTab({
   const [bulkRappelMensuelAuto, setBulkRappelMensuelAuto] = useState<'Oui' | 'Non'>('Non');
   const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
-  const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
-  const deptDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (deptDropdownRef.current && !deptDropdownRef.current.contains(e.target as Node)) {
-        setIsDeptDropdownOpen(false);
-      }
-    };
-    if (isDeptDropdownOpen) {
-      document.addEventListener('mousedown', handleOutsideClick);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
-  }, [isDeptDropdownOpen]);
   const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('oui');
 
   // Défibrillateurs avec Maintenance Autorisée = Oui ("Avec.Main") pour l'affichage Plan
@@ -3076,12 +3060,23 @@ export default function DefibTab({
               {t("Pro.Main au plus proche")}
             </button>
 
-            {/* Filter: Indicatif postal court */}
-            <div className="relative inline-block" ref={deptDropdownRef}>
-              <button
-                type="button"
-                id="filter-postal-court-btn"
-                onClick={() => setIsDeptDropdownOpen(prev => !prev)}
+            {/* Filter: Indicatif postal court (System Dropdown without arrow-down icon) */}
+            <div className="relative inline-block">
+              <style>{`
+                #filter-postal-court-select {
+                  appearance: none !important;
+                  -webkit-appearance: none !important;
+                  -moz-appearance: none !important;
+                  background-image: none !important;
+                }
+                #filter-postal-court-select::-ms-expand {
+                  display: none !important;
+                }
+              `}</style>
+              <select
+                id="filter-postal-court-select"
+                value={selectedDepartment || ''}
+                onChange={(e) => setSelectedDepartment(e.target.value || null)}
                 style={{
                   borderRadius: '1000px',
                   padding: '8px 16px',
@@ -3093,79 +3088,30 @@ export default function DefibTab({
                   color: selectedDepartment ? '#ffffff' : '#000000',
                   border: selectedDepartment ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
                   boxShadow: 'none',
-                  transition: 'all 0.15s ease',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px'
+                  outline: 'none',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  backgroundImage: 'none',
+                  textAlign: 'center',
+                  transition: 'all 0.15s ease'
                 }}
                 className="transition-all select-none"
+                title={t("Indicatif postal court")}
               >
-                <span>{selectedDepartment ? `${t("Indicatif postal court")} (${selectedDepartment})` : t("Indicatif postal court")}</span>
-                <span style={{ fontSize: '11px', transition: 'transform 0.15s ease', transform: isDeptDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
-              </button>
-
-              {isDeptDropdownOpen && (
-                <div
-                  className="absolute left-0 mt-2 bg-white rounded-xl shadow-xl z-50 p-2.5 font-sans animate-fadeIn"
-                  style={{
-                    width: '320px',
-                    maxHeight: '340px',
-                    overflowY: 'auto',
-                    border: '1px solid rgb(218, 218, 218)',
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
-                  }}
-                >
-                  <div className="px-1.5 py-1 mb-2 border-b border-slate-100 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      {t("Départements")} ({FRENCH_DEPARTMENTS.length})
-                    </span>
-                    {selectedDepartment && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedDepartment(null);
-                          setIsDeptDropdownOpen(false);
-                        }}
-                        className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
-                      >
-                        {t("Effacer")}
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-5 gap-1.5 pt-0.5">
-                    {FRENCH_DEPARTMENTS.map((dept) => {
-                      const isSelected = selectedDepartment === dept;
-                      return (
-                        <button
-                          key={dept}
-                          type="button"
-                          onClick={() => {
-                            setSelectedDepartment(isSelected ? null : dept);
-                            setIsDeptDropdownOpen(false);
-                          }}
-                          style={{
-                            backgroundColor: isSelected ? '#fe4eba' : '#f8fafc',
-                            color: isSelected ? '#ffffff' : '#000000',
-                            border: isSelected ? '1px solid #fe4eba' : '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            padding: '6px 2px',
-                            fontSize: '15px',
-                            fontWeight: isSelected ? 600 : 400,
-                            cursor: 'pointer',
-                            textAlign: 'center',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            transition: 'all 0.1s ease'
-                          }}
-                          className="hover:border-[#fe4eba] hover:scale-105 active:scale-95 transition-all"
-                        >
-                          {dept}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                <option value="" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
+                  {t("Indicatif postal court")}
+                </option>
+                {FRENCH_DEPARTMENTS.map((dept) => (
+                  <option
+                    key={dept}
+                    value={dept}
+                    style={{ backgroundColor: '#ffffff', color: '#000000' }}
+                  >
+                    {selectedDepartment === dept ? `${t("Indicatif postal court")} (${dept})` : dept}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

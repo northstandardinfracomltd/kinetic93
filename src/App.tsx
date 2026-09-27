@@ -837,6 +837,15 @@ export default function App() {
 
   const [fsmClientFilter, setFsmClientFilter] = useState<string>('Tous');
   const [fsmRejectedOrRefusedFilter, setFsmRejectedOrRefusedFilter] = useState<boolean>(false);
+  const [fsmLastSelectedTourId, setFsmLastSelectedTourId] = useState<string>('');
+  const [fsmOnlyMyZoneFilter, setFsmOnlyMyZoneFilter] = useState<boolean>(() => {
+    try {
+      const curTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      return localStorage.getItem(`defib_${curTenant}_fsm_only_my_zone`) === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [isFsmFilterSidePaneOpen, setIsFsmFilterSidePaneOpen] = useState<boolean>(false);
 
   // Bulk selection of missions
@@ -7692,7 +7701,24 @@ export default function App() {
               return dateStr;
             };
 
-            const scheduledTours = fsmTours.filter((t: any) => t.id !== 'a-trier' && t.startDate && t.startDate !== 'A trier');
+            const currentUserZoneRegions: string[] = (() => {
+              if (!teamWorkGroups || teamWorkGroups.length === 0) return [];
+              const uName = (currentLoggedInMember?.name || loggedUser?.name || '').trim().toLowerCase();
+              const uEmail = (currentLoggedInMember?.email || loggedUser?.email || '').trim().toLowerCase();
+              if (!uName && !uEmail) return [];
+              const userGroups = teamWorkGroups.filter(g => {
+                const inPlanners = (g.planners || []).some(p => p.trim().toLowerCase() === uName);
+                const inTechs = (g.technicians || []).some(t => t.trim().toLowerCase() === uName);
+                return inPlanners || inTechs;
+              });
+              return Array.from(new Set(userGroups.flatMap(g => g.regions || []).filter(Boolean)));
+            })();
+
+            const baseScheduledTours = fsmTours.filter((t: any) => t.id !== 'a-trier' && t.startDate && t.startDate !== 'A trier');
+            const scheduledTours = (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0)
+              ? baseScheduledTours.filter((t: any) => t.region && currentUserZoneRegions.includes(t.region))
+              : baseScheduledTours;
+
             scheduledTours.sort((a: any, b: any) => {
               const dateA = a.startDate || '';
               const dateB = b.startDate || '';
@@ -7726,7 +7752,7 @@ export default function App() {
             }
 
             // Déterminer la tournée active : auto-sélection de la plus proche en date si 'Tous', ou 'A trier' si aucune tournée
-            const defaultTourId = closestTour ? closestTour.id : 'A trier';
+            const defaultTourId = closestTour ? closestTour.id : (scheduledTours[0] ? scheduledTours[0].id : 'A trier');
             const activeDateFilter = fsmDateFilter === 'Tous' ? defaultTourId : fsmDateFilter;
 
             const getTourDisplayLabel = (tour: any): string => {
@@ -7750,7 +7776,10 @@ export default function App() {
               return label;
             };
 
-            const displayedTour = scheduledTours.find((t: any) => t.id === activeDateFilter) || closestTour || scheduledTours[0];
+            const selectedTourIdToDisplay = activeDateFilter === 'A trier'
+              ? (fsmLastSelectedTourId || (scheduledTours[0] ? scheduledTours[0].id : defaultTourId))
+              : activeDateFilter;
+            const displayedTour = scheduledTours.find((t: any) => t.id === selectedTourIdToDisplay) || closestTour || scheduledTours[0];
 
             const filteredTours = fsmTours.filter((tour) => {
               if (activeDateFilter !== 'Tous') {
@@ -7763,6 +7792,15 @@ export default function App() {
                   const matchesId = tour.id === activeDateFilter;
                   const isDateOnlyFallback = !fsmTours.some((x: any) => x.id === activeDateFilter) && tour.startDate === activeDateFilter;
                   if (!matchesId && !isDateOnlyFallback) {
+                    return false;
+                  }
+                }
+              }
+
+              // Filter: Afficher uniquement donnée de ma zone
+              if (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0) {
+                if (tour.id !== 'a-trier') {
+                  if (!tour.region || !currentUserZoneRegions.includes(tour.region)) {
                     return false;
                   }
                 }
@@ -8058,7 +8096,7 @@ export default function App() {
                           className="hover:bg-neutral-800 transition-colors"
                         >
                           Filtres
-                          {(fsmRegionFilter !== 'Tous' || fsmTechFilter !== 'Tous' || fsmPlannerFilter !== 'Tous' || fsmClientFilter !== 'Tous' || fsmRejectedOrRefusedFilter) && (
+                          {(fsmRegionFilter !== 'Tous' || fsmTechFilter !== 'Tous' || fsmPlannerFilter !== 'Tous' || fsmClientFilter !== 'Tous' || fsmRejectedOrRefusedFilter || (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0)) && (
                             <span
                               className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#fe4eba]"
                               title="Filtres actifs"
@@ -8116,7 +8154,7 @@ export default function App() {
                       </div>
                       
                       <div className="flex flex-wrap items-center gap-2">
-                        {/* Placer ADV/À trier */}
+                        {/* Placer: À trier / Ordres ADV */}
                         <button
                           type="button"
                           onClick={bulkMoveFsmMissionsToATrier}
@@ -8134,7 +8172,7 @@ export default function App() {
                           }}
                           className="hover:opacity-90 transition-opacity"
                         >
-                          Placer ADV/À trier
+                          Placer: À trier / Ordres ADV
                         </button>
                         
                         {/* Attribuer à une tournée */}
@@ -8488,8 +8526,53 @@ export default function App() {
                           </label>
                         </div>
 
+                        {/* Filter: Afficher uniquement donnée de ma zone (Apple-like toggle) */}
+                        <div className="pt-2">
+                          <label 
+                            className={`flex items-center justify-between select-none ${
+                              teamWorkGroups.length > 0 ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                            }`}
+                            title={teamWorkGroups.length === 0 ? "Aucune zone/groupe créée dans les Réglages de l'équipe" : undefined}
+                          >
+                            <div className="flex flex-col pr-2">
+                              <span className="text-[16px] text-black font-sans font-semibold">
+                                Afficher uniquement donnée de ma zone
+                              </span>
+                              {teamWorkGroups.length === 0 && (
+                                <span className="text-[12px] text-neutral-400">
+                                  Désactivé (aucune zone configurée)
+                                </span>
+                              )}
+                            </div>
+                            <div
+                              onClick={() => {
+                                if (teamWorkGroups.length === 0) return;
+                                const nextVal = !fsmOnlyMyZoneFilter;
+                                setFsmOnlyMyZoneFilter(nextVal);
+                                try {
+                                  const curTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+                                  localStorage.setItem(`defib_${curTenant}_fsm_only_my_zone`, String(nextVal));
+                                } catch (_) {}
+                              }}
+                              className={`w-12 h-7 flex items-center rounded-full p-1 transition-colors duration-200 ease-in-out shrink-0 ${
+                                teamWorkGroups.length === 0
+                                  ? 'bg-neutral-200 cursor-not-allowed'
+                                  : fsmOnlyMyZoneFilter
+                                  ? 'bg-[#34c759] cursor-pointer'
+                                  : 'bg-neutral-300 cursor-pointer'
+                              }`}
+                            >
+                              <div
+                                className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                                  fsmOnlyMyZoneFilter && teamWorkGroups.length > 0 ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </div>
+                          </label>
+                        </div>
+
                         {/* Reset button if any filter is active */}
-                        {(fsmRegionFilter !== 'Tous' || fsmTechFilter !== 'Tous' || fsmPlannerFilter !== 'Tous' || fsmClientFilter !== 'Tous' || fsmRejectedOrRefusedFilter) && (
+                        {(fsmRegionFilter !== 'Tous' || fsmTechFilter !== 'Tous' || fsmPlannerFilter !== 'Tous' || fsmClientFilter !== 'Tous' || fsmRejectedOrRefusedFilter || (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0)) && (
                           <div className="pt-4">
                             <button
                               type="button"
@@ -8499,6 +8582,11 @@ export default function App() {
                                 setFsmPlannerFilter('Tous');
                                 setFsmClientFilter('Tous');
                                 setFsmRejectedOrRefusedFilter(false);
+                                setFsmOnlyMyZoneFilter(false);
+                                try {
+                                  const curTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+                                  localStorage.removeItem(`defib_${curTenant}_fsm_only_my_zone`);
+                                } catch (_) {}
                               }}
                               className="w-full text-center py-2 text-sm text-neutral-500 hover:text-black cursor-pointer font-sans underline"
                             >
@@ -9102,7 +9190,18 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => {
-                          setFsmDateFilter('A trier');
+                          if (activeDateFilter === 'A trier') {
+                            // Déclic : revenir sur la tournée sélectionnée
+                            const returnTourId = fsmLastSelectedTourId || (displayedTour ? displayedTour.id : (scheduledTours[0] ? scheduledTours[0].id : 'Tous'));
+                            setFsmDateFilter(returnTourId);
+                          } else {
+                            if (activeDateFilter && activeDateFilter !== 'A trier' && activeDateFilter !== 'Tous') {
+                              setFsmLastSelectedTourId(activeDateFilter);
+                            } else if (displayedTour?.id) {
+                              setFsmLastSelectedTourId(displayedTour.id);
+                            }
+                            setFsmDateFilter('A trier');
+                          }
                         }}
                         style={{
                           borderRadius: '1000px',
@@ -9134,9 +9233,10 @@ export default function App() {
                           </label>
                           <select
                             id="select-fsm-tour-manage"
-                            value={activeDateFilter === 'A trier' ? '' : activeDateFilter}
+                            value={activeDateFilter === 'A trier' ? (fsmLastSelectedTourId || displayedTour.id) : activeDateFilter}
                             onChange={(e) => {
                               if (e.target.value) {
+                                setFsmLastSelectedTourId(e.target.value);
                                 setFsmDateFilter(e.target.value);
                               }
                             }}
@@ -9146,8 +9246,8 @@ export default function App() {
                               WebkitAppearance: 'none',
                               MozAppearance: 'none',
                               border: '1px solid rgb(218, 218, 218)',
-                              borderRadius: '13px',
-                              padding: '10px 16px',
+                              borderRadius: '1000px',
+                              padding: '10px 20px',
                               fontSize: '15px',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                               backgroundColor: '#ffffff',
@@ -9157,11 +9257,6 @@ export default function App() {
                             }}
                             className="w-full truncate focus:outline-none"
                           >
-                            {activeDateFilter === 'A trier' && (
-                              <option value="" disabled hidden>
-                                {getTourDisplayLabel(displayedTour)}
-                              </option>
-                            )}
                             {scheduledTours.map((st: any) => (
                               <option key={st.id} value={st.id}>
                                 {getTourDisplayLabel(st)}
@@ -10288,7 +10383,7 @@ export default function App() {
                       return (
                         <div key={t.id} className="bg-white relative space-y-6 animate-fadeIn" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px', maxWidth: '98%', margin: '24px auto', backgroundColor: '#ffffff', overflow: 'hidden' }}>
                           {/* THE INTERCALAIRE TOUR HEADER */}
-                          <div className="bg-white px-5 py-5 flex flex-col gap-4 font-sans" style={{ borderBottom: '1px solid rgb(218, 218, 218)', borderRadius: '17px 17px 0px 0px', backgroundColor: '#ffffff' }}>
+                          <div className="bg-white px-5 pt-5 pb-2.5 flex flex-col gap-3 font-sans" style={{ borderBottom: 'none', borderRadius: '17px 17px 0px 0px', backgroundColor: '#ffffff' }}>
                             {/* Row 1: Titre de la tournée + Action Buttons */}
                             <div className="flex flex-col md:flex-row md:items-end gap-3 w-full">
                               <div className="flex-1">
@@ -10597,11 +10692,29 @@ export default function App() {
                               >
                                 <option value="">Sélectionnez un technicien.</option>
                                 {(() => {
-                                  const techOptions = members
+                                  let techOptions = members
                                     .filter(m => isTechnicianMember(m))
                                     .map(m => m.name);
 
-                                  const uniqueTechOptions = Array.from(new Set<string>(techOptions)).filter((name: string) => name && name.trim() !== '');
+                                  // Uniquement à partir du moment où on a au moins 1 groupe de créé
+                                  if (teamWorkGroups && teamWorkGroups.length > 0) {
+                                    const currentRegion = (tourRegion || '').trim();
+                                    if (currentRegion) {
+                                      // Proposer uniquement les techniciens disponibles dans cette région selon les groupes
+                                      const matchingGroups = teamWorkGroups.filter(g =>
+                                        (g.regions || []).some(r => r.trim().toLowerCase() === currentRegion.toLowerCase())
+                                      );
+                                      const availableTechsForRegion = matchingGroups.flatMap(g => g.technicians || []);
+                                      techOptions = techOptions.filter(tName =>
+                                        availableTechsForRegion.some(at => at.trim().toLowerCase() === tName.trim().toLowerCase())
+                                      );
+                                    }
+                                  }
+
+                                  const uniqueTechOptions = Array.from(new Set<string>([
+                                    ...techOptions,
+                                    ...(tourTechName ? [tourTechName] : [])
+                                  ])).filter((name: string) => name && name.trim() !== '');
 
                                   return uniqueTechOptions.map((name: string) => (
                                     <option key={name} value={name}>
@@ -10936,7 +11049,7 @@ export default function App() {
 
                           return (
                             <div 
-                              className="px-5 py-3.5 flex flex-col gap-3 select-none"
+                              className="px-5 pt-0 pb-3 flex flex-col gap-2.5 select-none"
                               style={{ 
                                 borderBottom: '1px solid rgb(218, 218, 218)',
                                 backgroundColor: '#ffffff'

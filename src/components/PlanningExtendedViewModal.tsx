@@ -239,6 +239,11 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
   };
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setScrollLeft(e.currentTarget.scrollLeft);
+  };
 
   // Mouse drag-to-scroll support for horizontal panning
   const isDraggingRef = useRef(false);
@@ -266,6 +271,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     const x = e.pageX - container.offsetLeft;
     const walk = x - startXRef.current;
     container.scrollLeft = scrollLeftRef.current - walk;
+    setScrollLeft(container.scrollLeft);
   };
 
   const handleMouseUpOrLeave = () => {
@@ -285,10 +291,12 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       if (container && todayEl) {
         const cursorOffset = todayEl.offsetLeft + (todayEl.offsetWidth * (todayCursorPercent / 100));
         const targetScrollLeft = cursorOffset - (container.clientWidth / 2);
+        const finalLeft = Math.max(0, targetScrollLeft);
         container.scrollTo({
-          left: Math.max(0, targetScrollLeft),
+          left: finalLeft,
           behavior: smooth ? "smooth" : "auto"
         });
+        setScrollLeft(finalLeft);
       }
     }, 60);
   }, [todayCursorPercent]);
@@ -563,22 +571,6 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     });
   }, [techniciansList, localTours, localEvents, currentYear, currentMonth]);
 
-  // Keep technician intercalaire label sticky on horizontal scroll
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const updateStickyLabels = () => {
-      const sl = container.scrollLeft;
-      const labels = container.querySelectorAll<HTMLElement>('.tech-intercalaire-label');
-      labels.forEach((label) => {
-        label.style.transform = `translateX(${sl}px)`;
-      });
-    };
-    container.addEventListener('scroll', updateStickyLabels, { passive: true });
-    updateStickyLabels();
-    return () => container.removeEventListener('scroll', updateStickyLabels);
-  }, [techniciansData, currentMonth, currentYear, isOpen]);
-
   if (!isOpen) return null;
 
   return (
@@ -737,6 +729,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       {/* Main Matrix Gantt Container */}
       <div 
         ref={scrollContainerRef} 
+        onScroll={handleScroll}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUpOrLeave}
@@ -745,7 +738,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       >
         <div className="inline-block min-w-full align-top">
           {/* Timeline Table Grid */}
-          <table className="border-collapse text-left" style={{ minWidth: `${daysInMonth.length * 200}px`, width: '100%' }}>
+          <table className="border-separate border-spacing-0 text-left" style={{ minWidth: `${daysInMonth.length * 200}px`, width: '100%' }}>
             {/* Header: Weeks and Days (No left header column, day columns take full width) */}
             <thead className="sticky top-0 z-30 bg-white shadow-xs">
               {/* Row 1: Weeks */}
@@ -809,20 +802,19 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                 return (
                   <React.Fragment key={`tech-row-group-${tech.name}-${techIdx}`}>
                     {/* TECHNICIAN HORIZONTAL INTERCALAIRE ROW */}
-                    <tr className="bg-neutral-100/90 border-t-2 border-b border-neutral-300">
+                    <tr className="bg-neutral-100 border-t-2 border-b border-neutral-300">
                       <td
                         colSpan={daysInMonth.length}
-                        className="p-0 font-bold text-sm text-neutral-900 bg-neutral-100 select-none shadow-2xs overflow-visible"
+                        className="p-0 font-bold text-sm text-neutral-900 bg-neutral-100 select-none overflow-hidden"
                         style={{ backgroundColor: '#f5f5f5' }}
                       >
                         <div 
                           className="tech-intercalaire-label inline-flex items-center z-20"
                           style={{
-                            position: 'sticky',
-                            left: 0,
+                            transform: `translateX(${scrollLeft}px)`,
+                            willChange: 'transform',
                             padding: '8px 16px',
                             backgroundColor: '#f5f5f5',
-                            willChange: 'transform',
                             width: 'max-content'
                           }}
                         >
