@@ -100,25 +100,21 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   // Fit View / Unzoom feature like DefibTab
   const [isTableFitView, setIsTableFitView] = useState<boolean>(false);
   const [tableFitScale, setTableFitScale] = useState<number>(1);
-  const naturalTableWidthRef = useRef<number>(1400);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+
+  const getTargetTableWidth = (cat: string) => {
+    return cat === 'Commercial' ? 2200 : 1350;
+  };
 
   const toggleTableFitView = () => {
     setIsTableFitView(prev => {
       const next = !prev;
       if (next) {
         if (bottomScrollRef.current) {
-          const sWidth = bottomScrollRef.current.scrollWidth;
-          if (sWidth > 500) {
-            naturalTableWidthRef.current = sWidth;
-          }
           const clientW = bottomScrollRef.current.clientWidth;
-          const defaultW = ticketCategoryFilter === 'Commercial' ? 1650 : 1150;
-          const naturalW = (bottomScrollRef.current && bottomScrollRef.current.scrollWidth > 500)
-            ? bottomScrollRef.current.scrollWidth
-            : defaultW;
-          const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
+          const naturalW = getTargetTableWidth(ticketCategoryFilter);
+          const scale = Math.min(1, Math.max(0.1, (clientW - 6) / naturalW));
           setTableFitScale(scale);
         }
       } else {
@@ -134,22 +130,15 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       if (!bottomScrollRef.current) return;
       const clientW = bottomScrollRef.current.clientWidth;
       if (!isTableFitView) {
-        const sWidth = bottomScrollRef.current.scrollWidth;
-        if (sWidth > 500) {
-          naturalTableWidthRef.current = sWidth;
-        }
         setTableFitScale(1);
       } else {
-        const defaultW = ticketCategoryFilter === 'Commercial' ? 1650 : 1150;
-        const naturalW = (bottomScrollRef.current && bottomScrollRef.current.scrollWidth > 500)
-          ? bottomScrollRef.current.scrollWidth
-          : (naturalTableWidthRef.current || defaultW);
-        const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
+        const naturalW = getTargetTableWidth(ticketCategoryFilter);
+        const scale = Math.min(1, Math.max(0.1, (clientW - 6) / naturalW));
         setTableFitScale(scale);
       }
     };
 
-    const timer = setTimeout(updateWidth, 100);
+    const timer = setTimeout(updateWidth, 50);
     const observer = new ResizeObserver(updateWidth);
     observer.observe(bottomScrollRef.current);
     window.addEventListener('resize', updateWidth);
@@ -160,6 +149,25 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       window.removeEventListener('resize', updateWidth);
     };
   }, [isTableFitView, tickets, ticketCategoryFilter]);
+
+  // CRM Filtres Side-pane state
+  const [isFilterPaneOpen, setIsFilterPaneOpen] = useState(false);
+  const [filterCollaborateur, setFilterCollaborateur] = useState<string>('Tous');
+  const [filterCriticite, setFilterCriticite] = useState<string>('Tous');
+  const [filterSemaine, setFilterSemaine] = useState<string>('Tous');
+  const [filterSituationDevis, setFilterSituationDevis] = useState<string>('Tous');
+
+  const [draftFilterCollaborateur, setDraftFilterCollaborateur] = useState<string>('Tous');
+  const [draftFilterCriticite, setDraftFilterCriticite] = useState<string>('Tous');
+  const [draftFilterSemaine, setDraftFilterSemaine] = useState<string>('Tous');
+  const [draftFilterSituationDevis, setDraftFilterSituationDevis] = useState<string>('Tous');
+
+  const activeFiltersCount = (
+    (filterCollaborateur !== 'Tous' ? 1 : 0) +
+    (filterCriticite !== 'Tous' ? 1 : 0) +
+    (filterSemaine !== 'Tous' ? 1 : 0) +
+    (filterSituationDevis !== 'Tous' ? 1 : 0)
+  );
 
   // Side-pane drawer state
   const [isPaneOpen, setIsPaneOpen] = useState(false);
@@ -206,8 +214,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     return local || '';
   });
 
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-  const [settingsSavedToast, setSettingsSavedToast] = useState(false);
+  const [isSavingRelance, setIsSavingRelance] = useState(false);
+  const [isSavingSupport, setIsSavingSupport] = useState(false);
+  const [relanceEmailError, setRelanceEmailError] = useState('');
+  const [supportEmailError, setSupportEmailError] = useState('');
+
+  const isValidEmailAddress = (email: string) => {
+    const trimmed = email.trim();
+    if (!trimmed) return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+  };
 
   // Load CRM settings from Firebase
   useEffect(() => {
@@ -249,11 +265,40 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     }
   }, [activeTenant]);
 
-  const handleSaveCrmSettings = async () => {
-    setIsSavingSettings(true);
+  const handleSaveRelanceSettings = async () => {
+    if (relanceEmailReplyTo.trim() && !isValidEmailAddress(relanceEmailReplyTo)) {
+      setRelanceEmailError('Veuillez renseigner une adresse email valide (avec un @ et un nom de domaine).');
+      return;
+    }
+    setRelanceEmailError('');
+    setIsSavingRelance(true);
     try {
       localStorage.setItem(`defib_${activeTenant}_crm_relance_template`, relanceEmailBody);
       localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto`, relanceEmailReplyTo);
+      if (activeTenant) {
+        await saveCollectionToFirestore('crm_settings', {
+          relanceEmailBody,
+          relanceEmailReplyTo,
+          supportEmailSubject,
+          supportEmailBody,
+          supportEmailReplyTo
+        }, activeTenant);
+      }
+    } catch (err) {
+      console.error('Erreur enregistrement réglages CRM relance:', err);
+    } finally {
+      setIsSavingRelance(false);
+    }
+  };
+
+  const handleSaveSupportSettings = async () => {
+    if (supportEmailReplyTo.trim() && !isValidEmailAddress(supportEmailReplyTo)) {
+      setSupportEmailError('Veuillez renseigner une adresse email valide (avec un @ et un nom de domaine).');
+      return;
+    }
+    setSupportEmailError('');
+    setIsSavingSupport(true);
+    try {
       localStorage.setItem(`defib_${activeTenant}_crm_support_subject`, supportEmailSubject);
       localStorage.setItem(`defib_${activeTenant}_crm_support_template`, supportEmailBody);
       localStorage.setItem(`defib_${activeTenant}_crm_support_replyto`, supportEmailReplyTo);
@@ -266,12 +311,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           supportEmailReplyTo
         }, activeTenant);
       }
-      setSettingsSavedToast(true);
-      setTimeout(() => setSettingsSavedToast(false), 2500);
     } catch (err) {
-      console.error('Erreur enregistrement réglages CRM:', err);
+      console.error('Erreur enregistrement réglages CRM support:', err);
     } finally {
-      setIsSavingSettings(false);
+      setIsSavingSupport(false);
     }
   };
 
@@ -996,18 +1039,57 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
     // 3. Search query
     const q = ticketSearch.toLowerCase().trim();
-    if (!q) return matchesCat && matchesSit;
+    if (q) {
+      const ref = (t.reference || t.id || '').toLowerCase();
+      const obj = (t.objet || '').toLowerCase();
+      const cli = (t.client || t.customClientName || '').toLowerCase();
+      const eml = (t.email || '').toLowerCase();
+      const col = (t.collaborateur || '').toLowerCase();
+      const desc = (t.description || t.message || '').toLowerCase();
+      const refDev = (t.referenceDevis || '').toLowerCase();
 
-    const ref = (t.reference || t.id || '').toLowerCase();
-    const obj = (t.objet || '').toLowerCase();
-    const cli = (t.client || t.customClientName || '').toLowerCase();
-    const eml = (t.email || '').toLowerCase();
-    const col = (t.collaborateur || '').toLowerCase();
-    const desc = (t.description || t.message || '').toLowerCase();
-    const refDev = (t.referenceDevis || '').toLowerCase();
+      const matchesQuery = ref.includes(q) || obj.includes(q) || cli.includes(q) || eml.includes(q) || col.includes(q) || cat.toLowerCase().includes(q) || desc.includes(q) || refDev.includes(q);
+      if (!matchesQuery) return false;
+    }
 
-    const matchesQuery = ref.includes(q) || obj.includes(q) || cli.includes(q) || eml.includes(q) || col.includes(q) || cat.toLowerCase().includes(q) || desc.includes(q) || refDev.includes(q);
-    return matchesCat && matchesSit && matchesQuery;
+    // 4. Side-pane filter: Collaborateur
+    if (filterCollaborateur !== 'Tous') {
+      if (filterCollaborateur === 'Non attribué(s)') {
+        const c = (t.collaborateur || '').trim();
+        if (c && c !== 'Non attribué') return false;
+      } else {
+        if (t.collaborateur !== filterCollaborateur) return false;
+      }
+    }
+
+    // 5. Side-pane filter: Criticité
+    if (filterCriticite !== 'Tous') {
+      if (filterCriticite === 'Non renseigné') {
+        const crit = (t.criticite || '').trim();
+        if (crit && crit !== 'Non renseigné') return false;
+      } else {
+        if (t.criticite !== filterCriticite) return false;
+      }
+    }
+
+    // 6. Side-pane filter: Semaine
+    if (filterSemaine !== 'Tous') {
+      const rawOuvVal = t.dateOuverture || t.ouverture || t.createdAt;
+      const weekNum = getWeekNumberString(rawOuvVal);
+      if (weekNum !== filterSemaine) return false;
+    }
+
+    // 7. Side-pane filter: Situation Devis
+    if (filterSituationDevis !== 'Tous') {
+      if (filterSituationDevis === 'Non renseigné') {
+        const sitDev = (t.situationDevis || '').trim();
+        if (sitDev && sitDev !== 'Non renseigné') return false;
+      } else {
+        if (t.situationDevis !== filterSituationDevis) return false;
+      }
+    }
+
+    return matchesCat && matchesSit;
   });
 
   // Category counts
@@ -1514,6 +1596,50 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               Réglages
             </button>
 
+            {/* Filtres Button (à gauche de Nouveau avec badge de comptage si actif) */}
+            <button
+              type="button"
+              onClick={() => {
+                setDraftFilterCollaborateur(filterCollaborateur);
+                setDraftFilterCriticite(filterCriticite);
+                setDraftFilterSemaine(filterSemaine);
+                setDraftFilterSituationDevis(filterSituationDevis);
+                setIsFilterPaneOpen(true);
+              }}
+              id="btn-crm-filters"
+              style={{
+                ...blackButtonStyle,
+                position: 'relative',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              className="hover:bg-zinc-800 transition-colors"
+            >
+              <span>Filtres</span>
+              {activeFiltersCount > 0 && (
+                <span
+                  style={{
+                    minWidth: '22px',
+                    height: '22px',
+                    borderRadius: '9999px',
+                    backgroundColor: '#fe4eba',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 6px',
+                    lineHeight: 1
+                  }}
+                  title={`${activeFiltersCount} filtre(s) actif(s)`}
+                >
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+
             {/* Nouveau Button (renamed from Nouveau Ticket) */}
             <button
               type="button"
@@ -1542,7 +1668,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 style={{
                   borderRadius: '1000px',
                   padding: '7px 16px',
-                  fontSize: '15px',
+                  fontSize: '18px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -1574,7 +1700,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 style={{
                   borderRadius: '1000px',
                   padding: '7px 16px',
-                  fontSize: '15px',
+                  fontSize: '18px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -1744,11 +1870,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 borderBottom: '1px solid rgb(218, 218, 218)',
                 ...(isTableFitView ? {
                   zoom: tableFitScale,
-                  width: `${naturalTableWidthRef.current || 1400}px`,
-                  minWidth: `${naturalTableWidthRef.current || 1400}px`,
+                  width: `${getTargetTableWidth(ticketCategoryFilter)}px`,
+                  minWidth: `${getTargetTableWidth(ticketCategoryFilter)}px`,
+                  maxWidth: `${getTargetTableWidth(ticketCategoryFilter)}px`,
+                  tableLayout: 'auto',
                   transition: 'zoom 0.15s ease'
                 } : {
-                  width: '100%'
+                  width: '100%',
+                  minWidth: '100%'
                 })
               }}
             >
@@ -2991,6 +3120,224 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         </div>
       )}
 
+      {/* CRM FILTRES SIDE PANE DRAWER */}
+      {isFilterPaneOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden" id="crm-filters-drawer-modal">
+          {/* Overlay backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity cursor-pointer"
+            onClick={() => setIsFilterPaneOpen(false)}
+          />
+
+          {/* Drawer container */}
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
+            <div className="relative w-screen max-w-md bg-white shadow-2xl flex flex-col overflow-hidden h-full">
+              {/* Scrollable content area without title header or divider */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28 font-sans">
+                {/* 1. Sélection du collaborateur */}
+                <div>
+                  <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                    Sélection du collaborateur.
+                  </label>
+                  <select
+                    value={draftFilterCollaborateur}
+                    onChange={(e) => setDraftFilterCollaborateur(e.target.value)}
+                    style={{
+                      width: '100%',
+                      border: '1px solid #dedede',
+                      borderRadius: '13px',
+                      padding: '10px 14px',
+                      fontSize: '16px',
+                      color: '#000000',
+                      backgroundColor: '#ffffff',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="Tous">Tous</option>
+                    <option value="Non attribué(s)">Non attribué(s)</option>
+                    {members.map((m) => (
+                      <option key={m.id || m.name} value={m.name}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. Sélection de la criticité */}
+                <div>
+                  <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                    Sélection de la criticité.
+                  </label>
+                  <select
+                    value={draftFilterCriticite}
+                    onChange={(e) => setDraftFilterCriticite(e.target.value)}
+                    style={{
+                      width: '100%',
+                      border: '1px solid #dedede',
+                      borderRadius: '13px',
+                      padding: '10px 14px',
+                      fontSize: '16px',
+                      color: '#000000',
+                      backgroundColor: '#ffffff',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="Tous">Toutes</option>
+                    <option value="Urgent">Urgent</option>
+                    <option value="Semaine prochaine">Semaine prochaine</option>
+                    <option value="Ce mois">Ce mois</option>
+                    <option value="Mois prochain">Mois prochain</option>
+                    <option value="Non renseigné">Non renseigné</option>
+                  </select>
+                </div>
+
+                {/* 3. Sélection de la semaine */}
+                <div>
+                  <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                    Sélection de la semaine.
+                  </label>
+                  <select
+                    value={draftFilterSemaine}
+                    onChange={(e) => setDraftFilterSemaine(e.target.value)}
+                    style={{
+                      width: '100%',
+                      border: '1px solid #dedede',
+                      borderRadius: '13px',
+                      padding: '10px 14px',
+                      fontSize: '16px',
+                      color: '#000000',
+                      backgroundColor: '#ffffff',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="Tous">Toutes les semaines</option>
+                    {Array.from({ length: 53 }, (_, i) => `S${i + 1}`).map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 4. Sélection situation du devis */}
+                <div>
+                  <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                    Sélection situation du devis.
+                  </label>
+                  <select
+                    value={draftFilterSituationDevis}
+                    onChange={(e) => setDraftFilterSituationDevis(e.target.value)}
+                    style={{
+                      width: '100%',
+                      border: '1px solid #dedede',
+                      borderRadius: '13px',
+                      padding: '10px 14px',
+                      fontSize: '16px',
+                      color: '#000000',
+                      backgroundColor: '#ffffff',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="Tous">Toutes</option>
+                    <option value="Gagné">Gagné</option>
+                    <option value="Perdu">Perdu</option>
+                    <option value="Non renseigné">Non renseigné</option>
+                  </select>
+                </div>
+
+                {/* Réinitialiser si au moins un filtre est actif */}
+                {(draftFilterCollaborateur !== 'Tous' || draftFilterCriticite !== 'Tous' || draftFilterSemaine !== 'Tous' || draftFilterSituationDevis !== 'Tous') && (
+                  <div className="pt-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraftFilterCollaborateur('Tous');
+                        setDraftFilterCriticite('Tous');
+                        setDraftFilterSemaine('Tous');
+                        setDraftFilterSituationDevis('Tous');
+                      }}
+                      className="text-sm text-neutral-500 hover:text-black cursor-pointer font-sans underline"
+                    >
+                      Réinitialiser les filtres
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Floating Bottom Appliquer (bleu) et Fermer (noir) sans fond derrière */}
+              <div 
+                style={{
+                  position: 'absolute',
+                  bottom: '24px',
+                  left: '24px',
+                  right: '24px',
+                  zIndex: 20,
+                  display: 'flex',
+                  gap: '12px'
+                }}
+              >
+                <button
+                  type="button"
+                  id="btn-apply-crm-filters"
+                  onClick={() => {
+                    setFilterCollaborateur(draftFilterCollaborateur);
+                    setFilterCriticite(draftFilterCriticite);
+                    setFilterSemaine(draftFilterSemaine);
+                    setFilterSituationDevis(draftFilterSituationDevis);
+                    setIsFilterPaneOpen(false);
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#3556ec',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    padding: '14px',
+                    fontSize: '18px',
+                    fontWeight: 'normal',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    boxShadow: '0 4px 14px rgba(53, 86, 236, 0.3)',
+                  }}
+                  className="hover:bg-[#2b48cc] transition-colors"
+                >
+                  Appliquer
+                </button>
+                <button
+                  type="button"
+                  id="btn-close-crm-filters"
+                  onClick={() => setIsFilterPaneOpen(false)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#000000',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    padding: '14px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+                  }}
+                  className="hover:bg-zinc-800 transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PERFORMANCE & STATS / EXPORT SIDE PANE DRAWER */}
       {isPerformancePaneOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden" id="crm-performance-drawer-modal">
@@ -3294,379 +3641,329 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
           {/* Drawer container */}
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
-            <div className="w-screen max-w-md sm:max-w-2xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto justify-between">
-              <div>
-                <div className="space-y-6">
-                  {/* Section 1: Modèle Texte de l'email de relance avec variables */}
-                  <div 
-                    className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
-                    id="crm-settings-section-relance-email"
-                  >
-                    <div>
-                      <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
-                        Texte de l’email de relance.
+            <div className="relative w-screen max-w-md sm:max-w-2xl bg-white shadow-2xl flex flex-col overflow-hidden h-full">
+              {/* Scrollable content area */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28">
+                {/* Section 1: Modèle Texte de l'email de relance avec variables */}
+                <div 
+                  className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
+                  id="crm-settings-section-relance-email"
+                >
+                  <div>
+                    <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '12px', display: 'block', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}>
+                      Texte de l’email de relance
+                    </label>
+
+                    {/* Champ Email de réponse. */}
+                    <div className="mb-3">
+                      <label style={{ fontSize: '15px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
+                        Email de réponse.
                       </label>
-                      <p className="text-xs text-slate-500 font-sans mb-3">
-                        Ce texte sera utilisé lors de l'envoi d'emails de relance aux devis ou tickets sélectionnés dans la table.
-                      </p>
-
-                      {/* Champ Email ReplyTo. */}
-                      <div className="mb-3">
-                        <label style={{ fontSize: '15px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
-                          Email ReplyTo.
-                        </label>
-                        <input
-                          type="email"
-                          value={relanceEmailReplyTo}
-                          onChange={(e) => setRelanceEmailReplyTo(e.target.value)}
-                          placeholder="Ex: commercial@votre-entreprise.com"
-                          style={{
-                            width: '100%',
-                            padding: '10px 14px',
-                            border: '1px solid #cbd5e0',
-                            borderRadius: '11px',
-                            fontSize: '15px',
-                            color: '#000000',
-                            boxSizing: 'border-box',
-                            outline: 'none',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                          }}
-                        />
-                      </div>
-
-                      {/* Liste des variables insérables */}
-                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 mb-3">
-                        <span className="font-semibold text-slate-800 block text-xs uppercase tracking-wider font-sans">
-                          Variables insérables :
-                        </span>
-                        <div className="flex flex-wrap gap-2 pt-1 font-mono text-xs">
-                          <button
-                            type="button"
-                            onClick={() => setRelanceEmailBody(prev => prev + '{Client.}')}
-                            className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:border-black transition-colors cursor-pointer text-slate-800"
-                            title="Insérer {Client.}"
-                          >
-                            Client.
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setRelanceEmailBody(prev => prev + '{Référence Devis.}')}
-                            className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:border-black transition-colors cursor-pointer text-slate-800"
-                            title="Insérer {Référence Devis.}"
-                          >
-                            Référence Devis.
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setRelanceEmailBody(prev => prev + '{Lien Stockage Partagé Devis.}')}
-                            className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:border-black transition-colors cursor-pointer text-slate-800"
-                            title="Insérer {Lien Stockage Partagé Devis.}"
-                          >
-                            Lien Stockage Partagé Devis.
-                          </button>
-                        </div>
-                        <p className="text-[11px] text-slate-500 font-sans mt-1">
-                          Cliquez sur un bouton pour ajouter la variable ou insérez-la manuellement dans le texte ci-dessous.
-                        </p>
-                      </div>
-
-                      {/* Multiline textarea */}
-                      <textarea
-                        id="crm-relance-email-textarea"
-                        rows={7}
-                        value={relanceEmailBody}
-                        onChange={(e) => setRelanceEmailBody(e.target.value)}
-                        placeholder="Écrivez le modèle d'email de relance..."
+                      <input
+                        type="email"
+                        value={relanceEmailReplyTo}
+                        onChange={(e) => {
+                          setRelanceEmailReplyTo(e.target.value);
+                          if (relanceEmailError) setRelanceEmailError('');
+                        }}
                         style={{
                           width: '100%',
-                          padding: '12px 16px',
-                          border: '1px solid #cbd5e0',
-                          borderRadius: '13px',
-                          fontSize: '16px',
+                          padding: '10px 14px',
+                          border: relanceEmailError ? '1px solid #ef4444' : '1px solid #cbd5e0',
+                          borderRadius: '11px',
+                          fontSize: '15px',
                           color: '#000000',
                           boxSizing: 'border-box',
                           outline: 'none',
-                          resize: 'vertical',
-                          lineHeight: '1.5',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                        }}
+                      />
+                      {relanceEmailError && (
+                        <p className="text-xs text-red-600 font-sans mt-1.5 font-medium">
+                          {relanceEmailError}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Texte ferré à gauche des variables dynamiques */}
+                    <p 
+                      style={{ fontSize: '16px', color: '#000000', textAlign: 'left', marginBottom: '12px' }}
+                      className="font-sans leading-relaxed"
+                    >
+                      Utilisez les variables suivantes pour des textes dynamiques : {'{Client.}'} ou {'{Référence Devis.}'} ou {'{Lien Stockage Partagé Devis.}'}
+                    </p>
+
+                    {/* Multiline textarea */}
+                    <textarea
+                      id="crm-relance-email-textarea"
+                      rows={7}
+                      value={relanceEmailBody}
+                      onChange={(e) => setRelanceEmailBody(e.target.value)}
+                      placeholder="Écrivez le modèle d'email de relance..."
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '1px solid #cbd5e0',
+                        borderRadius: '13px',
+                        fontSize: '16px',
+                        color: '#000000',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                        resize: 'vertical',
+                        lineHeight: '1.5',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveRelanceSettings}
+                    disabled={isSavingRelance}
+                    style={{
+                      backgroundColor: '#3556ec',
+                      color: '#ffffff',
+                      fontSize: '18px',
+                      fontWeight: 'normal',
+                      borderRadius: '12px',
+                      padding: '12px 24px',
+                      border: 'none',
+                      cursor: isSavingRelance ? 'not-allowed' : 'pointer',
+                      opacity: isSavingRelance ? 0.6 : 1,
+                      width: '100%',
+                      display: 'block',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      transition: 'opacity 0.2s',
+                    }}
+                    className={isSavingRelance ? '' : 'hover:bg-[#2b48cc] transition-colors'}
+                  >
+                    Enregistrer
+                  </button>
+                </div>
+
+                {/* Section 1-bis: Modèle Texte initial email de support avec options & champ Objet */}
+                <div 
+                  className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
+                  id="crm-settings-section-support-email"
+                >
+                  <div>
+                    <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '12px', display: 'block', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}>
+                      Texte initial email de support
+                    </label>
+
+                    {/* Champ Email de réponse. */}
+                    <div className="mb-3">
+                      <label style={{ fontSize: '15px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
+                        Email de réponse.
+                      </label>
+                      <input
+                        type="email"
+                        value={supportEmailReplyTo}
+                        onChange={(e) => {
+                          setSupportEmailReplyTo(e.target.value);
+                          if (supportEmailError) setSupportEmailError('');
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          border: supportEmailError ? '1px solid #ef4444' : '1px solid #cbd5e0',
+                          borderRadius: '11px',
+                          fontSize: '15px',
+                          color: '#000000',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                        }}
+                      />
+                      {supportEmailError && (
+                        <p className="text-xs text-red-600 font-sans mt-1.5 font-medium">
+                          {supportEmailError}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Champ Objet */}
+                    <div className="mb-3">
+                      <label style={{ fontSize: '15px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
+                        Objet.
+                      </label>
+                      <input
+                        type="text"
+                        value={supportEmailSubject}
+                        onChange={(e) => setSupportEmailSubject(e.target.value)}
+                        placeholder="Ex: Suivi de votre dossier {Référence.}"
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          border: '1px solid #cbd5e0',
+                          borderRadius: '11px',
+                          fontSize: '15px',
+                          color: '#000000',
+                          boxSizing: 'border-box',
+                          outline: 'none',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                         }}
                       />
                     </div>
 
+                    {/* Texte ferré à gauche des variables dynamiques */}
+                    <p 
+                      style={{ fontSize: '16px', color: '#000000', textAlign: 'left', marginBottom: '12px' }}
+                      className="font-sans leading-relaxed"
+                    >
+                      Utilisez les variables suivantes pour des textes dynamiques : {'{Client.}'} ou {'{Référence.}'} ou {'{Objet.}'} ou {'{Collaborateur.}'}
+                    </p>
+
+                    {/* Multiline textarea */}
+                    <textarea
+                      id="crm-support-email-textarea"
+                      rows={7}
+                      value={supportEmailBody}
+                      onChange={(e) => setSupportEmailBody(e.target.value)}
+                      placeholder="Écrivez le modèle d'email initial de support..."
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '1px solid #cbd5e0',
+                        borderRadius: '13px',
+                        fontSize: '16px',
+                        color: '#000000',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                        resize: 'vertical',
+                        lineHeight: '1.5',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveSupportSettings}
+                    disabled={isSavingSupport}
+                    style={{
+                      backgroundColor: '#3556ec',
+                      color: '#ffffff',
+                      fontSize: '18px',
+                      fontWeight: 'normal',
+                      borderRadius: '12px',
+                      padding: '12px 24px',
+                      border: 'none',
+                      cursor: isSavingSupport ? 'not-allowed' : 'pointer',
+                      opacity: isSavingSupport ? 0.6 : 1,
+                      width: '100%',
+                      display: 'block',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      transition: 'opacity 0.2s',
+                    }}
+                    className={isSavingSupport ? '' : 'hover:bg-[#2b48cc] transition-colors'}
+                  >
+                    Enregistrer
+                  </button>
+                </div>
+
+                {/* Section 2: Formulaire de contact pour site web */}
+                <div 
+                  className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
+                  id="crm-settings-section-embed-form"
+                >
+                  <p 
+                    className="text-black font-sans leading-relaxed"
+                    style={{ fontSize: '18px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                  >
+                    Générez un formulaire de contact professionnel à intégrer sur votre site internet. Tous les messages envoyés depuis ce formulaire remonteront dans votre onglet CRM et vous recevrez un email de notification.
+                  </p>
+
+                  <div className="space-y-3 mt-3">
+                    <textarea
+                      id="crm-embed-textarea"
+                      readOnly
+                      value={embedCode}
+                      style={{
+                        backgroundColor: '#3b1e62',
+                        color: '#ffffff',
+                        fontFamily: "'Civilprom', sans-serif",
+                        fontSize: '16px',
+                        padding: '20px',
+                        borderRadius: '13px',
+                        border: 'none',
+                        resize: 'none',
+                        height: '210px',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                        lineHeight: '1.5',
+                      }}
+                      className="select-all"
+                    />
                     <button
                       type="button"
-                      onClick={handleSaveCrmSettings}
-                      disabled={isSavingSettings}
+                      id="btn-copy-embed-code"
+                      onClick={() => {
+                        navigator.clipboard.writeText(embedCode);
+                        setCopiedEmbed(true);
+                        setTimeout(() => setCopiedEmbed(false), 2000);
+                      }}
                       style={{
-                        backgroundColor: '#3556ec',
+                        backgroundColor: '#000000',
                         color: '#ffffff',
                         fontSize: '18px',
                         fontWeight: 'normal',
                         borderRadius: '12px',
                         padding: '12px 24px',
                         border: 'none',
-                        cursor: isSavingSettings ? 'wait' : 'pointer',
+                        cursor: 'pointer',
                         width: '100%',
                         display: 'block',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                       }}
-                      className="hover:bg-[#2b48cc] transition-colors font-sans"
+                      className="hover:opacity-90 active:scale-[0.99] transition-all font-sans"
                     >
-                      {isSavingSettings ? 'Enregistrement dans la base...' : settingsSavedToast ? '✓ Réglages enregistrés !' : 'Enregistrer le texte de relance'}
+                      {copiedEmbed ? "Copié !" : "Copier le code"}
                     </button>
                   </div>
+                </div>
 
-                  {/* Section 1-bis: Modèle Texte initial email de support avec options & champ Objet */}
-                  <div 
-                    className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
-                    id="crm-settings-section-support-email"
+                {/* Section 3: Recommandations */}
+                <div 
+                  className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 text-left"
+                  id="crm-settings-section-recommendations"
+                >
+                  <p 
+                    className="text-black font-sans leading-relaxed"
+                    style={{ fontSize: '18px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                   >
-                    <div>
-                      <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
-                        Texte initial email de support.
-                      </label>
-                      <p className="text-xs text-slate-500 font-sans mb-3">
-                        Ce texte et son objet par défaut seront pré-remplis lors de l'envoi d'un nouveau message au client sur les tickets Technique, Réclamation ou Sans Catégorie.
-                      </p>
-
-                      {/* Champ Email ReplyTo. */}
-                      <div className="mb-3">
-                        <label style={{ fontSize: '15px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
-                          Email ReplyTo.
-                        </label>
-                        <input
-                          type="email"
-                          value={supportEmailReplyTo}
-                          onChange={(e) => setSupportEmailReplyTo(e.target.value)}
-                          placeholder="Ex: support@votre-entreprise.com"
-                          style={{
-                            width: '100%',
-                            padding: '10px 14px',
-                            border: '1px solid #cbd5e0',
-                            borderRadius: '11px',
-                            fontSize: '15px',
-                            color: '#000000',
-                            boxSizing: 'border-box',
-                            outline: 'none',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                          }}
-                        />
-                      </div>
-
-                      {/* Champ Objet */}
-                      <div className="mb-3">
-                        <label style={{ fontSize: '15px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
-                          Objet.
-                        </label>
-                        <input
-                          type="text"
-                          value={supportEmailSubject}
-                          onChange={(e) => setSupportEmailSubject(e.target.value)}
-                          placeholder="Ex: Suivi de votre dossier {Référence.}"
-                          style={{
-                            width: '100%',
-                            padding: '10px 14px',
-                            border: '1px solid #cbd5e0',
-                            borderRadius: '11px',
-                            fontSize: '15px',
-                            color: '#000000',
-                            boxSizing: 'border-box',
-                            outline: 'none',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                          }}
-                        />
-                      </div>
-
-                      {/* Liste des variables insérables */}
-                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 mb-3">
-                        <span className="font-semibold text-slate-800 block text-xs uppercase tracking-wider font-sans">
-                          Variables insérables :
-                        </span>
-                        <div className="flex flex-wrap gap-2 pt-1 font-mono text-xs">
-                          <button
-                            type="button"
-                            onClick={() => setSupportEmailBody(prev => prev + '{Client.}')}
-                            className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:border-black transition-colors cursor-pointer text-slate-800"
-                            title="Insérer {Client.}"
-                          >
-                            Client.
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setSupportEmailBody(prev => prev + '{Référence.}')}
-                            className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:border-black transition-colors cursor-pointer text-slate-800"
-                            title="Insérer {Référence.}"
-                          >
-                            Référence.
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setSupportEmailBody(prev => prev + '{Objet.}')}
-                            className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:border-black transition-colors cursor-pointer text-slate-800"
-                            title="Insérer {Objet.}"
-                          >
-                            Objet.
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setSupportEmailBody(prev => prev + '{Collaborateur.}')}
-                            className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:border-black transition-colors cursor-pointer text-slate-800"
-                            title="Insérer {Collaborateur.}"
-                          >
-                            Collaborateur.
-                          </button>
-                        </div>
-                        <p className="text-[11px] text-slate-500 font-sans mt-1">
-                          Cliquez sur un bouton pour ajouter la variable ou insérez-la manuellement dans le texte ci-dessous.
-                        </p>
-                      </div>
-
-                      {/* Multiline textarea */}
-                      <textarea
-                        id="crm-support-email-textarea"
-                        rows={7}
-                        value={supportEmailBody}
-                        onChange={(e) => setSupportEmailBody(e.target.value)}
-                        placeholder="Écrivez le modèle d'email initial de support..."
-                        style={{
-                          width: '100%',
-                          padding: '12px 16px',
-                          border: '1px solid #cbd5e0',
-                          borderRadius: '13px',
-                          fontSize: '16px',
-                          color: '#000000',
-                          boxSizing: 'border-box',
-                          outline: 'none',
-                          resize: 'vertical',
-                          lineHeight: '1.5',
-                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                        }}
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleSaveCrmSettings}
-                      disabled={isSavingSettings}
-                      style={{
-                        backgroundColor: '#3556ec',
-                        color: '#ffffff',
-                        fontSize: '18px',
-                        fontWeight: 'normal',
-                        borderRadius: '12px',
-                        padding: '12px 24px',
-                        border: 'none',
-                        cursor: isSavingSettings ? 'wait' : 'pointer',
-                        width: '100%',
-                        display: 'block',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      }}
-                      className="hover:bg-[#2b48cc] transition-colors font-sans"
-                    >
-                      {isSavingSettings ? 'Enregistrement dans la base...' : settingsSavedToast ? '✓ Réglages enregistrés !' : 'Enregistrer le texte de support'}
-                    </button>
-                  </div>
-
-                  {/* Section 2: Formulaire de contact pour site web */}
-                  <div 
-                    className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
-                    id="crm-settings-section-embed-form"
-                  >
-                    <p 
-                      className="text-black font-sans leading-relaxed"
-                      style={{ fontSize: '18px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                    >
-                      Générez un formulaire de contact professionnel à intégrer sur votre site internet. Tous les messages envoyés depuis ce formulaire remonteront dans votre onglet CRM et vous recevrez un email de notification.
-                    </p>
-
-                    <div className="space-y-3 mt-3">
-                      <textarea
-                        id="crm-embed-textarea"
-                        readOnly
-                        value={embedCode}
-                        style={{
-                          backgroundColor: '#3b1e62',
-                          color: '#ffffff',
-                          fontFamily: "'Civilprom', sans-serif",
-                          fontSize: '16px',
-                          padding: '20px',
-                          borderRadius: '13px',
-                          border: 'none',
-                          resize: 'none',
-                          height: '210px',
-                          width: '100%',
-                          boxSizing: 'border-box',
-                          outline: 'none',
-                          lineHeight: '1.5',
-                        }}
-                        className="select-all"
-                      />
-                      <button
-                        type="button"
-                        id="btn-copy-embed-code"
-                        onClick={() => {
-                          navigator.clipboard.writeText(embedCode);
-                          setCopiedEmbed(true);
-                          setTimeout(() => setCopiedEmbed(false), 2000);
-                        }}
-                        style={{
-                          backgroundColor: '#000000',
-                          color: '#ffffff',
-                          fontSize: '18px',
-                          fontWeight: 'normal',
-                          borderRadius: '12px',
-                          padding: '12px 24px',
-                          border: 'none',
-                          cursor: 'pointer',
-                          width: '100%',
-                          display: 'block',
-                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        }}
-                        className="hover:opacity-90 active:scale-[0.99] transition-all font-sans"
-                      >
-                        {copiedEmbed ? "Copié !" : "Copier le code"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Section 3: Recommandations */}
-                  <div 
-                    className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 text-left"
-                    id="crm-settings-section-recommendations"
-                  >
-                    <p 
-                      className="text-black font-sans leading-relaxed"
-                      style={{ fontSize: '18px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                    >
-                      Les clients existants peuvent envoyer leurs demandes directement depuis leur espace client. Nous vous recommandons de créer une page de contact sur votre site web et d’y intégrer le formulaire à l'aide du code prêt à coller ci-dessus. Les demandes envoyées via ce formulaire arriveront également automatiquement dans votre CRM.
-                    </p>
-                  </div>
+                    Les clients existants peuvent envoyer leurs demandes directement depuis leur espace client. Nous vous recommandons de créer une page de contact sur votre site web et d’y intégrer le formulaire à l'aide du code prêt à coller ci-dessus. Les demandes envoyées via ce formulaire arriveront également automatiquement dans votre CRM.
+                  </p>
                 </div>
               </div>
 
-              {/* Full-width Fermer button at bottom */}
-              <div className="pt-6">
-                <button
-                  type="button"
-                  id="btn-close-crm-settings-bottom"
-                  onClick={() => setIsSettingsPaneOpen(false)}
-                  style={{
-                    backgroundColor: '#000000',
-                    color: '#ffffff',
-                    borderRadius: '13px',
-                    padding: '14px',
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    border: 'none',
-                    width: '100%',
-                    cursor: 'pointer',
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  }}
-                  className="hover:bg-zinc-800 transition-colors"
-                >
-                  Fermer
-                </button>
-              </div>
+              {/* Floating Bottom Fermer Button (sans div derrière le bouton) */}
+              <button
+                type="button"
+                id="btn-close-crm-settings-bottom"
+                onClick={() => setIsSettingsPaneOpen(false)}
+                style={{
+                  position: 'absolute',
+                  bottom: '24px',
+                  left: '24px',
+                  right: '24px',
+                  zIndex: 20,
+                  backgroundColor: '#000000',
+                  color: '#ffffff',
+                  borderRadius: '13px',
+                  padding: '14px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+                }}
+                className="hover:bg-zinc-800 transition-colors"
+              >
+                Fermer
+              </button>
             </div>
           </div>
         </div>
