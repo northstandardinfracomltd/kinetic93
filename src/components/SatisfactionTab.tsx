@@ -267,6 +267,7 @@ export default function SatisfactionTab({
     if (validNotes.length === 0) {
       return {
         scoreDisplay: "-",
+        scoreValue: "-",
         totalCount: 0,
         pctScore: "-",
       };
@@ -279,6 +280,7 @@ export default function SatisfactionTab({
 
     return {
       scoreDisplay: `${formatted}/4`,
+      scoreValue: formatted,
       totalCount: validNotes.length,
       pctScore: `${pct}%`,
     };
@@ -1069,20 +1071,29 @@ export default function SatisfactionTab({
               >
                 <div className="flex items-center justify-between">
                   <h4 
-                    style={{ fontSize: '18px', fontWeight: 600, color: '#000000', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                    style={{ fontSize: '18px', fontWeight: 600, color: '#000000', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}
                     className="cursor-default"
                   >
-                    {t("Satisfaction Moyenne.") || "Satisfaction Moyenne."}
+                    {t("Satisfaction Moyenne") || "Satisfaction Moyenne"}
                   </h4>
-                  {(satStartDate || satEndDate) && (
-                    <button
-                      type="button"
-                      onClick={() => { setSatStartDate(''); setSatEndDate(''); }}
-                      className="text-xs text-slate-500 hover:text-black underline cursor-pointer font-sans"
-                    >
-                      {t("Réinitialiser")}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setSatStartDate(''); setSatEndDate(''); }}
+                    style={{
+                      fontSize: '16px',
+                      backgroundColor: '#ef4444',
+                      color: '#ffffff',
+                      borderRadius: '10px',
+                      padding: '6px 16px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      fontWeight: 600,
+                    }}
+                    className="hover:opacity-90 active:scale-95 transition-all shadow-xs"
+                  >
+                    {t("Réinitialiser")}
+                  </button>
                 </div>
 
                 {/* Date range filter fields */}
@@ -1090,8 +1101,13 @@ export default function SatisfactionTab({
                   <div className="space-y-1">
                     <label 
                       htmlFor="input-sat-start-date" 
-                      className="block text-xs font-semibold text-slate-600 uppercase"
-                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                      className="block font-semibold"
+                      style={{ 
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        fontSize: '16px',
+                        color: '#000000',
+                        textTransform: 'none'
+                      }}
                     >
                       {t("Début.") || "Début."}
                     </label>
@@ -1119,8 +1135,13 @@ export default function SatisfactionTab({
                   <div className="space-y-1">
                     <label 
                       htmlFor="input-sat-end-date" 
-                      className="block text-xs font-semibold text-slate-600 uppercase"
-                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                      className="block font-semibold"
+                      style={{ 
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        fontSize: '16px',
+                        color: '#000000',
+                        textTransform: 'none'
+                      }}
                     >
                       {t("Fin.") || "Fin."}
                     </label>
@@ -1148,37 +1169,48 @@ export default function SatisfactionTab({
                 </div>
 
                 {/* Metric results */}
-                <div 
-                  className="pt-2 flex flex-col items-center justify-center text-center p-4 rounded-xl"
-                  style={{ backgroundColor: '#fafafa', border: '1px solid #f0f0f0' }}
-                >
-                  <div className="flex items-center justify-center gap-[2px]">
+                {perfSatisfaction.totalCount === 0 ? (
+                  <div 
+                    className="p-4 rounded-xl text-center"
+                    style={{ 
+                      backgroundColor: '#fafafa', 
+                      border: '1px solid #f0f0f0',
+                      color: '#000000',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      fontSize: '15px'
+                    }}
+                  >
+                    {t("Données insuffisantes sur cette période.") || "Données insuffisantes sur cette période."}
+                  </div>
+                ) : (
+                  <div 
+                    className="pt-2 flex flex-col items-center justify-center text-center p-4 rounded-xl"
+                    style={{ backgroundColor: '#fafafa', border: '1px solid #f0f0f0' }}
+                  >
+                    <div className="flex items-center justify-center gap-1.5">
+                      <div 
+                        style={roundBadgeStyle}
+                      >
+                        {perfSatisfaction.scoreValue}
+                      </div>
+                      <div 
+                        style={percentBadgeStyle}
+                      >
+                        {perfSatisfaction.pctScore === '-' ? '-' : perfSatisfaction.pctScore}
+                      </div>
+                    </div>
                     <div 
+                      className="mt-2 text-center"
                       style={{ 
-                        fontSize: '34px', 
-                        fontWeight: 900, 
+                        fontSize: '18px', 
                         color: '#000000', 
-                        fontFamily: "'Gochi', cursive, sans-serif",
-                        lineHeight: 1
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" 
                       }}
                     >
-                      {perfSatisfaction.scoreDisplay}
-                    </div>
-                    <div 
-                      style={percentBadgeStyle}
-                    >
-                      {perfSatisfaction.pctScore === '-' ? '-' : perfSatisfaction.pctScore}
+                      {`${perfSatisfaction.totalCount} ${perfSatisfaction.totalCount > 1 ? t("avis enregistrés") : t("avis enregistré")}`}
                     </div>
                   </div>
-                  <div 
-                    className="text-sm text-slate-600 mt-2"
-                    style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
-                  >
-                    {perfSatisfaction.totalCount === 0
-                      ? "-"
-                      : `${perfSatisfaction.totalCount} ${perfSatisfaction.totalCount > 1 ? t("avis enregistrés") : t("avis enregistré")}`}
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* BLOC 2 : Score NPS */}
@@ -1193,20 +1225,29 @@ export default function SatisfactionTab({
               >
                 <div className="flex items-center justify-between">
                   <h4 
-                    style={{ fontSize: '18px', fontWeight: 600, color: '#000000', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                    style={{ fontSize: '18px', fontWeight: 600, color: '#000000', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}
                     className="cursor-default"
                   >
-                    {t("Score NPS.") || "Score NPS."}
+                    {t("Score NPS") || "Score NPS"}
                   </h4>
-                  {(npsStartDate || npsEndDate) && (
-                    <button
-                      type="button"
-                      onClick={() => { setNpsStartDate(''); setNpsEndDate(''); }}
-                      className="text-xs text-slate-500 hover:text-black underline cursor-pointer font-sans"
-                    >
-                      {t("Réinitialiser")}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setNpsStartDate(''); setNpsEndDate(''); }}
+                    style={{
+                      fontSize: '16px',
+                      backgroundColor: '#ef4444',
+                      color: '#ffffff',
+                      borderRadius: '10px',
+                      padding: '6px 16px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      fontWeight: 600,
+                    }}
+                    className="hover:opacity-90 active:scale-95 transition-all shadow-xs"
+                  >
+                    {t("Réinitialiser")}
+                  </button>
                 </div>
 
                 {/* Date range filter fields without any mention of 'Par défaut : all time' */}
@@ -1214,8 +1255,13 @@ export default function SatisfactionTab({
                   <div className="space-y-1">
                     <label 
                       htmlFor="input-nps-start-date" 
-                      className="block text-xs font-semibold text-slate-600 uppercase"
-                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                      className="block font-semibold"
+                      style={{ 
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        fontSize: '16px',
+                        color: '#000000',
+                        textTransform: 'none'
+                      }}
                     >
                       {t("Début.") || "Début."}
                     </label>
@@ -1243,8 +1289,13 @@ export default function SatisfactionTab({
                   <div className="space-y-1">
                     <label 
                       htmlFor="input-nps-end-date" 
-                      className="block text-xs font-semibold text-slate-600 uppercase"
-                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                      className="block font-semibold"
+                      style={{ 
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        fontSize: '16px',
+                        color: '#000000',
+                        textTransform: 'none'
+                      }}
                     >
                       {t("Fin.") || "Fin."}
                     </label>
@@ -1272,30 +1323,43 @@ export default function SatisfactionTab({
                 </div>
 
                 {/* Score Big Display */}
-                <div 
-                  className="pt-2 flex flex-col items-center justify-center text-center p-4 rounded-xl"
-                  style={{ backgroundColor: '#fafafa', border: '1px solid #f0f0f0' }}
-                >
+                {perfNps.totalCount === 0 ? (
                   <div 
+                    className="p-4 rounded-xl text-center"
                     style={{ 
-                      fontSize: '44px', 
-                      fontWeight: 900, 
-                      color: perfNps.npsInt === null ? '#000000' : (perfNps.npsInt > 0 ? '#10b981' : (perfNps.npsInt < 0 ? '#ef4444' : '#000000')), 
-                      fontFamily: "'Gochi', cursive, sans-serif",
-                      lineHeight: 1
+                      backgroundColor: '#fafafa', 
+                      border: '1px solid #f0f0f0',
+                      color: '#000000',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      fontSize: '15px'
                     }}
                   >
-                    {perfNps.scoreDisplay}
+                    {t("Données insuffisantes sur cette période.") || "Données insuffisantes sur cette période."}
                   </div>
+                ) : (
                   <div 
-                    className="text-xs text-slate-500 mt-1"
-                    style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                    className="pt-2 flex flex-col items-center justify-center text-center p-4 rounded-xl"
+                    style={{ backgroundColor: '#fafafa', border: '1px solid #f0f0f0' }}
                   >
-                    {perfNps.totalCount === 0 
-                      ? "-" 
-                      : (perfNps.npsInt !== null ? `${t("Indice NPS")} (${perfNps.scoreDisplay})` : '')}
+                    <div 
+                      style={{ 
+                        fontSize: '44px', 
+                        fontWeight: 900, 
+                        color: perfNps.npsInt === null ? '#000000' : (perfNps.npsInt > 0 ? '#10b981' : (perfNps.npsInt < 0 ? '#ef4444' : '#000000')), 
+                        fontFamily: "'Gochi', cursive, sans-serif",
+                        lineHeight: 1
+                      }}
+                    >
+                      {perfNps.scoreDisplay}
+                    </div>
+                    <div 
+                      className="text-xs text-slate-500 mt-1"
+                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                    >
+                      {perfNps.npsInt !== null ? `${t("Indice NPS")} (${perfNps.scoreDisplay})` : ''}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Breakdown Categories: Promoteurs, Passifs, Détracteurs */}
                 <div className="space-y-2 pt-1 font-sans">
@@ -1308,8 +1372,8 @@ export default function SatisfactionTab({
                         <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] inline-block shrink-0"></span>
                         <span>{t("Promoteurs (9-10)")}</span>
                       </div>
-                      <div className="text-xs text-slate-500">
-                        {t("Clients très enthousiastes")}
+                      <div className="text-xs" style={{ color: '#000000' }}>
+                        {t("Clients très enthousiastes.") || "Clients très enthousiastes."}
                       </div>
                     </div>
                     <div className="text-right">
@@ -1331,8 +1395,8 @@ export default function SatisfactionTab({
                         <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b] inline-block shrink-0"></span>
                         <span>{t("Passifs (7-8)")}</span>
                       </div>
-                      <div className="text-xs text-slate-500">
-                        {t("Clients neutres (exclus du calcul direct)")}
+                      <div className="text-xs" style={{ color: '#000000' }}>
+                        {t("Clients neutres (exclus du calcul direct).") || "Clients neutres (exclus du calcul direct)."}
                       </div>
                     </div>
                     <div className="text-right">
@@ -1354,8 +1418,8 @@ export default function SatisfactionTab({
                         <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444] inline-block shrink-0"></span>
                         <span>{t("Détracteurs (0-6)")}</span>
                       </div>
-                      <div className="text-xs text-slate-500">
-                        {t("Clients insatisfaits ou à risque")}
+                      <div className="text-xs" style={{ color: '#000000' }}>
+                        {t("Clients insatisfaits ou à risque.") || "Clients insatisfaits ou à risque."}
                       </div>
                     </div>
                     <div className="text-right">

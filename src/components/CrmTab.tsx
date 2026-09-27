@@ -1125,6 +1125,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
   // Export CSV
   const handleExportPerformanceCSV = () => {
+    if (filteredPerfTickets.length === 0) return;
     let csvContent = '\uFEFF'; // UTF-8 BOM for Excel
 
     const escapeCsv = (val: any) => {
@@ -3001,10 +3002,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
           {/* Drawer container */}
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
-            <div className="w-screen max-w-md sm:max-w-2xl lg:max-w-3xl bg-white shadow-2xl flex flex-col p-6 sm:p-8 overflow-y-auto justify-between">
+            <div className="w-screen max-w-md sm:max-w-lg lg:max-w-xl bg-white shadow-2xl flex flex-col p-6 sm:p-8 overflow-y-auto justify-between">
               <div className="space-y-6">
                 {/* Section FILTRES (Plage date à date & Employé) */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4 text-left">
+                <div 
+                  style={{
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #DADADA',
+                    boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
+                  }}
+                  className="rounded-2xl p-4 sm:p-5 space-y-4 text-left"
+                >
                   {/* Plage date à date */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -3044,25 +3052,27 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <button
                       type="button"
                       id="btn-export-crm-performance-csv"
+                      disabled={filteredPerfTickets.length === 0}
                       onClick={handleExportPerformanceCSV}
                       style={{
-                        backgroundColor: '#3556ec',
+                        backgroundColor: filteredPerfTickets.length === 0 ? '#9ca3af' : '#3556ec',
                         color: '#ffffff',
                         fontSize: '18px',
                         fontWeight: 'normal',
                         borderRadius: '13px',
                         padding: '12px 24px',
                         border: 'none',
-                        cursor: 'pointer',
+                        cursor: filteredPerfTickets.length === 0 ? 'not-allowed' : 'pointer',
                         width: '100%',
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        opacity: filteredPerfTickets.length === 0 ? 0.6 : 1,
                       }}
-                      className="hover:bg-[#2b48cc] transition-colors"
+                      className={filteredPerfTickets.length === 0 ? '' : 'hover:bg-[#2b48cc] transition-colors'}
                     >
-                      Exporter en CSV ({filteredPerfTickets.length} lignes)
+                      Export CSV
                     </button>
                   </div>
 
@@ -3093,76 +3103,153 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 {/* STATISTIQUES (4 blocs statistiques) */}
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {/* Bloc stat 1: « Tickets ouverts » (count Nouveau + En cours) */}
+                    {/* Bloc stat 1: « Tickets ouverts » */}
                     <div 
-                      className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-1"
+                      className="p-4 rounded-2xl bg-white text-center flex flex-col items-center justify-center space-y-2"
+                      style={{
+                        border: '1px solid #DADADA',
+                        boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
+                      }}
                       id="stat-block-tickets-ouverts"
                     >
-                      <span className="text-xs font-semibold text-amber-700 font-sans block">
+                      <span 
+                        style={{
+                          cursor: 'default',
+                          fontSize: '18px',
+                          color: '#000000',
+                          paddingTop: '8px',
+                          fontWeight: 600,
+                        }}
+                        className="font-sans block"
+                      >
                         Tickets ouverts
                       </span>
-                      <div className="text-3xl font-bold font-sans text-slate-900">
+                      <div 
+                        style={{
+                          cursor: 'default',
+                          fontSize: '52px',
+                          lineHeight: '1.1',
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          paddingBottom: '8px',
+                        }}
+                        className="font-sans"
+                      >
                         {statTicketsOuverts}
                       </div>
-                      <span className="text-xs text-black font-sans block">
-                        (Nouveau / En cours)
-                      </span>
                     </div>
 
-                    {/* Bloc stat 2: « Tickets fermés » (count Terminé) */}
+                    {/* Bloc stat 2: « Tickets fermés » */}
                     <div 
-                      className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-1"
+                      className="p-4 rounded-2xl bg-white text-center flex flex-col items-center justify-center space-y-2"
+                      style={{
+                        border: '1px solid #DADADA',
+                        boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
+                      }}
                       id="stat-block-tickets-fermes"
                     >
-                      <span className="text-xs font-semibold text-emerald-700 font-sans block">
+                      <span 
+                        style={{
+                          cursor: 'default',
+                          fontSize: '18px',
+                          color: '#000000',
+                          paddingTop: '8px',
+                          fontWeight: 600,
+                        }}
+                        className="font-sans block"
+                      >
                         Tickets fermés
                       </span>
-                      <div className="text-3xl font-bold font-sans text-slate-900">
+                      <div 
+                        style={{
+                          cursor: 'default',
+                          fontSize: '52px',
+                          lineHeight: '1.1',
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          paddingBottom: '8px',
+                        }}
+                        className="font-sans"
+                      >
                         {statTicketsFermes}
                       </div>
-                      <span className="text-xs text-black font-sans block">
-                        (Terminé / Résolu)
-                      </span>
                     </div>
 
-                    {/* Bloc stat 3: « Volume affaires » (sum Total Affaire HT pour catégorie Commercial, situation devis nul, non renseigné ou gagné) */}
+                    {/* Bloc stat 3: « Volume affaires » */}
                     <div 
-                      className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-1"
+                      className="p-4 rounded-2xl bg-white text-center flex flex-col items-center justify-center space-y-2"
+                      style={{
+                        border: '1px solid #DADADA',
+                        boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
+                      }}
                       id="stat-block-volume-affaires"
                     >
-                      <span className="text-xs font-semibold text-blue-700 font-sans block">
+                      <span 
+                        style={{
+                          cursor: 'default',
+                          fontSize: '18px',
+                          color: '#000000',
+                          paddingTop: '8px',
+                          fontWeight: 600,
+                        }}
+                        className="font-sans block"
+                      >
                         Volume affaires
                       </span>
-                      <div className="flex items-baseline justify-center gap-1">
-                        <span className="text-2xl sm:text-3xl font-bold font-sans text-slate-900">
+                      <div 
+                        style={{
+                          cursor: 'default',
+                          fontSize: '52px',
+                          lineHeight: '1.1',
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          paddingBottom: '8px',
+                        }}
+                        className="flex items-baseline justify-center gap-1 font-sans"
+                      >
+                        <span>
                           {statVolumeAffaires.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
-                        <span className="text-xl font-bold font-sans text-slate-900">
+                        <span style={{ fontSize: '32px' }}>
                           €
                         </span>
                       </div>
-                      <span className="text-xs text-black font-sans block">
-                        Devis gagnés ou en cours (HT)
-                      </span>
                     </div>
 
-                    {/* Bloc stat 4: « Score closing » (note sur 10 selon devis Gagné / Perdu) */}
+                    {/* Bloc stat 4: « Score closing » */}
                     <div 
-                      className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-1"
+                      className="p-4 rounded-2xl bg-white text-center flex flex-col items-center justify-center space-y-2"
+                      style={{
+                        border: '1px solid #DADADA',
+                        boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
+                      }}
                       id="stat-block-score-closing"
                     >
-                      <span className="text-xs font-semibold text-purple-700 font-sans block">
+                      <span 
+                        style={{
+                          cursor: 'default',
+                          fontSize: '18px',
+                          color: '#000000',
+                          paddingTop: '8px',
+                          fontWeight: 600,
+                        }}
+                        className="font-sans block"
+                      >
                         Score closing
                       </span>
-                      <div className="text-3xl font-bold font-sans text-slate-900">
+                      <div 
+                        style={{
+                          cursor: 'default',
+                          fontSize: '52px',
+                          lineHeight: '1.1',
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          paddingBottom: '8px',
+                        }}
+                        className="font-sans"
+                      >
                         {scoreClosingText}
                       </div>
-                      <span className="text-xs text-black font-sans block">
-                        {totalDeals > 0 
-                          ? `${dealsGagnes} gagné(s) / ${totalDeals} traité(s) (${Math.round((dealsGagnes / totalDeals) * 100)}%)`
-                          : 'Aucun devis clos sur la période'
-                        }
-                      </span>
                     </div>
                   </div>
                 </div>
