@@ -8228,6 +8228,17 @@ export default function App() {
                     -moz-appearance: none !important;
                     background-image: none !important;
                   }
+                  #fsm-tab-container select#select-fsm-tour-manage {
+                    border-radius: 1000px !important;
+                    padding: 10px 20px !important;
+                  }
+                  #fsm-tab-container select#select-fsm-month-stats {
+                    width: auto !important;
+                    text-align: center !important;
+                    text-align-last: center !important;
+                    -webkit-text-align-last: center !important;
+                    -moz-text-align-last: center !important;
+                  }
                   #fsm-tab-container select option {
                     color: #000000 !important;
                     background: #ffffff !important;
@@ -8812,7 +8823,7 @@ export default function App() {
                           >
                             <div className="flex flex-col pr-2">
                               <span className="text-[16px] text-black font-sans font-semibold">
-                                Afficher uniquement donnée de ma zone
+                                Données de ma zone/groupe uniquement
                               </span>
                               {teamWorkGroups.length === 0 && (
                                 <span className="text-[12px] text-neutral-400">
@@ -9293,25 +9304,28 @@ export default function App() {
                 {/* Statistiques FSM du mois : Sélecteur mois/année + 2 gélules (Temps moyen & CO2 préservé) */}
                 <div 
                   id="fsm-stats-wrapper"
-                  className="px-4 pt-4 select-none flex flex-wrap items-center gap-3"
+                  className="px-4 pt-4 select-none flex flex-col gap-2 w-full"
                 >
                   {!isFsmStatsHidden && (
                     <div 
                       id="fsm-stats-container"
                       style={{
-                        display: 'inline-flex',
+                        display: 'flex',
+                        width: '100%',
                         flexWrap: 'wrap',
                         alignItems: 'center',
                         gap: '12px',
                         padding: '10px 14px',
-                        backgroundColor: '#ffffff',
+                        backgroundColor: 'transparent',
                         border: '1px solid rgb(218, 218, 218)',
                         borderRadius: '16px',
+                        boxSizing: 'border-box'
                       }}
                     >
                       {/* Field de choix de mois/année */}
                       <div className="flex items-center">
                         <select
+                          id="select-fsm-month-stats"
                           value={selectedFsmMonth}
                           onChange={(e) => setSelectedFsmMonth(e.target.value)}
                           title={translate("Sélectionner le mois")}
@@ -9326,6 +9340,9 @@ export default function App() {
                             cursor: 'pointer',
                             outline: 'none',
                             fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            textAlign: 'center',
+                            textAlignLast: 'center',
+                            width: 'auto',
                           }}
                         >
                           {availableFsmMonths.map((m) => (
@@ -9410,32 +9427,34 @@ export default function App() {
                     </div>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsFsmStatsHidden(prev => {
-                        const next = !prev;
-                        try {
-                          localStorage.setItem('defib_hide_fsm_stats', String(next));
-                        } catch (_) {}
-                        return next;
-                      });
-                    }}
-                    style={{
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontSize: '13px',
-                      color: '#000000',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: '4px 8px',
-                      textDecoration: 'none'
-                    }}
-                    className="hover:opacity-70 transition-opacity select-none cursor-pointer"
-                    id="btn-toggle-fsm-stats"
-                  >
-                    {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer")}
-                  </button>
+                  <div className="flex items-center justify-start">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFsmStatsHidden(prev => {
+                          const next = !prev;
+                          try {
+                            localStorage.setItem('defib_hide_fsm_stats', String(next));
+                          } catch (_) {}
+                          return next;
+                        });
+                      }}
+                      style={{
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        fontSize: '13px',
+                        color: '#000000',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '4px 8px',
+                        textDecoration: 'none'
+                      }}
+                      className="hover:opacity-70 transition-opacity select-none cursor-pointer"
+                      id="btn-toggle-fsm-stats"
+                    >
+                      {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer")}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Info message système lors de la création d'une tournée */}
