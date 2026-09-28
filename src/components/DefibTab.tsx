@@ -3097,10 +3097,10 @@ export default function DefibTab({
                   transition: 'all 0.15s ease'
                 }}
                 className="transition-all select-none"
-                title={t("Indicatif postal court")}
+                title={t("Indicatif postal court (tous)")}
               >
                 <option value="" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
-                  {t("Indicatif postal court")}
+                  {t("Indicatif postal court (tous)")}
                 </option>
                 {FRENCH_DEPARTMENTS.map((dept) => (
                   <option

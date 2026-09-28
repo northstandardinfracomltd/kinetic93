@@ -553,7 +553,7 @@ export default function SettingsModal({
     }
   };
 
-  const renderSectionHeader = (text: string, showSave: boolean = true) => (
+  const renderSectionHeader = (text: string) => (
     <div className="flex items-center justify-between mb-3 bg-transparent select-none w-full">
       <span 
         className="text-white px-3 py-1 text-[13px] inline-block font-sans"
@@ -567,33 +567,6 @@ export default function SettingsModal({
       >
         {text}
       </span>
-      {isPage && showSave && (
-        <button
-          disabled={isSaving}
-          onClick={handleSaveAll}
-          style={{
-            backgroundColor: 'rgb(53, 86, 236)',
-            color: '#ffffff',
-            boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
-            borderRadius: '0.75rem',
-            fontSize: '18px',
-            padding: '11px 22px',
-            fontWeight: '100',
-            transition: 'all 0s ease-in-out',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.5rem',
-            cursor: isSaving ? 'not-allowed' : 'pointer',
-            opacity: isSaving ? 0.6 : 1,
-            border: 'none',
-            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
-          }}
-          className="transition-all"
-        >
-          Enregistrer
-        </button>
-      )}
     </div>
   );
 
@@ -2165,15 +2138,17 @@ export default function SettingsModal({
           style={isPage ? { maxWidth: '98%', margin: '0 auto', width: '100%' } : {}}
         >
           {/* HUB ACCORDION: QUE SOUHAITEZ-VOUS FAIRE ? */}
-          <div className="space-y-4 select-none" id="settings-accordion-hub">
+          <div className="space-y-4 select-none pt-2 pb-4" id="settings-accordion-hub">
             <h2 
               className="font-bold text-black select-none text-left"
               style={{
-                fontSize: '28px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                fontSize: '32px',
+                fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif",
                 color: '#000000',
                 cursor: 'default',
                 letterSpacing: '-0.02em',
+                paddingTop: '16px',
+                paddingBottom: '16px',
                 margin: 0
               }}
             >
@@ -2193,13 +2168,13 @@ export default function SettingsModal({
                       fontSize: '18px',
                       fontWeight: 600,
                       borderRadius: '14px',
-                      padding: '14px 22px',
+                      padding: '12px 18px',
                       backgroundColor: isSelected ? '#000000' : '#ffffff',
-                      color: isSelected ? '#ffffff' : '#000000',
-                      border: isSelected ? '1.5px solid #000000' : '1.5px solid #cbd5e1',
+                      color: isSelected ? '#ffffff' : 'rgb(0, 0, 0)',
+                      border: isSelected ? '1px solid #000000' : '1px solid #dadada',
                       boxShadow: isSelected 
-                        ? '0 4px 12px rgba(0,0,0,0.18)' 
-                        : '0 1px 3px rgba(0,0,0,0.06)',
+                        ? 'rgba(0, 0, 0, 0.16) 0px 4px 12px -2px' 
+                        : 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease-in-out',
                       textAlign: 'center',
@@ -2218,8 +2193,6 @@ export default function SettingsModal({
           {/* SECTION 1: RÉGLAGES */}
           {activeSection === 'reglages' && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left animate-fadeIn" id="settings-section-company">
-              {renderSectionHeader(t("Réglages"))}
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="block text-[16px] font-bold text-black font-sans">{t("Langue et région du logiciel")}.</label>
@@ -2814,9 +2787,7 @@ export default function SettingsModal({
       {/* SECTION 2: APPARENCE DES RAPPORTS PDF (DIV DÉDIÉE INDÉPENDANTE) */}
       {activeSection === 'pdf' && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left animate-fadeIn" id="settings-section-pdf">
-          {renderSectionHeader(t("Apparence des rapports PDF"), false)}
-
-            <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1">
                 <label className="block text-[16px] font-bold text-black font-sans">
                   {t("Image source d’entête pour illustration.")}
@@ -2979,7 +2950,7 @@ export default function SettingsModal({
         {/* SECTION 3: APPARENCE DU LOGICIEL POUR VOTRE SESSION (DIV DÉDIÉE INDÉPENDANTE, Y COMPRIS LE FAVICON) */}
         {activeSection === 'apparence' && (
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-6 text-left animate-fadeIn" id="settings-section-appearance">
-            {renderSectionHeader(t("Apparence du logiciel pour votre session"), false)}
+            {renderSectionHeader(t("Apparence du logiciel pour votre session"))}
 
             <div className="space-y-3">
               <label className="block text-[16px] font-bold text-black font-sans">
@@ -3024,7 +2995,7 @@ export default function SettingsModal({
 
             {/* CHOIX DU FAVICON DU LOGICIEL (INCLUS DANS LA SECTION APPARENCE) */}
             <div className="pt-6 mt-6 border-t border-slate-100 space-y-4" id="settings-section-software-favicon">
-              {renderSectionHeader(t("Choix du favicon du logiciel"), false)}
+              {renderSectionHeader(t("Choix du favicon du logiciel"))}
 
               <div className="space-y-3">
               <label className="block text-[16px] font-bold text-black font-sans">
@@ -3079,9 +3050,7 @@ export default function SettingsModal({
       {/* SECTION 4: INTITULÉS DES EMPLACEMENTS */}
       {activeSection === 'emplacements' && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 mt-4 text-left animate-fadeIn" id="settings-section-location-names">
-          {renderSectionHeader(t("Intitulés des emplacements"))}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
               {(['Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'] as const).map(loc => (
                 <div key={loc} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
                   <span className="font-semibold text-[18px] text-black min-w-[120px] font-sans" style={{ fontSize: '18px', color: '#000000' }}>
@@ -3111,8 +3080,6 @@ export default function SettingsModal({
         {/* SECTION 6: MEMBRES DE L'ENVIRONNEMENT */}
         {activeSection === 'membres' && (
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-members" style={{ order: 98 }}>
-            {renderSectionHeader(t("Membres de l’environnement"))}
-
             {/* Formulaire d'ajout rapide de collaborateur */}
             <form onSubmit={handleAddMemberSubmit} className="space-y-4">
 
@@ -4057,8 +4024,6 @@ export default function SettingsModal({
         {/* SECTION: COMMUNICATION PORTAIL CLIENT */}
         {activeSection === 'communication' && (
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-communication-portail" style={{ order: 99 }}>
-            {renderSectionHeader(t("Communication portail client"))}
-
             <div className="space-y-2">
               <label htmlFor="settings-communication-portail" className="block text-[14px] font-bold text-black font-sans">
                 {t("Message à afficher.")}
@@ -4735,7 +4700,6 @@ export default function SettingsModal({
         {/* SECTION 5: ASSISTANCE DEFIBEO */}
         {activeSection === 'assistance' && (
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left mt-4 animate-fadeIn" id="settings-section-assistance-group">
-            {renderSectionHeader(t("Assistance Defibeo"), false)}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* SECTION 2: SUBSCRIPTION */}
               <div 

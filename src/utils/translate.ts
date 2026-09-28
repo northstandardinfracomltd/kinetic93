@@ -1144,6 +1144,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Détails intervention": "Intervention details",
     "Référence intervention.": "Intervention reference.",
     "Référence intervention": "Intervention reference",
+    "Référence intervention (renseignée automatiquement).": "Intervention reference (automatically filled).",
+    "Commentaire (max. 250 caractères).": "Comment (max. 250 characters).",
     "Transporteur": "Carrier",
     "Pièce.": "Part.",
     "Unité HT. (€)": "Unit Excl. Tax (€)",

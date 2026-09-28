@@ -271,7 +271,7 @@ export default function SatisfactionFormPage() {
             {/* RÉFÉRENCE INTERVENTION FIELD (Disabled, auto-populated, visible) */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="intervention_ref" className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
-                {t("Référence intervention.")}
+                {t("Référence intervention (renseignée automatiquement).") || "Référence intervention (renseignée automatiquement)."}
               </label>
               <input
                 id="intervention_ref"
@@ -380,7 +380,7 @@ export default function SatisfactionFormPage() {
             </div>
 
             {/* QUESTION RECOMMANDATION / NPS (1 à 10) */}
-            <div className="flex flex-col gap-2 pt-2">
+            <div className="flex flex-col gap-2 pt-8 mt-4" style={{ paddingTop: '32px' }}>
               <label className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
                 {t("Quelle est la probabilité que vous nous recommandiez?")}
               </label>
@@ -431,17 +431,18 @@ export default function SatisfactionFormPage() {
             </div>
 
             {/* COMMENTAIRE */}
-            <div className="flex flex-col gap-1.5 pt-2">
+            <div className="flex flex-col gap-1.5 pt-4">
               <label htmlFor="commentaire" className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
-                {t("Commentaire.")}
+                {t("Commentaire (max. 250 caractères).") || "Commentaire (max. 250 caractères)."}
               </label>
               <textarea
                 id="commentaire"
                 required
+                maxLength={250}
                 rows={4}
                 placeholder={t("Entrez votre commentaire.")}
                 value={commentaire}
-                onChange={(e) => setCommentaire(e.target.value)}
+                onChange={(e) => setCommentaire(e.target.value.slice(0, 250))}
                 className="w-full text-black"
               />
             </div>

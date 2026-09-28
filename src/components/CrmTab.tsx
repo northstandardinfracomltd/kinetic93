@@ -102,21 +102,48 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [tableFitScale, setTableFitScale] = useState<number>(1);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const naturalTableWidthRef = useRef<{ [key: string]: number }>({
+    Commercial: 3600,
+    Réclamation: 2500,
+    Technique: 2500,
+    'Sans Catégorie': 2500,
+  });
 
   const getTargetTableWidth = (cat: string) => {
-    return cat === 'Commercial' ? 2200 : 1350;
+    const minW = cat === 'Commercial' ? 3600 : 2500;
+    if (tableRef.current) {
+      const ths = tableRef.current.querySelectorAll('thead th');
+      if (ths.length > 0) {
+        let total = 0;
+        const currentZoom = (isTableFitView && tableFitScale > 0) ? tableFitScale : 1;
+        ths.forEach(th => {
+          const rect = th.getBoundingClientRect();
+          total += rect.width / currentZoom;
+        });
+        if (total > 500) {
+          return Math.max(minW, Math.ceil(total) + 60);
+        }
+      }
+    }
+    return Math.max(minW, naturalTableWidthRef.current[cat] || minW);
+  };
+
+  const calculateFitScale = (cat: string) => {
+    if (!bottomScrollRef.current) return 1;
+    const clientW = bottomScrollRef.current.clientWidth;
+    if (clientW <= 0) return 1;
+    const naturalW = getTargetTableWidth(cat);
+    // clientW - 40 ensures ample breathing room on the right so action buttons are never cut off
+    const scale = Math.min(1, Math.max(0.1, (clientW - 40) / naturalW));
+    return scale;
   };
 
   const toggleTableFitView = () => {
     setIsTableFitView(prev => {
       const next = !prev;
       if (next) {
-        if (bottomScrollRef.current) {
-          const clientW = bottomScrollRef.current.clientWidth;
-          const naturalW = getTargetTableWidth(ticketCategoryFilter);
-          const scale = Math.min(1, Math.max(0.1, (clientW - 6) / naturalW));
-          setTableFitScale(scale);
-        }
+        const nextScale = calculateFitScale(ticketCategoryFilter);
+        setTableFitScale(nextScale);
       } else {
         setTableFitScale(1);
       }
@@ -128,17 +155,15 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     if (!bottomScrollRef.current) return;
     const updateWidth = () => {
       if (!bottomScrollRef.current) return;
-      const clientW = bottomScrollRef.current.clientWidth;
       if (!isTableFitView) {
         setTableFitScale(1);
       } else {
-        const naturalW = getTargetTableWidth(ticketCategoryFilter);
-        const scale = Math.min(1, Math.max(0.1, (clientW - 6) / naturalW));
-        setTableFitScale(scale);
+        const nextScale = calculateFitScale(ticketCategoryFilter);
+        setTableFitScale(nextScale);
       }
     };
 
-    const timer = setTimeout(updateWidth, 50);
+    const timer = setTimeout(updateWidth, 60);
     const observer = new ResizeObserver(updateWidth);
     observer.observe(bottomScrollRef.current);
     window.addEventListener('resize', updateWidth);
@@ -1481,7 +1506,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         #crm-tab-container select,
         #crm-tab-container textarea:not(#crm-embed-textarea):not(#crm-relance-email-textarea) {
           padding: 10px 12px !important;
-          border: 1px solid #c9bfcd !important;
+          border: 1px solid #dadada !important;
           border-radius: 13px !important;
           font-size: 18px !important;
           font-weight: 400 !important;
@@ -1855,8 +1880,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       <div className="bg-white overflow-hidden mt-4" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         <div 
           ref={bottomScrollRef}
-          className={isTableFitView ? "overflow-x-hidden" : "overflow-x-auto"}
-          style={isTableFitView ? { width: '100%', overflowX: 'hidden' } : undefined}
+          className="overflow-x-auto"
+          style={isTableFitView ? { width: '100%', overflowX: 'auto', paddingRight: '8px' } : undefined}
         >
           {filteredTickets.length === 0 ? (
             <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
@@ -1929,7 +1954,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     </>
                   )}
 
-                  <th className="px-4 py-3.5 text-right whitespace-nowrap" style={thStyle}>Actions.</th>
+                  <th className="px-4 py-3.5 text-right whitespace-nowrap" style={{ ...thStyle, minWidth: '240px' }}>Actions.</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1951,7 +1976,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <tr 
                       key={t.id} 
                       onClick={() => openEditTicketPane(t)}
-                      className={`hover:bg-slate-50 transition-colors cursor-pointer ${isChecked ? 'bg-pink-50/20' : ''}`}
+                      className={`group hover:bg-[#ffecf8] transition-all cursor-pointer ${isChecked ? 'bg-[#ffecf8]/60' : ''}`}
                     >
                       {/* Row selection Radio Check */}
                       <td 
@@ -2010,8 +2035,18 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           <span>{ouvVal}</span>
                           {weekNum && (
                             <span 
-                              className="inline-flex items-center justify-center rounded-full bg-slate-900 text-white font-bold font-sans text-[11px] select-none shadow-2xs"
-                              style={{ width: '25px', height: '25px', minWidth: '25px', minHeight: '25px' }}
+                              className="inline-flex items-center justify-center rounded-full text-white font-bold font-sans select-none"
+                              style={{ 
+                                width: '40px', 
+                                height: '40px', 
+                                minWidth: '25px', 
+                                minHeight: '25px', 
+                                outline: '#8f1961 solid 3px', 
+                                outlineOffset: '3px', 
+                                marginLeft: '10px', 
+                                fontSize: '16px', 
+                                backgroundColor: '#8f1961' 
+                              }}
                               title={`Semaine ${weekNum}`}
                             >
                               {weekNum}
@@ -2110,7 +2145,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
                       {/* Actions. */}
                       <td 
-                        className="px-4 py-4 whitespace-nowrap text-right"
+                        className="px-4 py-4 whitespace-nowrap text-right pr-6"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="inline-flex items-center gap-2">
@@ -2177,7 +2212,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               <form onSubmit={handleSaveForm} className="space-y-6 flex-1 flex flex-col justify-between pt-2">
                 <div className="space-y-6">
                   {/* 1. Situation (3 cards in 33% 33% 33% with pink radio check) */}
-                  <div className="space-y-2">
+                  <div 
+                    className="space-y-2"
+                    style={{
+                      border: '1px solid rgb(218, 218, 218)',
+                      boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
+                      borderRadius: '14px',
+                      padding: '20px',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
                     <label>Situation.</label>
                     <div className="grid grid-cols-3 gap-3">
                       {(['Nouveau', 'En cours', 'Terminé'] as const).map((sit) => {
@@ -2186,7 +2230,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           <div
                             key={sit}
                             onClick={() => setFormSituation(sit)}
-                            className="flex items-center justify-start gap-2.5 p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                            className="flex items-center justify-start gap-2.5 p-3 rounded-xl cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                            style={{ border: '1px solid #dadada' }}
                             id={`crm-situation-${sit.toLowerCase().replace(/\s+/g, '-')}`}
                           >
                             <span 
@@ -2214,7 +2259,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </div>
 
                   {/* 2. Référence, Ouverture, Dernière actualisation (Side-by-side 33% 33% 33%, light-grey disabled, 18px font) */}
-                  <div className="grid grid-cols-3 gap-3">
+                  <div 
+                    className="grid grid-cols-3 gap-3"
+                    style={{
+                      border: '1px solid rgb(218, 218, 218)',
+                      boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
+                      borderRadius: '14px',
+                      padding: '20px',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
                     <div>
                       <label>Référence.</label>
                       <input
@@ -2238,18 +2292,22 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             fontSize: '18px',
                             backgroundColor: '#ffffff',
                             color: '#000000',
-                            paddingRight: getWeekNumberString(formOuverture) ? '54px' : undefined
+                            paddingRight: getWeekNumberString(formOuverture) ? '70px' : undefined
                           }}
                         />
                         {getWeekNumberString(formOuverture) && (
                           <div 
-                            className="absolute right-2.5 flex items-center justify-center rounded-full bg-slate-900 text-white font-bold font-sans pointer-events-none select-none shadow-xs"
+                            className="absolute right-3 flex items-center justify-center rounded-full text-white font-bold font-sans pointer-events-none select-none"
                             style={{
-                              width: '32px',
-                              height: '32px',
-                              minWidth: '32px',
-                              minHeight: '32px',
-                              fontSize: '12px'
+                              width: '40px',
+                              height: '40px',
+                              minWidth: '25px',
+                              minHeight: '25px',
+                              outline: '#8f1961 solid 3px',
+                              outlineOffset: '3px',
+                              marginLeft: '10px',
+                              fontSize: '16px',
+                              backgroundColor: '#8f1961'
                             }}
                             title={`Semaine ${getWeekNumberString(formOuverture)}`}
                           >
@@ -2272,7 +2330,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </div>
 
                   {/* 3. Catégorie, Criticité & Collaborateur (Side-by-side 33% 33% 33%) */}
-                  <div className="grid grid-cols-3 gap-3">
+                  <div 
+                    className="grid grid-cols-3 gap-3"
+                    style={{
+                      border: '1px solid rgb(218, 218, 218)',
+                      boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
+                      borderRadius: '14px',
+                      padding: '20px',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
                     <div>
                       <label>Catégorie.</label>
                       <select
@@ -2341,10 +2408,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
                   {/* 4. Encart: Client ou Prospect, Email, Situation/Structure, Contact, Objet, Description */}
                   <div 
-                    className="space-y-4 p-5"
+                    className="space-y-4"
                     style={{
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '16px',
+                      border: '1px solid rgb(218, 218, 218)',
+                      boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
+                      borderRadius: '14px',
+                      padding: '20px',
                       backgroundColor: '#ffffff'
                     }}
                   >
@@ -2405,7 +2474,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               <div
                                 key={sit}
                                 onClick={() => setFormSituationInterlocuteur(sit)}
-                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                                style={{ border: '1px solid #dadada' }}
                               >
                                 <span 
                                   className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
@@ -2446,7 +2516,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     setFormMarchePublic('Oui');
                                   }
                                 }}
-                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                                style={{ border: '1px solid #dadada' }}
                               >
                                 <span 
                                   className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
@@ -2550,10 +2621,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   {/* 5. SPECIFIC FIELDS WHEN CATEGORY IS « Commercial » */}
                   {formCategorie === 'Commercial' && (
                     <div 
-                      className="space-y-4 p-5 animate-fadeIn"
+                      className="space-y-4 animate-fadeIn"
                       style={{
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '16px',
+                        border: '1px solid rgb(218, 218, 218)',
+                        boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
+                        borderRadius: '14px',
+                        padding: '20px',
                         backgroundColor: '#ffffff'
                       }}
                       id="crm-commercial-section"
@@ -2570,7 +2643,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 <div
                                   key={opt}
                                   onClick={() => setFormMarchePublic(opt)}
-                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                                  style={{ border: '1px solid #dadada' }}
                                 >
                                   <span 
                                     className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
@@ -2606,7 +2680,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 <div
                                   key={sitDevis}
                                   onClick={() => setFormSituationDevis(sitDevis)}
-                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
+                                  style={{ border: '1px solid #dadada' }}
                                 >
                                   <span 
                                     className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
@@ -2657,7 +2732,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                   backgroundColor: isSelected ? '#000000' : '#ffffff',
                                   color: isSelected ? '#ffffff' : '#000000',
-                                  border: isSelected ? '2.5px solid #000000' : '1.5px solid #cbd5e1',
+                                  border: isSelected ? '2.5px solid #000000' : '1.5px solid #dadada',
                                   boxShadow: isSelected ? '0 2px 6px rgba(0,0,0,0.2)' : 'none',
                                   transition: 'all 0.15s ease'
                                 }}
@@ -2822,9 +2897,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             style={{
                               backgroundColor: '#000000',
                               color: '#ffffff',
-                              borderRadius: '10px',
-                              fontSize: '16px',
-                              padding: '8px 16px',
+                              borderRadius: '13px',
+                              fontSize: '18px',
+                              padding: '10px 19px',
                               border: 'none',
                               cursor: 'pointer',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
@@ -2838,7 +2913,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         {formCommercialEvents.length > 0 && (
                           <div className="space-y-3">
                             {formCommercialEvents.map((evt) => (
-                              <div key={evt.id} className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2.5 shadow-xs">
+                              <div key={evt.id} className="p-3.5 bg-white rounded-xl space-y-2.5 shadow-xs" style={{ border: '1px solid #dadada' }}>
                                 <div className="flex items-center justify-between gap-3">
                                   <div>
                                     <label className="text-xs !font-semibold text-slate-600 !mb-1">Date.</label>
@@ -2852,6 +2927,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                         padding: '6px 10px !important',
                                         fontSize: '14px !important',
                                         borderRadius: '8px !important',
+                                        border: '1px solid #dadada !important',
                                       }}
                                     />
                                   </div>
@@ -2859,11 +2935,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     type="button"
                                     onClick={() => handleRemoveCommercialEvent(evt.id)}
                                     style={{
-                                      backgroundColor: '#dc2626',
+                                      backgroundColor: 'rgb(203, 20, 20)',
                                       color: '#ffffff',
-                                      borderRadius: '8px',
-                                      padding: '8px 16px',
-                                      fontSize: '16px',
+                                      borderRadius: '13px',
+                                      padding: '10px 19px',
+                                      fontSize: '18px',
                                       fontWeight: 600,
                                       border: 'none',
                                       cursor: 'pointer',
@@ -2886,6 +2962,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                       fontSize: '15px !important',
                                       padding: '8px 10px !important',
                                       borderRadius: '8px !important',
+                                      border: '1px solid #dadada !important',
                                       resize: 'vertical',
                                       width: '100%'
                                     }}
@@ -2902,11 +2979,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   {/* 5-bis. SPECIFIC BLOCK WHEN CATEGORY IS TECHNIQUE / RÉCLAMATION / SANS CATÉGORIE: ENVOI DE MESSAGE AU CLIENT & HISTORIQUE */}
                   {formCategorie !== 'Commercial' && (
                     <div 
-                      className="space-y-4 p-5 animate-fadeIn"
+                      className="space-y-4 animate-fadeIn"
                       style={{
                         backgroundColor: '#ffffff',
-                        border: '1px solid #cbd5e0',
-                        borderRadius: '16px'
+                        border: '1px solid rgb(218, 218, 218)',
+                        boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
+                        borderRadius: '14px',
+                        padding: '20px'
                       }}
                     >
                       <div className="flex items-center justify-between">
@@ -3331,13 +3410,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
           {/* Drawer container */}
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
-            <div className="w-screen max-w-md sm:max-w-lg lg:max-w-xl bg-white shadow-2xl flex flex-col p-6 sm:p-8 overflow-y-auto justify-between">
-              <div className="space-y-6">
+            <div className="relative w-screen max-w-md sm:max-w-lg lg:max-w-xl bg-white shadow-2xl flex flex-col h-full overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 pb-28">
                 {/* Section FILTRES (Plage date à date & Employé) */}
                 <div 
                   style={{
                     backgroundColor: '#ffffff',
-                    border: '1px solid #DADADA',
+                    border: '1px solid #dadada',
                     boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
                   }}
                   className="rounded-2xl p-4 sm:p-5 space-y-4 text-left"
@@ -3355,7 +3434,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           fontSize: '15px !important',
                           borderRadius: '10px !important',
                           background: '#ffffff !important',
-                          border: '1px solid #cbd5e0 !important'
+                          border: '1px solid #dadada !important'
                         }}
                       />
                     </div>
@@ -3370,7 +3449,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           fontSize: '15px !important',
                           borderRadius: '10px !important',
                           background: '#ffffff !important',
-                          border: '1px solid #cbd5e0 !important'
+                          border: '1px solid #dadada !important'
                         }}
                       />
                     </div>
@@ -3378,31 +3457,36 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
                   {/* Bouton Export déplacé juste au-dessus du champ Employé, sans icône download */}
                   <div>
-                    <button
-                      type="button"
-                      id="btn-export-crm-performance-csv"
-                      disabled={filteredPerfTickets.length === 0}
-                      onClick={handleExportPerformanceCSV}
-                      style={{
-                        backgroundColor: filteredPerfTickets.length === 0 ? '#9ca3af' : '#3556ec',
-                        color: '#ffffff',
-                        fontSize: '18px',
-                        fontWeight: 'normal',
-                        borderRadius: '13px',
-                        padding: '12px 24px',
-                        border: 'none',
-                        cursor: filteredPerfTickets.length === 0 ? 'not-allowed' : 'pointer',
-                        width: '100%',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        opacity: filteredPerfTickets.length === 0 ? 0.6 : 1,
-                      }}
-                      className={filteredPerfTickets.length === 0 ? '' : 'hover:bg-[#2b48cc] transition-colors'}
-                    >
-                      Export CSV
-                    </button>
+                    {(() => {
+                      const isExportDisabled = !perfStartDate || !perfEndDate || filteredPerfTickets.length === 0;
+                      return (
+                        <button
+                          type="button"
+                          id="btn-export-crm-performance-csv"
+                          disabled={isExportDisabled}
+                          onClick={handleExportPerformanceCSV}
+                          style={{
+                            backgroundColor: isExportDisabled ? '#9ca3af' : '#3556ec',
+                            color: '#ffffff',
+                            fontSize: '18px',
+                            fontWeight: 'normal',
+                            borderRadius: '13px',
+                            padding: '12px 24px',
+                            border: 'none',
+                            cursor: isExportDisabled ? 'not-allowed' : 'pointer',
+                            width: '100%',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            opacity: isExportDisabled ? 0.6 : 1,
+                          }}
+                          className={isExportDisabled ? '' : 'hover:bg-[#2b48cc] transition-colors'}
+                        >
+                          Export CSV
+                        </button>
+                      );
+                    })()}
                   </div>
 
                   {/* Choix Employé avec 'Tous' en première option */}
@@ -3416,7 +3500,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         fontSize: '15px !important',
                         borderRadius: '10px !important',
                         background: '#ffffff !important',
-                        border: '1px solid #cbd5e0 !important'
+                        border: '1px solid #dadada !important'
                       }}
                     >
                       <option value="Tous">Tous</option>
@@ -3436,7 +3520,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <div 
                       className="p-4 rounded-2xl bg-white text-center flex flex-col items-center justify-center space-y-2"
                       style={{
-                        border: '1px solid #DADADA',
+                        border: '1px solid #dadada',
                         boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
                       }}
                       id="stat-block-tickets-ouverts"
@@ -3472,7 +3556,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <div 
                       className="p-4 rounded-2xl bg-white text-center flex flex-col items-center justify-center space-y-2"
                       style={{
-                        border: '1px solid #DADADA',
+                        border: '1px solid #dadada',
                         boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
                       }}
                       id="stat-block-tickets-fermes"
@@ -3508,7 +3592,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <div 
                       className="p-4 rounded-2xl bg-white text-center flex flex-col items-center justify-center space-y-2"
                       style={{
-                        border: '1px solid #DADADA',
+                        border: '1px solid #dadada',
                         boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
                       }}
                       id="stat-block-volume-affaires"
@@ -3539,7 +3623,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         <span>
                           {statVolumeAffaires.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
-                        <span style={{ fontSize: '32px' }}>
+                        <span style={{ fontSize: '22px', marginLeft: '-3px' }}>
                           €
                         </span>
                       </div>
@@ -3549,7 +3633,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <div 
                       className="p-4 rounded-2xl bg-white text-center flex flex-col items-center justify-center space-y-2"
                       style={{
-                        border: '1px solid #DADADA',
+                        border: '1px solid #dadada',
                         boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
                       }}
                       id="stat-block-score-closing"
@@ -3584,8 +3668,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 </div>
               </div>
 
-              {/* Full-width Fermer button at bottom */}
-              <div className="pt-6">
+              {/* Floating Full-width Fermer button at bottom */}
+              <div className="absolute bottom-5 left-6 right-6 sm:left-8 sm:right-8 z-20">
                 <button
                   type="button"
                   id="btn-close-crm-performance-bottom"
@@ -3600,6 +3684,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     border: 'none',
                     width: '100%',
                     cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
                   className="hover:bg-zinc-800 transition-colors"
@@ -3632,7 +3717,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   id="crm-settings-section-relance-email"
                 >
                   <div>
-                    <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '12px', display: 'block', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}>
+                    <label style={{ fontSize: '22px', fontWeight: 600, color: '#000000', paddingTop: '16px', marginBottom: '14px', display: 'block', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}>
                       Texte de l’email de relance
                     </label>
 
@@ -3651,7 +3736,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         style={{
                           width: '100%',
                           padding: '10px 14px',
-                          border: relanceEmailError ? '1px solid #ef4444' : '1px solid #cbd5e0',
+                          border: relanceEmailError ? '1px solid #ef4444' : '1px solid #dadada',
                           borderRadius: '11px',
                           fontSize: '15px',
                           color: '#000000',
@@ -3685,7 +3770,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       style={{
                         width: '100%',
                         padding: '12px 16px',
-                        border: '1px solid #cbd5e0',
+                        border: '1px solid #dadada',
                         borderRadius: '13px',
                         fontSize: '16px',
                         color: '#000000',
@@ -3729,7 +3814,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   id="crm-settings-section-support-email"
                 >
                   <div>
-                    <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '12px', display: 'block', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}>
+                    <label style={{ fontSize: '22px', fontWeight: 600, color: '#000000', paddingTop: '16px', marginBottom: '14px', display: 'block', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}>
                       Texte initial email de support
                     </label>
 
@@ -3748,7 +3833,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         style={{
                           width: '100%',
                           padding: '10px 14px',
-                          border: supportEmailError ? '1px solid #ef4444' : '1px solid #cbd5e0',
+                          border: supportEmailError ? '1px solid #ef4444' : '1px solid #dadada',
                           borderRadius: '11px',
                           fontSize: '15px',
                           color: '#000000',
@@ -3777,7 +3862,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         style={{
                           width: '100%',
                           padding: '10px 14px',
-                          border: '1px solid #cbd5e0',
+                          border: '1px solid #dadada',
                           borderRadius: '11px',
                           fontSize: '15px',
                           color: '#000000',
@@ -3806,7 +3891,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       style={{
                         width: '100%',
                         padding: '12px 16px',
-                        border: '1px solid #cbd5e0',
+                        border: '1px solid #dadada',
                         borderRadius: '13px',
                         fontSize: '16px',
                         color: '#000000',

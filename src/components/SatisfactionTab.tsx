@@ -148,6 +148,9 @@ export default function SatisfactionTab({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null);
 
+  // Selection state for reviews
+  const [selectedReviewIds, setSelectedReviewIds] = useState<string[]>([]);
+
   // Month filter state
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
 
@@ -407,10 +410,10 @@ export default function SatisfactionTab({
   };
 
   const roundBadgeStyle: React.CSSProperties = {
-    width: '27px',
-    height: '27px',
+    width: '30px',
+    height: '30px',
     borderRadius: '50%',
-    backgroundColor: '#fe4eba',
+    backgroundColor: '#3556ec',
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: '11px',
@@ -428,6 +431,10 @@ export default function SatisfactionTab({
     height: '46px',
     fontSize: '13.5px',
     letterSpacing: '-0.3px',
+    outline: '#8f1961 solid 3px',
+    outlineOffset: '3px',
+    marginLeft: '5px',
+    backgroundColor: '#8f1961',
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
@@ -487,8 +494,28 @@ export default function SatisfactionTab({
     });
   }, [customerReviews, selectedMonth, search]);
 
-  // CSV Export handler - exports dynamically based on the current display and title
+  // Selection handlers
+  const isAllSelected = filteredReviews.length > 0 && filteredReviews.every(r => selectedReviewIds.includes(r.id));
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedReviewIds([]);
+    } else {
+      setSelectedReviewIds(filteredReviews.map(r => r.id));
+    }
+  };
+
+  const handleToggleSelectRow = (id: string) => {
+    setSelectedReviewIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  // CSV Export handler - exports only the selected reviews
   const handleExportCSV = () => {
+    const reviewsToExport = filteredReviews.filter(rev => selectedReviewIds.includes(rev.id));
+    if (reviewsToExport.length === 0) return;
+
     const headers = [
       "Note globale",
       "Date",
@@ -504,7 +531,7 @@ export default function SatisfactionTab({
       "Évaluation"
     ];
 
-    const rows = filteredReviews.map(rev => {
+    const rows = reviewsToExport.map(rev => {
       const note = getNoteGlobale(rev);
       const date = formatToDisplayDate(getReviewDate(rev)) || '';
       const intervention = rev.interventionReference || rev.interventionRef || rev.intervention || '';
@@ -734,8 +761,13 @@ export default function SatisfactionTab({
               type="button"
               id="btn-export-satisfaction-csv"
               onClick={handleExportCSV}
-              style={rowActionButtonStyle}
-              className="cursor-pointer font-sans whitespace-nowrap hover:opacity-80 transition-all"
+              disabled={selectedReviewIds.length === 0}
+              style={{
+                ...rowActionButtonStyle,
+                opacity: selectedReviewIds.length === 0 ? 0.4 : 1,
+                cursor: selectedReviewIds.length === 0 ? 'not-allowed' : 'pointer',
+              }}
+              className="font-sans whitespace-nowrap hover:opacity-80 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <span>{t("Exporter")}</span>
             </button>
@@ -803,6 +835,25 @@ export default function SatisfactionTab({
           <table className="w-full text-left font-sans border-collapse text-xs" id="satisfaction-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
             <thead>
               <tr className="bg-transparent">
+                <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default', position: 'relative', top: 0, backgroundColor: '#ffffff', zIndex: 10, borderBottom: '1px solid rgb(218, 218, 218)' }}>
+                  <button
+                    type="button"
+                    onClick={handleToggleSelectAll}
+                    id="select-all-radio-checkbox"
+                    className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                      isAllSelected
+                        ? 'border-[#fe4eba] bg-transparent'
+                        : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                    }`}
+                    style={{ borderWidth: '2.5px' }}
+                    role="checkbox"
+                    aria-checked={isAllSelected}
+                  >
+                    {isAllSelected && (
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                    )}
+                  </button>
+                </th>
                 <th className="px-3 pt-3 pb-1.5 text-center min-w-[120px] whitespace-nowrap" style={thStyle}>{t("Note globale.")}</th>
                 <th className="px-4 pt-3 pb-1.5 w-28 whitespace-nowrap" style={thStyle}>{t("Date.")}</th>
                 <th className="px-4 pt-3 pb-1.5 w-36 whitespace-nowrap" style={thStyle}>{t("Intervention.")}</th>
@@ -819,6 +870,7 @@ export default function SatisfactionTab({
               </tr>
               {/* Second header row: column averages */}
               <tr className="bg-transparent" style={{ borderBottom: '1px solid rgb(218, 218, 218)' }}>
+                <th className="px-4 pt-1.5 pb-3"></th>
                 <th className="px-3 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
                   <div className="inline-flex items-center justify-center gap-[2px]">
                     <div style={roundBadgeStyle} title={t("Moyenne Note globale")}>
@@ -909,12 +961,13 @@ export default function SatisfactionTab({
             <tbody className="text-slate-700 text-xs text-black">
               {filteredReviews.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-12">
+                  <td colSpan={14} className="py-12">
                     <EmptyTablePlaceholder className="p-12 text-center font-sans lg:py-16" />
                   </td>
                 </tr>
               ) : (
                 filteredReviews.map((rev) => {
+                  const isChecked = selectedReviewIds.includes(rev.id);
                   const truncatedClientName = rev.clientName && rev.clientName.length > 15 
                     ? `${rev.clientName.substring(0, 15)}...` 
                     : rev.clientName || '-';
@@ -927,7 +980,33 @@ export default function SatisfactionTab({
                   const noteGlobale = getNoteGlobale(rev);
 
                   return (
-                    <tr key={rev.id} className="group hover:bg-[#ffecf8] transition-all cursor-pointer">
+                    <tr 
+                      key={rev.id} 
+                      className={`group hover:bg-[#ffecf8] transition-all cursor-pointer ${isChecked ? 'bg-[#fff5fa]' : ''}`}
+                    >
+                      {/* Radio selection column */}
+                      <td className="px-4 py-3.5 w-12 text-center select-none" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleSelectRow(rev.id);
+                          }}
+                          id={`radio-checkbox-row-${rev.id}`}
+                          className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                            isChecked
+                              ? 'border-[#fe4eba] bg-transparent'
+                              : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                          }`}
+                          style={{ borderWidth: '2.5px' }}
+                          role="checkbox"
+                          aria-checked={isChecked}
+                        >
+                          {isChecked && (
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                          )}
+                        </button>
+                      </td>
                       
                       {/* Round badges for Note globale (Note + Pourcentage) */}
                       <td className="px-3 py-4 align-middle text-center cursor-default whitespace-nowrap">
@@ -1071,7 +1150,7 @@ export default function SatisfactionTab({
               >
                 <div className="flex items-center justify-between">
                   <h4 
-                    style={{ fontSize: '18px', fontWeight: 600, color: '#000000', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}
+                    style={{ fontSize: '22px', fontWeight: 600, color: '#000000', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}
                     className="cursor-default"
                   >
                     {t("Satisfaction Moyenne") || "Satisfaction Moyenne"}
@@ -1080,11 +1159,11 @@ export default function SatisfactionTab({
                     type="button"
                     onClick={() => { setSatStartDate(''); setSatEndDate(''); }}
                     style={{
-                      fontSize: '16px',
-                      backgroundColor: '#ef4444',
-                      color: '#ffffff',
-                      borderRadius: '10px',
-                      padding: '6px 16px',
+                      fontSize: '18px',
+                      backgroundColor: 'rgb(222 29 29)',
+                      color: '#fff',
+                      borderRadius: '13px',
+                      padding: '8px 15px',
                       border: 'none',
                       cursor: 'pointer',
                       fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -1173,11 +1252,12 @@ export default function SatisfactionTab({
                   <div 
                     className="p-4 rounded-xl text-center"
                     style={{ 
-                      backgroundColor: '#fafafa', 
-                      border: '1px solid #f0f0f0',
-                      color: '#000000',
+                      backgroundColor: '#fff', 
+                      border: 'none',
+                      color: '#000',
                       fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                      fontSize: '15px'
+                      fontSize: '18px',
+                      cursor: 'default'
                     }}
                   >
                     {t("Données insuffisantes sur cette période.") || "Données insuffisantes sur cette période."}
@@ -1185,16 +1265,27 @@ export default function SatisfactionTab({
                 ) : (
                   <div 
                     className="pt-2 flex flex-col items-center justify-center text-center p-4 rounded-xl"
-                    style={{ backgroundColor: '#fafafa', border: '1px solid #f0f0f0' }}
+                    style={{ backgroundColor: '#ffffff', border: 'none' }}
                   >
                     <div className="flex items-center justify-center gap-1.5">
                       <div 
-                        style={roundBadgeStyle}
+                        style={{
+                          ...roundBadgeStyle,
+                          width: '30px',
+                          height: '30px',
+                          backgroundColor: '#3556ec',
+                        }}
                       >
                         {perfSatisfaction.scoreValue}
                       </div>
                       <div 
-                        style={percentBadgeStyle}
+                        style={{
+                          ...percentBadgeStyle,
+                          outline: '#8f1961 solid 3px',
+                          outlineOffset: '3px',
+                          marginLeft: '5px',
+                          backgroundColor: '#8f1961',
+                        }}
                       >
                         {perfSatisfaction.pctScore === '-' ? '-' : perfSatisfaction.pctScore}
                       </div>
@@ -1204,10 +1295,11 @@ export default function SatisfactionTab({
                       style={{ 
                         fontSize: '18px', 
                         color: '#000000', 
-                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" 
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        cursor: 'default'
                       }}
                     >
-                      {`${perfSatisfaction.totalCount} ${perfSatisfaction.totalCount > 1 ? t("avis enregistrés") : t("avis enregistré")}`}
+                      {`Vous avez ${perfSatisfaction.totalCount} ${perfSatisfaction.totalCount > 1 ? t("avis enregistrés") : t("avis enregistré")}.`}
                     </div>
                   </div>
                 )}
@@ -1225,7 +1317,7 @@ export default function SatisfactionTab({
               >
                 <div className="flex items-center justify-between">
                   <h4 
-                    style={{ fontSize: '18px', fontWeight: 600, color: '#000000', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}
+                    style={{ fontSize: '22px', fontWeight: 600, color: '#000000', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}
                     className="cursor-default"
                   >
                     {t("Score NPS") || "Score NPS"}
@@ -1234,11 +1326,11 @@ export default function SatisfactionTab({
                     type="button"
                     onClick={() => { setNpsStartDate(''); setNpsEndDate(''); }}
                     style={{
-                      fontSize: '16px',
-                      backgroundColor: '#ef4444',
-                      color: '#ffffff',
-                      borderRadius: '10px',
-                      padding: '6px 16px',
+                      fontSize: '18px',
+                      backgroundColor: 'rgb(222 29 29)',
+                      color: '#fff',
+                      borderRadius: '13px',
+                      padding: '8px 15px',
                       border: 'none',
                       cursor: 'pointer',
                       fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -1327,11 +1419,12 @@ export default function SatisfactionTab({
                   <div 
                     className="p-4 rounded-xl text-center"
                     style={{ 
-                      backgroundColor: '#fafafa', 
-                      border: '1px solid #f0f0f0',
-                      color: '#000000',
+                      backgroundColor: '#fff', 
+                      border: 'none',
+                      color: '#000',
                       fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                      fontSize: '15px'
+                      fontSize: '18px',
+                      cursor: 'default'
                     }}
                   >
                     {t("Données insuffisantes sur cette période.") || "Données insuffisantes sur cette période."}
@@ -1339,7 +1432,7 @@ export default function SatisfactionTab({
                 ) : (
                   <div 
                     className="pt-2 flex flex-col items-center justify-center text-center p-4 rounded-xl"
-                    style={{ backgroundColor: '#fafafa', border: '1px solid #f0f0f0' }}
+                    style={{ backgroundColor: '#ffffff', border: 'none' }}
                   >
                     <div 
                       style={{ 
@@ -1365,10 +1458,11 @@ export default function SatisfactionTab({
                 <div className="space-y-2 pt-1 font-sans">
                   {/* Promoteurs */}
                   <div 
-                    className="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between"
+                    className="p-3 bg-white flex items-center justify-between"
+                    style={{ border: '1px solid #dadada', borderRadius: '14px' }}
                   >
                     <div className="space-y-0.5">
-                      <div className="font-semibold text-black text-sm flex items-center gap-2">
+                      <div className="font-semibold text-black flex items-center gap-2" style={{ fontSize: '22px' }}>
                         <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] inline-block shrink-0"></span>
                         <span>{t("Promoteurs (9-10)")}</span>
                       </div>
@@ -1380,7 +1474,7 @@ export default function SatisfactionTab({
                       <div className="font-bold text-black text-base">
                         {perfNps.pctPromoters}%
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs" style={{ color: '#000000' }}>
                         {perfNps.promotersCount} {perfNps.promotersCount > 1 ? t("avis") : t("avis")}
                       </div>
                     </div>
@@ -1388,10 +1482,11 @@ export default function SatisfactionTab({
 
                   {/* Passifs */}
                   <div 
-                    className="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between"
+                    className="p-3 bg-white flex items-center justify-between"
+                    style={{ border: '1px solid #dadada', borderRadius: '14px' }}
                   >
                     <div className="space-y-0.5">
-                      <div className="font-semibold text-black text-sm flex items-center gap-2">
+                      <div className="font-semibold text-black flex items-center gap-2" style={{ fontSize: '22px' }}>
                         <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b] inline-block shrink-0"></span>
                         <span>{t("Passifs (7-8)")}</span>
                       </div>
@@ -1403,7 +1498,7 @@ export default function SatisfactionTab({
                       <div className="font-bold text-black text-base">
                         {perfNps.pctPassives}%
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs" style={{ color: '#000000' }}>
                         {perfNps.passivesCount} {perfNps.passivesCount > 1 ? t("avis") : t("avis")}
                       </div>
                     </div>
@@ -1411,10 +1506,11 @@ export default function SatisfactionTab({
 
                   {/* Détracteurs */}
                   <div 
-                    className="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between"
+                    className="p-3 bg-white flex items-center justify-between"
+                    style={{ border: '1px solid #dadada', borderRadius: '14px' }}
                   >
                     <div className="space-y-0.5">
-                      <div className="font-semibold text-black text-sm flex items-center gap-2">
+                      <div className="font-semibold text-black flex items-center gap-2" style={{ fontSize: '22px' }}>
                         <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444] inline-block shrink-0"></span>
                         <span>{t("Détracteurs (0-6)")}</span>
                       </div>
@@ -1426,7 +1522,7 @@ export default function SatisfactionTab({
                       <div className="font-bold text-black text-base">
                         {perfNps.pctDetractors}%
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs" style={{ color: '#000000' }}>
                         {perfNps.detractorsCount} {perfNps.detractorsCount > 1 ? t("avis") : t("avis")}
                       </div>
                     </div>
