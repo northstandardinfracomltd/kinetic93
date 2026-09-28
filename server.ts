@@ -255,7 +255,7 @@ function saveSingleDefibrillateurToChunk(defib: any, chunkIdx: number, prefix: s
     (async () => {
       try {
         const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${chunkIdx}`);
-        const snap = await withTimeout(getDoc(chunkDocRef), 3000, null);
+        const snap = await withTimeout(getDoc(chunkDocRef), 15000, null);
         if (snap && snap.exists()) {
           const docData = snap.data();
           const arr = docData?.value || [];
@@ -692,6 +692,16 @@ async function startServer() {
   // Use json middleware for API routes with high limit to handle large datasets (18,000+ items)
   app.use(express.json({ limit: '200mb' }));
   app.use(express.urlencoded({ extended: true, limit: '200mb' }));
+
+  // Static sounds serving for zero-latency audio playback
+  app.use('/sounds', express.static(path.join(process.cwd(), 'public', 'sounds'), {
+    maxAge: '1y',
+    immutable: true,
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Content-Type', 'audio/mpeg');
+    }
+  }));
 
   // Endpoint for identifying a defibrillator model using Gemini API
   app.post("/api/gemini/detect-model", async (req, res) => {
@@ -1170,296 +1180,337 @@ function matchesDefibWith(targetStr: string): (d: any) => boolean {
 
 function formatDefibrillateurOutput(d: any): any {
   if (!d || typeof d !== 'object') return d;
+
+  // Extract clean resolved values using all possible input aliases
+  const id = d.id || d.identifiant || '';
+  const identifiant = d.identifiant || d.id || '';
+  const numeroSerie = d.numeroSerie || d.num_serie || d.serial || '';
+
+  // Coffret
+  const rawCoffret = String(d.modeleCoffret || d.modele_coffret || d.boitier_modele || d.coffret_modele || d.modeleCoffretId || '').trim();
+  const isCoffretIdVar = rawCoffret.startsWith('VAR_') || rawCoffret.startsWith('var_') || rawCoffret.startsWith('v_');
+  const modeleCoffret = isCoffretIdVar ? (d.modeleCoffret || d.modele_coffret || d.boitier_modele || '') : rawCoffret;
+  const modeleCoffretId = d.modeleCoffretId || (isCoffretIdVar ? rawCoffret : '');
+  const numeroLotCoffret = String(d.numeroLotCoffret || d.boitier_lot || d.lot_coffret || d.lotCoffret || '').trim();
+  const commentaireCoffret = String(d.commentaireCoffret || d.commentaire_coffret || '').trim();
+
+  // Batterie
+  const rawBat = String(d.modeleBatterie || d.modele_batterie || d.modele_b || d.batterie_modele || d.modeleBatterieId || '').trim();
+  const isBatIdVar = rawBat.startsWith('VAR_') || rawBat.startsWith('var_') || rawBat.startsWith('v_');
+  const modeleBatterie = isBatIdVar ? (d.modeleBatterie || d.modele_batterie || d.modele_b || '') : rawBat;
+  const modeleBatterieId = d.modeleBatterieId || (isBatIdVar ? rawBat : '');
+  const lotBatterie = String(d.lotBatterie || d.lot_batterie || d.lot_b || d.batterie_lot || '').trim();
+  const peremptionBatterie = String(d.peremptionBatterie || d.peremption_batterie || d.peremption_b || d.date_peremption_batterie || '').trim();
+  const insertionBatterie = String(d.insertionBatterie || d.insertion_batterie || d.insertion_b || '').trim();
+  const livraisonBatterie = String(d.livraisonBatterie || d.livraison_batterie || d.livraison_b || '').trim();
+  const fabricationBatterie = String(d.fabricationBatterie || d.fabrication_b || d.date_fabrication_batterie || '').trim();
+  const situationBatterie = String(d.situationBatterie || d.situation_b || 'Vert').trim();
+  const pourcentageBatterie = d.pourcentageBatterie !== undefined && d.pourcentageBatterie !== '' ? String(d.pourcentageBatterie) : (d.pourcentage_constate_b !== undefined ? String(d.pourcentage_constate_b) : (d.pourcentage_batterie !== undefined ? String(d.pourcentage_batterie) : '100'));
+  const commentaireBatterie = String(d.commentaireBatterie || d.commentaire_b || d.commentaire_batterie || '').trim();
+
+  // Batterie secours
+  const hasBatterieSecours = d.hasBatterieSecours || d.has_batterie_secours || 'Non';
+  const rawBatSec = String(d.modeleBatterieSecours || d.modele_secours_b || d.modeleBatterieSecoursId || '').trim();
+  const isBatSecVar = rawBatSec.startsWith('VAR_') || rawBatSec.startsWith('var_') || rawBatSec.startsWith('v_');
+  const modeleBatterieSecours = isBatSecVar ? (d.modeleBatterieSecours || d.modele_secours_b || '') : rawBatSec;
+  const modeleBatterieSecoursId = d.modeleBatterieSecoursId || (isBatSecVar ? rawBatSec : '');
+  const lotBatterieSecours = String(d.lotBatterieSecours || d.lot_secours_b || '').trim();
+  const peremptionBatterieSecours = String(d.peremptionBatterieSecours || d.peremption_secours_b || '').trim();
+
+  // Électrode Adulte (A)
+  const rawElecA = String(d.modeleElectrodeA || d.modele_electrode_a || d.modele_a || d.electrode_a_modele || d.modeleElectrodeAId || '').trim();
+  const isElecAVar = rawElecA.startsWith('VAR_') || rawElecA.startsWith('var_') || rawElecA.startsWith('v_');
+  const modeleElectrodeA = isElecAVar ? (d.modeleElectrodeA || d.modele_electrode_a || d.modele_a || '') : rawElecA;
+  const modeleElectrodeAId = d.modeleElectrodeAId || (isElecAVar ? rawElecA : '');
+  const lotElectrodeA = String(d.lotElectrodeA || d.lot_electrode_a || d.lot_a || d.electrode_a_lot || '').trim();
+  const peremptionElectrodeA = String(d.peremptionElectrodeA || d.peremption_electrode_a || d.peremption_a || d.date_peremption_a || '').trim();
+  const insertionElectrodeA = String(d.insertionElectrodeA || d.insertion_electrode_a || d.insertion_a || '').trim();
+  const livraisonElectrodeA = String(d.livraisonElectrodeA || d.livraison_electrode_a || d.livraison_a || '').trim();
+  const situationElectrodeA = String(d.situationElectrodeA || d.situation_a || 'Vert').trim();
+  const commentaireElectrodeA = String(d.commentaireElectrodeA || d.commentaire_a || d.commentaire_electrode_a || '').trim();
+
+  // Électrode Adulte Secours
+  const hasElectrodeASecours = d.hasElectrodeASecours || d.has_electrode_a_secours || 'Non';
+  const rawElecASec = String(d.modeleElectrodeASecours || d.modele_secours_a || d.modeleElectrodeASecoursId || '').trim();
+  const isElecASecVar = rawElecASec.startsWith('VAR_') || rawElecASec.startsWith('var_') || rawElecASec.startsWith('v_');
+  const modeleElectrodeASecours = isElecASecVar ? (d.modeleElectrodeASecours || d.modele_secours_a || '') : rawElecASec;
+  const modeleElectrodeASecoursId = d.modeleElectrodeASecoursId || (isElecASecVar ? rawElecASec : '');
+  const lotElectrodeASecours = String(d.lotElectrodeASecours || d.lot_secours_a || '').trim();
+  const peremptionSecoursElectrodeA = String(d.peremptionSecoursElectrodeA || d.peremption_secours_a || '').trim();
+
+  // Padpak Adulte
+  const hasPadpakA = d.hasPadpakA || d.has_padpak_a || 'Non';
+  const lotPadpakA = String(d.lotPadpakA || d.lot_padpak_a || '').trim();
+  const peremptionPadpakA = String(d.peremptionPadpakA || d.peremption_padpak_a || '').trim();
+
+  // Électrode Pédiatrique (P)
+  const rawElecP = String(d.modeleElectrodeP || d.modele_electrode_p || d.modele_p || d.electrode_p_modele || d.modeleElectrodePId || '').trim();
+  const isElecPVar = rawElecP.startsWith('VAR_') || rawElecP.startsWith('var_') || rawElecP.startsWith('v_');
+  const modeleElectrodeP = isElecPVar ? (d.modeleElectrodeP || d.modele_electrode_p || d.modele_p || '') : rawElecP;
+  const modeleElectrodePId = d.modeleElectrodePId || (isElecPVar ? rawElecP : '');
+  const lotElectrodeP = String(d.lotElectrodeP || d.lot_electrode_p || d.lot_p || d.electrode_p_lot || '').trim();
+  const peremptionElectrodeP = String(d.peremptionElectrodeP || d.peremption_electrode_p || d.peremption_p || d.date_peremption_p || '').trim();
+  const insertionElectrodeP = String(d.insertionElectrodeP || d.insertion_electrode_p || d.insertion_p || '').trim();
+  const livraisonElectrodeP = String(d.livraisonElectrodeP || d.livraison_electrode_p || d.livraison_p || '').trim();
+  const situationElectrodeP = String(d.situationElectrodeP || d.situation_p || 'Vert').trim();
+  const commentaireElectrodeP = String(d.commentaireElectrodeP || d.commentaire_p || d.commentaire_electrode_p || '').trim();
+
+  // Électrode Pédiatrique Secours
+  const hasElectrodePSecours = d.hasElectrodePSecours || d.has_electrode_p_secours || 'Non';
+  const rawElecPSec = String(d.modeleElectrodePSecours || d.modele_secours_p || d.modeleElectrodePSecoursId || '').trim();
+  const isElecPSecVar = rawElecPSec.startsWith('VAR_') || rawElecPSec.startsWith('var_') || rawElecPSec.startsWith('v_');
+  const modeleElectrodePSecours = isElecPSecVar ? (d.modeleElectrodePSecours || d.modele_secours_p || '') : rawElecPSec;
+  const modeleElectrodePSecoursId = d.modeleElectrodePSecoursId || (isElecPSecVar ? rawElecPSec : '');
+  const lotElectrodePSecours = String(d.lotElectrodePSecours || d.lot_secours_p || '').trim();
+  const peremptionSecoursElectrodeP = String(d.peremptionSecoursElectrodeP || d.peremption_secours_p || '').trim();
+
+  // Padpak Pédiatrique
+  const hasPadpakP = d.hasPadpakP || d.has_padpak_p || 'Non';
+  const lotPadpakP = String(d.lotPadpakP || d.lot_padpak_p || '').trim();
+  const peremptionPadpakP = String(d.peremptionPadpakP || d.peremption_padpak_p || '').trim();
+
+  // DAE Matériel
+  const rawDae = String(d.modele || d.modele_dae || d.model || d.modeleDAE || d.modeleId || '').trim();
+  const isDaeVar = rawDae.startsWith('VAR_') || rawDae.startsWith('var_') || rawDae.startsWith('v_');
+  const modele = isDaeVar ? (d.modele || d.modele_dae || d.model || '') : rawDae;
+  const modeleId = d.modeleId || (isDaeVar ? rawDae : '');
+  const marque = d.marque || d.brand || 'Standard';
+  const statut = d.statut || d.status || d.statut_operationnel || 'Opérationnel';
+  const conforme = d.conforme || d.conformite || 'Oui';
+  const statutVoyant = d.statutVoyant || d.statut_voyant || 'Vert OK';
+  const etatHousse = d.etatHousse || d.etat_housse || 'Conforme';
+
+  // Maintenance & Dates
+  const derniereMaintenance = d.derniereMaintenance || d.derniere_maintenance || d.date_derniere_maintenance || '';
+  const prochaineMaintenance = d.prochaineMaintenance || d.prochaine_visite || d.prochaine_v || '';
+  const finGarantie = d.finGarantie || d.fin_garantie || d.expiration_garantie || '';
+  const fabrication = d.fabrication || d.date_fabrication || '';
+  const miseEnService = d.miseEnService || d.mise_en_service || '';
+  const sortieFabricant = d.sortieFabricant || d.sortie_fabricant || '';
+
+  // Trousse de secours
+  const peremptionTrousse = d.peremptionTrousse || d.peremption_trousse || d.date_peremption_trousse || '';
+  const kitCiseauxPresents = d.kitCiseauxPresents || d.kit_ciseaux_presents || d.ciseaux_presents || 'Oui';
+  const kitMasquePresent = d.kitMasquePresent || d.kit_masque_present || d.masque_present || 'Oui';
+  const kitPeremptionMasque = d.kitPeremptionMasque || d.kit_peremption_masque || d.peremption_masque || '';
+  const kitServiettesPresentes = d.kitServiettesPresentes || d.kit_serviettes_presentes || d.serviettes_presentes || 'Oui';
+  const kitPeremptionServiettes = d.kitPeremptionServiettes || d.kit_peremption_serviettes || d.peremption_serviettes || '';
+  const kitGantsPresents = d.kitGantsPresents || d.kit_gants_presents || d.gants_presents || 'Oui';
+  const kitRasoirPresent = d.kitRasoirPresent || d.kit_rasoir_present || d.rasoir_present || d.rasoir || 'Oui';
+
+  // Localisation & Site
+  const numVoie = d.numVoie || d.numero_et_voie || d.adresse || '';
+  const cp = d.cp || d.code_postal || d.zip || '';
+  const ville = d.ville || d.city || '';
+  const region = d.region || '';
+  const pays = d.pays || d.country || '';
+  const latitude = d.latitude || d.lat || '';
+  const longitude = d.longitude || d.lon || d.lng || '';
+  const commentaireAdresse = d.commentaireAdresse || d.aide_acces || '';
+  const nomSite = d.nomSite || d.nom_site || '';
+  const nomPrenomSite = d.nomPrenomSite || d.nom_prenom || '';
+  const telephoneSite = d.telephoneSite || d.telephone_portable || d.telephone_site || d.phone || '';
+  const emailSite = d.emailSite || d.email || d.email_site || '';
+  const categorieEtablissement = d.categorieEtablissement || d.categorie_etablissement || '';
+  const horaires = d.horaires || '';
+
+  // Commentaires
+  const commentaire = d.commentaire || d.notes || d.note || '';
+  const commentaireInterne = d.commentaireInterne || d.commentaire_interne || '';
+  const commentaireCampagneRappel = d.commentaireCampagneRappel || d.commentaire_campagne_rappel || '';
+
+  // Contrat & Facturation
+  const contrat = d.contrat || d.nomContrat || d.nom_contrat || 'Non';
+  const nomContrat = d.nomContrat || d.nom_contrat || '';
+  const referenceContrat = d.referenceContrat || d.reference_contrat || '';
+  const debutContrat = d.debutContrat || d.debut_contrat || '';
+  const finContrat = d.finContrat || d.fin_contrat || '';
+  const payeurId = d.payeurId || d.payeur_id || '';
+  const clientId = d.clientId || d.client_id || '';
+  const clientNom = d.clientNom || d.client_nom || d.client || '';
+  const clientIdField = d.clientIdField || d.client_id_field || '';
+
+  // Accès & Flags
+  const acces247 = toBoolean(d.acces247 ?? d.acces_247, false);
+  const accesSemaine = toBoolean(d.accesSemaine ?? d.acces_semaine, false);
+  const accesWeekend = toBoolean(d.accesWeekend ?? d.acces_weekend, false);
+  const exterieur = toBoolean(d.exterieur ?? d.exterieur_bool, false);
+  const fsmAutorise = d.fsmAutorise || d.fsm_autorise || d.maintenance_autorisee || 'Oui';
+  const sousTraitance = d.sousTraitance || d.sous_traitance || 'Non';
+  const loue = d.loue || 'Non';
+  const prete = d.prete || 'Non';
+  const stocke = d.stocke || 'Non';
+  const archive = d.archive || 'Non';
+  const numeroAtlasante = d.numeroAtlasante || d.numero_atlasante || '';
+  const versionLogiciel = d.versionLogiciel || d.version_logiciel || '';
+  const victimeSurvie = d.victimeSurvie || d.victime_survie || 'Non';
+  const victimeSansSurvie = d.victimeSansSurvie || d.victime_sans_survie || 'Non';
+  const ageVictime = d.ageVictime || d.age_victime || '';
+  const rappelMensuelAuto = d.rappelMensuelAuto || d.rappel_mensuel_auto || 'Non';
+  const rappelHebdoAuto = d.rappelHebdoAuto || d.rappel_hebdo_auto || 'Non';
+  const rappelJournalierAuto = d.rappelJournalierAuto || d.rappel_journalier_auto || 'Non';
+
   return {
-    ...d,
-    id: d.id,
-    identifiant: d.identifiant || d.id,
-    numeroSerie: d.numeroSerie || d.num_serie || '',
-    num_serie: d.num_serie || d.numeroSerie || '',
+    id,
+    identifiant,
+    numeroSerie,
+    statut,
+    statutVoyant,
+    etatHousse,
+    conforme,
+    fsmAutorise,
 
-    derniereMaintenance: d.derniereMaintenance || d.derniere_maintenance || d.date_derniere_maintenance || '',
-    derniere_maintenance: d.derniere_maintenance || d.derniereMaintenance || d.date_derniere_maintenance || '',
-    date_derniere_maintenance: d.date_derniere_maintenance || d.derniere_maintenance || d.derniereMaintenance || '',
-    prochaineMaintenance: d.prochaineMaintenance || d.prochaine_visite || d.prochaine_v || '',
-    prochaine_visite: d.prochaine_visite || d.prochaineMaintenance || d.prochaine_v || '',
-    prochaine_v: d.prochaine_v || d.prochaine_visite || d.prochaineMaintenance || '',
+    // Coffret
+    modeleCoffret,
+    modeleCoffretId,
+    numeroLotCoffret,
+    commentaireCoffret,
 
-    modeleElectrodeAId: d.modeleElectrodeAId || d.modele_a || d.modeleElectrodeA || '',
-    modeleElectrodeA: d.modeleElectrodeA || d.modele_electrode_a || d.modele_a || '',
-    modele_electrode_a: d.modele_electrode_a || d.modeleElectrodeA || d.modele_a || '',
-    modele_a: d.modele_a || d.modele_electrode_a || d.modeleElectrodeA || d.modeleElectrodeAId || '',
-    lotElectrodeA: d.lotElectrodeA || d.lot_electrode_a || d.lot_a || '',
-    lot_electrode_a: d.lot_electrode_a || d.lotElectrodeA || d.lot_a || '',
-    lot_a: d.lot_a || d.lot_electrode_a || d.lotElectrodeA || '',
-    peremptionElectrodeA: d.peremptionElectrodeA || d.peremption_electrode_a || d.peremption_a || '',
-    peremption_electrode_a: d.peremption_electrode_a || d.peremptionElectrodeA || d.peremption_a || '',
-    peremption_a: d.peremption_a || d.peremption_electrode_a || d.peremptionElectrodeA || '',
-    date_peremption_a: d.date_peremption_a || d.peremption_a || d.peremptionElectrodeA || '',
-    insertionElectrodeA: d.insertionElectrodeA || d.insertion_electrode_a || d.insertion_a || '',
-    insertion_electrode_a: d.insertion_electrode_a || d.insertionElectrodeA || d.insertion_a || '',
-    insertion_a: d.insertion_a || d.insertion_electrode_a || d.insertionElectrodeA || '',
-    livraisonElectrodeA: d.livraisonElectrodeA || d.livraison_electrode_a || d.livraison_a || '',
-    livraison_electrode_a: d.livraison_electrode_a || d.livraisonElectrodeA || d.livraison_a || '',
-    livraison_a: d.livraison_a || d.livraison_electrode_a || d.livraisonElectrodeA || '',
-    situationElectrodeA: d.situationElectrodeA || d.situation_a || 'Vert',
-    situation_a: d.situation_a || d.situationElectrodeA || 'Vert',
-    commentaireElectrodeA: d.commentaireElectrodeA || d.commentaire_a || '',
-    commentaire_a: d.commentaire_a || d.commentaireElectrodeA || '',
-    peremptionSecoursElectrodeA: d.peremptionSecoursElectrodeA || d.peremption_secours_a || '',
-    peremption_secours_a: d.peremption_secours_a || d.peremptionSecoursElectrodeA || '',
-    hasElectrodeASecours: d.hasElectrodeASecours || d.has_electrode_a_secours || 'Non',
-    has_electrode_a_secours: d.has_electrode_a_secours || d.hasElectrodeASecours || 'Non',
-    modeleElectrodeASecoursId: d.modeleElectrodeASecoursId || d.modele_secours_a || d.modeleElectrodeASecours || '',
-    modele_secours_a: d.modele_secours_a || d.modeleElectrodeASecoursId || '',
-    lotElectrodeASecours: d.lotElectrodeASecours || d.lot_secours_a || '',
-    lot_secours_a: d.lot_secours_a || d.lotElectrodeASecours || '',
-    hasPadpakA: d.hasPadpakA || d.has_padpak_a || 'Non',
-    has_padpak_a: d.has_padpak_a || d.hasPadpakA || 'Non',
-    lotPadpakA: d.lotPadpakA || d.lot_padpak_a || '',
-    lot_padpak_a: d.lot_padpak_a || d.lotPadpakA || '',
-    peremptionPadpakA: d.peremptionPadpakA || d.peremption_padpak_a || '',
-    peremption_padpak_a: d.peremption_padpak_a || d.peremptionPadpakA || '',
+    // Batterie
+    modeleBatterie,
+    modeleBatterieId,
+    lotBatterie,
+    peremptionBatterie,
+    pourcentageBatterie,
+    insertionBatterie,
+    livraisonBatterie,
+    fabricationBatterie,
+    situationBatterie,
+    commentaireBatterie,
 
-    modeleElectrodePId: d.modeleElectrodePId || d.modele_p || d.modeleElectrodeP || '',
-    modeleElectrodeP: d.modeleElectrodeP || d.modele_electrode_p || d.modele_p || '',
-    modele_electrode_p: d.modele_electrode_p || d.modeleElectrodeP || d.modele_p || '',
-    modele_p: d.modele_p || d.modele_electrode_p || d.modeleElectrodeP || d.modeleElectrodePId || '',
-    lotElectrodeP: d.lotElectrodeP || d.lot_electrode_p || d.lot_p || '',
-    lot_electrode_p: d.lot_electrode_p || d.lotElectrodeP || d.lot_p || '',
-    lot_p: d.lot_p || d.lot_electrode_p || d.lotElectrodeP || '',
-    peremptionElectrodeP: d.peremptionElectrodeP || d.peremption_electrode_p || d.peremption_p || '',
-    peremption_electrode_p: d.peremption_electrode_p || d.peremptionElectrodeP || d.peremption_p || '',
-    peremption_p: d.peremption_p || d.peremption_electrode_p || d.peremptionElectrodeP || '',
-    date_peremption_p: d.date_peremption_p || d.peremption_p || d.peremptionElectrodeP || '',
-    insertionElectrodeP: d.insertionElectrodeP || d.insertion_electrode_p || d.insertion_p || '',
-    insertion_electrode_p: d.insertion_electrode_p || d.insertionElectrodeP || d.insertion_p || '',
-    insertion_p: d.insertion_p || d.insertion_electrode_p || d.insertionElectrodeP || '',
-    livraisonElectrodeP: d.livraisonElectrodeP || d.livraison_electrode_p || d.livraison_p || '',
-    livraison_electrode_p: d.livraison_electrode_p || d.livraisonElectrodeP || d.livraison_p || '',
-    livraison_p: d.livraison_p || d.livraison_electrode_p || d.livraisonElectrodeP || '',
-    situationElectrodeP: d.situationElectrodeP || d.situation_p || 'Vert',
-    situation_p: d.situation_p || d.situationElectrodeP || 'Vert',
-    commentaireElectrodeP: d.commentaireElectrodeP || d.commentaire_p || '',
-    commentaire_p: d.commentaire_p || d.commentaireElectrodeP || '',
-    peremptionSecoursElectrodeP: d.peremptionSecoursElectrodeP || d.peremption_secours_p || '',
-    peremption_secours_p: d.peremption_secours_p || d.peremptionSecoursElectrodeP || '',
-    hasElectrodePSecours: d.hasElectrodePSecours || d.has_electrode_p_secours || 'Non',
-    has_electrode_p_secours: d.has_electrode_p_secours || d.hasElectrodePSecours || 'Non',
-    modeleElectrodePSecoursId: d.modeleElectrodePSecoursId || d.modele_secours_p || d.modeleElectrodePSecours || '',
-    modele_secours_p: d.modele_secours_p || d.modeleElectrodePSecoursId || '',
-    lotElectrodePSecours: d.lotElectrodePSecours || d.lot_secours_p || '',
-    lot_secours_p: d.lot_secours_p || d.lotElectrodePSecours || '',
-    hasPadpakP: d.hasPadpakP || d.has_padpak_p || 'Non',
-    has_padpak_p: d.has_padpak_p || d.hasPadpakP || 'Non',
-    lotPadpakP: d.lotPadpakP || d.lot_padpak_p || '',
-    lot_padpak_p: d.lot_padpak_p || d.lotPadpakP || '',
-    peremptionPadpakP: d.peremptionPadpakP || d.peremption_padpak_p || '',
-    peremption_padpak_p: d.peremption_padpak_p || d.peremptionPadpakP || '',
+    // Batterie Secours
+    hasBatterieSecours,
+    modeleBatterieSecours,
+    modeleBatterieSecoursId,
+    lotBatterieSecours,
+    peremptionBatterieSecours,
 
-    modeleBatterieId: d.modeleBatterieId || d.modele_b || d.modeleBatterie || '',
-    modeleBatterie: d.modeleBatterie || d.modele_batterie || d.modele_b || '',
-    modele_batterie: d.modele_batterie || d.modeleBatterie || d.modele_b || '',
-    modele_b: d.modele_b || d.modele_batterie || d.modeleBatterie || d.modeleBatterieId || '',
-    lotBatterie: d.lotBatterie || d.lot_batterie || d.lot_b || '',
-    lot_batterie: d.lot_batterie || d.lotBatterie || d.lot_b || '',
-    lot_b: d.lot_b || d.lot_batterie || d.lotBatterie || '',
-    peremptionBatterie: d.peremptionBatterie || d.peremption_batterie || d.peremption_b || '',
-    peremption_batterie: d.peremption_batterie || d.peremptionBatterie || d.peremption_b || '',
-    peremption_b: d.peremption_b || d.peremption_batterie || d.peremptionBatterie || '',
-    date_peremption_batterie: d.date_peremption_batterie || d.peremption_b || d.peremptionBatterie || '',
-    insertionBatterie: d.insertionBatterie || d.insertion_batterie || d.insertion_b || '',
-    insertion_batterie: d.insertion_batterie || d.insertionBatterie || d.insertion_b || '',
-    insertion_b: d.insertion_b || d.insertion_batterie || d.insertionBatterie || '',
-    livraisonBatterie: d.livraisonBatterie || d.livraison_batterie || d.livraison_b || '',
-    livraison_batterie: d.livraison_batterie || d.livraisonBatterie || d.livraison_b || '',
-    livraison_b: d.livraison_b || d.livraison_batterie || d.livraisonBatterie || '',
-    fabricationBatterie: d.fabricationBatterie || d.fabrication_b || d.date_fabrication_batterie || '',
-    fabrication_b: d.fabrication_b || d.fabricationBatterie || d.date_fabrication_batterie || '',
-    situationBatterie: d.situationBatterie || d.situation_b || 'Vert',
-    situation_b: d.situation_b || d.situationBatterie || 'Vert',
-    pourcentageBatterie: d.pourcentageBatterie || (d.pourcentage_constate_b !== undefined ? String(d.pourcentage_constate_b) : '100'),
-    pourcentage_constate_b: d.pourcentage_constate_b !== undefined ? d.pourcentage_constate_b : (parseInt(d.pourcentageBatterie, 10) || 100),
-    pourcentage_batterie: d.pourcentage_constate_b !== undefined ? d.pourcentage_constate_b : (parseInt(d.pourcentageBatterie, 10) || 100),
-    commentaireBatterie: d.commentaireBatterie || d.commentaire_b || '',
-    commentaire_b: d.commentaire_b || d.commentaireBatterie || '',
-    hasBatterieSecours: d.hasBatterieSecours || d.has_batterie_secours || 'Non',
-    has_batterie_secours: d.has_batterie_secours || d.hasBatterieSecours || 'Non',
-    modeleBatterieSecoursId: d.modeleBatterieSecoursId || d.modele_secours_b || d.modeleBatterieSecours || '',
-    modele_secours_b: d.modele_secours_b || d.modeleBatterieSecoursId || '',
-    lotBatterieSecours: d.lotBatterieSecours || d.lot_secours_b || '',
-    lot_secours_b: d.lot_secours_b || d.lotBatterieSecours || '',
-    peremptionBatterieSecours: d.peremptionBatterieSecours || d.peremption_secours_b || '',
-    peremption_secours_b: d.peremption_secours_b || d.peremptionBatterieSecours || '',
+    // Électrode Adulte (A)
+    modeleElectrodeA,
+    modeleElectrodeAId,
+    lotElectrodeA,
+    peremptionElectrodeA,
+    insertionElectrodeA,
+    livraisonElectrodeA,
+    situationElectrodeA,
+    commentaireElectrodeA,
 
-    modeleCoffretId: d.modeleCoffretId || d.boitier_modele || d.modele_coffret || '',
-    modeleCoffret: d.modeleCoffret || d.modele_coffret || d.boitier_modele || '',
-    modele_coffret: d.modele_coffret || d.modeleCoffret || d.boitier_modele || '',
-    boitier_modele: d.boitier_modele || d.modele_coffret || d.modeleCoffret || d.modeleCoffretId || '',
-    numeroLotCoffret: d.numeroLotCoffret || d.boitier_lot || d.lot_coffret || '',
-    lot_coffret: d.lot_coffret || d.numeroLotCoffret || d.boitier_lot || '',
-    boitier_lot: d.boitier_lot || d.lot_coffret || d.numeroLotCoffret || '',
-    commentaireCoffret: d.commentaireCoffret || d.commentaire_coffret || '',
-    commentaire_coffret: d.commentaire_coffret || d.commentaireCoffret || '',
+    // Électrode Adulte Secours
+    hasElectrodeASecours,
+    modeleElectrodeASecours,
+    modeleElectrodeASecoursId,
+    lotElectrodeASecours,
+    peremptionSecoursElectrodeA,
 
-    // Trousse de secours (8 champs conformes à la console web)
-    peremptionTrousse: d.peremptionTrousse || d.peremption_trousse || '',
-    peremption_trousse: d.peremption_trousse || d.peremptionTrousse || '',
+    // Padpak Adulte
+    hasPadpakA,
+    lotPadpakA,
+    peremptionPadpakA,
 
-    kitCiseauxPresents: d.kitCiseauxPresents || d.kit_ciseaux_presents || d.ciseaux_presents || 'Oui',
-    kit_ciseaux_presents: d.kit_ciseaux_presents || d.kitCiseauxPresents || d.ciseaux_presents || 'Oui',
-    ciseaux_presents: d.ciseaux_presents || d.kitCiseauxPresents || d.kit_ciseaux_presents || 'Oui',
-    ciseaux_presents_bool: toBoolean(d.kitCiseauxPresents ?? d.kit_ciseaux_presents ?? d.ciseaux_presents ?? 'Oui', true),
+    // Électrode Pédiatrique (P)
+    modeleElectrodeP,
+    modeleElectrodePId,
+    lotElectrodeP,
+    peremptionElectrodeP,
+    insertionElectrodeP,
+    livraisonElectrodeP,
+    situationElectrodeP,
+    commentaireElectrodeP,
 
-    kitMasquePresent: d.kitMasquePresent || d.kit_masque_present || d.masque_present || 'Oui',
-    kit_masque_present: d.kit_masque_present || d.kitMasquePresent || d.masque_present || 'Oui',
-    masque_present: d.masque_present || d.kitMasquePresent || d.kit_masque_present || 'Oui',
-    masque_present_bool: toBoolean(d.kitMasquePresent ?? d.kit_masque_present ?? d.masque_present ?? 'Oui', true),
+    // Électrode Pédiatrique Secours
+    hasElectrodePSecours,
+    modeleElectrodePSecours,
+    modeleElectrodePSecoursId,
+    lotElectrodePSecours,
+    peremptionSecoursElectrodeP,
 
-    kitPeremptionMasque: d.kitPeremptionMasque || d.kit_peremption_masque || d.peremption_masque || '',
-    kit_peremption_masque: d.kit_peremption_masque || d.kitPeremptionMasque || d.peremption_masque || '',
-    peremption_masque: d.peremption_masque || d.kitPeremptionMasque || d.kit_peremption_masque || '',
+    // Padpak Pédiatrique
+    hasPadpakP,
+    lotPadpakP,
+    peremptionPadpakP,
 
-    kitServiettesPresentes: d.kitServiettesPresentes || d.kit_serviettes_presentes || d.serviettes_presentes || 'Oui',
-    kit_serviettes_presentes: d.kit_serviettes_presentes || d.kitServiettesPresentes || d.serviettes_presentes || 'Oui',
-    serviettes_presentes: d.serviettes_presentes || d.kitServiettesPresentes || d.kit_serviettes_presentes || 'Oui',
-    serviettes_presentes_bool: toBoolean(d.kitServiettesPresentes ?? d.kit_serviettes_presentes ?? d.serviettes_presentes ?? 'Oui', true),
+    // DAE
+    modele,
+    modeleId,
+    marque,
 
-    kitPeremptionServiettes: d.kitPeremptionServiettes || d.kit_peremption_serviettes || d.peremption_serviettes || '',
-    kit_peremption_serviettes: d.kit_peremption_serviettes || d.kitPeremptionServiettes || d.peremption_serviettes || '',
-    peremption_serviettes: d.peremption_serviettes || d.kitPeremptionServiettes || d.kit_peremption_serviettes || '',
+    // Maintenance & Dates
+    derniereMaintenance,
+    prochaineMaintenance,
+    finGarantie,
+    fabrication,
+    miseEnService,
+    sortieFabricant,
 
-    kitGantsPresents: d.kitGantsPresents || d.kit_gants_presents || d.gants_presents || d.paire_gants_presents || 'Oui',
-    kit_gants_presents: d.kit_gants_presents || d.kitGantsPresents || d.gants_presents || d.paire_gants_presents || 'Oui',
-    gants_presents: d.gants_presents || d.kitGantsPresents || d.kit_gants_presents || d.paire_gants_presents || 'Oui',
-    paire_gants_presents: d.paire_gants_presents || d.kitGantsPresents || d.kit_gants_presents || d.gants_presents || 'Oui',
-    gants_presents_bool: toBoolean(d.kitGantsPresents ?? d.kit_gants_presents ?? d.gants_presents ?? d.paire_gants_presents ?? 'Oui', true),
+    // Trousse
+    peremptionTrousse,
+    kitCiseauxPresents,
+    kitMasquePresent,
+    kitPeremptionMasque,
+    kitServiettesPresentes,
+    kitPeremptionServiettes,
+    kitGantsPresents,
+    kitRasoirPresent,
 
-    kitRasoirPresent: d.kitRasoirPresent || d.kit_rasoir_present || d.rasoir_present || d.rasoir || 'Oui',
-    kit_rasoir_present: d.kit_rasoir_present || d.kitRasoirPresent || d.rasoir_present || d.rasoir || 'Oui',
-    rasoir_present: d.rasoir_present || d.kitRasoirPresent || d.kit_rasoir_present || d.rasoir || 'Oui',
-    rasoir: d.rasoir || d.kitRasoirPresent || d.kit_rasoir_present || d.rasoir_present || 'Oui',
-    rasoir_present_bool: toBoolean(d.kitRasoirPresent ?? d.kit_rasoir_present ?? d.rasoir_present ?? d.rasoir ?? 'Oui', true),
+    // Localisation & Site
+    numVoie,
+    cp,
+    ville,
+    region,
+    pays,
+    latitude,
+    longitude,
+    commentaireAdresse,
+    nomSite,
+    nomPrenomSite,
+    telephoneSite,
+    emailSite,
+    categorieEtablissement,
+    horaires,
 
-    modele: d.modele || d.modele_dae || d.modeleId || '',
-    modele_dae: d.modele_dae || d.modele || d.modeleId || '',
-    modeleId: d.modeleId || d.modele || '',
-    marque: d.marque || d.brand || 'Standard',
-    brand: d.brand || d.marque || 'Standard',
-    statut: d.statut || d.status || 'Opérationnel',
-    status: d.status || d.statut || 'Opérationnel',
-    conforme: d.conforme || 'Oui',
-    statutVoyant: d.statutVoyant || d.statut_voyant || 'Vert OK',
-    statut_voyant: d.statut_voyant || d.statutVoyant || 'Vert OK',
-    etatHousse: d.etatHousse || d.etat_housse || 'Conforme',
-    etat_housse: d.etat_housse || d.etatHousse || 'Conforme',
+    // Client & Contrat
+    clientId,
+    clientNom,
+    clientIdField,
+    payeurId,
+    contrat,
+    nomContrat,
+    referenceContrat,
+    debutContrat,
+    finContrat,
 
-    commentaireAdresse: d.commentaireAdresse || d.aide_acces || '',
-    aide_acces: d.aide_acces || d.commentaireAdresse || '',
-    numVoie: d.numVoie || d.numero_et_voie || d.adresse || '',
-    numero_et_voie: d.numero_et_voie || d.numVoie || d.adresse || '',
-    adresse: d.adresse || d.numVoie || d.numero_et_voie || '',
-    cp: d.cp || d.code_postal || '',
-    code_postal: d.code_postal || d.cp || '',
-    ville: d.ville || d.city || '',
-    city: d.city || d.ville || '',
-    region: d.region || '',
-    pays: d.pays || d.country || '',
-    country: d.country || d.pays || '',
-    latitude: d.latitude || d.lat || '',
-    lat: d.lat || d.latitude || '',
-    longitude: d.longitude || d.lon || d.lng || '',
-    lon: d.lon || d.longitude || '',
-    lng: d.lng || d.longitude || '',
-    nomPrenomSite: d.nomPrenomSite || d.nom_prenom || d.nom_site || '',
-    nom_prenom: d.nom_prenom || d.nomPrenomSite || d.nom_site || '',
-    nom_site: d.nom_site || d.nomPrenomSite || d.nom_prenom || '',
-    nomSite: d.nomSite || d.nom_site || d.nomPrenomSite || '',
-    categorieEtablissement: d.categorieEtablissement || d.categorie_etablissement || '',
-    categorie_etablissement: d.categorie_etablissement || d.categorieEtablissement || '',
-    telephoneSite: d.telephoneSite || d.telephone_portable || d.telephone_site || d.phone || d.tel || '',
-    telephone_portable: d.telephone_portable || d.telephoneSite || d.telephone_site || d.phone || d.tel || '',
-    telephone_site: d.telephone_site || d.telephoneSite || d.telephone_portable || d.phone || d.tel || '',
-    emailSite: d.emailSite || d.email || d.email_site || '',
-    email: d.email || d.emailSite || d.email_site || '',
-    email_site: d.email_site || d.emailSite || d.email || '',
-    commentaire: d.commentaire || d.notes || d.note || '',
-    notes: d.notes || d.commentaire || '',
-    commentaireInterne: d.commentaireInterne || d.commentaire_interne || '',
-    commentaire_interne: d.commentaire_interne || d.commentaireInterne || '',
-    horaires: d.horaires || '',
+    // Accès & Catégories
+    acces247,
+    accesSemaine,
+    accesWeekend,
+    exterieur,
+    loue,
+    prete,
+    stocke,
+    archive,
+    sousTraitance,
+    numeroAtlasante,
+    versionLogiciel,
 
-    finGarantie: d.finGarantie || d.fin_garantie || d.expiration_garantie || '',
-    fin_garantie: d.fin_garantie || d.finGarantie || d.expiration_garantie || '',
-    fabrication: d.fabrication || d.date_fabrication || '',
-    date_fabrication: d.date_fabrication || d.fabrication || '',
-    miseEnService: d.miseEnService || d.mise_en_service || '',
-    mise_en_service: d.mise_en_service || d.miseEnService || '',
-    sortieFabricant: d.sortieFabricant || d.sortie_fabricant || '',
-    sortie_fabricant: d.sortie_fabricant || d.sortieFabricant || '',
+    // Commentaires
+    commentaire,
+    commentaireInterne,
+    commentaireCampagneRappel,
 
-    contrat: d.contrat || d.nomContrat || d.nom_contrat || '',
-    nomContrat: d.nomContrat || d.nom_contrat || d.contrat || '',
-    nom_contrat: d.nom_contrat || d.nomContrat || d.contrat || '',
-    referenceContrat: d.referenceContrat || d.reference_contrat || '',
-    reference_contrat: d.reference_contrat || d.referenceContrat || '',
-    debutContrat: d.debutContrat || d.debut_contrat || '',
-    debut_contrat: d.debut_contrat || d.debutContrat || '',
-    finContrat: d.finContrat || d.fin_contrat || '',
-    fin_contrat: d.fin_contrat || d.finContrat || '',
-    payeurId: d.payeurId || d.payeur_id || '',
-    payeur_id: d.payeur_id || d.payeurId || '',
-    clientIdField: d.clientIdField || d.client_id_field || '',
-    client_id_field: d.client_id_field || d.clientIdField || '',
+    // Alertes
+    victimeSurvie,
+    victimeSansSurvie,
+    ageVictime,
+    rappelMensuelAuto,
+    rappelHebdoAuto,
+    rappelJournalierAuto,
 
-    acces247: d.acces247 !== undefined ? d.acces247 : (d.acces_247 !== undefined ? d.acces_247 : false),
-    acces_247: d.acces_247 !== undefined ? d.acces_247 : (d.acces247 !== undefined ? d.acces247 : false),
-    acces_247_bool: toBoolean(d.acces247 ?? d.acces_247, false),
-    accesSemaine: d.accesSemaine !== undefined ? d.accesSemaine : (d.acces_semaine !== undefined ? d.acces_semaine : false),
-    acces_semaine: d.acces_semaine !== undefined ? d.acces_semaine : (d.accesSemaine !== undefined ? d.accesSemaine : false),
-    acces_semaine_bool: toBoolean(d.accesSemaine ?? d.acces_semaine, false),
-    accesWeekend: d.accesWeekend !== undefined ? d.accesWeekend : (d.acces_weekend !== undefined ? d.acces_weekend : false),
-    acces_weekend: d.acces_weekend !== undefined ? d.acces_weekend : (d.accesWeekend !== undefined ? d.accesWeekend : false),
-    acces_weekend_bool: toBoolean(d.accesWeekend ?? d.acces_weekend, false),
-    exterieur: d.exterieur !== undefined ? d.exterieur : false,
-    exterieur_bool: toBoolean(d.exterieur, false),
-
-    numeroAtlasante: d.numeroAtlasante || d.numero_atlasante || '',
-    numero_atlasante: d.numero_atlasante || d.numeroAtlasante || '',
-    versionLogiciel: d.versionLogiciel || d.version_logiciel || '',
-    version_logiciel: d.version_logiciel || d.versionLogiciel || '',
-
-    // Catégories & Suivi opérationnel
-    loue: d.loue || 'Non',
-    prete: d.prete || 'Non',
-    stocke: d.stocke || 'Non',
-    archive: d.archive || 'Non',
-    sousTraitance: d.sousTraitance || d.sous_traitance || 'Non',
-    sous_traitance: d.sous_traitance || d.sousTraitance || 'Non',
-    fsmAutorise: d.fsmAutorise || d.fsm_autorise || d.maintenance_autorisee || d.maintenanceAutorisee || 'Oui',
-    fsm_autorise: d.fsm_autorise || d.fsmAutorise || d.maintenance_autorisee || d.maintenanceAutorisee || 'Oui',
-    maintenance_autorisee: d.maintenance_autorisee || d.maintenanceAutorisee || d.fsmAutorise || d.fsm_autorise || 'Oui',
-    maintenanceAutorisee: d.maintenanceAutorisee || d.maintenance_autorisee || d.fsmAutorise || d.fsm_autorise || 'Oui',
-    maintenance_autorisee_bool: toBoolean(d.maintenance_autorisee ?? d.maintenanceAutorisee ?? d.fsmAutorise ?? d.fsm_autorise ?? 'Oui', true),
-    fsm_autorise_bool: toBoolean(d.fsmAutorise ?? d.fsm_autorise ?? d.maintenance_autorisee ?? d.maintenanceAutorisee ?? 'Oui', true),
-    victimeSurvie: d.victimeSurvie || d.victime_survie || 'Non',
-    victime_survie: d.victime_survie || d.victimeSurvie || 'Non',
-    victimeSansSurvie: d.victimeSansSurvie || d.victime_sans_survie || 'Non',
-    victime_sans_survie: d.victime_sans_survie || d.victimeSansSurvie || 'Non',
-    ageVictime: d.ageVictime || d.age_victime || '',
-    age_victime: d.age_victime || d.ageVictime || '',
-    commentaireCampagneRappel: d.commentaireCampagneRappel || d.commentaire_campagne_rappel || '',
-    commentaire_campagne_rappel: d.commentaire_campagne_rappel || d.commentaireCampagneRappel || '',
-    rappelMensuelAuto: d.rappelMensuelAuto || d.rappel_mensuel_auto || 'Non',
-    rappel_mensuel_auto: d.rappel_mensuel_auto || d.rappelMensuelAuto || 'Non',
-    rappelHebdoAuto: d.rappelHebdoAuto || d.rappel_hebdo_auto || 'Non',
-    rappel_hebdo_auto: d.rappel_hebdo_auto || d.rappelHebdoAuto || 'Non',
-    rappelJournalierAuto: d.rappelJournalierAuto || d.rappel_journalier_auto || 'Non',
-    rappel_journalier_auto: d.rappel_journalier_auto || d.rappelJournalierAuto || 'Non',
-
-    clientId: d.clientId || d.client_id || '',
-    client_id: d.client_id || d.clientId || '',
-    clientNom: d.clientNom || d.client_nom || d.client || '',
-    client_nom: d.client_nom || d.clientNom || d.client || ''
+    // Métadonnées système
+    id_record: d.id_record || `record_${(d.envId || d.tenantId || 'd27').toLowerCase()}_${identifiant}`,
+    envId: d.envId || d.tenantId || 'D27',
+    tenantId: d.tenantId || d.envId || 'D27',
+    updatedAt: d.updatedAt || new Date().toISOString(),
+    _lastSource: d._lastSource || 'api'
   };
 }
 
@@ -2185,6 +2236,25 @@ async function warmupDefibrillateursStore() {
     } catch (err: any) {
       console.error("Error in /api/sync-single-defib:", err);
       return res.status(500).json({ error: err.message || "Erreur de synchronisation du défibrillateur." });
+    }
+  });
+
+  // Fast single defibrillator fetch endpoint for live WebApp modal sync
+  app.get("/api/sync-single-defib", async (req, res) => {
+    try {
+      const id = String(req.query.id || req.query.identifiant || req.query.numeroSerie || '').trim();
+      const tenantId = String(req.query.tenantId || 'D27').trim();
+      if (!id) {
+        return res.status(400).json({ error: "id paramètre requis." });
+      }
+      const found = await findSingleDefibrillateur(id, tenantId, ['D27', 'D58', 'demo']);
+      if (found && found.defib) {
+        const formatted = formatDefibrillateurOutput(found.defib);
+        return res.json({ status: "success", defib: formatted });
+      }
+      return res.status(404).json({ error: "Défibrillateur non trouvé." });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
     }
   });
 
@@ -3449,9 +3519,10 @@ async function warmupDefibrillateursStore() {
           batterie_peremption: 'peremptionBatterie',
           date_peremption_batterie: 'peremptionBatterie',
           peremptionBatterie: 'peremptionBatterie',
-          modele_b: 'modeleBatterieId',
-          modele_batterie: 'modeleBatterieId',
-          modeleBatterie: 'modeleBatterieId',
+          modele_b: 'modeleBatterie',
+          modele_batterie: 'modeleBatterie',
+          batterie_modele: 'modeleBatterie',
+          modeleBatterie: 'modeleBatterie',
           modeleBatterieId: 'modeleBatterieId',
           insertion_b: 'insertionBatterie',
           insertion_batterie: 'insertionBatterie',
@@ -3490,9 +3561,10 @@ async function warmupDefibrillateursStore() {
           electrode_a_peremption: 'peremptionElectrodeA',
           date_peremption_a: 'peremptionElectrodeA',
           peremptionElectrodeA: 'peremptionElectrodeA',
-          modele_a: 'modeleElectrodeAId',
-          modele_electrode_a: 'modeleElectrodeAId',
-          modeleElectrodeA: 'modeleElectrodeAId',
+          modele_a: 'modeleElectrodeA',
+          modele_electrode_a: 'modeleElectrodeA',
+          electrode_a_modele: 'modeleElectrodeA',
+          modeleElectrodeA: 'modeleElectrodeA',
           modeleElectrodeAId: 'modeleElectrodeAId',
           insertion_a: 'insertionElectrodeA',
           insertion_electrode_a: 'insertionElectrodeA',
@@ -3533,9 +3605,10 @@ async function warmupDefibrillateursStore() {
           electrode_p_peremption: 'peremptionElectrodeP',
           date_peremption_p: 'peremptionElectrodeP',
           peremptionElectrodeP: 'peremptionElectrodeP',
-          modele_p: 'modeleElectrodePId',
-          modele_electrode_p: 'modeleElectrodePId',
-          modeleElectrodeP: 'modeleElectrodePId',
+          modele_p: 'modeleElectrodeP',
+          modele_electrode_p: 'modeleElectrodeP',
+          electrode_p_modele: 'modeleElectrodeP',
+          modeleElectrodeP: 'modeleElectrodeP',
           modeleElectrodePId: 'modeleElectrodePId',
           insertion_p: 'insertionElectrodeP',
           insertion_electrode_p: 'insertionElectrodeP',
@@ -3567,10 +3640,10 @@ async function warmupDefibrillateursStore() {
           peremptionPadpakP: 'peremptionPadpakP',
 
           // Coffret / Boitier
-          boitier_modele: 'modeleCoffretId',
-          modele_coffret: 'modeleCoffretId',
-          coffret_modele: 'modeleCoffretId',
-          modeleCoffret: 'modeleCoffretId',
+          boitier_modele: 'modeleCoffret',
+          modele_coffret: 'modeleCoffret',
+          coffret_modele: 'modeleCoffret',
+          modeleCoffret: 'modeleCoffret',
           modeleCoffretId: 'modeleCoffretId',
           boitier_lot: 'numeroLotCoffret',
           lot_coffret: 'numeroLotCoffret',
@@ -3635,9 +3708,10 @@ async function warmupDefibrillateursStore() {
           trousse_peremption: 'peremptionTrousse',
 
           // Matériel DAE
-          modele: 'modeleId',
-          modele_dae: 'modeleId',
-          model: 'modeleId',
+          modele: 'modele',
+          modele_dae: 'modele',
+          model: 'modele',
+          modeleDAE: 'modele',
           modeleId: 'modeleId',
           marque: 'marque',
           brand: 'marque',
@@ -3976,30 +4050,70 @@ async function warmupDefibrillateursStore() {
               updatedDefib.modeleCoffretId = resolvedCoffret.id;
               updatedDefib.modeleCoffret = resolvedCoffret.nom;
               updatedDefib.boitier_modele = resolvedCoffret.nom;
-              updatedFields.add('modeleCoffretId');
+              updatedDefib.modele_coffret = resolvedCoffret.nom;
+              updatedFields.add('modeleCoffret');
+            } else if (coffretRaw) {
+              updatedDefib.modeleCoffret = coffretRaw;
+              updatedDefib.boitier_modele = coffretRaw;
+              updatedDefib.modele_coffret = coffretRaw;
+              if (coffretRaw.startsWith('VAR_') || coffretRaw.startsWith('var_') || coffretRaw.startsWith('v_')) {
+                updatedDefib.modeleCoffretId = coffretRaw;
+              }
+              updatedFields.add('modeleCoffret');
             }
+
             if (resolvedElecA) {
               updatedDefib.modeleElectrodeAId = resolvedElecA.id;
               updatedDefib.modeleElectrodeA = resolvedElecA.nom;
               updatedDefib.modele_a = resolvedElecA.nom;
-              updatedFields.add('modeleElectrodeAId');
+              updatedFields.add('modeleElectrodeA');
+            } else if (elecA_Raw) {
+              updatedDefib.modeleElectrodeA = elecA_Raw;
+              updatedDefib.modele_a = elecA_Raw;
+              if (elecA_Raw.startsWith('VAR_') || elecA_Raw.startsWith('var_') || elecA_Raw.startsWith('v_')) {
+                updatedDefib.modeleElectrodeAId = elecA_Raw;
+              }
+              updatedFields.add('modeleElectrodeA');
             }
+
             if (resolvedElecP) {
               updatedDefib.modeleElectrodePId = resolvedElecP.id;
               updatedDefib.modeleElectrodeP = resolvedElecP.nom;
               updatedDefib.modele_p = resolvedElecP.nom;
-              updatedFields.add('modeleElectrodePId');
+              updatedFields.add('modeleElectrodeP');
+            } else if (elecP_Raw) {
+              updatedDefib.modeleElectrodeP = elecP_Raw;
+              updatedDefib.modele_p = elecP_Raw;
+              if (elecP_Raw.startsWith('VAR_') || elecP_Raw.startsWith('var_') || elecP_Raw.startsWith('v_')) {
+                updatedDefib.modeleElectrodePId = elecP_Raw;
+              }
+              updatedFields.add('modeleElectrodeP');
             }
+
             if (resolvedBat) {
               updatedDefib.modeleBatterieId = resolvedBat.id;
               updatedDefib.modeleBatterie = resolvedBat.nom;
               updatedDefib.modele_b = resolvedBat.nom;
-              updatedFields.add('modeleBatterieId');
+              updatedFields.add('modeleBatterie');
+            } else if (batRaw) {
+              updatedDefib.modeleBatterie = batRaw;
+              updatedDefib.modele_b = batRaw;
+              if (batRaw.startsWith('VAR_') || batRaw.startsWith('var_') || batRaw.startsWith('v_')) {
+                updatedDefib.modeleBatterieId = batRaw;
+              }
+              updatedFields.add('modeleBatterie');
             }
+
             if (resolvedDae) {
               updatedDefib.modeleId = resolvedDae.id;
               updatedDefib.modele = resolvedDae.nom;
-              updatedFields.add('modeleId');
+              updatedFields.add('modele');
+            } else if (daeRaw) {
+              updatedDefib.modele = daeRaw;
+              if (daeRaw.startsWith('VAR_') || daeRaw.startsWith('var_') || daeRaw.startsWith('v_')) {
+                updatedDefib.modeleId = daeRaw;
+              }
+              updatedFields.add('modele');
             }
 
             // Sync dual fields

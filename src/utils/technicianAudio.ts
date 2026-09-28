@@ -2,11 +2,19 @@
 // Ultra-low-latency sound engine using pre-decoded Web Audio API AudioBuffers
 // with HTML5 Audio element fallback pool for instant (<5ms) sound playback.
 
-export const SOUND_ASSETS = {
+export const LOCAL_SOUND_ASSETS = {
+  SOUND1: "/sounds/soundfxwebapp1.mp3",
+  SOUND2: "/sounds/soundfxwebapp2.mp3",
+  SOUND3: "/sounds/soundfxwebapp3.mp3",
+} as const;
+
+export const REMOTE_SOUND_ASSETS = {
   SOUND1: "https://civilprom.s3.eu-north-1.amazonaws.com/soundfxwebapp1.mp3",
   SOUND2: "https://civilprom.s3.eu-north-1.amazonaws.com/soundfxwebapp2.mp3",
   SOUND3: "https://civilprom.s3.eu-north-1.amazonaws.com/soundfxwebapp3.mp3",
 } as const;
+
+export const SOUND_ASSETS = LOCAL_SOUND_ASSETS;
 
 type SoundKey = keyof typeof SOUND_ASSETS;
 
@@ -66,11 +74,14 @@ const preloadSounds = async () => {
   await Promise.all(
     keys.map(async (key) => {
       try {
-        const res = await fetch(SOUND_ASSETS[key], { mode: "cors" });
+        let res = await fetch(SOUND_ASSETS[key]);
+        if (!res.ok) {
+          res = await fetch(REMOTE_SOUND_ASSETS[key], { mode: "cors" });
+        }
         if (!res.ok) return;
         const arrayBuf = await res.arrayBuffer();
         rawArrayBuffers[key] = arrayBuf;
-        decodeBuffer(key, arrayBuf);
+        await decodeBuffer(key, arrayBuf);
       } catch {
         // Fallback to HTML5 audio already initialized
       }

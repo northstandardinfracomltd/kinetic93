@@ -2137,66 +2137,83 @@ export default function DefibTab({
     setIsFormOpen(true);
   };
 
+  // Helper to robustly resolve variable ID or label in dropdowns
+  const resolveModelSelectValue = (raw: string | undefined | null, list: Variable[]): string => {
+    if (!raw) return '';
+    const s = String(raw).trim();
+    if (!s) return '';
+    const byId = list.find(v => v && v.id === s);
+    if (byId) return byId.id;
+    const lower = s.toLowerCase();
+    const byNom = list.find(v => v && v.nom && (v.nom.toLowerCase() === lower || `${v.marque || ''} ${v.nom || ''}`.trim().toLowerCase() === lower));
+    if (byNom) return byNom.id;
+    const bySub = list.find(v => v && v.nom && (v.nom.toLowerCase().includes(lower) || lower.includes(v.nom.toLowerCase())));
+    if (bySub) return bySub.id;
+    return s;
+  };
+
   // Populate state for editing
   const openEditForm = (df: Defibrillateur) => {
     setEditingDefib(df);
     setFormError('');
 
+    const anyDf = df as any;
+
     // Load initial address values to avoid auto geocoding immediately on load
     loadedAddressRef.current = {
-      numVoie: df.numVoie || '',
-      cp: df.cp || '',
-      ville: df.ville || '',
-      pays: df.pays || 'France'
+      numVoie: df.numVoie || anyDf.numero_et_voie || anyDf.adresse || '',
+      cp: df.cp || anyDf.code_postal || anyDf.zip || '',
+      ville: df.ville || anyDf.city || '',
+      pays: df.pays || anyDf.country || 'France'
     };
 
-    setIdentifiant(df.identifiant);
-    setNumeroSerie(df.numeroSerie);
-    setCommentaire(df.commentaire || '');
-    setModeleId(df.modeleId);
-    setNumeroAtlasante(df.numeroAtlasante || '');
-    setVersionLogiciel(df.versionLogiciel || '');
+    setIdentifiant(df.identifiant || anyDf.id || '');
+    setNumeroSerie(df.numeroSerie || anyDf.num_serie || anyDf.serial || '');
+    setCommentaire(df.commentaire || anyDf.notes || anyDf.note || anyDf.commentaireDAE || '');
+    setModeleId(resolveModelSelectValue(df.modeleId || df.modele || anyDf.modele_dae || anyDf.model, modelesDefib));
+    setNumeroAtlasante(df.numeroAtlasante || anyDf.numero_atlasante || '');
+    setVersionLogiciel(df.versionLogiciel || anyDf.version_logiciel || '');
 
-    setClientId(df.clientId);
-    const linkedClient = clients.find(c => c.id === df.clientId);
+    setClientId(df.clientId || anyDf.client_id || '');
+    const linkedClient = clients.find(c => c.id === (df.clientId || anyDf.client_id));
     setClientSearchQuery(linkedClient ? `${linkedClient.denomination} (${linkedClient.siret || ''})` : '');
-    setNomSite(df.nomSite || '');
-    setCategorieEtablissement(df.categorieEtablissement || '');
-    setNomPrenomSite(df.nomPrenomSite || '');
-    setTelephoneSite(df.telephoneSite || '');
-    setEmailSite(df.emailSite || '');
-    setContrat(df.contrat || 'Non');
-    setNomContrat(df.nomContrat || '');
-    setReferenceContrat(df.referenceContrat || '');
-    setDebutContrat(df.debutContrat || '');
-    setFinContrat(df.finContrat || '');
-    setPayeurId(df.payeurId || '');
-    setClientIdField(df.clientIdField || '');
+    setNomSite(df.nomSite || anyDf.nom_site || '');
+    setCategorieEtablissement(df.categorieEtablissement || anyDf.categorie_etablissement || '');
+    setNomPrenomSite(df.nomPrenomSite || anyDf.nom_prenom || '');
+    setTelephoneSite(df.telephoneSite || anyDf.telephone_portable || anyDf.telephone_site || anyDf.phone || '');
+    setEmailSite(df.emailSite || anyDf.email || anyDf.email_site || '');
+    setContrat(df.contrat || anyDf.nomContrat || anyDf.nom_contrat || 'Non');
+    setNomContrat(df.nomContrat || anyDf.nom_contrat || '');
+    setReferenceContrat(df.referenceContrat || anyDf.reference_contrat || '');
+    setDebutContrat(df.debutContrat || anyDf.debut_contrat || '');
+    setFinContrat(df.finContrat || anyDf.fin_contrat || '');
+    setPayeurId(df.payeurId || anyDf.payeur_id || '');
+    setClientIdField(df.clientIdField || anyDf.client_id_field || '');
 
-    setModeleCoffretId(df.modeleCoffretId || '');
-    setNumeroLotCoffret(df.numeroLotCoffret || '');
-    setCommentaireCoffret(df.commentaireCoffret || '');
-    setPeremptionTrousse(df.peremptionTrousse || '');
-    setKitCiseauxPresents(df.kitCiseauxPresents || 'Oui');
-    setKitMasquePresent(df.kitMasquePresent || 'Oui');
-    setKitPeremptionMasque(df.kitPeremptionMasque || '');
-    setKitServiettesPresentes(df.kitServiettesPresentes || 'Oui');
-    setKitPeremptionServiettes(df.kitPeremptionServiettes || '');
-    setKitGantsPresents(df.kitGantsPresents || 'Oui');
-    setKitRasoirPresent(df.kitRasoirPresent || 'Oui');
+    setModeleCoffretId(resolveModelSelectValue(df.modeleCoffretId || df.modeleCoffret || anyDf.boitier_modele || anyDf.modele_coffret || anyDf.coffret_modele, modelesCoffret));
+    setNumeroLotCoffret(df.numeroLotCoffret || anyDf.boitier_lot || anyDf.lot_coffret || anyDf.lotCoffret || '');
+    setCommentaireCoffret(df.commentaireCoffret || anyDf.commentaire_coffret || '');
+    setPeremptionTrousse(df.peremptionTrousse || anyDf.peremption_trousse || anyDf.date_peremption_trousse || '');
+    setKitCiseauxPresents(df.kitCiseauxPresents || anyDf.ciseaux_presents || 'Oui');
+    setKitMasquePresent(df.kitMasquePresent || anyDf.masque_present || 'Oui');
+    setKitPeremptionMasque(df.kitPeremptionMasque || anyDf.peremption_masque || '');
+    setKitServiettesPresentes(df.kitServiettesPresentes || anyDf.serviettes_presentes || 'Oui');
+    setKitPeremptionServiettes(df.kitPeremptionServiettes || anyDf.peremption_serviettes || '');
+    setKitGantsPresents(df.kitGantsPresents || anyDf.gants_presents || 'Oui');
+    setKitRasoirPresent(df.kitRasoirPresent || anyDf.rasoir_present || anyDf.rasoir || 'Oui');
 
-    setNumVoie(df.numVoie || '');
-    setVille(df.ville || '');
-    setCp(df.cp || '');
+    setNumVoie(df.numVoie || anyDf.numero_et_voie || anyDf.adresse || '');
+    setVille(df.ville || anyDf.city || '');
+    setCp(df.cp || anyDf.code_postal || anyDf.zip || '');
     setRegion(df.region || 'Île-de-France');
-    setPays(df.pays || 'France');
-    setLatitude(df.latitude || '48.8566');
-    setLongitude(df.longitude || '2.3522');
-    setCommentaireAdresse(df.commentaireAdresse || '');
-    setAcces247(!!df.acces247);
-    setAccesSemaine(!!df.accesSemaine);
-    setAccesWeekend(!!df.accesWeekend);
-    setExterieur(!!df.exterieur);
+    setPays(df.pays || anyDf.country || 'France');
+    setLatitude(df.latitude || anyDf.lat || '48.8566');
+    setLongitude(df.longitude || anyDf.lon || anyDf.lng || '2.3522');
+    setCommentaireAdresse(df.commentaireAdresse || anyDf.aide_acces || '');
+    setAcces247(!!(df.acces247 ?? anyDf.acces_247));
+    setAccesSemaine(!!(df.accesSemaine ?? anyDf.acces_semaine));
+    setAccesWeekend(!!(df.accesWeekend ?? anyDf.acces_weekend));
+    setExterieur(!!(df.exterieur ?? anyDf.exterieur_bool));
 
     if (df.horaires) {
       try {
@@ -2230,55 +2247,55 @@ export default function DefibTab({
       ]);
     }
 
-    setFinGarantie(df.finGarantie || '');
-    setFabrication(df.fabrication || '');
-    setMiseEnService(df.miseEnService || '');
-    setDerniereMaintenance(df.derniereMaintenance || '');
-    setSortieFabricant(df.sortieFabricant || '');
+    setFinGarantie(df.finGarantie || anyDf.fin_garantie || '');
+    setFabrication(df.fabrication || anyDf.date_fabrication || '');
+    setMiseEnService(df.miseEnService || anyDf.mise_en_service || '');
+    setDerniereMaintenance(df.derniereMaintenance || anyDf.derniere_maintenance || anyDf.date_derniere_maintenance || '');
+    setSortieFabricant(df.sortieFabricant || anyDf.sortie_fabricant || '');
 
-    setHasElectrodeASecours(df.hasElectrodeASecours || (df.modeleElectrodeASecoursId || df.lotElectrodeASecours || df.peremptionSecoursElectrodeA ? 'Oui' : 'Non'));
-    setModeleElectrodeAId(df.modeleElectrodeAId || '');
-    setLotElectrodeA(df.lotElectrodeA || '');
-    setInsertionElectrodeA(df.insertionElectrodeA || '');
-    setPeremptionElectrodeA(df.peremptionElectrodeA || '');
-    setLivraisonElectrodeA(df.livraisonElectrodeA || '');
-    setSituationElectrodeA(df.situationElectrodeA || 'Vert');
-    setCommentaireElectrodeA(df.commentaireElectrodeA || '');
-    setPeremptionSecoursElectrodeA(df.peremptionSecoursElectrodeA || '');
-    setModeleElectrodeASecoursId(df.modeleElectrodeASecoursId || '');
-    setLotElectrodeASecours(df.lotElectrodeASecours || '');
-    setLotPadpakA(df.lotPadpakA || '');
-    setPeremptionPadpakA(df.peremptionPadpakA || '');
-    setHasPadpakA(df.hasPadpakA || (df.lotPadpakA || df.peremptionPadpakA ? 'Oui' : 'Non'));
+    setHasElectrodeASecours(df.hasElectrodeASecours || anyDf.has_electrode_a_secours || (df.modeleElectrodeASecoursId || anyDf.modele_secours_a || df.lotElectrodeASecours || anyDf.lot_secours_a || df.peremptionSecoursElectrodeA ? 'Oui' : 'Non'));
+    setModeleElectrodeAId(resolveModelSelectValue(df.modeleElectrodeAId || df.modeleElectrodeA || anyDf.modele_electrode_a || anyDf.modele_a, modelesElectrode));
+    setLotElectrodeA(df.lotElectrodeA || anyDf.lot_electrode_a || anyDf.lot_a || anyDf.electrode_a_lot || '');
+    setInsertionElectrodeA(df.insertionElectrodeA || anyDf.insertion_electrode_a || anyDf.insertion_a || '');
+    setPeremptionElectrodeA(df.peremptionElectrodeA || anyDf.peremption_electrode_a || anyDf.peremption_a || anyDf.date_peremption_a || '');
+    setLivraisonElectrodeA(df.livraisonElectrodeA || anyDf.livraison_electrode_a || anyDf.livraison_a || '');
+    setSituationElectrodeA(df.situationElectrodeA || anyDf.situation_a || 'Vert');
+    setCommentaireElectrodeA(df.commentaireElectrodeA || anyDf.commentaire_electrode_a || anyDf.commentaire_a || '');
+    setPeremptionSecoursElectrodeA(df.peremptionSecoursElectrodeA || anyDf.peremption_secours_a || '');
+    setModeleElectrodeASecoursId(resolveModelSelectValue(df.modeleElectrodeASecoursId || df.modeleElectrodeASecours || anyDf.modele_secours_a, modelesElectrode));
+    setLotElectrodeASecours(df.lotElectrodeASecours || anyDf.lot_secours_a || '');
+    setLotPadpakA(df.lotPadpakA || anyDf.lot_padpak_a || '');
+    setPeremptionPadpakA(df.peremptionPadpakA || anyDf.peremption_padpak_a || '');
+    setHasPadpakA(df.hasPadpakA || anyDf.has_padpak_a || (df.lotPadpakA || anyDf.lot_padpak_a || df.peremptionPadpakA ? 'Oui' : 'Non'));
 
-    setHasElectrodePSecours(df.hasElectrodePSecours || (df.modeleElectrodePSecoursId || df.lotElectrodePSecours || df.peremptionSecoursElectrodeP ? 'Oui' : 'Non'));
-    setModeleElectrodePId(df.modeleElectrodePId || '');
-    setLotElectrodeP(df.lotElectrodeP || '');
-    setInsertionElectrodeP(df.insertionElectrodeP || '');
-    setPeremptionElectrodeP(df.peremptionElectrodeP || '');
-    setLivraisonElectrodeP(df.livraisonElectrodeP || '');
-    setSituationElectrodeP(df.situationElectrodeP || 'Vert');
-    setCommentaireElectrodeP(df.commentaireElectrodeP || '');
-    setPeremptionSecoursElectrodeP(df.peremptionSecoursElectrodeP || '');
-    setModeleElectrodePSecoursId(df.modeleElectrodePSecoursId || '');
-    setLotElectrodePSecours(df.lotElectrodePSecours || '');
-    setLotPadpakP(df.lotPadpakP || '');
-    setPeremptionPadpakP(df.peremptionPadpakP || '');
-    setHasPadpakP(df.hasPadpakP || (df.lotPadpakP || df.peremptionPadpakP ? 'Oui' : 'Non'));
+    setHasElectrodePSecours(df.hasElectrodePSecours || anyDf.has_electrode_p_secours || (df.modeleElectrodePSecoursId || anyDf.modele_secours_p || df.lotElectrodePSecours || anyDf.lot_secours_p || df.peremptionSecoursElectrodeP ? 'Oui' : 'Non'));
+    setModeleElectrodePId(resolveModelSelectValue(df.modeleElectrodePId || df.modeleElectrodeP || anyDf.modele_electrode_p || anyDf.modele_p, modelesElectrode));
+    setLotElectrodeP(df.lotElectrodeP || anyDf.lot_electrode_p || anyDf.lot_p || anyDf.electrode_p_lot || '');
+    setInsertionElectrodeP(df.insertionElectrodeP || anyDf.insertion_electrode_p || anyDf.insertion_p || '');
+    setPeremptionElectrodeP(df.peremptionElectrodeP || anyDf.peremption_electrode_p || anyDf.peremption_p || anyDf.date_peremption_p || '');
+    setLivraisonElectrodeP(df.livraisonElectrodeP || anyDf.livraison_electrode_p || anyDf.livraison_p || '');
+    setSituationElectrodeP(df.situationElectrodeP || anyDf.situation_p || 'Vert');
+    setCommentaireElectrodeP(df.commentaireElectrodeP || anyDf.commentaire_electrode_p || anyDf.commentaire_p || '');
+    setPeremptionSecoursElectrodeP(df.peremptionSecoursElectrodeP || anyDf.peremption_secours_p || '');
+    setModeleElectrodePSecoursId(resolveModelSelectValue(df.modeleElectrodePSecoursId || df.modeleElectrodePSecours || anyDf.modele_secours_p, modelesElectrode));
+    setLotElectrodePSecours(df.lotElectrodePSecours || anyDf.lot_secours_p || '');
+    setLotPadpakP(df.lotPadpakP || anyDf.lot_padpak_p || '');
+    setPeremptionPadpakP(df.peremptionPadpakP || anyDf.peremption_padpak_p || '');
+    setHasPadpakP(df.hasPadpakP || anyDf.has_padpak_p || (df.lotPadpakP || anyDf.lot_padpak_p || df.peremptionPadpakP ? 'Oui' : 'Non'));
 
-    setHasBatterieSecours(df.hasBatterieSecours || (df.modeleBatterieSecoursId || df.lotBatterieSecours || df.peremptionBatterieSecours ? 'Oui' : 'Non'));
-    setModeleBatterieId(df.modeleBatterieId || '');
-    setLotBatterie(df.lotBatterie || '');
-    setInsertionBatterie(df.insertionBatterie || '');
-    setFabricationBatterie(df.fabricationBatterie || '');
-    setPeremptionBatterie(df.peremptionBatterie || '');
-    setLivraisonBatterie(df.livraisonBatterie || '');
-    setSituationBatterie(df.situationBatterie || 'Vert');
-    setPourcentageBatterie(df.pourcentageBatterie || '100');
-    setCommentaireBatterie(df.commentaireBatterie || '');
-    setModeleBatterieSecoursId(df.modeleBatterieSecoursId || '');
-    setLotBatterieSecours(df.lotBatterieSecours || '');
-    setPeremptionBatterieSecours(df.peremptionBatterieSecours || '');
+    setHasBatterieSecours(df.hasBatterieSecours || anyDf.has_batterie_secours || (df.modeleBatterieSecoursId || anyDf.modele_secours_b || df.lotBatterieSecours || anyDf.lot_secours_b || df.peremptionBatterieSecours ? 'Oui' : 'Non'));
+    setModeleBatterieId(resolveModelSelectValue(df.modeleBatterieId || df.modeleBatterie || anyDf.modele_batterie || anyDf.modele_b, modelesBatterie));
+    setLotBatterie(df.lotBatterie || anyDf.lot_batterie || anyDf.lot_b || anyDf.batterie_lot || '');
+    setInsertionBatterie(df.insertionBatterie || anyDf.insertion_batterie || anyDf.insertion_b || '');
+    setFabricationBatterie(df.fabricationBatterie || anyDf.fabrication_b || anyDf.date_fabrication_batterie || '');
+    setPeremptionBatterie(df.peremptionBatterie || anyDf.peremption_batterie || anyDf.peremption_b || anyDf.date_peremption_batterie || '');
+    setLivraisonBatterie(df.livraisonBatterie || anyDf.livraison_batterie || anyDf.livraison_b || '');
+    setSituationBatterie(df.situationBatterie || anyDf.situation_b || 'Vert');
+    setPourcentageBatterie(df.pourcentageBatterie !== undefined && df.pourcentageBatterie !== '' ? String(df.pourcentageBatterie) : (anyDf.pourcentage_constate_b !== undefined ? String(anyDf.pourcentage_constate_b) : (anyDf.pourcentage_batterie !== undefined ? String(anyDf.pourcentage_batterie) : '100')));
+    setCommentaireBatterie(df.commentaireBatterie || anyDf.commentaire_batterie || anyDf.commentaire_b || '');
+    setModeleBatterieSecoursId(resolveModelSelectValue(df.modeleBatterieSecoursId || df.modeleBatterieSecours || anyDf.modele_secours_b, modelesBatterie));
+    setLotBatterieSecours(df.lotBatterieSecours || anyDf.lot_secours_b || '');
+    setPeremptionBatterieSecours(df.peremptionBatterieSecours || anyDf.peremption_secours_b || '');
 
     setLoue(df.loue || 'Non');
     setPrete(df.prete || 'Non');
@@ -2286,7 +2303,7 @@ export default function DefibTab({
     setArchive(df.archive || 'Non');
     setConforme(df.conforme || 'Oui');
     setSousTraitance(df.sousTraitance || 'Non');
-    setFsmAutorise(df.fsmAutorise || 'Oui');
+    setFsmAutorise(df.fsmAutorise || anyDf.fsm_autorise || anyDf.maintenance_autorisee || 'Oui');
     setVictimeSurvie(df.victimeSurvie || 'Non');
     setVictimeSansSurvie(df.victimeSansSurvie || 'Non');
     setAgeVictime(df.ageVictime || '0');
@@ -2294,6 +2311,54 @@ export default function DefibTab({
     setRappelMensuelAuto(df.rappelMensuelAuto || 'Non');
     setRappelHebdoAuto(df.rappelHebdoAuto || 'Non');
     setRappelJournalierAuto(df.rappelJournalierAuto || 'Non');
+
+    // Live background refresh from server to ensure latest API updates (e.g. from developer API POST/PUT) are instantly reflected
+    const targetKey = df.identifiant || df.numeroSerie || df.id;
+    if (targetKey) {
+      fetch(`/api/sync-single-defib?id=${encodeURIComponent(targetKey)}&tenantId=${encodeURIComponent(activeTenantId || 'D27')}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(json => {
+          if (json && json.defib) {
+            const fresh = json.defib;
+            setEditingDefib(fresh);
+            if (fresh.commentaire !== undefined) setCommentaire(fresh.commentaire);
+            if (fresh.commentaireCoffret !== undefined) setCommentaireCoffret(fresh.commentaireCoffret);
+            if (fresh.numeroLotCoffret !== undefined) setNumeroLotCoffret(fresh.numeroLotCoffret);
+            if (fresh.modeleCoffretId || fresh.modeleCoffret) {
+              setModeleCoffretId(resolveModelSelectValue(fresh.modeleCoffretId || fresh.modeleCoffret, modelesCoffret));
+            }
+            if (fresh.lotBatterie !== undefined) setLotBatterie(fresh.lotBatterie);
+            if (fresh.commentaireBatterie !== undefined) setCommentaireBatterie(fresh.commentaireBatterie);
+            if (fresh.peremptionBatterie !== undefined) setPeremptionBatterie(fresh.peremptionBatterie);
+            if (fresh.pourcentageBatterie !== undefined) setPourcentageBatterie(fresh.pourcentageBatterie);
+            if (fresh.modeleBatterieId || fresh.modeleBatterie) {
+              setModeleBatterieId(resolveModelSelectValue(fresh.modeleBatterieId || fresh.modeleBatterie, modelesBatterie));
+            }
+            if (fresh.lotElectrodeA !== undefined) setLotElectrodeA(fresh.lotElectrodeA);
+            if (fresh.commentaireElectrodeA !== undefined) setCommentaireElectrodeA(fresh.commentaireElectrodeA);
+            if (fresh.peremptionElectrodeA !== undefined) setPeremptionElectrodeA(fresh.peremptionElectrodeA);
+            if (fresh.modeleElectrodeAId || fresh.modeleElectrodeA) {
+              setModeleElectrodeAId(resolveModelSelectValue(fresh.modeleElectrodeAId || fresh.modeleElectrodeA, modelesElectrode));
+            }
+            if (fresh.lotElectrodeP !== undefined) setLotElectrodeP(fresh.lotElectrodeP);
+            if (fresh.commentaireElectrodeP !== undefined) setCommentaireElectrodeP(fresh.commentaireElectrodeP);
+            if (fresh.peremptionElectrodeP !== undefined) setPeremptionElectrodeP(fresh.peremptionElectrodeP);
+            if (fresh.modeleElectrodePId || fresh.modeleElectrodeP) {
+              setModeleElectrodePId(resolveModelSelectValue(fresh.modeleElectrodePId || fresh.modeleElectrodeP, modelesElectrode));
+            }
+            if (fresh.modeleId || fresh.modele) {
+              setModeleId(resolveModelSelectValue(fresh.modeleId || fresh.modele, modelesDefib));
+            }
+            if (fresh.derniereMaintenance !== undefined) setDerniereMaintenance(fresh.derniereMaintenance);
+            if (fresh.prochaineMaintenance !== undefined) setProchaineMaintenance(fresh.prochaineMaintenance);
+            // Update in defibrillateurs table as well
+            if (setDefibrillateurs) {
+              setDefibrillateurs(prev => prev.map(item => (item.id === fresh.id || item.identifiant === fresh.identifiant || item.numeroSerie === fresh.numeroSerie) ? { ...item, ...fresh } : item));
+            }
+          }
+        })
+        .catch(() => {});
+    }
 
     setIsFormOpen(true);
   };
@@ -4067,6 +4132,9 @@ export default function DefibTab({
                           required
                         >
                           <option value="">-- Sélectionner Modèle --</option>
+                          {modeleId && !modelesDefib.some(v => v.id === modeleId) && (
+                            <option value={modeleId}>{modeleId}</option>
+                          )}
                           {modelesDefib.map(v => (
                             <option key={v.id} value={v.id}>
                               {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
@@ -4381,6 +4449,9 @@ export default function DefibTab({
                           className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700"
                         >
                           <option value="">-- Sans coffret --</option>
+                          {modeleCoffretId && !modelesCoffret.some(v => v.id === modeleCoffretId) && (
+                            <option value={modeleCoffretId}>{modeleCoffretId}</option>
+                          )}
                           {modelesCoffret.map(v => (
                             <option key={v.id} value={v.id}>
                               {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
@@ -5149,6 +5220,9 @@ export default function DefibTab({
                           className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
                         >
                           <option value="">-- Sélectionner Électrode --</option>
+                          {modeleElectrodeAId && !modelesElectrode.some(v => v.id === modeleElectrodeAId) && (
+                            <option value={modeleElectrodeAId}>{modeleElectrodeAId}</option>
+                          )}
                           {modelesElectrode.map(v => (
                             <option key={v.id} value={v.id}>
                               {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
@@ -5266,6 +5340,9 @@ export default function DefibTab({
                             className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
                           >
                             <option value="">-- Sélectionner Électrode --</option>
+                            {modeleElectrodeASecoursId && !modelesElectrode.some(v => v.id === modeleElectrodeASecoursId) && (
+                              <option value={modeleElectrodeASecoursId}>{modeleElectrodeASecoursId}</option>
+                            )}
                             {modelesElectrode.map(v => (
                               <option key={v.id} value={v.id}>
                                 {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
@@ -5444,6 +5521,9 @@ export default function DefibTab({
                           className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
                         >
                           <option value="">-- Sélectionner Électrode --</option>
+                          {modeleElectrodePId && !modelesElectrode.some(v => v.id === modeleElectrodePId) && (
+                            <option value={modeleElectrodePId}>{modeleElectrodePId}</option>
+                          )}
                           {modelesElectrode.map(v => (
                             <option key={v.id} value={v.id}>
                               {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
@@ -5561,6 +5641,9 @@ export default function DefibTab({
                             className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
                           >
                             <option value="">-- Sélectionner Électrode --</option>
+                            {modeleElectrodePSecoursId && !modelesElectrode.some(v => v.id === modeleElectrodePSecoursId) && (
+                              <option value={modeleElectrodePSecoursId}>{modeleElectrodePSecoursId}</option>
+                            )}
                             {modelesElectrode.map(v => (
                               <option key={v.id} value={v.id}>
                                 {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
@@ -5739,6 +5822,9 @@ export default function DefibTab({
                           className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
                         >
                           <option value="">-- Sélectionner Batterie --</option>
+                          {modeleBatterieId && !modelesBatterie.some(v => v.id === modeleBatterieId) && (
+                            <option value={modeleBatterieId}>{modeleBatterieId}</option>
+                          )}
                           {modelesBatterie.map(v => (
                             <option key={v.id} value={v.id}>
                               {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
@@ -5865,6 +5951,9 @@ export default function DefibTab({
                             className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
                           >
                             <option value="">-- Sélectionner Batterie --</option>
+                            {modeleBatterieSecoursId && !modelesBatterie.some(v => v.id === modeleBatterieSecoursId) && (
+                              <option value={modeleBatterieSecoursId}>{modeleBatterieSecoursId}</option>
+                            )}
                             {modelesBatterie.map(v => (
                               <option key={v.id} value={v.id}>
                                 {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
