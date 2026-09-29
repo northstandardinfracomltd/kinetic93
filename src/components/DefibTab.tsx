@@ -7652,6 +7652,14 @@ export default function DefibTab({
       {/* 👤 CLIENT SEARCH SIDE PANE 👤 */}
       {isSidePaneClientOpen && (
         <>
+          <style>{`
+            #client-search-side-pane input::placeholder,
+            #variable-search-side-pane input::placeholder {
+              color: #000000 !important;
+              opacity: 1 !important;
+              font-size: 18px !important;
+            }
+          `}</style>
           <div 
             onClick={() => {
               setIsSidePaneClientOpen(false);
@@ -7670,28 +7678,31 @@ export default function DefibTab({
                 type="text"
                 value={clientSidePaneSearch}
                 onChange={(e) => setClientSidePaneSearch(e.target.value)}
-                placeholder="Rechercher un client (nom, SIRET, ville...)..."
+                placeholder="Entrez votre recherche"
                 autoFocus
                 style={{
                   width: '100%',
                   padding: '13px 18px',
                   borderRadius: '13px',
                   border: '1px solid rgb(201, 191, 205)',
-                  fontSize: '16px',
+                  fontSize: '18px',
                   color: '#000000',
                   outline: 'none',
                   backgroundColor: '#ffffff',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                 }}
-                className="w-full text-black placeholder:text-slate-400 focus:border-blue-500 transition-colors"
+                className="w-full text-black placeholder:text-black placeholder:text-[18px] placeholder:opacity-100 focus:border-blue-500 transition-colors"
               />
             </div>
 
             {/* Client List */}
             <div className="flex-1 overflow-y-auto px-4 pb-28 space-y-2">
               {filteredSidePaneClients.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 text-sm font-sans">
-                  Aucun client trouvé.
+                <div 
+                  className="text-center py-12 text-slate-500 font-sans"
+                  style={{ fontSize: '18px' }}
+                >
+                  Aucun résultat trouvé.
                 </div>
               ) : (
                 filteredSidePaneClients.map((c) => {
@@ -7710,26 +7721,17 @@ export default function DefibTab({
                           : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-[15px] text-black">
-                          {c.denomination || 'Client sans nom'}
-                        </span>
-                        {(c.clientIdField || (c as any).codeClient) && (
-                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
-                            {c.clientIdField || (c as any).codeClient}
-                          </span>
-                        )}
-                      </div>
-                      {c.siret && (
-                        <p className="text-xs text-slate-500 mt-1">
-                          SIRET : <span className="font-mono text-slate-700">{c.siret}</span>
-                        </p>
-                      )}
-                      {(c.ville || c.codePostal || c.adresse || (c as any).cp) && (
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {[c.adresse, c.codePostal || (c as any).cp, c.ville].filter(Boolean).join(', ')}
-                        </p>
-                      )}
+                      <span 
+                        style={{ 
+                          fontSize: '18px', 
+                          color: '#000000', 
+                          fontWeight: 600,
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif' 
+                        }} 
+                        className="block truncate"
+                      >
+                        {c.denomination || 'Client sans nom'}
+                      </span>
                     </div>
                   );
                 })
@@ -7744,10 +7746,11 @@ export default function DefibTab({
                   setIsSidePaneClientOpen(false);
                   setClientSidePaneSearch('');
                 }}
-                className="pointer-events-auto w-full py-3.5 px-6 rounded-xl font-bold text-white text-[16px] transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
+                className="pointer-events-auto w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
                 style={{
                   backgroundColor: '#000000',
                   color: '#ffffff',
+                  fontSize: '18px',
                   border: 'none',
                   cursor: 'pointer',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
@@ -7763,6 +7766,13 @@ export default function DefibTab({
       {/* 🏷️ VARIABLE SEARCH SIDE PANE 🏷️ */}
       {activeVariableSidePane && (
         <>
+          <style>{`
+            #variable-search-side-pane input::placeholder {
+              color: #000000 !important;
+              opacity: 1 !important;
+              font-size: 18px !important;
+            }
+          `}</style>
           <div 
             onClick={() => {
               setActiveVariableSidePane(null);
@@ -7781,20 +7791,20 @@ export default function DefibTab({
                 type="text"
                 value={variableSidePaneSearch}
                 onChange={(e) => setVariableSidePaneSearch(e.target.value)}
-                placeholder="Rechercher..."
+                placeholder="Entrez votre recherche"
                 autoFocus
                 style={{
                   width: '100%',
                   padding: '13px 18px',
                   borderRadius: '13px',
                   border: '1px solid rgb(201, 191, 205)',
-                  fontSize: '16px',
+                  fontSize: '18px',
                   color: '#000000',
                   outline: 'none',
                   backgroundColor: '#ffffff',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                 }}
-                className="w-full text-black placeholder:text-slate-400 focus:border-blue-500 transition-colors"
+                className="w-full text-black placeholder:text-black placeholder:text-[18px] placeholder:opacity-100 focus:border-blue-500 transition-colors"
               />
             </div>
 
@@ -7813,20 +7823,30 @@ export default function DefibTab({
                       : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
-                  <span className="font-bold text-[15px] text-slate-700 italic">
-                    {activeVariableSidePane.emptyLabel || '-- Aucun --'}
+                  <span 
+                    style={{ 
+                      fontSize: '18px', 
+                      color: '#000000', 
+                      fontWeight: 600,
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif' 
+                    }} 
+                    className="block"
+                  >
+                    Sans coffret
                   </span>
                 </div>
               )}
 
               {filteredSidePaneVariables.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 text-sm font-sans">
+                <div 
+                  className="text-center py-12 text-slate-500 font-sans"
+                  style={{ fontSize: '18px' }}
+                >
                   Aucun résultat trouvé.
                 </div>
               ) : (
                 filteredSidePaneVariables.map((v) => {
                   const isSelected = v.id === activeVariableSidePane.selectedValue;
-                  const displayName = v.marque && v.marque !== 'Standard' ? `${v.marque} - ${v.nom}` : v.nom;
                   return (
                     <div
                       key={v.id}
@@ -7846,16 +7866,17 @@ export default function DefibTab({
                           <img src={v.imageUrl} alt="" className="w-full h-full object-contain" />
                         </div>
                       ) : null}
-                      <div className="flex-1 min-w-0">
-                        <span className="font-bold text-[15px] text-black block truncate">
-                          {displayName}
-                        </span>
-                        {v.marque && v.marque !== 'Standard' && (
-                          <span className="text-xs text-slate-500 block truncate">
-                            Marque : {v.marque}
-                          </span>
-                        )}
-                      </div>
+                      <span 
+                        style={{ 
+                          fontSize: '18px', 
+                          color: '#000000', 
+                          fontWeight: 600,
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif' 
+                        }} 
+                        className="block truncate flex-1"
+                      >
+                        {v.nom}
+                      </span>
                     </div>
                   );
                 })
@@ -7870,10 +7891,11 @@ export default function DefibTab({
                   setActiveVariableSidePane(null);
                   setVariableSidePaneSearch('');
                 }}
-                className="pointer-events-auto w-full py-3.5 px-6 rounded-xl font-bold text-white text-[16px] transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
+                className="pointer-events-auto w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
                 style={{
                   backgroundColor: '#000000',
                   color: '#ffffff',
+                  fontSize: '18px',
                   border: 'none',
                   cursor: 'pointer',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
