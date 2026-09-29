@@ -735,6 +735,46 @@ export default function DefibTab({
   const [isLotPScannerOpen, setIsLotPScannerOpen] = useState(false);
   const [isLotBatScannerOpen, setIsLotBatScannerOpen] = useState(false);
   
+  // Side Pane Search States for Client and Variables
+  const [isSidePaneClientOpen, setIsSidePaneClientOpen] = useState(false);
+  const [clientSidePaneSearch, setClientSidePaneSearch] = useState('');
+  const [activeVariableSidePane, setActiveVariableSidePane] = useState<{
+    category: string;
+    fieldLabel: string;
+    items: Variable[];
+    selectedValue: string;
+    onSelect: (id: string) => void;
+    allowEmpty?: boolean;
+    emptyLabel?: string;
+  } | null>(null);
+  const [variableSidePaneSearch, setVariableSidePaneSearch] = useState('');
+
+  const filteredSidePaneClients = useMemo(() => {
+    if (!clientSidePaneSearch.trim()) return clients;
+    const q = clientSidePaneSearch.trim().toLowerCase();
+    return clients.filter(c => {
+      const denom = (c.denomination || '').toLowerCase();
+      const siret = (c.siret || '').toLowerCase();
+      const ville = (c.ville || '').toLowerCase();
+      const cp = (c.codePostal || (c as any).cp || '').toLowerCase();
+      const code = (c.clientIdField || (c as any).codeClient || '').toLowerCase();
+      return denom.includes(q) || siret.includes(q) || ville.includes(q) || cp.includes(q) || code.includes(q);
+    });
+  }, [clients, clientSidePaneSearch]);
+
+  const filteredSidePaneVariables = useMemo(() => {
+    if (!activeVariableSidePane) return [];
+    const list = activeVariableSidePane.items || [];
+    if (!variableSidePaneSearch.trim()) return list;
+    const q = variableSidePaneSearch.trim().toLowerCase();
+    return list.filter(v => {
+      const nom = (v.nom || '').toLowerCase();
+      const marque = (v.marque || '').toLowerCase();
+      const full = `${marque} ${nom}`.toLowerCase();
+      return nom.includes(q) || marque.includes(q) || full.includes(q);
+    });
+  }, [activeVariableSidePane, variableSidePaneSearch]);
+
   // Tour Action State
   const [isTourDropdownOpen, setIsTourDropdownOpen] = useState(false);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
@@ -1772,9 +1812,16 @@ export default function DefibTab({
 
   // Indicateur "Conforme et à jour"
   const { conformeEtAJourCount, compliancePercent, projectedCompliancePercent, totalDefibsCount } = useMemo(() => {
-    const total = defibrillateurs.length;
+    // Ne prendre en considération que les défibrillateurs "Maintenance Autorisée = Oui"
+    const eligibleDefibs = defibrillateurs.filter(df => {
+      const anyDf = df as any;
+      const rawFsm = (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
+      return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1';
+    });
+
+    const total = eligibleDefibs.length;
     if (total === 0) {
-      return { conformeEtAJourCount: 0, compliancePercent: 100, projectedCompliancePercent: 100, totalDefibsCount: 0 };
+      return { conformeEtAJourCount: 0, compliancePercent: 0, projectedCompliancePercent: 0, totalDefibsCount: 0 };
     }
 
     // Identifiants et IDs des défibrillateurs présents dans des tournées actives (brouillon, à faire, en cours...)
@@ -1809,7 +1856,7 @@ export default function DefibTab({
     let compliantCount = 0;
     let projectedCount = 0;
 
-    for (const df of defibrillateurs) {
+    for (const df of eligibleDefibs) {
       // 1. Statut de conformité
       let isCompliant = true;
       if (df.conforme === 'Non') {
@@ -4116,16 +4163,35 @@ export default function DefibTab({
                           <label htmlFor="form-modeleid" className="block text-[11px] font-bold text-slate-500 uppercase">
                             Modèle.
                           </label>
-                          {setActiveTab && (
+                          <div className="flex items-center gap-2.5">
                             <button
                               type="button"
-                              onClick={handleSaveAndRedirectToVariables}
+                              onClick={() => {
+                                setActiveVariableSidePane({
+                                  category: 'Modèle Défibrillateur',
+                                  fieldLabel: 'Modèle',
+                                  items: modelesDefib,
+                                  selectedValue: modeleId,
+                                  onSelect: (id) => setModeleId(id)
+                                });
+                                setVariableSidePaneSearch('');
+                              }}
                               className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
                               style={{ textDecoration: 'none' }}
                             >
-                              Nouvelle variable
+                              Rechercher
                             </button>
-                          )}
+                            {setActiveTab && (
+                              <button
+                                type="button"
+                                onClick={handleSaveAndRedirectToVariables}
+                                className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                style={{ textDecoration: 'none' }}
+                              >
+                                Nouvelle variable
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <select
                           id="form-modeleid"
@@ -4230,9 +4296,22 @@ export default function DefibTab({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {/* Native System Client Dropdown */}
                       <div className="space-y-1 relative">
-                        <label htmlFor="form-client-select" className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                          Client.
-                        </label>
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="form-client-select" className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            Client.
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsSidePaneClientOpen(true);
+                              setClientSidePaneSearch('');
+                            }}
+                            className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                            style={{ textDecoration: 'none' }}
+                          >
+                            Rechercher
+                          </button>
+                        </div>
                         <select
                           id="form-client-select"
                           value={clientId}
@@ -4434,16 +4513,37 @@ export default function DefibTab({
                           <label htmlFor="form-mod-coffret" className="block text-[11px] font-bold text-slate-500 uppercase">
                             Modèle.
                           </label>
-                          {setActiveTab && (
+                          <div className="flex items-center gap-2.5">
                             <button
                               type="button"
-                              onClick={handleSaveAndRedirectToVariables}
+                              onClick={() => {
+                                setActiveVariableSidePane({
+                                  category: 'Modèle Coffret',
+                                  fieldLabel: 'Modèle de coffret',
+                                  items: modelesCoffret,
+                                  selectedValue: modeleCoffretId,
+                                  onSelect: (id) => setModeleCoffretId(id),
+                                  allowEmpty: true,
+                                  emptyLabel: '-- Sans coffret --'
+                                });
+                                setVariableSidePaneSearch('');
+                              }}
                               className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
                               style={{ textDecoration: 'none' }}
                             >
-                              Nouvelle variable
+                              Rechercher
                             </button>
-                          )}
+                            {setActiveTab && (
+                              <button
+                                type="button"
+                                onClick={handleSaveAndRedirectToVariables}
+                                className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                style={{ textDecoration: 'none' }}
+                              >
+                                Nouvelle variable
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <select
                           id="form-mod-coffret"
@@ -5205,16 +5305,35 @@ export default function DefibTab({
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <label htmlFor="form-elec-a-lookup" className="block text-[10px] font-bold text-slate-400 uppercase">Modèle.</label>
-                          {setActiveTab && (
+                          <div className="flex items-center gap-2.5">
                             <button
                               type="button"
-                              onClick={handleSaveAndRedirectToVariables}
+                              onClick={() => {
+                                setActiveVariableSidePane({
+                                  category: 'Modèle Électrode',
+                                  fieldLabel: "Modèle d'électrode adulte",
+                                  items: modelesElectrode,
+                                  selectedValue: modeleElectrodeAId,
+                                  onSelect: (id) => setModeleElectrodeAId(id)
+                                });
+                                setVariableSidePaneSearch('');
+                              }}
                               className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
                               style={{ textDecoration: 'none' }}
                             >
-                              Nouvelle variable
+                              Rechercher
                             </button>
-                          )}
+                            {setActiveTab && (
+                              <button
+                                type="button"
+                                onClick={handleSaveAndRedirectToVariables}
+                                className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                style={{ textDecoration: 'none' }}
+                              >
+                                Nouvelle variable
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <select
                           id="form-elec-a-lookup"
@@ -5506,16 +5625,35 @@ export default function DefibTab({
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <label htmlFor="form-elec-p-lookup" className="block text-[10px] font-bold text-slate-400 uppercase">Modèle.</label>
-                          {setActiveTab && (
+                          <div className="flex items-center gap-2.5">
                             <button
                               type="button"
-                              onClick={handleSaveAndRedirectToVariables}
+                              onClick={() => {
+                                setActiveVariableSidePane({
+                                  category: 'Modèle Électrode',
+                                  fieldLabel: "Modèle d'électrode pédiatrique",
+                                  items: modelesElectrode,
+                                  selectedValue: modeleElectrodePId,
+                                  onSelect: (id) => setModeleElectrodePId(id)
+                                });
+                                setVariableSidePaneSearch('');
+                              }}
                               className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
                               style={{ textDecoration: 'none' }}
                             >
-                              Nouvelle variable
+                              Rechercher
                             </button>
-                          )}
+                            {setActiveTab && (
+                              <button
+                                type="button"
+                                onClick={handleSaveAndRedirectToVariables}
+                                className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                style={{ textDecoration: 'none' }}
+                              >
+                                Nouvelle variable
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <select
                           id="form-elec-p-lookup"
@@ -5807,16 +5945,35 @@ export default function DefibTab({
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <label htmlFor="form-bat-lookup" className="block text-[10px] font-bold text-slate-400 uppercase">Modèle.</label>
-                          {setActiveTab && (
+                          <div className="flex items-center gap-2.5">
                             <button
                               type="button"
-                              onClick={handleSaveAndRedirectToVariables}
+                              onClick={() => {
+                                setActiveVariableSidePane({
+                                  category: 'Modèle Batterie',
+                                  fieldLabel: 'Modèle de batterie',
+                                  items: modelesBatterie,
+                                  selectedValue: modeleBatterieId,
+                                  onSelect: (id) => setModeleBatterieId(id)
+                                });
+                                setVariableSidePaneSearch('');
+                              }}
                               className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
                               style={{ textDecoration: 'none' }}
                             >
-                              Nouvelle variable
+                              Rechercher
                             </button>
-                          )}
+                            {setActiveTab && (
+                              <button
+                                type="button"
+                                onClick={handleSaveAndRedirectToVariables}
+                                className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                style={{ textDecoration: 'none' }}
+                              >
+                                Nouvelle variable
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <select
                           id="form-bat-lookup"
@@ -7490,6 +7647,243 @@ export default function DefibTab({
           onClick={() => setIsFilterPaneOpen(false)}
           className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-[85]"
         />
+      )}
+
+      {/* 👤 CLIENT SEARCH SIDE PANE 👤 */}
+      {isSidePaneClientOpen && (
+        <>
+          <div 
+            onClick={() => {
+              setIsSidePaneClientOpen(false);
+              setClientSidePaneSearch('');
+            }}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[9998] transition-opacity"
+          />
+          <div 
+            className="fixed inset-y-0 right-0 w-full sm:w-[480px] bg-white shadow-2xl z-[9999] flex flex-col transform transition-transform duration-200 ease-in-out"
+            id="client-search-side-pane"
+            style={{ height: '100%' }}
+          >
+            {/* Search field at the very top - No title, No line divider */}
+            <div className="p-4 pt-5 pb-3 bg-white">
+              <input
+                type="text"
+                value={clientSidePaneSearch}
+                onChange={(e) => setClientSidePaneSearch(e.target.value)}
+                placeholder="Rechercher un client (nom, SIRET, ville...)..."
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '13px 18px',
+                  borderRadius: '13px',
+                  border: '1px solid rgb(201, 191, 205)',
+                  fontSize: '16px',
+                  color: '#000000',
+                  outline: 'none',
+                  backgroundColor: '#ffffff',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                }}
+                className="w-full text-black placeholder:text-slate-400 focus:border-blue-500 transition-colors"
+              />
+            </div>
+
+            {/* Client List */}
+            <div className="flex-1 overflow-y-auto px-4 pb-28 space-y-2">
+              {filteredSidePaneClients.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-sm font-sans">
+                  Aucun client trouvé.
+                </div>
+              ) : (
+                filteredSidePaneClients.map((c) => {
+                  const isSelected = c.id === clientId;
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => {
+                        handleClientChange(c.id);
+                        setIsSidePaneClientOpen(false);
+                        setClientSidePaneSearch('');
+                      }}
+                      className={`p-3.5 rounded-xl cursor-pointer transition-all border ${
+                        isSelected 
+                          ? 'bg-[#ffecf8] border-[#fe4eba]' 
+                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-[15px] text-black">
+                          {c.denomination || 'Client sans nom'}
+                        </span>
+                        {(c.clientIdField || (c as any).codeClient) && (
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
+                            {c.clientIdField || (c as any).codeClient}
+                          </span>
+                        )}
+                      </div>
+                      {c.siret && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          SIRET : <span className="font-mono text-slate-700">{c.siret}</span>
+                        </p>
+                      )}
+                      {(c.ville || c.codePostal || c.adresse || (c as any).cp) && (
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {[c.adresse, c.codePostal || (c as any).cp, c.ville].filter(Boolean).join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Floating Black "Fermer" Button at Bottom */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white/95 to-transparent pointer-events-none">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSidePaneClientOpen(false);
+                  setClientSidePaneSearch('');
+                }}
+                className="pointer-events-auto w-full py-3.5 px-6 rounded-xl font-bold text-white text-[16px] transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
+                style={{
+                  backgroundColor: '#000000',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                }}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 🏷️ VARIABLE SEARCH SIDE PANE 🏷️ */}
+      {activeVariableSidePane && (
+        <>
+          <div 
+            onClick={() => {
+              setActiveVariableSidePane(null);
+              setVariableSidePaneSearch('');
+            }}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[9998] transition-opacity"
+          />
+          <div 
+            className="fixed inset-y-0 right-0 w-full sm:w-[480px] bg-white shadow-2xl z-[9999] flex flex-col transform transition-transform duration-200 ease-in-out"
+            id="variable-search-side-pane"
+            style={{ height: '100%' }}
+          >
+            {/* Search field at the very top - No title, No line divider */}
+            <div className="p-4 pt-5 pb-3 bg-white">
+              <input
+                type="text"
+                value={variableSidePaneSearch}
+                onChange={(e) => setVariableSidePaneSearch(e.target.value)}
+                placeholder="Rechercher..."
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '13px 18px',
+                  borderRadius: '13px',
+                  border: '1px solid rgb(201, 191, 205)',
+                  fontSize: '16px',
+                  color: '#000000',
+                  outline: 'none',
+                  backgroundColor: '#ffffff',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                }}
+                className="w-full text-black placeholder:text-slate-400 focus:border-blue-500 transition-colors"
+              />
+            </div>
+
+            {/* Variable List */}
+            <div className="flex-1 overflow-y-auto px-4 pb-28 space-y-2">
+              {activeVariableSidePane.allowEmpty && (
+                <div
+                  onClick={() => {
+                    activeVariableSidePane.onSelect('');
+                    setActiveVariableSidePane(null);
+                    setVariableSidePaneSearch('');
+                  }}
+                  className={`p-3.5 rounded-xl cursor-pointer transition-all border ${
+                    !activeVariableSidePane.selectedValue
+                      ? 'bg-[#ffecf8] border-[#fe4eba]'
+                      : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="font-bold text-[15px] text-slate-700 italic">
+                    {activeVariableSidePane.emptyLabel || '-- Aucun --'}
+                  </span>
+                </div>
+              )}
+
+              {filteredSidePaneVariables.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-sm font-sans">
+                  Aucun résultat trouvé.
+                </div>
+              ) : (
+                filteredSidePaneVariables.map((v) => {
+                  const isSelected = v.id === activeVariableSidePane.selectedValue;
+                  const displayName = v.marque && v.marque !== 'Standard' ? `${v.marque} - ${v.nom}` : v.nom;
+                  return (
+                    <div
+                      key={v.id}
+                      onClick={() => {
+                        activeVariableSidePane.onSelect(v.id);
+                        setActiveVariableSidePane(null);
+                        setVariableSidePaneSearch('');
+                      }}
+                      className={`p-3.5 rounded-xl cursor-pointer transition-all border flex items-center gap-3 ${
+                        isSelected 
+                          ? 'bg-[#ffecf8] border-[#fe4eba]' 
+                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {v.imageUrl ? (
+                        <div className="w-12 h-12 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                          <img src={v.imageUrl} alt="" className="w-full h-full object-contain" />
+                        </div>
+                      ) : null}
+                      <div className="flex-1 min-w-0">
+                        <span className="font-bold text-[15px] text-black block truncate">
+                          {displayName}
+                        </span>
+                        {v.marque && v.marque !== 'Standard' && (
+                          <span className="text-xs text-slate-500 block truncate">
+                            Marque : {v.marque}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Floating Black "Fermer" Button at Bottom */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white/95 to-transparent pointer-events-none">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveVariableSidePane(null);
+                  setVariableSidePaneSearch('');
+                }}
+                className="pointer-events-auto w-full py-3.5 px-6 rounded-xl font-bold text-white text-[16px] transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
+                style={{
+                  backgroundColor: '#000000',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                }}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
 
