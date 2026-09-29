@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Defibrillateur, Client, Variable, CompanyInfo, OtherEquipment } from '../types';
 import { t } from '../utils/translate';
 import MapModal from './MapModal';
@@ -7650,8 +7651,26 @@ export default function DefibTab({
       )}
 
       {/* 👤 CLIENT SEARCH SIDE PANE 👤 */}
-      {isSidePaneClientOpen && (
-        <>
+      {isSidePaneClientOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            minHeight: '100dvh',
+            maxHeight: '100dvh',
+            zIndex: 99999,
+          }}
+          onClick={() => {
+            setIsSidePaneClientOpen(false);
+            setClientSidePaneSearch('');
+          }}
+        >
           <style>{`
             #client-search-side-pane input::placeholder,
             #variable-search-side-pane input::placeholder {
@@ -7661,19 +7680,18 @@ export default function DefibTab({
             }
           `}</style>
           <div 
-            onClick={() => {
-              setIsSidePaneClientOpen(false);
-              setClientSidePaneSearch('');
-            }}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[9998] transition-opacity"
-          />
-          <div 
-            className="fixed inset-y-0 right-0 w-full sm:w-[480px] bg-white shadow-2xl z-[9999] flex flex-col transform transition-transform duration-200 ease-in-out"
+            className="relative w-full sm:w-[480px] bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out"
             id="client-search-side-pane"
-            style={{ height: '100%' }}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              borderLeft: '1px solid #e2e8f0',
+            }}
           >
             {/* Search field at the very top - No title, No line divider */}
-            <div className="p-4 pt-5 pb-3 bg-white">
+            <div className="p-4 pt-5 pb-3 bg-white shrink-0">
               <input
                 type="text"
                 value={clientSidePaneSearch}
@@ -7696,7 +7714,7 @@ export default function DefibTab({
             </div>
 
             {/* Client List */}
-            <div className="flex-1 overflow-y-auto px-4 pb-28 space-y-2">
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
               {filteredSidePaneClients.length === 0 ? (
                 <div 
                   className="text-center py-12 text-slate-500 font-sans"
@@ -7739,14 +7757,14 @@ export default function DefibTab({
             </div>
 
             {/* Floating Black "Fermer" Button at Bottom */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white/95 to-transparent pointer-events-none">
+            <div className="p-4 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               <button
                 type="button"
                 onClick={() => {
                   setIsSidePaneClientOpen(false);
                   setClientSidePaneSearch('');
                 }}
-                className="pointer-events-auto w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
+                className="w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
                 style={{
                   backgroundColor: '#000000',
                   color: '#ffffff',
@@ -7760,12 +7778,31 @@ export default function DefibTab({
               </button>
             </div>
           </div>
-        </>
+        </div>,
+        document.body
       )}
 
       {/* 🏷️ VARIABLE SEARCH SIDE PANE 🏷️ */}
-      {activeVariableSidePane && (
-        <>
+      {activeVariableSidePane && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            minHeight: '100dvh',
+            maxHeight: '100dvh',
+            zIndex: 99999,
+          }}
+          onClick={() => {
+            setActiveVariableSidePane(null);
+            setVariableSidePaneSearch('');
+          }}
+        >
           <style>{`
             #variable-search-side-pane input::placeholder {
               color: #000000 !important;
@@ -7774,19 +7811,18 @@ export default function DefibTab({
             }
           `}</style>
           <div 
-            onClick={() => {
-              setActiveVariableSidePane(null);
-              setVariableSidePaneSearch('');
-            }}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[9998] transition-opacity"
-          />
-          <div 
-            className="fixed inset-y-0 right-0 w-full sm:w-[480px] bg-white shadow-2xl z-[9999] flex flex-col transform transition-transform duration-200 ease-in-out"
+            className="relative w-full sm:w-[480px] bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out"
             id="variable-search-side-pane"
-            style={{ height: '100%' }}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              borderLeft: '1px solid #e2e8f0',
+            }}
           >
             {/* Search field at the very top - No title, No line divider */}
-            <div className="p-4 pt-5 pb-3 bg-white">
+            <div className="p-4 pt-5 pb-3 bg-white shrink-0">
               <input
                 type="text"
                 value={variableSidePaneSearch}
@@ -7809,7 +7845,7 @@ export default function DefibTab({
             </div>
 
             {/* Variable List */}
-            <div className="flex-1 overflow-y-auto px-4 pb-28 space-y-2">
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
               {activeVariableSidePane.allowEmpty && (
                 <div
                   onClick={() => {
@@ -7884,14 +7920,14 @@ export default function DefibTab({
             </div>
 
             {/* Floating Black "Fermer" Button at Bottom */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white/95 to-transparent pointer-events-none">
+            <div className="p-4 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               <button
                 type="button"
                 onClick={() => {
                   setActiveVariableSidePane(null);
                   setVariableSidePaneSearch('');
                 }}
-                className="pointer-events-auto w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
+                className="w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
                 style={{
                   backgroundColor: '#000000',
                   color: '#ffffff',
@@ -7905,7 +7941,8 @@ export default function DefibTab({
               </button>
             </div>
           </div>
-        </>
+        </div>,
+        document.body
       )}
 
 
