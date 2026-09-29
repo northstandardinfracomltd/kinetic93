@@ -709,25 +709,23 @@ export default function GmaoOtherEquipmentCorrectionForm({
   };
 
   return (
-    <div className={isWebapp ? "w-full space-y-6 font-sans animate-fadeIn max-w-full text-black pb-12 px-2 sm:px-4 bg-white" : "w-full space-y-6 font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black pb-12 px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl"} id="gmao-other-eq-correction-layout">
-      {isWebapp && (
-        <div className="sticky top-0 right-0 z-50 flex justify-end pointer-events-none w-full -mr-0 md:-mr-4 mt-0 mb-[-36px]">
-          <div 
-            className="flex items-center px-3.5 py-1.5 text-white font-sans pointer-events-auto shadow-none border-none"
-            style={{
-              backgroundColor: '#5c1b62',
-              border: 'none',
-              boxShadow: 'none',
-              borderBottomLeftRadius: '13px',
-              borderTopRightRadius: '0px',
-              borderTopLeftRadius: '0px',
-              borderBottomRightRadius: '0px',
-              fontWeight: 100,
-              fontSize: '16px'
-            }}
-          >
-            {chronoText}
-          </div>
+    <div className={isWebapp ? `w-full ${isReduced ? 'space-y-0 pb-0' : 'space-y-6 pb-12'} font-sans animate-fadeIn max-w-full text-black px-2 sm:px-4 bg-white relative` : "w-full space-y-6 font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black pb-12 px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl"} id="gmao-other-eq-correction-layout">
+      {isWebapp && !isReduced && (
+        <div 
+          className="fixed top-0 right-0 z-[60] flex items-center px-3.5 py-1.5 text-white font-sans pointer-events-auto select-none shadow-sm"
+          style={{
+            backgroundColor: '#5c1b62',
+            border: 'none',
+            boxShadow: 'none',
+            borderBottomLeftRadius: '13px',
+            borderTopRightRadius: '0px',
+            borderTopLeftRadius: '0px',
+            borderBottomRightRadius: '0px',
+            fontWeight: 100,
+            fontSize: '16px'
+          }}
+        >
+          {chronoText}
         </div>
       )}
 
@@ -736,8 +734,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
           type="button"
           onClick={onCancel}
           id="btn-close-other-eq-modal"
-          style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '15px 20px', backgroundColor: '#000000', color: '#ffffff' }}
-          className="transition-colors cursor-pointer font-sans"
+          style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#000000', color: '#ffffff' }}
+          className="transition-colors cursor-pointer font-sans select-none"
         >
           Annuler
         </button>
@@ -751,13 +749,17 @@ export default function GmaoOtherEquipmentCorrectionForm({
           style={{
             width: '100%',
             borderRadius: '0px',
-            padding: '15px 20px',
+            padding: '14px 20px',
             backgroundColor: '#e5e7eb',
             color: '#000000',
             fontSize: '18px',
             fontWeight: 'bold',
             border: 'none',
             borderTop: '1px solid #d1d5db',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer'
           }}
           className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none"
         >

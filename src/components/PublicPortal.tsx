@@ -938,161 +938,6 @@ export default function PublicPortal({
     } catch (e) {}
   }, [pauseEnabled]);
 
-  const [showConfirmRecalculate, setShowConfirmRecalculate] = useState(false);
-
-  const handleRecalculateTour = async () => {
-    const activeToursSource = fsmTours && fsmTours.length > 0
-      ? fsmTours
-      : (() => {
-          const raw = localStorage.getItem("defib_fsm_tours");
-          return raw ? JSON.parse(raw) : [];
-        })();
-
-    if (!selectedTourId || !activeToursSource || activeToursSource.length === 0) return;
-    const tour = activeToursSource.find((t: any) => t.id === selectedTourId);
-    if (!tour) return;
-
-    if (!tour.techName || tour.techName === "Aucun" || tour.techName.trim() === "") {
-      alert(t("Aucun technicien n'est configuré pour cette tournée."));
-      return;
-    }
-
-    const tech = members.find(
-      (m) => m.name.trim().toLowerCase() === tour.techName.trim().toLowerCase()
-    );
-    const hasTechStructured = tech && tech.startAddressLat !== undefined && tech.startAddressLng !== undefined;
-    const hasTechString = tech && tech.startAddress && tech.startAddress.trim() !== "";
-    if (!tech || (!hasTechStructured && !hasTechString)) {
-      alert(t("Le technicien sélectionné doit avoir une adresse de départ renseignée pour pouvoir calculer l'itinéraire."));
-      return;
-    }
-
-    setShowConfirmRecalculate(true);
-  };
-
-  const executeTourRecalculation = async () => {
-    setShowConfirmRecalculate(false);
-    const activeToursSource = fsmTours && fsmTours.length > 0
-      ? fsmTours
-      : (() => {
-          const raw = localStorage.getItem("defib_fsm_tours");
-          return raw ? JSON.parse(raw) : [];
-        })();
-
-    if (!selectedTourId || !activeToursSource || activeToursSource.length === 0) return;
-    const tour = activeToursSource.find((t: any) => t.id === selectedTourId);
-    if (!tour) return;
-
-    const tech = members.find(
-      (m) => m.name.trim().toLowerCase() === tour.techName.trim().toLowerCase()
-    );
-    if (!tech) return;
-
-    try {
-      let startCoord: { lat: number; lng: number } | null = null;
-      if (tech.startAddressLat !== undefined && tech.startAddressLng !== undefined) {
-        const parsedLat = Number(tech.startAddressLat);
-        const parsedLng = Number(tech.startAddressLng);
-        if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
-          startCoord = { lat: parsedLat, lng: parsedLng };
-        }
-      }
-      if (!startCoord && tech.startAddress) {
-        startCoord = await geocodeAddress(tech.startAddress);
-      }
-
-      if (!startCoord) {
-        alert(t("Impossible de déterminer les coordonnées de départ du technicien."));
-        return;
-      }
-
-      const equipmentCoords: Record<string, { lat: number; lng: number }> = {};
-      const equipmentDetails: Record<string, any> = {};
-
-      (tour.missions || []).forEach((m: any) => {
-        const defib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
-        if (defib) {
-          equipmentDetails[m.defibIdentifiant] = defib;
-          const lat = parseFloat(defib.latitude);
-          const lng = parseFloat(defib.longitude);
-          if (!isNaN(lat) && !isNaN(lng)) {
-            equipmentCoords[m.defibIdentifiant] = { lat, lng };
-          }
-        } else {
-          const other = otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant);
-          if (other) {
-            equipmentDetails[m.defibIdentifiant] = other;
-            const lat = parseFloat(other.latitude);
-            const lng = parseFloat(other.longitude);
-            if (!isNaN(lat) && !isNaN(lng)) {
-              equipmentCoords[m.defibIdentifiant] = { lat, lng };
-            }
-          }
-        }
-      });
-
-      const preference = tech.optimizationPreference || "proche";
-      const sortedMissions = sortMissionsByProximity(
-        tour.missions || [],
-        startCoord,
-        equipmentCoords,
-        preference as any
-      );
-
-      // Determine first mission travel hours from technician departure address
-      let firstCoord = (sortedMissions.length > 0 && sortedMissions[0].defibIdentifiant)
-        ? equipmentCoords[sortedMissions[0].defibIdentifiant]
-        : null;
-
-      if (!firstCoord && sortedMissions.length > 0) {
-        const firstDefib = defibrillateurs.find((d: any) => d.identifiant === sortedMissions[0].defibIdentifiant);
-        const firstOther = otherEquipments.find((o: any) => o.identifiant === sortedMissions[0].defibIdentifiant);
-        const eq = firstDefib || firstOther;
-        if (eq) {
-          const addressStr = [eq.numVoie, eq.cp, eq.ville].filter(Boolean).join(' ');
-          if (addressStr.trim()) {
-            firstCoord = await geocodeAddress(addressStr);
-            if (firstCoord) {
-              equipmentCoords[sortedMissions[0].defibIdentifiant] = firstCoord;
-            }
-          }
-        }
-      }
-
-      const firstMissionTravelHours = (startCoord && firstCoord)
-        ? await calculateFirstMissionTravelHours(startCoord, firstCoord)
-        : (startCoord ? 1 : 0);
-
-      const scheduledMissions = scheduleMissions(
-        sortedMissions,
-        tour.startDate,
-        equipmentDetails,
-        tech,
-        firstMissionTravelHours,
-        variables
-      );
-
-      const updatedToursList = activeToursSource.map((t: any) => {
-        if (t.id === selectedTourId) {
-          return {
-            ...t,
-            missions: scheduledMissions,
-            calculated: true,
-          };
-        }
-        return t;
-      });
-
-      if (onUpdateFsmTours) {
-        onUpdateFsmTours(updatedToursList);
-        alert(t("L'itinéraire et les horaires ont été recalculés et optimisés avec succès !"));
-      }
-    } catch (err) {
-      console.error("Failed to optimize tour in technician portal:", err);
-      alert(t("Une erreur est survenue lors du calcul de la tournée."));
-    }
-  };
-
   // Selected tour ID and passage num for currently opening GMAO report overlay
   const [reportActiveTourId, setReportActiveTourId] = useState<string>("");
   const [reportActivePassageNum, setReportActivePassageNum] = useState<
@@ -7894,7 +7739,19 @@ export default function PublicPortal({
                                               fontSize: "14px",
                                             }}
                                           >
-                                            {!t.calculated ? '?' : (p.displayNum !== undefined && p.displayNum !== '?' ? p.displayNum : (pIdx + 1))}
+                                            {(() => {
+                                              const matchingFsmTour = (fsmTours || []).find((mt: any) => mt.id === t.id) || t;
+                                              const isTourCalculated = matchingFsmTour.calculated !== undefined ? !!matchingFsmTour.calculated : !!t.calculated;
+                                              if (!isTourCalculated) return '?';
+
+                                              if (matchingFsmTour.missions && Array.isArray(matchingFsmTour.missions)) {
+                                                const mIdx = matchingFsmTour.missions.findIndex((m: any) => m.id === p.id || (m.defibIdentifiant && m.defibIdentifiant === p.identifiant));
+                                                if (mIdx !== -1) {
+                                                  return (matchingFsmTour.missions[mIdx].passageNumber || (mIdx + 1));
+                                                }
+                                              }
+                                              return (p.displayNum !== undefined && p.displayNum !== '?' ? p.displayNum : p.num);
+                                            })()}
                                           </div>
 
                                           {/* Identifiant du défibrillateur dans une gelule alignée à gauche et pas en full width */}
@@ -8251,6 +8108,7 @@ export default function PublicPortal({
                                               );
                                               setReportActiveTourId(t.id);
                                               setReportActivePassageNum(p.num);
+                                              setIsReportOverlayMinimized(false);
                                               setIsReportOverlayOpen(true);
                                             } else {
                                               const matched =
@@ -8286,6 +8144,7 @@ export default function PublicPortal({
                                                   missionId: p.id,
                                                   tourId: t.id,
                                                 });
+                                                setIsReportOverlayMinimized(false);
                                                 setIsReportOverlayOpen(true);
                                               } else {
                                                 alert(
@@ -8600,6 +8459,8 @@ export default function PublicPortal({
                       setMissionSite("DÉPLACEMENT");
                       setReportActiveTourId("");
                       setReportActivePassageNum(null);
+                      setReportToEdit(null);
+                      setIsReportOverlayMinimized(false);
                       setIsReportOverlayOpen(true);
                     }}
                     style={{
@@ -14737,33 +14598,6 @@ export default function PublicPortal({
                   Ce constat de conformité de l'appareil de secours fait foi de
                   l'évaluation physique réalisée.
                 </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* System-like Confirm Modal for Tour recalculation */}
-        {showConfirmRecalculate && (
-          <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex items-center justify-center z-[99999] p-4 font-sans text-black select-none">
-            <div className="bg-white border border-neutral-300 shadow-xl rounded-[14px] max-w-md w-full p-6 space-y-5 animate-scaleUp">
-              <p className="text-[18px] text-black leading-relaxed font-bold">
-                {t("Êtes-vous certains de vouloir poursuivre? Cela va écraser les dates et créneaux prévus par l'administrateur.")}
-              </p>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmRecalculate(false)}
-                  className="px-5 py-2.5 bg-black hover:bg-neutral-900 text-white font-bold text-[18px] rounded-[13px] transition-all shadow-sm"
-                >
-                  {t("Non")}
-                </button>
-                <button
-                  type="button"
-                  onClick={executeTourRecalculation}
-                  className="px-5 py-2.5 bg-black hover:bg-neutral-900 text-white font-bold text-[18px] rounded-[13px] transition-all shadow-sm"
-                >
-                  {t("Oui")}
-                </button>
               </div>
             </div>
           </div>

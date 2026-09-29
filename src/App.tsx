@@ -8479,11 +8479,17 @@ export default function App() {
                             color: '#ffffff',
                             border: '1px solid #000000',
                             borderRadius: '13px',
-                            padding: '8px 16px',
+                            padding: '9px 18px',
                             fontSize: '16px',
                             fontWeight: '600',
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                             cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: '42px',
+                            boxSizing: 'border-box',
+                            lineHeight: '1.25',
                           }}
                           className="hover:opacity-90 transition-opacity"
                         >
@@ -8491,7 +8497,7 @@ export default function App() {
                         </button>
                         
                         {/* Attribuer à une tournée */}
-                        <div className="relative">
+                        <div className="relative inline-flex items-center">
                           <button
                             type="button"
                             onClick={() => setIsFsmBulkTourDropdownOpen(!isFsmBulkTourDropdownOpen)}
@@ -8499,13 +8505,19 @@ export default function App() {
                             style={{
                               backgroundColor: '#000000',
                               color: '#ffffff',
-                              border: 'none',
+                              border: '1px solid #000000',
                               borderRadius: '13px',
-                              padding: '8px 16px',
+                              padding: '9px 18px',
                               fontSize: '16px',
                               fontWeight: '600',
                               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                               cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              height: '42px',
+                              boxSizing: 'border-box',
+                              lineHeight: '1.25',
                             }}
                             className="hover:opacity-90 transition-opacity"
                           >
@@ -8514,7 +8526,7 @@ export default function App() {
 
                           {isFsmBulkTourDropdownOpen && (
                             <div 
-                              className="absolute right-0 mt-1 w-72 bg-white rounded-xl z-50 py-2.5 font-sans animate-fadeIn"
+                              className="absolute right-0 top-full mt-1 w-72 bg-white rounded-xl z-50 py-2.5 font-sans animate-fadeIn"
                               style={{ 
                                 fontSize: '16px',
                                 border: '1px solid rgb(218 218 218)',
@@ -8575,13 +8587,19 @@ export default function App() {
                           style={{
                             backgroundColor: '#dc2626',
                             color: '#ffffff',
-                            border: 'none',
+                            border: '1px solid #dc2626',
                             borderRadius: '13px',
-                            padding: '8px 16px',
+                            padding: '9px 18px',
                             fontSize: '16px',
                             fontWeight: '600',
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                             cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: '42px',
+                            boxSizing: 'border-box',
+                            lineHeight: '1.25',
                           }}
                           className="hover:opacity-90 transition-opacity"
                         >
@@ -9755,6 +9773,50 @@ export default function App() {
                                 </div>
                               ) : (
                                 <div className="space-y-4 bg-white">
+                                  {/* Radio check pour sélectionner toutes les missions de la tournée */}
+                                  {(() => {
+                                    const tourMissionIds = (t.missions || []).map((m: any) => m.id);
+                                    const isAllTourMissionsSelected = tourMissionIds.length > 0 && tourMissionIds.every((id: string) => selectedFsmMissionIds.includes(id));
+                                    
+                                    const handleToggleSelectAllTourMissions = () => {
+                                      if (isAllTourMissionsSelected) {
+                                        setSelectedFsmMissionIds(prev => prev.filter(id => !tourMissionIds.includes(id)));
+                                      } else {
+                                        setSelectedFsmMissionIds(prev => Array.from(new Set([...prev, ...tourMissionIds])));
+                                      }
+                                    };
+
+                                    return (
+                                      <div className="flex items-center gap-2.5 pb-1 select-none">
+                                        <button
+                                          type="button"
+                                          onClick={handleToggleSelectAllTourMissions}
+                                          id={`radio-check-select-all-${t.id}`}
+                                          className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
+                                            isAllTourMissionsSelected
+                                              ? 'border-[#fe4eba] bg-transparent'
+                                              : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                          }`}
+                                          style={{ borderWidth: '2.5px' }}
+                                          role="checkbox"
+                                          aria-checked={isAllTourMissionsSelected}
+                                          title="Sélectionner toutes les missions"
+                                        >
+                                          {isAllTourMissionsSelected && (
+                                            <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                          )}
+                                        </button>
+                                        <span
+                                          onClick={handleToggleSelectAllTourMissions}
+                                          className="text-[15px] font-sans font-normal text-black cursor-pointer hover:opacity-85 select-none"
+                                          style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                                        >
+                                          Sélectionner toutes les missions.
+                                        </span>
+                                      </div>
+                                    );
+                                  })()}
+
                                   {t.missions.map((m: any, idx: number) => {
                                     const missionKey = `a-trier-${m.id || idx}`;
                                     const isExpanded = !!fsmExpandedMissions[missionKey];
@@ -11631,6 +11693,50 @@ export default function App() {
                             </div>
                           ) : (
                             <div className="space-y-4 bg-white">
+                              {/* Radio check pour sélectionner toutes les missions de la tournée */}
+                              {(() => {
+                                const tourMissionIds = (t.missions || []).map((m: any) => m.id);
+                                const isAllTourMissionsSelected = tourMissionIds.length > 0 && tourMissionIds.every((id: string) => selectedFsmMissionIds.includes(id));
+                                
+                                const handleToggleSelectAllTourMissions = () => {
+                                  if (isAllTourMissionsSelected) {
+                                    setSelectedFsmMissionIds(prev => prev.filter(id => !tourMissionIds.includes(id)));
+                                  } else {
+                                    setSelectedFsmMissionIds(prev => Array.from(new Set([...prev, ...tourMissionIds])));
+                                  }
+                                };
+
+                                return (
+                                  <div className="flex items-center gap-2.5 pb-1 select-none">
+                                    <button
+                                      type="button"
+                                      onClick={handleToggleSelectAllTourMissions}
+                                      id={`radio-check-select-all-${t.id}`}
+                                      className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
+                                        isAllTourMissionsSelected
+                                          ? 'border-[#fe4eba] bg-transparent'
+                                          : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                      }`}
+                                      style={{ borderWidth: '2.5px' }}
+                                      role="checkbox"
+                                      aria-checked={isAllTourMissionsSelected}
+                                      title="Sélectionner toutes les missions"
+                                    >
+                                      {isAllTourMissionsSelected && (
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                      )}
+                                    </button>
+                                    <span
+                                      onClick={handleToggleSelectAllTourMissions}
+                                      className="text-[15px] font-sans font-normal text-black cursor-pointer hover:opacity-85 select-none"
+                                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                                    >
+                                      Sélectionner toutes les missions.
+                                    </span>
+                                  </div>
+                                );
+                              })()}
+
                               {t.missions.map((m: any, idx: number) => {
                                 const calculatedDate = (() => {
                                   if (!tourStartDate) return '';
@@ -13518,6 +13624,7 @@ export default function App() {
                         <thead>
                           <tr className="bg-transparent">
                             <th className="px-4 py-3.5 w-10 text-center" style={thStyle}></th>
+                            <th className="px-4 py-3.5 w-14 whitespace-nowrap" style={thStyle}>Miniature.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Horodatage.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Catégorie matériel.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Client.</th>
@@ -13563,6 +13670,16 @@ export default function App() {
                               boxShadow: isDisabled ? 'none' : rowActionButtonStyle.boxShadow,
                               border: 'none',
                             });
+
+                            const getBlueBtnStyle = (isDisabled: boolean) => ({
+                              ...rowActionButtonStyle,
+                              opacity: isDisabled ? 0.35 : 1,
+                              cursor: isDisabled ? 'not-allowed' : 'pointer',
+                              backgroundColor: isDisabled ? '#cbd5e1' : '#3556ec',
+                              color: isDisabled ? '#64748b' : '#ffffff',
+                              boxShadow: isDisabled ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                              border: 'none',
+                            });
                             
                             // Retrieve category name elegantly
                             const getCategoryName = (r: any) => {
@@ -13577,7 +13694,16 @@ export default function App() {
                             };
 
                             return (
-                              <tr key={rep.id} className="group hover:bg-[#ffecf8] transition-all cursor-pointer">
+                              <tr 
+                                key={rep.id} 
+                                onClick={(e) => {
+                                  if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
+                                  if (!isGererDisabled) {
+                                    setManagingReportId(rep.id);
+                                  }
+                                }}
+                                className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
+                              >
                                 {/* Conforme Status Dot Banner column & Flag Voyants */}
                                 <td className="px-3 py-5 text-center whitespace-nowrap" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   <div className="inline-flex items-center justify-center gap-2">
@@ -13622,6 +13748,45 @@ export default function App() {
                                     />
                                   </div>
                                 </td>
+
+                                {/* Miniature thumbnail column */}
+                                {(() => {
+                                  const catName = getCategoryName(rep).toLowerCase();
+                                  const isDefib = !rep.defibSnapshot?.categorie ||
+                                    catName.includes('défibrillateur') ||
+                                    catName.includes('defibrillateur');
+                                  
+                                  let defibThumbUrl: string | undefined = undefined;
+                                  if (isDefib) {
+                                    const matchedDefib = defibrillateurs.find((d: any) =>
+                                      d.id === rep.defibId ||
+                                      (rep.defibSnapshot?.identifiant && d.identifiant === rep.defibSnapshot.identifiant) ||
+                                      (rep.defibSnapshot?.numeroSerie && d.numeroSerie === rep.defibSnapshot.numeroSerie)
+                                    );
+                                    const targetModelId = rep.defibSnapshot?.modeleId || matchedDefib?.modeleId;
+                                    const targetModelNom = rep.defibSnapshot?.modele || matchedDefib?.modele;
+                                    const defibModel = variables.find((v: any) =>
+                                      (targetModelId && v.id === targetModelId) ||
+                                      (v.category === 'Modèle Défibrillateur' && targetModelNom && v.nom === targetModelNom)
+                                    );
+                                    defibThumbUrl = defibModel?.imageUrl;
+                                  }
+
+                                  return (
+                                    <td className="px-4 py-3.5">
+                                      <div className="w-14 h-14 rounded-md bg-white border border-slate-200 overflow-hidden relative flex items-center justify-center p-1.5" style={{ backgroundColor: '#ffffff' }}>
+                                        {isDefib && defibThumbUrl ? (
+                                          <img
+                                            src={defibThumbUrl}
+                                            alt=""
+                                            className="w-full h-full object-contain"
+                                            referrerPolicy="no-referrer"
+                                          />
+                                        ) : null}
+                                      </div>
+                                    </td>
+                                  );
+                                })()}
 
                                 {/* Date / Horodatage */}
                                 <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
@@ -13971,7 +14136,7 @@ export default function App() {
                                       type="button"
                                       disabled={isCorrigerDisabled}
                                       onClick={() => !isCorrigerDisabled && setEditingReportId(rep.id)}
-                                      style={getBtnStyle(isCorrigerDisabled)}
+                                      style={getBlueBtnStyle(isCorrigerDisabled)}
                                       className={isCorrigerDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
                                     >
                                       Corriger
@@ -14106,7 +14271,7 @@ export default function App() {
                                           alert("Le rapport d'intervention a été validé avec succès ! L'état de l'équipement a été mis à jour et un e-mail avec le rapport a été envoyé au client.");
                                         }
                                       }}
-                                      style={getBtnStyle(isValiderDisabled)}
+                                      style={getBlueBtnStyle(isValiderDisabled)}
                                       className={isValiderDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
                                     >
                                       {isValidated ? 'Validé' : 'Valider'}
@@ -14194,7 +14359,7 @@ export default function App() {
                         }}
                       >
                         {/* Drawer Body without inner padding/border div */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white font-sans">
+                        <div className="flex-1 overflow-y-auto p-6 pb-28 space-y-6 bg-white font-sans">
                           {/* Field: Commentaire du technicien. (Disabled textarea showing section 11 Commentaire interne) */}
                           <div className="space-y-2">
                             <label className="block text-[18px] font-medium text-[#000]">
@@ -14208,11 +14373,11 @@ export default function App() {
                             />
                           </div>
 
-                          {/* Field A: Drapeau GMAO */}
+                          {/* Field A: Drapeau ou indicateur */}
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
                               <label className="block text-[16px] font-medium text-[#000]">
-                                Drapeau GMAO
+                                Drapeau ou indicateur.
                               </label>
                               <button
                                 type="button"
@@ -14251,7 +14416,7 @@ export default function App() {
                               }}
                               className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 cursor-pointer"
                             >
-                              <option value="">-- Sélectionner un drapeau GMAO --</option>
+                              <option value="">-- Sélectionner un drapeau ou indicateur --</option>
                               {variables
                                 .filter(v => v.category === 'Drapeau GMAO' || v.category === 'Drapeau post-intervention')
                                 .map(v => (
@@ -14293,12 +14458,18 @@ export default function App() {
                             ) : null}
                           </div>
 
-                          {/* Field B: Commentaire */}
+                          {/* Field B: Commentaire interne */}
                           <div className="space-y-1.5 pt-1">
                             <label className="block text-[16px] font-medium text-[#000]">
-                              Commentaire
+                              Commentaire interne.
                             </label>
                             <textarea
+                              ref={(el) => {
+                                if (el) {
+                                  el.style.height = 'auto';
+                                  el.style.height = `${Math.max(el.scrollHeight, 100)}px`;
+                                }
+                              }}
                               value={
                                 managingReport.commentaire !== undefined && managingReport.commentaire !== null && managingReport.commentaire !== ''
                                   ? managingReport.commentaire
@@ -14310,9 +14481,12 @@ export default function App() {
                                   r.id === managingReport.id ? { ...r, commentaire: val } : r
                                 );
                                 saveReports(updatedReports);
+                                e.target.style.height = 'auto';
+                                e.target.style.height = `${Math.max(e.target.scrollHeight, 100)}px`;
                               }}
                               placeholder="Entrez un commentaire."
-                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-50/50 resize-y min-h-[120px] focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
+                              style={{ overflowY: 'hidden', resize: 'none' }}
+                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-50/50 min-h-[100px] focus:outline-none focus:ring-0 focus:border-slate-300 font-sans leading-relaxed"
                             />
                           </div>
 
@@ -14396,27 +14570,54 @@ export default function App() {
                               />
                             </div>
                           )}
+                        </div>
 
-                          {/* Enregistrer & Fermer Buttons */}
-                          <div className="pt-2 space-y-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                saveReports(generatedReports);
-                                setManagingReportId(null);
-                              }}
-                              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[18px] font-medium transition-colors cursor-pointer border-none shadow-sm"
-                            >
-                              Enregistrer
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setManagingReportId(null)}
-                              className="w-full py-3.5 bg-black text-white rounded-xl text-[18px] font-medium hover:bg-slate-800 transition-colors cursor-pointer border-none"
-                            >
-                              Fermer
-                            </button>
-                          </div>
+                        {/* Boutons floating en bas côtes à côtes */}
+                        <div 
+                          className="absolute bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-xs border-t border-slate-200 z-50 flex items-center gap-3 font-sans"
+                          style={{
+                            boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.08)'
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              saveReports(generatedReports);
+                              setManagingReportId(null);
+                            }}
+                            style={{
+                              backgroundColor: '#3556ec',
+                              color: '#ffffff',
+                              fontSize: '18px',
+                              fontWeight: '600',
+                              borderRadius: '12px',
+                              height: '48px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              boxShadow: '0 4px 12px rgba(53, 86, 236, 0.25)'
+                            }}
+                            className="flex-1 py-3 px-4 hover:brightness-110 transition-all flex items-center justify-center font-sans"
+                          >
+                            Enregistrer
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setManagingReportId(null)}
+                            style={{
+                              backgroundColor: '#000000',
+                              color: '#ffffff',
+                              fontSize: '18px',
+                              fontWeight: '600',
+                              borderRadius: '12px',
+                              height: '48px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)'
+                            }}
+                            className="flex-1 py-3 px-4 hover:bg-slate-800 transition-all flex items-center justify-center font-sans"
+                          >
+                            Fermer
+                          </button>
                         </div>
                       </div>
                     </div>

@@ -1543,6 +1543,7 @@ export default function StocksTab({
               <table className="w-full text-left font-sans border-collapse text-xs" id="stocks-record-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
                 <thead>
                   <tr className="bg-transparent">
+                    <th className="px-4 py-3.5 w-14 text-left whitespace-nowrap" style={thStyle}>Miniature.</th>
                     <th className="px-4 py-3.5" style={thStyle}>UGS</th>
                     <th className="px-4 py-3.5" style={thStyle}>Pièce ou service.</th>
                     <th className="px-4 py-3.5 text-center" style={thStyle}>Inv. traça. actif.</th>
@@ -1558,7 +1559,7 @@ export default function StocksTab({
                 <tbody className="text-slate-700 text-xs">
                   {filteredStocks.length === 0 ? (
                     <tr>
-                      <td colSpan={10}>
+                      <td colSpan={11}>
                         <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                       </td>
                     </tr>
@@ -1603,6 +1604,19 @@ export default function StocksTab({
                             setDistribDate(new Date().toISOString().split('T')[0]);
                           }}
                         >
+                          {/* Miniature thumbnail column */}
+                          <td className="px-4 py-3.5">
+                            <div className="w-14 h-14 rounded-md bg-white border border-slate-200 overflow-hidden relative flex items-center justify-center p-1.5" style={{ backgroundColor: '#ffffff' }}>
+                              {vObj?.imageUrl ? (
+                                <img
+                                  src={vObj.imageUrl}
+                                  alt=""
+                                  className="w-full h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : null}
+                            </div>
+                          </td>
                           <td className="px-4 py-5 whitespace-nowrap font-sans text-xs font-bold text-slate-800 uppercase tracking-wide" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', fontSize: '15px' }}>
                             {st.ugs || '0001'}
                           </td>

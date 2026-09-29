@@ -544,7 +544,7 @@ export default function VariableTab({
       nom: nom.trim(),
       marque: marque.trim() || 'Standard',
       description: description.trim(),
-      imageUrl: category === 'Modèle Défibrillateur' ? imageUrl.trim() : undefined,
+      imageUrl: (category === 'Modèle Défibrillateur' || category === 'Modèle Coffret' || category === 'Modèle Électrode' || category === 'Modèle Batterie' || category === 'Modèle Filtre Purificateur') ? imageUrl.trim() : undefined,
       couleurHex: (category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Modèle Contrat') ? (formattedHex || undefined) : undefined,
       dureePrestation: category === 'Modèle Raison Prestation' && dureePrestation !== '' ? parseInt(dureePrestation, 10) : undefined,
       identifiant: identifiant.trim() || undefined,
@@ -861,7 +861,7 @@ export default function VariableTab({
                 </div>
 
                 {/* Optional Line Source de l'image (No sub-div, simple list flow) */}
-                {category === 'Modèle Défibrillateur' && (
+                {(category === 'Modèle Défibrillateur' || category === 'Modèle Coffret' || category === 'Modèle Électrode' || category === 'Modèle Batterie' || category === 'Modèle Filtre Purificateur') && (
                   <div className="space-y-1">
                     <label htmlFor="input-variable-image" className="block text-[11px] font-bold text-slate-500 uppercase">
                       Lien source de l'image.
@@ -1267,7 +1267,7 @@ export default function VariableTab({
                       {/* Visual box column */}
                       <td className="px-4 py-3.5">
                         <div className="w-14 h-14 rounded-md bg-white border border-slate-200 overflow-hidden relative flex items-center justify-center p-1.5" style={{ backgroundColor: '#ffffff' }}>
-                          {v.category === 'Modèle Défibrillateur' && v.imageUrl ? (
+                          {v.imageUrl ? (
                             <img
                               src={v.imageUrl}
                               alt={v.nom}
