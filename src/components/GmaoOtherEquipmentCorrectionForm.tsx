@@ -18,6 +18,8 @@ interface GmaoOtherEquipmentCorrectionFormProps {
   stocks?: StockRecord[];
   onSelectDefibrillator?: (defibId: string) => void;
   onSelectOtherEquipment?: (otherEquipment: any) => void;
+  isMinimized?: boolean;
+  onToggleMinimize?: () => void;
 }
 
 const CODE39_PATTERNS: Record<string, string> = {
@@ -243,10 +245,40 @@ export default function GmaoOtherEquipmentCorrectionForm({
   variables = [],
   stocks = [],
   onSelectDefibrillator,
-  onSelectOtherEquipment
+  onSelectOtherEquipment,
+  isMinimized,
+  onToggleMinimize
 }: GmaoOtherEquipmentCorrectionFormProps) {
+  const [internalMinimized, setInternalMinimized] = useState(false);
+  const isReduced = isMinimized !== undefined ? isMinimized : internalMinimized;
+  const handleToggleReduce = onToggleMinimize || (() => setInternalMinimized((prev) => !prev));
   const [isLookupScannerOpen, setIsLookupScannerOpen] = useState(false);
   const [errorText, setErrorText] = useState("");
+
+  const [currentTickTime, setCurrentTickTime] = useState(() => new Date());
+  const [formStartTime] = useState(() => new Date());
+
+  useEffect(() => {
+    if (!isWebapp) return;
+    const interval = setInterval(() => {
+      setCurrentTickTime(new Date());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isWebapp]);
+
+  const chronoText = useMemo(() => {
+    let diffMs = currentTickTime.getTime() - formStartTime.getTime();
+    if (diffMs < 0) diffMs = 0;
+    const totalSecs = Math.floor(diffMs / 1000);
+    const hrs = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    const pad = (num: number) => String(num).padStart(2, '0');
+    if (hrs > 0) {
+      return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+    }
+    return `${pad(mins)}:${pad(secs)}`;
+  }, [currentTickTime, formStartTime]);
 
   // Section 1 - Client fields
   const [clientId, setClientId] = useState(otherEquipment?.clientId || '');
@@ -678,6 +710,63 @@ export default function GmaoOtherEquipmentCorrectionForm({
 
   return (
     <div className={isWebapp ? "w-full space-y-6 font-sans animate-fadeIn max-w-full text-black pb-12 px-2 sm:px-4 bg-white" : "w-full space-y-6 font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black pb-12 px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl"} id="gmao-other-eq-correction-layout">
+      {isWebapp && (
+        <div className="sticky top-0 right-0 z-50 flex justify-end pointer-events-none w-full -mr-0 md:-mr-4 mt-0 mb-[-36px]">
+          <div 
+            className="flex items-center px-3.5 py-1.5 text-white font-sans pointer-events-auto shadow-none border-none"
+            style={{
+              backgroundColor: '#5c1b62',
+              border: 'none',
+              boxShadow: 'none',
+              borderBottomLeftRadius: '13px',
+              borderTopRightRadius: '0px',
+              borderTopLeftRadius: '0px',
+              borderBottomRightRadius: '0px',
+              fontWeight: 100,
+              fontSize: '16px'
+            }}
+          >
+            {chronoText}
+          </div>
+        </div>
+      )}
+
+      {isWebapp && (
+        <button
+          type="button"
+          onClick={onCancel}
+          id="btn-close-other-eq-modal"
+          style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '15px 20px', backgroundColor: '#000000', color: '#ffffff' }}
+          className="transition-colors cursor-pointer font-sans"
+        >
+          Annuler
+        </button>
+      )}
+
+      {isWebapp && (
+        <button
+          type="button"
+          onClick={handleToggleReduce}
+          id="btn-toggle-reduce-other-eq"
+          style={{
+            width: '100%',
+            borderRadius: '0px',
+            padding: '15px 20px',
+            backgroundColor: '#e5e7eb',
+            color: '#000000',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            border: 'none',
+            borderTop: '1px solid #d1d5db',
+          }}
+          className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none"
+        >
+          {isReduced ? "Agrandir" : "Réduire"}
+        </button>
+      )}
+
+      {!isReduced && (
+        <>
       {/* Header */}
       <div 
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
@@ -1807,6 +1896,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
 
         </form>
       </div>
+        </>
+      )}
     </div>
   );
 }

@@ -29,6 +29,8 @@ interface GmaoCorrectionFormProps {
   members?: Member[];
   forceSmartphoneLayout?: boolean;
   isWebapp?: boolean;
+  isMinimized?: boolean;
+  onToggleMinimize?: () => void;
 }
 
 const DEFAULT_DEFIB: Defibrillateur = {
@@ -348,8 +350,13 @@ export default function GmaoCorrectionForm({
   onUpdateStocks,
   members = [],
   forceSmartphoneLayout = false,
-  isWebapp = false
+  isWebapp = false,
+  isMinimized,
+  onToggleMinimize
 }: GmaoCorrectionFormProps) {
+  const [internalMinimized, setInternalMinimized] = useState(false);
+  const isReduced = isMinimized !== undefined ? isMinimized : internalMinimized;
+  const handleToggleReduce = onToggleMinimize || (() => setInternalMinimized((prev) => !prev));
 
   const availableMembers = React.useMemo<Member[]>(() => {
     let list: Member[] = [];
@@ -1137,6 +1144,7 @@ export default function GmaoCorrectionForm({
   const isDrawing = useRef(false);
 
   const [currentTickTime, setCurrentTickTime] = useState(() => new Date());
+  const [formOpenTime] = useState(() => new Date());
 
   useEffect(() => {
     if (report) {
@@ -1229,9 +1237,9 @@ export default function GmaoCorrectionForm({
   }, [endTimeStamp]);
 
   const chronoText = useMemo(() => {
-    if (!parsedStart) return "00:00";
+    const start = parsedStart || formOpenTime;
     const end = parsedEnd || currentTickTime;
-    let diffMs = end.getTime() - parsedStart.getTime();
+    let diffMs = end.getTime() - start.getTime();
     if (diffMs < 0) diffMs = 0;
     
     const totalSecs = Math.floor(diffMs / 1000);
@@ -1244,7 +1252,7 @@ export default function GmaoCorrectionForm({
       return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
     }
     return `${pad(mins)}:${pad(secs)}`;
-  }, [parsedStart, parsedEnd, currentTickTime]);
+  }, [parsedStart, formOpenTime, parsedEnd, currentTickTime]);
 
   // Auto-generate reference intervention
   useEffect(() => {
@@ -2270,7 +2278,7 @@ export default function GmaoCorrectionForm({
 
   return (
     <div className={isWebapp || forceSmartphoneLayout ? "w-full space-y-6 font-sans animate-fadeIn max-w-full text-black pb-48 px-0 bg-white" : "w-full space-y-6 font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black pb-48 px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl"} id="gmao-correction-layout">
-      {isWebapp && isNew && (
+      {isWebapp && (
         <div className="sticky top-0 right-0 z-50 flex justify-end pointer-events-none w-full -mr-0 md:-mr-4 mt-0 mb-[-36px]">
           <div 
             className="flex items-center px-3.5 py-1.5 text-white font-sans pointer-events-auto shadow-none border-none"
@@ -2300,6 +2308,29 @@ export default function GmaoCorrectionForm({
       >
         Annuler
       </button>
+
+      <button
+        type="button"
+        onClick={handleToggleReduce}
+        id="btn-toggle-reduce-gmao"
+        style={{
+          width: '100%',
+          borderRadius: '0px',
+          padding: '15px 20px',
+          backgroundColor: '#e5e7eb',
+          color: '#000000',
+          fontSize: '18px',
+          fontWeight: 'bold',
+          border: 'none',
+          borderTop: '1px solid #d1d5db',
+        }}
+        className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none"
+      >
+        {isReduced ? "Agrandir" : "Réduire"}
+      </button>
+
+      {!isReduced && (
+        <>
 
       {alertInfoErrors && alertInfoErrors.length > 0 && (() => {
         const isErrorBlocking = (err: string) => {
@@ -5612,6 +5643,8 @@ export default function GmaoCorrectionForm({
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
 
     </div>

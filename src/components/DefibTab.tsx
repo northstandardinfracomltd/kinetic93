@@ -452,6 +452,8 @@ export default function DefibTab({
   isDefibLoading = false,
   defibLoadingProgress,
 }: DefibTabProps) {
+  const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
+
   // Navigation, Search & Filters State
   const [search, setSearch] = useState('');
   const [isFilterPaneOpen, setIsFilterPaneOpen] = useState(false);
@@ -2154,6 +2156,7 @@ export default function DefibTab({
 
   // Populate state for editing
   const openEditForm = (df: Defibrillateur) => {
+    const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
     setEditingDefib(df);
     setFormError('');
 
@@ -2170,7 +2173,7 @@ export default function DefibTab({
     setIdentifiant(df.identifiant || anyDf.id || '');
     setNumeroSerie(df.numeroSerie || anyDf.num_serie || anyDf.serial || '');
     setCommentaire(df.commentaire || anyDf.notes || anyDf.note || anyDf.commentaireDAE || '');
-    setModeleId(resolveModelSelectValue(df.modeleId || df.modele || anyDf.modele_dae || anyDf.model, modelesDefib));
+    setModeleId(resolveModelSelectValue(df.modeleId || anyDf.modele || anyDf.modele_dae || anyDf.model, modelesDefib));
     setNumeroAtlasante(df.numeroAtlasante || anyDf.numero_atlasante || '');
     setVersionLogiciel(df.versionLogiciel || anyDf.version_logiciel || '');
 
@@ -2190,7 +2193,7 @@ export default function DefibTab({
     setPayeurId(df.payeurId || anyDf.payeur_id || '');
     setClientIdField(df.clientIdField || anyDf.client_id_field || '');
 
-    setModeleCoffretId(resolveModelSelectValue(df.modeleCoffretId || df.modeleCoffret || anyDf.boitier_modele || anyDf.modele_coffret || anyDf.coffret_modele, modelesCoffret));
+    setModeleCoffretId(resolveModelSelectValue(df.modeleCoffretId || anyDf.modeleCoffret || anyDf.boitier_modele || anyDf.modele_coffret || anyDf.coffret_modele, modelesCoffret));
     setNumeroLotCoffret(df.numeroLotCoffret || anyDf.boitier_lot || anyDf.lot_coffret || anyDf.lotCoffret || '');
     setCommentaireCoffret(df.commentaireCoffret || anyDf.commentaire_coffret || '');
     setPeremptionTrousse(df.peremptionTrousse || anyDf.peremption_trousse || anyDf.date_peremption_trousse || '');
@@ -2254,7 +2257,7 @@ export default function DefibTab({
     setSortieFabricant(df.sortieFabricant || anyDf.sortie_fabricant || '');
 
     setHasElectrodeASecours(df.hasElectrodeASecours || anyDf.has_electrode_a_secours || (df.modeleElectrodeASecoursId || anyDf.modele_secours_a || df.lotElectrodeASecours || anyDf.lot_secours_a || df.peremptionSecoursElectrodeA ? 'Oui' : 'Non'));
-    setModeleElectrodeAId(resolveModelSelectValue(df.modeleElectrodeAId || df.modeleElectrodeA || anyDf.modele_electrode_a || anyDf.modele_a, modelesElectrode));
+    setModeleElectrodeAId(resolveModelSelectValue(df.modeleElectrodeAId || anyDf.modeleElectrodeA || anyDf.modele_electrode_a || anyDf.modele_a, modelesElectrode));
     setLotElectrodeA(df.lotElectrodeA || anyDf.lot_electrode_a || anyDf.lot_a || anyDf.electrode_a_lot || '');
     setInsertionElectrodeA(df.insertionElectrodeA || anyDf.insertion_electrode_a || anyDf.insertion_a || '');
     setPeremptionElectrodeA(df.peremptionElectrodeA || anyDf.peremption_electrode_a || anyDf.peremption_a || anyDf.date_peremption_a || '');
@@ -2262,14 +2265,14 @@ export default function DefibTab({
     setSituationElectrodeA(df.situationElectrodeA || anyDf.situation_a || 'Vert');
     setCommentaireElectrodeA(df.commentaireElectrodeA || anyDf.commentaire_electrode_a || anyDf.commentaire_a || '');
     setPeremptionSecoursElectrodeA(df.peremptionSecoursElectrodeA || anyDf.peremption_secours_a || '');
-    setModeleElectrodeASecoursId(resolveModelSelectValue(df.modeleElectrodeASecoursId || df.modeleElectrodeASecours || anyDf.modele_secours_a, modelesElectrode));
+    setModeleElectrodeASecoursId(resolveModelSelectValue(df.modeleElectrodeASecoursId || anyDf.modeleElectrodeASecours || anyDf.modele_secours_a, modelesElectrode));
     setLotElectrodeASecours(df.lotElectrodeASecours || anyDf.lot_secours_a || '');
     setLotPadpakA(df.lotPadpakA || anyDf.lot_padpak_a || '');
     setPeremptionPadpakA(df.peremptionPadpakA || anyDf.peremption_padpak_a || '');
     setHasPadpakA(df.hasPadpakA || anyDf.has_padpak_a || (df.lotPadpakA || anyDf.lot_padpak_a || df.peremptionPadpakA ? 'Oui' : 'Non'));
 
     setHasElectrodePSecours(df.hasElectrodePSecours || anyDf.has_electrode_p_secours || (df.modeleElectrodePSecoursId || anyDf.modele_secours_p || df.lotElectrodePSecours || anyDf.lot_secours_p || df.peremptionSecoursElectrodeP ? 'Oui' : 'Non'));
-    setModeleElectrodePId(resolveModelSelectValue(df.modeleElectrodePId || df.modeleElectrodeP || anyDf.modele_electrode_p || anyDf.modele_p, modelesElectrode));
+    setModeleElectrodePId(resolveModelSelectValue(df.modeleElectrodePId || anyDf.modeleElectrodeP || anyDf.modele_electrode_p || anyDf.modele_p, modelesElectrode));
     setLotElectrodeP(df.lotElectrodeP || anyDf.lot_electrode_p || anyDf.lot_p || anyDf.electrode_p_lot || '');
     setInsertionElectrodeP(df.insertionElectrodeP || anyDf.insertion_electrode_p || anyDf.insertion_p || '');
     setPeremptionElectrodeP(df.peremptionElectrodeP || anyDf.peremption_electrode_p || anyDf.peremption_p || anyDf.date_peremption_p || '');
@@ -2277,14 +2280,14 @@ export default function DefibTab({
     setSituationElectrodeP(df.situationElectrodeP || anyDf.situation_p || 'Vert');
     setCommentaireElectrodeP(df.commentaireElectrodeP || anyDf.commentaire_electrode_p || anyDf.commentaire_p || '');
     setPeremptionSecoursElectrodeP(df.peremptionSecoursElectrodeP || anyDf.peremption_secours_p || '');
-    setModeleElectrodePSecoursId(resolveModelSelectValue(df.modeleElectrodePSecoursId || df.modeleElectrodePSecours || anyDf.modele_secours_p, modelesElectrode));
+    setModeleElectrodePSecoursId(resolveModelSelectValue(df.modeleElectrodePSecoursId || anyDf.modeleElectrodePSecours || anyDf.modele_secours_p, modelesElectrode));
     setLotElectrodePSecours(df.lotElectrodePSecours || anyDf.lot_secours_p || '');
     setLotPadpakP(df.lotPadpakP || anyDf.lot_padpak_p || '');
     setPeremptionPadpakP(df.peremptionPadpakP || anyDf.peremption_padpak_p || '');
     setHasPadpakP(df.hasPadpakP || anyDf.has_padpak_p || (df.lotPadpakP || anyDf.lot_padpak_p || df.peremptionPadpakP ? 'Oui' : 'Non'));
 
     setHasBatterieSecours(df.hasBatterieSecours || anyDf.has_batterie_secours || (df.modeleBatterieSecoursId || anyDf.modele_secours_b || df.lotBatterieSecours || anyDf.lot_secours_b || df.peremptionBatterieSecours ? 'Oui' : 'Non'));
-    setModeleBatterieId(resolveModelSelectValue(df.modeleBatterieId || df.modeleBatterie || anyDf.modele_batterie || anyDf.modele_b, modelesBatterie));
+    setModeleBatterieId(resolveModelSelectValue(df.modeleBatterieId || anyDf.modeleBatterie || anyDf.modele_batterie || anyDf.modele_b, modelesBatterie));
     setLotBatterie(df.lotBatterie || anyDf.lot_batterie || anyDf.lot_b || anyDf.batterie_lot || '');
     setInsertionBatterie(df.insertionBatterie || anyDf.insertion_batterie || anyDf.insertion_b || '');
     setFabricationBatterie(df.fabricationBatterie || anyDf.fabrication_b || anyDf.date_fabrication_batterie || '');
@@ -2293,7 +2296,7 @@ export default function DefibTab({
     setSituationBatterie(df.situationBatterie || anyDf.situation_b || 'Vert');
     setPourcentageBatterie(df.pourcentageBatterie !== undefined && df.pourcentageBatterie !== '' ? String(df.pourcentageBatterie) : (anyDf.pourcentage_constate_b !== undefined ? String(anyDf.pourcentage_constate_b) : (anyDf.pourcentage_batterie !== undefined ? String(anyDf.pourcentage_batterie) : '100')));
     setCommentaireBatterie(df.commentaireBatterie || anyDf.commentaire_batterie || anyDf.commentaire_b || '');
-    setModeleBatterieSecoursId(resolveModelSelectValue(df.modeleBatterieSecoursId || df.modeleBatterieSecours || anyDf.modele_secours_b, modelesBatterie));
+    setModeleBatterieSecoursId(resolveModelSelectValue(df.modeleBatterieSecoursId || anyDf.modeleBatterieSecours || anyDf.modele_secours_b, modelesBatterie));
     setLotBatterieSecours(df.lotBatterieSecours || anyDf.lot_secours_b || '');
     setPeremptionBatterieSecours(df.peremptionBatterieSecours || anyDf.peremption_secours_b || '');
 
@@ -2315,45 +2318,45 @@ export default function DefibTab({
     // Live background refresh from server to ensure latest API updates (e.g. from developer API POST/PUT) are instantly reflected
     const targetKey = df.identifiant || df.numeroSerie || df.id;
     if (targetKey) {
-      fetch(`/api/sync-single-defib?id=${encodeURIComponent(targetKey)}&tenantId=${encodeURIComponent(activeTenantId || 'D27')}`)
+      const activeTenant = activeTenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : '') || 'demo';
+      fetch(`/api/sync-single-defib?id=${encodeURIComponent(targetKey)}&tenantId=${encodeURIComponent(activeTenant || 'D27')}`)
         .then(res => res.ok ? res.json() : null)
         .then(json => {
           if (json && json.defib) {
             const fresh = json.defib;
+            const anyFresh = fresh as any;
             setEditingDefib(fresh);
             if (fresh.commentaire !== undefined) setCommentaire(fresh.commentaire);
             if (fresh.commentaireCoffret !== undefined) setCommentaireCoffret(fresh.commentaireCoffret);
             if (fresh.numeroLotCoffret !== undefined) setNumeroLotCoffret(fresh.numeroLotCoffret);
-            if (fresh.modeleCoffretId || fresh.modeleCoffret) {
-              setModeleCoffretId(resolveModelSelectValue(fresh.modeleCoffretId || fresh.modeleCoffret, modelesCoffret));
+            if (fresh.modeleCoffretId || anyFresh.modeleCoffret) {
+              setModeleCoffretId(resolveModelSelectValue(fresh.modeleCoffretId || anyFresh.modeleCoffret, modelesCoffret));
             }
             if (fresh.lotBatterie !== undefined) setLotBatterie(fresh.lotBatterie);
             if (fresh.commentaireBatterie !== undefined) setCommentaireBatterie(fresh.commentaireBatterie);
             if (fresh.peremptionBatterie !== undefined) setPeremptionBatterie(fresh.peremptionBatterie);
             if (fresh.pourcentageBatterie !== undefined) setPourcentageBatterie(fresh.pourcentageBatterie);
-            if (fresh.modeleBatterieId || fresh.modeleBatterie) {
-              setModeleBatterieId(resolveModelSelectValue(fresh.modeleBatterieId || fresh.modeleBatterie, modelesBatterie));
+            if (fresh.modeleBatterieId || anyFresh.modeleBatterie) {
+              setModeleBatterieId(resolveModelSelectValue(fresh.modeleBatterieId || anyFresh.modeleBatterie, modelesBatterie));
             }
             if (fresh.lotElectrodeA !== undefined) setLotElectrodeA(fresh.lotElectrodeA);
             if (fresh.commentaireElectrodeA !== undefined) setCommentaireElectrodeA(fresh.commentaireElectrodeA);
             if (fresh.peremptionElectrodeA !== undefined) setPeremptionElectrodeA(fresh.peremptionElectrodeA);
-            if (fresh.modeleElectrodeAId || fresh.modeleElectrodeA) {
-              setModeleElectrodeAId(resolveModelSelectValue(fresh.modeleElectrodeAId || fresh.modeleElectrodeA, modelesElectrode));
+            if (fresh.modeleElectrodeAId || anyFresh.modeleElectrodeA) {
+              setModeleElectrodeAId(resolveModelSelectValue(fresh.modeleElectrodeAId || anyFresh.modeleElectrodeA, modelesElectrode));
             }
             if (fresh.lotElectrodeP !== undefined) setLotElectrodeP(fresh.lotElectrodeP);
             if (fresh.commentaireElectrodeP !== undefined) setCommentaireElectrodeP(fresh.commentaireElectrodeP);
             if (fresh.peremptionElectrodeP !== undefined) setPeremptionElectrodeP(fresh.peremptionElectrodeP);
-            if (fresh.modeleElectrodePId || fresh.modeleElectrodeP) {
-              setModeleElectrodePId(resolveModelSelectValue(fresh.modeleElectrodePId || fresh.modeleElectrodeP, modelesElectrode));
+            if (fresh.modeleElectrodePId || anyFresh.modeleElectrodeP) {
+              setModeleElectrodePId(resolveModelSelectValue(fresh.modeleElectrodePId || anyFresh.modeleElectrodeP, modelesElectrode));
             }
-            if (fresh.modeleId || fresh.modele) {
-              setModeleId(resolveModelSelectValue(fresh.modeleId || fresh.modele, modelesDefib));
+            if (fresh.modeleId || anyFresh.modele) {
+              setModeleId(resolveModelSelectValue(fresh.modeleId || anyFresh.modele, modelesDefib));
             }
             if (fresh.derniereMaintenance !== undefined) setDerniereMaintenance(fresh.derniereMaintenance);
-            if (fresh.prochaineMaintenance !== undefined) setProchaineMaintenance(fresh.prochaineMaintenance);
-            // Update in defibrillateurs table as well
-            if (setDefibrillateurs) {
-              setDefibrillateurs(prev => prev.map(item => (item.id === fresh.id || item.identifiant === fresh.identifiant || item.numeroSerie === fresh.numeroSerie) ? { ...item, ...fresh } : item));
+            if (onUpdateDefib) {
+              onUpdateDefib(fresh);
             }
           }
         })

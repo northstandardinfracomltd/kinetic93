@@ -16,6 +16,32 @@ if (typeof navigator !== 'undefined' && typeof document !== 'undefined') {
 
 // Silence benign Vite WebSocket and HMR errors/rejections in development environment
 if (typeof window !== 'undefined') {
+  try {
+    Object.defineProperty(window, 'activeTenantId', {
+      get() {
+        try {
+          return localStorage.getItem('defib_tenant_id') || 'demo';
+        } catch {
+          return 'demo';
+        }
+      },
+      set(val) {
+        try {
+          localStorage.setItem('defib_tenant_id', val);
+        } catch {}
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  } catch {}
+}
+if (typeof globalThis !== 'undefined') {
+  try {
+    (globalThis as any).activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
+  } catch {}
+}
+
+if (typeof window !== 'undefined') {
   if ((import.meta as any).env?.DEV) {
     try {
       const OriginalWebSocket = window.WebSocket;

@@ -8042,7 +8042,7 @@ export default function App() {
                 }
               }
 
-              // Filter: Afficher uniquement donnée de ma zone
+              // Filter: Données de ma zone/groupe uniquement
               if (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0) {
                 if (tour.id !== 'a-trier') {
                   if (!tour.region || !currentUserZoneRegions.includes(tour.region)) {
@@ -8229,15 +8229,43 @@ export default function App() {
                     background-image: none !important;
                   }
                   #fsm-tab-container select#select-fsm-tour-manage {
-                    border-radius: 1000px !important;
-                    padding: 10px 20px !important;
+                    border-radius: 9999px !important;
+                    -webkit-border-radius: 9999px !important;
+                    -moz-border-radius: 9999px !important;
+                    padding: 10px 38px 10px 20px !important;
+                    font-size: 15px !important;
+                    font-weight: 500 !important;
+                    height: 42px !important;
+                    line-height: 20px !important;
+                    border: 1px solid rgb(218, 218, 218) !important;
+                    background-color: #ffffff !important;
+                    color: #000000 !important;
+                    box-sizing: border-box !important;
+                  }
+                  #fsm-tab-container select#select-fsm-tour-manage:hover:not(:disabled),
+                  #fsm-tab-container select#select-fsm-tour-manage:focus:not(:disabled) {
+                    outline: none !important;
+                    border-color: #fa53d5 !important;
+                    box-shadow: 0 0 0 2.5px rgba(250, 83, 213, 0.35) !important;
+                  }
+                  #fsm-stats-wrapper,
+                  #fsm-stats-container {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    background: transparent !important;
+                    background-color: transparent !important;
+                    box-sizing: border-box !important;
                   }
                   #fsm-tab-container select#select-fsm-month-stats {
-                    width: auto !important;
-                    text-align: center !important;
-                    text-align-last: center !important;
-                    -webkit-text-align-last: center !important;
-                    -moz-text-align-last: center !important;
+                    width: 100% !important;
+                    height: 100% !important;
+                    opacity: 0 !important;
+                    cursor: pointer !important;
+                    position: absolute !important;
+                    inset: 0 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    border: none !important;
                   }
                   #fsm-tab-container select option {
                     color: #000000 !important;
@@ -8813,7 +8841,7 @@ export default function App() {
                           </label>
                         </div>
 
-                        {/* Filter: Afficher uniquement donnée de ma zone (Apple-like toggle) */}
+                        {/* Filter: Données de ma zone/groupe uniquement (Apple-like toggle) */}
                         <div className="pt-2">
                           <label 
                             className={`flex items-center justify-between select-none ${
@@ -9304,7 +9332,16 @@ export default function App() {
                 {/* Statistiques FSM du mois : Sélecteur mois/année + 2 gélules (Temps moyen & CO2 préservé) */}
                 <div 
                   id="fsm-stats-wrapper"
-                  className="px-4 pt-4 select-none flex flex-col gap-2 w-full"
+                  className="pt-4 select-none flex flex-col gap-2 w-full"
+                  style={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    paddingLeft: 0,
+                    paddingRight: 0,
+                    backgroundColor: 'transparent',
+                    background: 'transparent',
+                    boxSizing: 'border-box'
+                  }}
                 >
                   {!isFsmStatsHidden && (
                     <div 
@@ -9312,46 +9349,71 @@ export default function App() {
                       style={{
                         display: 'flex',
                         width: '100%',
+                        maxWidth: '100%',
                         flexWrap: 'wrap',
                         alignItems: 'center',
                         gap: '12px',
                         padding: '10px 14px',
                         backgroundColor: 'transparent',
+                        background: 'transparent',
                         border: '1px solid rgb(218, 218, 218)',
                         borderRadius: '16px',
                         boxSizing: 'border-box'
                       }}
                     >
-                      {/* Field de choix de mois/année */}
-                      <div className="flex items-center">
-                        <select
-                          id="select-fsm-month-stats"
-                          value={selectedFsmMonth}
-                          onChange={(e) => setSelectedFsmMonth(e.target.value)}
-                          title={translate("Sélectionner le mois")}
-                          style={{
-                            backgroundColor: '#f8fafc',
-                            border: '1px solid rgb(218, 218, 218)',
-                            borderRadius: '13px',
-                            padding: '9px 16px',
-                            fontSize: '15px',
-                            fontWeight: 600,
-                            color: '#000000',
-                            cursor: 'pointer',
-                            outline: 'none',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            textAlign: 'center',
-                            textAlignLast: 'center',
-                            width: 'auto',
-                          }}
-                        >
-                          {availableFsmMonths.map((m) => (
-                            <option key={m.key} value={m.key}>
-                              {m.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      {/* Bouton de choix de mois/année */}
+                      {(() => {
+                        const activeMonthObj = availableFsmMonths.find((m) => m.key === selectedFsmMonth);
+                        const activeMonthLabel = activeMonthObj ? activeMonthObj.label : (selectedFsmMonth || translate("Sélectionner le mois"));
+                        return (
+                          <div className="relative inline-flex items-center justify-center" style={{ width: 'auto' }}>
+                            <button
+                              type="button"
+                              id="btn-fsm-month-stats"
+                              className="inline-flex items-center justify-center text-center select-none hover:bg-slate-100 transition-colors"
+                              style={{
+                                backgroundColor: '#f8fafc',
+                                border: '1px solid rgb(218, 218, 218)',
+                                borderRadius: '13px',
+                                padding: '9px 18px',
+                                fontSize: '15px',
+                                fontWeight: 600,
+                                color: '#000000',
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                textAlign: 'center',
+                                width: 'auto',
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {activeMonthLabel}
+                            </button>
+                            <select
+                              id="select-fsm-month-stats"
+                              value={selectedFsmMonth}
+                              onChange={(e) => setSelectedFsmMonth(e.target.value)}
+                              title={translate("Sélectionner le mois")}
+                              style={{
+                                position: 'absolute',
+                                inset: 0,
+                                width: '100%',
+                                height: '100%',
+                                opacity: 0,
+                                cursor: 'pointer',
+                                zIndex: 10,
+                                appearance: 'none',
+                                WebkitAppearance: 'none',
+                              }}
+                            >
+                              {availableFsmMonths.map((m) => (
+                                <option key={m.key} value={m.key}>
+                                  {m.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })()}
 
                       {/* Gélule 1 : Temps moyen d’une intervention */}
                       <div 
@@ -9531,32 +9593,38 @@ export default function App() {
                           >
                             {translate("Sélection de la tournée à gérer:")}
                           </label>
-                          <select
-                            id="select-fsm-tour-manage"
-                            value={activeDateFilter === 'A trier' ? (fsmLastSelectedTourId || displayedTour.id) : activeDateFilter}
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                setFsmLastSelectedTourId(e.target.value);
-                                setFsmDateFilter(e.target.value);
-                              }
-                            }}
-                            style={{
-                              width: '100%',
-                              appearance: 'none',
-                              WebkitAppearance: 'none',
-                              MozAppearance: 'none',
-                              border: '1px solid rgb(218, 218, 218)',
-                              borderRadius: '1000px',
-                              padding: '10px 20px',
-                              fontSize: '15px',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              backgroundColor: '#ffffff',
-                              color: '#000000',
-                              cursor: 'pointer',
-                              outline: 'none',
-                            }}
-                            className="w-full truncate focus:outline-none"
-                          >
+                          <div className="relative w-full">
+                            <select
+                              id="select-fsm-tour-manage"
+                              value={activeDateFilter === 'A trier' ? (fsmLastSelectedTourId || displayedTour.id) : activeDateFilter}
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  setFsmLastSelectedTourId(e.target.value);
+                                  setFsmDateFilter(e.target.value);
+                                }
+                              }}
+                              style={{
+                                width: '100%',
+                                appearance: 'none',
+                                WebkitAppearance: 'none',
+                                MozAppearance: 'none',
+                                border: '1px solid rgb(218, 218, 218)',
+                                borderRadius: '9999px',
+                                WebkitBorderRadius: '9999px',
+                                MozBorderRadius: '9999px',
+                                padding: '10px 38px 10px 20px',
+                                fontSize: '15px',
+                                fontWeight: 500,
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                backgroundColor: '#ffffff',
+                                color: '#000000',
+                                cursor: 'pointer',
+                                outline: 'none',
+                                height: '42px',
+                                boxSizing: 'border-box',
+                              }}
+                              className="w-full truncate focus:outline-none pr-10"
+                            >
                             {(() => {
                               const STATUS_ORDER = ['Brouillon', 'À faire', 'En cours', 'Effectué', 'Terminé'];
                               const grouped = new Map<string, any[]>();
@@ -9600,8 +9668,12 @@ export default function App() {
                               });
                             })()}
                           </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5">
+                            <ChevronDown className="h-4 w-4 text-black" />
+                          </div>
                         </div>
-                      )}
+                      </div>
+                    )}
                     </div>
                   );
                 })()}

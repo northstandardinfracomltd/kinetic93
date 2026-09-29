@@ -350,6 +350,8 @@ export default function PublicPortal({
 
   // Report Form full-width overlay state
   const [isReportOverlayOpen, setIsReportOverlayOpen] = useState(false);
+  const [isReportOverlayMinimized, setIsReportOverlayMinimized] = useState(false);
+  const [activeSettingsSection, setActiveSettingsSection] = useState<string | null>(null);
   const [emargementModalRecordId, setEmargementModalRecordId] = useState<string | null>(null);
   const [isEmargementOverlayOpen, setIsEmargementOverlayOpen] = useState(false);
 
@@ -1664,12 +1666,14 @@ export default function PublicPortal({
                 return dateStr;
               };
 
+              const isTourCalculated = !!mt.calculated;
               return {
                 id: mt.id || `fsm-tour-${index}`,
                 title: mt.title || "Tournée",
                 startDate: tryFormatDateToFrench(mt.startDate),
                 status: mt.status || "À faire",
                 techName: mt.techName || "",
+                calculated: isTourCalculated,
                 passages: (mt.missions || []).map((m: any, idx: number) => {
                   const defib = defibrillateurs.find(
                     (d: any) =>
@@ -1758,8 +1762,10 @@ export default function PublicPortal({
                   })();
                   const rawEstDate = m.estimatedDate || calculatedDate;
 
+                  const passageNumVal: any = !isTourCalculated ? "?" : (m.passageNumber || m.num || (idx + 1));
                   return {
                     num: idx + 1,
+                    displayNum: passageNumVal,
                     id: m.id || `df-p-${idx}`,
                     identifiant: m.defibIdentifiant || defib?.identifiant || "",
                     model,
@@ -2071,12 +2077,14 @@ export default function PublicPortal({
             return dateStr;
           };
 
+          const isTourCalculated = !!mt.calculated;
           return {
             id: mt.id || `fsm-tour-${index}`,
             title: mt.title || "Tournée",
             startDate: tryFormatDateToFrench(mt.startDate),
             status: mt.status || "À faire",
             techName: mt.techName || "",
+            calculated: isTourCalculated,
             passages: (mt.missions || []).map((m: any, idx: number) => {
               const defib = defibrillateurs.find(
                 (d: any) =>
@@ -2163,8 +2171,10 @@ export default function PublicPortal({
               })();
               const rawEstDate = m.estimatedDate || calculatedDate;
 
+              const passageNumVal: any = !isTourCalculated ? "?" : (m.passageNumber || m.num || (idx + 1));
               return {
                 num: idx + 1,
+                displayNum: passageNumVal,
                 id: m.id || `df-p-${idx}`,
                 identifiant: m.defibIdentifiant || defib?.identifiant || "",
                 model,
@@ -2206,13 +2216,13 @@ export default function PublicPortal({
   }, [authenticatedUser, defibrillateurs, fsmTours, members, variables]);
 
   // Switch/Toggle status of a passage
-  const togglePassageStatus = (tourId: string, passageNum: number) => {
+  const togglePassageStatus = (tourId: string, passageIdOrNum: any) => {
     const updated = tours.map((t) => {
       if (t.id === tourId) {
         return {
           ...t,
           passages: t.passages.map((p) => {
-            if (p.num === passageNum) {
+            if ((p.id && p.id === passageIdOrNum) || p.num === passageIdOrNum) {
               const newStatus = p.status === "À faire" ? "Effectué" : "À faire";
               return { ...p, status: newStatus };
             }
@@ -2361,30 +2371,23 @@ export default function PublicPortal({
 
   const availableReportTechnicians = useMemo(() => {
     const techSet = new Set<string>();
-    if (authenticatedUser?.name?.trim()) {
-      techSet.add(authenticatedUser.name.trim());
-    }
+    const isTech = (m: any) => {
+      const r = (m?.role || "").toLowerCase().trim();
+      return r === "technicien" || r === "maintenance terrain" || r.includes("tech");
+    };
+
     (members || []).forEach((m) => {
-      if (m?.name?.trim()) {
+      if (m?.name?.trim() && isTech(m)) {
         techSet.add(m.name.trim());
       }
     });
-    generatedReports.forEach((rep) => {
-      if (
-        rep?.techName &&
-        rep.techName.trim() &&
-        rep.techName !== "Non assigné" &&
-        rep.techName !== "Technicien connecté" &&
-        rep.techName !== "Un technicien"
-      ) {
-        techSet.add(rep.techName.trim());
-      }
-    });
-    if (selectedReportTech && selectedReportTech !== "all") {
-      techSet.add(selectedReportTech.trim());
+
+    if (authenticatedUser?.name?.trim() && isTech(authenticatedUser)) {
+      techSet.add(authenticatedUser.name.trim());
     }
+
     return Array.from(techSet).sort((a, b) => a.localeCompare(b, "fr"));
-  }, [authenticatedUser, members, generatedReports, selectedReportTech]);
+  }, [authenticatedUser, members]);
 
   const sortedAndLimitedReports = useMemo(() => {
     return [...generatedReports]
@@ -4028,7 +4031,7 @@ export default function PublicPortal({
 
   // Render signature onto canvas in technician portal
   useEffect(() => {
-    if (activeTab === "localisation" && sigCanvasRef.current) {
+    if (activeTab === "localisation" && activeSettingsSection === "signature" && sigCanvasRef.current) {
       const canvas = sigCanvasRef.current;
       const ctx = canvas.getContext('2d');
       if (ctx) {
@@ -4043,7 +4046,7 @@ export default function PublicPortal({
         }
       }
     }
-  }, [activeTab, techSignature]);
+  }, [activeTab, activeSettingsSection, techSignature]);
 
   // Auto-scroll to first mission with status "À faire" when arriving on Interventions tab (if tour open)
   useEffect(() => {
@@ -4822,6 +4825,27 @@ export default function PublicPortal({
     alert(
       `Vos préférences géographiques ont été enregistrées avec succès et le lien de live tracking a été envoyé vers le pupitre principal d'administration !`,
     );
+    setActiveSettingsSection(null);
+  };
+
+  const handleSaveSignature = () => {
+    if (sigCanvasRef.current && authenticatedUser) {
+      const dataUrl = sigCanvasRef.current.toDataURL();
+      setTechSignature(dataUrl);
+      const updatedMembers = members.map((m) => {
+        if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
+          return { ...m, signature: dataUrl };
+        }
+        return m;
+      });
+      onUpdateMembers(updatedMembers);
+      const updatedUser = { ...authenticatedUser, signature: dataUrl };
+      setAuthenticatedUser(updatedUser);
+      localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
+      const envId = localStorage.getItem("defib_tenant_id") || "demo";
+      localStorage.setItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`, dataUrl);
+    }
+    setActiveSettingsSection(null);
   };
 
   // Google Calendar integration helpers
@@ -5368,7 +5392,16 @@ export default function PublicPortal({
             {/* FULL WIDTH SPECIAL REPORT FORM OVERLAY */}
             {isReportOverlayOpen && (
               <div
-                className="fixed inset-0 bg-white z-50 flex flex-col overflow-y-auto p-0 animate-slideUp text-black"
+                className={
+                  isReportOverlayMinimized
+                    ? "fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-slate-300 shadow-2xl flex flex-col overflow-hidden text-black animate-slideUp"
+                    : "fixed inset-0 bg-white z-50 flex flex-col overflow-y-auto p-0 animate-slideUp text-black"
+                }
+                style={
+                  isReportOverlayMinimized
+                    ? { maxHeight: "116px", height: "auto" }
+                    : undefined
+                }
                 id="report-form-overlay"
               >
                 {selectedOtherEquipmentUnique ? (
@@ -5378,6 +5411,8 @@ export default function PublicPortal({
                     forceSmartphoneLayout={false}
                     isNew={true}
                     isWebapp={true}
+                    isMinimized={isReportOverlayMinimized}
+                    onToggleMinimize={() => setIsReportOverlayMinimized((prev) => !prev)}
                     otherEquipments={otherEquipments}
                     defibrillateurs={defibrillateurs}
                     variables={variables}
@@ -5395,6 +5430,7 @@ export default function PublicPortal({
                     }}
                     onCancel={() => {
                       setIsReportOverlayOpen(false);
+                      setIsReportOverlayMinimized(false);
                       setSelectedOtherEquipmentUnique(null);
                       setReportActiveTourId("");
                       setReportActivePassageNum(null);
@@ -5443,6 +5479,7 @@ export default function PublicPortal({
                         `Le rapport "${submission.title}" a été enregistré avec succès (en attente de validation sur le logiciel principal) !`,
                       );
                       setIsReportOverlayOpen(false);
+                      setIsReportOverlayMinimized(false);
                       setSelectedOtherEquipmentUnique(null);
                       setReportActiveTourId("");
                       setReportActivePassageNum(null);
@@ -5451,7 +5488,7 @@ export default function PublicPortal({
                 ) : (
                   <GmaoCorrectionForm
                     key={reportToEdit ? `edit-${reportToEdit.id}-${reportToEdit.date || ''}` : `new-${selectedDefibId || 'new'}`}
-                    isNew={reportToEdit ? false : true}
+                    isNew={reportToEdit ? (!generatedReports.some(r => r.id === reportToEdit.id)) : true}
                     report={reportToEdit}
                     clients={clients}
                     variables={variables}
@@ -5464,8 +5501,11 @@ export default function PublicPortal({
                     stocks={stocks}
                     forceSmartphoneLayout={false}
                     isWebapp={true}
+                    isMinimized={isReportOverlayMinimized}
+                    onToggleMinimize={() => setIsReportOverlayMinimized((prev) => !prev)}
                     onCancel={() => {
                       setIsReportOverlayOpen(false);
+                      setIsReportOverlayMinimized(false);
                       setReportToEdit(null);
                       setSelectedDefibId("");
                       setSelectedDefibData(null);
@@ -5487,6 +5527,7 @@ export default function PublicPortal({
                           `Le rapport "${submission.title}" a été modifié avec succès (en attente de validation sur le logiciel principal) !`,
                         );
                         setIsReportOverlayOpen(false);
+                        setIsReportOverlayMinimized(false);
                         setReportToEdit(null);
                         setSelectedDefibId("");
                         setSelectedDefibData(null);
@@ -7752,36 +7793,6 @@ export default function PublicPortal({
                         text="Seules les tournées marquées « À faire » et attribuées au technicien peuvent être sélectionnées."
                       />
 
-                      {/* Section "Affiner la tournée" */}
-                      {selectedTourId && isTourActive && (
-                        <div className="px-1" id="affiner-tournee-block">
-                          <div
-                            className="bg-white border px-4 space-y-3 flex flex-col justify-center"
-                            style={{
-                              borderColor: "rgb(201, 190, 205)",
-                              borderRadius: "14px",
-                              minHeight: "78px",
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[18px] font-bold text-black font-sans">
-                                {t("Affiner la tournée.")}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={handleRecalculateTour}
-                                style={{
-                                  boxShadow: "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset",
-                                }}
-                                className="px-5 py-2.5 bg-black hover:bg-neutral-900 text-white font-bold text-[18px] rounded-[13px] transition-all"
-                              >
-                                {t("Re/Calculer")}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
                       {/* List of stacked tournées */}
                       {selectedTourId &&
                         getSortedTours()
@@ -7793,7 +7804,7 @@ export default function PublicPortal({
                                 className="grid grid-cols-1 md:grid-cols-2 gap-3 space-y-0"
                                 id={`tour-passages-${t.id}`}
                               >
-                                {t.passages.filter((p: any) => p.status !== "Attente").map((p) => {
+                                {t.passages.filter((p: any) => p.status !== "Attente").map((p, pIdx) => {
                                   const isCompleted = p.status === "Effectué";
                                   const isFormationMission = p.equipmentType === 'Formation' || p.equipmentType?.toLowerCase().includes('formation') || !!p.formationId;
                                   const matchedFmt = isFormationMission ? formations?.find((f: any) => f.id === p.formationId || f.id === p.identifiant) : null;
@@ -7835,7 +7846,7 @@ export default function PublicPortal({
                                         <button
                                           type="button"
                                           onClick={() =>
-                                            togglePassageStatus(t.id, p.num)
+                                            togglePassageStatus(t.id, p.id || p.num)
                                           }
                                           className="flex items-center gap-2 cursor-pointer focus:outline-hidden"
                                           style={{ fontSize: "16px" }}
@@ -7883,7 +7894,7 @@ export default function PublicPortal({
                                               fontSize: "14px",
                                             }}
                                           >
-                                            {p.num}
+                                            {!t.calculated ? '?' : (p.displayNum !== undefined && p.displayNum !== '?' ? p.displayNum : (pIdx + 1))}
                                           </div>
 
                                           {/* Identifiant du défibrillateur dans une gelule alignée à gauche et pas en full width */}
@@ -7903,6 +7914,35 @@ export default function PublicPortal({
                                             {isFormationMission ? "Formation" : p.identifiant}
                                           </span>
                                         </div>
+
+                                        {/* Miniature du modèle défibrillateur (si autre matériel, masqué) */}
+                                        {(() => {
+                                          if (matchedOther || isFormationMission) return null;
+                                          const defibModelVar = variables?.find(
+                                            (v: any) =>
+                                              v.id === matchedDefib?.modeleId ||
+                                              (v.category === "Modèle Défibrillateur" &&
+                                                (v.nom === p.model || v.nom === (matchedDefib as any)?.modele))
+                                          );
+                                          const thumbUrl =
+                                            defibModelVar?.imageUrl ||
+                                            (matchedDefib as any)?.imageUrl ||
+                                            (matchedDefib as any)?.photoUrl;
+                                          if (!thumbUrl) return null;
+                                          return (
+                                            <div
+                                              className="w-16 h-16 sm:w-20 sm:h-20 rounded-[12px] bg-white border flex items-center justify-center p-1 shrink-0 my-1"
+                                              style={{ borderColor: "rgb(201, 190, 205)" }}
+                                              title="Modèle défibrillateur"
+                                            >
+                                              <img
+                                                src={thumbUrl}
+                                                alt={p.model || "Modèle"}
+                                                className="w-full h-full object-contain"
+                                              />
+                                            </div>
+                                          );
+                                        })()}
 
                                         {/* Textes de la div en font color black */}
                                         <div
@@ -8031,29 +8071,25 @@ export default function PublicPortal({
                                               </p>
                                             )}
 
-                                          {p.interventionReference && (
-                                            <p style={{ color: "#000000" }}>
-                                              Référence intervention :{" "}
-                                              <span
-                                                className="font-semibold"
-                                                style={{ color: "#000000" }}
-                                              >
-                                                {p.interventionReference}
-                                              </span>
-                                            </p>
-                                          )}
+                                          <p style={{ color: "#000000" }}>
+                                            Référence intervention :{" "}
+                                            <span
+                                              className="font-semibold"
+                                              style={{ color: "#000000" }}
+                                            >
+                                              {p.interventionReference || ""}
+                                            </span>
+                                          </p>
 
-                                          {p.autreReference && (
-                                            <p style={{ color: "#000000" }}>
-                                              Autre référence :{" "}
-                                              <span
-                                                className="font-semibold"
-                                                style={{ color: "#000000" }}
-                                              >
-                                                {p.autreReference}
-                                              </span>
-                                            </p>
-                                          )}
+                                          <p style={{ color: "#000000" }}>
+                                            Autre référence :{" "}
+                                            <span
+                                              className="font-semibold"
+                                              style={{ color: "#000000" }}
+                                            >
+                                              {p.autreReference || ""}
+                                            </span>
+                                          </p>
 
                                           {/* Bon de commande */}
                                           <p style={{ color: "#000000" }}>
@@ -8095,32 +8131,31 @@ export default function PublicPortal({
                                             </p>
                                           )}
 
-                                          {p.estimatedDate && (
-                                            <p style={{ color: "#000000" }}>
-                                              Date estimée :{" "}
-                                              <span
-                                                className="font-semibold"
-                                                style={{ color: "#000000" }}
-                                              >
-                                                {(() => {
-                                                  const cleanDate =
-                                                    p.estimatedDate.replace(
-                                                      /\//g,
-                                                      "-",
-                                                    );
-                                                  const pts =
-                                                    cleanDate.split("-");
-                                                  if (pts.length === 3) {
-                                                    if (pts[0].length === 4) {
-                                                      return `${pts[2]}/${pts[1]}/${pts[0]}`;
-                                                    }
-                                                    return `${pts[0]}/${pts[1]}/${pts[2]}`;
+                                          <p style={{ color: "#000000" }}>
+                                            Date estimée :{" "}
+                                            <span
+                                              className="font-semibold"
+                                              style={{ color: "#000000" }}
+                                            >
+                                              {(() => {
+                                                if (!p.estimatedDate) return "";
+                                                const cleanDate =
+                                                  p.estimatedDate.replace(
+                                                    /\//g,
+                                                    "-",
+                                                  ).trim();
+                                                const pts =
+                                                  cleanDate.split("-");
+                                                if (pts.length === 3) {
+                                                  if (pts[0].length === 4) {
+                                                    return `${pts[2].padStart(2, "0")}-${pts[1].padStart(2, "0")}-${pts[0]}`;
                                                   }
-                                                  return p.estimatedDate;
-                                                })()}
-                                              </span>
-                                            </p>
-                                          )}
+                                                  return `${pts[0].padStart(2, "0")}-${pts[1].padStart(2, "0")}-${pts[2]}`;
+                                                }
+                                                return p.estimatedDate;
+                                              })()}
+                                            </span>
+                                          </p>
                                           <p style={{ color: "#000000" }}>
                                             Créneau estimé :{" "}
                                             <span
@@ -8629,6 +8664,35 @@ export default function PublicPortal({
                           }}
                           id={`report-card-${rep.id}`}
                         >
+                          {/* Miniature du modèle défibrillateur (si autre matériel, masqué) */}
+                          {(() => {
+                            if (matchedOther) return null;
+                            const defibModelVar = variables?.find(
+                              (v: any) =>
+                                v.id === snapshot?.modeleId ||
+                                (v.category === "Modèle Défibrillateur" &&
+                                  (v.nom === snapshot?.modele || v.nom === rep.title))
+                            );
+                            const thumbUrl =
+                              defibModelVar?.imageUrl ||
+                              (snapshot as any)?.imageUrl ||
+                              (snapshot as any)?.photoUrl;
+                            if (!thumbUrl) return null;
+                            return (
+                              <div
+                                className="w-16 h-16 sm:w-20 sm:h-20 rounded-[12px] bg-white border flex items-center justify-center p-1 shrink-0 mb-2"
+                                style={{ borderColor: "rgb(201, 190, 205)" }}
+                                title="Modèle défibrillateur"
+                              >
+                                <img
+                                  src={thumbUrl}
+                                  alt="Défibrillateur"
+                                  className="w-full h-full object-contain"
+                                />
+                              </div>
+                            );
+                          })()}
+
                           {/* Gelule Date en premier */}
                           <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
                             <span
@@ -12053,6 +12117,23 @@ export default function PublicPortal({
                     #tab-veille-screen textarea::placeholder {
                       font-size: 18px !important;
                     }
+                    #tab-veille-screen input[type="date"] {
+                      -webkit-appearance: none !important;
+                      -moz-appearance: none !important;
+                      appearance: none !important;
+                      box-sizing: border-box !important;
+                      width: 100% !important;
+                      max-width: 100% !important;
+                      min-width: 0 !important;
+                      display: block !important;
+                      background-color: transparent !important;
+                    }
+                    #tab-veille-screen input[type="date"]::-webkit-date-and-time-value {
+                      text-align: left !important;
+                      margin: 0 !important;
+                      padding: 0 !important;
+                      line-height: inherit !important;
+                    }
                     #tab-veille-screen input[type="date"]::-webkit-calendar-picker-indicator {
                       display: none !important;
                       -webkit-appearance: none !important;
@@ -12161,8 +12242,15 @@ export default function PublicPortal({
                           outline: "none",
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
+                          width: "100%",
+                          maxWidth: "100%",
+                          minWidth: 0,
+                          boxSizing: "border-box",
+                          display: "block",
+                          WebkitAppearance: "none",
+                          appearance: "none",
                         }}
-                        className="w-full text-black"
+                        className="w-full max-w-full min-w-0 text-black box-border block"
                       />
                     </div>
 
@@ -12282,168 +12370,12 @@ export default function PublicPortal({
                 </div>
               )}
 
-              {/* ----------------- TAB 5: LOCALISATION ----------------- */}
+              {/* ----------------- TAB 5: RÉGLAGES ----------------- */}
               {activeTab === "localisation" && (
                 <div
-                  className="space-y-6 pb-16 animate-fadeIn"
+                  className="space-y-6 pb-16 animate-fadeIn text-left"
                   id="tab-localisation-screen"
                 >
-                  {/* Nom du logiciel / Entreprise - Credit Card Banner Header (Recto / Verso) */}
-                  <div
-                    className="select-none"
-                    style={{
-                      width: "100%",
-                      maxWidth: "340px",
-                      aspectRatio: "85.6 / 53.98",
-                      margin: "15px auto 25px",
-                      perspective: "1000px",
-                      cursor: "pointer",
-                      touchAction: "manipulation",
-                    }}
-                    onClick={() => setIsSettingsCardFlipped((prev) => !prev)}
-                    title="Toucher pour retourner la carte"
-                  >
-                    <div
-                      style={{
-                        position: "relative",
-                        width: "100%",
-                        height: "100%",
-                        transformStyle: "preserve-3d",
-                        transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-                        transform: isSettingsCardFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-                      }}
-                    >
-                      {/* RECTO (Front of the card) */}
-                      <div
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
-                          borderRadius: "16px",
-                          overflow: "hidden",
-                          backfaceVisibility: "hidden",
-                          WebkitBackfaceVisibility: "hidden",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: "16px",
-                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.1)",
-                        }}
-                      >
-                        {/* Encoche sur le flan gauche avec filtre plus sombre pour contraster */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: "-10px",
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            width: "28px",
-                            height: "36px",
-                            backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
-                            filter: "brightness(0.72)",
-                            borderRadius: "0px 25px 25px 0px",
-                            zIndex: 10,
-                          }}
-                        />
-
-                        {/* Logo Top Right */}
-                        <img
-                          src="https://civilprom.s3.eu-north-1.amazonaws.com/DefibeoLogo.svg"
-                          alt="Logo"
-                          style={{
-                            position: "absolute",
-                            top: "2px",
-                            right: "16px",
-                            height: "46px",
-                            width: "auto",
-                            objectFit: "contain",
-                          }}
-                        />
-
-                        {/* Technicien Bottom Left */}
-                        {authenticatedUser?.name && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              bottom: "12px",
-                              left: "18px",
-                              color: "rgba(255, 255, 255, 0.95)",
-                              fontSize: "15px",
-                              fontWeight: "600",
-                              fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
-                            }}
-                          >
-                            {authenticatedUser.name}
-                          </div>
-                        )}
-
-                        {/* Nom du logiciel / Entreprise au centre */}
-                        <div
-                          style={{
-                            color: "rgb(255, 255, 255)",
-                            fontSize: "20px",
-                            textAlign: "center",
-                            fontFamily: 'var(--font-sans), "DefibeoMain", "Civilprom", sans-serif',
-                            fontWeight: "bold",
-                          }}
-                          className="tracking-wide w-full px-6"
-                        >
-                          {((companyInfo.nomLogiciel || companyInfo.name || "Defibeo")).length > 25
-                            ? (companyInfo.nomLogiciel || companyInfo.name || "Defibeo").substring(0, 25) + "..."
-                            : (companyInfo.nomLogiciel || companyInfo.name || "Defibeo")}
-                        </div>
-                      </div>
-
-                      {/* VERSO (Back of the card) */}
-                      <div
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
-                          borderRadius: "16px",
-                          overflow: "hidden",
-                          backfaceVisibility: "hidden",
-                          WebkitBackfaceVisibility: "hidden",
-                          transform: "rotateY(180deg)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: "20px",
-                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.1)",
-                        }}
-                      >
-                        {/* Encoche sur le flan opposé au verso pour continuité géométrique */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            right: "-10px",
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            width: "28px",
-                            height: "36px",
-                            backgroundColor: currentTechTheme?.color || "rgb(101, 25, 106)",
-                            filter: "brightness(0.72)",
-                            borderRadius: "25px 0px 0px 25px",
-                            zIndex: 10,
-                          }}
-                        />
-
-                        {/* Logo Defibeo Centré au verso */}
-                        <img
-                          src="https://civilprom.s3.eu-north-1.amazonaws.com/DefibeoLogo.svg"
-                          alt="Defibeo Logo"
-                          style={{
-                            maxHeight: "60px",
-                            maxWidth: "60%",
-                            width: "auto",
-                            height: "auto",
-                            objectFit: "contain",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
                   <style>{`
                     #tab-localisation-screen input,
                     #tab-localisation-screen select,
@@ -12456,137 +12388,297 @@ export default function PublicPortal({
                       color: #9ca3af !important;
                     }
                   `}</style>
-                  <form
-                    onSubmit={handleSaveLocalisation}
-                    className="space-y-5"
-                    style={{
-                      border: "none",
-                      padding: "0",
-                      background: "transparent",
-                      boxShadow: "none",
-                    }}
-                    id="auth-main-card"
-                  >
-                    <div className="space-y-4">
-                      {/* Toggle Masquer le pointage */}
-                      <div className="space-y-1.5" style={{ marginTop: "24px" }}>
-                        <div
-                          className="bg-white border px-4 py-[25px]"
-                          style={{
-                            borderColor: "rgb(201, 190, 205)",
-                            borderRadius: "14px",
-                          }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-[18px] font-bold text-black font-sans select-none">
-                              {t("Masquer le pointage.")}
-                            </span>
-                            <div className="flex items-center gap-3">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newVal = !hidePointage;
-                                  setHidePointage(newVal);
-                                  try {
-                                    const envId = localStorage.getItem("defib_tenant_id") || "demo";
-                                    localStorage.setItem("defib_hide_pointage", newVal ? "true" : "false");
-                                    localStorage.setItem(`defib_${envId}_tech_hide_pointage`, newVal ? "true" : "false");
-                                    if (authenticatedUser?.name) {
-                                      localStorage.setItem(`defib_${envId}_tech_hide_pointage_${authenticatedUser.name}`, newVal ? "true" : "false");
-                                    }
-                                  } catch (e) {}
-                                }}
-                                className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+
+                  {/* Header Title */}
+                  <div className="space-y-4">
+                    <h2
+                      style={{
+                        fontSize: "28px",
+                        color: "#000000",
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        fontWeight: "bold",
+                        paddingTop: "8px",
+                        paddingBottom: "8px",
+                        margin: 0,
+                      }}
+                    >
+                      {t("Que souhaitez-vous faire ?")}
+                    </h2>
+
+                    {/* Button Cloud */}
+                    <div className="flex flex-wrap gap-2.5 sm:gap-3 items-center">
+                      {[
+                        { key: "pointage", label: "Pointage" },
+                        { key: "localisation", label: "Localisation" },
+                        { key: "adresse", label: "Adresse" },
+                        { key: "signature", label: "Signature" },
+                        { key: "apparence", label: "Apparence" },
+                        { key: "installer", label: "Installer l’app" },
+                        { key: "google-calendar", label: "Google Calendar" },
+                      ].map((sec) => {
+                        const isSelected = activeSettingsSection === sec.key;
+                        return (
+                          <button
+                            key={sec.key}
+                            type="button"
+                            onClick={() =>
+                              setActiveSettingsSection((prev) =>
+                                prev === sec.key ? null : sec.key
+                              )
+                            }
+                            style={{
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              fontSize: "18px",
+                              fontWeight: 600,
+                              borderRadius: "14px",
+                              padding: "12px 18px",
+                              backgroundColor: isSelected ? "#000000" : "#ffffff",
+                              color: isSelected ? "#ffffff" : "rgb(0, 0, 0)",
+                              border: isSelected
+                                ? "1px solid #000000"
+                                : "1px solid #dadada",
+                              boxShadow: isSelected
+                                ? "rgba(0, 0, 0, 0.16) 0px 4px 12px -2px"
+                                : "rgba(0, 0, 0, 0.06) 0px 2px 8px -2px",
+                              cursor: "pointer",
+                              transition: "all 0.15s ease-in-out",
+                              textAlign: "center",
+                              whiteSpace: "normal",
+                              lineHeight: "1.3",
+                            }}
+                            className="hover:scale-[1.02] active:scale-[0.98] select-none"
+                          >
+                            {sec.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* SECTION 1: POINTAGE */}
+                  {activeSettingsSection === "pointage" && (
+                    <div className="space-y-4 pt-2 text-left animate-fadeIn">
+                      <div
+                        className="bg-white border px-4 py-[25px]"
+                        style={{
+                          borderColor: "rgb(201, 190, 205)",
+                          borderRadius: "14px",
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[18px] font-bold text-black font-sans select-none">
+                            {t("Masquer le pointage.")}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newVal = !hidePointage;
+                                setHidePointage(newVal);
+                                try {
+                                  const envId =
+                                    localStorage.getItem("defib_tenant_id") || "demo";
+                                  localStorage.setItem(
+                                    "defib_hide_pointage",
+                                    newVal ? "true" : "false"
+                                  );
+                                  localStorage.setItem(
+                                    `defib_${envId}_tech_hide_pointage`,
+                                    newVal ? "true" : "false"
+                                  );
+                                  if (authenticatedUser?.name) {
+                                    localStorage.setItem(
+                                      `defib_${envId}_tech_hide_pointage_${authenticatedUser.name}`,
+                                      newVal ? "true" : "false"
+                                    );
+                                  }
+                                } catch (e) {}
+                              }}
+                              className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                              style={{
+                                backgroundColor: hidePointage
+                                  ? "#fe4eba"
+                                  : "#cbd5e1",
+                              }}
+                            >
+                              <span
+                                className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
                                 style={{
-                                  backgroundColor: hidePointage
-                                    ? "#fe4eba"
-                                    : "#cbd5e1",
+                                  transform: hidePointage
+                                    ? "translateX(20px)"
+                                    : "translateX(0px)",
                                 }}
-                              >
-                                <span
-                                  className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
-                                  style={{
-                                    transform: hidePointage
-                                      ? "translateX(20px)"
-                                      : "translateX(0px)",
-                                  }}
-                                />
-                              </button>
-                            </div>
+                              />
+                            </button>
                           </div>
                         </div>
                       </div>
 
-                      {/* Live map link replaced by toggle */}
-                      {!companyInfo?.hiddenTabs?.includes("Localisation") && !companyInfo?.hiddenTabs?.includes("Localisation (Webapp)") && !companyInfo?.hiddenTabs?.includes("Localisations") && (
-                        <div className="space-y-1.5" style={{ marginTop: "24px" }}>
-                          <div
-                            className="bg-white border px-4 py-[25px]"
-                            style={{
-                              borderColor: "rgb(201, 190, 205)",
-                              borderRadius: "14px",
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[18px] font-bold text-black font-sans select-none">
-                                Activer la localisation.
-                              </span>
-                              <div className="flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const newVal = gpsSharingLink === "Partagé" ? "Non partagé" : "Partagé";
-                                    setGpsSharingLink(newVal);
-                                  }}
-                                  className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
-                                  style={{
-                                    backgroundColor: gpsSharingLink === "Partagé"
-                                      ? "rgb(254, 78, 187)"
-                                      : "#cbd5e1",
-                                  }}
-                                >
-                                  <span
-                                    className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
-                                    style={{
-                                      transform: gpsSharingLink === "Partagé"
-                                        ? "translateX(20px)"
-                                        : "translateX(0px)",
-                                    }}
-                                  />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          <div style={{ marginTop: "12px" }}>
-                            <a
-                              href="https://defibeo.com/school/"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                fontSize: "18px",
-                                color: "#3556ec",
-                                textDecoration: "underline",
-                                fontWeight: "bold",
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveSettingsSection(null);
+                        }}
+                        style={{
+                          backgroundColor: "rgb(53, 86, 236)",
+                          color: "#fff",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderRadius: "12px",
+                          padding: "14px 20px",
+                          border: "none",
+                          boxShadow:
+                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          cursor: "pointer",
+                          width: "100%",
+                        }}
+                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <span>Enregistrer</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* SECTION 2: LOCALISATION */}
+                  {activeSettingsSection === "localisation" && (
+                    <div className="space-y-4 pt-2 text-left animate-fadeIn">
+                      <div
+                        className="bg-white border px-4 py-[25px]"
+                        style={{
+                          borderColor: "rgb(201, 190, 205)",
+                          borderRadius: "14px",
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[18px] font-bold text-black font-sans select-none">
+                            Activer la localisation.
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newVal =
+                                  gpsSharingLink === "Partagé"
+                                    ? "Non partagé"
+                                    : "Partagé";
+                                setGpsSharingLink(newVal);
                               }}
-                              className="font-sans block hover:opacity-85 text-blue-600 cursor-pointer"
+                              className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                              style={{
+                                backgroundColor:
+                                  gpsSharingLink === "Partagé"
+                                    ? "rgb(254, 78, 187)"
+                                    : "#cbd5e1",
+                              }}
                             >
-                              Vous devez partager avec {companyInfo?.gmailPartageLocalisation || "(Manquant)"}, consultez l’aide.
-                            </a>
+                              <span
+                                className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
+                                style={{
+                                  transform:
+                                    gpsSharingLink === "Partagé"
+                                      ? "translateX(20px)"
+                                      : "translateX(0px)",
+                                }}
+                              />
+                            </button>
                           </div>
                         </div>
-                      )}
+                      </div>
 
-                      {/* Mon adresse structured fields */}
-                      <div className="space-y-4" style={{ marginTop: "32px" }}>
-                        {/* Numéro et voie */}
-                        <div className="space-y-1" style={{ marginTop: "24px" }}>
-                          <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Numéro et voie.</label>
+                      <div style={{ marginTop: "12px" }}>
+                        <a
+                          href="https://defibeo.com/school/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontSize: "18px",
+                            color: "#3556ec",
+                            textDecoration: "underline",
+                            fontWeight: "bold",
+                          }}
+                          className="font-sans block hover:opacity-85 text-blue-600 cursor-pointer"
+                        >
+                          Vous devez partager avec{" "}
+                          {companyInfo?.gmailPartageLocalisation || "(Manquant)"},
+                          consultez l’aide.
+                        </a>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveSettingsSection(null);
+                        }}
+                        style={{
+                          backgroundColor: "rgb(53, 86, 236)",
+                          color: "#fff",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderRadius: "12px",
+                          padding: "14px 20px",
+                          border: "none",
+                          boxShadow:
+                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          cursor: "pointer",
+                          width: "100%",
+                        }}
+                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <span>Enregistrer</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* SECTION 3: ADRESSE */}
+                  {activeSettingsSection === "adresse" && (
+                    <form
+                      onSubmit={(e) => {
+                        handleSaveLocalisation(e);
+                        setActiveSettingsSection(null);
+                      }}
+                      className="space-y-4 pt-2 text-left animate-fadeIn"
+                    >
+                      {/* Numéro et voie */}
+                      <div className="space-y-1">
+                        <label
+                          style={{ fontSize: "18px", color: "#000000" }}
+                          className="block font-bold"
+                        >
+                          Numéro et voie.
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={techStartStreet}
+                          onChange={(e) => setTechStartStreet(e.target.value)}
+                          placeholder="Ex: 15 Rue de la Paix"
+                          style={{
+                            fontSize: "18px",
+                            padding: "14px",
+                            borderRadius: "13px",
+                            border: "1px solid rgb(201, 191, 205)",
+                            outline: "none",
+                            color: "rgb(0, 0, 0)",
+                          }}
+                          className="w-full bg-white focus:border-indigo-500 font-sans"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Ville */}
+                        <div className="space-y-1">
+                          <label
+                            style={{ fontSize: "18px", color: "#000000" }}
+                            className="block font-bold"
+                          >
+                            Ville.
+                          </label>
                           <input
                             type="text"
                             required
-                            value={techStartStreet}
-                            onChange={(e) => setTechStartStreet(e.target.value)}
-                            placeholder="Ex: 15 Rue de la Paix"
+                            value={techStartCity}
+                            onChange={(e) => setTechStartCity(e.target.value)}
+                            placeholder="Ex: Paris"
                             style={{
                               fontSize: "18px",
                               padding: "14px",
@@ -12599,155 +12691,192 @@ export default function PublicPortal({
                           />
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {/* Ville */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Ville.</label>
-                            <input
-                              type="text"
-                              required
-                              value={techStartCity}
-                              onChange={(e) => setTechStartCity(e.target.value)}
-                              placeholder="Ex: Paris"
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                              }}
-                              className="w-full bg-white focus:border-indigo-500 font-sans"
-                            />
-                          </div>
-
-                          {/* Code postal */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Code postal.</label>
-                            <input
-                              type="text"
-                              required
-                              value={techStartZip}
-                              onChange={(e) => setTechStartZip(e.target.value)}
-                              placeholder="Ex: 75002"
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                              }}
-                              className="w-full bg-white focus:border-indigo-500 font-sans"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {/* Région */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Région.</label>
-                            <select
-                              required
-                              value={techStartRegion}
-                              onChange={(e) => setTechStartRegion(e.target.value)}
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                                appearance: "none",
-                                WebkitAppearance: "none",
-                                MozAppearance: "none",
-                              }}
-                              className="w-full bg-white focus:border-indigo-500 appearance-none"
-                            >
-                              <option value="">Choisir une région</option>
-                              {getRegionsForCountry(techStartCountry || 'France').map((r) => (
-                                <option key={r} value={r}>{r}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Pays */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Pays.</label>
-                            <select
-                              required
-                              value={techStartCountry}
-                              onChange={(e) => setTechStartCountry(e.target.value)}
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                                appearance: "none",
-                                WebkitAppearance: "none",
-                                MozAppearance: "none",
-                              }}
-                              className="w-full bg-white focus:border-indigo-500 appearance-none"
-                            >
-                              {["France", "Espagne", "Portugal", "Suisse", "Luxembourg", "Belgique", "Allemagne", "Pays-Bas", "Royaume-Uni", "Irlande", "Suède", "Pologne", "Tchéquie", "Autriche"].map((c) => (
-                                <option key={c} value={c}>{c}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {/* Latitude */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Latitude.</label>
-                            <input
-                              type="text"
-                              readOnly
-                              required
-                              value={(techStartLat && techStartLat.toLowerCase() !== 'null' && techStartLat.toLowerCase() !== 'undefined' && techStartLat.toLowerCase() !== 'nan') ? techStartLat : ''}
-                              placeholder="Rempli automatiquement"
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                                backgroundColor: "#f3f4f6",
-                                cursor: "not-allowed",
-                              }}
-                              className="w-full"
-                            />
-                          </div>
-
-                          {/* Longitude */}
-                          <div className="space-y-1">
-                            <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">Longitude.</label>
-                            <input
-                              type="text"
-                              readOnly
-                              required
-                              value={(techStartLng && techStartLng.toLowerCase() !== 'null' && techStartLng.toLowerCase() !== 'undefined' && techStartLng.toLowerCase() !== 'nan') ? techStartLng : ''}
-                              placeholder="Rempli automatiquement"
-                              style={{
-                                fontSize: "18px",
-                                padding: "14px",
-                                borderRadius: "13px",
-                                border: "1px solid rgb(201, 191, 205)",
-                                outline: "none",
-                                color: "rgb(0, 0, 0)",
-                                backgroundColor: "#f3f4f6",
-                                cursor: "not-allowed",
-                              }}
-                              className="w-full"
-                            />
-                          </div>
+                        {/* Code postal */}
+                        <div className="space-y-1">
+                          <label
+                            style={{ fontSize: "18px", color: "#000000" }}
+                            className="block font-bold"
+                          >
+                            Code postal.
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={techStartZip}
+                            onChange={(e) => setTechStartZip(e.target.value)}
+                            placeholder="Ex: 75002"
+                            style={{
+                              fontSize: "18px",
+                              padding: "14px",
+                              borderRadius: "13px",
+                              border: "1px solid rgb(201, 191, 205)",
+                              outline: "none",
+                              color: "rgb(0, 0, 0)",
+                            }}
+                            className="w-full bg-white focus:border-indigo-500 font-sans"
+                          />
                         </div>
                       </div>
 
-                      {/* Route Optimization selector */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Région */}
+                        <div className="space-y-1">
+                          <label
+                            style={{ fontSize: "18px", color: "#000000" }}
+                            className="block font-bold"
+                          >
+                            Région.
+                          </label>
+                          <select
+                            required
+                            value={techStartRegion}
+                            onChange={(e) => setTechStartRegion(e.target.value)}
+                            style={{
+                              fontSize: "18px",
+                              padding: "14px",
+                              borderRadius: "13px",
+                              border: "1px solid rgb(201, 191, 205)",
+                              outline: "none",
+                              color: "rgb(0, 0, 0)",
+                              appearance: "none",
+                              WebkitAppearance: "none",
+                              MozAppearance: "none",
+                            }}
+                            className="w-full bg-white focus:border-indigo-500 appearance-none"
+                          >
+                            <option value="">Choisir une région</option>
+                            {getRegionsForCountry(techStartCountry || "France").map(
+                              (r) => (
+                                <option key={r} value={r}>
+                                  {r}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        </div>
+
+                        {/* Pays */}
+                        <div className="space-y-1">
+                          <label
+                            style={{ fontSize: "18px", color: "#000000" }}
+                            className="block font-bold"
+                          >
+                            Pays.
+                          </label>
+                          <select
+                            required
+                            value={techStartCountry}
+                            onChange={(e) => setTechStartCountry(e.target.value)}
+                            style={{
+                              fontSize: "18px",
+                              padding: "14px",
+                              borderRadius: "13px",
+                              border: "1px solid rgb(201, 191, 205)",
+                              outline: "none",
+                              color: "rgb(0, 0, 0)",
+                              appearance: "none",
+                              WebkitAppearance: "none",
+                              MozAppearance: "none",
+                            }}
+                            className="w-full bg-white focus:border-indigo-500 appearance-none"
+                          >
+                            {[
+                              "France",
+                              "Espagne",
+                              "Portugal",
+                              "Suisse",
+                              "Luxembourg",
+                              "Belgique",
+                              "Allemagne",
+                              "Pays-Bas",
+                              "Royaume-Uni",
+                              "Irlande",
+                              "Suède",
+                              "Pologne",
+                              "Tchéquie",
+                              "Autriche",
+                            ].map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Latitude */}
+                        <div className="space-y-1">
+                          <label
+                            style={{ fontSize: "18px", color: "#000000" }}
+                            className="block font-bold"
+                          >
+                            Latitude.
+                          </label>
+                          <input
+                            type="text"
+                            readOnly
+                            required
+                            value={
+                              techStartLat &&
+                              techStartLat.toLowerCase() !== "null" &&
+                              techStartLat.toLowerCase() !== "undefined" &&
+                              techStartLat.toLowerCase() !== "nan"
+                                ? techStartLat
+                                : ""
+                            }
+                            placeholder="Rempli automatiquement"
+                            style={{
+                              fontSize: "18px",
+                              padding: "14px",
+                              borderRadius: "13px",
+                              border: "1px solid rgb(201, 191, 205)",
+                              outline: "none",
+                              color: "rgb(0, 0, 0)",
+                              backgroundColor: "#f3f4f6",
+                              cursor: "not-allowed",
+                            }}
+                            className="w-full"
+                          />
+                        </div>
+
+                        {/* Longitude */}
+                        <div className="space-y-1">
+                          <label
+                            style={{ fontSize: "18px", color: "#000000" }}
+                            className="block font-bold"
+                          >
+                            Longitude.
+                          </label>
+                          <input
+                            type="text"
+                            readOnly
+                            required
+                            value={
+                              techStartLng &&
+                              techStartLng.toLowerCase() !== "null" &&
+                              techStartLng.toLowerCase() !== "undefined" &&
+                              techStartLng.toLowerCase() !== "nan"
+                                ? techStartLng
+                                : ""
+                            }
+                            placeholder="Rempli automatiquement"
+                            style={{
+                              fontSize: "18px",
+                              padding: "14px",
+                              borderRadius: "13px",
+                              border: "1px solid rgb(201, 191, 205)",
+                              outline: "none",
+                              color: "rgb(0, 0, 0)",
+                              backgroundColor: "#f3f4f6",
+                              cursor: "not-allowed",
+                            }}
+                            className="w-full"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Stratégie des déplacements */}
                       <div className="space-y-1.5">
                         <label
                           style={{ fontSize: "18px", color: "#000000" }}
@@ -12780,7 +12909,7 @@ export default function PublicPortal({
                         </select>
                       </div>
 
-                      {/* Navigation App selector */}
+                      {/* Application de navigation par défaut */}
                       <div className="space-y-1.5">
                         <label
                           style={{ fontSize: "18px", color: "#000000" }}
@@ -12804,19 +12933,37 @@ export default function PublicPortal({
                           }}
                           className="w-full bg-white font-semibold cursor-pointer focus:border-indigo-500"
                         >
-                          <option value="apple-maps">
-                            Apple Maps
-                          </option>
-                          <option value="google-maps">
-                            Google Maps
-                          </option>
-                          <option value="waze">
-                            Waze
-                          </option>
+                          <option value="apple-maps">Apple Maps</option>
+                          <option value="google-maps">Google Maps</option>
+                          <option value="waze">Waze</option>
                         </select>
                       </div>
 
-                      {/* Signature Section */}
+                      <button
+                        type="submit"
+                        style={{
+                          backgroundColor: "rgb(53, 86, 236)",
+                          color: "#fff",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderRadius: "12px",
+                          padding: "14px 20px",
+                          border: "none",
+                          boxShadow:
+                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          cursor: "pointer",
+                          width: "100%",
+                        }}
+                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <span>Enregistrer</span>
+                      </button>
+                    </form>
+                  )}
+
+                  {/* SECTION 4: SIGNATURE */}
+                  {activeSettingsSection === "signature" && (
+                    <div className="space-y-4 pt-2 text-left animate-fadeIn">
                       <div className="space-y-3 text-left">
                         <label
                           style={{ fontSize: "18px", color: "#000000" }}
@@ -12824,16 +12971,25 @@ export default function PublicPortal({
                         >
                           Signature.
                         </label>
-                        <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
-                          Dessinez votre signature ci-dessous. Elle sera automatiquement apposée sur tous vos rapports de maintenance validés.
+                        <p
+                          style={{
+                            fontSize: "16px",
+                            color: "#000000",
+                            lineHeight: "1.5",
+                          }}
+                          className="font-sans font-normal"
+                        >
+                          Dessinez votre signature ci-dessous. Elle sera
+                          automatiquement apposée sur tous vos rapports de
+                          maintenance validés.
                         </p>
 
-                        <div 
-                          className="p-3 bg-white relative" 
-                          style={{ 
-                            border: "1px solid #c9bfcd", 
-                            borderRadius: "13px", 
-                            maxWidth: "400px" 
+                        <div
+                          className="p-3 bg-white relative"
+                          style={{
+                            border: "1px solid #c9bfcd",
+                            borderRadius: "13px",
+                            maxWidth: "400px",
                           }}
                         >
                           <canvas
@@ -12861,164 +13017,284 @@ export default function PublicPortal({
                           </div>
                         </div>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveSignature}
+                        style={{
+                          backgroundColor: "rgb(53, 86, 236)",
+                          color: "#fff",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderRadius: "12px",
+                          padding: "14px 20px",
+                          border: "none",
+                          boxShadow:
+                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          cursor: "pointer",
+                          width: "100%",
+                        }}
+                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <span>Enregistrer</span>
+                      </button>
                     </div>
+                  )}
 
-                    <button
-                      type="submit"
-                      style={{
-                        backgroundColor: "rgb(53, 86, 236)",
-                        color: "#fff",
-                        fontSize: "18px",
-                        fontWeight: "bold",
-                        borderRadius: "12px",
-                        padding: "14px 20px",
-                        border: "none",
-                        boxShadow:
-                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                        cursor: "pointer",
-                        width: "100%",
-                      }}
-                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <span>Enregistrer</span>
-                    </button>
-
-                    {/* Section: Choix du thème pour la session technicien */}
-                    <div className="pt-5 space-y-3 text-left" id="webapp-section-software-theme">
-                      <h3 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
-                        {t("Apparence du logiciel pour votre session.")}
-                      </h3>
-                      <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
-                        {t("Thème du logiciel (conforme accessibilité ISO/IEC 40500).")}
-                      </p>
-
-                      <div className="flex flex-col gap-2.5 pt-1">
-                        {APP_THEMES.map((theme) => {
-                          const isSelected = currentTechTheme.id === theme.id;
-                          return (
-                            <div
-                              key={theme.id}
-                              onClick={() => handleThemeSelect(theme.id)}
-                              style={{
-                                border: "1px solid #c9bfcd",
-                                borderRadius: "13px",
-                              }}
-                              className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
-                              id={`webapp-theme-card-${theme.id}`}
-                            >
-                              <span 
-                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                                style={{
-                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
-                                  width: '20px',
-                                  height: '20px',
-                                  minWidth: '20px',
-                                  minHeight: '20px',
-                                  backgroundColor: '#ffffff'
-                                }}
-                              >
-                                {isSelected && (
-                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
-                                )}
-                              </span>
-                              <span
-                                className="font-medium text-black cursor-pointer select-none font-sans"
-                                style={{ fontSize: "18px", color: "#000000" }}
-                              >
-                                {t(theme.name)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Section: Choix du favicon pour la session technicien */}
-                    <div className="pt-5 space-y-3 text-left" id="webapp-section-software-favicon">
-                      <h3 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
-                        {t("Choix du favicon du logiciel.")}
-                      </h3>
-                      <p style={{ fontSize: "16px", color: "#000000", lineHeight: "1.5" }} className="font-sans font-normal">
-                        {t("Il s’agit de l’icône montré dans l’onglet de votre navigateur.")}
-                      </p>
-
-                      <div className="flex flex-col gap-2.5 pt-1">
-                        {APP_FAVICONS.map((fav) => {
-                          const isSelected = currentTechFavicon.id === fav.id;
-                          return (
-                            <div
-                              key={fav.id}
-                              onClick={() => handleFaviconSelect(fav.id)}
-                              style={{
-                                border: "1px solid #c9bfcd",
-                                borderRadius: "13px",
-                              }}
-                              className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
-                              id={`webapp-favicon-card-${fav.id}`}
-                            >
-                              <span 
-                                className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                                style={{
-                                  border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
-                                  width: '20px',
-                                  height: '20px',
-                                  minWidth: '20px',
-                                  minHeight: '20px',
-                                  backgroundColor: '#ffffff'
-                                }}
-                              >
-                                {isSelected && (
-                                  <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
-                                )}
-                              </span>
-                              <img
-                                src={fav.url}
-                                alt={fav.name}
-                                className="w-5 h-5 object-contain shrink-0"
-                                referrerPolicy="no-referrer"
-                              />
-                              <span
-                                className="font-medium text-black cursor-pointer select-none font-sans"
-                                style={{ fontSize: "18px", color: "#000000" }}
-                              >
-                                {t(fav.name)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Illustration Add to Home Screen at the bottom touching bottom border */}
-                    <div 
-                      className="mt-6 bg-white overflow-hidden text-left flex flex-col justify-between"
-                      style={{
-                        border: "1px solid #c9bfcd",
-                        borderRadius: "13px",
-                      }}
-                      id="webapp-add-to-home-screen-card"
-                    >
-                      <div className="p-5 pb-2 space-y-1">
-                        <h4 className="font-bold font-sans" style={{ fontSize: "18px", color: "#000000" }}>
-                          {t("Ajouter à l'écran d'accueil.")}
-                        </h4>
-                        <p className="font-sans leading-relaxed" style={{ fontSize: "16px", color: "#000000" }}>
-                          {t("Sur iPhone ou iPad, depuis Safari (iOS 26), touchez l’icône Partager (le carré avec une flèche vers le haut), faites défiler le menu vers le bas puis sélectionnez Sur l’écran d’accueil (carré avec un « + »). Vérifiez ensuite que l’option Ouvrir en tant qu’app web est bien activée, puis appuyez sur Ajouter en haut à droite.")}
+                  {/* SECTION 5: APPARENCE */}
+                  {activeSettingsSection === "apparence" && (
+                    <div className="space-y-5 pt-2 text-left animate-fadeIn">
+                      {/* Section: Choix du thème pour la session technicien */}
+                      <div
+                        className="space-y-3 text-left"
+                        id="webapp-section-software-theme"
+                      >
+                        <h3
+                          className="font-bold font-sans"
+                          style={{ fontSize: "18px", color: "#000000" }}
+                        >
+                          {t("Apparence du logiciel pour votre session.")}
+                        </h3>
+                        <p
+                          style={{
+                            fontSize: "16px",
+                            color: "#000000",
+                            lineHeight: "1.5",
+                          }}
+                          className="font-sans font-normal"
+                        >
+                          {t(
+                            "Thème du logiciel (conforme accessibilité ISO/IEC 40500)."
+                          )}
                         </p>
-                      </div>
-                      <div className="w-full flex justify-center items-end pt-2">
-                        <img
-                          src="https://civilprom.s3.eu-north-1.amazonaws.com/Illustration+Add+To+Home+Screen.svg"
-                          alt="Illustration Add To Home Screen"
-                          className="w-full h-auto block select-none pointer-events-none"
-                          style={{ marginBottom: 0, display: "block" }}
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    </div>
 
-                    {/* Google Calendar integration section */}
-                    <div className="pt-5 space-y-4">
+                        <div className="flex flex-col gap-2.5 pt-1">
+                          {APP_THEMES.map((theme) => {
+                            const isSelected =
+                              currentTechTheme.id === theme.id;
+                            return (
+                              <div
+                                key={theme.id}
+                                onClick={() => handleThemeSelect(theme.id)}
+                                style={{
+                                  border: "1px solid #c9bfcd",
+                                  borderRadius: "13px",
+                                }}
+                                className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
+                                id={`webapp-theme-card-${theme.id}`}
+                              >
+                                <span
+                                  className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                  style={{
+                                    border: isSelected
+                                      ? "2.5px solid #fe4eba"
+                                      : "2.5px solid #cbd5e1",
+                                    width: "20px",
+                                    height: "20px",
+                                    minWidth: "20px",
+                                    minHeight: "20px",
+                                    backgroundColor: "#ffffff",
+                                  }}
+                                >
+                                  {isSelected && (
+                                    <span
+                                      className="rounded-full bg-[#fe4eba]"
+                                      style={{
+                                        width: "9px",
+                                        height: "9px",
+                                      }}
+                                    />
+                                  )}
+                                </span>
+                                <span
+                                  className="font-medium text-black cursor-pointer select-none font-sans"
+                                  style={{
+                                    fontSize: "18px",
+                                    color: "#000000",
+                                  }}
+                                >
+                                  {t(theme.name)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Section: Choix du favicon pour la session technicien */}
+                      <div
+                        className="pt-2 space-y-3 text-left"
+                        id="webapp-section-software-favicon"
+                      >
+                        <h3
+                          className="font-bold font-sans"
+                          style={{ fontSize: "18px", color: "#000000" }}
+                        >
+                          {t("Choix du favicon du logiciel.")}
+                        </h3>
+                        <p
+                          style={{
+                            fontSize: "16px",
+                            color: "#000000",
+                            lineHeight: "1.5",
+                          }}
+                          className="font-sans font-normal"
+                        >
+                          {t(
+                            "Il s’agit de l’icône montré dans l’onglet de votre navigateur."
+                          )}
+                        </p>
+
+                        <div className="flex flex-col gap-2.5 pt-1">
+                          {APP_FAVICONS.map((fav) => {
+                            const isSelected =
+                              currentTechFavicon.id === fav.id;
+                            return (
+                              <div
+                                key={fav.id}
+                                onClick={() => handleFaviconSelect(fav.id)}
+                                style={{
+                                  border: "1px solid #c9bfcd",
+                                  borderRadius: "13px",
+                                }}
+                                className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
+                                id={`webapp-favicon-card-${fav.id}`}
+                              >
+                                <span
+                                  className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
+                                  style={{
+                                    border: isSelected
+                                      ? "2.5px solid #fe4eba"
+                                      : "2.5px solid #cbd5e1",
+                                    width: "20px",
+                                    height: "20px",
+                                    minWidth: "20px",
+                                    minHeight: "20px",
+                                    backgroundColor: "#ffffff",
+                                  }}
+                                >
+                                  {isSelected && (
+                                    <span
+                                      className="rounded-full bg-[#fe4eba]"
+                                      style={{
+                                        width: "9px",
+                                        height: "9px",
+                                      }}
+                                    />
+                                  )}
+                                </span>
+                                <img
+                                  src={fav.url}
+                                  alt={fav.name}
+                                  className="w-5 h-5 object-contain shrink-0"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <span
+                                  className="font-medium text-black cursor-pointer select-none font-sans"
+                                  style={{
+                                    fontSize: "18px",
+                                    color: "#000000",
+                                  }}
+                                >
+                                  {t(fav.name)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveSettingsSection(null);
+                        }}
+                        style={{
+                          backgroundColor: "rgb(53, 86, 236)",
+                          color: "#fff",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderRadius: "12px",
+                          padding: "14px 20px",
+                          border: "none",
+                          boxShadow:
+                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          cursor: "pointer",
+                          width: "100%",
+                        }}
+                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <span>Appliquer</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* SECTION 6: INSTALLER L'APP */}
+                  {activeSettingsSection === "installer" && (
+                    <div className="space-y-4 pt-2 text-left animate-fadeIn">
+                      <div
+                        className="bg-white overflow-hidden text-left flex flex-col justify-between"
+                        style={{
+                          border: "1px solid #c9bfcd",
+                          borderRadius: "13px",
+                        }}
+                        id="webapp-add-to-home-screen-card"
+                      >
+                        <div className="p-5 pb-2 space-y-1">
+                          <h4
+                            className="font-bold font-sans"
+                            style={{ fontSize: "18px", color: "#000000" }}
+                          >
+                            {t("Ajouter à l'écran d'accueil.")}
+                          </h4>
+                          <p
+                            className="font-sans leading-relaxed"
+                            style={{ fontSize: "16px", color: "#000000" }}
+                          >
+                            {t(
+                              "Sur iPhone ou iPad, depuis Safari (iOS 26), touchez l’icône Partager (le carré avec une flèche vers le haut), faites défiler le menu vers le bas puis sélectionnez Sur l’écran d’accueil (carré avec un « + »). Vérifiez ensuite que l’option Ouvrir en tant qu’app web est bien activée, puis appuyez sur Ajouter en haut à droite."
+                            )}
+                          </p>
+                        </div>
+                        <div className="w-full flex justify-center items-end pt-2">
+                          <img
+                            src="https://civilprom.s3.eu-north-1.amazonaws.com/Illustration+Add+To+Home+Screen.svg"
+                            alt="Illustration Add To Home Screen"
+                            className="w-full h-auto block select-none pointer-events-none"
+                            style={{ marginBottom: 0, display: "block" }}
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveSettingsSection(null);
+                        }}
+                        style={{
+                          backgroundColor: "rgb(53, 86, 236)",
+                          color: "#fff",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderRadius: "12px",
+                          padding: "14px 20px",
+                          border: "none",
+                          boxShadow:
+                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          cursor: "pointer",
+                          width: "100%",
+                        }}
+                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <span>Appliquer</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* SECTION 7: GOOGLE CALENDAR */}
+                  {activeSettingsSection === "google-calendar" && (
+                    <div className="space-y-4 pt-2 text-left animate-fadeIn">
                       <h3 className="text-lg font-bold text-slate-800">
                         Intégration Google Calendar
                       </h3>
@@ -13028,7 +13304,7 @@ export default function PublicPortal({
                           style={{
                             fontSize: "18px",
                             color: "rgb(254, 78, 187)",
-                            textAlign: "center"
+                            textAlign: "center",
                           }}
                         >
                           {syncStatusMsg.text}
@@ -13044,8 +13320,8 @@ export default function PublicPortal({
                             💡 Action requise sur votre projet Firebase :
                           </p>
                           <p className="text-xs leading-relaxed">
-                            Pour des raisons de sécurité, Google demande à ce
-                            que le nom de domaine de la webapp soit rajouté aux
+                            Pour des raisons de sécurité, Google demande à ce que
+                            le nom de domaine de la webapp soit rajouté aux
                             domaines autorisés de votre projet Firebase.
                           </p>
                           <ol className="text-xs list-decimal pl-4 space-y-1.5 font-medium">
@@ -13080,25 +13356,40 @@ export default function PublicPortal({
                             Une fois l'adresse ajoutée, recliquez sur
                             "Synchroniser Google Calendar" !
                           </p>
-                          <div className="mt-3 pt-2 border-t border-amber-200 flex flex-col gap-1.5" id="simulate-google-cal-sync-container-1">
+                          <div
+                            className="mt-3 pt-2 border-t border-amber-200 flex flex-col gap-1.5"
+                            id="simulate-google-cal-sync-container-1"
+                          >
                             <p className="text-[11px] text-amber-700 font-sans">
-                              Pour vos tests en mode aperçu, vous pouvez également simuler la synchronisation immédiatement :
+                              Pour vos tests en mode aperçu, vous pouvez
+                              également simuler la synchronisation immédiatement :
                             </p>
                             <button
                               type="button"
                               onClick={async () => {
                                 const mockToken = "mock_token_" + Date.now();
-                                const email = authenticatedUser?.email || "tech.demo@gmail.com";
+                                const email =
+                                  authenticatedUser?.email ||
+                                  "tech.demo@gmail.com";
                                 setGoogleAccessToken(mockToken);
                                 setSyncedGoogleEmail(email);
-                                const techName = authenticatedUser?.name || "common";
-                                localStorage.setItem(`defib_google_cal_email_${techName}`, email);
+                                const techName =
+                                  authenticatedUser?.name || "common";
+                                localStorage.setItem(
+                                  `defib_google_cal_email_${techName}`,
+                                  email
+                                );
                                 try {
-                                  const syncResult = await performGoogleCalendarSync(mockToken);
-                                  const calendarId = syncResult.calendarId || "mock_calendar_id";
+                                  const syncResult =
+                                    await performGoogleCalendarSync(mockToken);
+                                  const calendarId =
+                                    syncResult.calendarId || "mock_calendar_id";
                                   if (authenticatedUser) {
                                     const updatedMembers = members.map((m) => {
-                                      if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
+                                      if (
+                                        m.name.trim().toLowerCase() ===
+                                        authenticatedUser.name.trim().toLowerCase()
+                                      ) {
                                         return {
                                           ...m,
                                           googleCalEmail: email,
@@ -13114,7 +13405,10 @@ export default function PublicPortal({
                                       googleCalId: calendarId,
                                     };
                                     setAuthenticatedUser(updatedUser);
-                                    localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
+                                    localStorage.setItem(
+                                      "defib_active_tech_session",
+                                      JSON.stringify(updatedUser)
+                                    );
                                   }
                                   setSyncStatusMsg({
                                     type: "success",
@@ -13123,7 +13417,10 @@ export default function PublicPortal({
                                   setShowDomainHelp(false);
                                   setShowOperationHelp(false);
                                 } catch (err: any) {
-                                  alert("Erreur lors de la simulation : " + err.message);
+                                  alert(
+                                    "Erreur lors de la simulation : " +
+                                      err.message
+                                  );
                                 }
                               }}
                               className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-[8px] font-sans text-xs font-bold transition-all w-fit shadow-sm cursor-pointer select-none"
@@ -13192,25 +13489,40 @@ export default function PublicPortal({
                             Une fois la méthode Google activée, vous pourrez
                             synchroniser votre Google Calendar en un clic !
                           </p>
-                          <div className="mt-3 pt-2 border-t border-amber-200 flex flex-col gap-1.5" id="simulate-google-cal-sync-container-2">
+                          <div
+                            className="mt-3 pt-2 border-t border-amber-200 flex flex-col gap-1.5"
+                            id="simulate-google-cal-sync-container-2"
+                          >
                             <p className="text-[11px] text-amber-700 font-sans">
-                              Pour vos tests en mode aperçu, vous pouvez également simuler la synchronisation immédiatement :
+                              Pour vos tests en mode aperçu, vous pouvez
+                              également simuler la synchronisation immédiatement :
                             </p>
                             <button
                               type="button"
                               onClick={async () => {
                                 const mockToken = "mock_token_" + Date.now();
-                                const email = authenticatedUser?.email || "tech.demo@gmail.com";
+                                const email =
+                                  authenticatedUser?.email ||
+                                  "tech.demo@gmail.com";
                                 setGoogleAccessToken(mockToken);
                                 setSyncedGoogleEmail(email);
-                                const techName = authenticatedUser?.name || "common";
-                                localStorage.setItem(`defib_google_cal_email_${techName}`, email);
+                                const techName =
+                                  authenticatedUser?.name || "common";
+                                localStorage.setItem(
+                                  `defib_google_cal_email_${techName}`,
+                                  email
+                                );
                                 try {
-                                  const syncResult = await performGoogleCalendarSync(mockToken);
-                                  const calendarId = syncResult.calendarId || "mock_calendar_id";
+                                  const syncResult =
+                                    await performGoogleCalendarSync(mockToken);
+                                  const calendarId =
+                                    syncResult.calendarId || "mock_calendar_id";
                                   if (authenticatedUser) {
                                     const updatedMembers = members.map((m) => {
-                                      if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
+                                      if (
+                                        m.name.trim().toLowerCase() ===
+                                        authenticatedUser.name.trim().toLowerCase()
+                                      ) {
                                         return {
                                           ...m,
                                           googleCalEmail: email,
@@ -13226,7 +13538,10 @@ export default function PublicPortal({
                                       googleCalId: calendarId,
                                     };
                                     setAuthenticatedUser(updatedUser);
-                                    localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
+                                    localStorage.setItem(
+                                      "defib_active_tech_session",
+                                      JSON.stringify(updatedUser)
+                                    );
                                   }
                                   setSyncStatusMsg({
                                     type: "success",
@@ -13235,7 +13550,10 @@ export default function PublicPortal({
                                   setShowDomainHelp(false);
                                   setShowOperationHelp(false);
                                 } catch (err: any) {
-                                  alert("Erreur lors de la simulation : " + err.message);
+                                  alert(
+                                    "Erreur lors de la simulation : " +
+                                      err.message
+                                  );
                                 }
                               }}
                               className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-[8px] font-sans text-xs font-bold transition-all w-fit shadow-sm cursor-pointer select-none"
@@ -13255,7 +13573,9 @@ export default function PublicPortal({
                             💡 Activer l'API Google Calendar sur votre projet :
                           </p>
                           <p className="text-xs leading-relaxed">
-                            L'API Google Calendar n'est pas encore activée sur votre projet Google Cloud pour le projet numéro <strong>{disabledProjectNumber}</strong>.
+                            L'API Google Calendar n'est pas encore activée sur
+                            votre projet Google Cloud pour le projet numéro{" "}
+                            <strong>{disabledProjectNumber}</strong>.
                           </p>
                           <div className="pt-1">
                             <a
@@ -13269,16 +13589,20 @@ export default function PublicPortal({
                           </div>
                           <ol className="text-xs list-decimal pl-4 space-y-1.5 font-medium">
                             <li>
-                              Cliquez sur le bouton ci-dessus pour ouvrir la page d'activation de la Console Google Cloud.
+                              Cliquez sur le bouton ci-dessus pour ouvrir la
+                              page d'activation de la Console Google Cloud.
                             </li>
                             <li>
-                              Assurez-vous d'être connecté avec le compte Google propriétaire de l'application.
+                              Assurez-vous d'être connecté avec le compte
+                              Google propriétaire de l'application.
                             </li>
                             <li>
-                              Cliquez sur le bouton bleu <strong>Activer</strong> (ou Enable).
+                              Cliquez sur le bouton bleu{" "}
+                              <strong>Activer</strong> (ou Enable).
                             </li>
                             <li>
-                              Attendez quelques minutes que l'activation se propage, puis réessayez la synchronisation !
+                              Attendez quelques minutes que l'activation se
+                              propage, puis réessayez la synchronisation !
                             </li>
                           </ol>
                         </div>
@@ -13316,7 +13640,7 @@ export default function PublicPortal({
                             style={{
                               fontSize: "18px",
                               color: "rgb(254, 78, 187)",
-                              textAlign: "center"
+                              textAlign: "center",
                             }}
                           >
                             Compte synchronisé ({syncedGoogleEmail})
@@ -13366,28 +13690,28 @@ export default function PublicPortal({
                           </button>
                         </div>
                       )}
-
-                      {/* Quitter la session button */}
-                      <button
-                        type="button"
-                        onClick={handleLogout}
-                        style={{
-                          backgroundColor: "#dc2626",
-                          color: "#ffffff",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderRadius: "12px",
-                          padding: "14px 20px",
-                          border: "none",
-                          cursor: "pointer",
-                          width: "100%",
-                        }}
-                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-4"
-                      >
-                        <span>Quitter la session</span>
-                      </button>
                     </div>
-                  </form>
+                  )}
+
+                  {/* Quitter la session button - Always at the bottom */}
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    style={{
+                      backgroundColor: "#dc2626",
+                      color: "#ffffff",
+                      fontSize: "18px",
+                      fontWeight: "bold",
+                      borderRadius: "12px",
+                      padding: "14px 20px",
+                      border: "none",
+                      cursor: "pointer",
+                      width: "100%",
+                    }}
+                    className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-4"
+                  >
+                    <span>Quitter la session</span>
+                  </button>
                 </div>
               )}
             </div>
