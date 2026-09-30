@@ -16,7 +16,12 @@ export type ImportExportCategory =
   | 'Variable — Modèle Électrode.'
   | 'Variable — Modèle Batterie.'
   | 'Variable — Modèle Service.'
-  | 'Variable — Modèle Coffret.';
+  | 'Variable — Modèle Coffret.'
+  | 'Variable — Modèle Signalétique.'
+  | 'Variable — Modèle Scellé.'
+  | 'Variable — Modèle Autocollant.'
+  | 'Variable — Modèle Kit de secours.'
+  | 'Variable — Modèle Pièce Autre.';
 
 export interface ImportExportRecord {
   id: string;
@@ -208,13 +213,23 @@ function generateCSV(
     case 'Variable — Modèle Électrode.':
     case 'Variable — Modèle Batterie.':
     case 'Variable — Modèle Service.':
-    case 'Variable — Modèle Coffret.': {
+    case 'Variable — Modèle Coffret.':
+    case 'Variable — Modèle Signalétique.':
+    case 'Variable — Modèle Scellé.':
+    case 'Variable — Modèle Autocollant.':
+    case 'Variable — Modèle Kit de secours.':
+    case 'Variable — Modèle Pièce Autre.': {
       const categoryMap: Record<string, string> = {
         'Variable — Modèle Défibrillateur.': 'Modèle Défibrillateur',
         'Variable — Modèle Électrode.': 'Modèle Électrode',
         'Variable — Modèle Batterie.': 'Modèle Batterie',
         'Variable — Modèle Service.': 'Modèle Service',
         'Variable — Modèle Coffret.': 'Modèle Coffret',
+        'Variable — Modèle Signalétique.': 'Modèle Signalétique',
+        'Variable — Modèle Scellé.': 'Modèle Scellé',
+        'Variable — Modèle Autocollant.': 'Modèle Autocollant',
+        'Variable — Modèle Kit de secours.': 'Modèle Kit de secours',
+        'Variable — Modèle Pièce Autre.': 'Modèle Pièce Autre',
       };
       const targetCategory = categoryMap[compartment];
       items = (data.variables || []).filter(v => v.category === targetCategory);
@@ -1630,6 +1645,11 @@ export default function ImportExportTab({
           'Variable — Modèle Batterie.': 'Modèle Batterie',
           'Variable — Modèle Service.': 'Modèle Service',
           'Variable — Modèle Coffret.': 'Modèle Coffret',
+          'Variable — Modèle Signalétique.': 'Modèle Signalétique',
+          'Variable — Modèle Scellé.': 'Modèle Scellé',
+          'Variable — Modèle Autocollant.': 'Modèle Autocollant',
+          'Variable — Modèle Kit de secours.': 'Modèle Kit de secours',
+          'Variable — Modèle Pièce Autre.': 'Modèle Pièce Autre',
         };
         const targetCategory = categoryMap[formCategorie];
         const valResult = validateAndParseVariables(uploadedCsvContent, targetCategory);
@@ -2163,6 +2183,11 @@ export default function ImportExportTab({
                         <option value="Variable — Modèle Batterie.">{t("Variable — Modèle Batterie.")}</option>
                         <option value="Variable — Modèle Service.">{t("Variable — Modèle Service.")}</option>
                         <option value="Variable — Modèle Coffret.">{t("Variable — Modèle Coffret.")}</option>
+                        <option value="Variable — Modèle Signalétique.">{t("Variable — Modèle Signalétique.")}</option>
+                        <option value="Variable — Modèle Scellé.">{t("Variable — Modèle Scellé.")}</option>
+                        <option value="Variable — Modèle Autocollant.">{t("Variable — Modèle Autocollant.")}</option>
+                        <option value="Variable — Modèle Kit de secours.">{t("Variable — Modèle Kit de secours.")}</option>
+                        <option value="Variable — Modèle Pièce Autre.">{t("Variable — Modèle Pièce Autre.")}</option>
                       </select>
                     </div>
 

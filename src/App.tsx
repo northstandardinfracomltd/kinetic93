@@ -788,6 +788,9 @@ export default function App() {
   const [gmaoFilter, setGmaoFilter] = useState<'upcoming' | 'moderation' | 'validated'>('moderation');
   const [gmaoIncludeAutresMateriels, setGmaoIncludeAutresMateriels] = useState<boolean>(true);
   const [isGmaoFilterPaneOpen, setIsGmaoFilterPaneOpen] = useState<boolean>(false);
+  const [isGmaoDevisPaneOpen, setIsGmaoDevisPaneOpen] = useState<boolean>(false);
+  const [gmaoDevisDateDebut, setGmaoDevisDateDebut] = useState<string>('');
+  const [gmaoDevisDateFin, setGmaoDevisDateFin] = useState<string>('');
   const [gmaoCurrentPage, setGmaoCurrentPage] = useState<number>(1);
   const [draftGmaoFilters, setDraftGmaoFilters] = useState({
     client: 'Tous',
@@ -4816,7 +4819,10 @@ export default function App() {
           localStorage.setItem(`defib_${activeRunTenantId}_clients`, JSON.stringify(sanitizedOffline));
         }
 
-        const baseVariables = getLocalTenantValue<Variable[]>('variables', INITIAL_VARIABLES);
+        const rawOfflineVariables = getLocalTenantValue<Variable[]>('variables', INITIAL_VARIABLES);
+        const existingCategorySet = new Set((rawOfflineVariables || []).map(v => v.category));
+        const missingInitialVars = INITIAL_VARIABLES.filter(iv => !existingCategorySet.has(iv.category));
+        const baseVariables = missingInitialVars.length > 0 ? [...rawOfflineVariables, ...missingInitialVars] : rawOfflineVariables;
         setVariables(baseVariables);
 
         const tenantInitialDefibs: Defibrillateur[] = INITIAL_DEFIBRILLATEURS.map(d => ({
@@ -5126,7 +5132,17 @@ export default function App() {
           return sanitized;
         }));
 
-        syncTasks.push(syncBackground<Variable[]>('variables', 'variables', setVariables));
+        syncTasks.push(syncBackground<Variable[]>('variables', 'variables', setVariables, (remoteVariables) => {
+          if (!Array.isArray(remoteVariables) || remoteVariables.length === 0) return INITIAL_VARIABLES;
+          const remoteCatSet = new Set(remoteVariables.map(v => v.category));
+          const missingVars = INITIAL_VARIABLES.filter(iv => !remoteCatSet.has(iv.category));
+          if (missingVars.length > 0) {
+            const merged = [...remoteVariables, ...missingVars];
+            saveCollectionToFirestore('variables', merged, activeRunTenantId).catch(() => {});
+            return merged;
+          }
+          return remoteVariables;
+        }));
         syncTasks.push(syncBackground<Defibrillateur[]>(
           'defibrillateurs',
           'defibrillateurs',
@@ -13020,6 +13036,141 @@ export default function App() {
               width: '100%',
             };
 
+            const allDevisReports = (generatedReports || []).filter(r => r.demandeDevis === true || r.defibSnapshot?.demandeDevis === true);
+            const pendingDevisCount = allDevisReports.filter(r => r.devisStatus !== 'termine' && !r.devisTermine).length;
+
+            const normalizeDateForFilter = (dateStr?: string) => {
+              if (!dateStr) return '';
+              const trimmed = dateStr.trim();
+              if (trimmed.includes('/')) {
+                const parts = trimmed.split('/');
+                if (parts.length === 3) {
+                  const day = parts[0].padStart(2, '0');
+                  const month = parts[1].padStart(2, '0');
+                  const year = parts[2];
+                  return `${year}-${month}-${day}`;
+                }
+              }
+              return trimmed.slice(0, 10);
+            };
+
+            const displayedDevisReports = allDevisReports.filter(r => {
+              const rawDate = r.date || r.interventionDate || r.dateIntervention || '';
+              const dateFormatted = normalizeDateForFilter(rawDate);
+              if (gmaoDevisDateDebut && dateFormatted && dateFormatted < gmaoDevisDateDebut) return false;
+              if (gmaoDevisDateFin && dateFormatted && dateFormatted > gmaoDevisDateFin) return false;
+              return true;
+            });
+
+            const getPriorityColor = (priorite?: string, isTermine?: boolean) => {
+              if (isTermine) return '#94a3b8'; // gris
+              const p = (priorite || '').toLowerCase().trim();
+              if (p === 'basse') return '#3b82f6'; // bleu
+              if (p === 'haute') return '#ef4444'; // rouge
+              return '#f97316'; // moyenne = orange
+            };
+
+            const handleMarkDevisTermine = (reportId: string) => {
+              const updatedReports = generatedReports.map(rep => {
+                if (rep.id === reportId) {
+                  const updatedDefibSnapshot = rep.defibSnapshot 
+                    ? { ...rep.defibSnapshot, devisStatus: 'termine', devisTermine: true } 
+                    : undefined;
+                  return { 
+                    ...rep, 
+                    devisStatus: 'termine', 
+                    devisTermine: true, 
+                    ...(updatedDefibSnapshot ? { defibSnapshot: updatedDefibSnapshot } : {}) 
+                  };
+                }
+                return rep;
+              });
+              saveReports(updatedReports);
+            };
+
+            const handleDeleteDevisRequest = (reportId: string) => {
+              const updatedReports = generatedReports.map(rep => {
+                if (rep.id === reportId) {
+                  const updatedDefibSnapshot = rep.defibSnapshot 
+                    ? { 
+                        ...rep.defibSnapshot, 
+                        demandeDevis: false, 
+                        devisStatus: undefined, 
+                        devisTermine: undefined,
+                        devisArticlesSelectionnes: [],
+                        devisAutreInfo: '',
+                        devisPriorite: undefined
+                      } 
+                    : undefined;
+                  return { 
+                    ...rep, 
+                    demandeDevis: false, 
+                    devisStatus: undefined, 
+                    devisTermine: undefined,
+                    devisArticlesSelectionnes: [],
+                    devisAutreInfo: '',
+                    devisPriorite: undefined,
+                    ...(updatedDefibSnapshot ? { defibSnapshot: updatedDefibSnapshot } : {}) 
+                  };
+                }
+                return rep;
+              });
+              saveReports(updatedReports);
+            };
+
+            const handleExportDevisCSV = () => {
+              const headers = [
+                "Référence intervention",
+                "Date intervention",
+                "Priorité",
+                "Statut",
+                "Produits et services demandés",
+                "Précisions Autre",
+                "Commentaire interne"
+              ];
+
+              const escapeCSV = (val: any) => {
+                if (val === null || val === undefined) return '';
+                let str = String(val);
+                if (str.includes(';') || str.includes('\n') || str.includes('"')) {
+                  return '"' + str.replace(/"/g, '""') + '"';
+                }
+                return str;
+              };
+
+              const rows = displayedDevisReports.map(r => {
+                const ref = r.interventionReference || r.autreReference || r.customReference || r.identifiant || r.defibIdentifiant || r.id;
+                const date = r.date || r.interventionDate || r.dateIntervention || '';
+                const priorite = r.devisPriorite || r.defibSnapshot?.devisPriorite || 'Moyenne';
+                const isTermine = r.devisStatus === 'termine' || r.devisTermine === true;
+                const statut = isTermine ? 'Terminé' : 'À traiter';
+                const items = (r.devisArticlesSelectionnes || r.defibSnapshot?.devisArticlesSelectionnes || []).join(', ');
+                const autre = r.devisAutreInfo || r.defibSnapshot?.devisAutreInfo || '';
+                const comm = r.commentaireInterne || r.defibSnapshot?.commentaireInterne || '';
+
+                return [
+                  escapeCSV(ref),
+                  escapeCSV(date),
+                  escapeCSV(priorite),
+                  escapeCSV(statut),
+                  escapeCSV(items),
+                  escapeCSV(autre),
+                  escapeCSV(comm)
+                ].join(';');
+              });
+
+              const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.setAttribute('download', `requetes_devis_${new Date().toISOString().slice(0, 10)}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+            };
+
             const cancelFiltersButtonStyle: React.CSSProperties = {
               ...rowActionButtonStyle,
               backgroundColor: '#000000',
@@ -13327,7 +13478,7 @@ export default function App() {
 
                     <div className="flex flex-wrap items-center gap-3">
                       {/* Field recherche (Search input) */}
-                      <div className="relative w-full sm:w-64">
+                      <div className="relative w-full sm:w-48 md:w-52">
                         <input
                           type="text"
                           id="search-gmao-input"
@@ -13462,6 +13613,20 @@ export default function App() {
                             {activeGmaoFiltersCount}
                           </span>
                         )}
+                      </button>
+
+                      {/* Bouton Requêtes Devis */}
+                      <button
+                        type="button"
+                        onClick={() => setIsGmaoDevisPaneOpen(true)}
+                        id="btn-trigger-gmao-devis-requests"
+                        style={customButtonStyle}
+                        className="flex items-center gap-1.5 ml-1 cursor-pointer"
+                      >
+                        <span>{t('Requêtes Devis')}</span>
+                        <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#fe4eba] rounded-full ml-1">
+                          {pendingDevisCount}
+                        </span>
                       </button>
 
                       {/* No Actualiser button */}
@@ -14667,7 +14832,9 @@ export default function App() {
                         <div className="flex-1 overflow-y-auto bg-white font-sans relative">
                           <GmaoCorrectionForm
                             report={repToEdit}
-                            isWebapp={true}
+                            isWebapp={false}
+                            isMainSoftware={true}
+                            hideReduceAndTimer={true}
                             forceSmartphoneLayout={true}
                             onSave={(updatedReport) => {
                               const updatedReports = generatedReports.map(r => r.id === editingReportId ? updatedReport : r);
@@ -14925,6 +15092,251 @@ export default function App() {
                 {isGmaoFilterPaneOpen && (
                   <div 
                     onClick={() => setIsGmaoFilterPaneOpen(false)}
+                    className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-[9990]"
+                  />
+                )}
+
+                {/* 🧭 GMAO DEVIS REQUESTS SIDE PANE / DRAWER 🧭 */}
+                {isGmaoDevisPaneOpen && (
+                  <div 
+                    className="fixed inset-y-0 right-0 w-full max-w-md sm:max-w-lg md:max-w-xl bg-white shadow-2xl z-[9999] flex flex-col border-l border-slate-200 transform transition-transform animate-slideLeft" 
+                    id="gmao-devis-side-pane"
+                    style={{ height: '100%' }}
+                  >
+                    {/* Fixed / Sticky Header in Side Pane */}
+                    <div className="p-5 border-b border-slate-200 bg-white space-y-4 shrink-0 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xl font-bold text-black font-sans">
+                            Requêtes Devis
+                          </h3>
+                          <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 text-xs font-bold text-white bg-[#fe4eba] rounded-full">
+                            {displayedDevisReports.length}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleExportDevisCSV}
+                          style={{
+                            backgroundColor: '#000000',
+                            color: '#ffffff',
+                            borderRadius: '10px',
+                            fontSize: '14px',
+                            padding: '7px 16px',
+                            fontWeight: 'bold',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                          className="flex items-center gap-1.5 hover:bg-slate-800 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          <span>Export CSV</span>
+                        </button>
+                      </div>
+
+                      {/* Choix de la période date / date */}
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider font-sans">
+                            Du (Date début)
+                          </label>
+                          <input
+                            type="date"
+                            value={gmaoDevisDateDebut}
+                            onChange={(e) => setGmaoDevisDateDebut(e.target.value)}
+                            style={{
+                              border: '1px solid #dedede',
+                              borderRadius: '10px',
+                              padding: '7px 12px',
+                              fontSize: '14px',
+                              width: '100%',
+                              backgroundColor: '#ffffff',
+                              color: '#000000'
+                            }}
+                            className="cursor-pointer"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider font-sans">
+                            Au (Date fin)
+                          </label>
+                          <input
+                            type="date"
+                            value={gmaoDevisDateFin}
+                            onChange={(e) => setGmaoDevisDateFin(e.target.value)}
+                            style={{
+                              border: '1px solid #dedede',
+                              borderRadius: '10px',
+                              padding: '7px 12px',
+                              fontSize: '14px',
+                              width: '100%',
+                              backgroundColor: '#ffffff',
+                              color: '#000000'
+                            }}
+                            className="cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Scroll Area containing requests */}
+                    <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50">
+                      {displayedDevisReports.length === 0 ? (
+                        <div className="p-12 text-center text-slate-400 font-sans space-y-2">
+                          <p className="text-base font-medium">Aucune requête de devis trouvée.</p>
+                          <p className="text-xs text-slate-400">Les demandes de devis activées par les techniciens lors des rapports apparaîtront ici.</p>
+                        </div>
+                      ) : (
+                        displayedDevisReports.map((r) => {
+                          const refIntervention = r.interventionReference || r.autreReference || r.customReference || r.identifiant || r.defibIdentifiant || r.id;
+                          const rawDate = r.date || r.interventionDate || r.dateIntervention || '';
+                          const dateIntervention = rawDate.includes('-') && rawDate.length === 10
+                            ? rawDate.split('-').reverse().join('/')
+                            : rawDate;
+                          const priorite = r.devisPriorite || r.defibSnapshot?.devisPriorite || 'Moyenne';
+                          const isTermine = r.devisStatus === 'termine' || r.devisTermine === true;
+                          const articlesList = r.devisArticlesSelectionnes || r.defibSnapshot?.devisArticlesSelectionnes || [];
+                          const autreInfo = r.devisAutreInfo || r.defibSnapshot?.devisAutreInfo || '';
+                          const commInterne = r.commentaireInterne || r.defibSnapshot?.commentaireInterne || '';
+
+                          return (
+                            <div 
+                              key={r.id} 
+                              className={`p-4 rounded-xl border transition-all space-y-3 shadow-xs ${
+                                isTermine 
+                                  ? 'bg-slate-100/80 border-slate-200 opacity-80' 
+                                  : 'bg-white border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              {/* Ligne 1: Référence à gauche, Date - Rond priorité à droite */}
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="font-bold text-base text-black font-sans tracking-tight">
+                                  {refIntervention}
+                                </span>
+                                <div className="flex items-center gap-2 text-sm text-slate-600 font-sans">
+                                  <span>{dateIntervention || '-'}</span>
+                                  <span 
+                                    className="w-3.5 h-3.5 rounded-full inline-block shrink-0 shadow-2xs" 
+                                    style={{ backgroundColor: getPriorityColor(priorite, isTermine) }}
+                                    title={isTermine ? "Terminé (Gris)" : `Priorité : ${priorite}`}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Ligne 2: Liste produits/services */}
+                              <div className="space-y-1">
+                                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider font-sans">
+                                  Produit(s) et service(s) demandés.
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {articlesList.length > 0 ? (
+                                    articlesList.map((art: string, idx: number) => (
+                                      <span 
+                                        key={idx}
+                                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200"
+                                      >
+                                        {art}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-slate-400 italic">Aucun article sélectionné</span>
+                                  )}
+                                  {autreInfo && (
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-900 border border-amber-200">
+                                      Autre : {autreInfo}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Ligne 3: Commentaire interne */}
+                              <div className="space-y-1">
+                                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider font-sans">
+                                  Commentaire interne du technicien.
+                                </span>
+                                <p className="text-xs text-slate-700 font-sans bg-slate-50 p-2.5 rounded-lg border border-slate-200 whitespace-pre-wrap">
+                                  {commInterne || "-"}
+                                </p>
+                              </div>
+
+                              {/* Ligne 4: Bouton Terminé ou Supprimer */}
+                              <div className="pt-1">
+                                {!isTermine ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMarkDevisTermine(r.id)}
+                                    style={{
+                                      backgroundColor: 'rgb(53, 86, 236)',
+                                      color: '#ffffff',
+                                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                      borderRadius: '10px',
+                                      fontSize: '14px',
+                                      padding: '7px 16px',
+                                      fontWeight: 'bold',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                    }}
+                                    className="cursor-pointer hover:opacity-90 transition-opacity"
+                                  >
+                                    Terminé
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteDevisRequest(r.id)}
+                                    style={{
+                                      backgroundColor: '#000000',
+                                      color: '#ffffff',
+                                      borderRadius: '10px',
+                                      fontSize: '14px',
+                                      padding: '7px 16px',
+                                      fontWeight: 'bold',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                    }}
+                                    className="cursor-pointer hover:bg-slate-800 transition-colors"
+                                  >
+                                    Supprimer
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Sticky Footer: Bouton Fermer */}
+                    <div className="p-4 border-t border-slate-200 bg-white shrink-0 sticky bottom-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsGmaoDevisPaneOpen(false)}
+                        style={{
+                          backgroundColor: '#000000',
+                          color: '#ffffff',
+                          fontSize: '18px',
+                          fontWeight: '600',
+                          borderRadius: '12px',
+                          height: '48px',
+                          width: '100%',
+                          border: 'none',
+                          cursor: 'pointer',
+                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)'
+                        }}
+                        className="hover:bg-slate-800 transition-colors flex items-center justify-center font-sans"
+                      >
+                        Fermer
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Drawer Overlay backdrop for Devis Pane */}
+                {isGmaoDevisPaneOpen && (
+                  <div 
+                    onClick={() => setIsGmaoDevisPaneOpen(false)}
                     className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-[9990]"
                   />
                 )}

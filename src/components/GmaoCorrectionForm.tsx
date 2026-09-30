@@ -29,6 +29,8 @@ interface GmaoCorrectionFormProps {
   members?: Member[];
   forceSmartphoneLayout?: boolean;
   isWebapp?: boolean;
+  isMainSoftware?: boolean;
+  hideReduceAndTimer?: boolean;
   isMinimized?: boolean;
   onToggleMinimize?: () => void;
 }
@@ -351,9 +353,12 @@ export default function GmaoCorrectionForm({
   members = [],
   forceSmartphoneLayout = false,
   isWebapp = false,
+  isMainSoftware = false,
+  hideReduceAndTimer = false,
   isMinimized,
   onToggleMinimize
 }: GmaoCorrectionFormProps) {
+  const shouldShowChronoAndReduce = isWebapp && !isMainSoftware && !hideReduceAndTimer;
   const [internalMinimized, setInternalMinimized] = useState(false);
   const isReduced = isMinimized !== undefined ? isMinimized : internalMinimized;
   const handleToggleReduce = onToggleMinimize || (() => setInternalMinimized((prev) => !prev));
@@ -1146,6 +1151,72 @@ export default function GmaoCorrectionForm({
   const [currentTickTime, setCurrentTickTime] = useState(() => new Date());
   const [formOpenTime] = useState(() => new Date());
 
+  // Section 11 Clôture - Toggles & Demande de devis
+  const [mesPhotosValides, setMesPhotosValides] = useState<boolean>(() => report?.mesPhotosValides ?? false);
+  const [etiquetteObligatoireConforme, setEtiquetteObligatoireConforme] = useState<boolean>(() => report?.etiquetteObligatoireConforme ?? false);
+  const [scelleConforme, setScelleConforme] = useState<boolean>(() => report?.scelleConforme ?? false);
+  const [stickerEntrepriseApplique, setStickerEntrepriseApplique] = useState<boolean>(() => report?.stickerEntrepriseApplique ?? false);
+  const [demandeDevis, setDemandeDevis] = useState<boolean>(() => report?.demandeDevis ?? false);
+  const [devisArticlesSelectionnes, setDevisArticlesSelectionnes] = useState<string[]>(() => report?.devisArticlesSelectionnes || []);
+  const [devisAutreInfo, setDevisAutreInfo] = useState<string>(() => report?.devisAutreInfo || '');
+  const [devisPriorite, setDevisPriorite] = useState<'Basse' | 'Moyenne' | 'Haute' | ''>(() => report?.devisPriorite || 'Moyenne');
+  const [devisSearchQuery, setDevisSearchQuery] = useState('');
+  const [isDevisDropdownOpen, setIsDevisDropdownOpen] = useState(false);
+  const devisDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (devisDropdownRef.current && !devisDropdownRef.current.contains(event.target as Node)) {
+        setIsDevisDropdownOpen(false);
+      }
+    }
+    if (isDevisDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDevisDropdownOpen]);
+
+  const DEVIS_ALLOWED_CATEGORIES = useMemo(() => [
+    'Modèle Défibrillateur',
+    'Modèle Coffret',
+    'Modèle Électrode',
+    'Modèle Batterie',
+    'Modèle Service',
+    'Modèle Filtre Purificateur',
+    'Type Filtre Purificateur',
+    'Modèle Signalétique',
+    'Modèle Scellé',
+    'Modèle Autocollant',
+    'Modèle Kit de secours',
+    'Modèle Pièce Autre'
+  ], []);
+
+  const devisAvailableVariables = useMemo(() => {
+    if (!variables) return [];
+    return variables.filter(v => DEVIS_ALLOWED_CATEGORIES.includes(v.category));
+  }, [variables, DEVIS_ALLOWED_CATEGORIES]);
+
+  const filteredDevisVariables = useMemo(() => {
+    const q = devisSearchQuery.trim().toLowerCase();
+    if (!q) return devisAvailableVariables;
+    return devisAvailableVariables.filter(v => 
+      (v.nom && v.nom.toLowerCase().includes(q)) ||
+      (v.identifiant && v.identifiant.toLowerCase().includes(q)) ||
+      (v.marque && v.marque.toLowerCase().includes(q)) ||
+      (v.category && v.category.toLowerCase().includes(q))
+    );
+  }, [devisAvailableVariables, devisSearchQuery]);
+
+  const toggleDevisArticle = (articleName: string) => {
+    setDevisArticlesSelectionnes(prev => 
+      prev.includes(articleName)
+        ? prev.filter(x => x !== articleName)
+        : [...prev, articleName]
+    );
+  };
+
   useEffect(() => {
     if (report) {
       const defibIdFound = report.defibId || report.defibSnapshot?.id || initialDefibId || '';
@@ -1217,6 +1288,14 @@ export default function GmaoCorrectionForm({
       setServiceEmettreId(report.serviceEmettreId || '');
       setTechSignature(report.techSignature || '');
       setEndTimeStamp(report.endTimeStamp || '');
+      setMesPhotosValides(report.mesPhotosValides ?? false);
+      setEtiquetteObligatoireConforme(report.etiquetteObligatoireConforme ?? false);
+      setScelleConforme(report.scelleConforme ?? false);
+      setStickerEntrepriseApplique(report.stickerEntrepriseApplique ?? false);
+      setDemandeDevis(report.demandeDevis ?? false);
+      setDevisArticlesSelectionnes(report.devisArticlesSelectionnes || []);
+      setDevisAutreInfo(report.devisAutreInfo || '');
+      setDevisPriorite(report.devisPriorite || 'Moyenne');
     }
   }, [report]);
 
@@ -2162,6 +2241,14 @@ export default function GmaoCorrectionForm({
     finalSnapshot.kitPeremptionServiettes = finalKitPeremptionServiettes;
     finalSnapshot.kitGantsPresents = kitGantsPresents;
     finalSnapshot.kitRasoirPresent = kitRasoirPresent;
+    finalSnapshot.mesPhotosValides = mesPhotosValides;
+    finalSnapshot.etiquetteObligatoireConforme = etiquetteObligatoireConforme;
+    finalSnapshot.scelleConforme = scelleConforme;
+    finalSnapshot.stickerEntrepriseApplique = stickerEntrepriseApplique;
+    finalSnapshot.demandeDevis = demandeDevis;
+    finalSnapshot.devisArticlesSelectionnes = devisArticlesSelectionnes;
+    finalSnapshot.devisAutreInfo = devisAutreInfo;
+    finalSnapshot.devisPriorite = devisPriorite;
 
     if (stocksMutated && onUpdateStocks) {
       onUpdateStocks(updatedStocks);
@@ -2177,6 +2264,7 @@ export default function GmaoCorrectionForm({
       siteMission: missionSite,
       photoUrl: photoUrl || undefined,
       defibSnapshot: finalSnapshot,
+      commentaireInterne: snapshot.commentaireInterne || '',
       techSignature: techSignature,
       endTimeStamp: endTimeStamp,
       clientPinCode: clientPinCode,
@@ -2259,6 +2347,16 @@ export default function GmaoCorrectionForm({
       // Section 11 additions
       fichierDonneesRecupere,
       
+      // Clôture checklist toggles & Demande de devis
+      mesPhotosValides,
+      etiquetteObligatoireConforme,
+      scelleConforme,
+      stickerEntrepriseApplique,
+      demandeDevis,
+      devisArticlesSelectionnes,
+      devisAutreInfo,
+      devisPriorite,
+
       // Draft invoice integration
       emettreFactureBrouillon,
       serviceEmettreId
@@ -2278,7 +2376,7 @@ export default function GmaoCorrectionForm({
 
   return (
     <div className={isWebapp || forceSmartphoneLayout ? `w-full ${isReduced ? 'space-y-0 pb-0' : 'space-y-6 pb-48'} font-sans animate-fadeIn max-w-full text-black px-0 bg-white relative` : "w-full space-y-6 font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black pb-48 px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl"} id="gmao-correction-layout">
-      {isWebapp && !isReduced && (
+      {shouldShowChronoAndReduce && !isReduced && (
         <div 
           className="fixed top-0 right-0 z-[60] flex items-center px-3.5 py-1.5 text-white font-sans pointer-events-auto select-none shadow-sm"
           style={{
@@ -2309,7 +2407,7 @@ export default function GmaoCorrectionForm({
       </button>
 
       {/* Button Réduire / Agrandir */}
-      {isWebapp && (
+      {shouldShowChronoAndReduce && (
         <button
           type="button"
           onClick={handleToggleReduce}
@@ -5321,20 +5419,6 @@ export default function GmaoCorrectionForm({
               />
             </div>
 
-            <div className="space-y-1">
-              <label htmlFor="snap-commentaire-interne" className="block text-[11px] font-bold text-black uppercase">
-                Commentaire interne.
-              </label>
-              <textarea
-                id="snap-commentaire-interne"
-                rows={4}
-                value={snapshot.commentaireInterne || ''}
-                onChange={(e) => handleSnapshotChange('commentaireInterne', e.target.value)}
-                className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 text-xs rounded-lg leading-relaxed focus:ring-1 focus:ring-indigo-500"
-                placeholder="Entrez un commentaire."
-              />
-            </div>
-
             {/* Point 5: Pièces jointes (1-3 fichiers) avec Google Drive */}
             <div className="pt-2 space-y-2 bg-white">
               <label className="block text-[11px] font-bold text-black uppercase">
@@ -5440,6 +5524,285 @@ export default function GmaoCorrectionForm({
                   className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
                 />
               </div>
+            </div>
+
+            {/* Clôture Checklist Toggles */}
+            <div className="pt-2 space-y-2.5">
+              {/* Toggle 1: Mes 3 photos sont valides */}
+              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[12px] font-bold text-black uppercase select-none">
+                  Mes 3 photos sont valides.
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    id="toggle-photos-valides"
+                    checked={mesPhotosValides}
+                    onChange={(e) => setMesPhotosValides(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
+                </label>
+              </div>
+
+              {/* Toggle 2: Étiquette obligatoire conforme */}
+              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[12px] font-bold text-black uppercase select-none">
+                  Étiquette obligatoire conforme.
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    id="toggle-etiquette-conforme"
+                    checked={etiquetteObligatoireConforme}
+                    onChange={(e) => setEtiquetteObligatoireConforme(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
+                </label>
+              </div>
+
+              {/* Toggle 3: Signalétique conforme */}
+              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[12px] font-bold text-black uppercase select-none">
+                  Signalétique conforme.
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    id="toggle-signaletique-conforme"
+                    checked={signaletiqueConforme === 'Oui'}
+                    onChange={(e) => setSignaletiqueConforme(e.target.checked ? 'Oui' : 'Non')}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
+                </label>
+              </div>
+
+              {/* Toggle 4: Scellé conforme */}
+              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[12px] font-bold text-black uppercase select-none">
+                  Scellé conforme.
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    id="toggle-scelle-conforme"
+                    checked={scelleConforme}
+                    onChange={(e) => setScelleConforme(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
+                </label>
+              </div>
+
+              {/* Toggle 5: Sticker entreprise appliqué */}
+              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[12px] font-bold text-black uppercase select-none">
+                  Sticker entreprise appliqué.
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    id="toggle-sticker-applique"
+                    checked={stickerEntrepriseApplique}
+                    onChange={(e) => setStickerEntrepriseApplique(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
+                </label>
+              </div>
+
+              {/* Toggle 6: Demande de devis */}
+              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[12px] font-bold text-black uppercase select-none">
+                  Demande de devis.
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    id="toggle-demande-devis"
+                    checked={demandeDevis}
+                    onChange={(e) => setDemandeDevis(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
+                </label>
+              </div>
+
+              {/* Conditional Demande de devis fields */}
+              {demandeDevis && (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-4 animate-fadeIn">
+                  {/* Field 1: Multi-select with search */}
+                  <div className="space-y-1.5 relative" ref={devisDropdownRef}>
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Sélection du/des produit(s)/service(s).
+                    </label>
+
+                    {/* Chips container & dropdown trigger */}
+                    <div 
+                      onClick={() => setIsDevisDropdownOpen(prev => !prev)}
+                      className="min-h-[42px] p-2 bg-white border border-slate-200 rounded-lg flex flex-wrap gap-1.5 items-center cursor-pointer hover:border-slate-300 transition-colors"
+                    >
+                      {devisArticlesSelectionnes.length === 0 ? (
+                        <span className="text-xs text-slate-400 select-none">
+                          Sélectionnez les modèles, pièces ou services...
+                        </span>
+                      ) : (
+                        devisArticlesSelectionnes.map((item) => (
+                          <span 
+                            key={item} 
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span>{item}</span>
+                            <button
+                              type="button"
+                              onClick={() => toggleDevisArticle(item)}
+                              className="text-indigo-400 hover:text-indigo-800 ml-0.5 font-bold cursor-pointer"
+                              title="Retirer"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))
+                      )}
+                      <span className="ml-auto text-xs text-slate-400 select-none">▾</span>
+                    </div>
+
+                    {/* Dropdown popup */}
+                    {isDevisDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-fadeIn">
+                        {/* Search input */}
+                        <div className="p-2 border-b border-slate-100 bg-slate-50">
+                          <input
+                            type="text"
+                            value={devisSearchQuery}
+                            onChange={(e) => setDevisSearchQuery(e.target.value)}
+                            placeholder="Rechercher une pièce, un service, un modèle..."
+                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-hidden focus:border-indigo-500"
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+
+                        {/* List items */}
+                        <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+                          {/* Option "Autre" */}
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleDevisArticle('Autre');
+                            }}
+                            className="flex items-center gap-2.5 px-3 py-2 hover:bg-indigo-50/60 cursor-pointer transition-colors bg-amber-50/30"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={devisArticlesSelectionnes.includes('Autre')}
+                              onChange={() => {}}
+                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-amber-900">
+                              Autre (saisie libre)
+                            </span>
+                          </div>
+
+                          {filteredDevisVariables.length === 0 ? (
+                            <div className="p-3 text-center text-xs text-slate-400">
+                              Aucun modèle ou pièce correspondant trouvé.
+                            </div>
+                          ) : (
+                            filteredDevisVariables.map((v) => {
+                              const isChecked = devisArticlesSelectionnes.includes(v.nom);
+                              return (
+                                <div
+                                  key={v.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleDevisArticle(v.nom);
+                                  }}
+                                  className={`flex items-center gap-2.5 px-3 py-2 hover:bg-indigo-50/60 cursor-pointer transition-colors ${
+                                    isChecked ? 'bg-indigo-50/40' : ''
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {}}
+                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                  />
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <span className="text-[10px] uppercase font-bold text-slate-500 px-2 py-0.5 rounded-full bg-slate-100 shrink-0">
+                                      {v.category.replace('Modèle ', '')}
+                                    </span>
+                                    <span className="text-xs text-slate-800 font-medium truncate">
+                                      {v.nom}
+                                    </span>
+                                    {v.identifiant && (
+                                      <span className="text-[11px] text-slate-400 font-mono shrink-0">
+                                        [{v.identifiant}]
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Saisie libre "Autre" si sélectionné */}
+                    {devisArticlesSelectionnes.includes('Autre') && (
+                      <div className="space-y-1 pt-1 animate-fadeIn">
+                        <label htmlFor="devis-autre-info" className="block text-[11px] font-bold text-black uppercase">
+                          Précisions pour « Autre ».
+                        </label>
+                        <input
+                          type="text"
+                          id="devis-autre-info"
+                          value={devisAutreInfo}
+                          onChange={(e) => setDevisAutreInfo(e.target.value)}
+                          placeholder="Renseignez d’autres informations ou références nécessaires..."
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Field 2: Priorité */}
+                  <div className="space-y-1">
+                    <label htmlFor="devis-priorite" className="block text-[11px] font-bold text-black uppercase">
+                      Priorité.
+                    </label>
+                    <select
+                      id="devis-priorite"
+                      value={devisPriorite}
+                      onChange={(e) => setDevisPriorite(e.target.value as any)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                    >
+                      <option value="Basse">Basse</option>
+                      <option value="Moyenne">Moyenne</option>
+                      <option value="Haute">Haute</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Commentaire interne déplacé en dessous de la dernière toggle */}
+            <div className="space-y-1 pt-2">
+              <label htmlFor="snap-commentaire-interne" className="block text-[11px] font-bold text-black uppercase">
+                Commentaire interne.
+              </label>
+              <textarea
+                id="snap-commentaire-interne"
+                rows={4}
+                value={snapshot.commentaireInterne || ''}
+                onChange={(e) => handleSnapshotChange('commentaireInterne', e.target.value)}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 text-xs rounded-lg leading-relaxed focus:ring-1 focus:ring-indigo-500"
+                placeholder="Entrez un commentaire."
+              />
             </div>
           </div>
 

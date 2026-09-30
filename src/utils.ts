@@ -124,6 +124,46 @@ export const INITIAL_VARIABLES: Variable[] = [
     marque: 'Standard',
     description: 'Contrat d’abonnement maintenance premium avec visite annuelle et remplacement pièces.',
     couleurHex: '#3556EC'
+  },
+  {
+    id: 'MSIG1',
+    category: 'Modèle Signalétique',
+    nom: 'Signalétique DAE Normative ILCOR',
+    marque: 'Standard',
+    identifiant: 'SIG-ILCOR-01',
+    description: 'Panneau signalétique conforme aux normes ILCOR pour défibrillateur.'
+  },
+  {
+    id: 'MSCL1',
+    category: 'Modèle Scellé',
+    nom: 'Scellé de sécurité plastique vert',
+    marque: 'Standard',
+    identifiant: 'SCL-VERT-01',
+    description: 'Scellé de sécurité numéroté pour boîtier et sacoche de défibrillateur.'
+  },
+  {
+    id: 'MAUT1',
+    category: 'Modèle Autocollant',
+    nom: 'Autocollant de maintenance et contrôle DAE',
+    marque: 'Standard',
+    identifiant: 'ATC-MAINT-01',
+    description: 'Autocollant de contrôle et de suivi des maintenances périodiques.'
+  },
+  {
+    id: 'MKIT1',
+    category: 'Modèle Kit de secours',
+    nom: 'Kit de secours d’intervention DAE standard',
+    marque: 'Standard',
+    identifiant: 'KIT-SEC-01',
+    description: 'Kit de premier secours : ciseaux de jésuit, rasoir jetable, gants, masque de bouche-à-bouche.'
+  },
+  {
+    id: 'MPAUT1',
+    category: 'Modèle Pièce Autre',
+    nom: 'Support mural universel / Transformateur',
+    marque: 'Standard',
+    identifiant: 'AUT-PIECE-01',
+    description: 'Pièce détachée ou accessoire complémentaire pour matériel de secours.'
   }
 ];
 

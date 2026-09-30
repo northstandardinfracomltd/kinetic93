@@ -137,6 +137,11 @@ const CATEGORIES: VariableCategory[] = [
   'Modèle Coffret',
   'Modèle Électrode',
   'Modèle Batterie',
+  'Modèle Signalétique',
+  'Modèle Scellé',
+  'Modèle Autocollant',
+  'Modèle Kit de secours',
+  'Modèle Pièce Autre',
   'Modèle Contrat',
   'Modèle Service',
   'Fournisseur',
@@ -530,7 +535,7 @@ export default function VariableTab({
       return;
     }
 
-    const hideRappelAlerte = category === 'Modèle Contrat' || category === 'Modèle Service' || category === 'Fournisseur' || category === 'Modèle Raison Prestation' || category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Type Filtre Purificateur' || category === 'Modèle Filtre Purificateur' || category === 'Formation';
+    const hideRappelAlerte = category === 'Modèle Contrat' || category === 'Modèle Service' || category === 'Fournisseur' || category === 'Modèle Raison Prestation' || category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Type Filtre Purificateur' || category === 'Modèle Filtre Purificateur' || category === 'Formation' || category === 'Modèle Signalétique' || category === 'Modèle Scellé' || category === 'Modèle Autocollant' || category === 'Modèle Kit de secours' || category === 'Modèle Pièce Autre';
 
     let formattedHex = couleurHex.trim();
     if ((category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Modèle Contrat') && formattedHex) {
@@ -539,12 +544,14 @@ export default function VariableTab({
       }
     }
 
+    const allowsImage = category === 'Modèle Défibrillateur' || category === 'Modèle Coffret' || category === 'Modèle Électrode' || category === 'Modèle Batterie' || category === 'Modèle Filtre Purificateur' || category === 'Modèle Signalétique' || category === 'Modèle Scellé' || category === 'Modèle Autocollant' || category === 'Modèle Kit de secours' || category === 'Modèle Pièce Autre';
+
     const payload: any = {
       category: category as VariableCategory,
       nom: nom.trim(),
       marque: marque.trim() || 'Standard',
       description: description.trim(),
-      imageUrl: (category === 'Modèle Défibrillateur' || category === 'Modèle Coffret' || category === 'Modèle Électrode' || category === 'Modèle Batterie' || category === 'Modèle Filtre Purificateur') ? imageUrl.trim() : undefined,
+      imageUrl: allowsImage ? imageUrl.trim() : undefined,
       couleurHex: (category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Modèle Contrat') ? (formattedHex || undefined) : undefined,
       dureePrestation: category === 'Modèle Raison Prestation' && dureePrestation !== '' ? parseInt(dureePrestation, 10) : undefined,
       identifiant: identifiant.trim() || undefined,
@@ -600,7 +607,8 @@ export default function VariableTab({
   };
 
   if (isModalOpen) {
-    const hideRappelAlerte = category === 'Modèle Contrat' || category === 'Modèle Service' || category === 'Fournisseur' || category === 'Modèle Raison Prestation' || category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Type Filtre Purificateur' || category === 'Modèle Filtre Purificateur' || category === 'Formation';
+    const hideRappelAlerte = category === 'Modèle Contrat' || category === 'Modèle Service' || category === 'Fournisseur' || category === 'Modèle Raison Prestation' || category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Type Filtre Purificateur' || category === 'Modèle Filtre Purificateur' || category === 'Formation' || category === 'Modèle Signalétique' || category === 'Modèle Scellé' || category === 'Modèle Autocollant' || category === 'Modèle Kit de secours' || category === 'Modèle Pièce Autre';
+    const allowsImage = category === 'Modèle Défibrillateur' || category === 'Modèle Coffret' || category === 'Modèle Électrode' || category === 'Modèle Batterie' || category === 'Modèle Filtre Purificateur' || category === 'Modèle Signalétique' || category === 'Modèle Scellé' || category === 'Modèle Autocollant' || category === 'Modèle Kit de secours' || category === 'Modèle Pièce Autre';
 
     return (
       <div className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto" id="variable-form-overlay">
@@ -861,7 +869,7 @@ export default function VariableTab({
                 </div>
 
                 {/* Optional Line Source de l'image (No sub-div, simple list flow) */}
-                {(category === 'Modèle Défibrillateur' || category === 'Modèle Coffret' || category === 'Modèle Électrode' || category === 'Modèle Batterie' || category === 'Modèle Filtre Purificateur') && (
+                {allowsImage && (
                   <div className="space-y-1">
                     <label htmlFor="input-variable-image" className="block text-[11px] font-bold text-slate-500 uppercase">
                       Lien source de l'image.

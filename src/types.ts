@@ -73,7 +73,25 @@ export interface Client {
   autresContrats?: ClientContract[];
 }
 
-export type VariableCategory = 'Modèle Défibrillateur' | 'Modèle Coffret' | 'Modèle Électrode' | 'Modèle Batterie' | 'Modèle Contrat' | 'Modèle Service' | 'Fournisseur' | 'Modèle Raison Prestation' | 'Drapeau GMAO' | 'Drapeau post-intervention' | 'Type Filtre Purificateur' | 'Modèle Filtre Purificateur' | 'Formation';
+export type VariableCategory =
+  | 'Modèle Défibrillateur'
+  | 'Modèle Coffret'
+  | 'Modèle Électrode'
+  | 'Modèle Batterie'
+  | 'Modèle Signalétique'
+  | 'Modèle Scellé'
+  | 'Modèle Autocollant'
+  | 'Modèle Kit de secours'
+  | 'Modèle Pièce Autre'
+  | 'Modèle Contrat'
+  | 'Modèle Service'
+  | 'Fournisseur'
+  | 'Modèle Raison Prestation'
+  | 'Drapeau GMAO'
+  | 'Drapeau post-intervention'
+  | 'Type Filtre Purificateur'
+  | 'Modèle Filtre Purificateur'
+  | 'Formation';
 
 export interface Variable {
   id: string;
@@ -247,6 +265,16 @@ export interface Defibrillateur {
   rappelMensuelAuto?: 'Oui' | 'Non';
   rappelHebdoAuto?: 'Oui' | 'Non';
   rappelJournalierAuto?: 'Oui' | 'Non';
+  mesPhotosValides?: boolean;
+  etiquetteObligatoireConforme?: boolean;
+  scelleConforme?: boolean;
+  stickerEntrepriseApplique?: boolean;
+  demandeDevis?: boolean;
+  devisArticlesSelectionnes?: string[];
+  devisAutreInfo?: string;
+  devisPriorite?: 'Basse' | 'Moyenne' | 'Haute';
+  devisStatus?: string;
+  devisTermine?: boolean;
   envId?: string;
   tenantId?: string;
   id_record?: string;

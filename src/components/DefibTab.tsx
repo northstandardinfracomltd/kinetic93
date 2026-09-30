@@ -431,6 +431,63 @@ const FRENCH_DEPARTMENTS = [
   "91", "92", "93", "94", "95", "96", "97", "98", "99", "2A", "2B"
 ];
 
+export interface ConfigurableColumn {
+  id: string;
+  label: string;
+}
+
+export const CONFIGURABLE_COLUMNS: ConfigurableColumn[] = [
+  { id: 'identifiant', label: 'Identifiant.' },
+  { id: 'serie', label: 'Série.' },
+  { id: 'client', label: 'Client.' },
+  { id: 'nomSite', label: 'Nom du site.' },
+  { id: 'contrat', label: 'Contrat.' },
+  { id: 'localisation', label: 'Localisation.' },
+  { id: 'expirGarantie', label: 'Expir. garantie.' },
+  { id: 'proVisite', label: 'Pro. visite.' },
+  { id: 'peremptionA', label: 'Péremption A.' },
+  { id: 'peremptionP', label: 'Péremption P.' },
+  { id: 'peremptionB', label: 'Péremption B.' },
+  { id: 'tournee', label: 'Tournée.' },
+];
+
+export interface CsvExportColumn {
+  id: string;
+  label: string;
+}
+
+export const CSV_EXPORT_COLUMNS: CsvExportColumn[] = [
+  { id: 'identifiant', label: 'Identifiant.' },
+  { id: 'serie', label: 'Série.' },
+  { id: 'modele', label: 'Modèle.' },
+  { id: 'client', label: 'Client.' },
+  { id: 'nomSite', label: 'Nom du site.' },
+  { id: 'contrat', label: 'Contrat.' },
+  { id: 'nomContrat', label: 'Titre du contrat.' },
+  { id: 'finContrat', label: 'Fin du contrat.' },
+  { id: 'localisation', label: 'Localisation.' },
+  { id: 'rue', label: 'Numéro et voie.' },
+  { id: 'ville', label: 'Ville.' },
+  { id: 'cp', label: 'Code postal.' },
+  { id: 'region', label: 'Région.' },
+  { id: 'pays', label: 'Pays.' },
+  { id: 'latitude', label: 'Latitude.' },
+  { id: 'longitude', label: 'Longitude.' },
+  { id: 'expirGarantie', label: 'Expir. garantie.' },
+  { id: 'derniereMaint', label: 'Dernière maintenance.' },
+  { id: 'prochaineMaint', label: 'Pro. visite.' },
+  { id: 'peremptionElectrodeA', label: 'Péremption A.' },
+  { id: 'lotElectrodeA', label: 'Lot électrode A.' },
+  { id: 'peremptionElectrodeP', label: 'Péremption P.' },
+  { id: 'lotElectrodeP', label: 'Lot électrode P.' },
+  { id: 'peremptionBatterie', label: 'Péremption B.' },
+  { id: 'lotBatterie', label: 'Lot batterie.' },
+  { id: 'boitier', label: 'Boîtier.' },
+  { id: 'tournee', label: 'Tournée.' },
+  { id: 'conforme', label: 'Conforme.' },
+  { id: 'commentaire', label: 'Commentaire.' },
+];
+
 export default function DefibTab({
   currentLang,
   defibrillateurs,
@@ -1928,6 +1985,136 @@ export default function DefibTab({
     });
   };
 
+  // Columns visibility state
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('defib_table_hidden_columns');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return new Set(parsed);
+          }
+        }
+      } catch (e) {}
+    }
+    return new Set();
+  });
+  const [tempHiddenColumns, setTempHiddenColumns] = useState<Set<string>>(new Set());
+  const [isColumnVisibilityPaneOpen, setIsColumnVisibilityPaneOpen] = useState(false);
+
+  // Toggle function for visibility side pane: Black (visible) <-> Red (hidden)
+  const toggleColumnVisibility = (colId: string) => {
+    setTempHiddenColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(colId)) {
+        // Was hidden (red), make it visible (black)
+        next.delete(colId);
+      } else {
+        // Was visible (black), make it hidden (red)
+        // Rule: At least 4 columns must remain visible
+        const remainingVisible = CONFIGURABLE_COLUMNS.length - (next.size + 1);
+        if (remainingVisible < 4) {
+          alert(t("Vous devez conserver au moins 4 colonnes visibles."));
+          return prev;
+        }
+        next.add(colId);
+      }
+      return next;
+    });
+  };
+
+  // CSV Export custom columns state
+  const [isCsvExportPaneOpen, setIsCsvExportPaneOpen] = useState(false);
+  const [tempCsvExcludedColumns, setTempCsvExcludedColumns] = useState<Set<string>>(new Set());
+
+  // Toggle function for CSV export columns side pane
+  const toggleCsvColumn = (colId: string) => {
+    setTempCsvExcludedColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(colId)) {
+        // Was excluded (red), include it (black)
+        next.delete(colId);
+      } else {
+        // Was included (black), exclude it (red)
+        if (next.size + 1 >= CSV_EXPORT_COLUMNS.length) {
+          alert(t("Veuillez sélectionner au moins une colonne à exporter."));
+          return prev;
+        }
+        next.add(colId);
+      }
+      return next;
+    });
+  };
+
+  const handleDownloadCustomCsv = () => {
+    const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
+    if (selectedDefibs.length === 0) {
+      alert(t("Aucun défibrillateur sélectionné."));
+      return;
+    }
+    const includedCols = CSV_EXPORT_COLUMNS.filter(c => !tempCsvExcludedColumns.has(c.id));
+    if (includedCols.length === 0) {
+      alert(t("Veuillez sélectionner au moins une colonne à exporter."));
+      return;
+    }
+
+    const headers = includedCols.map(c => `"${c.label.replace(/"/g, '""')}"`);
+    const rows = selectedDefibs.map(df => {
+      const cl = clients.find(c => c.id === df.clientId);
+      const model = variables.find(v => v.id === df.modeleId);
+      const matchingTours = (fsmTours || []).filter(t => t.missions?.some((m: any) => m.defibIdentifiant === df.identifiant));
+      const prochaineMaint = computeProchaineMaintenance(df.derniereMaintenance);
+
+      const valuesMap: Record<string, string> = {
+        identifiant: df.identifiant || '',
+        serie: df.numeroSerie || '',
+        modele: model?.nom || df.modeleId || '',
+        client: cl?.denomination || '',
+        nomSite: df.nomSite || '',
+        contrat: cl ? (cl.contrat || '') : (df.contrat || ''),
+        nomContrat: cl ? (cl.nomContrat || '') : (df.nomContrat || ''),
+        finContrat: formatDateToFR(cl ? cl.finContrat : df.finContrat) || '',
+        localisation: df.ville && df.cp ? `${df.ville}, ${df.cp}` : (df.ville || df.cp || ''),
+        rue: df.numVoie || (df as any).rue || '',
+        ville: df.ville || '',
+        cp: df.cp || '',
+        region: df.region || '',
+        pays: df.pays || 'France',
+        latitude: df.latitude ? String(df.latitude) : '',
+        longitude: df.longitude ? String(df.longitude) : '',
+        expirGarantie: formatDateToFR(df.finGarantie) || '',
+        derniereMaint: formatDateToFR(df.derniereMaintenance) || '',
+        prochaineMaint: formatDateToFR(prochaineMaint) || '',
+        peremptionElectrodeA: formatDateToFR(df.peremptionElectrodeA) || '',
+        lotElectrodeA: df.lotElectrodeA || '',
+        peremptionElectrodeP: formatDateToFR(df.peremptionElectrodeP) || '',
+        lotElectrodeP: df.lotElectrodeP || '',
+        peremptionBatterie: formatDateToFR(df.peremptionBatterie) || '',
+        lotBatterie: df.lotBatterie || '',
+        boitier: df.modeleCoffretId || '',
+        tournee: matchingTours.length > 0 ? matchingTours[matchingTours.length - 1].title : '',
+        conforme: df.conforme || '',
+        commentaire: (df.commentaire || '').replace(/[\r\n]+/g, ' '),
+      };
+
+      return includedCols.map(c => `"${(valuesMap[c.id] || '').replace(/"/g, '""')}"`).join(';');
+    });
+
+    const csvContent = '\uFEFF' + headers.join(';') + '\n' + rows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `defibrillateurs_selection_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setIsCsvExportPaneOpen(false);
+  };
+
   const handleTopScroll = () => {
     if (topScrollRef.current && bottomScrollRef.current) {
       bottomScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
@@ -3009,7 +3196,11 @@ export default function DefibTab({
                   </button>
 
                   <button
-                    onClick={() => exportToCSV(defibrillateurs.filter(d => selectedIds.includes(d.id)), clients, variables)}
+                    onClick={() => {
+                      setTempCsvExcludedColumns(new Set());
+                      setIsCsvExportPaneOpen(true);
+                    }}
+                    id="btn-bulk-export-csv"
                     style={rowActionButton18Style}
                     className="cursor-pointer"
                   >
@@ -3231,9 +3422,9 @@ export default function DefibTab({
             </div>
           </div>
 
-          {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard */}
+          {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard + Gérer la visibilité des colonnes */}
           <div 
-            className="flex items-center justify-start"
+            className="flex items-center justify-start gap-4 flex-wrap"
             style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
           >
             <button
@@ -3264,6 +3455,35 @@ export default function DefibTab({
                 <Minimize2 size={10} className="shrink-0 text-black" color="#000000" />
               )}
               <span style={{ color: '#000000' }}>{isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
+            </button>
+
+            <button
+              type="button"
+              id="btn-manage-columns-visibility"
+              onClick={() => {
+                setTempHiddenColumns(new Set(hiddenColumns));
+                setIsColumnVisibilityPaneOpen(true);
+              }}
+              style={{
+                fontSize: '9px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                fontWeight: 100,
+                cursor: 'pointer',
+                background: 'transparent',
+                border: 'none',
+                padding: '2px 4px',
+                color: '#000000',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                textDecoration: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="hover:opacity-80 transition-all select-none cursor-pointer"
+              title={t("Gérer la visibilité des colonnes")}
+            >
+              <Eye size={10} className="shrink-0 text-black" color="#000000" />
+              <span style={{ color: '#000000' }}>{t("Gérer la visibilité des colonnes")}</span>
             </button>
           </div>
 
@@ -3352,18 +3572,42 @@ export default function DefibTab({
                     </button>
                   </th>
                   <th className="px-4 py-3.5 w-14 whitespace-nowrap" style={thStyle}>Miniature.</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Identifiant.</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Série.</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Client.</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t("Nom du site.")}</th>
-                  <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Contrat.</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Localisation.</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Expir. garantie.</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t("Pro. visite.")}</th>
-                  <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Péremption A.")}</th>
-                  <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Péremption P.")}</th>
-                  <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Péremption B.")}</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Tournée.</th>
+                  {!hiddenColumns.has('identifiant') && (
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Identifiant.</th>
+                  )}
+                  {!hiddenColumns.has('serie') && (
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Série.</th>
+                  )}
+                  {!hiddenColumns.has('client') && (
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Client.</th>
+                  )}
+                  {!hiddenColumns.has('nomSite') && (
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t("Nom du site.")}</th>
+                  )}
+                  {!hiddenColumns.has('contrat') && (
+                    <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Contrat.</th>
+                  )}
+                  {!hiddenColumns.has('localisation') && (
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Localisation.</th>
+                  )}
+                  {!hiddenColumns.has('expirGarantie') && (
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Expir. garantie.</th>
+                  )}
+                  {!hiddenColumns.has('proVisite') && (
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t("Pro. visite.")}</th>
+                  )}
+                  {!hiddenColumns.has('peremptionA') && (
+                    <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Péremption A.")}</th>
+                  )}
+                  {!hiddenColumns.has('peremptionP') && (
+                    <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Péremption P.")}</th>
+                  )}
+                  {!hiddenColumns.has('peremptionB') && (
+                    <th className="px-3 py-3.5 text-center whitespace-nowrap" style={thStyle}>{t("Péremption B.")}</th>
+                  )}
+                  {!hiddenColumns.has('tournee') && (
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Tournée.</th>
+                  )}
                   <th className="px-4 py-3.5 text-right w-12 whitespace-nowrap" style={thStyle}>Actions.</th>
                 </tr>
               </thead>
@@ -3449,245 +3693,269 @@ export default function DefibTab({
                       </td>
 
                       {/* Identifiant */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <div 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              copyIdentifiantToClipboard(df.identifiant || '');
-                              setCopiedTableId(df.id);
-                              if (copiedTableTimeoutRef.current) clearTimeout(copiedTableTimeoutRef.current);
-                              copiedTableTimeoutRef.current = setTimeout(() => {
-                                setCopiedTableId(null);
-                              }, 1500);
-                            }}
-                            style={{ 
-                              display: 'inline-flex', 
-                              alignItems: 'center', 
-                              gap: '8px',
-                              border: '1px solid rgb(231, 231, 231)',
-                              borderRadius: '1000px',
-                              padding: '4px 12px',
-                              backgroundColor: '#ffffff',
-                              position: 'relative',
-                              cursor: 'pointer',
-                            }} 
-                            className="whitespace-nowrap shrink-0 hover:border-slate-400 select-none"
-                            title="Cliquer pour copier l'identifiant"
-                          >
-                            {copiedTableId === df.id && (
-                              <span 
-                                style={{
-                                  position: 'absolute',
-                                  bottom: 'calc(100% + 4px)',
-                                  left: '50%',
-                                  transform: 'translateX(-50%)',
-                                  fontSize: '18px',
-                                  color: '#16a34a',
-                                  fontWeight: 'bold',
-                                  pointerEvents: 'none',
-                                  whiteSpace: 'nowrap',
-                                  zIndex: 50,
-                                  textShadow: '0 1px 2px #ffffff',
-                                }}
-                              >
-                                Copié!
-                              </span>
-                            )}
-                            {(() => {
-                              const status = getSafetyStatus(df);
-                              return (
-                                <span 
-                                  className={`w-2 h-2 rounded-full shrink-0 ${status.colorClass}`} 
-                                  title={status.title}
-                                />
-                              );
-                            })()}
-                            <span className="whitespace-nowrap">{df.identifiant}</span>
-                          </div>
-
-                          {activeAlerts.map((a, idx) => {
-                            const isRed = a.option.includes('Rouge');
-                            const bgColor = isRed ? '#fee2e2' : '#ffedd5';
-                            const borderColor = isRed ? '#fca5a5' : '#fed7aa';
-                            const textColor = isRed ? '#991b1b' : '#9a3412';
-                            const text = a.option.split(' — ')[0];
-                            return (
-                              <span 
-                                key={idx}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap animate-pulse shrink-0 border"
-                                style={{ backgroundColor: bgColor, borderColor: borderColor, color: textColor }}
-                                title={`${a.option}${a.debut ? ` (du ${a.debut}${a.fin ? ` au ${a.fin}` : ''})` : ''}${a.desc ? ` : ${a.desc}` : ''}`}
-                              >
-                                ⚠️ {text}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </td>
-
-                      {/* Série */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
-                        <div>{df.numeroSerie}</div>
-                        {df.numeroAtlasante ? (
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5" title="Numéro Atlasanté">
-                            Atlas: {df.numeroAtlasante}
-                          </div>
-                        ) : null}
-                      </td>
-
-                      {/* Client */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={linkedClient?.denomination}>
-                        {linkedClient?.denomination || ''}
-                      </td>
-
-                      {/* Nom du site */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={df.nomSite}>
-                        <div>{df.nomSite || ''}</div>
-                        {df.categorieEtablissement ? (
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5" title="Catégorie d'établissement">
-                            Catégorie: {df.categorieEtablissement}
-                          </div>
-                        ) : null}
-                      </td>
-
-                      {/* Contrat Yes/No */}
-                      <td className="px-4 py-5 text-center">
-                        {(() => {
-                          const activeContrat = linkedClient ? linkedClient.contrat : df.contrat;
-                          const activeNomContrat = linkedClient ? (linkedClient.nomContrat === 'Sans contrat de maintenance' ? '' : linkedClient.nomContrat) : df.nomContrat;
-                          const activeFinContrat = linkedClient ? linkedClient.finContrat : df.finContrat;
-                          if (!activeContrat) return null;
-
-                          // Lookup matching contract model from variables (associated with the contract in client or defib)
-                          const contractModel = (variables || []).find(v =>
-                            v.category === 'Modèle Contrat' && (
-                              (activeNomContrat && (v.nom.trim().toLowerCase() === activeNomContrat.trim().toLowerCase() || v.id === activeNomContrat)) ||
-                              (linkedClient?.nomContrat && (v.nom.trim().toLowerCase() === linkedClient.nomContrat.trim().toLowerCase() || v.id === linkedClient.nomContrat)) ||
-                              (linkedClient?.redactionContrat && v.description && linkedClient.redactionContrat.includes(v.description))
-                            )
-                          );
-                          let dotColor = (contractModel && contractModel.couleurHex && contractModel.couleurHex.trim()) 
-                            ? contractModel.couleurHex.trim() 
-                            : '#94A3B8';
-                          if (!dotColor.startsWith('#')) {
-                            dotColor = '#' + dotColor;
-                          }
-
-                          return (
-                            <span style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '8px',
-                              borderRadius: '1000px',
-                              backgroundColor: '#ffffff',
-                              border: '1px solid rgb(231, 231, 231)',
-                              color: '#000000',
-                              fontSize: '16px',
-                              fontWeight: 100,
-                              padding: '4px 12px',
-                              whiteSpace: 'nowrap',
-                            }}>
-                              <span 
-                                className="w-2 h-2 rounded-full shrink-0" 
-                                style={{ backgroundColor: dotColor }} 
-                              />
-                              <span>
-                                {activeContrat === 'Oui' ? (
-                                  `Oui${activeNomContrat ? `, ${activeNomContrat}` : ''}${activeFinContrat ? `, Expir.${formatDateToFR(activeFinContrat)}` : ''}`
-                                ) : (
-                                  activeContrat
-                                )}
-                              </span>
-                            </span>
-                          );
-                        })()}
-                      </td>
-
-                      {/* Localisation (ville / cp) */}
-                      <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
-                        {df.ville && df.cp ? `${df.ville}, ${df.cp}` : (df.ville || df.cp || '-')}
-                      </td>
-
-                      {/* Fin Garantie */}
-                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.finGarantie), backgroundColor: 'transparent' }}>
-                        {formatDateToFR(df.finGarantie) || '-'}
-                      </td>
-
-                      {/* Prochaine Maintenance */}
-                      <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(prochaineMaint), backgroundColor: 'transparent' }}>
-                        {formatDateToFR(prochaineMaint) || '-'}
-                      </td>
-
-                      {/* Electrode Adult Expiry */}
-                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionElectrodeA), backgroundColor: 'transparent' }}>
-                        {formatDateToFR(df.peremptionElectrodeA) || '-'}
-                      </td>
-
-                      {/* Electrode Pediatric Expiry */}
-                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionElectrodeP), backgroundColor: 'transparent' }}>
-                        {formatDateToFR(df.peremptionElectrodeP) || '-'}
-                      </td>
-
-                      {/* Battery Expiry */}
-                      <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionBatterie), backgroundColor: 'transparent' }}>
-                        {formatDateToFR(df.peremptionBatterie) || '-'}
-                      </td>
-
-                      {/* Tournée association column */}
-                      <td className="px-4 py-5 text-left font-sans" onClick={(e) => e.stopPropagation()}>
-                        {(() => {
-                          const matchingTours = (fsmTours || []).filter(t => 
-                            t.missions?.some((m: any) => m.defibIdentifiant === df.identifiant)
-                          );
-                          if (matchingTours.length > 0) {
-                            // Show only the single most recent one (the last matching one in our list)
-                            const latestTour = matchingTours[matchingTours.length - 1];
-                            const matchMission = latestTour.missions?.find((m: any) => m.defibIdentifiant === df.identifiant);
-                            const isRejected = matchMission && matchMission.status !== 'Effectué' && matchMission.rejectionReason;
-                            
-                            const rawRejectedDate = matchMission?.rejectedAt || matchMission?.estimatedDate || latestTour.startDate || new Date().toLocaleDateString('fr-FR');
-                            const formatToFrDate = (dStr: string) => {
-                              if (!dStr) return '';
-                              const clean = dStr.replace(/\//g, '-');
-                              const pts = clean.split('-');
-                              if (pts.length === 3) {
-                                if (pts[0].length === 4) {
-                                  return `${pts[2]}/${pts[1]}/${pts[0]}`;
-                                }
-                                return `${pts[0]}/${pts[1]}/${pts[2]}`;
-                              }
-                              return dStr;
-                            };
-                            const rejectedDateFormatted = formatToFrDate(rawRejectedDate);
-
-                            return (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                      {!hiddenColumns.has('identifiant') && (
+                        <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <div 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyIdentifiantToClipboard(df.identifiant || '');
+                                setCopiedTableId(df.id);
+                                if (copiedTableTimeoutRef.current) clearTimeout(copiedTableTimeoutRef.current);
+                                copiedTableTimeoutRef.current = setTimeout(() => {
+                                  setCopiedTableId(null);
+                                }, 1500);
+                              }}
+                              style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '8px',
+                                border: '1px solid rgb(231, 231, 231)',
+                                borderRadius: '1000px',
+                                padding: '4px 12px',
+                                backgroundColor: '#ffffff',
+                                position: 'relative',
+                                cursor: 'pointer',
+                              }} 
+                              className="whitespace-nowrap shrink-0 hover:border-slate-400 select-none"
+                              title="Cliquer pour copier l'identifiant"
+                            >
+                              {copiedTableId === df.id && (
                                 <span 
                                   style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    borderRadius: '1000px',
-                                    backgroundColor: '#ffffff',
-                                    border: '1px solid rgb(231, 231, 231)',
-                                    color: '#000000',
-                                    fontSize: '16px',
-                                    fontWeight: 100,
-                                    padding: '4px 12px',
+                                    position: 'absolute',
+                                    bottom: 'calc(100% + 4px)',
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    fontSize: '18px',
+                                    color: '#16a34a',
+                                    fontWeight: 'bold',
+                                    pointerEvents: 'none',
                                     whiteSpace: 'nowrap',
-                                    width: 'fit-content'
-                                  }} 
-                                  title={latestTour.title}
+                                    zIndex: 50,
+                                    textShadow: '0 1px 2px #ffffff',
+                                  }}
                                 >
-                                  {latestTour.title}
+                                  Copié!
                                 </span>
-                              </div>
+                              )}
+                              {(() => {
+                                const status = getSafetyStatus(df);
+                                return (
+                                  <span 
+                                    className={`w-2 h-2 rounded-full shrink-0 ${status.colorClass}`} 
+                                    title={status.title}
+                                  />
+                                );
+                              })()}
+                              <span className="whitespace-nowrap">{df.identifiant}</span>
+                            </div>
+
+                            {activeAlerts.map((a, idx) => {
+                              const isRed = a.option.includes('Rouge');
+                              const bgColor = isRed ? '#fee2e2' : '#ffedd5';
+                              const borderColor = isRed ? '#fca5a5' : '#fed7aa';
+                              const textColor = isRed ? '#991b1b' : '#9a3412';
+                              const text = a.option.split(' — ')[0];
+                              return (
+                                <span 
+                                  key={idx}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap animate-pulse shrink-0 border"
+                                  style={{ backgroundColor: bgColor, borderColor: borderColor, color: textColor }}
+                                  title={`${a.option}${a.debut ? ` (du ${a.debut}${a.fin ? ` au ${a.fin}` : ''})` : ''}${a.desc ? ` : ${a.desc}` : ''}`}
+                                >
+                                  ⚠️ {text}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      )}
+
+                      {/* Série */}
+                      {!hiddenColumns.has('serie') && (
+                        <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                          <div>{df.numeroSerie}</div>
+                          {df.numeroAtlasante ? (
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5" title="Numéro Atlasanté">
+                              Atlas: {df.numeroAtlasante}
+                            </div>
+                          ) : null}
+                        </td>
+                      )}
+
+                      {/* Client */}
+                      {!hiddenColumns.has('client') && (
+                        <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={linkedClient?.denomination}>
+                          {linkedClient?.denomination || ''}
+                        </td>
+                      )}
+
+                      {/* Nom du site */}
+                      {!hiddenColumns.has('nomSite') && (
+                        <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={df.nomSite}>
+                          <div>{df.nomSite || ''}</div>
+                          {df.categorieEtablissement ? (
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5" title="Catégorie d'établissement">
+                              Catégorie: {df.categorieEtablissement}
+                            </div>
+                          ) : null}
+                        </td>
+                      )}
+
+                      {/* Contrat Yes/No */}
+                      {!hiddenColumns.has('contrat') && (
+                        <td className="px-4 py-5 text-center">
+                          {(() => {
+                            const activeContrat = linkedClient ? linkedClient.contrat : df.contrat;
+                            const activeNomContrat = linkedClient ? (linkedClient.nomContrat === 'Sans contrat de maintenance' ? '' : linkedClient.nomContrat) : df.nomContrat;
+                            const activeFinContrat = linkedClient ? linkedClient.finContrat : df.finContrat;
+                            if (!activeContrat) return null;
+
+                            // Lookup matching contract model from variables (associated with the contract in client or defib)
+                            const contractModel = (variables || []).find(v =>
+                              v.category === 'Modèle Contrat' && (
+                                (activeNomContrat && (v.nom.trim().toLowerCase() === activeNomContrat.trim().toLowerCase() || v.id === activeNomContrat)) ||
+                                (linkedClient?.nomContrat && (v.nom.trim().toLowerCase() === linkedClient.nomContrat.trim().toLowerCase() || v.id === linkedClient.nomContrat)) ||
+                                (linkedClient?.redactionContrat && v.description && linkedClient.redactionContrat.includes(v.description))
+                              )
                             );
-                          }
-                          return null;
-                        })()}
-                      </td>
+                            let dotColor = (contractModel && contractModel.couleurHex && contractModel.couleurHex.trim()) 
+                              ? contractModel.couleurHex.trim() 
+                              : '#94A3B8';
+                            if (!dotColor.startsWith('#')) {
+                              dotColor = '#' + dotColor;
+                            }
+
+                            return (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                borderRadius: '1000px',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid rgb(231, 231, 231)',
+                                color: '#000000',
+                                fontSize: '16px',
+                                fontWeight: 100,
+                                padding: '4px 12px',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                <span 
+                                  className="w-2 h-2 rounded-full shrink-0" 
+                                  style={{ backgroundColor: dotColor }} 
+                                />
+                                <span>
+                                  {activeContrat === 'Oui' ? (
+                                    `Oui${activeNomContrat ? `, ${activeNomContrat}` : ''}${activeFinContrat ? `, Expir.${formatDateToFR(activeFinContrat)}` : ''}`
+                                  ) : (
+                                    activeContrat
+                                  )}
+                                </span>
+                              </span>
+                            );
+                          })()}
+                        </td>
+                      )}
+
+                      {/* Localisation (ville / cp) */}
+                      {!hiddenColumns.has('localisation') && (
+                        <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                          {df.ville && df.cp ? `${df.ville}, ${df.cp}` : (df.ville || df.cp || '-')}
+                        </td>
+                      )}
+
+                      {/* Fin Garantie */}
+                      {!hiddenColumns.has('expirGarantie') && (
+                        <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.finGarantie), backgroundColor: 'transparent' }}>
+                          {formatDateToFR(df.finGarantie) || '-'}
+                        </td>
+                      )}
+
+                      {/* Prochaine Maintenance */}
+                      {!hiddenColumns.has('proVisite') && (
+                        <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(prochaineMaint), backgroundColor: 'transparent' }}>
+                          {formatDateToFR(prochaineMaint) || '-'}
+                        </td>
+                      )}
+
+                      {/* Electrode Adult Expiry */}
+                      {!hiddenColumns.has('peremptionA') && (
+                        <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionElectrodeA), backgroundColor: 'transparent' }}>
+                          {formatDateToFR(df.peremptionElectrodeA) || '-'}
+                        </td>
+                      )}
+
+                      {/* Electrode Pediatric Expiry */}
+                      {!hiddenColumns.has('peremptionP') && (
+                        <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionElectrodeP), backgroundColor: 'transparent' }}>
+                          {formatDateToFR(df.peremptionElectrodeP) || '-'}
+                        </td>
+                      )}
+
+                      {/* Battery Expiry */}
+                      {!hiddenColumns.has('peremptionB') && (
+                        <td className="px-3 py-5 text-center font-sans" style={{ fontSize: '16px', fontWeight: 100, color: getDateColor(df.peremptionBatterie), backgroundColor: 'transparent' }}>
+                          {formatDateToFR(df.peremptionBatterie) || '-'}
+                        </td>
+                      )}
+
+                      {/* Tournée association column */}
+                      {!hiddenColumns.has('tournee') && (
+                        <td className="px-4 py-5 text-left font-sans" onClick={(e) => e.stopPropagation()}>
+                          {(() => {
+                            const matchingTours = (fsmTours || []).filter(t => 
+                              t.missions?.some((m: any) => m.defibIdentifiant === df.identifiant)
+                            );
+                            if (matchingTours.length > 0) {
+                              // Show only the single most recent one (the last matching one in our list)
+                              const latestTour = matchingTours[matchingTours.length - 1];
+                              const matchMission = latestTour.missions?.find((m: any) => m.defibIdentifiant === df.identifiant);
+                              const isRejected = matchMission && matchMission.status !== 'Effectué' && matchMission.rejectionReason;
+                              
+                              const rawRejectedDate = matchMission?.rejectedAt || matchMission?.estimatedDate || latestTour.startDate || new Date().toLocaleDateString('fr-FR');
+                              const formatToFrDate = (dStr: string) => {
+                                if (!dStr) return '';
+                                const clean = dStr.replace(/\//g, '-');
+                                const pts = clean.split('-');
+                                if (pts.length === 3) {
+                                  if (pts[0].length === 4) {
+                                    return `${pts[2]}/${pts[1]}/${pts[0]}`;
+                                  }
+                                  return `${pts[0]}/${pts[1]}/${pts[2]}`;
+                                }
+                                return dStr;
+                              };
+                              const rejectedDateFormatted = formatToFrDate(rawRejectedDate);
+
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                                  <span 
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      borderRadius: '1000px',
+                                      backgroundColor: '#ffffff',
+                                      border: '1px solid rgb(231, 231, 231)',
+                                      color: '#000000',
+                                      fontSize: '16px',
+                                      fontWeight: 100,
+                                      padding: '4px 12px',
+                                      whiteSpace: 'nowrap',
+                                      width: 'fit-content'
+                                    }} 
+                                    title={latestTour.title}
+                                  >
+                                    {latestTour.title}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </td>
+                      )}
 
                       {/* Action buttons */}
                       <td className="px-4 py-5 text-right" onClick={(e) => e.stopPropagation()}>
@@ -7938,6 +8206,222 @@ export default function DefibTab({
                 }}
               >
                 Fermer
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 👁️ COLUMNS VISIBILITY SIDE PANE 👁️ */}
+      {isColumnVisibilityPaneOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[100] flex justify-end"
+          id="columns-visibility-side-pane-container"
+        >
+          {/* Backdrop */}
+          <div 
+            onClick={() => {
+              setTempHiddenColumns(new Set(hiddenColumns));
+              setIsColumnVisibilityPaneOpen(false);
+            }}
+            className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs"
+          />
+
+          {/* Side Pane */}
+          <div 
+            className="relative w-full sm:w-[480px] bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out z-10" 
+            id="columns-visibility-side-pane"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              borderLeft: '1px solid #e2e8f0',
+            }}
+          >
+            {/* Nuage de boutons initialement tous background noir - Pas de titre, Pas de line divider, Pas de cross-close icon */}
+            <div className="flex-1 overflow-y-auto p-6 pt-8">
+              <div className="flex flex-wrap gap-2.5 sm:gap-3 items-center">
+                {CONFIGURABLE_COLUMNS.map((col) => {
+                  const isHidden = tempHiddenColumns.has(col.id);
+                  return (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => toggleColumnVisibility(col.id)}
+                      style={{
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        borderRadius: '14px',
+                        padding: '12px 18px',
+                        backgroundColor: isHidden ? '#dc2626' : '#000000',
+                        color: '#ffffff',
+                        border: isHidden ? '1px solid #dc2626' : '1px solid #000000',
+                        boxShadow: 'rgba(0, 0, 0, 0.08) 0px 2px 8px -2px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease-in-out',
+                      }}
+                      className="hover:scale-[1.02] active:scale-[0.98] select-none cursor-pointer"
+                    >
+                      {t(col.label)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Floating Black & Blue Buttons side by side at bottom */}
+            <div className="p-5 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setTempHiddenColumns(new Set(hiddenColumns));
+                  setIsColumnVisibilityPaneOpen(false);
+                }}
+                style={{
+                  backgroundColor: '#000000',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  borderRadius: '13px',
+                  padding: '14px 20px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                }}
+                className="flex-1 text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+              >
+                Fermer
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setHiddenColumns(new Set(tempHiddenColumns));
+                  try {
+                    localStorage.setItem('defib_table_hidden_columns', JSON.stringify(Array.from(tempHiddenColumns)));
+                  } catch (e) {}
+                  setIsColumnVisibilityPaneOpen(false);
+                }}
+                style={{
+                  backgroundColor: 'rgb(53, 86, 236)',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  borderRadius: '13px',
+                  padding: '14px 20px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                }}
+                className="flex-1 text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+              >
+                Appliquer
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 📄 CSV EXPORT COLUMNS SIDE PANE 📄 */}
+      {isCsvExportPaneOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[100] flex justify-end"
+          id="csv-export-side-pane-container"
+        >
+          {/* Backdrop */}
+          <div 
+            onClick={() => setIsCsvExportPaneOpen(false)}
+            className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs"
+          />
+
+          {/* Side Pane */}
+          <div 
+            className="relative w-full sm:w-[480px] bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out z-10" 
+            id="csv-export-side-pane"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              borderLeft: '1px solid #e2e8f0',
+            }}
+          >
+            {/* Nuage de boutons initialement tous background noir - Pas de titre, Pas de line divider, Pas de cross-close icon */}
+            <div className="flex-1 overflow-y-auto p-6 pt-8">
+              <div className="flex flex-wrap gap-2.5 sm:gap-3 items-center">
+                {CSV_EXPORT_COLUMNS.map((col) => {
+                  const isExcluded = tempCsvExcludedColumns.has(col.id);
+                  return (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => toggleCsvColumn(col.id)}
+                      style={{
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        borderRadius: '14px',
+                        padding: '12px 18px',
+                        backgroundColor: isExcluded ? '#dc2626' : '#000000',
+                        color: '#ffffff',
+                        border: isExcluded ? '1px solid #dc2626' : '1px solid #000000',
+                        boxShadow: 'rgba(0, 0, 0, 0.08) 0px 2px 8px -2px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease-in-out',
+                      }}
+                      className="hover:scale-[1.02] active:scale-[0.98] select-none cursor-pointer"
+                    >
+                      {t(col.label)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Floating Black & Blue Buttons side by side at bottom */}
+            <div className="p-5 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsCsvExportPaneOpen(false)}
+                style={{
+                  backgroundColor: '#000000',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  borderRadius: '13px',
+                  padding: '14px 20px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                }}
+                className="flex-1 text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+              >
+                Fermer
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadCustomCsv}
+                style={{
+                  backgroundColor: 'rgb(53, 86, 236)',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  borderRadius: '13px',
+                  padding: '14px 20px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                }}
+                className="flex-1 text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+              >
+                Télécharger CSV
               </button>
             </div>
           </div>

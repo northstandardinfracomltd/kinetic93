@@ -833,6 +833,11 @@ export default function StocksTab({
       'Modèle Filtre Purificateur': { label: 'FILTRES PURIFICATEURS', order: 7 },
       'Type Filtre Purificateur': { label: 'TYPES FILTRES', order: 8 },
       'Formation': { label: 'FORMATIONS', order: 9 },
+      'Modèle Signalétique': { label: 'SIGNALÉTIQUE', order: 10 },
+      'Modèle Scellé': { label: 'SCELLÉS', order: 11 },
+      'Modèle Autocollant': { label: 'AUTOCOLLANTS', order: 12 },
+      'Modèle Kit de secours': { label: 'KITS DE SECOURS', order: 13 },
+      'Modèle Pièce Autre': { label: 'PIÈCES AUTRES', order: 14 },
     };
 
     const excluded = new Set([
