@@ -694,13 +694,19 @@ export default function ClientTab({
 
   // Search filter
   const filteredClients = useMemo(() => {
-    return clients.filter(
-      (c) =>
-        (c.denomination || '').toLowerCase().includes(search.toLowerCase()) ||
-        (c.siret || '').toLowerCase().includes(search.toLowerCase()) ||
-        (c.email || '').toLowerCase().includes(search.toLowerCase()) ||
-        (c.nomPrenomSite || '').toLowerCase().includes(search.toLowerCase()) ||
-        (c.nomContrat || '').toLowerCase().includes(search.toLowerCase())
+    return (clients || []).filter(
+      (c) => {
+        if (!c || typeof c !== 'object') return false;
+        // Ignore corrupted entries or misplaced defibs
+        if ((c as any).numeroSerie && !c.denomination && !c.siret) return false;
+        const denom = (c.denomination || (c as any).nomSite || (c as any).nom || '').toLowerCase();
+        const siret = (c.siret || '').toLowerCase();
+        const email = (c.email || '').toLowerCase();
+        const nomSite = (c.nomPrenomSite || '').toLowerCase();
+        const nomContrat = (c.nomContrat || '').toLowerCase();
+        const s = (search || '').toLowerCase();
+        return denom.includes(s) || siret.includes(s) || email.includes(s) || nomSite.includes(s) || nomContrat.includes(s);
+      }
     );
   }, [clients, search]);
 
@@ -2226,8 +2232,10 @@ export default function ClientTab({
 
                     {/* Denomination */}
                     <td className="px-4 py-5 font-sans" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
-                      <div className="font-semibold text-slate-950 whitespace-nowrap truncate max-w-[200px]" title={client.denomination}>
-                        {client.denomination.length > 20 ? client.denomination.substring(0, 20) + '...' : client.denomination}
+                      <div className="font-semibold text-slate-950 whitespace-nowrap truncate max-w-[200px]" title={client.denomination || (client as any).nomSite || (client as any).nom || ''}>
+                        {(client.denomination || (client as any).nomSite || (client as any).nom || '').length > 20 
+                          ? (client.denomination || (client as any).nomSite || (client as any).nom || '').substring(0, 20) + '...' 
+                          : (client.denomination || (client as any).nomSite || (client as any).nom || '-')}
                       </div>
                     </td>
 
@@ -2245,7 +2253,7 @@ export default function ClientTab({
                         }} 
                         className="whitespace-nowrap"
                       >
-                        {client.siret}
+                        {client.siret || '-'}
                       </div>
                     </td>
 

@@ -489,6 +489,10 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
       if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices') {
         return true;
       }
+      // D27 & D58 share the clients catalog
+      if (collectionName === 'clients' && ((cleanTid === 'd58' && itemEnv === 'd27') || (cleanTid === 'd27' && itemEnv === 'd58'))) {
+        return true;
+      }
       return false; // Rejects items belonging to another tenant!
     }
 
@@ -513,6 +517,13 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
         return false;
       }
     } else if (collectionName === 'clients') {
+      // Discard items that are actually defibrillateurs accidentally saved into clients
+      if (item.numeroSerie && !item.denomination && !item.siret && !item.clientCode) {
+        return false;
+      }
+      if (item.id === 'REP-UPCOMING-fsm-m-demo') {
+        return false;
+      }
       if (!itemEnv && (item.id === 'c1' || item.id === 'c2' || item.id === 'c3') && item.denomination === 'Secours Pro Ouest') {
         return false;
       }

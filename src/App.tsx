@@ -5120,15 +5120,21 @@ export default function App() {
         // Fire all sync tasks completely concurrently and collect promises
         syncTasks.push(syncBackground<Client[]>('clients', 'clients', setClients, (data) => {
           let changed = false;
-          const sanitized = data.map(c => {
-            if (!c.signaturePin || !c.signaturePin.trim()) {
-              changed = true;
-              return { ...c, signaturePin: generateRandomPin() };
-            }
-            return c;
-          });
+          const sanitized = (data || [])
+            .filter(c => c && typeof c === 'object' && !(c as any).numeroSerie)
+            .map(c => {
+              const fixed = { ...c };
+              if (!fixed.denomination) {
+                fixed.denomination = (c as any).nomSite || (c as any).nomEtablissement || (c as any).nom || 'Client sans nom';
+              }
+              if (!fixed.signaturePin || !fixed.signaturePin.trim()) {
+                changed = true;
+                fixed.signaturePin = generateRandomPin();
+              }
+              return fixed;
+            });
           if (changed) {
-            saveCollectionToFirestore('clients', sanitized, tenantId);
+            saveCollectionToFirestore('clients', sanitized, activeRunTenantId);
           }
           return sanitized;
         }));
@@ -5468,6 +5474,11 @@ export default function App() {
       if (clients.length <= 250) {
         saveCollectionToFirestore('clients', clients, tenantId);
         safeSetLocalStorage(`defib_${tenantId}_clients`, JSON.stringify(clients));
+      } else {
+        try {
+          idbSet(`defib_${tenantId}_clients`, clients);
+          idbSet(`fs_cache_${tenantId}_clients`, clients);
+        } catch (_) {}
       }
     }
   }, [clients, isFirebaseLoaded, tenantId, loadedTenantIdState]);
