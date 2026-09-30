@@ -8463,12 +8463,26 @@ export default function DefibTab({
             }}
           >
             {/* Toggles Apple-style pour la configuration de l'export CSV */}
-            <div className="px-6 pt-6 pb-2 space-y-2.5">
-              <div className="flex items-center justify-between py-2.5 px-3.5 bg-slate-50 border border-slate-200/90 rounded-xl">
-                <span className="text-[13px] font-bold text-slate-800 select-none">
+            <div className="px-6 pt-6 pb-2 space-y-3">
+              <div 
+                className="flex items-center justify-between py-3 px-4 rounded-xl"
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #dadada',
+                }}
+              >
+                <span 
+                  className="select-none"
+                  style={{
+                    color: '#000000',
+                    fontSize: '18px',
+                    fontWeight: 600,
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
                   {t("Maintenir la sélection.")}
                 </span>
-                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
+                <label className="relative inline-flex items-center cursor-pointer select-none shrink-0" style={{ cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     id="toggle-maintenir-selection-csv"
@@ -8480,11 +8494,25 @@ export default function DefibTab({
                 </label>
               </div>
 
-              <div className="flex items-center justify-between py-2.5 px-3.5 bg-slate-50 border border-slate-200/90 rounded-xl">
-                <span className="text-[13px] font-bold text-slate-800 select-none">
+              <div 
+                className="flex items-center justify-between py-3 px-4 rounded-xl"
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #dadada',
+                }}
+              >
+                <span 
+                  className="select-none"
+                  style={{
+                    color: '#000000',
+                    fontSize: '18px',
+                    fontWeight: 600,
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
                   {t("Supprimer la mention des sections.")}
                 </span>
-                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
+                <label className="relative inline-flex items-center cursor-pointer select-none shrink-0" style={{ cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     id="toggle-supprimer-mention-sections"

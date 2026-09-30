@@ -120,7 +120,8 @@ import {
   Bell,
   Info,
   Minimize2,
-  Maximize2
+  Maximize2,
+  BarChart3
 } from 'lucide-react';
 
 export type AppTab = 
@@ -8248,7 +8249,7 @@ export default function App() {
                     border-radius: 9999px !important;
                     -webkit-border-radius: 9999px !important;
                     -moz-border-radius: 9999px !important;
-                    padding: 10px 38px 10px 20px !important;
+                    padding: 10px 20px !important;
                     font-size: 15px !important;
                     font-weight: 500 !important;
                     height: 42px !important;
@@ -8258,6 +8259,7 @@ export default function App() {
                     color: #000000 !important;
                     box-sizing: border-box !important;
                   }
+                  #fsm-tab-container button#btn-fsm-to-sort-adv:hover:not(:disabled),
                   #fsm-tab-container select#select-fsm-tour-manage:hover:not(:disabled),
                   #fsm-tab-container select#select-fsm-tour-manage:focus:not(:disabled) {
                     outline: none !important;
@@ -9536,19 +9538,28 @@ export default function App() {
                         });
                       }}
                       style={{
+                        fontSize: '9px',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        fontSize: '13px',
-                        color: '#000000',
-                        background: 'none',
-                        border: 'none',
+                        fontWeight: 100,
                         cursor: 'pointer',
-                        padding: '4px 8px',
-                        textDecoration: 'none'
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '2px 4px',
+                        color: '#000000',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        textDecoration: 'none',
+                        transition: 'all 0.15s ease'
                       }}
-                      className="hover:opacity-70 transition-opacity select-none cursor-pointer"
+                      className="hover:opacity-80 transition-all select-none cursor-pointer"
                       id="btn-toggle-fsm-stats"
+                      title={isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer")}
                     >
-                      {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer")}
+                      <BarChart3 size={10} className="shrink-0 text-black" color="#000000" />
+                      <span style={{ color: '#000000' }}>
+                        {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer")}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -9585,6 +9596,7 @@ export default function App() {
                     >
                       <button
                         type="button"
+                        id="btn-fsm-to-sort-adv"
                         onClick={() => {
                           if (activeDateFilter === 'A trier') {
                             // Déclic : revenir sur la tournée sélectionnée
@@ -9646,7 +9658,7 @@ export default function App() {
                                 borderRadius: '9999px',
                                 WebkitBorderRadius: '9999px',
                                 MozBorderRadius: '9999px',
-                                padding: '10px 38px 10px 20px',
+                                padding: '10px 20px',
                                 fontSize: '15px',
                                 fontWeight: 500,
                                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -9657,7 +9669,7 @@ export default function App() {
                                 height: '42px',
                                 boxSizing: 'border-box',
                               }}
-                              className="w-full truncate focus:outline-none pr-10"
+                              className="w-full truncate focus:outline-none"
                             >
                             {(() => {
                               const STATUS_ORDER = ['Brouillon', 'À faire', 'En cours', 'Effectué', 'Terminé'];
@@ -9702,9 +9714,6 @@ export default function App() {
                               });
                             })()}
                           </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5">
-                            <ChevronDown className="h-4 w-4 text-black" />
-                          </div>
                         </div>
                       </div>
                     )}
