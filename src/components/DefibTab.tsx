@@ -437,18 +437,18 @@ export interface ConfigurableColumn {
 }
 
 export const CONFIGURABLE_COLUMNS: ConfigurableColumn[] = [
-  { id: 'identifiant', label: 'Identifiant.' },
-  { id: 'serie', label: 'Série.' },
-  { id: 'client', label: 'Client.' },
-  { id: 'nomSite', label: 'Nom du site.' },
-  { id: 'contrat', label: 'Contrat.' },
-  { id: 'localisation', label: 'Localisation.' },
-  { id: 'expirGarantie', label: 'Expir. garantie.' },
-  { id: 'proVisite', label: 'Pro. visite.' },
-  { id: 'peremptionA', label: 'Péremption A.' },
-  { id: 'peremptionP', label: 'Péremption P.' },
-  { id: 'peremptionB', label: 'Péremption B.' },
-  { id: 'tournee', label: 'Tournée.' },
+  { id: 'identifiant', label: 'Identifiant' },
+  { id: 'serie', label: 'Série' },
+  { id: 'client', label: 'Client' },
+  { id: 'nomSite', label: 'Nom du site' },
+  { id: 'contrat', label: 'Contrat' },
+  { id: 'localisation', label: 'Localisation' },
+  { id: 'expirGarantie', label: 'Expir. garantie' },
+  { id: 'proVisite', label: 'Pro. visite' },
+  { id: 'peremptionA', label: 'Péremption A' },
+  { id: 'peremptionP', label: 'Péremption P' },
+  { id: 'peremptionB', label: 'Péremption B' },
+  { id: 'tournee', label: 'Tournée' },
 ];
 
 export interface CsvExportColumn {
@@ -457,35 +457,35 @@ export interface CsvExportColumn {
 }
 
 export const CSV_EXPORT_COLUMNS: CsvExportColumn[] = [
-  { id: 'identifiant', label: 'Identifiant.' },
-  { id: 'serie', label: 'Série.' },
-  { id: 'modele', label: 'Modèle.' },
-  { id: 'client', label: 'Client.' },
-  { id: 'nomSite', label: 'Nom du site.' },
-  { id: 'contrat', label: 'Contrat.' },
-  { id: 'nomContrat', label: 'Titre du contrat.' },
-  { id: 'finContrat', label: 'Fin du contrat.' },
-  { id: 'localisation', label: 'Localisation.' },
-  { id: 'rue', label: 'Numéro et voie.' },
-  { id: 'ville', label: 'Ville.' },
-  { id: 'cp', label: 'Code postal.' },
-  { id: 'region', label: 'Région.' },
-  { id: 'pays', label: 'Pays.' },
-  { id: 'latitude', label: 'Latitude.' },
-  { id: 'longitude', label: 'Longitude.' },
-  { id: 'expirGarantie', label: 'Expir. garantie.' },
-  { id: 'derniereMaint', label: 'Dernière maintenance.' },
-  { id: 'prochaineMaint', label: 'Pro. visite.' },
-  { id: 'peremptionElectrodeA', label: 'Péremption A.' },
-  { id: 'lotElectrodeA', label: 'Lot électrode A.' },
-  { id: 'peremptionElectrodeP', label: 'Péremption P.' },
-  { id: 'lotElectrodeP', label: 'Lot électrode P.' },
-  { id: 'peremptionBatterie', label: 'Péremption B.' },
-  { id: 'lotBatterie', label: 'Lot batterie.' },
-  { id: 'boitier', label: 'Boîtier.' },
-  { id: 'tournee', label: 'Tournée.' },
-  { id: 'conforme', label: 'Conforme.' },
-  { id: 'commentaire', label: 'Commentaire.' },
+  { id: 'identifiant', label: 'Identifiant' },
+  { id: 'serie', label: 'Série' },
+  { id: 'modele', label: 'Modèle' },
+  { id: 'client', label: 'Client' },
+  { id: 'nomSite', label: 'Nom du site' },
+  { id: 'contrat', label: 'Contrat' },
+  { id: 'nomContrat', label: 'Titre du contrat' },
+  { id: 'finContrat', label: 'Fin du contrat' },
+  { id: 'localisation', label: 'Localisation' },
+  { id: 'rue', label: 'Numéro et voie' },
+  { id: 'ville', label: 'Ville' },
+  { id: 'cp', label: 'Code postal' },
+  { id: 'region', label: 'Région' },
+  { id: 'pays', label: 'Pays' },
+  { id: 'latitude', label: 'Latitude' },
+  { id: 'longitude', label: 'Longitude' },
+  { id: 'expirGarantie', label: 'Expir. garantie' },
+  { id: 'derniereMaint', label: 'Dernière maintenance' },
+  { id: 'prochaineMaint', label: 'Pro. visite' },
+  { id: 'peremptionElectrodeA', label: 'Péremption A' },
+  { id: 'lotElectrodeA', label: 'Lot électrode A' },
+  { id: 'peremptionElectrodeP', label: 'Péremption P' },
+  { id: 'lotElectrodeP', label: 'Lot électrode P' },
+  { id: 'peremptionBatterie', label: 'Péremption B' },
+  { id: 'lotBatterie', label: 'Lot batterie' },
+  { id: 'boitier', label: 'Boîtier' },
+  { id: 'tournee', label: 'Tournée' },
+  { id: 'conforme', label: 'Conforme' },
+  { id: 'commentaire', label: 'Commentaire' },
 ];
 
 export default function DefibTab({
@@ -8252,7 +8252,7 @@ export default function DefibTab({
                       onClick={() => toggleColumnVisibility(col.id)}
                       style={{
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        fontSize: '16px',
+                        fontSize: '18px',
                         fontWeight: 600,
                         borderRadius: '14px',
                         padding: '12px 18px',
@@ -8265,7 +8265,7 @@ export default function DefibTab({
                       }}
                       className="hover:scale-[1.02] active:scale-[0.98] select-none cursor-pointer"
                     >
-                      {t(col.label)}
+                      {t(col.label).replace(/\.+$/, '')}
                     </button>
                   );
                 })}
@@ -8363,7 +8363,7 @@ export default function DefibTab({
                       onClick={() => toggleCsvColumn(col.id)}
                       style={{
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        fontSize: '16px',
+                        fontSize: '18px',
                         fontWeight: 600,
                         borderRadius: '14px',
                         padding: '12px 18px',
@@ -8376,7 +8376,7 @@ export default function DefibTab({
                       }}
                       className="hover:scale-[1.02] active:scale-[0.98] select-none cursor-pointer"
                     >
-                      {t(col.label)}
+                      {t(col.label).replace(/\.+$/, '')}
                     </button>
                   );
                 })}
