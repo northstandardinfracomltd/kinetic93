@@ -13478,7 +13478,7 @@ export default function App() {
 
                     <div className="flex flex-wrap items-center gap-3">
                       {/* Field recherche (Search input) */}
-                      <div className="relative w-full sm:w-48 md:w-52">
+                      <div className="relative w-full sm:w-36 md:w-40">
                         <input
                           type="text"
                           id="search-gmao-input"
@@ -13489,7 +13489,7 @@ export default function App() {
                           style={{
                             border: '1px solid #dedede',
                             borderRadius: '13px',
-                            padding: '9px 19px',
+                            padding: '9px 14px',
                             fontSize: '18px',
                             fontWeight: '100',
                             color: '#000000',
@@ -13596,38 +13596,39 @@ export default function App() {
                         </div>
                       </label>
 
-                      {/* Bouton Filtres */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDraftGmaoFilters(activeGmaoFilters);
-                          setIsGmaoFilterPaneOpen(true);
-                        }}
-                        id="btn-trigger-gmao-filters"
-                        style={customButtonStyle}
-                        className="flex items-center gap-1.5 ml-2 cursor-pointer"
-                      >
-                        <span>{t('Filtres')}</span>
-                        {activeGmaoFiltersCount > 0 && (
-                          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#fe4eba] rounded-full ml-1">
-                            {activeGmaoFiltersCount}
-                          </span>
-                        )}
-                      </button>
+                      {/* Boutons Filtres & Dem. Devis */}
+                      <div className="flex items-center gap-1.5 ml-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDraftGmaoFilters(activeGmaoFilters);
+                            setIsGmaoFilterPaneOpen(true);
+                          }}
+                          id="btn-trigger-gmao-filters"
+                          style={customButtonStyle}
+                          className="flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <span>{t('Filtres')}</span>
+                          {activeGmaoFiltersCount > 0 && (
+                            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#fe4eba] rounded-full ml-0.5">
+                              {activeGmaoFiltersCount}
+                            </span>
+                          )}
+                        </button>
 
-                      {/* Bouton Requêtes Devis */}
-                      <button
-                        type="button"
-                        onClick={() => setIsGmaoDevisPaneOpen(true)}
-                        id="btn-trigger-gmao-devis-requests"
-                        style={customButtonStyle}
-                        className="flex items-center gap-1.5 ml-1 cursor-pointer"
-                      >
-                        <span>{t('Requêtes Devis')}</span>
-                        <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#fe4eba] rounded-full ml-1">
-                          {pendingDevisCount}
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsGmaoDevisPaneOpen(true)}
+                          id="btn-trigger-gmao-devis-requests"
+                          style={customButtonStyle}
+                          className="flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <span>{t('Dem. Devis')}</span>
+                          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#fe4eba] rounded-full ml-0.5">
+                            {pendingDevisCount}
+                          </span>
+                        </button>
+                      </div>
 
                       {/* No Actualiser button */}
                     </div>
@@ -15104,40 +15105,9 @@ export default function App() {
                     style={{ height: '100%' }}
                   >
                     {/* Fixed / Sticky Header in Side Pane */}
-                    <div className="p-5 border-b border-slate-200 bg-white space-y-4 shrink-0 shadow-2xs">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-xl font-bold text-black font-sans">
-                            Requêtes Devis
-                          </h3>
-                          <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 text-xs font-bold text-white bg-[#fe4eba] rounded-full">
-                            {displayedDevisReports.length}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleExportDevisCSV}
-                          style={{
-                            backgroundColor: '#000000',
-                            color: '#ffffff',
-                            borderRadius: '10px',
-                            fontSize: '14px',
-                            padding: '7px 16px',
-                            fontWeight: 'bold',
-                            border: 'none',
-                            cursor: 'pointer',
-                          }}
-                          className="flex items-center gap-1.5 hover:bg-slate-800 transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                          </svg>
-                          <span>Export CSV</span>
-                        </button>
-                      </div>
-
+                    <div className="p-5 border-b border-slate-200 bg-white space-y-3 shrink-0 shadow-2xs">
                       {/* Choix de la période date / date */}
-                      <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider font-sans">
                             Du (Date début)
@@ -15149,7 +15119,7 @@ export default function App() {
                             style={{
                               border: '1px solid #dedede',
                               borderRadius: '10px',
-                              padding: '7px 12px',
+                              padding: '8px 12px',
                               fontSize: '14px',
                               width: '100%',
                               backgroundColor: '#ffffff',
@@ -15169,7 +15139,7 @@ export default function App() {
                             style={{
                               border: '1px solid #dedede',
                               borderRadius: '10px',
-                              padding: '7px 12px',
+                              padding: '8px 12px',
                               fontSize: '14px',
                               width: '100%',
                               backgroundColor: '#ffffff',
@@ -15179,16 +15149,33 @@ export default function App() {
                           />
                         </div>
                       </div>
+
+                      {/* Bouton Export CSV en dessous des dates */}
+                      <button
+                        type="button"
+                        onClick={handleExportDevisCSV}
+                        style={{
+                          backgroundColor: 'rgb(53, 86, 236)',
+                          color: '#ffffff',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          borderRadius: '13px',
+                          padding: '12px 20px',
+                          width: '100%',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                        }}
+                        className="text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+                      >
+                        Export CSV
+                      </button>
                     </div>
 
                     {/* Scroll Area containing requests */}
-                    <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50">
-                      {displayedDevisReports.length === 0 ? (
-                        <div className="p-12 text-center text-slate-400 font-sans space-y-2">
-                          <p className="text-base font-medium">Aucune requête de devis trouvée.</p>
-                          <p className="text-xs text-slate-400">Les demandes de devis activées par les techniciens lors des rapports apparaîtront ici.</p>
-                        </div>
-                      ) : (
+                    <div className="flex-1 overflow-y-auto p-5 pb-28 space-y-4 bg-slate-50/50">
+                      {displayedDevisReports.length > 0 && (
                         displayedDevisReports.map((r) => {
                           const refIntervention = r.interventionReference || r.autreReference || r.customReference || r.identifiant || r.defibIdentifiant || r.id;
                           const rawDate = r.date || r.interventionDate || r.dateIntervention || '';
@@ -15308,8 +15295,8 @@ export default function App() {
                       )}
                     </div>
 
-                    {/* Sticky Footer: Bouton Fermer */}
-                    <div className="p-4 border-t border-slate-200 bg-white shrink-0 sticky bottom-0">
+                    {/* Floating Fermer Button en bas */}
+                    <div className="absolute bottom-5 left-5 right-5 z-20 pointer-events-none">
                       <button
                         type="button"
                         onClick={() => setIsGmaoDevisPaneOpen(false)}
@@ -15317,15 +15304,16 @@ export default function App() {
                           backgroundColor: '#000000',
                           color: '#ffffff',
                           fontSize: '18px',
-                          fontWeight: '600',
-                          borderRadius: '12px',
-                          height: '48px',
+                          fontWeight: 'bold',
+                          borderRadius: '13px',
+                          padding: '14px 20px',
                           width: '100%',
                           border: 'none',
                           cursor: 'pointer',
-                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)'
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
                         }}
-                        className="hover:bg-slate-800 transition-colors flex items-center justify-center font-sans"
+                        className="pointer-events-auto text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all shadow-xl"
                       >
                         Fermer
                       </button>

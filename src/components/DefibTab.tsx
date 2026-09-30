@@ -488,6 +488,38 @@ export const CSV_EXPORT_COLUMNS: CsvExportColumn[] = [
   { id: 'commentaire', label: 'Commentaire' },
 ];
 
+export const COLUMN_SECTION_MAP: Record<string, string> = {
+  identifiant: 'Section 1 - ',
+  serie: 'Section 1 - ',
+  modele: 'Section 1 - ',
+  commentaire: 'Section 1 - ',
+  client: 'Section 2 - ',
+  nomSite: 'Section 2 - ',
+  contrat: 'Section 2 - ',
+  nomContrat: 'Section 2 - ',
+  finContrat: 'Section 2 - ',
+  boitier: 'Section 3 - ',
+  localisation: 'Section 4 - ',
+  rue: 'Section 4 - ',
+  ville: 'Section 4 - ',
+  cp: 'Section 4 - ',
+  region: 'Section 4 - ',
+  pays: 'Section 4 - ',
+  latitude: 'Section 4 - ',
+  longitude: 'Section 4 - ',
+  expirGarantie: 'Section 5 - ',
+  derniereMaint: 'Section 5 - ',
+  prochaineMaint: 'Section 5 - ',
+  peremptionElectrodeA: 'Section 6 - ',
+  lotElectrodeA: 'Section 6 - ',
+  peremptionElectrodeP: 'Section 7 - ',
+  lotElectrodeP: 'Section 7 - ',
+  peremptionBatterie: 'Section 8 - ',
+  lotBatterie: 'Section 8 - ',
+  tournee: 'Section 9 - ',
+  conforme: 'Section 9 - ',
+};
+
 export default function DefibTab({
   currentLang,
   defibrillateurs,
@@ -2026,7 +2058,49 @@ export default function DefibTab({
 
   // CSV Export custom columns state
   const [isCsvExportPaneOpen, setIsCsvExportPaneOpen] = useState(false);
-  const [tempCsvExcludedColumns, setTempCsvExcludedColumns] = useState<Set<string>>(new Set());
+  const [maintenirSelectionCsv, setMaintenirSelectionCsv] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('defib_csv_export_keep_selection') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+  const [supprimerMentionSections, setSupprimerMentionSections] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('defib_csv_export_strip_sections') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+  const [tempCsvExcludedColumns, setTempCsvExcludedColumns] = useState<Set<string>>(() => {
+    try {
+      const keep = localStorage.getItem('defib_csv_export_keep_selection') === 'true';
+      if (keep) {
+        const saved = localStorage.getItem('defib_csv_export_excluded_cols');
+        if (saved) return new Set(JSON.parse(saved));
+      }
+    } catch (e) {}
+    return new Set();
+  });
+
+  const handleToggleMaintenirSelectionCsv = (checked: boolean) => {
+    setMaintenirSelectionCsv(checked);
+    try {
+      localStorage.setItem('defib_csv_export_keep_selection', checked ? 'true' : 'false');
+      if (checked) {
+        localStorage.setItem('defib_csv_export_excluded_cols', JSON.stringify(Array.from(tempCsvExcludedColumns)));
+      } else {
+        localStorage.removeItem('defib_csv_export_excluded_cols');
+      }
+    } catch (e) {}
+  };
+
+  const handleToggleSupprimerMentionSections = (checked: boolean) => {
+    setSupprimerMentionSections(checked);
+    try {
+      localStorage.setItem('defib_csv_export_strip_sections', checked ? 'true' : 'false');
+    } catch (e) {}
+  };
 
   // Toggle function for CSV export columns side pane
   const toggleCsvColumn = (colId: string) => {
@@ -2042,6 +2116,11 @@ export default function DefibTab({
           return prev;
         }
         next.add(colId);
+      }
+      if (maintenirSelectionCsv) {
+        try {
+          localStorage.setItem('defib_csv_export_excluded_cols', JSON.stringify(Array.from(next)));
+        } catch (e) {}
       }
       return next;
     });
@@ -2059,7 +2138,22 @@ export default function DefibTab({
       return;
     }
 
-    const headers = includedCols.map(c => `"${c.label.replace(/"/g, '""')}"`);
+    if (maintenirSelectionCsv) {
+      try {
+        localStorage.setItem('defib_csv_export_excluded_cols', JSON.stringify(Array.from(tempCsvExcludedColumns)));
+      } catch (e) {}
+    }
+
+    const headers = includedCols.map(c => {
+      const colLabel = c.label.replace(/\.+$/, '');
+      if (supprimerMentionSections) {
+        return `"${colLabel.replace(/^Section\s+\d+\s*[-—:]\s*/i, '').replace(/"/g, '""')}"`;
+      } else {
+        const sectionPrefix = COLUMN_SECTION_MAP[c.id] || '';
+        const finalLabel = colLabel.startsWith('Section') ? colLabel : `${sectionPrefix}${colLabel}`;
+        return `"${finalLabel.replace(/"/g, '""')}"`;
+      }
+    });
     const rows = selectedDefibs.map(df => {
       const cl = clients.find(c => c.id === df.clientId);
       const model = variables.find(v => v.id === df.modeleId);
@@ -3197,7 +3291,24 @@ export default function DefibTab({
 
                   <button
                     onClick={() => {
-                      setTempCsvExcludedColumns(new Set());
+                      try {
+                        const keep = localStorage.getItem('defib_csv_export_keep_selection') === 'true';
+                        setMaintenirSelectionCsv(keep);
+                        if (keep) {
+                          const saved = localStorage.getItem('defib_csv_export_excluded_cols');
+                          if (saved) {
+                            setTempCsvExcludedColumns(new Set(JSON.parse(saved)));
+                          } else {
+                            setTempCsvExcludedColumns(new Set());
+                          }
+                        } else {
+                          setTempCsvExcludedColumns(new Set());
+                        }
+                        const strip = localStorage.getItem('defib_csv_export_strip_sections') === 'true';
+                        setSupprimerMentionSections(strip);
+                      } catch (e) {
+                        setTempCsvExcludedColumns(new Set());
+                      }
                       setIsCsvExportPaneOpen(true);
                     }}
                     id="btn-bulk-export-csv"
@@ -8351,8 +8462,43 @@ export default function DefibTab({
               borderLeft: '1px solid #e2e8f0',
             }}
           >
+            {/* Toggles Apple-style pour la configuration de l'export CSV */}
+            <div className="px-6 pt-6 pb-2 space-y-2.5">
+              <div className="flex items-center justify-between py-2.5 px-3.5 bg-slate-50 border border-slate-200/90 rounded-xl">
+                <span className="text-[13px] font-bold text-slate-800 select-none">
+                  {t("Maintenir la sélection.")}
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    id="toggle-maintenir-selection-csv"
+                    checked={maintenirSelectionCsv}
+                    onChange={(e) => handleToggleMaintenirSelectionCsv(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between py-2.5 px-3.5 bg-slate-50 border border-slate-200/90 rounded-xl">
+                <span className="text-[13px] font-bold text-slate-800 select-none">
+                  {t("Supprimer la mention des sections.")}
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    id="toggle-supprimer-mention-sections"
+                    checked={supprimerMentionSections}
+                    onChange={(e) => handleToggleSupprimerMentionSections(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
+                </label>
+              </div>
+            </div>
+
             {/* Nuage de boutons initialement tous background noir - Pas de titre, Pas de line divider, Pas de cross-close icon */}
-            <div className="flex-1 overflow-y-auto p-6 pt-8">
+            <div className="flex-1 overflow-y-auto p-6 pt-4">
               <div className="flex flex-wrap gap-2.5 sm:gap-3 items-center">
                 {CSV_EXPORT_COLUMNS.map((col) => {
                   const isExcluded = tempCsvExcludedColumns.has(col.id);
