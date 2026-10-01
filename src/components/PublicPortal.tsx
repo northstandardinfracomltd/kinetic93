@@ -30,7 +30,6 @@ import {
   Play,
   Square,
   LogOut,
-  Map,
   Eye,
   Sliders,
   CheckSquare,

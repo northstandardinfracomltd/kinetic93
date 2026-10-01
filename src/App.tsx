@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getRegionsForCountry } from './utils/regions';
-import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems } from './firebase';
+import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey } from './firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { idbSet, idbGet } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
-import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, TeamWorkGroup, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText } from './types';
+import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, TeamWorkGroup, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, TenantMessage } from './types';
 import {
   INITIAL_CLIENTS,
   INITIAL_VARIABLES,
@@ -22,6 +23,7 @@ import {
   INITIAL_REPORTS,
   INITIAL_TOURS,
   INITIAL_MEMBERS,
+  INITIAL_TENANT_MESSAGES,
   generateRandomPin,
   formatDateToFR,
   computeProchaineMaintenance,
@@ -65,6 +67,7 @@ import EmargementsTab from './components/EmargementsTab';
 import GmaoCorrectionForm from './components/GmaoCorrectionForm';
 import ImportExportTab from './components/ImportExportTab';
 import { SearchSidePane, SearchSidePaneItem } from './components/SearchSidePane';
+import { CanalMessagesSidePane } from './components/CanalMessagesSidePane';
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from './utils/fsmOptimizer';
 import { loadCttGlobalRules, checkTourCttViolations } from './utils/cttRules';
 import { CttGlobalRules, DEFAULT_CTT_GLOBAL_RULES } from './types';
@@ -1468,6 +1471,77 @@ export default function App() {
   const [gedCategory, setGedCategory] = useState<'Manuel de conformité' | "Fiche de visite d'audit" | 'Autre'>('Manuel de conformité');
   const [gedFileName, setGedFileName] = useState('');
   const [selectedGedFile, setSelectedGedFile] = useState<File | null>(null);
+
+  // Canal Messages state & unread tracker
+  const [tenantMessages, setTenantMessages] = useState<TenantMessage[]>(() => {
+    try {
+      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      const raw = localStorage.getItem(`defib_${activeTenant}_tenant_messages`);
+      if (raw) return JSON.parse(raw);
+      return activeTenant === 'demo' ? INITIAL_TENANT_MESSAGES : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isCanalMessagesOpen, setIsCanalMessagesOpen] = useState(false);
+  const [lastSeenMessageTime, setLastSeenMessageTime] = useState<number>(() => {
+    try {
+      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      const raw = localStorage.getItem(`defib_${activeTenant}_messages_last_seen`);
+      return raw ? Number(raw) : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  const unreadMessagesCount = useMemo(() => {
+    if (isCanalMessagesOpen) return 0;
+    const myEmail = loggedUser?.email?.trim().toLowerCase() || '';
+    return tenantMessages.filter(
+      (m) => m.createdAt > lastSeenMessageTime && m.authorEmail?.trim().toLowerCase() !== myEmail
+    ).length;
+  }, [tenantMessages, lastSeenMessageTime, loggedUser?.email, isCanalMessagesOpen]);
+
+  const handleMessagesRead = () => {
+    const now = Date.now();
+    setLastSeenMessageTime(now);
+    localStorage.setItem(`defib_${tenantId}_messages_last_seen`, String(now));
+  };
+
+  // Real-time listener for tenant messages to update badge & chat across all devices
+  useEffect(() => {
+    if (!tenantId) return;
+    try {
+      const colKey = getCollectionKey('tenantMessages', tenantId);
+      const docRef = doc(db, 'appData', colKey);
+      const unsubscribe = onSnapshot(
+        docRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            let remoteList: TenantMessage[] = [];
+            if (Array.isArray(data?.value)) {
+              remoteList = data.value;
+            } else if (Array.isArray(data)) {
+              remoteList = data;
+            }
+            if (remoteList) {
+              setTenantMessages(remoteList);
+              try {
+                localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
+              } catch (_) {}
+            }
+          }
+        },
+        (error) => {
+          console.warn('Real-time listener on tenantMessages in App:', error);
+        }
+      );
+      return () => unsubscribe();
+    } catch (e) {
+      console.warn('Error setting up onSnapshot for tenantMessages:', e);
+    }
+  }, [tenantId]);
 
 
 
@@ -5026,6 +5100,9 @@ export default function App() {
         const baseEmargements = getLocalTenantValue<EmargementRecord[]>('emargements', []);
         setEmargements(baseEmargements);
 
+        const baseTenantMessages = getLocalTenantValue<TenantMessage[]>('tenant_messages', activeRunTenantId === 'demo' ? INITIAL_TENANT_MESSAGES : []);
+        setTenantMessages(baseTenantMessages);
+
         let cleanedNotifications: AppNotification[] = [];
         const rawNotifs = getLocalTenantValue<AppNotification[]>('notifications', []);
         if (Array.isArray(rawNotifs)) {
@@ -5120,7 +5197,8 @@ export default function App() {
           achats_fournisseurs: JSON.stringify(baseAchats),
           formations: JSON.stringify(baseFormations),
           stagiaires: JSON.stringify(baseStagiaires),
-          emargements: JSON.stringify(baseEmargements)
+          emargements: JSON.stringify(baseEmargements),
+          tenantMessages: JSON.stringify(baseTenantMessages)
         };
 
         loadedTenantIdRef.current = activeRunTenantId;
@@ -5387,6 +5465,7 @@ export default function App() {
         syncTasks.push(syncBackground<EmargementRecord[]>('emargements', 'emargements', setEmargements));
         syncTasks.push(syncBackground<TeamWorkGroup[]>('teamWorkGroups', 'team_work_groups', setTeamWorkGroups));
         syncTasks.push(syncBackground<SuspiciousActivityLog[]>('suspicious_activity_logs', 'suspicious_activity_logs', setSuspiciousActivityLogs));
+        syncTasks.push(syncBackground<TenantMessage[]>('tenantMessages', 'tenant_messages', setTenantMessages));
 
         const currentEmail = loggedUser?.email?.trim().toLowerCase();
         if (currentEmail && tenantId && tenantId !== 'demo') {
@@ -5839,6 +5918,20 @@ export default function App() {
       loadedDataRef.current.achats_fournisseurs = str;
     }
   }, [achatsFournisseurs, isFirebaseLoaded, tenantId, loadedTenantIdState]);
+
+  useEffect(() => {
+    if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
+      const str = JSON.stringify(tenantMessages);
+      if (loadedDataRef.current.tenantMessages === str) return;
+      saveCollectionToFirestore('tenantMessages', tenantMessages, tenantId);
+      try {
+        localStorage.setItem(`defib_${tenantId}_tenant_messages`, str);
+      } catch (e) {
+        console.warn('Storage quota exceeded for tenantMessages:', e);
+      }
+      loadedDataRef.current.tenantMessages = str;
+    }
+  }, [tenantMessages, isFirebaseLoaded, tenantId, loadedTenantIdState]);
 
   const saveGedDocs = (newGed: GedDocument[]) => {
     setGedDocs(newGed);
@@ -7907,6 +8000,34 @@ export default function App() {
             }}
           >
             <span>{t('Paramètres')}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setIsCanalMessagesOpen(true);
+              handleMessagesRead();
+            }}
+            id="sidebar-btn-canal-messages"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl transition-all border-0 cursor-pointer text-white hover:brightness-110 active:scale-[0.98] mt-2.5 relative"
+            style={{
+              boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
+              background: '#3556ec',
+              fontSize: '18px',
+              textTransform: 'none',
+              letterSpacing: 'normal',
+              fontWeight: 'bold',
+              fontFamily: "DefibeoMain, Civilprom, sans-serif"
+            }}
+          >
+            <span>{t('Canal Messages')}</span>
+            {unreadMessagesCount > 0 && (
+              <span
+                className="ml-2 inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 text-[12px] font-extrabold rounded-full bg-rose-500 text-white shadow-xs"
+                style={{ lineHeight: 1 }}
+              >
+                {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+              </span>
+            )}
           </button>
         </div>
       </aside>
@@ -17073,6 +17194,22 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <CanalMessagesSidePane
+        isOpen={isCanalMessagesOpen}
+        onClose={() => setIsCanalMessagesOpen(false)}
+        tenantId={tenantId}
+        currentUser={{
+          email: loggedUser?.email || '',
+          name: loggedUser?.name?.trim() || 
+            members.find(m => m.email && loggedUser?.email && m.email.toLowerCase() === loggedUser.email.toLowerCase())?.name ||
+            companyInfo?.adminName || 
+            'Membre'
+        }}
+        messages={tenantMessages}
+        setMessages={setTenantMessages}
+        onMessagesRead={handleMessagesRead}
+      />
 
       <FeedbackDrawer companyName={companyInfo?.name} />
     </div>

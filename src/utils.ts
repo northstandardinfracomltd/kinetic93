@@ -1,4 +1,4 @@
-import { Defibrillateur, Client, Variable, OtherEquipment, SupportTicket, CommercialDoc, GedDocument, StockRecord, DistributedStockLocation, VeilleRecord, Member } from './types';
+import { Defibrillateur, Client, Variable, OtherEquipment, SupportTicket, CommercialDoc, GedDocument, StockRecord, DistributedStockLocation, VeilleRecord, Member, TenantMessage } from './types';
 
 export const REGIONS_FRANCAISES = [
   'Auvergne-Rhône-Alpes',
@@ -1027,5 +1027,42 @@ export function safeSetLocalStorage(key: string, value: string): void {
     // Gracefully ignore quota limits without spamming
   }
 }
+
+export const INITIAL_TENANT_MESSAGES: TenantMessage[] = [
+  {
+    id: 'msg-demo-1',
+    authorName: 'Sophie Martin',
+    authorEmail: 's.martin@demo.com',
+    tag: 'Planification',
+    content: 'Bonjour l’équipe, le planning des tournées de maintenance FSM de la semaine prochaine a été ajusté.',
+    createdAt: 1790838900000,
+    dateStr: '01/10/2026 à 09:15',
+    tenantId: 'demo',
+    envId: 'demo',
+  },
+  {
+    id: 'msg-demo-2',
+    authorName: 'Marc Laurent',
+    authorEmail: 'm.laurent@demo.com',
+    tag: 'Logistique',
+    content: 'Réception confirmée de 20 nouveaux kits électrodes adultes à l’entrepôt central.',
+    createdAt: 1790847000000,
+    dateStr: '01/10/2026 à 11:30',
+    tenantId: 'demo',
+    envId: 'demo',
+  },
+  {
+    id: 'msg-demo-3',
+    authorName: 'Ronan Roesch',
+    authorEmail: 'roesch.ronan@gmail.com',
+    tag: 'Exploitation',
+    content: 'Bien reçu, les techniciens peuvent passer récupérer leurs réassorts avant de partir en intervention.',
+    createdAt: 1790855100000,
+    dateStr: '01/10/2026 à 13:45',
+    tenantId: 'demo',
+    envId: 'demo',
+  }
+];
+
 
 

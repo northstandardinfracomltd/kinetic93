@@ -188,6 +188,8 @@ export function getCollectionNameAliases(collectionName: string): string[] {
     aliases.push('ctt_model_settings', 'cttModelSettings', 'ctt_settings');
   } else if (collectionName === 'ctt_global_rules' || collectionName === 'cttGlobalRules' || collectionName === 'ctt_rules') {
     aliases.push('ctt_global_rules', 'cttGlobalRules', 'ctt_rules');
+  } else if (collectionName === 'tenantMessages' || collectionName === 'tenant_messages' || collectionName === 'canal_messages') {
+    aliases.push('tenantMessages', 'tenant_messages', 'canal_messages');
   }
   return Array.from(new Set(aliases));
 }

@@ -644,6 +644,19 @@ export interface Memo {
   createdAt: number;
 }
 
+export interface TenantMessage {
+  id: string;
+  authorName: string;
+  authorEmail: string;
+  authorId?: string;
+  tag: string;
+  content: string;
+  createdAt: number;
+  dateStr: string;
+  tenantId?: string;
+  envId?: string;
+}
+
 export interface OtherEquipment {
   id: string;
   identifiant: string;
