@@ -134,7 +134,7 @@ import {
   Info,
   Minimize2,
   Maximize2,
-  BarChart3,
+  ChartNoAxesColumn,
   AlertTriangle
 } from 'lucide-react';
 
@@ -878,6 +878,12 @@ export default function App() {
   // Bulk selection of missions
   const [selectedFsmMissionIds, setSelectedFsmMissionIds] = useState<string[]>([]);
   const [isFsmBulkTourDropdownOpen, setIsFsmBulkTourDropdownOpen] = useState<boolean>(false);
+
+  // Auto-deselect missions when navigating to another tour or switching tab
+  useEffect(() => {
+    setSelectedFsmMissionIds([]);
+    setIsFsmBulkTourDropdownOpen(false);
+  }, [fsmDateFilter, fsmLastSelectedTourId, activeTab]);
 
   // FSM Stats hidden state (saved in localStorage)
   const [isFsmStatsHidden, setIsFsmStatsHidden] = useState<boolean>(() => {
@@ -8502,11 +8508,11 @@ export default function App() {
                     border-radius: 9999px !important;
                     -webkit-border-radius: 9999px !important;
                     -moz-border-radius: 9999px !important;
-                    padding: 10px 20px !important;
+                    padding: 0 20px !important;
                     font-size: 15px !important;
                     font-weight: 500 !important;
-                    height: 42px !important;
-                    line-height: 20px !important;
+                    height: 44px !important;
+                    line-height: 44px !important;
                     border: 1px solid rgb(218, 218, 218) !important;
                     background-color: #ffffff !important;
                     color: #000000 !important;
@@ -8519,7 +8525,14 @@ export default function App() {
                     border-color: #fa53d5 !important;
                     box-shadow: 0 0 0 2.5px rgba(250, 83, 213, 0.35) !important;
                   }
-                  #fsm-stats-wrapper,
+                  #fsm-stats-wrapper {
+                    width: 100% !important;
+                    max-width: 98% !important;
+                    margin: 0 auto !important;
+                    background: transparent !important;
+                    background-color: transparent !important;
+                    box-sizing: border-box !important;
+                  }
                   #fsm-stats-container {
                     width: 100% !important;
                     max-width: 100% !important;
@@ -8875,27 +8888,6 @@ export default function App() {
                           className="hover:opacity-90 transition-opacity"
                         >
                           Annuler et supprimer l’intervention
-                        </button>
-
-                        {/* Désélectionner */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedFsmMissionIds([]);
-                            setIsFsmBulkTourDropdownOpen(false);
-                          }}
-                          style={{
-                            backgroundColor: 'transparent',
-                            color: '#000000',
-                            border: 'none',
-                            padding: '8px 12px',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                          }}
-                          className="hover:opacity-75 transition-colors font-sans"
-                        >
-                          Désélectionner
                         </button>
                       </div>
                     </div>
@@ -9624,7 +9616,8 @@ export default function App() {
                   className="pt-4 select-none flex flex-col gap-2 w-full"
                   style={{
                     width: '100%',
-                    maxWidth: '100%',
+                    maxWidth: '98%',
+                    margin: '0 auto',
                     paddingLeft: 0,
                     paddingRight: 0,
                     backgroundColor: 'transparent',
@@ -9807,11 +9800,11 @@ export default function App() {
                       }}
                       className="hover:opacity-80 transition-all select-none cursor-pointer"
                       id="btn-toggle-fsm-stats"
-                      title={isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer")}
+                      title={isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer les statistiques")}
                     >
-                      <BarChart3 size={10} className="shrink-0 text-black" color="#000000" />
+                      <ChartNoAxesColumn size={10} className="shrink-0 text-black" color="#000000" />
                       <span style={{ color: '#000000' }}>
-                        {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer")}
+                        {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer les statistiques")}
                       </span>
                     </button>
                   </div>
@@ -9894,7 +9887,12 @@ export default function App() {
                         }}
                         style={{
                           borderRadius: '1000px',
-                          padding: '10px 20px',
+                          padding: '0 20px',
+                          height: '44px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxSizing: 'border-box',
                           fontSize: '15px',
                           fontWeight: 500,
                           cursor: 'pointer',
@@ -9949,7 +9947,7 @@ export default function App() {
                                 borderRadius: '9999px',
                                 WebkitBorderRadius: '9999px',
                                 MozBorderRadius: '9999px',
-                                padding: '10px 20px',
+                                padding: '0 20px',
                                 fontSize: '15px',
                                 fontWeight: 500,
                                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -9957,7 +9955,8 @@ export default function App() {
                                 color: '#000000',
                                 cursor: 'pointer',
                                 outline: 'none',
-                                height: '42px',
+                                height: '44px',
+                                lineHeight: '44px',
                                 boxSizing: 'border-box',
                               }}
                               className="w-full truncate focus:outline-none"

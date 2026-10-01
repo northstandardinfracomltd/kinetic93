@@ -1385,6 +1385,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Sélectionner le mois": "Select month",
     "Taux de complétion des missions :": "Mission completion rate:",
     "Masquer": "Hide",
+    "Masquer les statistiques": "Hide statistics",
     "Afficher les statistiques": "Show statistics"
   },
   Deutsch: {
@@ -2220,6 +2221,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Sélectionner le mois": "Monat auswählen",
     "Taux de complétion des missions :": "Missionsabschlussrate:",
     "Masquer": "Ausblenden",
+    "Masquer les statistiques": "Statistiken ausblenden",
     "Afficher les statistiques": "Statistiken anzeigen"
   },
   Português: {
@@ -3056,6 +3058,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Sélectionner le mois": "Selecionar o mês",
     "Taux de complétion des missions :": "Taxa de conclusão das missões:",
     "Masquer": "Ocultar",
+    "Masquer les statistiques": "Ocultar estatísticas",
     "Afficher les statistiques": "Mostrar estatísticas"
   },
   Español: {
@@ -3892,6 +3895,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Sélectionner le mois": "Seleccionar el mes",
     "Taux de complétion des missions :": "Tasa de finalización de misiones:",
     "Masquer": "Ocultar",
+    "Masquer les statistiques": "Ocultar estadísticas",
     "Afficher les statistiques": "Mostrar estadísticas"
   }
 };

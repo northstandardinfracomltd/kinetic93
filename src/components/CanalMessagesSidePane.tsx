@@ -38,8 +38,8 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   setMessages,
   onMessagesRead,
 }) => {
-  const [selectedFilterTag, setSelectedFilterTag] = useState<string | null>(null);
-  const [selectedInputTag, setSelectedInputTag] = useState<CanalTagName>('Exploitation');
+  // Par défaut, le filtre est positionné sur 'Exploitation' (la gélule Tous ayant été supprimée)
+  const [selectedFilterTag, setSelectedFilterTag] = useState<CanalTagName>('Exploitation');
   const [messageInput, setMessageInput] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: string } | null>(null);
 
@@ -123,7 +123,6 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
 
   // Filtered messages
   const displayedMessages = useMemo(() => {
-    if (!selectedFilterTag) return messages;
     return messages.filter((m) => m.tag === selectedFilterTag);
   }, [messages, selectedFilterTag]);
 
@@ -156,11 +155,12 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       minute: '2-digit',
     })}`;
 
+    // Le message est automatiquement envoyé dans le tag de l'onglet actif (ex: Exploitation)
     const newMsg: TenantMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       authorName: currentUser.name || 'Membre',
       authorEmail: currentUser.email || '',
-      tag: selectedInputTag,
+      tag: selectedFilterTag,
       content: text,
       createdAt: Date.now(),
       dateStr: dateFormatted,
@@ -216,8 +216,6 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
 
   if (!isOpen || typeof document === 'undefined') return null;
 
-  const currentInputTagObj = getTagInfo(selectedInputTag);
-
   return createPortal(
     <div
       className="fixed inset-0 flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn z-[99999]"
@@ -243,22 +241,28 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
         }}
       >
-        {/* FLOATING TAGS BAR AT THE VERY TOP (WITH FERMER BUTTON PRECEDING "TOUS") */}
+        {/* TOP TAGS BAR (SANS BACKGROUND, SANS BORDER-BOTTOM, SANS BOX-SHADOW) */}
         <div
-          className="px-4 py-3 bg-white/95 backdrop-blur-xs shrink-0 shadow-xs z-10"
-          style={{ borderBottom: '1px solid #dadada' }}
+          className="px-4 py-3 shrink-0 z-10"
+          style={{
+            background: 'transparent',
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderBottom: 'none',
+            boxShadow: 'none',
+          }}
         >
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-            {/* Bouton type blanc "Fermer" pour fermer la side pane (font-size 18px) */}
+            {/* Bouton Fermer : background noir et texte blanc (font-size 18px) */}
             <button
               type="button"
               onClick={onClose}
               id="btn-close-canal-sidepane"
-              className="px-4 py-1.5 rounded-full font-bold shrink-0 transition-all cursor-pointer shadow-2xs hover:bg-slate-50 active:scale-[0.98]"
+              className="px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer shadow-xs hover:opacity-90 active:scale-[0.98]"
               style={{
-                backgroundColor: '#ffffff',
-                color: '#000000',
-                border: '1px solid #dadada',
+                backgroundColor: '#000000',
+                color: '#ffffff',
+                border: 'none',
                 fontSize: '18px',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
               }}
@@ -266,23 +270,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               {t('Fermer')}
             </button>
 
-            {/* Filter "Tous" (font-size 16px, sans border) */}
-            <button
-              type="button"
-              onClick={() => setSelectedFilterTag(null)}
-              className="px-3.5 py-1.5 rounded-full shrink-0 transition-all cursor-pointer font-medium"
-              style={{
-                backgroundColor: selectedFilterTag === null ? '#000000' : '#f1f5f9',
-                color: selectedFilterTag === null ? '#ffffff' : '#000000',
-                border: 'none',
-                fontSize: '16px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-              }}
-            >
-              {t('Tous')} ({messages.length})
-            </button>
-
-            {/* 8 Required Tags (font-size 16px, sans border) */}
+            {/* 8 Required Tags (font-size 18px, sans border, pas de gélule Tous) */}
             {CANAL_TAGS.map((tag) => {
               const isSelected = selectedFilterTag === tag.name;
               const count = messages.filter((m) => m.tag === tag.name).length;
@@ -290,27 +278,33 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 <button
                   key={tag.name}
                   type="button"
-                  onClick={() => setSelectedFilterTag(isSelected ? null : tag.name)}
-                  className="px-3.5 py-1.5 rounded-full shrink-0 transition-all cursor-pointer flex items-center gap-2 font-medium"
+                  onClick={() => setSelectedFilterTag(tag.name)}
+                  className="px-4 py-2 rounded-full shrink-0 transition-all cursor-pointer flex items-center gap-2 font-medium"
                   style={{
                     backgroundColor: isSelected ? tag.dot : tag.bg,
                     color: isSelected ? '#ffffff' : tag.text,
                     border: 'none',
-                    fontSize: '16px',
-                    boxShadow: isSelected ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
+                    fontSize: '18px',
+                    boxShadow: isSelected ? '0 2px 4px rgba(0,0,0,0.15)' : 'none',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
                 >
                   <span
-                    className="w-2 h-2 rounded-full shrink-0"
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
                     style={{ backgroundColor: isSelected ? '#ffffff' : tag.dot }}
                   />
                   <span>{tag.name}</span>
                   {count > 0 && (
                     <span
-                      className="ml-0.5 text-xs px-1.5 py-0.2 rounded-full"
+                      className="inline-flex items-center justify-center rounded-full shrink-0 font-bold"
                       style={{
-                        backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)',
+                        backgroundColor: 'rgb(163, 20, 20)',
+                        color: '#ffffff',
+                        fontSize: '14px',
+                        width: '25px',
+                        height: '25px',
+                        padding: '3.5px',
+                        lineHeight: 1,
                       }}
                     >
                       {count}
@@ -382,48 +376,22 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* BOTTOM FULL-WIDTH INPUT BAR */}
+        {/* BOTTOM INPUT BAR FLOATING (SANS BACKGROUND ET SANS BORDER-TOP DERRIÈRE) */}
         <div
-          className="bg-white p-3 sm:p-4 shrink-0"
-          style={{ borderTop: '1px solid #dadada' }}
+          className="p-3 sm:p-4 shrink-0"
+          style={{
+            background: 'transparent',
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderTop: 'none',
+          }}
         >
-          <form onSubmit={handleSendMessage} className="space-y-2">
+          <form onSubmit={handleSendMessage}>
             <div
-              className="flex items-center gap-2 bg-[#f8fafc] rounded-2xl p-2 pl-3 transition-all"
+              className="flex items-center gap-2 bg-white rounded-2xl p-2 pl-4 transition-all shadow-lg"
               style={{ border: '1px solid #dadada' }}
             >
-              {/* Tag choice: Gélule à gauche sans flèche, sans border, font-size 16px, dropdown system */}
-              <div className="relative shrink-0 flex items-center">
-                <select
-                  value={selectedInputTag}
-                  onChange={(e) => setSelectedInputTag(e.target.value as CanalTagName)}
-                  className="outline-none cursor-pointer font-semibold rounded-full px-3.5 py-1.5 transition-all text-center"
-                  style={{
-                    fontSize: '16px',
-                    backgroundColor: currentInputTagObj.bg,
-                    color: currentInputTagObj.text,
-                    border: 'none',
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  }}
-                  title={t('Choisir le tag')}
-                >
-                  {CANAL_TAGS.map((tItem) => (
-                    <option
-                      key={tItem.name}
-                      value={tItem.name}
-                      style={{
-                        color: '#000000',
-                        backgroundColor: '#ffffff',
-                        fontSize: '16px',
-                      }}
-                    >
-                      {tItem.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Message textarea: auto-height, max 350 chars, font-size 16px */}
+              {/* Message textarea: auto-height, max 350 chars, font-size 18px, pas de sélecteur de tag */}
               <textarea
                 ref={textareaRef}
                 rows={1}
@@ -443,9 +411,9 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 placeholder={t('Écrivez votre message pour l’équipe...')}
                 className="flex-1 bg-transparent border-0 outline-none text-black px-2 py-1 placeholder:text-slate-400 resize-none overflow-y-auto"
                 style={{
-                  fontSize: '16px',
+                  fontSize: '18px',
                   lineHeight: '1.4',
-                  minHeight: '40px',
+                  minHeight: '44px',
                   maxHeight: '180px',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 }}
