@@ -8359,9 +8359,14 @@ export default function App() {
             const selectedTourIdToDisplay = activeDateFilter === 'A trier'
               ? (fsmLastSelectedTourId || (scheduledTours[0] ? scheduledTours[0].id : defaultTourId))
               : activeDateFilter;
-            const displayedTour = scheduledTours.find((t: any) => t.id === selectedTourIdToDisplay) || closestTour || scheduledTours[0];
+            const displayedTour = activeDateFilter === 'none'
+              ? null
+              : (scheduledTours.find((t: any) => t.id === selectedTourIdToDisplay) || closestTour || scheduledTours[0]);
 
             const filteredTours = fsmTours.filter((tour) => {
+              if (activeDateFilter === 'none') {
+                return false;
+              }
               if (activeDateFilter !== 'Tous') {
                 if (activeDateFilter === 'A trier') {
                   if (!(tour.id === 'a-trier' || tour.startDate === 'A trier')) {
@@ -9927,48 +9932,68 @@ export default function App() {
                       id="fsm-dates-pills"
                       style={{ overflow: 'visible' }}
                     >
-                      <button
-                        type="button"
-                        id="btn-fsm-to-sort-adv"
-                        onClick={() => {
-                          if (activeDateFilter === 'A trier') {
-                            // Déclic : revenir sur la tournée sélectionnée
-                            const returnTourId = fsmLastSelectedTourId || (displayedTour ? displayedTour.id : (scheduledTours[0] ? scheduledTours[0].id : 'Tous'));
-                            setFsmDateFilter(returnTourId);
-                          } else {
-                            if (activeDateFilter && activeDateFilter !== 'A trier' && activeDateFilter !== 'Tous') {
-                              setFsmLastSelectedTourId(activeDateFilter);
-                            } else if (displayedTour?.id) {
-                              setFsmLastSelectedTourId(displayedTour.id);
-                            }
-                            setFsmDateFilter('A trier');
-                          }
-                        }}
-                        style={{
-                          borderRadius: '1000px',
-                          padding: '0 20px',
-                          height: '44px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxSizing: 'border-box',
-                          fontSize: '15px',
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          backgroundColor: activeDateFilter === 'A trier' ? '#fa53d5' : '#ffffff',
-                          color: activeDateFilter === 'A trier' ? '#ffffff' : '#000000',
-                          border: activeDateFilter === 'A trier' ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
-                          transition: 'all 0.15s ease',
-                          whiteSpace: 'nowrap',
-                          flexShrink: 0
-                        }}
-                        className="transition-all flex-shrink-0"
-                      >
-                        {translate("À trier / Ordres ADV")}
-                      </button>
+                      {(() => {
+                        const aTrierTour = fsmTours.find((t: any) => t.id === 'a-trier');
+                        const aTrierCount = aTrierTour?.missions?.length || 0;
 
-                      {scheduledTours.length > 0 && displayedTour && (
+                        return (
+                          <button
+                            type="button"
+                            id="btn-fsm-to-sort-adv"
+                            onClick={() => {
+                              if (activeDateFilter === 'A trier') {
+                                const returnTourId = fsmLastSelectedTourId || (displayedTour ? displayedTour.id : (scheduledTours[0] ? scheduledTours[0].id : 'none'));
+                                setFsmDateFilter(returnTourId);
+                              } else {
+                                if (activeDateFilter && activeDateFilter !== 'A trier' && activeDateFilter !== 'Tous' && activeDateFilter !== 'none') {
+                                  setFsmLastSelectedTourId(activeDateFilter);
+                                } else if (displayedTour?.id && displayedTour.id !== 'a-trier') {
+                                  setFsmLastSelectedTourId(displayedTour.id);
+                                }
+                                setFsmDateFilter('A trier');
+                              }
+                            }}
+                            style={{
+                              borderRadius: '1000px',
+                              padding: '0 20px',
+                              height: '44px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxSizing: 'border-box',
+                              fontSize: '15px',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              backgroundColor: activeDateFilter === 'A trier' ? '#fa53d5' : '#ffffff',
+                              color: activeDateFilter === 'A trier' ? '#ffffff' : '#000000',
+                              border: activeDateFilter === 'A trier' ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
+                              transition: 'all 0.15s ease',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0
+                            }}
+                            className="transition-all flex-shrink-0"
+                          >
+                            <span>{translate("À trier / Ordres ADV")}</span>
+                            <span
+                              className="inline-flex items-center justify-center rounded-full shrink-0 font-bold ml-2.5"
+                              style={{
+                                backgroundColor: '#3556ec',
+                                color: '#ffffff',
+                                fontSize: '12px',
+                                minWidth: '22px',
+                                height: '22px',
+                                padding: '0 6px',
+                                lineHeight: 1,
+                              }}
+                            >
+                              {aTrierCount}
+                            </span>
+                          </button>
+                        );
+                      })()}
+
+                      {scheduledTours.length > 0 && (
                         <div className="flex-1 min-w-0 flex flex-col justify-end">
                           <div className="flex items-center justify-between mb-1">
                             <label 
@@ -9990,11 +10015,16 @@ export default function App() {
                           <div className="relative w-full">
                             <select
                               id="select-fsm-tour-manage"
-                              value={activeDateFilter === 'A trier' ? (fsmLastSelectedTourId || displayedTour.id) : activeDateFilter}
+                              value={
+                                activeDateFilter === 'A trier'
+                                  ? (fsmLastSelectedTourId && scheduledTours.some((st: any) => st.id === fsmLastSelectedTourId) ? fsmLastSelectedTourId : 'none')
+                                  : (scheduledTours.some((st: any) => st.id === activeDateFilter) ? activeDateFilter : 'none')
+                              }
                               onChange={(e) => {
-                                if (e.target.value) {
-                                  setFsmLastSelectedTourId(e.target.value);
-                                  setFsmDateFilter(e.target.value);
+                                const val = e.target.value;
+                                setFsmDateFilter(val);
+                                if (val && val !== 'none') {
+                                  setFsmLastSelectedTourId(val);
                                 }
                               }}
                               style={{
@@ -10020,6 +10050,9 @@ export default function App() {
                               }}
                               className="w-full truncate focus:outline-none"
                             >
+                              <option value="none">
+                                {translate("Aucune tournée sélectionnée")}
+                              </option>
                             {(() => {
                               const STATUS_ORDER = ['Brouillon', 'À faire', 'En cours', 'Effectué', 'Terminé'];
                               const grouped = new Map<string, any[]>();
@@ -10072,6 +10105,11 @@ export default function App() {
 
                 {fsmTours.length === 0 ? (
                   <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
+                ) : activeDateFilter === 'none' ? (
+                  <div className="p-16 text-center font-sans lg:py-24 bg-white rounded-2xl border border-neutral-200 m-4">
+                    <p className="text-lg font-bold text-black mb-1">{translate("Aucune tournée sélectionnée")}</p>
+                    <p className="text-sm text-neutral-500">{translate("Veuillez sélectionner une tournée dans le menu déroulant ci-dessus.")}</p>
+                  </div>
                 ) : filteredTours.length === 0 ? (
                   <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                 ) : (
