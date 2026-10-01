@@ -78,9 +78,9 @@ function getFrenchHolidaysSet(year: number): Set<string> {
   return holidays;
 }
 
-function parseToIso(dateStr?: string): string {
+function parseToIso(dateStr?: any): string {
   if (!dateStr) return '';
-  const str = dateStr.trim();
+  const str = String(dateStr).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
   if (str.includes('/')) {
     const parts = str.split('/');
@@ -100,9 +100,11 @@ function parseToIso(dateStr?: string): string {
   return str;
 }
 
-function parseTimeToSeconds(tStr?: string): number {
-  if (!tStr) return 0;
-  const str = tStr.trim();
+function parseTimeToSeconds(tStr?: any): number {
+  if (tStr === null || tStr === undefined || tStr === '') return 0;
+  if (typeof tStr === 'number') return isNaN(tStr) ? 0 : tStr * 60;
+  const str = String(tStr).trim();
+  if (!str) return 0;
   if (str.includes(':')) {
     const parts = str.split(':').map((p) => parseInt(p, 10) || 0);
     if (parts.length >= 3) {
@@ -194,8 +196,8 @@ export function getMonthlyWorkingDaysData(
 ): MonthlyTableData {
   const monthLabel = `${FRENCH_MONTH_NAMES[monthIndex]} ${year}`;
   const holidays = getFrenchHolidaysSet(year);
-  const member = members.find(
-    (m) => m.name === techName || m.name?.toLowerCase() === techName.toLowerCase()
+  const member = (Array.isArray(members) ? members : []).find(
+    (m) => m && (m.name === techName || String(m.name || '').toLowerCase() === String(techName || '').toLowerCase())
   );
 
   const headers = [
@@ -974,10 +976,11 @@ function hasPointageInMonth(
   monthIndex: number,
   pointages: PointageLog[]
 ): boolean {
-  if (!pointages || pointages.length === 0) return false;
+  if (!pointages || !Array.isArray(pointages) || pointages.length === 0 || !techName) return false;
+  const safeTechName = String(techName).trim().toLowerCase();
   return pointages.some((p) => {
-    if (!p.techName) return false;
-    if (p.techName !== techName && p.techName.toLowerCase() !== techName.toLowerCase()) return false;
+    if (!p || !p.techName) return false;
+    if (String(p.techName).trim().toLowerCase() !== safeTechName) return false;
     const iso = parseToIso(p.startDate);
     if (!iso || iso.length < 7) return false;
     const parts = iso.split('-');
@@ -1001,7 +1004,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.slice(0, 5).map((s) => ({
+          return parsed.slice(0, 5).filter(Boolean).map((s) => ({
             ...s,
             setting2: s.setting2 || (!s.setting2 && !s.setting3),
             setting3: s.setting2 ? false : s.setting3,
@@ -1033,7 +1036,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           try {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && isMounted) {
-              setCttSettings(parsed.slice(0, 5).map((s) => ({
+              setCttSettings(parsed.slice(0, 5).filter(Boolean).map((s) => ({
                 ...s,
                 setting2: s.setting2 || (!s.setting2 && !s.setting3),
                 setting3: s.setting2 ? false : s.setting3,
@@ -1043,7 +1046,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
         }
         const remote = await fetchCollectionFromFirestore<CttModelSetting[]>('ctt_model_settings');
         if (isMounted && remote && Array.isArray(remote)) {
-          const sanitized = remote.slice(0, 5).map((s) => ({
+          const sanitized = remote.slice(0, 5).filter(Boolean).map((s) => ({
             ...s,
             setting2: s.setting2 || (!s.setting2 && !s.setting3),
             setting3: s.setting2 ? false : s.setting3,
@@ -1279,12 +1282,14 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
   };
 
   // Extract technician list
-  const techNamesFromMembers = (members || [])
-    .filter((m) => m.role === 'Technicien' || m.role?.toLowerCase().includes('tech'))
-    .map((m) => m.name)
-    .filter(Boolean);
+  const techNamesFromMembers = (Array.isArray(members) ? members : [])
+    .filter((m) => m && (m.role === 'Technicien' || (m.role || '').toLowerCase().includes('tech')))
+    .map((m) => m && m.name)
+    .filter((n): n is string => Boolean(n));
 
-  const techNamesFromPointages = (pointages || []).map((p) => p.techName).filter(Boolean);
+  const techNamesFromPointages = (Array.isArray(pointages) ? pointages : [])
+    .map((p) => p && p.techName)
+    .filter((n): n is string => Boolean(n));
 
   const allTechnicians = Array.from(
     new Set([...techNamesFromMembers, ...techNamesFromPointages])
@@ -1296,11 +1301,11 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
       ? allTechnicians
       : Array.from(
           new Set([
-            ...(members || []).map((m) => m.name),
-            ...(pointages || []).map((p) => p.techName),
+            ...(Array.isArray(members) ? members : []).map((m) => m && m.name),
+            ...(Array.isArray(pointages) ? pointages : []).map((p) => p && p.techName),
           ])
         )
-          .filter(Boolean)
+          .filter((n): n is string => Boolean(n))
           .sort();
 
   // Generate 12 recent months up to current month plus any additional months from pointages
@@ -1316,7 +1321,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
     if (monthSet.has(key)) return;
     monthSet.add(key);
 
-    const monthLabel = `${FRENCH_MONTH_NAMES[mIdx]} ${y}`;
+    const monthLabel = `${FRENCH_MONTH_NAMES[mIdx] || 'Mois'} ${y}`;
     // Achèvement indicatif: 1st day of month + 1
     const nextMonth = new Date(y, mIdx + 1, 1);
     const d = String(nextMonth.getDate()).padStart(2, '0');
@@ -1333,7 +1338,8 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
   }
 
   // Add months from pointages
-  (pointages || []).forEach((p) => {
+  (Array.isArray(pointages) ? pointages : []).forEach((p) => {
+    if (!p) return;
     const iso = parseToIso(p.startDate);
     if (iso && iso.length >= 7) {
       const parts = iso.split('-');
@@ -1360,6 +1366,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
   const techToUse = selectedTechFilter === 'Tous' ? technicians : [selectedTechFilter];
 
   techToUse.forEach((tech) => {
+    if (!tech) return;
     monthList.forEach((ml) => {
       if (hasPointageInMonth(tech, ml.year, ml.monthIndex, pointages)) {
         rows.push({

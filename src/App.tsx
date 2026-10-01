@@ -56,6 +56,7 @@ import GedTab from './components/GedTab';
 import AchatsFournisseursTab from './components/AchatsFournisseursTab';
 import TicketsCaisseTab from './components/TicketsCaisseTab';
 import TempsTab from './components/TempsTab';
+import ErrorBoundary from './components/ErrorBoundary';
 import LocalisationsTab from './components/LocalisationsTab';
 import SatisfactionTab from './components/SatisfactionTab';
 import VeillesTab from './components/VeillesTab';
@@ -2524,7 +2525,7 @@ export default function App() {
     // Log suspicious activity Event G: delete tour
     try {
       const tourName = tour.title || tour.id || 'Tournée';
-      logDeleteTour(tenantIdState, tourName, loggedUser?.name).catch(() => {});
+      logDeleteTour(tenantId, tourName, loggedUser?.name).catch(() => {});
     } catch (_) {}
 
     // Conserver en mémoire les émissions préservées (CO2) si la tournée a été faite / effectuée
@@ -7155,7 +7156,7 @@ export default function App() {
     const target = clients.find((c) => c.id === id);
     if (target) {
       const compName = target.denomination || target.siret || 'Client';
-      logDeleteClient(tenantIdState, compName, loggedUser?.name).catch(() => {});
+      logDeleteClient(tenantId, compName, loggedUser?.name).catch(() => {});
     }
 
     saveClients(clients.filter((c) => c.id !== id));
@@ -7276,7 +7277,7 @@ export default function App() {
     if (target) {
       const identifiant = target.identifiant || id;
       const materialType = variables.find(v => v.id === target.modeleId)?.nom || target.modeleId || 'Défibrillateur';
-      logDeleteDefib(tenantIdState, identifiant, materialType, loggedUser?.name).catch(() => {});
+      logDeleteDefib(tenantId, identifiant, materialType, loggedUser?.name).catch(() => {});
     }
     saveDefibs(defibrillateurs.filter((df) => df.id !== id));
   };
@@ -7292,7 +7293,7 @@ export default function App() {
       if (target) {
         const identifiant = target.identifiant || id;
         const materialType = variables.find(v => v.id === target.modeleId)?.nom || target.modeleId || 'Défibrillateur';
-        logDeleteDefib(tenantIdState, identifiant, materialType, loggedUser?.name).catch(() => {});
+        logDeleteDefib(tenantId, identifiant, materialType, loggedUser?.name).catch(() => {});
       }
     }
     saveDefibs(defibrillateurs.filter((df) => !ids.includes(df.id)));
@@ -7304,7 +7305,7 @@ export default function App() {
       return;
     }
     // Log suspicious activity Event B: bulk edit defibs
-    logBulkEditDefib(tenantIdState, loggedUser?.name, undefined, ids.length).catch(() => {});
+    logBulkEditDefib(tenantId, loggedUser?.name, undefined, ids.length).catch(() => {});
 
     const updatedList = defibrillateurs.map((df) => {
       if (ids.includes(df.id)) {
@@ -16876,12 +16877,14 @@ export default function App() {
           )}
 
           {activeTab === 'temps' && (
-            <TempsTab
-              pointages={pointages}
-              members={members}
-              onUpdatePointages={(updated) => savePointages(updated)}
-              companyInfo={companyInfo}
-            />
+            <ErrorBoundary fallbackMessage="Impossible d'afficher le module Temps.">
+              <TempsTab
+                pointages={pointages}
+                members={members}
+                onUpdatePointages={(updated) => savePointages(updated)}
+                companyInfo={companyInfo}
+              />
+            </ErrorBoundary>
           )}
 
           {/* ======================================= */}

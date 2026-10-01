@@ -651,7 +651,7 @@ export default function AutresMaterielsTab({
     if (target) {
       const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
       const identifiant = target.identifiant || id;
-      const serialNumber = target.numeroSerie || 'Sans numéro de série';
+      const serialNumber = (target as any).numeroSerie || target.identifiant || 'Sans numéro de série';
       logDeleteOtherEquipment(activeTenant, identifiant, serialNumber).catch(() => {});
     }
     const updated = otherEquipments.filter(item => item.id !== id);

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import ErrorBoundary from "./ErrorBoundary";
 import {
   Heart,
   ChevronLeft,
@@ -90,9 +91,10 @@ import {
 
 
 // Helper functions for French date <-> ISO date picker compatibility
-const getIsoDate = (dateStr: string) => {
+const getIsoDate = (dateStr: any) => {
   if (!dateStr) return "";
-  const parts = dateStr.includes("/") ? dateStr.split("/") : dateStr.split("-");
+  const s = String(dateStr).trim();
+  const parts = s.includes("/") ? s.split("/") : s.split("-");
   if (parts.length === 3) {
     if (parts[0].length === 4) {
       return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
@@ -103,16 +105,17 @@ const getIsoDate = (dateStr: string) => {
       return `${y}-${m}-${d}`;
     }
   }
-  return dateStr;
+  return s;
 };
 
-const getFrenchDate = (isoDate: string) => {
+const getFrenchDate = (isoDate: any) => {
   if (!isoDate) return "";
-  const parts = isoDate.split("-");
+  const s = String(isoDate).trim();
+  const parts = s.split("-");
   if (parts.length === 3) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
-  return isoDate;
+  return s;
 };
 
 const CODE39_MAP: Record<string, string> = {
@@ -4525,9 +4528,11 @@ export default function PublicPortal({
     }
   };
 
-  const timeToMins = (tStr?: string): number => {
-    if (!tStr) return 0;
-    const str = tStr.trim();
+  const timeToMins = (tStr?: any): number => {
+    if (tStr === null || tStr === undefined || tStr === "") return 0;
+    if (typeof tStr === "number") return isNaN(tStr) ? 0 : tStr;
+    const str = String(tStr).trim();
+    if (!str) return 0;
     if (str.includes(":")) {
       const parts = str.split(":").map((p) => parseInt(p, 10));
       if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
@@ -4542,10 +4547,11 @@ export default function PublicPortal({
     return isNaN(val) ? 0 : val;
   };
 
-  const minsToHHMM = (totalMins: number): string => {
-    if (isNaN(totalMins) || totalMins <= 0) return "00:00";
-    const h = String(Math.floor(totalMins / 60)).padStart(2, "0");
-    const m = String(Math.floor(totalMins % 60)).padStart(2, "0");
+  const minsToHHMM = (totalMins: any): string => {
+    const num = Number(totalMins);
+    if (isNaN(num) || num <= 0) return "00:00";
+    const h = String(Math.floor(num / 60)).padStart(2, "0");
+    const m = String(Math.floor(num % 60)).padStart(2, "0");
     return `${h}:${m}`;
   };
 
@@ -11070,10 +11076,11 @@ export default function PublicPortal({
 
               {/* ----------------- TAB 3: TEMPS ----------------- */}
               {activeTab === "temps" && (
-                <div
-                  className="space-y-6 pb-16 animate-fadeIn"
-                  id="tab-temps-screen"
-                >
+                <ErrorBoundary fallbackMessage="Impossible d'afficher l'onglet Temps dans la webapp.">
+                  <div
+                    className="space-y-6 pb-16 animate-fadeIn"
+                    id="tab-temps-screen"
+                  >
                   <style>{`
                     #tab-temps-screen input,
                     #tab-temps-screen textarea,
@@ -11113,9 +11120,11 @@ export default function PublicPortal({
 
                   {/* Period control button (PLACED FIRST) */}
                   {(() => {
-                    const activePointage = pointages.find(
+                    const safeAllPointages = Array.isArray(pointages) ? pointages.filter(Boolean) : [];
+                    const currentTechName = authenticatedUser?.name || "";
+                    const activePointage = safeAllPointages.find(
                       (p) =>
-                        p.isOngoing && p.techName === authenticatedUser?.name,
+                        p && p.isOngoing && p.techName && String(p.techName).trim().toLowerCase() === currentTechName.trim().toLowerCase(),
                     );
                     const isTracking = !!activePointage;
 
@@ -11222,7 +11231,9 @@ export default function PublicPortal({
                       pointages: any[];
                     }
 
-                    const techPointages = pointages.filter((p) => p.techName === authenticatedUser?.name);
+                    const safeAllPointages = Array.isArray(pointages) ? pointages.filter(Boolean) : [];
+                    const currentTechName = authenticatedUser?.name || "";
+                    const techPointages = safeAllPointages.filter((p) => p && p.techName && String(p.techName).trim().toLowerCase() === currentTechName.trim().toLowerCase());
                     const weeksMap = new Map<string, TechWeekVolume>();
 
                     techPointages.forEach((p) => {
@@ -11254,6 +11265,7 @@ export default function PublicPortal({
                       String(currentTime.getMinutes()).padStart(2, "0");
 
                     weekPts.forEach((p) => {
+                      if (!p) return;
                       const startTime = p.startTime || "00:00";
                       const endTime = p.isOngoing ? p.endTime || liveHHMM : p.endTime || "00:00";
                       const sMins = timeToMins(startTime);
@@ -11264,22 +11276,24 @@ export default function PublicPortal({
                       const repas = timeToMins(p.tempsRepas);
                       let effectifMins = Math.max(0, ampMins - tm - ts - repas);
 
-                      if (cttModelSettings && cttModelSettings.length > 0) {
+                      if (Array.isArray(cttModelSettings) && cttModelSettings.length > 0) {
                         const pIso = getIsoDate(p.startDate);
                         const parts = pIso.split("-").map(Number);
-                        if (parts.length === 3) {
+                        if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
                           const dObj = new Date(parts[0], parts[1] - 1, parts[2]);
                           const dayLabel = DAY_KEYS[dObj.getDay()];
-                          cttModelSettings.forEach((s) => {
-                            if (!s.setting1 || !s.setting1.includes(dayLabel)) return;
-                            const mins = Math.min(500, Math.max(1, typeof s.setting5 === 'number' && !isNaN(s.setting5) ? s.setting5 : parseInt(String(s.setting5), 10) || 0));
-                            if (mins <= 0) return;
-                            if (s.setting2) {
-                              effectifMins = Math.max(0, effectifMins - mins);
-                            } else if (s.setting3) {
-                              effectifMins = effectifMins + mins;
-                            }
-                          });
+                          if (dayLabel) {
+                            cttModelSettings.filter(Boolean).forEach((s) => {
+                              if (!s || !Array.isArray(s.setting1) || !s.setting1.includes(dayLabel)) return;
+                              const mins = Math.min(500, Math.max(1, typeof s.setting5 === 'number' && !isNaN(s.setting5) ? s.setting5 : parseInt(String(s.setting5), 10) || 0));
+                              if (mins <= 0) return;
+                              if (s.setting2) {
+                                effectifMins = Math.max(0, effectifMins - mins);
+                              } else if (s.setting3) {
+                                effectifMins = effectifMins + mins;
+                              }
+                            });
+                          }
                         }
                       }
                       totalWeekMins += effectifMins;
@@ -11440,9 +11454,10 @@ export default function PublicPortal({
 
                   {/* Pointages registered log list */}
                   <div className="space-y-4">
-                    {pointages
-                      .filter((p) => p.techName === authenticatedUser?.name)
+                    {(Array.isArray(pointages) ? pointages : [])
+                      .filter((p) => p && p.techName && String(p.techName).trim().toLowerCase() === (authenticatedUser?.name || "").trim().toLowerCase())
                       .map((p) => {
+                        if (!p) return null;
                         const liveHHMM =
                           String(currentTime.getHours()).padStart(2, "0") +
                           ":" +
@@ -12038,7 +12053,8 @@ export default function PublicPortal({
                       })}
                   </div>
                 </div>
-              )}
+              </ErrorBoundary>
+            )}
 
               {/* ----------------- TAB 4: FRAIS ----------------- */}
               {activeTab === "frais" && !isFraisHidden && (

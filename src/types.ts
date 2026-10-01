@@ -467,6 +467,16 @@ export interface CompanyInfo {
   pdfCardBorderColor?: string;
   pdfCardBgColor?: string;
   pdfLabelTextColor?: string;
+  siret?: string;
+  naf?: string;
+  tva?: string;
+  formeJuridique?: string;
+  capitalSocial?: string;
+  adresseSiege?: string;
+  codePostalSiege?: string;
+  villeSiege?: string;
+  paysSiege?: string;
+  langue?: string;
 }
 
 export interface PointageLog {
@@ -637,6 +647,7 @@ export interface Memo {
 export interface OtherEquipment {
   id: string;
   identifiant: string;
+  numeroSerie?: string;
   
   // Section 1 - Client
   clientId: string;
