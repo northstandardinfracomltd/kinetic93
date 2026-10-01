@@ -528,7 +528,10 @@ export default function GedTab({
                                 <button
                                   type="button"
                                   id={`btn-consult-ged-${doc.id}`}
-                                  onClick={() => handleConsultGed(doc)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleConsultGed(doc);
+                                  }}
                                   style={rowActionButton18Style}
                                   className="cursor-pointer font-sans"
                                 >

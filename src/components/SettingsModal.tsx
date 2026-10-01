@@ -1321,11 +1321,22 @@ export default function SettingsModal({
       };
       localStorage.setItem('defib_atlasante_active', String(atlasanteActive));
       window.dispatchEvent(new Event('atlasante-status-changed'));
+      localStorage.setItem(`defib_${myTenantId}_google_drive_active`, String(googleDriveActive));
       localStorage.setItem('defib_google_drive_active', String(googleDriveActive));
-      if (googleDriveEmail) localStorage.setItem('defib_google_drive_email', googleDriveEmail);
-      else localStorage.removeItem('defib_google_drive_email');
-      if (googleDriveAccessToken) localStorage.setItem('defib_google_drive_token', googleDriveAccessToken);
-      else localStorage.removeItem('defib_google_drive_token');
+      if (googleDriveEmail) {
+        localStorage.setItem(`defib_${myTenantId}_google_drive_email`, googleDriveEmail);
+        localStorage.setItem('defib_google_drive_email', googleDriveEmail);
+      } else {
+        localStorage.removeItem(`defib_${myTenantId}_google_drive_email`);
+        localStorage.removeItem('defib_google_drive_email');
+      }
+      if (googleDriveAccessToken) {
+        localStorage.setItem(`defib_${myTenantId}_google_drive_token`, googleDriveAccessToken);
+        localStorage.setItem('defib_google_drive_token', googleDriveAccessToken);
+      } else {
+        localStorage.removeItem(`defib_${myTenantId}_google_drive_token`);
+        localStorage.removeItem('defib_google_drive_token');
+      }
       window.dispatchEvent(new Event('google-drive-status-changed'));
       await saveCollectionToFirestore('api_connectors', payload);
       setConnectorsSaveStatus('saved');
