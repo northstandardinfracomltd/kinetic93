@@ -1082,8 +1082,11 @@ export default function SettingsModal({
         setGoogleDriveActive(true);
         setGoogleDriveEmail(email);
         setGoogleDriveAccessToken(token);
+        localStorage.setItem(`defib_${myTenantId}_google_drive_active`, 'true');
         localStorage.setItem('defib_google_drive_active', 'true');
+        localStorage.setItem(`defib_${myTenantId}_google_drive_email`, email);
         localStorage.setItem('defib_google_drive_email', email);
+        localStorage.setItem(`defib_${myTenantId}_google_drive_token`, token);
         localStorage.setItem('defib_google_drive_token', token);
         window.dispatchEvent(new Event('google-drive-status-changed'));
       } catch (err: any) {
@@ -1151,8 +1154,11 @@ export default function SettingsModal({
                   setGoogleDriveActive(true);
                   setGoogleDriveEmail(email);
                   setGoogleDriveAccessToken(token);
+                  localStorage.setItem(`defib_${myTenantId}_google_drive_active`, 'true');
                   localStorage.setItem('defib_google_drive_active', 'true');
+                  localStorage.setItem(`defib_${myTenantId}_google_drive_email`, email);
                   localStorage.setItem('defib_google_drive_email', email);
+                  localStorage.setItem(`defib_${myTenantId}_google_drive_token`, token);
                   localStorage.setItem('defib_google_drive_token', token);
                   window.dispatchEvent(new Event('google-drive-status-changed'));
                 }
@@ -1160,6 +1166,7 @@ export default function SettingsModal({
             } catch (e: any) {
               clearInterval(pollTimer);
               setGoogleDriveActive(false);
+              localStorage.setItem(`defib_${myTenantId}_google_drive_active`, 'false');
               localStorage.setItem('defib_google_drive_active', 'false');
               window.dispatchEvent(new Event('google-drive-status-changed'));
               alert("Erreur de connexion Google Drive : " + (e.message || e));
@@ -1167,6 +1174,7 @@ export default function SettingsModal({
           }, 500);
         } catch (fallbackErr: any) {
           setGoogleDriveActive(false);
+          localStorage.setItem(`defib_${myTenantId}_google_drive_active`, 'false');
           localStorage.setItem('defib_google_drive_active', 'false');
           window.dispatchEvent(new Event('google-drive-status-changed'));
           alert("Erreur de connexion Google Drive : " + (fallbackErr.message || fallbackErr));
@@ -1176,8 +1184,11 @@ export default function SettingsModal({
       setGoogleDriveActive(false);
       setGoogleDriveEmail('');
       setGoogleDriveAccessToken('');
+      localStorage.setItem(`defib_${myTenantId}_google_drive_active`, 'false');
       localStorage.setItem('defib_google_drive_active', 'false');
+      localStorage.removeItem(`defib_${myTenantId}_google_drive_email`);
       localStorage.removeItem('defib_google_drive_email');
+      localStorage.removeItem(`defib_${myTenantId}_google_drive_token`);
       localStorage.removeItem('defib_google_drive_token');
       window.dispatchEvent(new Event('google-drive-status-changed'));
     }

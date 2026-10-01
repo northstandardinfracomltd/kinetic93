@@ -12,6 +12,7 @@ interface GedTabProps {
   setIsGedFormOpen: (open: boolean) => void;
   handleConsultGed: (doc: GedDocument) => void;
   setActiveTab?: (tab: any) => void;
+  tenantId?: string;
 }
 
 export default function GedTab({
@@ -21,6 +22,7 @@ export default function GedTab({
   setIsGedFormOpen,
   handleConsultGed,
   setActiveTab,
+  tenantId,
 }: GedTabProps) {
   const [gedTitle, setGedTitle] = useState('');
   const [gedCategory, setGedCategory] = useState('');
@@ -40,17 +42,17 @@ export default function GedTab({
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  // Fetch and synchronize Google Drive status
+  // Fetch and synchronize Google Drive status for this tenant
   const refreshGoogleDriveStatus = useCallback(async () => {
     try {
-      const status = await fetchGoogleDriveStatus();
+      const status = await fetchGoogleDriveStatus(tenantId);
       setGoogleDriveActive(status.active);
       setGoogleDriveEmail(status.email);
       setGoogleDriveAccessToken(status.accessToken);
     } catch (e) {
       console.error('Erreur de lecture du statut Google Drive :', e);
     }
-  }, []);
+  }, [tenantId]);
 
   useEffect(() => {
     refreshGoogleDriveStatus();
@@ -89,7 +91,7 @@ export default function GedTab({
     setUploadError(null);
 
     // If Google Drive connector is active, automatically upload and deposit shared URL in the form
-    const currentStatus = await fetchGoogleDriveStatus();
+    const currentStatus = await fetchGoogleDriveStatus(tenantId);
     const token = currentStatus.accessToken || googleDriveAccessToken;
     if (currentStatus.active && token) {
       setIsUploading(true);
@@ -115,7 +117,7 @@ export default function GedTab({
     }
 
     // 1. Google Drive Connector verification
-    const currentStatus = await fetchGoogleDriveStatus();
+    const currentStatus = await fetchGoogleDriveStatus(tenantId);
     const isConnectorActive = Boolean(currentStatus.active && (currentStatus.accessToken || googleDriveAccessToken));
 
     if (!isConnectorActive) {
@@ -383,7 +385,19 @@ export default function GedTab({
                   />
                 </div>
 
-                <button onClick={startNewGed} style={customButtonStyle} className="font-sans" id="btn-new-ged-doc">
+                <button
+                  type="button"
+                  onClick={googleDriveActive ? startNewGed : undefined}
+                  disabled={!googleDriveActive}
+                  style={{
+                    ...customButtonStyle,
+                    opacity: !googleDriveActive ? 0.45 : 1,
+                    cursor: !googleDriveActive ? 'not-allowed' : 'pointer',
+                  }}
+                  className="font-sans"
+                  id="btn-new-ged-doc"
+                  title={!googleDriveActive ? t("Connecteur Google Drive inactif. Activez-le dans les paramètres pour ajouter un document.") : undefined}
+                >
                   {t('Nouveau')}
                 </button>
               </div>
@@ -451,7 +465,6 @@ export default function GedTab({
                                 </span>
                               )}
                             </div>
-                            <div className="text-xs text-slate-400 font-light mt-0.5">{doc.fileName} ({doc.fileSize})</div>
                           </td>
 
                           {/* Catégorie */}
@@ -495,22 +508,33 @@ export default function GedTab({
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="inline-flex gap-2 bg-transparent">
-                              <button
-                                type="button"
-                                id={`btn-consult-ged-${doc.id}`}
-                                onClick={() => {
-                                  if (doc.fileUrl) {
-                                    window.open(doc.fileUrl, '_blank', 'noopener,noreferrer');
-                                  } else {
-                                    handleConsultGed(doc);
-                                  }
-                                }}
-                                style={rowActionButton18Style}
-                                className="cursor-pointer font-sans"
-                                title={t("Consulter le document sur Google Drive")}
-                              >
-                                {t('Consulter')}
-                              </button>
+                              {doc.fileUrl ? (
+                                <a
+                                  href={doc.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  id={`btn-consult-ged-${doc.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    ...rowActionButton18Style,
+                                    textDecoration: 'none',
+                                  }}
+                                  className="cursor-pointer font-sans inline-flex items-center justify-center"
+                                  title={t("Consulter le document sur Google Drive")}
+                                >
+                                  {t('Consulter')}
+                                </a>
+                              ) : (
+                                <button
+                                  type="button"
+                                  id={`btn-consult-ged-${doc.id}`}
+                                  onClick={() => handleConsultGed(doc)}
+                                  style={rowActionButton18Style}
+                                  className="cursor-pointer font-sans"
+                                >
+                                  {t('Consulter')}
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 id={`btn-delete-ged-${doc.id}`}
@@ -724,16 +748,20 @@ export default function GedTab({
                   <input
                     type="url"
                     id="ged-file-url-input"
+                    disabled
+                    readOnly
                     value={gedFileUrl}
-                    onChange={(e) => setGedFileUrl(e.target.value)}
                     placeholder={
                       googleDriveActive
-                        ? t("L'URL partagée Google Drive sera déposée ici après l'upload...")
-                        : t('Veuillez activer le connecteur Google Drive pour obtenir le lien partagé')
+                        ? t("L'URL partagée Google Drive sera renseignée automatiquement lors de la sélection du fichier...")
+                        : t('Veuillez activer le connecteur Google Drive dans les paramètres')
                     }
-                    className="font-sans focus:outline-none w-full pr-28"
+                    className="font-sans focus:outline-none w-full pr-28 cursor-not-allowed"
                     style={{
-                      backgroundColor: gedFileUrl ? '#f0fdf4' : '#ffffff',
+                      backgroundColor: gedFileUrl ? '#f0fdf4' : '#f1f5f9',
+                      color: '#000000',
+                      opacity: 0.85,
+                      cursor: 'not-allowed',
                     }}
                   />
                   {gedFileUrl && (

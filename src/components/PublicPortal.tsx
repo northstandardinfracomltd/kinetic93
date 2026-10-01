@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import ErrorBoundary from "./ErrorBoundary";
 import {
   Heart,
   ChevronLeft,
@@ -11076,11 +11075,10 @@ export default function PublicPortal({
 
               {/* ----------------- TAB 3: TEMPS ----------------- */}
               {activeTab === "temps" && (
-                <ErrorBoundary fallbackMessage="Impossible d'afficher l'onglet Temps dans la webapp.">
-                  <div
-                    className="space-y-6 pb-16 animate-fadeIn"
-                    id="tab-temps-screen"
-                  >
+                <div
+                  className="space-y-6 pb-16 animate-fadeIn"
+                  id="tab-temps-screen"
+                >
                   <style>{`
                     #tab-temps-screen input,
                     #tab-temps-screen textarea,
@@ -12053,8 +12051,7 @@ export default function PublicPortal({
                       })}
                   </div>
                 </div>
-              </ErrorBoundary>
-            )}
+              )}
 
               {/* ----------------- TAB 4: FRAIS ----------------- */}
               {activeTab === "frais" && !isFraisHidden && (

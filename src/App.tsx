@@ -56,7 +56,6 @@ import GedTab from './components/GedTab';
 import AchatsFournisseursTab from './components/AchatsFournisseursTab';
 import TicketsCaisseTab from './components/TicketsCaisseTab';
 import TempsTab from './components/TempsTab';
-import ErrorBoundary from './components/ErrorBoundary';
 import LocalisationsTab from './components/LocalisationsTab';
 import SatisfactionTab from './components/SatisfactionTab';
 import VeillesTab from './components/VeillesTab';
@@ -5532,6 +5531,19 @@ export default function App() {
         if (data.pennylaneActive !== undefined) setPennylaneActive(data.pennylaneActive);
         if (data.dropboxActive !== undefined) setDropboxActive(data.dropboxActive);
         if (data.dropboxAccessToken !== undefined) setDropboxAccessToken(data.dropboxAccessToken);
+        if (data.googleDriveActive !== undefined) {
+          localStorage.setItem(`defib_${tenantId}_google_drive_active`, String(data.googleDriveActive));
+          localStorage.setItem('defib_google_drive_active', String(data.googleDriveActive));
+          if (data.googleDriveEmail) {
+            localStorage.setItem(`defib_${tenantId}_google_drive_email`, data.googleDriveEmail);
+            localStorage.setItem('defib_google_drive_email', data.googleDriveEmail);
+          }
+          if (data.googleDriveAccessToken) {
+            localStorage.setItem(`defib_${tenantId}_google_drive_token`, data.googleDriveAccessToken);
+            localStorage.setItem('defib_google_drive_token', data.googleDriveAccessToken);
+          }
+          window.dispatchEvent(new Event('google-drive-status-changed'));
+        }
       } else {
         setPennylaneActive(false);
         setDropboxActive(false);
@@ -16834,6 +16846,7 @@ export default function App() {
               setIsGedFormOpen={setIsGedFormOpen}
               handleConsultGed={handleConsultGed}
               setActiveTab={setActiveTab}
+              tenantId={tenantId}
             />
           )}
 
@@ -16849,14 +16862,12 @@ export default function App() {
           )}
 
           {activeTab === 'temps' && (
-            <ErrorBoundary fallbackMessage="Impossible d'afficher le module Temps.">
-              <TempsTab
-                pointages={pointages}
-                members={members}
-                onUpdatePointages={(updated) => savePointages(updated)}
-                companyInfo={companyInfo}
-              />
-            </ErrorBoundary>
+            <TempsTab
+              pointages={pointages}
+              members={members}
+              onUpdatePointages={(updated) => savePointages(updated)}
+              companyInfo={companyInfo}
+            />
           )}
 
           {/* ======================================= */}

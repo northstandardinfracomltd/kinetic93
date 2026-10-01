@@ -7,22 +7,25 @@ export interface GoogleDriveStatus {
 }
 
 export async function fetchGoogleDriveStatus(tenantId?: string): Promise<GoogleDriveStatus> {
-  const activeTenant = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+  const activeTenant = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
   try {
     const data = await fetchCollectionFromFirestore<any>('api_connectors', activeTenant);
-    if (data && data.googleDriveActive !== undefined) {
+    if (data && typeof data === 'object' && data.googleDriveActive !== undefined) {
       const active = Boolean(data.googleDriveActive);
-      const email = data.googleDriveEmail || localStorage.getItem('defib_google_drive_email') || '';
-      const accessToken = data.googleDriveAccessToken || localStorage.getItem('defib_google_drive_token') || '';
+      const email = data.googleDriveEmail || localStorage.getItem(`defib_${activeTenant}_google_drive_email`) || localStorage.getItem('defib_google_drive_email') || '';
+      const accessToken = data.googleDriveAccessToken || localStorage.getItem(`defib_${activeTenant}_google_drive_token`) || localStorage.getItem('defib_google_drive_token') || '';
       return { active, email, accessToken };
     }
   } catch (e) {
     console.error("Error fetching Google Drive status from Firestore:", e);
   }
 
-  const active = localStorage.getItem('defib_google_drive_active') === 'true';
-  const email = localStorage.getItem('defib_google_drive_email') || '';
-  const accessToken = localStorage.getItem('defib_google_drive_token') || '';
+  const tenantSpecificActive = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_google_drive_active`) : null;
+  const active = tenantSpecificActive !== null 
+    ? tenantSpecificActive === 'true' 
+    : (typeof window !== 'undefined' ? localStorage.getItem('defib_google_drive_active') === 'true' : false);
+  const email = (typeof window !== 'undefined' ? (localStorage.getItem(`defib_${activeTenant}_google_drive_email`) || localStorage.getItem('defib_google_drive_email')) : '') || '';
+  const accessToken = (typeof window !== 'undefined' ? (localStorage.getItem(`defib_${activeTenant}_google_drive_token`) || localStorage.getItem('defib_google_drive_token')) : '') || '';
   return { active, email, accessToken };
 }
 
