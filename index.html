@@ -55,12 +55,24 @@
           }
         });
       }
+      if ('caches' in window) {
+        caches.keys().then(function(keys) {
+          keys.forEach(function(key) { caches.delete(key); });
+        });
+      }
       window.addEventListener('error', function(e) {
         var msg = (e && e.message) ? e.message : '';
-        if (msg.includes('module script') || msg.includes('MIME type') || msg.includes('Loading chunk') || msg.includes('dynamically imported module') || msg.includes('Failed to fetch dynamically imported module')) {
-          if (!sessionStorage.getItem('reloaded_for_chunk')) {
-            sessionStorage.setItem('reloaded_for_chunk', 'true');
-            window.location.reload();
+        if (msg.includes('is not a constructor') || msg.includes('module script') || msg.includes('MIME type') || msg.includes('Loading chunk') || msg.includes('dynamically imported module') || msg.includes('Failed to fetch dynamically imported module')) {
+          if (!sessionStorage.getItem('reloaded_for_cached_error')) {
+            sessionStorage.setItem('reloaded_for_cached_error', 'true');
+            if ('caches' in window) {
+              caches.keys().then(function(names) {
+                for (var name of names) caches.delete(name);
+                window.location.reload();
+              });
+            } else {
+              window.location.reload();
+            }
           }
         }
       }, true);

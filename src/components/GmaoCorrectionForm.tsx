@@ -5529,105 +5529,345 @@ export default function GmaoCorrectionForm({
             {/* Clôture Checklist Toggles */}
             <div className="pt-2 space-y-2.5">
               {/* Toggle 1: Mes 3 photos sont valides */}
-              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-[12px] font-bold text-black uppercase select-none">
+              <div 
+                className="flex items-center justify-between py-3 px-4 rounded-xl"
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #dadada',
+                }}
+              >
+                <span 
+                  className="font-bold select-none text-black"
+                  style={{
+                    fontSize: '18px',
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
                   Mes 3 photos sont valides.
                 </span>
-                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    id="toggle-photos-valides"
-                    checked={mesPhotosValides}
-                    onChange={(e) => setMesPhotosValides(e.target.checked)}
-                    className="sr-only peer"
+                <button
+                  type="button"
+                  role="switch"
+                  id="toggle-photos-valides"
+                  aria-checked={mesPhotosValides}
+                  onClick={() => setMesPhotosValides(!mesPhotosValides)}
+                  style={{
+                    width: '51px',
+                    height: '31px',
+                    borderRadius: '9999px',
+                    backgroundColor: mesPhotosValides ? '#3556EC' : '#e5e5ea',
+                    transition: 'background-color 0.25s ease',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    border: 'none',
+                    padding: 0,
+                    outline: 'none',
+                    flexShrink: 0,
+                    boxShadow: mesPhotosValides ? 'none' : 'inset 0 0 0 1px rgba(0,0,0,0.06)',
+                  }}
+                  className="transition-colors cursor-pointer"
+                >
+                  <span
+                    style={{
+                      display: 'block',
+                      width: '27px',
+                      height: '27px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ffffff',
+                      boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
+                      position: 'absolute',
+                      top: '2px',
+                      left: mesPhotosValides ? '22px' : '2px',
+                      transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    }}
                   />
-                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
-                </label>
+                </button>
               </div>
 
               {/* Toggle 2: Étiquette obligatoire conforme */}
-              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-[12px] font-bold text-black uppercase select-none">
+              <div 
+                className="flex items-center justify-between py-3 px-4 rounded-xl"
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #dadada',
+                }}
+              >
+                <span 
+                  className="font-bold select-none text-black"
+                  style={{
+                    fontSize: '18px',
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
                   Étiquette obligatoire conforme.
                 </span>
-                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    id="toggle-etiquette-conforme"
-                    checked={etiquetteObligatoireConforme}
-                    onChange={(e) => setEtiquetteObligatoireConforme(e.target.checked)}
-                    className="sr-only peer"
+                <button
+                  type="button"
+                  role="switch"
+                  id="toggle-etiquette-conforme"
+                  aria-checked={etiquetteObligatoireConforme}
+                  onClick={() => setEtiquetteObligatoireConforme(!etiquetteObligatoireConforme)}
+                  style={{
+                    width: '51px',
+                    height: '31px',
+                    borderRadius: '9999px',
+                    backgroundColor: etiquetteObligatoireConforme ? '#3556EC' : '#e5e5ea',
+                    transition: 'background-color 0.25s ease',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    border: 'none',
+                    padding: 0,
+                    outline: 'none',
+                    flexShrink: 0,
+                    boxShadow: etiquetteObligatoireConforme ? 'none' : 'inset 0 0 0 1px rgba(0,0,0,0.06)',
+                  }}
+                  className="transition-colors cursor-pointer"
+                >
+                  <span
+                    style={{
+                      display: 'block',
+                      width: '27px',
+                      height: '27px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ffffff',
+                      boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
+                      position: 'absolute',
+                      top: '2px',
+                      left: etiquetteObligatoireConforme ? '22px' : '2px',
+                      transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    }}
                   />
-                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
-                </label>
+                </button>
               </div>
 
               {/* Toggle 3: Signalétique conforme */}
-              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-[12px] font-bold text-black uppercase select-none">
+              <div 
+                className="flex items-center justify-between py-3 px-4 rounded-xl"
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #dadada',
+                }}
+              >
+                <span 
+                  className="font-bold select-none text-black"
+                  style={{
+                    fontSize: '18px',
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
                   Signalétique conforme.
                 </span>
-                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    id="toggle-signaletique-conforme"
-                    checked={signaletiqueConforme === 'Oui'}
-                    onChange={(e) => setSignaletiqueConforme(e.target.checked ? 'Oui' : 'Non')}
-                    className="sr-only peer"
+                <button
+                  type="button"
+                  role="switch"
+                  id="toggle-signaletique-conforme"
+                  aria-checked={signaletiqueConforme === 'Oui'}
+                  onClick={() => setSignaletiqueConforme(signaletiqueConforme === 'Oui' ? 'Non' : 'Oui')}
+                  style={{
+                    width: '51px',
+                    height: '31px',
+                    borderRadius: '9999px',
+                    backgroundColor: signaletiqueConforme === 'Oui' ? '#3556EC' : '#e5e5ea',
+                    transition: 'background-color 0.25s ease',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    border: 'none',
+                    padding: 0,
+                    outline: 'none',
+                    flexShrink: 0,
+                    boxShadow: signaletiqueConforme === 'Oui' ? 'none' : 'inset 0 0 0 1px rgba(0,0,0,0.06)',
+                  }}
+                  className="transition-colors cursor-pointer"
+                >
+                  <span
+                    style={{
+                      display: 'block',
+                      width: '27px',
+                      height: '27px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ffffff',
+                      boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
+                      position: 'absolute',
+                      top: '2px',
+                      left: signaletiqueConforme === 'Oui' ? '22px' : '2px',
+                      transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    }}
                   />
-                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
-                </label>
+                </button>
               </div>
 
               {/* Toggle 4: Scellé conforme */}
-              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-[12px] font-bold text-black uppercase select-none">
+              <div 
+                className="flex items-center justify-between py-3 px-4 rounded-xl"
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #dadada',
+                }}
+              >
+                <span 
+                  className="font-bold select-none text-black"
+                  style={{
+                    fontSize: '18px',
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
                   Scellé conforme.
                 </span>
-                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    id="toggle-scelle-conforme"
-                    checked={scelleConforme}
-                    onChange={(e) => setScelleConforme(e.target.checked)}
-                    className="sr-only peer"
+                <button
+                  type="button"
+                  role="switch"
+                  id="toggle-scelle-conforme"
+                  aria-checked={scelleConforme}
+                  onClick={() => setScelleConforme(!scelleConforme)}
+                  style={{
+                    width: '51px',
+                    height: '31px',
+                    borderRadius: '9999px',
+                    backgroundColor: scelleConforme ? '#3556EC' : '#e5e5ea',
+                    transition: 'background-color 0.25s ease',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    border: 'none',
+                    padding: 0,
+                    outline: 'none',
+                    flexShrink: 0,
+                    boxShadow: scelleConforme ? 'none' : 'inset 0 0 0 1px rgba(0,0,0,0.06)',
+                  }}
+                  className="transition-colors cursor-pointer"
+                >
+                  <span
+                    style={{
+                      display: 'block',
+                      width: '27px',
+                      height: '27px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ffffff',
+                      boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
+                      position: 'absolute',
+                      top: '2px',
+                      left: scelleConforme ? '22px' : '2px',
+                      transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    }}
                   />
-                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
-                </label>
+                </button>
               </div>
 
               {/* Toggle 5: Sticker entreprise appliqué */}
-              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-[12px] font-bold text-black uppercase select-none">
+              <div 
+                className="flex items-center justify-between py-3 px-4 rounded-xl"
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #dadada',
+                }}
+              >
+                <span 
+                  className="font-bold select-none text-black"
+                  style={{
+                    fontSize: '18px',
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
                   Sticker entreprise appliqué.
                 </span>
-                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    id="toggle-sticker-applique"
-                    checked={stickerEntrepriseApplique}
-                    onChange={(e) => setStickerEntrepriseApplique(e.target.checked)}
-                    className="sr-only peer"
+                <button
+                  type="button"
+                  role="switch"
+                  id="toggle-sticker-applique"
+                  aria-checked={stickerEntrepriseApplique}
+                  onClick={() => setStickerEntrepriseApplique(!stickerEntrepriseApplique)}
+                  style={{
+                    width: '51px',
+                    height: '31px',
+                    borderRadius: '9999px',
+                    backgroundColor: stickerEntrepriseApplique ? '#3556EC' : '#e5e5ea',
+                    transition: 'background-color 0.25s ease',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    border: 'none',
+                    padding: 0,
+                    outline: 'none',
+                    flexShrink: 0,
+                    boxShadow: stickerEntrepriseApplique ? 'none' : 'inset 0 0 0 1px rgba(0,0,0,0.06)',
+                  }}
+                  className="transition-colors cursor-pointer"
+                >
+                  <span
+                    style={{
+                      display: 'block',
+                      width: '27px',
+                      height: '27px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ffffff',
+                      boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
+                      position: 'absolute',
+                      top: '2px',
+                      left: stickerEntrepriseApplique ? '22px' : '2px',
+                      transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    }}
                   />
-                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
-                </label>
+                </button>
               </div>
 
               {/* Toggle 6: Demande de devis */}
-              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-[12px] font-bold text-black uppercase select-none">
+              <div 
+                className="flex items-center justify-between py-3 px-4 rounded-xl"
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #dadada',
+                }}
+              >
+                <span 
+                  className="font-bold select-none text-black"
+                  style={{
+                    fontSize: '18px',
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
                   Demande de devis.
                 </span>
-                <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    id="toggle-demande-devis"
-                    checked={demandeDevis}
-                    onChange={(e) => setDemandeDevis(e.target.checked)}
-                    className="sr-only peer"
+                <button
+                  type="button"
+                  role="switch"
+                  id="toggle-demande-devis"
+                  aria-checked={demandeDevis}
+                  onClick={() => setDemandeDevis(!demandeDevis)}
+                  style={{
+                    width: '51px',
+                    height: '31px',
+                    borderRadius: '9999px',
+                    backgroundColor: demandeDevis ? '#3556EC' : '#e5e5ea',
+                    transition: 'background-color 0.25s ease',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    border: 'none',
+                    padding: 0,
+                    outline: 'none',
+                    flexShrink: 0,
+                    boxShadow: demandeDevis ? 'none' : 'inset 0 0 0 1px rgba(0,0,0,0.06)',
+                  }}
+                  className="transition-colors cursor-pointer"
+                >
+                  <span
+                    style={{
+                      display: 'block',
+                      width: '27px',
+                      height: '27px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ffffff',
+                      boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
+                      position: 'absolute',
+                      top: '2px',
+                      left: demandeDevis ? '22px' : '2px',
+                      transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    }}
                   />
-                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3556EC]" style={{ cursor: 'pointer' }}></div>
-                </label>
+                </button>
               </div>
 
               {/* Conditional Demande de devis fields */}
