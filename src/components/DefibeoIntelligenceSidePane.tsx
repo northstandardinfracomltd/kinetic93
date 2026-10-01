@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Send } from 'lucide-react';
 import { t } from '../utils/translate';
 
 interface ChatMessage {
@@ -101,12 +100,11 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
       });
 
       if (!resp.ok) {
-        const errorJson = await resp.json().catch(() => ({}));
-        throw new Error(errorJson.error || `Erreur serveur (${resp.status})`);
+        throw new Error("Bientôt disponible, revenez prochainement.");
       }
 
       const data = await resp.json();
-      const assistantText = data.answer || "Désolé, aucune réponse n'a été renvoyée.";
+      const assistantText = data.answer || "Bientôt disponible, revenez prochainement.";
 
       const assistantMsg: ChatMessage = {
         id: `ast-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -116,11 +114,11 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
       };
 
       setMessages([...nextMessages, assistantMsg]);
-    } catch (err: any) {
+    } catch {
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
         role: 'assistant',
-        content: err.message || "Une erreur est survenue lors de l'interrogation de l'IA.",
+        content: "Bientôt disponible, revenez prochainement.",
         createdAt: Date.now(),
       };
       setMessages([...nextMessages, errorMsg]);
@@ -157,151 +155,53 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
         }}
       >
-        {/* HEADER */}
-        <div
-          className="px-6 py-4 bg-white flex items-center justify-between shrink-0"
-          style={{ borderBottom: '1px solid #dadada' }}
-        >
-          <div className="flex items-center gap-3">
-            <h3
-              className="text-xl font-bold tracking-tight text-black m-0"
-              style={{
-                fontSize: '20px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-              }}
-            >
-              {t('Defibeo Intelligence')}
-            </h3>
-            <span
-              className="text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-200"
-            >
-              {t('IA')}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleQuitConversation}
-            id="btn-close-defibeo-intelligence"
-            className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:text-black hover:bg-slate-100 transition-colors cursor-pointer border-0 bg-transparent"
-            title={t('Fermer')}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* CHAT MESSAGES AREA (VERY SIMPLE & MINIMALIST WITHOUT ICONS) */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#f8f9fa]">
-          {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
+        {/* MESSAGES LIST AREA (NO HEADER, EMPTY WHEN NO MESSAGES) */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#f8f9fa] pt-6">
+          {messages.map((msg) => {
+            const isUser = msg.role === 'user';
+            return (
               <div
-                className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center mb-3 shadow-xs border border-[#dadada] text-black font-extrabold text-xl"
+                key={msg.id}
+                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-fadeIn`}
               >
-                DI
-              </div>
-              <p
-                className="text-[17px] font-bold text-black mb-1.5"
-                style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-              >
-                {t('Defibeo Intelligence')}
-              </p>
-              <p className="text-xs text-slate-500 max-w-md leading-relaxed mb-6">
-                {t(
-                  'Posez vos questions sur vos défibrillateurs, vos clients, vos interventions ou sur l’utilisation du logiciel.'
-                )}
-              </p>
-
-              {/* Suggested example questions */}
-              <div className="w-full max-w-md space-y-2 text-left">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
-                  {t('Exemples de questions')} :
-                </p>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleSendMessage(
-                      undefined,
-                      'Quels sont les défibrillateurs avec une intervention à faire pour mon client Dupont'
-                    )
-                  }
-                  className="w-full p-3 rounded-xl bg-white border border-[#dadada] hover:border-blue-400 hover:bg-blue-50/50 text-left text-xs font-medium text-slate-700 transition-all cursor-pointer shadow-2xs"
-                >
-                  « Quels sont les défibrillateurs avec une intervention à faire pour mon client Dupont »
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleSendMessage(
-                      undefined,
-                      'Quels défibrillateurs ont une date de maintenance dépassée ou prévue ce mois-ci ?'
-                    )
-                  }
-                  className="w-full p-3 rounded-xl bg-white border border-[#dadada] hover:border-blue-400 hover:bg-blue-50/50 text-left text-xs font-medium text-slate-700 transition-all cursor-pointer shadow-2xs"
-                >
-                  « Quels défibrillateurs ont une date de maintenance dépassée ou prévue ce mois-ci ? »
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleSendMessage(
-                      undefined,
-                      'Combien de défibrillateurs et de clients sont actuellement enregistrés ?'
-                    )
-                  }
-                  className="w-full p-3 rounded-xl bg-white border border-[#dadada] hover:border-blue-400 hover:bg-blue-50/50 text-left text-xs font-medium text-slate-700 transition-all cursor-pointer shadow-2xs"
-                >
-                  « Combien de défibrillateurs et de clients sont actuellement enregistrés ? »
-                </button>
-              </div>
-            </div>
-          ) : (
-            messages.map((msg) => {
-              const isUser = msg.role === 'user';
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-fadeIn`}
-                >
-                  {/* Sender label */}
-                  <div className="mb-1 px-1 text-[11px] font-semibold text-slate-400">
-                    {isUser ? t('Vous') : t('Defibeo Intelligence')}
-                  </div>
-
-                  {/* Message bubble (pure minimalist text, no icons) */}
-                  <div
-                    className="rounded-2xl p-3.5 shadow-2xs transition-all relative select-text"
-                    style={{
-                      maxWidth: isUser ? '85%' : '92%',
-                      backgroundColor: isUser ? '#ffffff' : '#ffffff',
-                      border: isUser ? '1.5px solid #3556ec' : '1px solid #dadada',
-                      color: '#000000',
-                      borderBottomRightRadius: isUser ? '4px' : '16px',
-                      borderBottomLeftRadius: !isUser ? '4px' : '16px',
-                    }}
-                  >
-                    <p
-                      className="text-[15px] leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
-                      style={{ color: '#000000' }}
-                    >
-                      {msg.content}
-                    </p>
-                  </div>
+                {/* Sender label */}
+                <div className="mb-1 px-1 text-[12px] font-semibold text-slate-400">
+                  {isUser ? t('Vous') : t('Defibeo Intelligence')}
                 </div>
-              );
-            })
-          )}
+
+                {/* Message bubble (SANS BORDER qu'il soit bleu ou gris) */}
+                <div
+                  className="rounded-2xl p-3.5 shadow-2xs transition-all relative select-text"
+                  style={{
+                    maxWidth: isUser ? '85%' : '92%',
+                    backgroundColor: '#ffffff',
+                    border: 'none',
+                    color: '#000000',
+                    borderBottomRightRadius: isUser ? '4px' : '16px',
+                    borderBottomLeftRadius: !isUser ? '4px' : '16px',
+                  }}
+                >
+                  <p
+                    className="text-[16px] leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                    style={{ color: '#000000' }}
+                  >
+                    {msg.content}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
 
           {isLoading && (
             <div className="flex flex-col items-start animate-fadeIn">
-              <div className="mb-1 px-1 text-[11px] font-semibold text-slate-400">
+              <div className="mb-1 px-1 text-[12px] font-semibold text-slate-400">
                 {t('Defibeo Intelligence')}
               </div>
               <div
-                className="rounded-2xl rounded-bl-xs p-3.5 bg-white border border-[#dadada] text-black shadow-2xs max-w-[90%]"
+                className="rounded-2xl rounded-bl-xs p-3.5 bg-white text-black shadow-2xs max-w-[90%]"
+                style={{ border: 'none' }}
               >
-                <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
                   <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
                   <span>{t('Defibeo Intelligence analyse vos données...')}</span>
                 </div>
@@ -314,23 +214,17 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
 
         {/* BOTTOM FLOATING INPUT & CONTROLS */}
         <div
-          className="sticky bottom-0 bg-white/95 backdrop-blur-md p-4 shrink-0 shadow-lg"
-          style={{ borderTop: '1px solid #dadada' }}
+          className="p-4 shrink-0 bg-transparent space-y-3"
+          style={{
+            background: 'transparent',
+            backgroundColor: 'transparent',
+            border: 'none',
+          }}
         >
-          {/* Gélule en petit en floating juste au-dessus du champ de saisie */}
-          <div className="flex justify-center mb-2.5">
-            <span
-              className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-medium text-slate-500 bg-slate-100 border border-slate-200 select-none shadow-2xs text-center"
-              style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-            >
-              {t('Defibeo Intelligence est une IA expérimentale et peut se tromper.')}
-            </span>
-          </div>
-
-          <form onSubmit={(e) => handleSendMessage(e)} className="space-y-2.5">
+          <form onSubmit={(e) => handleSendMessage(e)} className="space-y-3">
             {/* Input bar */}
             <div
-              className="flex items-center gap-2 bg-[#f8fafc] rounded-2xl p-1.5 pl-3 transition-all"
+              className="flex items-center gap-2 bg-white rounded-2xl p-2 pl-4 transition-all shadow-lg"
               style={{ border: '1px solid #dadada' }}
             >
               <input
@@ -340,40 +234,66 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
                 onChange={(e) => setInputQuestion(e.target.value)}
                 placeholder={t('Posez votre question sur vos données ou le logiciel...')}
                 disabled={isLoading}
-                className="flex-1 bg-transparent border-0 outline-none text-black text-[15px] px-2 py-1 placeholder:text-slate-400"
-                style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                className="flex-1 bg-transparent border-0 outline-none text-black px-2 py-1 placeholder:text-slate-400"
+                style={{
+                  fontSize: '18px',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
               />
 
+              {/* Bouton Envoyer: pas d'icône send, font-size 18px */}
               <button
                 type="submit"
                 disabled={!inputQuestion.trim() || isLoading}
                 id="btn-submit-defibeo-intelligence"
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0"
                 style={{
                   backgroundColor: '#3556ec',
                   boxShadow:
                     'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
-                  fontSize: '15px',
+                  fontSize: '18px',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   opacity: !inputQuestion.trim() || isLoading ? 0.45 : 1,
                   cursor: !inputQuestion.trim() || isLoading ? 'not-allowed' : 'pointer',
                 }}
               >
                 <span>{t('Envoyer')}</span>
-                <Send className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Bouton Quitter la conversation directement en dessous */}
-            <button
-              type="button"
-              onClick={handleQuitConversation}
-              id="btn-quit-defibeo-intelligence"
-              className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-black transition-all cursor-pointer border border-slate-200 text-center"
-              style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-            >
-              {t('Quitter la conversation')}
-            </button>
+            {/* Ligne inférieure: Gélule d'avertissement + Bouton Quitter la conversation sur la même ligne */}
+            <div className="flex items-center justify-between gap-3 pt-0.5">
+              {/* Gélule en petit Defibeo Intelligence */}
+              <div className="flex-1 min-w-0">
+                <span
+                  className="inline-block truncate max-w-full px-3.5 py-2 rounded-full text-xs font-medium text-slate-500 bg-white shadow-xs select-none text-center"
+                  style={{
+                    border: '1px solid #dadada',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                  title={t('Defibeo Intelligence est une IA expérimentale et peut se tromper.')}
+                >
+                  {t('Defibeo Intelligence est une IA expérimentale et peut se tromper.')}
+                </span>
+              </div>
+
+              {/* Bouton Quitter la conversation (background blanc, font-size 18px) */}
+              <button
+                type="button"
+                onClick={handleQuitConversation}
+                id="btn-quit-defibeo-intelligence"
+                className="shrink-0 px-5 py-2 rounded-full font-bold transition-all cursor-pointer shadow-xs hover:bg-slate-50 active:scale-[0.98] whitespace-nowrap"
+                style={{
+                  backgroundColor: '#ffffff',
+                  color: '#000000',
+                  border: '1px solid #dadada',
+                  fontSize: '18px',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+              >
+                {t('Quitter la conversation')}
+              </button>
+            </div>
           </form>
         </div>
       </div>

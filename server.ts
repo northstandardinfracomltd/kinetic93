@@ -804,7 +804,7 @@ Renvoie obligatoirement un objet JSON contenant :
       }
 
       if (!process.env.GEMINI_API_KEY) {
-        return res.status(500).json({ error: "La clé API Gemini n'est pas configurée sur le serveur." });
+        return res.json({ answer: "Bientôt disponible, revenez prochainement." });
       }
 
       const { GoogleGenAI } = await import("@google/genai");
@@ -868,7 +868,7 @@ ${question}`;
       return res.json({ answer: answerText });
     } catch (error: any) {
       console.error("Defibeo Intelligence Error:", error);
-      return res.status(500).json({ error: error.message || "Une erreur est survenue lors de l'interrogation de l'IA." });
+      return res.json({ answer: "Bientôt disponible, revenez prochainement." });
     }
   });
 
