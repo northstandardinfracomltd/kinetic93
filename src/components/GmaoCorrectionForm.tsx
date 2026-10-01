@@ -1065,6 +1065,14 @@ export default function GmaoCorrectionForm({
   const [armoireConnectee, setArmoireConnectee] = useState<'Oui' | 'Non'>(report?.armoireConnectee || 'Non');
   const [dispositifHandicap, setDispositifHandicap] = useState<'Oui' | 'Non'>(report?.dispositifHandicap || 'Non');
   const [signaletiqueConforme, setSignaletiqueConforme] = useState<'Oui' | 'Non'>(report?.signaletiqueConforme || 'Non');
+  const [installeExterieur, setInstalleExterieur] = useState<'Oui' | 'Non'>(
+    report?.installeExterieur ||
+    report?.defibSnapshot?.installeExterieur ||
+    (report?.defibSnapshot?.exterieur !== undefined ? (report.defibSnapshot.exterieur ? 'Oui' : 'Non') : undefined) ||
+    origDefib?.installeExterieur ||
+    (origDefib?.exterieur !== undefined ? (origDefib.exterieur ? 'Oui' : 'Non') : undefined) ||
+    'Non'
+  );
 
   // S6 Electrode A
   const [electrodeARemplacee, setElectrodeARemplacee] = useState<'Oui' | 'Non'>(report?.electrodeARemplacee || 'Non');
@@ -1083,6 +1091,9 @@ export default function GmaoCorrectionForm({
   // S8 Batterie
   const [batterieRemplacee, setBatterieRemplacee] = useState<'Oui' | 'Non'>(report?.batterieRemplacee || 'Non');
   const [selectionBatterieRemplacee, setSelectionBatterieRemplacee] = useState<string>(report?.selectionBatterieRemplacee || '');
+  const [pourcentageChargeNouvelleBatterie, setPourcentageChargeNouvelleBatterie] = useState<string>(
+    report?.pourcentageChargeNouvelleBatterie ? String(report.pourcentageChargeNouvelleBatterie) : '100'
+  );
   const [batterieConformeSante, setBatterieConformeSante] = useState<'Oui' | 'Non'>(
     report?.batterieConformeSante || (snapshot?.situationBatterie === 'Vert' ? 'Oui' : 'Non') || 'Oui'
   );
@@ -1243,6 +1254,17 @@ export default function GmaoCorrectionForm({
       setArmoireConnectee(report.armoireConnectee || 'Non');
       setDispositifHandicap(report.dispositifHandicap || 'Non');
       setSignaletiqueConforme(report.signaletiqueConforme || 'Non');
+      if (report.installeExterieur) {
+        setInstalleExterieur(report.installeExterieur);
+      } else if (report.defibSnapshot?.installeExterieur) {
+        setInstalleExterieur(report.defibSnapshot.installeExterieur);
+      } else if (report.defibSnapshot?.exterieur !== undefined) {
+        setInstalleExterieur(report.defibSnapshot.exterieur ? 'Oui' : 'Non');
+      } else if (origDefib?.installeExterieur) {
+        setInstalleExterieur(origDefib.installeExterieur);
+      } else if (origDefib?.exterieur !== undefined) {
+        setInstalleExterieur(origDefib.exterieur ? 'Oui' : 'Non');
+      }
       setElectrodeARemplacee(report.electrodeARemplacee || 'Non');
       setSelectionElectrodeARemplacee(report.selectionElectrodeARemplacee || '');
       setCustomElectrodeARemplacee(report.customElectrodeARemplacee || '');
@@ -1260,6 +1282,7 @@ export default function GmaoCorrectionForm({
       setBatterieRemplacee(report.batterieRemplacee || 'Non');
       setSelectionBatterieRemplacee(report.selectionBatterieRemplacee || '');
       setCustomBatterieRemplacee(report.customBatterieRemplacee || '');
+      setPourcentageChargeNouvelleBatterie(report.pourcentageChargeNouvelleBatterie ? String(report.pourcentageChargeNouvelleBatterie) : '100');
       setBatterieConformeSante(report.batterieConformeSante || (report.defibSnapshot?.situationBatterie === 'Vert' ? 'Oui' : 'Non') || 'Oui');
       setTechConformeArrivee(report.techConformeArrivee || '');
       setTechCommentaireArrivee(report.techCommentaireArrivee || '');
@@ -1635,6 +1658,13 @@ export default function GmaoCorrectionForm({
       setKitPeremptionServiettes(defib.kitPeremptionServiettes || '');
       setKitGantsPresents(defib.kitGantsPresents || 'Oui');
       setKitRasoirPresent(defib.kitRasoirPresent || 'Oui');
+      if (defib.installeExterieur) {
+        setInstalleExterieur(defib.installeExterieur);
+      } else if (defib.exterieur !== undefined) {
+        setInstalleExterieur(defib.exterieur ? 'Oui' : 'Non');
+      } else {
+        setInstalleExterieur('Non');
+      }
     } else {
       setSnapshot(DEFAULT_DEFIB);
       setKitPeremption('');
@@ -2041,6 +2071,12 @@ export default function GmaoCorrectionForm({
       if (batterieRemplacee === 'Oui' && selectionBatterieRemplacee === 'Autre' && !customBatterieRemplacee.trim()) {
         errors.push("Vous avez sélectionné 'Autre' pour la batterie remplacée (Section 8), mais vous n’avez pas saisi de référence.");
       }
+      if (batterieRemplacee === 'Oui') {
+        const valPct = parseInt(pourcentageChargeNouvelleBatterie, 10);
+        if (!pourcentageChargeNouvelleBatterie || isNaN(valPct) || valPct < 1 || valPct > 100) {
+          errors.push("Le pourcentage de charge de la nouvelle batterie doit être un chiffre compris entre 1 et 100.");
+        }
+      }
     }
     if (isVisibleGantsPresents || isVisiblePeremptionServiettes || isVisibleServiettesPresentes || isVisiblePeremptionMasque || isVisibleMasquePresent || isVisibleCiseauxPresents || isVisiblePeremptionTrousse || isVisibleRasoir) {
       if (kitSecoursRemplaceOuAjoute === 'Oui' && !selectionKitSecoursRemplace) {
@@ -2204,7 +2240,7 @@ export default function GmaoCorrectionForm({
       if (selectionBatterieRemplacee === 'Autre') {
         finalSnapshot.lotBatterie = customBatterieRemplacee;
         finalSnapshot.insertionBatterie = maintDate;
-        finalSnapshot.pourcentageBatterie = '100';
+        finalSnapshot.pourcentageBatterie = pourcentageChargeNouvelleBatterie || '100';
         finalSnapshot.situationBatterie = 'Vert';
       } else {
         const res = getTraceAndStock(selectionBatterieRemplacee);
@@ -2213,7 +2249,7 @@ export default function GmaoCorrectionForm({
           finalSnapshot.lotBatterie = res.trace.lotOrSerial;
           finalSnapshot.peremptionBatterie = res.trace.expirationDate || '';
           finalSnapshot.insertionBatterie = maintDate;
-          finalSnapshot.pourcentageBatterie = '100';
+          finalSnapshot.pourcentageBatterie = pourcentageChargeNouvelleBatterie || '100';
           finalSnapshot.situationBatterie = 'Vert';
         }
       }
@@ -2249,6 +2285,8 @@ export default function GmaoCorrectionForm({
     finalSnapshot.devisArticlesSelectionnes = devisArticlesSelectionnes;
     finalSnapshot.devisAutreInfo = devisAutreInfo;
     finalSnapshot.devisPriorite = devisPriorite;
+    finalSnapshot.installeExterieur = installeExterieur;
+    finalSnapshot.exterieur = installeExterieur === 'Oui';
 
     if (stocksMutated && onUpdateStocks) {
       onUpdateStocks(updatedStocks);
@@ -2287,6 +2325,7 @@ export default function GmaoCorrectionForm({
       armoireConnectee,
       dispositifHandicap,
       signaletiqueConforme,
+      installeExterieur,
 
       // Section 6 additions
       electrodeARemplacee,
@@ -2305,6 +2344,7 @@ export default function GmaoCorrectionForm({
       // Section 8 additions
       batterieRemplacee,
       selectionBatterieRemplacee,
+      pourcentageChargeNouvelleBatterie: batterieRemplacee === 'Oui' ? pourcentageChargeNouvelleBatterie : undefined,
       batterieConformeSante,
 
       // Section 10 kit de secours additionnels
@@ -3747,6 +3787,16 @@ export default function GmaoCorrectionForm({
                   <FormRadio label="Non" checked={signaletiqueConforme === 'Non'} onChange={() => setSignaletiqueConforme('Non')} />
                 </div>
               </div>
+
+              <div className="space-y-1 bg-white">
+                <label className="block text-[11px] font-bold text-black uppercase">
+                  Installé en extérieur.
+                </label>
+                <div className="flex gap-6 items-center pt-1 bg-white">
+                  <FormRadio label="Oui" checked={installeExterieur === 'Oui'} onChange={() => setInstalleExterieur('Oui')} />
+                  <FormRadio label="Non" checked={installeExterieur === 'Non'} onChange={() => setInstalleExterieur('Non')} />
+                </div>
+              </div>
             </div>
 
             <div className="pt-3 space-y-1 bg-white">
@@ -4972,6 +5022,26 @@ export default function GmaoCorrectionForm({
                     />
                   </div>
                 )}
+
+                <div className="pt-2 space-y-1 bg-white">
+                  <label htmlFor="input-pourcentage-charge-nouvelle-batterie" className="block text-[11px] font-bold text-black uppercase">
+                    Pourcentage de charge nouvelle batterie.
+                  </label>
+                  <input
+                    type="number"
+                    id="input-pourcentage-charge-nouvelle-batterie"
+                    min="1"
+                    max="100"
+                    value={pourcentageChargeNouvelleBatterie}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '');
+                      setPourcentageChargeNouvelleBatterie(val);
+                    }}
+                    placeholder="100"
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800"
+                    required
+                  />
+                </div>
               </div>
             )}
 

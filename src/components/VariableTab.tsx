@@ -318,6 +318,7 @@ export default function VariableTab({
   const [couleurHex, setCouleurHex] = useState('');
   const [dureePrestation, setDureePrestation] = useState('');
   const [identifiant, setIdentifiant] = useState('');
+  const [typeDefibrillateur, setTypeDefibrillateur] = useState<'DSA' | 'DEA' | 'Non renseigné'>('Non renseigné');
   const [error, setError] = useState('');
 
   // Rappel or Alert section fields
@@ -430,6 +431,7 @@ export default function VariableTab({
     setCouleurHex('');
     setDureePrestation('');
     setIdentifiant('');
+    setTypeDefibrillateur('Non renseigné');
     setRappelAlerteOption('');
     setRappelDateDebut('');
     setRappelDateFin('');
@@ -480,6 +482,7 @@ export default function VariableTab({
     setCouleurHex(v.couleurHex || '');
     setDureePrestation(v.dureePrestation !== undefined && v.dureePrestation !== null ? String(v.dureePrestation) : '');
     setIdentifiant(v.identifiant || '');
+    setTypeDefibrillateur(v.typeDefibrillateur || 'Non renseigné');
     setRappelAlerteOption(v.rappelAlerteOption || '');
     setRappelDateDebut(v.rappelDateDebut || '');
     setRappelDateFin(v.rappelDateFin || '');
@@ -562,6 +565,7 @@ export default function VariableTab({
     };
 
     if (category === 'Modèle Défibrillateur') {
+      payload.typeDefibrillateur = typeDefibrillateur;
       payload.visibiliteNumeroAtlasante = visibiliteNumeroAtlasante;
       payload.visibiliteVersionLogiciel = visibiliteVersionLogiciel;
       payload.visibiliteFactureBrouillon = visibiliteFactureBrouillon;
@@ -867,6 +871,25 @@ export default function VariableTab({
                     placeholder="Ex: REF123"
                   />
                 </div>
+
+                {/* Type Défibrillateur. (spécifique à Modèle Défibrillateur uniquement) */}
+                {category === 'Modèle Défibrillateur' && (
+                  <div className="space-y-1">
+                    <label htmlFor="input-variable-type-defib" className="block text-[11px] font-bold text-slate-500 uppercase">
+                      Type Défibrillateur.
+                    </label>
+                    <select
+                      id="input-variable-type-defib"
+                      value={typeDefibrillateur}
+                      onChange={(e) => setTypeDefibrillateur(e.target.value as 'DSA' | 'DEA' | 'Non renseigné')}
+                      className="w-full"
+                    >
+                      <option value="Non renseigné">Non renseigné</option>
+                      <option value="DSA">DSA</option>
+                      <option value="DEA">DEA</option>
+                    </select>
+                  </div>
+                )}
 
                 {/* Optional Line Source de l'image (No sub-div, simple list flow) */}
                 {allowsImage && (

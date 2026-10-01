@@ -99,6 +99,7 @@ export interface Variable {
   marque: string;
   description: string;
   category: VariableCategory;
+  typeDefibrillateur?: 'DSA' | 'DEA' | 'Non renseigné'; // Appliqué si category === 'Modèle Défibrillateur'
   imageUrl?: string; // Appliqué si category === 'Modèle Défibrillateur'
   couleurHex?: string; // Appliqué si category === 'Drapeau GMAO' ou 'Drapeau post-intervention'
   dureePrestation?: number; // Durée de la prestation en minutes (Appliqué si category === 'Modèle Raison Prestation')
@@ -194,6 +195,7 @@ export interface Defibrillateur {
   accesSemaine: boolean;
   accesWeekend: boolean;
   exterieur: boolean;
+  installeExterieur?: 'Oui' | 'Non';
   horaires?: string;
 
   // Section 5 - Dates
