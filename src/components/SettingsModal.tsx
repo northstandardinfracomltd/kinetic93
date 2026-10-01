@@ -5005,24 +5005,8 @@ export default function SettingsModal({
             }}
             id="settings-section-actions-suspectes"
           >
-            {/* Header & Download traces button */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2.5">
-                  <ShieldAlert className="w-6 h-6 text-black" />
-                  <h3 
-                    className="text-xl font-bold text-black"
-                    style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', fontSize: '20px' }}
-                  >
-                    {t("Observateur des actions suspectes")}
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-500 font-sans">
-                  {t("Suivi et traçabilité en temps réel des actions sensibles de l'environnement.")}
-                </p>
-              </div>
-
-              {/* Bouton Télécharger les traces */}
+            {/* Bouton Télécharger les traces */}
+            <div className="flex justify-end pb-2">
               <button
                 type="button"
                 onClick={() => exportSuspiciousActivityToCsv(suspiciousLogs, myTenantId)}
@@ -5030,14 +5014,13 @@ export default function SettingsModal({
                   ...rowActionButtonStyle,
                   backgroundColor: '#000000',
                   color: '#ffffff',
-                  fontSize: '16px',
+                  fontSize: '18px',
                   padding: '11px 20px',
                   borderRadius: '12px',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   fontWeight: 600,
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '8px',
                   cursor: 'pointer',
                   border: 'none',
                   boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
@@ -5045,19 +5028,8 @@ export default function SettingsModal({
                 className="hover:opacity-90 active:scale-[0.98] transition-all"
                 title={t("Télécharger le fichier CSV de toutes les traces")}
               >
-                <Download className="w-4 h-4" />
                 <span>{t("Télécharger les traces")}</span>
               </button>
-            </div>
-
-            {/* Counter info */}
-            <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/80 font-sans">
-              <span>
-                {t("Affichage limité aux 30 dernières actions suspectes.")}
-              </span>
-              <span className="font-semibold text-black">
-                {suspiciousLogs.length} {t("trace(s) enregistrée(s)")}
-              </span>
             </div>
 
             {/* List of up to 30 suspicious action notifications */}
@@ -5087,30 +5059,47 @@ export default function SettingsModal({
                   return (
                     <div
                       key={log.id || index}
-                      className="p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/60 transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs"
+                      className="p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/60 transition-colors flex flex-col gap-2.5 shadow-xs text-left"
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0 mt-0.5 border border-slate-200 text-slate-700">
-                          <Activity className="w-4 h-4" />
-                        </div>
-                        <div className="space-y-1 text-left">
-                          <p 
-                            className="font-medium text-black leading-snug"
-                            style={{ fontSize: '15px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                      <p 
+                        className="font-medium text-black leading-snug"
+                        style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                      >
+                        {log.message}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          style={{
+                            fontSize: '13px',
+                            borderRadius: '100px',
+                            color: '#ffffff',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            padding: '3px 8px',
+                            border: 'none',
+                            background: '#000000',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          Horodatage : {formattedDate}
+                        </span>
+                        {log.userIp && (
+                          <span
+                            style={{
+                              fontSize: '13px',
+                              borderRadius: '100px',
+                              color: '#ffffff',
+                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                              padding: '3px 8px',
+                              border: 'none',
+                              background: '#000000',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                            }}
                           >
-                            {log.message}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-sans">
-                            <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-[11px] text-slate-700">
-                              {formattedDate}
-                            </span>
-                            {log.userIp && (
-                              <span className="bg-slate-100 px-2 py-0.5 rounded text-[11px] text-slate-600">
-                                IP : {log.userIp}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                            IP : {log.userIp}
+                          </span>
+                        )}
                       </div>
                     </div>
                   );

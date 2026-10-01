@@ -547,7 +547,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       if (clientIp) {
         setCurrentIp(clientIp);
       }
-      logUserLogin(tenantIdVal, nameVal || emailVal, clientIp).catch(() => {});
     } catch (e) {
       console.error(e);
     }

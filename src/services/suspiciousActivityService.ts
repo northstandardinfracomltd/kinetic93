@@ -26,6 +26,7 @@ export interface SuspiciousActivityLog {
 }
 
 let inMemoryIp: string = '';
+let lastLoggedCall: { key: string; time: number } | null = null;
 
 // Pre-fetch IP on initial module load
 if (typeof window !== 'undefined') {
@@ -156,6 +157,24 @@ export async function recordSuspiciousActivity(
       if (Array.isArray(parsed)) existing = parsed;
     }
   } catch (_) {}
+
+  // Prevent duplicate records for the same action within 2.5 seconds
+  const dedupeKey = `${effectiveTenantId}_${entry.actionType}_${entry.message}`;
+  const nowMs = Date.now();
+  if (lastLoggedCall && lastLoggedCall.key === dedupeKey && (nowMs - lastLoggedCall.time) < 2500) {
+    if (existing[0]) return existing[0];
+  }
+  lastLoggedCall = { key: dedupeKey, time: nowMs };
+
+  if (existing.length > 0) {
+    const latest = existing[0];
+    if (latest.actionType === entry.actionType && latest.message === entry.message) {
+      const diffMs = Math.abs(nowMs - new Date(latest.timestamp).getTime());
+      if (diffMs < 2500) {
+        return latest;
+      }
+    }
+  }
 
   const updated = [newLog, ...existing];
   try {
