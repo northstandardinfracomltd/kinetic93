@@ -427,13 +427,13 @@ export default function SatisfactionTab({
 
   const percentBadgeStyle: React.CSSProperties = {
     ...roundBadgeStyle,
-    width: '46px',
-    height: '46px',
+    width: '42px',
+    height: '42px',
     fontSize: '13.5px',
     letterSpacing: '-0.3px',
     outline: '#8f1961 solid 3px',
     outlineOffset: '3px',
-    marginLeft: '5px',
+    marginLeft: '10px',
     backgroundColor: '#8f1961',
   };
 
@@ -471,7 +471,29 @@ export default function SatisfactionTab({
   // Searching and month filtering logic - calculates exactly the rows displayed on screen
   const filteredReviews = useMemo(() => {
     return customerReviews.filter((rev) => {
-      // 1. Month filter
+      // 1. Date range filter (Début et Fin)
+      if (satStartDate || satEndDate) {
+        const revDate = parseReviewTimestamp(rev);
+        if (revDate) {
+          const revTime = revDate.getTime();
+          if (satStartDate) {
+            const m = satStartDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (m) {
+              const startTs = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 0, 0, 0, 0).getTime();
+              if (revTime < startTs) return false;
+            }
+          }
+          if (satEndDate) {
+            const m = satEndDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (m) {
+              const endTs = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 23, 59, 59, 999).getTime();
+              if (revTime > endTs) return false;
+            }
+          }
+        }
+      }
+
+      // 2. Month filter
       if (selectedMonth !== 'all') {
         const parsed = extractMonthFromDate(getReviewDate(rev));
         if (!parsed || parsed.key !== selectedMonth) {
@@ -479,7 +501,7 @@ export default function SatisfactionTab({
         }
       }
 
-      // 2. Search query filter
+      // 3. Search query filter
       const q = search.trim().toLowerCase();
       if (!q) return true;
       return (
@@ -492,7 +514,7 @@ export default function SatisfactionTab({
         (rev.defibId && rev.defibId.toLowerCase().includes(q))
       );
     });
-  }, [customerReviews, selectedMonth, search]);
+  }, [customerReviews, selectedMonth, search, satStartDate, satEndDate]);
 
   // Selection handlers
   const isAllSelected = filteredReviews.length > 0 && filteredReviews.every(r => selectedReviewIds.includes(r.id));
@@ -511,9 +533,11 @@ export default function SatisfactionTab({
     );
   };
 
-  // CSV Export handler - exports only the selected reviews
+  // CSV Export handler - exports matching reviews (selected or all filtered)
   const handleExportCSV = () => {
-    const reviewsToExport = filteredReviews.filter(rev => selectedReviewIds.includes(rev.id));
+    const reviewsToExport = selectedReviewIds.length > 0
+      ? filteredReviews.filter(rev => selectedReviewIds.includes(rev.id))
+      : filteredReviews;
     if (reviewsToExport.length === 0) return;
 
     const headers = [
@@ -697,8 +721,8 @@ export default function SatisfactionTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
-            {/* Search Bar Input */}
-            <div className="relative w-full sm:w-80 bg-white">
+            {/* Search Bar Input (reduced width) */}
+            <div className="relative w-44 sm:w-52 bg-white">
               <input
                 type="text"
                 id="search-satisfaction-input"
@@ -713,6 +737,75 @@ export default function SatisfactionTab({
                 onBlur={() => setIsSearchFocused(false)}
               />
             </div>
+
+            {/* Bouton Date Début (comme dans la side pane performance) */}
+            <div className="relative inline-flex items-center">
+              <button
+                type="button"
+                id="btn-filter-sat-start-date"
+                style={{
+                  ...rowActionButtonStyle,
+                  width: 'auto',
+                  whiteSpace: 'nowrap',
+                  backgroundColor: satStartDate ? '#3556ec' : '#000000',
+                }}
+                className="cursor-pointer font-sans hover:opacity-80 transition-all select-none"
+              >
+                <span>{satStartDate ? `Début : ${formatToDisplayDate(satStartDate)}` : (t("Début.") || "Début.")}</span>
+              </button>
+              <input
+                type="date"
+                id="filter-sat-start-date"
+                value={satStartDate}
+                onChange={(e) => setSatStartDate(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                title={t("Filtrer par date de début")}
+              />
+            </div>
+
+            {/* Bouton Date Fin (comme dans la side pane performance) */}
+            <div className="relative inline-flex items-center">
+              <button
+                type="button"
+                id="btn-filter-sat-end-date"
+                style={{
+                  ...rowActionButtonStyle,
+                  width: 'auto',
+                  whiteSpace: 'nowrap',
+                  backgroundColor: satEndDate ? '#3556ec' : '#000000',
+                }}
+                className="cursor-pointer font-sans hover:opacity-80 transition-all select-none"
+              >
+                <span>{satEndDate ? `Fin : ${formatToDisplayDate(satEndDate)}` : (t("Fin.") || "Fin.")}</span>
+              </button>
+              <input
+                type="date"
+                id="filter-sat-end-date"
+                value={satEndDate}
+                onChange={(e) => setSatEndDate(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                title={t("Filtrer par date de fin")}
+              />
+            </div>
+
+            {(satStartDate || satEndDate) && (
+              <button
+                type="button"
+                id="btn-reset-sat-dates"
+                onClick={() => { setSatStartDate(''); setSatEndDate(''); }}
+                style={{
+                  ...rowActionButtonStyle,
+                  backgroundColor: 'rgb(222 29 29)',
+                  color: '#fff',
+                  width: 'auto',
+                  whiteSpace: 'nowrap',
+                }}
+                className="cursor-pointer font-sans hover:opacity-90 active:scale-95 transition-all select-none"
+                title={t("Réinitialiser les dates")}
+              >
+                <span>{t("Réinitialiser")}</span>
+              </button>
+            )}
 
             {/* Filter Month Button / Native Dropdown (Largeur auto selon le texte affiché) */}
             <div className="relative inline-flex items-center">
@@ -761,11 +854,11 @@ export default function SatisfactionTab({
               type="button"
               id="btn-export-satisfaction-csv"
               onClick={handleExportCSV}
-              disabled={selectedReviewIds.length === 0}
+              disabled={filteredReviews.length === 0}
               style={{
                 ...rowActionButtonStyle,
-                opacity: selectedReviewIds.length === 0 ? 0.4 : 1,
-                cursor: selectedReviewIds.length === 0 ? 'not-allowed' : 'pointer',
+                opacity: filteredReviews.length === 0 ? 0.4 : 1,
+                cursor: filteredReviews.length === 0 ? 'not-allowed' : 'pointer',
               }}
               className="font-sans whitespace-nowrap hover:opacity-80 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -1283,7 +1376,7 @@ export default function SatisfactionTab({
                           ...percentBadgeStyle,
                           outline: '#8f1961 solid 3px',
                           outlineOffset: '3px',
-                          marginLeft: '5px',
+                          marginLeft: '10px',
                           backgroundColor: '#8f1961',
                         }}
                       >

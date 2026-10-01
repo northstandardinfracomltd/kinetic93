@@ -103,39 +103,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [tableFitScale, setTableFitScale] = useState<number>(1);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
-  const naturalTableWidthRef = useRef<{ [key: string]: number }>({
-    Commercial: 3600,
-    Réclamation: 2500,
-    Technique: 2500,
-    'Sans Catégorie': 2500,
-  });
+  const naturalTableWidthRef = useRef<number>(1650);
 
-  const getTargetTableWidth = (cat: string) => {
-    const minW = cat === 'Commercial' ? 3600 : 2500;
-    if (tableRef.current) {
-      const ths = tableRef.current.querySelectorAll('thead th');
-      if (ths.length > 0) {
-        let total = 0;
-        const currentZoom = (isTableFitView && tableFitScale > 0) ? tableFitScale : 1;
-        ths.forEach(th => {
-          const rect = th.getBoundingClientRect();
-          total += rect.width / currentZoom;
-        });
-        if (total > 500) {
-          return Math.max(minW, Math.ceil(total) + 60);
-        }
-      }
-    }
-    return Math.max(minW, naturalTableWidthRef.current[cat] || minW);
-  };
-
-  const calculateFitScale = (cat: string) => {
+  const calculateFitScale = () => {
     if (!bottomScrollRef.current) return 1;
     const clientW = bottomScrollRef.current.clientWidth;
     if (clientW <= 0) return 1;
-    const naturalW = getTargetTableWidth(cat);
-    // clientW - 40 ensures ample breathing room on the right so action buttons are never cut off
-    const scale = Math.min(1, Math.max(0.1, (clientW - 40) / naturalW));
+    const naturalW = naturalTableWidthRef.current || 1650;
+    const scale = Math.min(1, Math.max(0.15, (clientW - 10) / naturalW));
     return scale;
   };
 
@@ -143,8 +118,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setIsTableFitView(prev => {
       const next = !prev;
       if (next) {
-        const nextScale = calculateFitScale(ticketCategoryFilter);
-        setTableFitScale(nextScale);
+        setTableFitScale(calculateFitScale());
       } else {
         setTableFitScale(1);
       }
@@ -156,11 +130,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     if (!bottomScrollRef.current) return;
     const updateWidth = () => {
       if (!bottomScrollRef.current) return;
+      const clientW = bottomScrollRef.current.clientWidth;
       if (!isTableFitView) {
+        const sWidth = bottomScrollRef.current.scrollWidth;
+        if (sWidth > 500) {
+          naturalTableWidthRef.current = sWidth;
+        }
         setTableFitScale(1);
       } else {
-        const nextScale = calculateFitScale(ticketCategoryFilter);
-        setTableFitScale(nextScale);
+        const naturalW = naturalTableWidthRef.current || 1650;
+        const scale = Math.min(1, Math.max(0.15, (clientW - 10) / naturalW));
+        setTableFitScale(scale);
       }
     };
 
@@ -176,6 +156,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     };
   }, [isTableFitView, tickets, ticketCategoryFilter]);
 
+  // CRM Date Range Filters (Filtre Date Début et Filtre Date Fin)
+  const [crmDateStart, setCrmDateStart] = useState<string>('');
+  const [crmDateEnd, setCrmDateEnd] = useState<string>('');
+
   // CRM Filtres Side-pane state
   const [isFilterPaneOpen, setIsFilterPaneOpen] = useState(false);
   const [filterCollaborateur, setFilterCollaborateur] = useState<string>('Tous');
@@ -183,12 +167,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [filterSemaine, setFilterSemaine] = useState<string>('Tous');
   const [filterSituationDevis, setFilterSituationDevis] = useState<string>('Tous');
 
+  const [draftFilterStatut, setDraftFilterStatut] = useState<'Tous' | 'Nouveau' | 'En cours' | 'Terminé'>('Tous');
   const [draftFilterCollaborateur, setDraftFilterCollaborateur] = useState<string>('Tous');
   const [draftFilterCriticite, setDraftFilterCriticite] = useState<string>('Tous');
   const [draftFilterSemaine, setDraftFilterSemaine] = useState<string>('Tous');
   const [draftFilterSituationDevis, setDraftFilterSituationDevis] = useState<string>('Tous');
 
   const activeFiltersCount = (
+    (ticketStatusFilter !== 'Tous' ? 1 : 0) +
     (filterCollaborateur !== 'Tous' ? 1 : 0) +
     (filterCriticite !== 'Tous' ? 1 : 0) +
     (filterSemaine !== 'Tous' ? 1 : 0) +
@@ -1127,6 +1113,48 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       }
     }
 
+    // 8. Date à date filter (Filtre Date Début et Filtre Date Fin)
+    if (crmDateStart || crmDateEnd) {
+      const rawOuv = t.dateOuverture || t.ouverture || t.createdAt || (t as any).date;
+      if (rawOuv) {
+        let ticketTime = 0;
+        if (typeof rawOuv === 'number') {
+          ticketTime = rawOuv > 1e11 ? rawOuv : rawOuv * 1000;
+        } else {
+          const s = String(rawOuv).trim();
+          const ymd = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+          if (ymd) {
+            ticketTime = new Date(parseInt(ymd[1], 10), parseInt(ymd[2], 10) - 1, parseInt(ymd[3], 10)).getTime();
+          } else {
+            const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+            if (dmy) {
+              ticketTime = new Date(parseInt(dmy[3], 10), parseInt(dmy[2], 10) - 1, parseInt(dmy[1], 10)).getTime();
+            } else {
+              const d = new Date(s);
+              if (!isNaN(d.getTime())) ticketTime = d.getTime();
+            }
+          }
+        }
+
+        if (ticketTime > 0) {
+          if (crmDateStart) {
+            const m = crmDateStart.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (m) {
+              const startTs = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 0, 0, 0, 0).getTime();
+              if (ticketTime < startTs) return false;
+            }
+          }
+          if (crmDateEnd) {
+            const m = crmDateEnd.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (m) {
+              const endTs = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 23, 59, 59, 999).getTime();
+              if (ticketTime > endTs) return false;
+            }
+          }
+        }
+      }
+    }
+
     return matchesCat && matchesSit;
   });
 
@@ -1586,7 +1614,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
           <div>
             <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }} id="crm-tab-title">
-              Suivi Commercial et Support
+              CRM
             </h2>
           </div>
 
@@ -1608,7 +1636,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 backgroundColor: '#ffffff',
                 fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                 outline: 'none',
-                width: '260px',
+                width: '200px',
               }}
             />
 
@@ -1638,6 +1666,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             <button
               type="button"
               onClick={() => {
+                setDraftFilterStatut(ticketStatusFilter);
                 setDraftFilterCollaborateur(filterCollaborateur);
                 setDraftFilterCriticite(filterCriticite);
                 setDraftFilterSemaine(filterSemaine);
@@ -1692,70 +1721,95 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         </div>
       </div>
 
-      {/* Header Pills: Categories first, then Situation */}
-      <div className="px-4 space-y-3 mt-4" id="crm-filter-pills-wrapper">
-        {/* Row 1: Gélules de catégories : « Commercial » / « Réclamation » / « Technique » / « Sans Catégorie » */}
-        <div className="flex flex-wrap gap-2.5 items-center justify-center sm:justify-start" id="crm-category-pills">
-          {(['Commercial', 'Réclamation', 'Technique', 'Sans Catégorie'] as const).map((catOpt) => {
-            const isSelected = ticketCategoryFilter === catOpt;
-            return (
-              <button
-                key={catOpt}
-                type="button"
-                onClick={() => setTicketCategoryFilter(catOpt)}
-                style={{
-                  borderRadius: '1000px',
-                  padding: '7px 16px',
-                  fontSize: '18px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  backgroundColor: isSelected ? '#000000' : '#ffffff',
-                  color: isSelected ? '#ffffff' : '#000000',
-                  border: isSelected ? '1px solid #000000' : '1px solid rgb(218, 218, 218)',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {catOpt}
-                {catOpt === 'Commercial' && ` (${countCatCommercial})`}
-                {catOpt === 'Réclamation' && ` (${countCatReclamation})`}
-                {catOpt === 'Technique' && ` (${countCatTechnique})`}
-                {catOpt === 'Sans Catégorie' && ` (${countCatSansCat})`}
-              </button>
-            );
-          })}
-        </div>
+      {/* Header Pills: Gélules de catégories et Filtre date à date sur la même ligne */}
+      <div className="px-4 mt-4" id="crm-filter-pills-wrapper">
+        <div className="flex flex-wrap gap-3 items-center justify-between" id="crm-category-pills">
+          <div className="flex flex-wrap gap-2.5 items-center justify-center sm:justify-start">
+            {(['Commercial', 'Réclamation', 'Technique', 'Sans Catégorie'] as const).map((catOpt) => {
+              const isSelected = ticketCategoryFilter === catOpt;
+              return (
+                <button
+                  key={catOpt}
+                  type="button"
+                  onClick={() => setTicketCategoryFilter(catOpt)}
+                  style={{
+                    borderRadius: '1000px',
+                    padding: '7px 16px',
+                    fontSize: '18px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    backgroundColor: isSelected ? '#000000' : '#ffffff',
+                    color: isSelected ? '#ffffff' : '#000000',
+                    border: isSelected ? '1px solid #000000' : '1px solid rgb(218, 218, 218)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {catOpt}
+                  {catOpt === 'Commercial' && ` (${countCatCommercial})`}
+                  {catOpt === 'Réclamation' && ` (${countCatReclamation})`}
+                  {catOpt === 'Technique' && ` (${countCatTechnique})`}
+                  {catOpt === 'Sans Catégorie' && ` (${countCatSansCat})`}
+                </button>
+              );
+            })}
+          </div>
 
-        {/* Row 2: Gélules de situation : « Tous » / « Nouveau » / « En cours » / « Terminé » */}
-        <div className="flex flex-wrap gap-2.5 items-center justify-center sm:justify-start" id="crm-situation-pills">
-          {(['Tous', 'Nouveau', 'En cours', 'Terminé'] as const).map((filterOpt) => {
-            const isSelected = ticketStatusFilter === filterOpt;
-            return (
-              <button
-                key={filterOpt}
-                type="button"
-                onClick={() => setTicketStatusFilter(filterOpt)}
+          {/* Filtres date à date sur la même ligne après un gap */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="crm-filter-date-start" className="text-xs font-semibold text-neutral-600 whitespace-nowrap">
+                Filtre Date Début
+              </label>
+              <input
+                type="date"
+                id="crm-filter-date-start"
+                value={crmDateStart}
+                onChange={(e) => setCrmDateStart(e.target.value)}
                 style={{
-                  borderRadius: '1000px',
-                  padding: '7px 16px',
-                  fontSize: '18px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
+                  border: '1px solid rgb(218, 218, 218)',
+                  borderRadius: '12px',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  backgroundColor: '#ffffff',
+                  color: '#000000',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  backgroundColor: isSelected ? '#000000' : '#ffffff',
-                  color: isSelected ? '#ffffff' : '#000000',
-                  border: isSelected ? '1px solid #000000' : '1px solid rgb(218, 218, 218)',
-                  transition: 'all 0.15s ease'
+                  outline: 'none',
                 }}
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="crm-filter-date-end" className="text-xs font-semibold text-neutral-600 whitespace-nowrap">
+                Filtre Date Fin
+              </label>
+              <input
+                type="date"
+                id="crm-filter-date-end"
+                value={crmDateEnd}
+                onChange={(e) => setCrmDateEnd(e.target.value)}
+                style={{
+                  border: '1px solid rgb(218, 218, 218)',
+                  borderRadius: '12px',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  backgroundColor: '#ffffff',
+                  color: '#000000',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  outline: 'none',
+                }}
+              />
+            </div>
+            {(crmDateStart || crmDateEnd) && (
+              <button
+                type="button"
+                onClick={() => { setCrmDateStart(''); setCrmDateEnd(''); }}
+                className="text-xs text-rose-600 hover:text-rose-800 font-bold px-1.5 py-1 cursor-pointer"
+                title="Effacer le filtre date"
               >
-                {filterOpt}
-                {filterOpt === 'Tous' && ` (${tickets.length})`}
-                {filterOpt === 'Nouveau' && ` (${countNew})`}
-                {filterOpt === 'En cours' && ` (${countProgress})`}
-                {filterOpt === 'Terminé' && ` (${countTermine})`}
+                ✕
               </button>
-            );
-          })}
+            )}
+          </div>
         </div>
       </div>
 
@@ -1893,8 +1947,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       <div className="bg-white overflow-hidden mt-4" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         <div 
           ref={bottomScrollRef}
-          className="overflow-x-auto"
-          style={isTableFitView ? { width: '100%', overflowX: 'auto', paddingRight: '8px' } : undefined}
+          className={isTableFitView ? "overflow-x-hidden" : "overflow-x-auto"}
+          style={isTableFitView ? { width: '100%', overflowX: 'hidden' } : undefined}
         >
           {filteredTickets.length === 0 ? (
             <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
@@ -1908,10 +1962,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 borderBottom: '1px solid rgb(218, 218, 218)',
                 ...(isTableFitView ? {
                   zoom: tableFitScale,
-                  width: `${getTargetTableWidth(ticketCategoryFilter)}px`,
-                  minWidth: `${getTargetTableWidth(ticketCategoryFilter)}px`,
-                  maxWidth: `${getTargetTableWidth(ticketCategoryFilter)}px`,
-                  tableLayout: 'auto',
+                  width: `${naturalTableWidthRef.current || 1650}px`,
+                  minWidth: `${naturalTableWidthRef.current || 1650}px`,
                   transition: 'zoom 0.15s ease'
                 } : {
                   width: '100%',
@@ -2168,8 +2220,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               e.stopPropagation();
                               openEditTicketPane(t);
                             }}
-                            style={rowActionButtonStyle}
-                            className="hover:bg-zinc-800 transition-colors"
+                            style={{
+                              ...rowActionButtonStyle,
+                              backgroundColor: '#3556ec',
+                              color: '#ffffff',
+                              border: 'none',
+                            }}
+                            className="hover:bg-[#2b48cc] transition-colors"
                           >
                             Gérer
                           </button>
@@ -3337,12 +3394,41 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </select>
                 </div>
 
+                {/* 5. Statut. */}
+                <div>
+                  <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                    Statut.
+                  </label>
+                  <select
+                    value={draftFilterStatut}
+                    onChange={(e) => setDraftFilterStatut(e.target.value as any)}
+                    style={{
+                      width: '100%',
+                      border: '1px solid #dedede',
+                      borderRadius: '13px',
+                      padding: '10px 14px',
+                      fontSize: '16px',
+                      color: '#000000',
+                      backgroundColor: '#ffffff',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="Tous">Tous</option>
+                    <option value="Nouveau">Nouveau</option>
+                    <option value="En cours">En cours</option>
+                    <option value="Terminé">Terminé</option>
+                  </select>
+                </div>
+
                 {/* Réinitialiser si au moins un filtre est actif */}
-                {(draftFilterCollaborateur !== 'Tous' || draftFilterCriticite !== 'Tous' || draftFilterSemaine !== 'Tous' || draftFilterSituationDevis !== 'Tous') && (
+                {(draftFilterStatut !== 'Tous' || draftFilterCollaborateur !== 'Tous' || draftFilterCriticite !== 'Tous' || draftFilterSemaine !== 'Tous' || draftFilterSituationDevis !== 'Tous') && (
                   <div className="pt-2 text-center">
                     <button
                       type="button"
                       onClick={() => {
+                        setDraftFilterStatut('Tous');
                         setDraftFilterCollaborateur('Tous');
                         setDraftFilterCriticite('Tous');
                         setDraftFilterSemaine('Tous');
@@ -3372,6 +3458,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   type="button"
                   id="btn-apply-crm-filters"
                   onClick={() => {
+                    setTicketStatusFilter(draftFilterStatut);
                     setFilterCollaborateur(draftFilterCollaborateur);
                     setFilterCriticite(draftFilterCriticite);
                     setFilterSemaine(draftFilterSemaine);
