@@ -2716,6 +2716,12 @@ export default function App() {
         saveStocks(updatedStocks);
       }
     }
+    if (fsmDateFilter === tourId) {
+      setFsmDateFilter('none');
+    }
+    if (fsmLastSelectedTourId === tourId) {
+      setFsmLastSelectedTourId('');
+    }
     saveFsmTours(fsmTours.filter(t => t.id !== tourId));
   };
 
@@ -8674,13 +8680,6 @@ export default function App() {
 
                       <div className="flex flex-wrap items-center gap-2">
                         <button
-                          onClick={addFsmTour}
-                          id="btn-add-tour"
-                          style={blueButtonStyle}
-                        >
-                          Nouvelle tournée
-                        </button>
-                        <button
                           onClick={() => setFsmPlanningSidePaneOpen(true)}
                           id="btn-fsm-plannings"
                           style={{
@@ -8772,7 +8771,14 @@ export default function App() {
                           }}
                           className="hover:bg-neutral-800 transition-colors"
                         >
-                          Réglages de l’équipe
+                          Groupes et zones
+                        </button>
+                        <button
+                          onClick={addFsmTour}
+                          id="btn-add-tour"
+                          style={blueButtonStyle}
+                        >
+                          Nouvelle tournée
                         </button>
                       </div>
                     </div>
@@ -8960,7 +8966,7 @@ export default function App() {
                       style={{
                         height: '100vh',
                         boxShadow: 'none',
-                        borderRadius: '16px 0px 0px 16px',
+                        borderRadius: '0px',
                         borderLeft: '1px solid #e2e8f0',
                       }}
                     >
@@ -9022,7 +9028,7 @@ export default function App() {
                       style={{
                         height: '100vh',
                         boxShadow: 'none',
-                        borderRadius: '16px 0px 0px 16px',
+                        borderRadius: '0px',
                         borderLeft: '1px solid #e2e8f0',
                       }}
                     >
@@ -9290,7 +9296,7 @@ export default function App() {
                       style={{
                         height: '100vh',
                         boxShadow: 'none',
-                        borderRadius: '16px 0px 0px 16px',
+                        borderRadius: '0px',
                         borderLeft: '1px solid #e2e8f0',
                       }}
                     >
