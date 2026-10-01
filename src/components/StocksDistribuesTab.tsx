@@ -139,14 +139,9 @@ export default function StocksDistribuesTab({
     return (stocks || []).map((st) => {
       const vObj = variables.find(v => v.id === st.denominationPieceId);
       const pieceName = vObj ? vObj.nom : 'Dénomination inconnue';
-      const pieceCat = vObj ? vObj.category : '';
-      const ugsLabel = st.ugs ? `UGS: ${st.ugs}` : undefined;
       return {
         id: st.id,
         label: pieceName,
-        subtitle: [pieceCat, ugsLabel, `Dispo: ${st.quantite ?? 0}`].filter(Boolean).join(' • '),
-        badge: pieceCat,
-        imageUrl: vObj?.imageUrl,
         raw: { st, vObj },
       };
     });

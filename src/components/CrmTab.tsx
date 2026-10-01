@@ -360,13 +360,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const clientSidePaneItems: SearchSidePaneItem[] = useMemo(() => {
     return (clients || []).map((c) => {
       const cName = c.denomination || (c as any).name || c.id || 'Client';
-      const cEmail = c.email || c.emailSite || '';
-      const loc = [c.ville, c.codePostal].filter(Boolean).join(' ');
       return {
         id: cName,
         label: cName,
-        subtitle: [cEmail, loc, c.siret].filter(Boolean).join(' • ') || undefined,
-        badge: c.clientIdField || (c as any).codeClient || undefined,
         raw: c,
       };
     });

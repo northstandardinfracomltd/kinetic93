@@ -1734,21 +1734,6 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           {/* Drawer Container */}
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10" id="temps-settings-pane">
             <div className="w-screen max-w-md sm:max-w-xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto">
-              {/* Drawer Header */}
-              <div className="pb-3 border-b border-[#dadada] mb-4 flex items-center justify-between">
-                <h3 className="font-bold text-black" style={{ fontFamily: '"Gochi", cursive, sans-serif', fontSize: '24px' }}>
-                  {t("Réglages CTT")}
-                </h3>
-                <button
-                  type="button"
-                  onClick={closeSettingsPane}
-                  className="text-gray-400 hover:text-black transition-colors cursor-pointer text-xl font-bold px-2 py-1"
-                  title={t("Fermer")}
-                >
-                  ✕
-                </button>
-              </div>
-
               {/* Parameters List */}
               <div className="space-y-5 flex-1 pt-2 pb-2">
                 {/* LOT 1: Amplitude maximale journalière */}

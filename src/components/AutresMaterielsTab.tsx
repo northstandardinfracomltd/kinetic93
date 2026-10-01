@@ -435,8 +435,6 @@ export default function AutresMaterielsTab({
     return (clients || []).map((c) => ({
       id: c.id,
       label: c.denomination || 'Client sans nom',
-      subtitle: [c.ville, c.codePostal || (c as any).cp, c.siret].filter(Boolean).join(' • ') || undefined,
-      badge: c.clientIdField || (c as any).codeClient || undefined,
       raw: c,
     }));
   }, [clients]);

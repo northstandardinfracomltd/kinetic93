@@ -890,14 +890,9 @@ export default function StocksTab({
     const items: SearchSidePaneItem[] = [];
     groupedStockVariables.forEach(group => {
       group.items.forEach(v => {
-        const brandStr = v.marque && v.marque !== 'Standard' ? `(${v.marque})` : '';
-        const idStr = v.identifiant ? `[${v.identifiant}] ` : '';
         items.push({
           id: v.id,
-          label: `${idStr}${v.nom} ${brandStr}`.trim(),
-          subtitle: v.reference ? `Réf: ${v.reference}` : undefined,
-          badge: group.label,
-          imageUrl: v.imageUrl,
+          label: v.nom,
           raw: v,
         });
       });

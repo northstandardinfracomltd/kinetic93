@@ -13214,43 +13214,17 @@ export default function App() {
                   isOpen={isSidePaneFsmTourOpen}
                   onClose={() => setIsSidePaneFsmTourOpen(false)}
                   paneId="fsm-tour-search-side-pane"
-                  items={(scheduledTours || []).map((st: any) => {
-                    const rawStatus = String(st.status || 'Brouillon').trim();
-                    const techName = st.techName ? `Tech: ${st.techName}` : 'Sans technicien';
-                    const nbMissions = Array.isArray(st.missions) ? `${st.missions.length} mission(s)` : '0 mission';
-                    const dateStr = st.startDate || '';
-                    const statusColors: Record<string, string> = {
-                      'Brouillon': '#f1f5f9',
-                      'À faire': '#eff6ff',
-                      'En cours': '#fef3c7',
-                      'Effectué': '#f0fdf4',
-                      'Terminé': '#ecfdf5',
-                    };
-                    return {
-                      id: st.id,
-                      label: st.title || `Tournée ${st.id}`,
-                      subtitle: [dateStr, techName, nbMissions, st.vehicleName].filter(Boolean).join(' • '),
-                      badge: rawStatus,
-                      badgeColor: statusColors[rawStatus] || '#f1f5f9',
-                      raw: st,
-                    };
-                  })}
+                  items={(scheduledTours || []).map((st: any) => ({
+                    id: st.id,
+                    label: st.title || `Tournée ${st.id}`,
+                    raw: st,
+                  }))}
                   selectedId={activeDateFilter === 'A trier' ? (fsmLastSelectedTourId || displayedTour?.id) : activeDateFilter}
                   onSelect={(item) => {
                     setFsmLastSelectedTourId(item.id);
                     setFsmDateFilter(item.id);
                   }}
                   searchPlaceholder="Entrez votre recherche"
-                  searchFilter={(item, q) => {
-                    const l = (item.label || '').toLowerCase();
-                    const s = (item.subtitle || '').toLowerCase();
-                    const b = (item.badge || '').toLowerCase();
-                    const tObj = item.raw;
-                    const tech = (tObj?.techName || '').toLowerCase();
-                    const veh = (tObj?.vehicleName || '').toLowerCase();
-                    const date = (tObj?.startDate || '').toLowerCase();
-                    return l.includes(q) || s.includes(q) || b.includes(q) || tech.includes(q) || veh.includes(q) || date.includes(q);
-                  }}
                 />
 
                 {/* 2. Side Pane Search for Mission Raison/Prestations */}
@@ -13263,7 +13237,6 @@ export default function App() {
                     .map((v: any) => ({
                       id: v.id,
                       label: v.nom,
-                      subtitle: v.dureePrestation ? `Durée : ${v.dureePrestation} min` : undefined,
                       raw: v,
                     }))}
                   onSelect={(item) => {
@@ -13301,7 +13274,6 @@ export default function App() {
                   items={(activeMissionPartsSidePane?.stockItems || []).map((si: any) => ({
                     id: si.id,
                     label: si.label,
-                    subtitle: si.name && si.name !== si.label ? si.name : undefined,
                     raw: si,
                   }))}
                   onSelect={(item) => {
