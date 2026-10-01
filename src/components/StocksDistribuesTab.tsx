@@ -3,6 +3,8 @@ import { t } from '../utils/translate';
 import { Variable, StockRecord, DistributedStockLocation, Member } from '../types';
 import { getLocationCustomName } from '../utils';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
+import { logDeleteDistributedStock } from '../services/suspiciousActivityService';
 
 const CODE39_MAP: Record<string, string> = {
   '0': '101001101101',
@@ -131,6 +133,24 @@ export default function StocksDistribuesTab({
 
   // Form states - now maps to a StockRecord (Centrale des stocks) instead of raw variable
   const [selectedStockId, setSelectedStockId] = useState('');
+  const [isSidePaneStockOpen, setIsSidePaneStockOpen] = useState(false);
+
+  const stockSidePaneItems: SearchSidePaneItem[] = useMemo(() => {
+    return (stocks || []).map((st) => {
+      const vObj = variables.find(v => v.id === st.denominationPieceId);
+      const pieceName = vObj ? vObj.nom : 'Dénomination inconnue';
+      const pieceCat = vObj ? vObj.category : '';
+      const ugsLabel = st.ugs ? `UGS: ${st.ugs}` : undefined;
+      return {
+        id: st.id,
+        label: pieceName,
+        subtitle: [pieceCat, ugsLabel, `Dispo: ${st.quantite ?? 0}`].filter(Boolean).join(' • '),
+        badge: pieceCat,
+        imageUrl: vObj?.imageUrl,
+        raw: { st, vObj },
+      };
+    });
+  }, [stocks, variables]);
   const [locationName, setLocationName] = useState<DistributedStockLocation['locationName']>('Centrale des stocks');
   const [volumeDisponible, setVolumeDisponible] = useState<number>(0);
   const [volumeReserve, setVolumeReserve] = useState<number>(0);
@@ -504,6 +524,12 @@ export default function StocksDistribuesTab({
   };
 
   const handleDelete = (id: string) => {
+    const target = distributedStocks.find(x => x.id === id);
+    if (target) {
+      const itemStockName = variables.find(v => v.id === target.denominationPieceId)?.nom || target.denominationPieceId || target.ugs || 'Équipement';
+      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      logDeleteDistributedStock(activeTenant, itemStockName).catch(() => {});
+    }
     const updated = distributedStocks.filter(x => x.id !== id);
     saveDistributedStocks(updated);
   };
@@ -1159,7 +1185,19 @@ export default function StocksDistribuesTab({
 
               {/* Piece Selection - looks up Centrale des stocks records */}
               <div className="flex flex-col gap-1 bg-white md:col-span-4">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Équipement de la centrale des stocks *</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Équipement de la centrale des stocks *</label>
+                  {!editingId && (
+                    <button
+                      type="button"
+                      onClick={() => setIsSidePaneStockOpen(true)}
+                      className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      Rechercher
+                    </button>
+                  )}
+                </div>
                 <select
                   value={selectedStockId}
                   onChange={(e) => setSelectedStockId(e.target.value)}
@@ -1815,6 +1853,26 @@ export default function StocksDistribuesTab({
           </form>
         </div>
       )}
+
+      {/* Side Pane Search for Équipement de la centrale des stocks */}
+      <SearchSidePane
+        isOpen={isSidePaneStockOpen}
+        onClose={() => setIsSidePaneStockOpen(false)}
+        paneId="stocks-distribues-equipment-search-side-pane"
+        items={stockSidePaneItems}
+        selectedId={selectedStockId}
+        onSelect={(item) => setSelectedStockId(item.id)}
+        searchPlaceholder="Entrez votre recherche"
+        searchFilter={(item, q) => {
+          const l = (item.label || '').toLowerCase();
+          const s = (item.subtitle || '').toLowerCase();
+          const b = (item.badge || '').toLowerCase();
+          const raw = item.raw;
+          const ugs = (raw?.st?.ugs || '').toLowerCase();
+          const cat = (raw?.vObj?.category || '').toLowerCase();
+          return l.includes(q) || s.includes(q) || b.includes(q) || ugs.includes(q) || cat.includes(q);
+        }}
+      />
 
     </div>
   );

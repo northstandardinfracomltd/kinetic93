@@ -14,9 +14,10 @@ import { doc, setDoc } from 'firebase/firestore';
 import { triggerEmail1Inscription, triggerEmail4Signalement, triggerAuthCodeEmail } from '../utils/emailService';
 import { updateLoginSessionSlug } from '../utils/sessionSlug';
 import TopBarProgress from './TopBarProgress';
+import { setCurrentIp, logUserLogin } from '../services/suspiciousActivityService';
 
 interface LoginProps {
-  onLoginSuccess: (email: string, name: string, tenantId: string, role?: string) => void;
+  onLoginSuccess: (email: string, name: string, tenantId: string, role?: string, clientIp?: string) => void;
 }
 
 
@@ -479,6 +480,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       .then(data => {
         if (data.ip) {
           setClientIp(data.ip);
+          setCurrentIp(data.ip);
         }
       })
       .catch(() => {
@@ -542,10 +544,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     try {
       localStorage.removeItem(`login_attempts_${clientIp}`);
       purgeAllLocalEnvironmentCaches(tenantIdVal);
+      if (clientIp) {
+        setCurrentIp(clientIp);
+      }
+      logUserLogin(tenantIdVal, nameVal || emailVal, clientIp).catch(() => {});
     } catch (e) {
       console.error(e);
     }
-    onLoginSuccess(emailVal, nameVal, tenantIdVal, roleVal);
+    onLoginSuccess(emailVal, nameVal, tenantIdVal, roleVal, clientIp);
   };
 
   const sendAuthCodeAndPrompt = async (userData: {

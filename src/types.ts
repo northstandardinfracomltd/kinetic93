@@ -487,6 +487,32 @@ export interface PointageLog {
 
 export type CttColumnTarget = 'Temps Trajet Matin' | 'Temps Trajet Soir' | 'Temps Repas';
 
+export interface CttGlobalRules {
+  maxDailyAmplitudeEnabled: boolean;
+  maxDailyAmplitudeHours: number; // 1 à 24
+  maxDailyAmplitudeErrorText: string;
+  minConsecutiveRestEnabled: boolean;
+  minConsecutiveRestHours: number; // 1 à 24
+  minConsecutiveRestErrorText: string;
+  minBreakRestEnabled: boolean;
+  minBreakRestMinutes: number; // 1 à 60
+  minBreakRestErrorText: string;
+  minBreakRestTechErrorText: string;
+}
+
+export const DEFAULT_CTT_GLOBAL_RULES: CttGlobalRules = {
+  maxDailyAmplitudeEnabled: false,
+  maxDailyAmplitudeHours: 10,
+  maxDailyAmplitudeErrorText: "L'amplitude maximale journalière de travail a été dépassée.",
+  minConsecutiveRestEnabled: false,
+  minConsecutiveRestHours: 11,
+  minConsecutiveRestErrorText: "Le temps de repos minimum entre deux jours consécutifs n'a pas été respecté.",
+  minBreakRestEnabled: false,
+  minBreakRestMinutes: 45,
+  minBreakRestErrorText: "La pause déjeuner (repas) minimale entre 12h et 14h n'a pas été respectée sur cette journée.",
+  minBreakRestTechErrorText: "Votre pause repas minimale n'est pas encore atteinte. Vous ne pouvez pas reprendre immédiatement.",
+};
+
 export interface CttModelSetting {
   id: string;
   setting0: string; // Titre du paramètre (max 30 chars)
@@ -773,6 +799,32 @@ export interface TeamWorkGroup {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export type SuspiciousActionType =
+  | 'CONNEXION'
+  | 'MODIFICATION_MASSE_DEFIB'
+  | 'EXPORT_MASSE'
+  | 'SUPPRESSION_DEFIB'
+  | 'SUPPRESSION_AUTRE_MATERIEL'
+  | 'SUPPRESSION_CLIENT'
+  | 'SUPPRESSION_TOURNEE'
+  | 'SUPPRESSION_STOCK_CENTRALE'
+  | 'SUPPRESSION_STOCK_DISTRIBUE'
+  | 'SUPPRESSION_MEMBRE'
+  | 'MODIFICATION_PARAMETRE';
+
+export interface SuspiciousActivityLog {
+  id: string;
+  tenantId: string;
+  timestamp: string;
+  userId?: string;
+  userName: string;
+  userIp: string;
+  actionType: SuspiciousActionType;
+  message: string;
+  details?: Record<string, any>;
+}
+
 
 
 

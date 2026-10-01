@@ -16,7 +16,11 @@ import {
   Image as ImageIcon,
   KeyRound,
   Plus,
-  Trash2
+  Trash2,
+  Download,
+  ShieldAlert,
+  Activity,
+  FileSpreadsheet
 } from 'lucide-react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText } from '../types';
 import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile, auth } from '../firebase';
@@ -28,6 +32,13 @@ import { getRegionsForCountry } from '../utils/regions';
 import { geocodeAddress } from '../utils/fsmOptimizer';
 import HelpBubble from './HelpBubble';
 import { ApiActivityDrawer } from './ApiActivityDrawer';
+import {
+  SuspiciousActivityLog,
+  exportSuspiciousActivityToCsv,
+  getTenantSuspiciousLogs,
+  logDeleteMember,
+  logUpdateSetting
+} from '../services/suspiciousActivityService';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -49,6 +60,7 @@ interface SettingsModalProps {
   onUpdateLocationNames?: (names: Record<string, string>) => void;
   isDeveloper?: boolean;
   isReadOnly?: boolean;
+  suspiciousActivityLogs?: SuspiciousActivityLog[];
 }
 
 export default function SettingsModal({
@@ -71,6 +83,7 @@ export default function SettingsModal({
   onUpdateLocationNames,
   isDeveloper = false,
   isReadOnly = false,
+  suspiciousActivityLogs: propSuspiciousLogs,
 }: SettingsModalProps) {
   const [selectedLang, setSelectedLang] = React.useState(() => {
     const lang = localStorage.getItem('defib_lang') || 'Français, France';
@@ -110,6 +123,28 @@ export default function SettingsModal({
   
   const myTenantId = localStorage.getItem('defib_tenant_id') || 'demo';
 
+  // Suspicious activity logs state
+  const [suspiciousLogs, setSuspiciousLogs] = React.useState<SuspiciousActivityLog[]>(() => {
+    if (propSuspiciousLogs && propSuspiciousLogs.length > 0) return propSuspiciousLogs;
+    return getTenantSuspiciousLogs(myTenantId);
+  });
+
+  React.useEffect(() => {
+    if (propSuspiciousLogs) {
+      setSuspiciousLogs(propSuspiciousLogs);
+    }
+  }, [propSuspiciousLogs]);
+
+  React.useEffect(() => {
+    const handleLogEvent = (e: any) => {
+      if (e.detail?.updated) {
+        setSuspiciousLogs(e.detail.updated);
+      }
+    };
+    window.addEventListener('defib-suspicious-activity-logged', handleLogEvent);
+    return () => window.removeEventListener('defib-suspicious-activity-logged', handleLogEvent);
+  }, []);
+
   // Local states for form editing without auto-saving until save clicked ("pas d'auto-save")
   const [localCompany, setLocalCompany] = React.useState<CompanyInfo>(companyInfo);
   const envIdDisplay = shortEnvId || (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || 'D18';
@@ -125,7 +160,8 @@ export default function SettingsModal({
     | 'assistance'
     | 'parrainage'
     | 'membres'
-    | 'communication';
+    | 'communication'
+    | 'actions_suspectes';
 
   const [activeSection, setActiveSection] = React.useState<SettingsSectionKey | null>(null);
 
@@ -140,6 +176,7 @@ export default function SettingsModal({
     { key: 'parrainage', label: 'Parrainage' },
     { key: 'membres', label: 'Membres de l’environnement' },
     { key: 'communication', label: 'Communication portail client' },
+    { key: 'actions_suspectes', label: 'Observateur des actions suspectes' },
   ];
 
   const isCurrentUserSuperAdmin = React.useMemo(() => {
@@ -1342,6 +1379,11 @@ export default function SettingsModal({
     setLocalCompany(updatedCompany);
     onUpdateCompanyInfo(updatedCompany);
 
+    try {
+      const activeTenant = myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      logUpdateSetting(activeTenant, `Visibilité onglet ${tabLabel}`).catch(() => {});
+    } catch (_) {}
+
     if (myTenantId && myTenantId !== 'demo') {
       saveCollectionToFirestore('companyInfo', updatedCompany).catch(err =>
         console.error('Error saving company info directly to Firestore:', err)
@@ -1565,6 +1607,10 @@ export default function SettingsModal({
     if (isSuperAdmin) {
       alert("Impossible de supprimer le Super-Administrateur principal.");
       return;
+    }
+    if (m) {
+      const activeTenant = myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      logDeleteMember(activeTenant, m.name || m.email).catch(() => {});
     }
     const updatedList = localMembers.filter((_, idx) => idx !== index);
     setLocalMembers(updatedList);
@@ -1799,6 +1845,50 @@ export default function SettingsModal({
       enableDevisFactures: enableDevisFactures,
       communicationPortailClient: communicationPortailClient
     };
+
+    // Log suspicious activity event K for modified fields in Réglages
+    try {
+      const activeTenant = myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      const checkFields: { key: keyof CompanyInfo; label: string }[] = [
+        { key: 'name', label: 'Nom commercial' },
+        { key: 'logo', label: 'URL source du logo' },
+        { key: 'website', label: 'URL du site internet' },
+        { key: 'email', label: 'Email de l’entreprise' },
+        { key: 'phone', label: 'Téléphone de l’entreprise' },
+        { key: 'nomLogiciel', label: 'Nom du logiciel' },
+        { key: 'siret', label: 'Numéro SIRET' },
+        { key: 'naf', label: 'Code NAF' },
+        { key: 'tva', label: 'Numéro TVA' },
+        { key: 'formeJuridique', label: 'Forme juridique' },
+        { key: 'capitalSocial', label: 'Capital social' },
+        { key: 'adresseSiege', label: 'Adresse du siège' },
+        { key: 'codePostalSiege', label: 'Code postal du siège' },
+        { key: 'villeSiege', label: 'Ville du siège' },
+        { key: 'paysSiege', label: 'Pays du siège' },
+      ];
+
+      for (const f of checkFields) {
+        const oldVal = (companyInfo as any)?.[f.key] ?? '';
+        const newVal = (companyToSave as any)?.[f.key] ?? '';
+        if (String(oldVal).trim() !== String(newVal).trim()) {
+          logUpdateSetting(activeTenant, f.label).catch(() => {});
+        }
+      }
+
+      if (enableAutoEmails !== companyInfo?.enableAutoEmails) {
+        logUpdateSetting(activeTenant, 'Emails automatiques').catch(() => {});
+      }
+      if (enableSatisfactionAvis !== companyInfo?.enableSatisfactionAvis) {
+        logUpdateSetting(activeTenant, 'Avis de satisfaction').catch(() => {});
+      }
+      if (enableDevisFactures !== companyInfo?.enableDevisFactures) {
+        logUpdateSetting(activeTenant, 'Devis et factures').catch(() => {});
+      }
+      if (selectedLang && companyInfo?.langue && selectedLang !== companyInfo?.langue) {
+        logUpdateSetting(activeTenant, 'Langue et région du logiciel').catch(() => {});
+      }
+    } catch (_) {}
+
     onUpdateCompanyInfo(companyToSave);
     onUpdateMembers(membersToSave);
 
@@ -2757,8 +2847,7 @@ export default function SettingsModal({
                 "Importer Exporter",
                 "Formations",
                 "Stagiaires",
-                "Émargements",
-                "Notifications"
+                "Émargements"
               ].map((pillLabel) => {
                 const isHidden = localCompany?.hiddenTabs?.includes(pillLabel);
                 return (
@@ -4899,6 +4988,134 @@ export default function SettingsModal({
               <p className="text-emerald-600 font-sans text-sm font-medium mt-1">
                 {t("Merci ! Votre demande de parrainage a été envoyée avec succès.")}
               </p>
+            )}
+          </div>
+        )}
+
+        {/* SECTION: OBSERVATEUR DES ACTIONS SUSPECTES */}
+        {activeSection === 'actions_suspectes' && (
+          <div 
+            className="p-5 rounded-2xl border flex flex-col gap-5 mt-4 text-left animate-fadeIn bg-white"
+            style={{
+              borderColor: 'rgb(218, 218, 218)',
+              background: '#ffffff',
+              boxShadow: 'none',
+              maxWidth: '100%',
+              margin: '16px 0px 16px 0px',
+            }}
+            id="settings-section-actions-suspectes"
+          >
+            {/* Header & Download traces button */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <ShieldAlert className="w-6 h-6 text-black" />
+                  <h3 
+                    className="text-xl font-bold text-black"
+                    style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', fontSize: '20px' }}
+                  >
+                    {t("Observateur des actions suspectes")}
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 font-sans">
+                  {t("Suivi et traçabilité en temps réel des actions sensibles de l'environnement.")}
+                </p>
+              </div>
+
+              {/* Bouton Télécharger les traces */}
+              <button
+                type="button"
+                onClick={() => exportSuspiciousActivityToCsv(suspiciousLogs, myTenantId)}
+                style={{
+                  ...rowActionButtonStyle,
+                  backgroundColor: '#000000',
+                  color: '#ffffff',
+                  fontSize: '16px',
+                  padding: '11px 20px',
+                  borderRadius: '12px',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                  border: 'none',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+                }}
+                className="hover:opacity-90 active:scale-[0.98] transition-all"
+                title={t("Télécharger le fichier CSV de toutes les traces")}
+              >
+                <Download className="w-4 h-4" />
+                <span>{t("Télécharger les traces")}</span>
+              </button>
+            </div>
+
+            {/* Counter info */}
+            <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/80 font-sans">
+              <span>
+                {t("Affichage limité aux 30 dernières actions suspectes.")}
+              </span>
+              <span className="font-semibold text-black">
+                {suspiciousLogs.length} {t("trace(s) enregistrée(s)")}
+              </span>
+            </div>
+
+            {/* List of up to 30 suspicious action notifications */}
+            {suspiciousLogs.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                <ShieldCheck className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                <p className="font-semibold text-slate-600 font-sans">{t("Aucune action suspecte enregistrée")}</p>
+                <p className="text-xs mt-1 text-slate-400 font-sans">
+                  {t("Les événements de connexion, modifications, exports et suppressions apparaîtront ici.")}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {suspiciousLogs.slice(0, 30).map((log, index) => {
+                  let formattedDate = log.timestamp;
+                  try {
+                    formattedDate = new Date(log.timestamp).toLocaleString('fr-FR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    });
+                  } catch (_) {}
+
+                  return (
+                    <div
+                      key={log.id || index}
+                      className="p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/60 transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0 mt-0.5 border border-slate-200 text-slate-700">
+                          <Activity className="w-4 h-4" />
+                        </div>
+                        <div className="space-y-1 text-left">
+                          <p 
+                            className="font-medium text-black leading-snug"
+                            style={{ fontSize: '15px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                          >
+                            {log.message}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-sans">
+                            <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-[11px] text-slate-700">
+                              {formattedDate}
+                            </span>
+                            {log.userIp && (
+                              <span className="bg-slate-100 px-2 py-0.5 rounded text-[11px] text-slate-600">
+                                IP : {log.userIp}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}

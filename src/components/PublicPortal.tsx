@@ -62,6 +62,7 @@ import {
   APP_FAVICONS,
   AppFaviconOption,
   formatPdfHeaderText,
+  CttModelSetting,
 } from "../types";
 import EmargementsTab from "./EmargementsTab";
 import { REGIONS_FRANCAISES } from "../utils";
@@ -77,6 +78,7 @@ import {
 import { auth } from "../firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from "../utils/fsmOptimizer";
+import { loadCttGlobalRules } from "../utils/cttRules";
 import { PlanningTab } from "./PlanningTab";
 import HelpBubble from "./HelpBubble";
 import TopBarProgress from "./TopBarProgress";
@@ -827,18 +829,111 @@ export default function PublicPortal({
   });
   const [pauseReason, setPauseReason] = useState<string>(() => {
     try {
-      return localStorage.getItem("defib_pause_reason") || "Nuit Hôtel";
+      return localStorage.getItem("defib_pause_reason") || "Repas";
     } catch (e) {
-      return "Nuit Hôtel";
+      return "Repas";
     }
   });
 
+  const [pauseStartTime, setPauseStartTime] = useState<number | null>(() => {
+    try {
+      const saved = localStorage.getItem("defib_pause_start_time");
+      if (saved) return parseInt(saved, 10);
+      const repasSaved = localStorage.getItem("defib_pause_repas_start_time");
+      if (repasSaved) return parseInt(repasSaved, 10);
+      return null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const formatPauseTimestamp = (ts: number | null | undefined) => {
+    if (!ts) return "";
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return "";
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${dd}/${mm}/${yyyy} - ${hh}:${min}.`;
+  };
+
+  const [pauseRepasError, setPauseRepasError] = useState<string | null>(null);
+
+  const [selectedVolumeWeek, setSelectedVolumeWeek] = useState<string>("");
+  const [cttModelSettings, setCttModelSettings] = useState<CttModelSetting[]>(() => {
+    try {
+      const tid = (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) || "demo";
+      const saved = localStorage.getItem(`defib_${tid}_ctt_model_settings`) || localStorage.getItem("ctt_model_settings");
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return [];
+  });
+
+  useEffect(() => {
+    const reloadCttSettings = () => {
+      try {
+        const tid = (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) || "demo";
+        const saved = localStorage.getItem(`defib_${tid}_ctt_model_settings`) || localStorage.getItem("ctt_model_settings");
+        if (saved) setCttModelSettings(JSON.parse(saved));
+      } catch (_) {}
+    };
+    window.addEventListener("storage", reloadCttSettings);
+    window.addEventListener("defib_ctt_model_settings_updated", reloadCttSettings);
+    return () => {
+      window.removeEventListener("storage", reloadCttSettings);
+      window.removeEventListener("defib_ctt_model_settings_updated", reloadCttSettings);
+    };
+  }, []);
+
   const updateTourPauseState = (enabled: boolean, reason: string) => {
+    const effectiveReason = reason || pauseReason || "Repas";
+
+    // Check if turning OFF a "Repas" pause
+    if (!enabled && (pauseReason === "Repas" || effectiveReason === "Repas")) {
+      const rules = loadCttGlobalRules();
+      const minRequiredMinutes = rules.minBreakRestMinutes && rules.minBreakRestMinutes > 0 ? rules.minBreakRestMinutes : 45;
+      const shouldEnforce = rules.minBreakRestEnabled || minRequiredMinutes > 0;
+      if (shouldEnforce) {
+        const rawStartTime = localStorage.getItem("defib_pause_repas_start_time") || localStorage.getItem("defib_pause_start_time");
+        const startTime = rawStartTime ? parseInt(rawStartTime, 10) : (pauseStartTime || 0);
+        const now = Date.now();
+        const elapsedMinutes = startTime > 0 ? (now - startTime) / (60 * 1000) : 0;
+        if (elapsedMinutes < minRequiredMinutes) {
+          const remainingMins = Math.ceil(minRequiredMinutes - elapsedMinutes);
+          const baseMsg = rules.minBreakRestTechErrorText?.trim() || "Votre pause repas minimale n'est pas encore atteinte. Vous ne pouvez pas reprendre immédiatement.";
+          setPauseRepasError(`${baseMsg} (Temps restant : ${remainingMins} min)`);
+          return;
+        }
+      }
+    }
+
+    setPauseRepasError(null);
     setPauseEnabled(enabled);
-    setPauseReason(reason);
+    setPauseReason(effectiveReason);
+
+    const now = Date.now();
     try {
       localStorage.setItem("defib_pause_enabled", enabled ? "true" : "false");
-      localStorage.setItem("defib_pause_reason", reason);
+      localStorage.setItem("defib_pause_reason", effectiveReason);
+      if (enabled) {
+        let startTimeToUse = pauseStartTime;
+        if (!startTimeToUse) {
+          startTimeToUse = now;
+          setPauseStartTime(now);
+          localStorage.setItem("defib_pause_start_time", now.toString());
+        }
+        if (effectiveReason === "Repas") {
+          if (!localStorage.getItem("defib_pause_repas_start_time")) {
+            localStorage.setItem("defib_pause_repas_start_time", startTimeToUse.toString());
+          }
+        }
+      } else {
+        setPauseStartTime(null);
+        localStorage.removeItem("defib_pause_start_time");
+        localStorage.removeItem("defib_pause_repas_start_time");
+      }
     } catch (e) {}
 
     const activeTechName = (authenticatedUser?.name || "").trim().toLowerCase();
@@ -7263,12 +7358,17 @@ export default function PublicPortal({
             {/* Alert banner if no ongoing pointage for connected technician session */}
             {!hidePointage && !pointages.some((p) => p.isOngoing && p.techName?.trim().toLowerCase() === (authenticatedUser?.name || "").trim().toLowerCase()) && (
               <div
-                className="text-white text-center font-semibold select-none shadow-xs font-sans shrink-0"
+                onClick={() => setActiveTab("temps")}
+                className="text-white text-center font-semibold select-none shadow-xs font-sans shrink-0 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
                 style={{
                   background: "#3556ec",
                   fontSize: "14px",
                   padding: "12px 0px",
+                  cursor: "pointer",
                 }}
+                role="button"
+                tabIndex={0}
+                title={t("Ouvrir l’onglet Temps")}
               >
                 {t("Vous n’avez pas de pointage en cours.")}
               </div>
@@ -7573,13 +7673,29 @@ export default function PublicPortal({
                             borderRadius: "14px",
                           }}
                         >
+                          {pauseRepasError && (
+                            <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-red-700 text-sm font-semibold flex items-start justify-between gap-2 animate-fadeIn">
+                              <div className="flex items-start gap-2">
+                                <span className="text-base shrink-0">⚠️</span>
+                                <div className="flex-1">{pauseRepasError}</div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setPauseRepasError(null)}
+                                className="text-red-500 hover:text-red-700 font-bold ml-2 cursor-pointer text-sm"
+                                title="Fermer"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between">
                             <span className="text-[18px] font-bold text-black font-sans">
                               {t("Suspendre pour pause.")}
                             </span>
                             <button
                               type="button"
-                              onClick={() => updateTourPauseState(!pauseEnabled, pauseReason || "Nuit Hôtel")}
+                              onClick={() => updateTourPauseState(!pauseEnabled, pauseReason || "Repas")}
                               className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
                               style={{
                                 backgroundColor: pauseEnabled
@@ -7608,6 +7724,13 @@ export default function PublicPortal({
                                   .
                                 </div>
                               )}
+                              <div
+                                className="font-bold text-black font-sans"
+                                style={{ fontSize: "16px", color: "#000000" }}
+                                id="pause-start-timestamp"
+                              >
+                                {t("Début Pause :")} {formatPauseTimestamp(pauseStartTime || Date.now())}
+                              </div>
                               <div>
                                 <select
                                   value={pauseReason}
@@ -7620,6 +7743,7 @@ export default function PublicPortal({
                                     fontSize: "16px",
                                   }}
                                 >
+                                  <option value="Repas">Repas</option>
                                   <option value="Nuit Hôtel">Nuit Hôtel</option>
                                   <option value="Week-End">Week-End</option>
                                   <option value="Jour Férié">Jour Férié</option>
@@ -7728,7 +7852,7 @@ export default function PublicPortal({
                                       </div>
 
                                       <div className="space-y-3">
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
                                           {/* Rond rose avec le numéro du passage */}
                                           <div
                                             className="flex items-center justify-center font-bold text-white rounded-full shrink-0"
@@ -7770,36 +7894,36 @@ export default function PublicPortal({
                                           >
                                             {isFormationMission ? "Formation" : p.identifiant}
                                           </span>
-                                        </div>
 
-                                        {/* Miniature du modèle défibrillateur (si autre matériel, masqué) */}
-                                        {(() => {
-                                          if (matchedOther || isFormationMission) return null;
-                                          const defibModelVar = variables?.find(
-                                            (v: any) =>
-                                              v.id === matchedDefib?.modeleId ||
-                                              (v.category === "Modèle Défibrillateur" &&
-                                                (v.nom === p.model || v.nom === (matchedDefib as any)?.modele))
-                                          );
-                                          const thumbUrl =
-                                            defibModelVar?.imageUrl ||
-                                            (matchedDefib as any)?.imageUrl ||
-                                            (matchedDefib as any)?.photoUrl;
-                                          if (!thumbUrl) return null;
-                                          return (
-                                            <div
-                                              className="w-16 h-16 sm:w-20 sm:h-20 rounded-[12px] bg-white border flex items-center justify-center p-1 shrink-0 my-1"
-                                              style={{ borderColor: "rgb(201, 190, 205)" }}
-                                              title="Modèle défibrillateur"
-                                            >
-                                              <img
-                                                src={thumbUrl}
-                                                alt={p.model || "Modèle"}
-                                                className="w-full h-full object-contain"
-                                              />
-                                            </div>
-                                          );
-                                        })()}
+                                          {/* Miniature du modèle défibrillateur sur la même ligne (taille réduite) */}
+                                          {(() => {
+                                            if (matchedOther || isFormationMission) return null;
+                                            const defibModelVar = variables?.find(
+                                              (v: any) =>
+                                                v.id === matchedDefib?.modeleId ||
+                                                (v.category === "Modèle Défibrillateur" &&
+                                                  (v.nom === p.model || v.nom === (matchedDefib as any)?.modele))
+                                            );
+                                            const thumbUrl =
+                                              defibModelVar?.imageUrl ||
+                                              (matchedDefib as any)?.imageUrl ||
+                                              (matchedDefib as any)?.photoUrl;
+                                            if (!thumbUrl) return null;
+                                            return (
+                                              <div
+                                                className="w-10 h-10 sm:w-11 sm:h-11 rounded-[8px] bg-white border flex items-center justify-center p-1 shrink-0"
+                                                style={{ borderColor: "rgb(201, 190, 205)" }}
+                                                title="Modèle défibrillateur"
+                                              >
+                                                <img
+                                                  src={thumbUrl}
+                                                  alt={p.model || "Modèle"}
+                                                  className="w-full h-full object-contain"
+                                                />
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
 
                                         {/* Textes de la div en font color black */}
                                         <div
@@ -7915,18 +8039,6 @@ export default function PublicPortal({
                                               ""
                                             )}
                                           </p>
-                                          {p.reason &&
-                                            p.reason.trim() !== "" && (
-                                              <p style={{ color: "#000000" }}>
-                                                Raison :{" "}
-                                                <span
-                                                  className="font-semibold"
-                                                  style={{ color: "#000000" }}
-                                                >
-                                                  {p.reason}
-                                                </span>
-                                              </p>
-                                            )}
 
                                           <p style={{ color: "#000000" }}>
                                             Référence intervention :{" "}
@@ -10999,46 +11111,7 @@ export default function PublicPortal({
                     }
                   `}</style>
 
-                  {/* Digital Clock Section */}
-                  <div
-                    style={{ backgroundColor: "#000", color: "#fff" }}
-                    className="p-5 rounded-2xl text-center space-y-2"
-                  >
-                    <span
-                      style={{
-                        fontSize: "18px",
-                        color: "#fff",
-                        fontFamily: "var(--font-sans), sans-serif",
-                      }}
-                      className="font-normal block"
-                    >
-                      {t("Date et heure.")}
-                    </span>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        color: "#fff",
-                        fontFamily: "var(--font-sans), sans-serif",
-                      }}
-                      className="font-bold"
-                    >
-                      {currentTime.toLocaleDateString(
-                        getLanguage() === "English" ? "en-US" : 
-                        getLanguage() === "Deutsch" ? "de-DE" : 
-                        getLanguage() === "Português" ? "pt-PT" : 
-                        getLanguage() === "Español" ? "es-ES" : "fr-FR"
-                      )}{" "}
-                      -{" "}
-                      {currentTime.toLocaleTimeString(
-                        getLanguage() === "English" ? "en-US" : 
-                        getLanguage() === "Deutsch" ? "de-DE" : 
-                        getLanguage() === "Português" ? "pt-PT" : 
-                        getLanguage() === "Español" ? "es-ES" : "fr-FR"
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Period control button */}
+                  {/* Period control button (PLACED FIRST) */}
                   {(() => {
                     const activePointage = pointages.find(
                       (p) =>
@@ -11077,12 +11150,293 @@ export default function PublicPortal({
                           {isTracking ? (
                             <span>{t("Terminer le pointage")}</span>
                           ) : (
-                            <span>{t("Démarrer la période")}</span>
+                            <span>{t("Démarrer le pointage")}</span>
                           )}
                         </button>
                       </div>
                     );
                   })()}
+
+                  {/* Section: Consulter mon volume horaire calculé à la semaine */}
+                  {(() => {
+                    const FRENCH_MONTHS = [
+                      "Juin", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+                    ];
+                    // Real 0-indexed months
+                    const MONTH_NAMES_FR = [
+                      "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+                    ];
+                    const DAY_KEYS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+
+                    const getWeekDataFromIso = (isoStr: string) => {
+                      if (!isoStr) return null;
+                      const parts = isoStr.split("-").map(Number);
+                      if (parts.length !== 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return null;
+                      const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                      if (isNaN(d.getTime())) return null;
+
+                      const day = d.getDay();
+                      const diffToMon = day === 0 ? -6 : 1 - day;
+                      const monday = new Date(d);
+                      monday.setDate(d.getDate() + diffToMon);
+                      monday.setHours(0, 0, 0, 0);
+
+                      const sunday = new Date(monday);
+                      sunday.setDate(monday.getDate() + 6);
+                      sunday.setHours(23, 59, 59, 999);
+
+                      // ISO week number
+                      const target = new Date(monday.valueOf());
+                      const dayNr = (monday.getDay() + 6) % 7;
+                      target.setDate(target.getDate() - dayNr + 3);
+                      const firstThursday = target.valueOf();
+                      target.setMonth(0, 1);
+                      if (target.getDay() !== 4) {
+                        target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+                      }
+                      const weekNum = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+
+                      const mondayIso = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
+                      const sundayIso = `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, "0")}-${String(sunday.getDate()).padStart(2, "0")}`;
+
+                      const label = `S${weekNum} du ${monday.getDate()} ${MONTH_NAMES_FR[monday.getMonth()]} à ${sunday.getDate()} ${MONTH_NAMES_FR[sunday.getMonth()]}`;
+
+                      return {
+                        weekKey: mondayIso,
+                        weekNum,
+                        label,
+                        monday,
+                        sunday,
+                        mondayIso,
+                        sundayIso,
+                      };
+                    };
+
+                    interface TechWeekVolume {
+                      weekKey: string;
+                      label: string;
+                      mondayIso: string;
+                      sundayIso: string;
+                      pointages: any[];
+                    }
+
+                    const techPointages = pointages.filter((p) => p.techName === authenticatedUser?.name);
+                    const weeksMap = new Map<string, TechWeekVolume>();
+
+                    techPointages.forEach((p) => {
+                      const iso = getIsoDate(p.startDate);
+                      const wInfo = getWeekDataFromIso(iso);
+                      if (!wInfo) return;
+                      if (!weeksMap.has(wInfo.weekKey)) {
+                        weeksMap.set(wInfo.weekKey, {
+                          weekKey: wInfo.weekKey,
+                          label: wInfo.label,
+                          mondayIso: wInfo.mondayIso,
+                          sundayIso: wInfo.sundayIso,
+                          pointages: [],
+                        });
+                      }
+                      weeksMap.get(wInfo.weekKey)!.pointages.push(p);
+                    });
+
+                    const availableWeeks: TechWeekVolume[] = Array.from(weeksMap.values());
+                    availableWeeks.sort((a, b) => b.mondayIso.localeCompare(a.mondayIso));
+                    const activeWeekKey = selectedVolumeWeek && weeksMap.has(selectedVolumeWeek) ? selectedVolumeWeek : (availableWeeks[0]?.weekKey || "");
+                    const selectedWeekData = weeksMap.get(activeWeekKey);
+                    const weekPts = selectedWeekData ? selectedWeekData.pointages : [];
+
+                    let totalWeekMins = 0;
+                    const liveHHMM =
+                      String(currentTime.getHours()).padStart(2, "0") +
+                      ":" +
+                      String(currentTime.getMinutes()).padStart(2, "0");
+
+                    weekPts.forEach((p) => {
+                      const startTime = p.startTime || "00:00";
+                      const endTime = p.isOngoing ? p.endTime || liveHHMM : p.endTime || "00:00";
+                      const sMins = timeToMins(startTime);
+                      const eMins = timeToMins(endTime);
+                      const ampMins = Math.max(0, eMins - sMins);
+                      const tm = timeToMins(p.trajetMatin);
+                      const ts = timeToMins(p.trajetSoir);
+                      const repas = timeToMins(p.tempsRepas);
+                      let effectifMins = Math.max(0, ampMins - tm - ts - repas);
+
+                      if (cttModelSettings && cttModelSettings.length > 0) {
+                        const pIso = getIsoDate(p.startDate);
+                        const parts = pIso.split("-").map(Number);
+                        if (parts.length === 3) {
+                          const dObj = new Date(parts[0], parts[1] - 1, parts[2]);
+                          const dayLabel = DAY_KEYS[dObj.getDay()];
+                          cttModelSettings.forEach((s) => {
+                            if (!s.setting1 || !s.setting1.includes(dayLabel)) return;
+                            const mins = Math.min(500, Math.max(1, typeof s.setting5 === 'number' && !isNaN(s.setting5) ? s.setting5 : parseInt(String(s.setting5), 10) || 0));
+                            if (mins <= 0) return;
+                            if (s.setting2) {
+                              effectifMins = Math.max(0, effectifMins - mins);
+                            } else if (s.setting3) {
+                              effectifMins = effectifMins + mins;
+                            }
+                          });
+                        }
+                      }
+                      totalWeekMins += effectifMins;
+                    });
+
+                    const weekHours = Math.floor(totalWeekMins / 60);
+                    const weekMins = totalWeekMins % 60;
+
+                    return (
+                      <div
+                        style={{
+                          backgroundColor: "#ffffff",
+                          border: "1px solid #dadada",
+                          borderRadius: "16px",
+                          padding: "20px",
+                        }}
+                        className="space-y-4 shadow-xs"
+                        id="tech-volume-horaire-semaine"
+                      >
+                        <div
+                          style={{
+                            fontSize: "18px",
+                            color: "#000000",
+                            fontWeight: "bold",
+                            fontFamily: "var(--font-sans), sans-serif",
+                          }}
+                        >
+                          {t("Consulter mon volume horaire calculé à la semaine.")}
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor="select-volume-semaine"
+                            className="block mb-1.5 font-bold text-black"
+                            style={{ fontSize: "15px", fontFamily: "var(--font-sans), sans-serif" }}
+                          >
+                            {t("Sélection Semaine")}
+                          </label>
+                          <select
+                            id="select-volume-semaine"
+                            value={activeWeekKey}
+                            onChange={(e) => setSelectedVolumeWeek(e.target.value)}
+                            style={{
+                              border: "1px solid #c9bfcd",
+                              borderRadius: "13px",
+                              padding: "12px 16px",
+                              fontSize: "16px",
+                              width: "100%",
+                              backgroundColor: "#ffffff",
+                              color: "#000000",
+                              fontFamily: "var(--font-sans), sans-serif",
+                              cursor: "pointer",
+                            }}
+                            className="focus:outline-none"
+                          >
+                            {availableWeeks.length === 0 ? (
+                              <option value="">{t("Aucun pointage disponible.")}</option>
+                            ) : (
+                              availableWeeks.map((w) => (
+                                <option key={w.weekKey} value={w.weekKey}>
+                                  {w.label}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+
+                        {/* Gros titre du volume horaire */}
+                        <div className="pt-1 flex items-baseline gap-0.5 text-black font-sans">
+                          <span
+                            style={{
+                              fontSize: "48px",
+                              fontWeight: "800",
+                              lineHeight: 1,
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            }}
+                          >
+                            {weekHours}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "24px",
+                              fontWeight: "700",
+                              color: "#000000",
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            }}
+                          >
+                            h
+                          </span>
+                          {weekMins > 0 && (
+                            <>
+                              <span
+                                style={{
+                                  fontSize: "48px",
+                                  fontWeight: "800",
+                                  lineHeight: 1,
+                                  marginLeft: "8px",
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                }}
+                              >
+                                {weekMins}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: "24px",
+                                  fontWeight: "700",
+                                  color: "#000000",
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                }}
+                              >
+                                min
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Digital Clock Section */}
+                  <div
+                    style={{ backgroundColor: "#000", color: "#fff" }}
+                    className="p-5 rounded-2xl text-center space-y-2"
+                  >
+                    <span
+                      style={{
+                        fontSize: "18px",
+                        color: "#fff",
+                        fontFamily: "var(--font-sans), sans-serif",
+                      }}
+                      className="font-normal block"
+                    >
+                      {t("Date et heure.")}
+                    </span>
+                    <div
+                      style={{
+                        fontSize: "18px",
+                        color: "#fff",
+                        fontFamily: "var(--font-sans), sans-serif",
+                      }}
+                      className="font-bold"
+                    >
+                      {currentTime.toLocaleDateString(
+                        getLanguage() === "English" ? "en-US" : 
+                        getLanguage() === "Deutsch" ? "de-DE" : 
+                        getLanguage() === "Português" ? "pt-PT" : 
+                        getLanguage() === "Español" ? "es-ES" : "fr-FR"
+                      )}{" "}
+                      -{" "}
+                      {currentTime.toLocaleTimeString(
+                        getLanguage() === "English" ? "en-US" : 
+                        getLanguage() === "Deutsch" ? "de-DE" : 
+                        getLanguage() === "Português" ? "pt-PT" : 
+                        getLanguage() === "Español" ? "es-ES" : "fr-FR"
+                      )}
+                    </div>
+                  </div>
 
                   {/* Pointages registered log list */}
                   <div className="space-y-4">

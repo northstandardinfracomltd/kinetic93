@@ -6,6 +6,7 @@ import { generateRandomShortCode, computeProchaineMaintenance } from '../utils';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { logBulkExport } from '../services/suspiciousActivityService';
 
 export type ImportExportCategory = 
   | 'Défibrillateurs.' 
@@ -1768,6 +1769,9 @@ export default function ImportExportTab({
         const updated = [newRecord, ...records];
         setRecords(updated);
         
+        // Log suspicious activity event C
+        logBulkExport(tenantId, undefined, undefined, formCategorie).catch(() => {});
+
         // Save to LocalStorage and Firestore
         const key = `defib_import_export_records_${tenantId}`;
         localStorage.setItem(key, JSON.stringify(updated));

@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Maximize2, Minimize2, BarChart3, Calendar, Trash2 } from 'lucide-react';
 import { SupportTicket, Member, Client, CompanyInfo, CommercialEvent, SupportMessage } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
 import { INITIAL_TICKETS } from '../utils';
 import { sendScriptEmail } from '../utils/emailService';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore } from '../firebase';
@@ -354,6 +355,22 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formCollaborateur, setFormCollaborateur] = useState('');
   const [formClientSelect, setFormClientSelect] = useState('Autre');
   const [formCustomClientName, setFormCustomClientName] = useState('');
+  const [isSidePaneClientOpen, setIsSidePaneClientOpen] = useState(false);
+
+  const clientSidePaneItems: SearchSidePaneItem[] = useMemo(() => {
+    return (clients || []).map((c) => {
+      const cName = c.denomination || (c as any).name || c.id || 'Client';
+      const cEmail = c.email || c.emailSite || '';
+      const loc = [c.ville, c.codePostal].filter(Boolean).join(' ');
+      return {
+        id: cName,
+        label: cName,
+        subtitle: [cEmail, loc, c.siret].filter(Boolean).join(' • ') || undefined,
+        badge: c.clientIdField || (c as any).codeClient || undefined,
+        raw: c,
+      };
+    });
+  }, [clients]);
   const [formEmail, setFormEmail] = useState('');
   const [formDescription, setFormDescription] = useState('');
 
@@ -2419,7 +2436,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   >
                     {/* Client ou Prospect */}
                     <div>
-                      <label>Client ou Prospect.</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label>Client ou Prospect.</label>
+                        <button
+                          type="button"
+                          onClick={() => setIsSidePaneClientOpen(true)}
+                          className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                          style={{ textDecoration: 'none' }}
+                        >
+                          Rechercher
+                        </button>
+                      </div>
                       <select
                         value={formClientSelect}
                         onChange={(e) => handleClientChange(e.target.value)}
@@ -4035,6 +4062,31 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* Side Pane Search for Client ou Prospect */}
+      <SearchSidePane
+        isOpen={isSidePaneClientOpen}
+        onClose={() => setIsSidePaneClientOpen(false)}
+        paneId="crm-client-search-side-pane"
+        items={clientSidePaneItems}
+        selectedId={formClientSelect}
+        onSelect={(item) => handleClientChange(item.id)}
+        allowEmpty={true}
+        emptyLabel="Autre (Saisie manuelle)"
+        onSelectEmpty={() => handleClientChange('Autre')}
+        emptySelected={formClientSelect === 'Autre'}
+        searchPlaceholder="Entrez votre recherche"
+        searchFilter={(item, q) => {
+          const l = (item.label || '').toLowerCase();
+          const s = (item.subtitle || '').toLowerCase();
+          const b = (item.badge || '').toLowerCase();
+          const c = item.raw;
+          const email = (c?.email || c?.emailSite || '').toLowerCase();
+          const siret = (c?.siret || '').toLowerCase();
+          const ville = (c?.ville || '').toLowerCase();
+          return l.includes(q) || s.includes(q) || b.includes(q) || email.includes(q) || siret.includes(q) || ville.includes(q);
+        }}
+      />
     </div>
   );
 };

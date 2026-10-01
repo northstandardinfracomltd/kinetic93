@@ -64,15 +64,25 @@ import StagiairesTab from './components/StagiairesTab';
 import EmargementsTab from './components/EmargementsTab';
 import GmaoCorrectionForm from './components/GmaoCorrectionForm';
 import ImportExportTab from './components/ImportExportTab';
+import { SearchSidePane, SearchSidePaneItem } from './components/SearchSidePane';
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from './utils/fsmOptimizer';
+import { loadCttGlobalRules, checkTourCttViolations } from './utils/cttRules';
+import { CttGlobalRules, DEFAULT_CTT_GLOBAL_RULES } from './types';
 import SatisfactionFormPage from './components/SatisfactionFormPage';
 import MissionValidationPage from './components/MissionValidationPage';
-import NotificationsTab from './components/NotificationsTab';
 import { PlanningTab } from './components/PlanningTab';
 import FeedbackDrawer from './components/FeedbackDrawer';
 import { EmptyTablePlaceholder } from './components/EmptyTablePlaceholder';
 import TopBarProgress from './components/TopBarProgress';
 import { updateLoginSessionSlug } from './utils/sessionSlug';
+import {
+  SuspiciousActivityLog,
+  logUserLogin,
+  logBulkEditDefib,
+  logDeleteDefib,
+  logDeleteClient,
+  logDeleteTour
+} from './services/suspiciousActivityService';
 
 
 import {
@@ -121,7 +131,8 @@ import {
   Info,
   Minimize2,
   Maximize2,
-  BarChart3
+  BarChart3,
+  AlertTriangle
 } from 'lucide-react';
 
 export type AppTab = 
@@ -356,7 +367,7 @@ export default function App() {
     };
   }, []);
 
-  const handleLoginSuccess = (email: string, name: string, activeTenantId?: string, loggedInRole?: string) => {
+  const handleLoginSuccess = (email: string, name: string, activeTenantId?: string, loggedInRole?: string, clientIp?: string) => {
     const tenantToSet = activeTenantId || 'demo';
     
     // Purge volatile local cached payloads
@@ -375,6 +386,7 @@ export default function App() {
     setCommercialDocs([]);
     setCustomerReviews([]);
     setNotifications([]);
+    setSuspiciousActivityLogs([]);
     setGedDocs([]);
     setExpenses([]);
     setVeilles([]);
@@ -407,6 +419,9 @@ export default function App() {
     setLoggedUser(user);
     localStorage.setItem('defib_admin_logged_in', 'true');
     localStorage.setItem('defib_admin_logged_user', JSON.stringify(user));
+
+    // Log suspicious activity Event A: user login
+    logUserLogin(tenantToSet, name || email, clientIp).catch(() => {});
 
     const roleToSet = loggedInRole || 'admin';
     localStorage.setItem('defib_logged_user_role', roleToSet);
@@ -499,6 +514,7 @@ export default function App() {
     setStagiaires([]);
     setEmargements([]);
     setLogisticsNotifications([]);
+    setSuspiciousActivityLogs([]);
     setMembers([]);
     setCompanyInfo({
       name: "Mon Cabinet",
@@ -737,7 +753,8 @@ export default function App() {
       }
     }
 
-    rawSetActiveTab(resolvedTab);
+    const finalTab = (resolvedTab as any) === 'notifications' ? 'defibrillateurs' : resolvedTab;
+    rawSetActiveTab(finalTab);
   };
   const [distributedStocksSearchQuery, setDistributedStocksSearchQuery] = useState('');
   const [stockSearchQuery, setStockSearchQuery] = useState('');
@@ -816,6 +833,9 @@ export default function App() {
   const [managingReportId, setManagingReportId] = useState<string | null>(null);
   const [fsmDateFilter, setFsmDateFilter] = useState<string>('Tous');
   const [isFsmTourDropdownOpen, setIsFsmTourDropdownOpen] = useState<boolean>(false);
+  const [isSidePaneFsmTourOpen, setIsSidePaneFsmTourOpen] = useState<boolean>(false);
+  const [activeMissionReasonSidePane, setActiveMissionReasonSidePane] = useState<{ tourId: string; missionId: string } | null>(null);
+  const [activeMissionPartsSidePane, setActiveMissionPartsSidePane] = useState<{ tourId: string; missionId: string; stockItems: any[] } | null>(null);
   const fsmTourDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -868,6 +888,47 @@ export default function App() {
   // FSM System Info Message
   const [fsmSystemInfoMessage, setFsmSystemInfoMessage] = useState<string | null>(null);
   const fsmSystemInfoTimeoutRef = useRef<any>(null);
+
+  // CTT Global Rules (Amplitude journalière, Repos consécutif, Repos pause)
+  const [cttGlobalRules, setCttGlobalRules] = useState<CttGlobalRules>(() => loadCttGlobalRules());
+
+  useEffect(() => {
+    let isMounted = true;
+    const reloadCttRules = async () => {
+      if (!isMounted) return;
+      const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+      setCttGlobalRules(loadCttGlobalRules(tid));
+      try {
+        const remote = await fetchCollectionFromFirestore<any[]>('ctt_global_rules', tid);
+        if (isMounted && remote && Array.isArray(remote) && remote.length > 0) {
+          const first = remote[0];
+          const parsedRules: CttGlobalRules = {
+            maxDailyAmplitudeEnabled: !!first.maxDailyAmplitudeEnabled,
+            maxDailyAmplitudeHours: typeof first.maxDailyAmplitudeHours === 'number' && first.maxDailyAmplitudeHours >= 1 && first.maxDailyAmplitudeHours <= 24 ? first.maxDailyAmplitudeHours : DEFAULT_CTT_GLOBAL_RULES.maxDailyAmplitudeHours,
+            maxDailyAmplitudeErrorText: first.maxDailyAmplitudeErrorText || DEFAULT_CTT_GLOBAL_RULES.maxDailyAmplitudeErrorText,
+            minConsecutiveRestEnabled: !!first.minConsecutiveRestEnabled,
+            minConsecutiveRestHours: typeof first.minConsecutiveRestHours === 'number' && first.minConsecutiveRestHours >= 1 && first.minConsecutiveRestHours <= 24 ? first.minConsecutiveRestHours : DEFAULT_CTT_GLOBAL_RULES.minConsecutiveRestHours,
+            minConsecutiveRestErrorText: first.minConsecutiveRestErrorText || DEFAULT_CTT_GLOBAL_RULES.minConsecutiveRestErrorText,
+            minBreakRestEnabled: !!first.minBreakRestEnabled,
+            minBreakRestMinutes: typeof first.minBreakRestMinutes === 'number' && first.minBreakRestMinutes >= 1 && first.minBreakRestMinutes <= 60 ? first.minBreakRestMinutes : DEFAULT_CTT_GLOBAL_RULES.minBreakRestMinutes,
+            minBreakRestErrorText: first.minBreakRestErrorText || DEFAULT_CTT_GLOBAL_RULES.minBreakRestErrorText,
+            minBreakRestTechErrorText: first.minBreakRestTechErrorText || DEFAULT_CTT_GLOBAL_RULES.minBreakRestTechErrorText,
+          };
+          setCttGlobalRules(parsedRules);
+          localStorage.setItem(`defib_${tid}_ctt_global_rules`, JSON.stringify(parsedRules));
+          localStorage.setItem('ctt_global_rules', JSON.stringify(parsedRules));
+        }
+      } catch (_) {}
+    };
+    reloadCttRules();
+    window.addEventListener('storage', reloadCttRules);
+    window.addEventListener('defib_ctt_global_rules_updated', reloadCttRules);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', reloadCttRules);
+      window.removeEventListener('defib_ctt_global_rules_updated', reloadCttRules);
+    };
+  }, []);
 
   // Team Work Groups by Zone
   const [isFsmTeamPaneOpen, setIsFsmTeamPaneOpen] = useState<boolean>(false);
@@ -1262,6 +1323,19 @@ export default function App() {
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [logisticsNotifications, setLogisticsNotifications] = useState<LogisticsNotification[]>([]);
+  const [suspiciousActivityLogs, setSuspiciousActivityLogs] = useState<SuspiciousActivityLog[]>(() =>
+    getLocalTenantValue<SuspiciousActivityLog[]>('suspicious_activity_logs', [])
+  );
+
+  useEffect(() => {
+    const handleLogEvent = (e: any) => {
+      if (e.detail?.updated) {
+        setSuspiciousActivityLogs(e.detail.updated);
+      }
+    };
+    window.addEventListener('defib-suspicious-activity-logged', handleLogEvent);
+    return () => window.removeEventListener('defib-suspicious-activity-logged', handleLogEvent);
+  }, []);
 
   const saveLogisticsNotifications = (updated: LogisticsNotification[]) => {
     setLogisticsNotifications(updated);
@@ -2381,7 +2455,9 @@ export default function App() {
         equipmentDetails,
         tech,
         firstMissionTravelHours,
-        variables
+        variables,
+        cttGlobalRules,
+        currentToursList
       );
 
       const updatedTours = currentToursList.map(t => {
@@ -2446,6 +2522,12 @@ export default function App() {
       alert("Impossible de supprimer une tournée dont le statut est À faire ou En cours.");
       return;
     }
+
+    // Log suspicious activity Event G: delete tour
+    try {
+      const tourName = tour.title || tour.id || 'Tournée';
+      logDeleteTour(tenantIdState, tourName, loggedUser?.name).catch(() => {});
+    } catch (_) {}
 
     // Conserver en mémoire les émissions préservées (CO2) si la tournée a été faite / effectuée
     const wasDone = 
@@ -4970,6 +5052,8 @@ export default function App() {
           }
         }
         setNotifications(cleanedNotifications);
+        const baseSuspicious = getLocalTenantValue<SuspiciousActivityLog[]>('suspicious_activity_logs', []);
+        setSuspiciousActivityLogs(baseSuspicious);
 
         const savedEnable = localStorage.getItem(`defib_${activeRunTenantId}_enable_other_equipments`);
         setEnableOtherEquipments(savedEnable || baseCompanyInfo.enableOtherEquipments || 'Non');
@@ -5304,6 +5388,7 @@ export default function App() {
         syncTasks.push(syncBackground<StagiaireRecord[]>('stagiaires', 'stagiaires', setStagiaires));
         syncTasks.push(syncBackground<EmargementRecord[]>('emargements', 'emargements', setEmargements));
         syncTasks.push(syncBackground<TeamWorkGroup[]>('teamWorkGroups', 'team_work_groups', setTeamWorkGroups));
+        syncTasks.push(syncBackground<SuspiciousActivityLog[]>('suspicious_activity_logs', 'suspicious_activity_logs', setSuspiciousActivityLogs));
 
         const currentEmail = loggedUser?.email?.trim().toLowerCase();
         if (currentEmail && tenantId && tenantId !== 'demo') {
@@ -7067,6 +7152,14 @@ export default function App() {
       );
       return;
     }
+
+    // Log suspicious activity Event F: delete client
+    const target = clients.find((c) => c.id === id);
+    if (target) {
+      const compName = target.denomination || target.siret || 'Client';
+      logDeleteClient(tenantIdState, compName, loggedUser?.name).catch(() => {});
+    }
+
     saveClients(clients.filter((c) => c.id !== id));
   };
 
@@ -7180,6 +7273,13 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    // Log suspicious activity Event D: delete defibrillator
+    const target = defibrillateurs.find((df) => df.id === id);
+    if (target) {
+      const identifiant = target.identifiant || id;
+      const materialType = variables.find(v => v.id === target.modeleId)?.nom || target.modeleId || 'Défibrillateur';
+      logDeleteDefib(tenantIdState, identifiant, materialType, loggedUser?.name).catch(() => {});
+    }
     saveDefibs(defibrillateurs.filter((df) => df.id !== id));
   };
 
@@ -7187,6 +7287,15 @@ export default function App() {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
+    }
+    // Log suspicious activity Event D for bulk delete
+    for (const id of ids) {
+      const target = defibrillateurs.find((df) => df.id === id);
+      if (target) {
+        const identifiant = target.identifiant || id;
+        const materialType = variables.find(v => v.id === target.modeleId)?.nom || target.modeleId || 'Défibrillateur';
+        logDeleteDefib(tenantIdState, identifiant, materialType, loggedUser?.name).catch(() => {});
+      }
     }
     saveDefibs(defibrillateurs.filter((df) => !ids.includes(df.id)));
   };
@@ -7196,6 +7305,9 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    // Log suspicious activity Event B: bulk edit defibs
+    logBulkEditDefib(tenantIdState, loggedUser?.name, undefined, ids.length).catch(() => {});
+
     const updatedList = defibrillateurs.map((df) => {
       if (ids.includes(df.id)) {
         return { ...df, ...updates };
@@ -7543,7 +7655,6 @@ export default function App() {
               { id: 'emargements', label: t('Émargements'), icon: ClipboardList },
               { id: 'variables', label: t('Variables'), icon: Layers },
               { id: 'import-export', label: t('Importer Exporter'), icon: Download },
-              { id: 'notifications', label: 'Notifications', icon: Bell },
               { id: 'ged', label: t('GED'), icon: ClipboardList },
             ];
 
@@ -7564,7 +7675,6 @@ export default function App() {
                 variables: "Variables",
                 "import-export": "Importer Exporter",
                 satisfaction: "Satisfaction",
-                notifications: "Notifications",
                 veilles: "Relevé Concurrentiel",
                 formations: "Formations",
                 stagiaires: "Stagiaires",
@@ -9598,6 +9708,34 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Persistent CTT violation alert at the top of TOURNÉES & MISSIONS */}
+                {(() => {
+                  const targetTour = displayedTour && displayedTour.id !== 'a-trier' ? displayedTour : (filteredTours.find(ft => ft.id !== 'a-trier'));
+                  if (!targetTour) return null;
+                  const topViolations = checkTourCttViolations(targetTour, cttGlobalRules, variables, fsmTours);
+                  if (topViolations.length === 0) return null;
+                  return (
+                    <div 
+                      className="mx-4 mt-3 p-4 bg-red-50 border border-red-300 rounded-xl flex flex-col gap-2 text-red-950 font-sans animate-fadeIn shadow-xs"
+                      style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                      id="fsm-top-ctt-violation-banner"
+                    >
+                      <div className="flex items-center gap-2.5 font-bold text-red-800 text-[15px]">
+                        <span className="text-lg">⚠️</span>
+                        <span>{translate("Alerte CTT — Tournée")} « {targetTour.title || targetTour.id} »</span>
+                      </div>
+                      <div className="pl-6 space-y-1.5">
+                        {topViolations.map((v, i) => (
+                          <div key={i} className="text-[14px]">
+                            <span className="font-bold text-red-900">{v.message}</span>
+                            {v.details && <span className="text-red-700 text-xs block font-normal mt-0.5">{v.details}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {fsmTours.length > 0 && (() => {
                   return (
                     <div 
@@ -9643,13 +9781,23 @@ export default function App() {
 
                       {scheduledTours.length > 0 && displayedTour && (
                         <div className="flex-1 min-w-0 flex flex-col justify-end">
-                          <label 
-                            htmlFor="select-fsm-tour-manage"
-                            className="block text-[14px] font-semibold text-black mb-1 font-sans truncate"
-                            style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                          >
-                            {translate("Sélection de la tournée à gérer:")}
-                          </label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label 
+                              htmlFor="select-fsm-tour-manage"
+                              className="block text-[14px] font-semibold text-black font-sans truncate"
+                              style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                            >
+                              {translate("Sélection de la tournée à gérer:")}
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setIsSidePaneFsmTourOpen(true)}
+                              className="text-[14px] sm:text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                              style={{ textDecoration: 'none' }}
+                            >
+                              Rechercher
+                            </button>
+                          </div>
                           <div className="relative w-full">
                             <select
                               id="select-fsm-tour-manage"
@@ -11528,6 +11676,32 @@ export default function App() {
                           })()}
                         </div>
 
+                        {/* Persistent CTT violation alert inside tour card */}
+                        {(() => {
+                          const tourViolations = checkTourCttViolations(t, cttGlobalRules, variables, fsmTours);
+                          if (tourViolations.length === 0) return null;
+                          return (
+                            <div 
+                              className="mx-5 my-3 p-4 rounded-xl border border-red-300 bg-red-50 text-red-950 space-y-2 font-sans animate-fadeIn shadow-xs"
+                              style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                              id={`tour-ctt-violations-${t.id}`}
+                            >
+                              <div className="flex items-center gap-2 font-bold text-red-800 text-[16px]">
+                                <span className="text-xl">⚠️</span>
+                                <span>{translate("Alerte de conformité CTT (Garde-fous temps de travail & repos)")}</span>
+                              </div>
+                              <div className="space-y-1.5 pl-7">
+                                {tourViolations.map((v, vIdx) => (
+                                  <div key={vIdx} className="text-sm">
+                                    <p className="text-red-950 font-bold text-[15px]">{v.message}</p>
+                                    {v.details && <p className="text-red-800 text-xs font-normal mt-0.5">{v.details}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {/* INDICATEURS DE PROGRESSION */}
                         {(() => {
                           const tourMissions = t.missions || [];
@@ -11893,6 +12067,31 @@ export default function App() {
                                             return m.reason?.toLowerCase().includes('autre') ? 'Autre matériel' : 'Défibrillateur';
                                           })())}
                                         </span>
+
+                                        {/* CTT Violation Pill on mission */}
+                                        {(() => {
+                                          const tourViolations = checkTourCttViolations(t, cttGlobalRules, variables, fsmTours);
+                                          const mDate = estimatedDateValue;
+                                          const missionViolations = tourViolations.filter(v => v.date && (v.date === mDate || v.date.includes(mDate)));
+                                          if (missionViolations.length === 0) return null;
+                                          return (
+                                            <span 
+                                              style={{
+                                                backgroundColor: '#fee2e2',
+                                                color: '#b91c1c',
+                                                borderRadius: '1000px',
+                                                padding: '4px 12px',
+                                                fontSize: '14px',
+                                                fontWeight: 700,
+                                                border: '1px solid #fca5a5',
+                                                cursor: 'default'
+                                              }}
+                                              title={missionViolations.map(v => v.message).join(' | ')}
+                                            >
+                                              ⚠️ {translate("Alerte CTT")}
+                                            </span>
+                                          );
+                                        })()}
 
                                         {(() => {
                                           const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
@@ -12405,9 +12604,19 @@ export default function App() {
 
                                         {/* Raison/Prestation. */}
                                         <div className="lg:col-span-3 space-y-1.5 relative font-sans w-full bg-transparent">
-                                          <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
-                                            {translate("Raison/Prestation.")}
-                                          </label>
+                                          <div className="flex items-center justify-between mb-1">
+                                            <label className="fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
+                                              {translate("Raison/Prestation.")}
+                                            </label>
+                                            <button
+                                              type="button"
+                                              onClick={() => setActiveMissionReasonSidePane({ tourId: t.id, missionId: m.id })}
+                                              className="text-[14px] sm:text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                              style={{ textDecoration: 'none' }}
+                                            >
+                                              Rechercher
+                                            </button>
+                                          </div>
                                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full items-center bg-transparent">
                                             {/* Dropdown Select on the left */}
                                             <div className="md:col-span-1 w-full bg-transparent">
@@ -12665,6 +12874,14 @@ export default function App() {
                                           <span className="fsm-label-style bg-transparent" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>
                                             Pièces requises.
                                           </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => setActiveMissionPartsSidePane({ tourId: t.id, missionId: m.id, stockItems })}
+                                            className="text-[14px] sm:text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                            style={{ textDecoration: 'none' }}
+                                          >
+                                            Rechercher
+                                          </button>
                                         </div>
 
                                         {/* SELECTED PIECES BADGES */}
@@ -12992,6 +13209,123 @@ export default function App() {
                   })}
                   </div>
                 )}
+
+                {/* 1. Side Pane Search for Tour Selection */}
+                <SearchSidePane
+                  isOpen={isSidePaneFsmTourOpen}
+                  onClose={() => setIsSidePaneFsmTourOpen(false)}
+                  paneId="fsm-tour-search-side-pane"
+                  items={(scheduledTours || []).map((st: any) => {
+                    const rawStatus = String(st.status || 'Brouillon').trim();
+                    const techName = st.techName ? `Tech: ${st.techName}` : 'Sans technicien';
+                    const nbMissions = Array.isArray(st.missions) ? `${st.missions.length} mission(s)` : '0 mission';
+                    const dateStr = st.startDate || '';
+                    const statusColors: Record<string, string> = {
+                      'Brouillon': '#f1f5f9',
+                      'À faire': '#eff6ff',
+                      'En cours': '#fef3c7',
+                      'Effectué': '#f0fdf4',
+                      'Terminé': '#ecfdf5',
+                    };
+                    return {
+                      id: st.id,
+                      label: st.title || `Tournée ${st.id}`,
+                      subtitle: [dateStr, techName, nbMissions, st.vehicleName].filter(Boolean).join(' • '),
+                      badge: rawStatus,
+                      badgeColor: statusColors[rawStatus] || '#f1f5f9',
+                      raw: st,
+                    };
+                  })}
+                  selectedId={activeDateFilter === 'A trier' ? (fsmLastSelectedTourId || displayedTour?.id) : activeDateFilter}
+                  onSelect={(item) => {
+                    setFsmLastSelectedTourId(item.id);
+                    setFsmDateFilter(item.id);
+                  }}
+                  searchPlaceholder="Entrez votre recherche"
+                  searchFilter={(item, q) => {
+                    const l = (item.label || '').toLowerCase();
+                    const s = (item.subtitle || '').toLowerCase();
+                    const b = (item.badge || '').toLowerCase();
+                    const tObj = item.raw;
+                    const tech = (tObj?.techName || '').toLowerCase();
+                    const veh = (tObj?.vehicleName || '').toLowerCase();
+                    const date = (tObj?.startDate || '').toLowerCase();
+                    return l.includes(q) || s.includes(q) || b.includes(q) || tech.includes(q) || veh.includes(q) || date.includes(q);
+                  }}
+                />
+
+                {/* 2. Side Pane Search for Mission Raison/Prestations */}
+                <SearchSidePane
+                  isOpen={!!activeMissionReasonSidePane}
+                  onClose={() => setActiveMissionReasonSidePane(null)}
+                  paneId="fsm-mission-reason-search-side-pane"
+                  items={(variables || [])
+                    .filter((v: any) => v.category === "Modèle Raison Prestation")
+                    .map((v: any) => ({
+                      id: v.id,
+                      label: v.nom,
+                      subtitle: v.dureePrestation ? `Durée : ${v.dureePrestation} min` : undefined,
+                      raw: v,
+                    }))}
+                  onSelect={(item) => {
+                    if (!activeMissionReasonSidePane) return;
+                    const { tourId, missionId } = activeMissionReasonSidePane;
+                    const targetTour = fsmTours.find(t => t.id === tourId);
+                    if (!targetTour) return;
+                    const targetMission = (targetTour.missions || []).find((m: any) => m.id === missionId);
+                    if (!targetMission) return;
+                    const currentReasons: string[] = Array.isArray(targetMission.reasons)
+                      ? targetMission.reasons
+                      : (targetMission.reason ? targetMission.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
+                    if (!currentReasons.includes(item.label)) {
+                      const nextReasons = [...currentReasons, item.label];
+                      let totalDuree = 0;
+                      for (const r of nextReasons) {
+                        const match = variables.find((v: any) => v.category === "Modèle Raison Prestation" && v.nom === r);
+                        if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
+                      }
+                      updateFsmMission(tourId, missionId, {
+                        reasons: nextReasons,
+                        reason: nextReasons.join(", "),
+                        dureePrestation: totalDuree > 0 ? totalDuree : undefined,
+                      });
+                    }
+                  }}
+                  searchPlaceholder="Entrez votre recherche"
+                />
+
+                {/* 3. Side Pane Search for Mission Pièces requises */}
+                <SearchSidePane
+                  isOpen={!!activeMissionPartsSidePane}
+                  onClose={() => setActiveMissionPartsSidePane(null)}
+                  paneId="fsm-mission-parts-search-side-pane"
+                  items={(activeMissionPartsSidePane?.stockItems || []).map((si: any) => ({
+                    id: si.id,
+                    label: si.label,
+                    subtitle: si.name && si.name !== si.label ? si.name : undefined,
+                    raw: si,
+                  }))}
+                  onSelect={(item) => {
+                    if (!activeMissionPartsSidePane) return;
+                    const { tourId, missionId } = activeMissionPartsSidePane;
+                    const targetTour = fsmTours.find(t => t.id === tourId);
+                    if (!targetTour) return;
+                    const targetMission = (targetTour.missions || []).find((m: any) => m.id === missionId);
+                    if (!targetMission) return;
+                    const selectedVal = item.label;
+                    if (selectedVal && !targetMission.requiredParts.includes(selectedVal)) {
+                      const updatedParts = [...targetMission.requiredParts, selectedVal];
+                      changeFsmMissionParts(tourId, missionId, targetMission.requiredParts, updatedParts);
+                    }
+                  }}
+                  searchPlaceholder="Entrez votre recherche"
+                  searchFilter={(item, q) => {
+                    const l = (item.label || '').toLowerCase();
+                    const s = (item.subtitle || '').toLowerCase();
+                    const b = (item.badge || '').toLowerCase();
+                    return l.includes(q) || s.includes(q) || b.includes(q);
+                  }}
+                />
               </div>
             );
           })()}
@@ -16617,13 +16951,6 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'notifications' && (
-            <NotificationsTab
-              notifications={notifications}
-              onUpdateNotifications={saveNotifications}
-            />
-          )}
-
           {activeTab === 'parametres' && (
             <SettingsModal
               isPage={true}
@@ -16649,6 +16976,7 @@ export default function App() {
               onUpdateLocationNames={setLocationNames}
               isDeveloper={isDeveloper}
               isReadOnly={isDeveloper}
+              suspiciousActivityLogs={suspiciousActivityLogs}
             />
           )}
 
@@ -16701,6 +17029,7 @@ export default function App() {
         onUpdateLocationNames={setLocationNames}
         isDeveloper={isDeveloper}
         isReadOnly={isDeveloper}
+        suspiciousActivityLogs={suspiciousActivityLogs}
       />
 
       {/* Modal Avisage Tournée */}

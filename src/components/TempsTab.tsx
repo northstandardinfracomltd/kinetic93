@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { PointageLog, Member, CttModelSetting, CttColumnTarget, CompanyInfo } from '../types';
+import { PointageLog, Member, CttModelSetting, CttColumnTarget, CompanyInfo, CttGlobalRules, DEFAULT_CTT_GLOBAL_RULES } from '../types';
+import { loadCttGlobalRules } from '../utils/cttRules';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { t } from '../utils/translate';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
@@ -1013,6 +1014,14 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
     return [];
   });
 
+  // Global CTT Rules (Amplitude maximale journalière & Amplitude minimale de repos)
+  const [cttGlobalRules, setCttGlobalRules] = useState<CttGlobalRules>(() => {
+    return loadCttGlobalRules();
+  });
+  const [draftGlobalRules, setDraftGlobalRules] = useState<CttGlobalRules>(() => {
+    return loadCttGlobalRules();
+  });
+
   // Sync with Firestore on mount and upon custom update events
   useEffect(() => {
     let isMounted = true;
@@ -1043,18 +1052,47 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           localStorage.setItem(`defib_${tid}_ctt_model_settings`, JSON.stringify(sanitized));
           localStorage.setItem('ctt_model_settings', JSON.stringify(sanitized));
         }
+
+        // Load Global Rules
+        const localRules = loadCttGlobalRules(tid);
+        if (isMounted) {
+          setCttGlobalRules(localRules);
+        }
+        try {
+          const remoteRules = await fetchCollectionFromFirestore<any[]>('ctt_global_rules');
+          if (isMounted && remoteRules && Array.isArray(remoteRules) && remoteRules.length > 0) {
+            const first = remoteRules[0];
+            const parsedRules: CttGlobalRules = {
+              maxDailyAmplitudeEnabled: !!first.maxDailyAmplitudeEnabled,
+              maxDailyAmplitudeHours: typeof first.maxDailyAmplitudeHours === 'number' && first.maxDailyAmplitudeHours >= 1 && first.maxDailyAmplitudeHours <= 24 ? first.maxDailyAmplitudeHours : DEFAULT_CTT_GLOBAL_RULES.maxDailyAmplitudeHours,
+              maxDailyAmplitudeErrorText: first.maxDailyAmplitudeErrorText || DEFAULT_CTT_GLOBAL_RULES.maxDailyAmplitudeErrorText,
+              minConsecutiveRestEnabled: !!first.minConsecutiveRestEnabled,
+              minConsecutiveRestHours: typeof first.minConsecutiveRestHours === 'number' && first.minConsecutiveRestHours >= 1 && first.minConsecutiveRestHours <= 24 ? first.minConsecutiveRestHours : DEFAULT_CTT_GLOBAL_RULES.minConsecutiveRestHours,
+              minConsecutiveRestErrorText: first.minConsecutiveRestErrorText || DEFAULT_CTT_GLOBAL_RULES.minConsecutiveRestErrorText,
+              minBreakRestEnabled: !!first.minBreakRestEnabled,
+              minBreakRestMinutes: typeof first.minBreakRestMinutes === 'number' && first.minBreakRestMinutes >= 1 && first.minBreakRestMinutes <= 60 ? first.minBreakRestMinutes : DEFAULT_CTT_GLOBAL_RULES.minBreakRestMinutes,
+              minBreakRestErrorText: first.minBreakRestErrorText || DEFAULT_CTT_GLOBAL_RULES.minBreakRestErrorText,
+              minBreakRestTechErrorText: first.minBreakRestTechErrorText || DEFAULT_CTT_GLOBAL_RULES.minBreakRestTechErrorText,
+            };
+            setCttGlobalRules(parsedRules);
+            localStorage.setItem(`defib_${tid}_ctt_global_rules`, JSON.stringify(parsedRules));
+            localStorage.setItem('ctt_global_rules', JSON.stringify(parsedRules));
+          }
+        } catch (_) {}
       } catch (err) {
-        console.error('Error fetching ctt_model_settings from Firestore:', err);
+        console.error('Error fetching ctt settings from Firestore:', err);
       }
     };
 
     loadSettingsFromFirebase();
     window.addEventListener('storage', loadSettingsFromFirebase);
     window.addEventListener('defib_ctt_model_settings_updated', loadSettingsFromFirebase);
+    window.addEventListener('defib_ctt_global_rules_updated', loadSettingsFromFirebase);
     return () => {
       isMounted = false;
       window.removeEventListener('storage', loadSettingsFromFirebase);
       window.removeEventListener('defib_ctt_model_settings_updated', loadSettingsFromFirebase);
+      window.removeEventListener('defib_ctt_global_rules_updated', loadSettingsFromFirebase);
     };
   }, []);
 
@@ -1103,6 +1141,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
       setting3: s.setting2 ? false : s.setting3,
     }));
     setDraftSettings(cloned);
+    setDraftGlobalRules({ ...cttGlobalRules });
     setIsSettingsPaneOpen(true);
   };
 
@@ -1114,6 +1153,50 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
     if (draftConflicts.length > 0) {
       return;
     }
+
+    // Validation for Amplitude maximale journalière
+    if (draftGlobalRules.maxDailyAmplitudeEnabled) {
+      const h = Number(draftGlobalRules.maxDailyAmplitudeHours);
+      if (!h || isNaN(h) || h < 1 || h > 24) {
+        alert(t("L'amplitude maximale journalière requiert une valeur horaire valide comprise entre 1 et 24h."));
+        return;
+      }
+      if (!draftGlobalRules.maxDailyAmplitudeErrorText || !draftGlobalRules.maxDailyAmplitudeErrorText.trim()) {
+        alert(t("Veuillez renseigner la texture du message d'erreur pour l'amplitude maximale journalière."));
+        return;
+      }
+    }
+
+    // Validation for Amplitude minimale de repos
+    if (draftGlobalRules.minConsecutiveRestEnabled) {
+      const h = Number(draftGlobalRules.minConsecutiveRestHours);
+      if (!h || isNaN(h) || h < 1 || h > 24) {
+        alert(t("L'amplitude minimale de repos requiert une valeur horaire valide comprise entre 1 et 24h."));
+        return;
+      }
+      if (!draftGlobalRules.minConsecutiveRestErrorText || !draftGlobalRules.minConsecutiveRestErrorText.trim()) {
+        alert(t("Veuillez renseigner la texture du message d'erreur pour l'amplitude minimale de repos entre 2 jours consécutifs."));
+        return;
+      }
+    }
+
+    // Validation for Amplitude minimale de repos pendant un pointage en cours
+    if (draftGlobalRules.minBreakRestEnabled) {
+      const mins = Number(draftGlobalRules.minBreakRestMinutes);
+      if (!mins || isNaN(mins) || mins < 1 || mins > 60) {
+        alert(t("L'amplitude minimale de repos pendant un pointage requiert une valeur horaire (mins) comprise entre 1 et 60 mins."));
+        return;
+      }
+      if (!draftGlobalRules.minBreakRestErrorText || !draftGlobalRules.minBreakRestErrorText.trim()) {
+        alert(t("Veuillez renseigner la texture du message d'erreur pour l'amplitude minimale de repos pendant un pointage."));
+        return;
+      }
+      if (!draftGlobalRules.minBreakRestTechErrorText || !draftGlobalRules.minBreakRestTechErrorText.trim()) {
+        alert(t("Veuillez renseigner la texture du message d'erreur pour le technicien."));
+        return;
+      }
+    }
+
     const sanitized = draftSettings.slice(0, 5).map((s) => ({
       ...s,
       setting0: (s.setting0 || '').slice(0, 30),
@@ -1122,6 +1205,21 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
       setting5: Math.min(500, Math.max(1, typeof s.setting5 === 'number' && !isNaN(s.setting5) && s.setting5 >= 1 ? s.setting5 : 1)),
     }));
     setCttSettings(sanitized);
+
+    const sanitizedRules: CttGlobalRules = {
+      maxDailyAmplitudeEnabled: !!draftGlobalRules.maxDailyAmplitudeEnabled,
+      maxDailyAmplitudeHours: Math.min(24, Math.max(1, Number(draftGlobalRules.maxDailyAmplitudeHours) || 10)),
+      maxDailyAmplitudeErrorText: draftGlobalRules.maxDailyAmplitudeErrorText.trim() || DEFAULT_CTT_GLOBAL_RULES.maxDailyAmplitudeErrorText,
+      minConsecutiveRestEnabled: !!draftGlobalRules.minConsecutiveRestEnabled,
+      minConsecutiveRestHours: Math.min(24, Math.max(1, Number(draftGlobalRules.minConsecutiveRestHours) || 11)),
+      minConsecutiveRestErrorText: draftGlobalRules.minConsecutiveRestErrorText.trim() || DEFAULT_CTT_GLOBAL_RULES.minConsecutiveRestErrorText,
+      minBreakRestEnabled: !!draftGlobalRules.minBreakRestEnabled,
+      minBreakRestMinutes: Math.min(60, Math.max(1, Number(draftGlobalRules.minBreakRestMinutes) || 45)),
+      minBreakRestErrorText: draftGlobalRules.minBreakRestErrorText.trim() || DEFAULT_CTT_GLOBAL_RULES.minBreakRestErrorText,
+      minBreakRestTechErrorText: draftGlobalRules.minBreakRestTechErrorText.trim() || DEFAULT_CTT_GLOBAL_RULES.minBreakRestTechErrorText,
+    };
+    setCttGlobalRules(sanitizedRules);
+
     try {
       const tid = (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
       localStorage.setItem(`defib_${tid}_ctt_model_settings`, JSON.stringify(sanitized));
@@ -1130,8 +1228,15 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
       saveCollectionToFirestore('ctt_model_settings', sanitized).catch((err) => {
         console.error('Error saving ctt_model_settings to Firestore:', err);
       });
+
+      localStorage.setItem(`defib_${tid}_ctt_global_rules`, JSON.stringify(sanitizedRules));
+      localStorage.setItem('ctt_global_rules', JSON.stringify(sanitizedRules));
+      window.dispatchEvent(new Event('defib_ctt_global_rules_updated'));
+      saveCollectionToFirestore('ctt_global_rules', [sanitizedRules]).catch((err) => {
+        console.error('Error saving ctt_global_rules to Firestore:', err);
+      });
     } catch (e) {
-      console.error('Failed to save ctt_model_settings to localStorage or Firestore', e);
+      console.error('Failed to save ctt settings to localStorage or Firestore', e);
     }
     setIsSettingsPaneOpen(false);
   };
@@ -1399,6 +1504,10 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           transition: all 0s !important;
           width: 100% !important;
         }
+        #temps-settings-pane input.short-input-field {
+          width: 140px !important;
+          max-width: 160px !important;
+        }
         #temps-settings-pane select {
           appearance: none !important;
           -webkit-appearance: none !important;
@@ -1439,17 +1548,6 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           </div>
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
-            {/* Bouton Réglages du modèle */}
-            <button
-              type="button"
-              onClick={openSettingsPane}
-              style={actionButtonStyle}
-              className="hover:bg-zinc-800 transition-colors shrink-0"
-              id="btn-model-settings"
-            >
-              {t("Réglages du modèle")}
-            </button>
-
             {/* Search Bar Input */}
             <div className="relative w-full sm:w-80 bg-white">
               <input
@@ -1466,6 +1564,17 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                 onBlur={() => setIsSearchFocused(false)}
               />
             </div>
+
+            {/* Bouton Réglages CTT */}
+            <button
+              type="button"
+              onClick={openSettingsPane}
+              style={actionButtonStyle}
+              className="hover:bg-zinc-800 transition-colors shrink-0"
+              id="btn-ctt-settings"
+            >
+              {t("Réglages CTT")}
+            </button>
           </div>
         </div>
       </div>
@@ -1618,8 +1727,353 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           {/* Drawer Container */}
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10" id="temps-settings-pane">
             <div className="w-screen max-w-md sm:max-w-xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto">
+              {/* Drawer Header */}
+              <div className="pb-3 border-b border-[#dadada] mb-4 flex items-center justify-between">
+                <h3 className="font-bold text-black" style={{ fontFamily: '"Gochi", cursive, sans-serif', fontSize: '24px' }}>
+                  {t("Réglages CTT")}
+                </h3>
+                <button
+                  type="button"
+                  onClick={closeSettingsPane}
+                  className="text-gray-400 hover:text-black transition-colors cursor-pointer text-xl font-bold px-2 py-1"
+                  title={t("Fermer")}
+                >
+                  ✕
+                </button>
+              </div>
+
               {/* Parameters List */}
               <div className="space-y-5 flex-1 pt-2 pb-2">
+                {/* LOT 1: Amplitude maximale journalière */}
+                <div
+                  className="space-y-3 p-4 bg-white"
+                  style={{
+                    border: '1px solid #dadada',
+                    borderRadius: '13px',
+                  }}
+                  id="lot-max-daily-amplitude"
+                >
+                  {/* Triple Champ 1.1: Amplitude maximale journalière. (Toggle ON/OFF) */}
+                  <div className="flex items-center justify-between">
+                    <label
+                      className="select-none font-bold"
+                      style={{
+                        color: '#000',
+                        fontSize: '18px',
+                        paddingRight: '15px',
+                        cursor: 'default',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                      }}
+                    >
+                      {t("Amplitude maximale journalière.")}
+                    </label>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        id="toggle-max-daily-amplitude"
+                        checked={draftGlobalRules.maxDailyAmplitudeEnabled}
+                        onChange={(e) => {
+                          setDraftGlobalRules(prev => ({
+                            ...prev,
+                            maxDailyAmplitudeEnabled: e.target.checked
+                          }));
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                    </label>
+                  </div>
+
+                  {/* Triple Champ 1.2: Valeur horaire (h). */}
+                  <div>
+                    <label
+                      className="block mb-1 font-sans font-bold"
+                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                    >
+                      {t("Valeur horaire (h).")} {draftGlobalRules.maxDailyAmplitudeEnabled && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      id="input-max-daily-amplitude-hours"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={2}
+                      value={draftGlobalRules.maxDailyAmplitudeHours || ''}
+                      disabled={!draftGlobalRules.maxDailyAmplitudeEnabled}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, '');
+                        if (raw === '') {
+                          setDraftGlobalRules(prev => ({ ...prev, maxDailyAmplitudeHours: 0 }));
+                          return;
+                        }
+                        const num = parseInt(raw, 10);
+                        const clamped = Math.min(24, Math.max(1, num));
+                        setDraftGlobalRules(prev => ({ ...prev, maxDailyAmplitudeHours: clamped }));
+                      }}
+                      onBlur={() => {
+                        if (draftGlobalRules.maxDailyAmplitudeEnabled && (!draftGlobalRules.maxDailyAmplitudeHours || draftGlobalRules.maxDailyAmplitudeHours < 1)) {
+                          setDraftGlobalRules(prev => ({ ...prev, maxDailyAmplitudeHours: 10 }));
+                        }
+                      }}
+                      placeholder={t("Nombre entre 1 et 24 (ex: 10)")}
+                      className={`short-input-field ${!draftGlobalRules.maxDailyAmplitudeEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    />
+                  </div>
+
+                  {/* Triple Champ 1.3: Texture du message d'erreur. */}
+                  <div>
+                    <label
+                      className="block mb-1 font-sans font-bold"
+                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                    >
+                      {t("Texture du message d’erreur.")} {draftGlobalRules.maxDailyAmplitudeEnabled && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      id="input-max-daily-amplitude-error-text"
+                      value={draftGlobalRules.maxDailyAmplitudeErrorText}
+                      disabled={!draftGlobalRules.maxDailyAmplitudeEnabled}
+                      onChange={(e) => {
+                        setDraftGlobalRules(prev => ({ ...prev, maxDailyAmplitudeErrorText: e.target.value }));
+                      }}
+                      placeholder={t("Texte du message d'erreur...")}
+                      className={!draftGlobalRules.maxDailyAmplitudeEnabled ? 'opacity-40 cursor-not-allowed' : ''}
+                    />
+                  </div>
+                </div>
+
+                {/* Line divider between Lot 1 and Lot 2 */}
+                <div className="pt-1 pb-1">
+                  <div style={{ borderBottom: '1px solid #dadada', width: '100%' }} />
+                </div>
+
+                {/* LOT 2: Amplitude minimale de repos entre 2 jours consécutifs */}
+                <div
+                  className="space-y-3 p-4 bg-white"
+                  style={{
+                    border: '1px solid #dadada',
+                    borderRadius: '13px',
+                  }}
+                  id="lot-min-consecutive-rest"
+                >
+                  {/* Triple Champ 2.1: Amplitude minimale de repos entre 2 jours consécutifs. (Toggle ON/OFF) */}
+                  <div className="flex items-center justify-between">
+                    <label
+                      className="select-none font-bold"
+                      style={{
+                        color: '#000',
+                        fontSize: '18px',
+                        paddingRight: '15px',
+                        cursor: 'default',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                      }}
+                    >
+                      {t("Amplitude minimale de repos entre 2 jours consécutifs.")}
+                    </label>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        id="toggle-min-consecutive-rest"
+                        checked={draftGlobalRules.minConsecutiveRestEnabled}
+                        onChange={(e) => {
+                          setDraftGlobalRules(prev => ({
+                            ...prev,
+                            minConsecutiveRestEnabled: e.target.checked
+                          }));
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                    </label>
+                  </div>
+
+                  {/* Triple Champ 2.2: Valeur horaire (h). */}
+                  <div>
+                    <label
+                      className="block mb-1 font-sans font-bold"
+                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                    >
+                      {t("Valeur horaire (h).")} {draftGlobalRules.minConsecutiveRestEnabled && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      id="input-min-consecutive-rest-hours"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={2}
+                      value={draftGlobalRules.minConsecutiveRestHours || ''}
+                      disabled={!draftGlobalRules.minConsecutiveRestEnabled}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, '');
+                        if (raw === '') {
+                          setDraftGlobalRules(prev => ({ ...prev, minConsecutiveRestHours: 0 }));
+                          return;
+                        }
+                        const num = parseInt(raw, 10);
+                        const clamped = Math.min(24, Math.max(1, num));
+                        setDraftGlobalRules(prev => ({ ...prev, minConsecutiveRestHours: clamped }));
+                      }}
+                      onBlur={() => {
+                        if (draftGlobalRules.minConsecutiveRestEnabled && (!draftGlobalRules.minConsecutiveRestHours || draftGlobalRules.minConsecutiveRestHours < 1)) {
+                          setDraftGlobalRules(prev => ({ ...prev, minConsecutiveRestHours: 11 }));
+                        }
+                      }}
+                      placeholder={t("Nombre entre 1 et 24 (ex: 11)")}
+                      className={`short-input-field ${!draftGlobalRules.minConsecutiveRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    />
+                  </div>
+
+                  {/* Triple Champ 2.3: Texture du message d'erreur. */}
+                  <div>
+                    <label
+                      className="block mb-1 font-sans font-bold"
+                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                    >
+                      {t("Texture du message d’erreur.")} {draftGlobalRules.minConsecutiveRestEnabled && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      id="input-min-consecutive-rest-error-text"
+                      value={draftGlobalRules.minConsecutiveRestErrorText}
+                      disabled={!draftGlobalRules.minConsecutiveRestEnabled}
+                      onChange={(e) => {
+                        setDraftGlobalRules(prev => ({ ...prev, minConsecutiveRestErrorText: e.target.value }));
+                      }}
+                      placeholder={t("Texte du message d'erreur...")}
+                      className={!draftGlobalRules.minConsecutiveRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}
+                    />
+                  </div>
+                </div>
+
+                {/* Line divider between Lot 2 and Lot 3 */}
+                <div className="pt-1 pb-1">
+                  <div style={{ borderBottom: '1px solid #dadada', width: '100%' }} />
+                </div>
+
+                {/* LOT 3: Amplitude minimale de repos pendant un pointage en cours */}
+                <div
+                  className="space-y-3 p-4 bg-white"
+                  style={{
+                    border: '1px solid #dadada',
+                    borderRadius: '13px',
+                  }}
+                  id="lot-min-break-rest"
+                >
+                  {/* Triple Champ 3.1: Amplitude minimale de repos pendant un pointage en cours. (Toggle ON/OFF) */}
+                  <div className="flex items-center justify-between">
+                    <label
+                      className="select-none font-bold"
+                      style={{
+                        color: '#000',
+                        fontSize: '18px',
+                        paddingRight: '15px',
+                        cursor: 'default',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                      }}
+                    >
+                      {t("Amplitude minimale de repos pendant un pointage en cours.")}
+                    </label>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        id="toggle-min-break-rest"
+                        checked={draftGlobalRules.minBreakRestEnabled}
+                        onChange={(e) => {
+                          setDraftGlobalRules(prev => ({
+                            ...prev,
+                            minBreakRestEnabled: e.target.checked
+                          }));
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                    </label>
+                  </div>
+
+                  {/* Triple Champ 3.2: Valeur horaire (mins). */}
+                  <div>
+                    <label
+                      className="block mb-1 font-sans font-bold"
+                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                    >
+                      {t("Valeur horaire (mins).")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      id="input-min-break-rest-minutes"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={2}
+                      value={draftGlobalRules.minBreakRestMinutes || ''}
+                      disabled={!draftGlobalRules.minBreakRestEnabled}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, '');
+                        if (raw === '') {
+                          setDraftGlobalRules(prev => ({ ...prev, minBreakRestMinutes: 0 }));
+                          return;
+                        }
+                        const num = parseInt(raw, 10);
+                        const clamped = Math.min(60, Math.max(1, num));
+                        setDraftGlobalRules(prev => ({ ...prev, minBreakRestMinutes: clamped }));
+                      }}
+                      onBlur={() => {
+                        if (draftGlobalRules.minBreakRestEnabled && (!draftGlobalRules.minBreakRestMinutes || draftGlobalRules.minBreakRestMinutes < 1)) {
+                          setDraftGlobalRules(prev => ({ ...prev, minBreakRestMinutes: 45 }));
+                        }
+                      }}
+                      placeholder={t("Nombre entre 1 et 60 (ex: 45)")}
+                      className={`short-input-field ${!draftGlobalRules.minBreakRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    />
+                  </div>
+
+                  {/* Triple Champ 3.3: Texture du message d'erreur. */}
+                  <div>
+                    <label
+                      className="block mb-1 font-sans font-bold"
+                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                    >
+                      {t("Texture du message d’erreur.")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      id="input-min-break-rest-error-text"
+                      value={draftGlobalRules.minBreakRestErrorText}
+                      disabled={!draftGlobalRules.minBreakRestEnabled}
+                      onChange={(e) => {
+                        setDraftGlobalRules(prev => ({ ...prev, minBreakRestErrorText: e.target.value }));
+                      }}
+                      placeholder={t("Texte du message d'erreur pour tournées et missions...")}
+                      className={!draftGlobalRules.minBreakRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}
+                    />
+                  </div>
+
+                  {/* Triple Champ 3.4: Texture du message d'erreur pour le technicien. */}
+                  <div>
+                    <label
+                      className="block mb-1 font-sans font-bold"
+                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                    >
+                      {t("Texture du message d’erreur pour le technicien.")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      id="input-min-break-rest-tech-error-text"
+                      value={draftGlobalRules.minBreakRestTechErrorText}
+                      disabled={!draftGlobalRules.minBreakRestEnabled}
+                      onChange={(e) => {
+                        setDraftGlobalRules(prev => ({ ...prev, minBreakRestTechErrorText: e.target.value }));
+                      }}
+                      placeholder={t("Texte du message d'erreur pour le technicien...")}
+                      className={!draftGlobalRules.minBreakRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}
+                    />
+                  </div>
+                </div>
+
+                {/* Line divider separating the 3 lots from the rest of the parameters */}
+                <div className="pt-2 pb-2">
+                  <div style={{ borderBottom: '1px solid #dadada', width: '100%' }} />
+                </div>
+
                 {draftSettings.map((param, idx) => {
                   const ruleConflicts = draftConflicts.filter(
                     (c) => c.ruleIndexA === idx || c.ruleIndexB === idx

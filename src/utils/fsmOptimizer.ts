@@ -1,3 +1,6 @@
+import { CttGlobalRules, DEFAULT_CTT_GLOBAL_RULES } from '../types';
+import { loadCttGlobalRules } from './cttRules';
+
 // FSM Routing and Schedule Optimizer
 
 export interface Coordinate {
@@ -501,9 +504,12 @@ export function scheduleMissions(
   equipmentDetails: Record<string, any>,
   tech?: any,
   firstMissionTravelHours: number = 0,
-  variables?: any[]
+  variables?: any[],
+  customCttRules?: CttGlobalRules,
+  allTours?: any[]
 ): any[] {
   if (!missions || missions.length === 0) return [];
+  const cttRules: CttGlobalRules = customCttRules || loadCttGlobalRules();
 
   let currentCursorDate = new Date(tourStartDate || new Date().toISOString().split('T')[0]);
   if (isNaN(currentCursorDate.getTime())) {
@@ -517,6 +523,99 @@ export function scheduleMissions(
     .filter(idx => idx !== -1);
 
   const result: any[] = new Array(missions.length);
+
+  // Helper to test if a candidate slot on targetDate violates CTT rules
+  const checkCttCandidate = (targetDateStr: string, candStart: number, candEnd: number, prevScheduled: any[]) => {
+    // Rule 1: Max daily amplitude
+    if (cttRules.maxDailyAmplitudeEnabled && cttRules.maxDailyAmplitudeHours > 0) {
+      const dayMissions = prevScheduled.filter(m => m && m.estimatedDate === targetDateStr && m.estimatedSlot);
+      if (dayMissions.length > 0) {
+        const earliest = Math.min(...dayMissions.map(m => parseSlotToMinutes(m.estimatedSlot)));
+        const amplitude = candEnd - earliest;
+        if (amplitude > cttRules.maxDailyAmplitudeHours * 60) {
+          return { valid: false, reason: 'max_amplitude' };
+        }
+      }
+    }
+
+    // Rule 2: Min consecutive rest from day - 1
+    let adjustedStart = candStart;
+    if (cttRules.minConsecutiveRestEnabled && cttRules.minConsecutiveRestHours > 0) {
+      const dTarget = new Date(targetDateStr);
+      const yesterday = formatDate(addDays(dTarget, -1));
+      let yesterdayMissions = prevScheduled.filter(m => m && m.estimatedDate === yesterday && m.estimatedSlot);
+
+      // Also check other tours for the same technician if prevScheduled has no missions yesterday
+      if (yesterdayMissions.length === 0 && Array.isArray(allTours) && tech?.name) {
+        const otherTours = allTours.filter(ot =>
+          ot && ot.techName && String(ot.techName).trim().toLowerCase() === String(tech.name).trim().toLowerCase()
+        );
+        for (const ot of otherTours) {
+          const otActive = (ot.missions || []).filter((m: any) => {
+            const mDate = m?.estimatedDate || ot.startDate;
+            return mDate === yesterday && m?.estimatedSlot;
+          });
+          if (otActive.length > 0) {
+            yesterdayMissions.push(...otActive);
+          }
+        }
+      }
+
+      if (yesterdayMissions.length > 0) {
+        let maxEndYesterday = -Infinity;
+        yesterdayMissions.forEach(m => {
+          const s = parseSlotToMinutes(m.estimatedSlot);
+          const d = getMissionDurationInMinutes(m.reason || '', variables, m);
+          if (s + d > maxEndYesterday) maxEndYesterday = s + d;
+        });
+        if (maxEndYesterday !== -Infinity) {
+          const earliestAllowed = maxEndYesterday + (cttRules.minConsecutiveRestHours * 60) - 1440;
+          if (adjustedStart < earliestAllowed) {
+            adjustedStart = earliestAllowed;
+          }
+        }
+      }
+    }
+
+    // Rule 3: Min break rest between 12h and 14h (720 to 840 mins)
+    if (cttRules.minBreakRestEnabled && cttRules.minBreakRestMinutes > 0) {
+      const requiredBreak = cttRules.minBreakRestMinutes;
+      const windowStart = 720; // 12h00
+      const windowEnd = 840;   // 14h00
+      const duration = candEnd - candStart;
+
+      const dayMissions = prevScheduled.filter(m => m && m.estimatedDate === targetDateStr && m.estimatedSlot);
+      let maxPriorEnd = 0;
+      dayMissions.forEach(m => {
+        const s = parseSlotToMinutes(m.estimatedSlot);
+        const d = getMissionDurationInMinutes(m.reason || '', variables, m);
+        if (s + d > maxPriorEnd) maxPriorEnd = s + d;
+      });
+
+      // Case A: Prior mission ended during lunch [12:00, 14:00]
+      if (maxPriorEnd >= windowStart && maxPriorEnd < windowEnd) {
+        const breakEnd = maxPriorEnd + requiredBreak;
+        if (adjustedStart < breakEnd) {
+          adjustedStart = breakEnd;
+        }
+      }
+      // Case B: Prior mission ended before 12:00 (or no prior missions)
+      else if (maxPriorEnd < windowStart) {
+        // If candidate would start in the first portion of lunch
+        if (adjustedStart >= windowStart && adjustedStart < windowStart + requiredBreak) {
+          adjustedStart = windowStart + requiredBreak;
+        }
+        // If candidate starts before 12:00, but ends after 14:00 - requiredBreak,
+        // it leaves less than requiredBreak free continuous minutes before 14:00
+        else if (adjustedStart < windowStart && (adjustedStart + duration) > (windowEnd - requiredBreak)) {
+          // If candidate cannot finish before 12:00, schedule break at 12:00 and push candidate after break
+          adjustedStart = windowStart + requiredBreak;
+        }
+      }
+    }
+
+    return { valid: true, adjustedStart };
+  };
 
   let i = 0;
   while (i < missions.length) {
@@ -566,6 +665,8 @@ export function scheduleMissions(
             intervals = [{ start: 480, end: 1080 }];
           }
           let found = false;
+          const candDateStr = formatDate(currentCursorDate);
+
           for (const interval of intervals) {
             let candidateStart = Math.max(currentCursorMinutes, interval.start);
 
@@ -575,6 +676,14 @@ export function scheduleMissions(
               const dayTechStart = (techInts.length > 0 && techInts[0].start) ? techInts[0].start : 480;
               const earliestArrival = dayTechStart + (firstMissionTravelHours * 60);
               candidateStart = Math.max(earliestArrival, interval.start);
+            }
+
+            const cttCheck = checkCttCandidate(candDateStr, candidateStart, candidateStart + duration, result.slice(0, i));
+            if (!cttCheck.valid) {
+              continue; // Exceeds max daily amplitude, cannot fit today
+            }
+            if (cttCheck.adjustedStart !== undefined && cttCheck.adjustedStart > candidateStart) {
+              candidateStart = cttCheck.adjustedStart;
             }
 
             if (candidateStart + duration <= interval.end) {
@@ -646,6 +755,14 @@ export function scheduleMissions(
               candStart = Math.max(earliestArrival, interval.start);
             }
 
+            const cttCheck = checkCttCandidate(candDateStr, candStart, candStart + duration, result.slice(0, i));
+            if (!cttCheck.valid) {
+              continue;
+            }
+            if (cttCheck.adjustedStart !== undefined && cttCheck.adjustedStart > candStart) {
+              candStart = cttCheck.adjustedStart;
+            }
+
             const candEnd = candStart + duration;
 
             if (candDateStr < nextForcedDateStr) {
@@ -696,6 +813,12 @@ export function scheduleMissions(
             const durK = getMissionDurationInMinutes(mK.reason || '', variables, mK);
 
             let startMinsK = limitMins - durK;
+            if (cttRules.minBreakRestEnabled && cttRules.minBreakRestMinutes > 0) {
+              if (limitMins > 720 && limitMins <= 720 + cttRules.minBreakRestMinutes) {
+                limitMins = 720;
+                startMinsK = limitMins - durK;
+              }
+            }
             if (startMinsK < 480) {
               limitDateObj = addDays(limitDateObj, -1);
               limitMins = 1080;

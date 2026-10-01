@@ -8,6 +8,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import MapModal from './MapModal';
 import HelpBubble from './HelpBubble';
+import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
+import { logDeleteOtherEquipment } from '../services/suspiciousActivityService';
 
 const CODE39_PATTERNS: Record<string, string> = {
   '0': '000110100', '1': '100100001', '2': '001100001', '3': '101100000',
@@ -427,6 +429,17 @@ export default function AutresMaterielsTab({
   // Client Search in dropdown
   const [clientSearchText, setClientSearchText] = useState('');
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+  const [isSidePaneClientOpen, setIsSidePaneClientOpen] = useState(false);
+
+  const clientSidePaneItems: SearchSidePaneItem[] = useMemo(() => {
+    return (clients || []).map((c) => ({
+      id: c.id,
+      label: c.denomination || 'Client sans nom',
+      subtitle: [c.ville, c.codePostal || (c as any).cp, c.siret].filter(Boolean).join(' • ') || undefined,
+      badge: c.clientIdField || (c as any).codeClient || undefined,
+      raw: c,
+    }));
+  }, [clients]);
 
   // Map client denomination
   // Moved clientMap lookup declaration up or we already have it.
@@ -633,6 +646,13 @@ export default function AutresMaterielsTab({
     if (isDeveloper || isReadOnly) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
+    }
+    const target = otherEquipments.find(item => item.id === id);
+    if (target) {
+      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      const identifiant = target.identifiant || id;
+      const serialNumber = target.numeroSerie || 'Sans numéro de série';
+      logDeleteOtherEquipment(activeTenant, identifiant, serialNumber).catch(() => {});
     }
     const updated = otherEquipments.filter(item => item.id !== id);
     saveOtherEquipments(updated);
@@ -1689,7 +1709,17 @@ export default function AutresMaterielsTab({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Client Select Dropdown */}
                   <div className="space-y-1 relative" id="client-select-lookup-container">
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase">Sélection du client.</label>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase">Sélection du client.</label>
+                      <button
+                        type="button"
+                        onClick={() => setIsSidePaneClientOpen(true)}
+                        className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                        style={{ textDecoration: 'none' }}
+                      >
+                        Rechercher
+                      </button>
+                    </div>
                     <div className="relative">
                       <input
                         type="text"
@@ -2918,6 +2948,26 @@ export default function AutresMaterielsTab({
         executeAddToTrier={executeAddToTrier}
         executeAddTournee={executeAddTournee}
         isAnySelectedInTour={isAnySelectedInTour}
+      />
+
+      {/* Side Pane Search for Client */}
+      <SearchSidePane
+        isOpen={isSidePaneClientOpen}
+        onClose={() => setIsSidePaneClientOpen(false)}
+        paneId="autres-materiels-client-side-pane"
+        items={clientSidePaneItems}
+        selectedId={clientId}
+        onSelect={(item) => handleClientSelect(item.id)}
+        searchPlaceholder="Entrez votre recherche"
+        searchFilter={(item, q) => {
+          const denom = (item.label || '').toLowerCase();
+          const sub = (item.subtitle || '').toLowerCase();
+          const badge = (item.badge || '').toLowerCase();
+          const c = item.raw;
+          const siret = (c?.siret || '').toLowerCase();
+          const ville = (c?.ville || '').toLowerCase();
+          return denom.includes(q) || sub.includes(q) || badge.includes(q) || siret.includes(q) || ville.includes(q);
+        }}
       />
     </div>
   );

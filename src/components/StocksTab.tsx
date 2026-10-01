@@ -5,6 +5,8 @@ import { getLocationCustomName, generateRandomShortCode } from '../utils';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { Check, X } from 'lucide-react';
+import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
+import { logDeleteStockCenter } from '../services/suspiciousActivityService';
 
 const CODE39_MAP: Record<string, string> = {
   '0': '101001101101',
@@ -882,6 +884,26 @@ export default function StocksTab({
   const [newStorage, setNewStorage] = useState<string>('');
   const [newCommentaire, setNewCommentaire] = useState<string>('');
   const [newUsageRecommandeIds, setNewUsageRecommandeIds] = useState<string[]>([]);
+  const [isSidePanePieceOpen, setIsSidePanePieceOpen] = useState(false);
+
+  const pieceSidePaneItems: SearchSidePaneItem[] = useMemo(() => {
+    const items: SearchSidePaneItem[] = [];
+    groupedStockVariables.forEach(group => {
+      group.items.forEach(v => {
+        const brandStr = v.marque && v.marque !== 'Standard' ? `(${v.marque})` : '';
+        const idStr = v.identifiant ? `[${v.identifiant}] ` : '';
+        items.push({
+          id: v.id,
+          label: `${idStr}${v.nom} ${brandStr}`.trim(),
+          subtitle: v.reference ? `Réf: ${v.reference}` : undefined,
+          badge: group.label,
+          imageUrl: v.imageUrl,
+          raw: v,
+        });
+      });
+    });
+    return items;
+  }, [groupedStockVariables]);
 
   // Search & Filter State
   const [localStockSearchQuery, setLocalStockSearchQuery] = useState('');
@@ -1728,6 +1750,9 @@ export default function StocksTab({
                                     disabled={isDeleteDisabled}
                                     onClick={() => {
                                       if (isDeleteDisabled) return;
+                                      const itemStockName = variables.find(v => v.id === st.denominationPieceId)?.nom || st.denominationPieceId || st.ugs || 'Équipement';
+                                      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+                                      logDeleteStockCenter(activeTenant, itemStockName).catch(() => {});
                                       saveStocks(stocks.filter(s => s.id !== st.id));
                                       if (saveDistributedStocks && distEntries.length > 0) {
                                         const remainingDistributed = (distributedStocks || []).filter(ds => 
@@ -1911,16 +1936,26 @@ export default function StocksTab({
               <div className="flex flex-col gap-1 bg-white md:col-span-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Pièce ou service *</label>
-                  {setActiveTab && (
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      onClick={handleSaveAndRedirectToVariables}
+                      onClick={() => setIsSidePanePieceOpen(true)}
                       className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
                       style={{ textDecoration: 'none' }}
                     >
-                      Nouvelle variable
+                      Rechercher
                     </button>
-                  )}
+                    {setActiveTab && (
+                      <button
+                        type="button"
+                        onClick={handleSaveAndRedirectToVariables}
+                        className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                        style={{ textDecoration: 'none' }}
+                      >
+                        Nouvelle variable
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <select
                   value={newDenomStr}
@@ -3515,6 +3550,28 @@ export default function StocksTab({
           </div>
         </div>
       )}
+
+      {/* Side Pane Search for Pièce ou service */}
+      <SearchSidePane
+        isOpen={isSidePanePieceOpen}
+        onClose={() => setIsSidePanePieceOpen(false)}
+        paneId="stocks-piece-search-side-pane"
+        items={pieceSidePaneItems}
+        selectedId={newDenomStr}
+        onSelect={(item) => setNewDenomStr(item.id)}
+        searchPlaceholder="Entrez votre recherche"
+        searchFilter={(item, q) => {
+          const l = (item.label || '').toLowerCase();
+          const s = (item.subtitle || '').toLowerCase();
+          const b = (item.badge || '').toLowerCase();
+          const v = item.raw;
+          const nom = (v?.nom || '').toLowerCase();
+          const ident = (v?.identifiant || '').toLowerCase();
+          const ref = (v?.reference || '').toLowerCase();
+          const marque = (v?.marque || '').toLowerCase();
+          return l.includes(q) || s.includes(q) || b.includes(q) || nom.includes(q) || ident.includes(q) || ref.includes(q) || marque.includes(q);
+        }}
+      />
 
     </div>
   );
