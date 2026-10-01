@@ -26,7 +26,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
   const [isLoading, setIsLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
@@ -35,7 +35,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => {
-        inputRef.current?.focus();
+        textareaRef.current?.focus();
         scrollToBottom(false);
       }, 80);
     }
@@ -64,6 +64,9 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
     // Ephemeral wipe: clear conversation without persisting anything
     setMessages([]);
     setInputQuestion('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '28px';
+    }
     setIsLoading(false);
     onClose();
   };
@@ -83,6 +86,9 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
     setInputQuestion('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '28px';
+    }
     setIsLoading(true);
 
     try {
@@ -124,7 +130,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
       setMessages([...nextMessages, errorMsg]);
     } finally {
       setIsLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => textareaRef.current?.focus(), 50);
     }
   };
 
@@ -169,21 +175,27 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
                   {isUser ? t('Vous') : t('Defibeo Intelligence')}
                 </div>
 
-                {/* Message bubble (SANS BORDER qu'il soit bleu ou gris) */}
+                {/* Message bubble : background-color: #ebedee; font-size: 18px; border: 1px solid #dadada6e; box-shadow: none; padding: 10px 15px; color: #000; cursor : default; */}
                 <div
-                  className="rounded-2xl p-3.5 shadow-2xs transition-all relative select-text"
+                  className="rounded-2xl transition-all relative select-text"
                   style={{
-                    maxWidth: isUser ? '85%' : '92%',
-                    backgroundColor: '#ffffff',
-                    border: 'none',
+                    maxWidth: isUser ? '85%' : '90%',
+                    backgroundColor: '#ebedee',
+                    fontSize: '18px',
+                    border: '1px solid #dadada6e',
+                    boxShadow: 'none',
+                    padding: '10px 15px',
                     color: '#000000',
-                    borderBottomRightRadius: isUser ? '4px' : '16px',
-                    borderBottomLeftRadius: !isUser ? '4px' : '16px',
+                    cursor: 'default',
                   }}
                 >
                   <p
-                    className="text-[16px] leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
-                    style={{ color: '#000000' }}
+                    className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                    style={{
+                      fontSize: '18px',
+                      color: '#000000',
+                      cursor: 'default',
+                    }}
                   >
                     {msg.content}
                   </p>
@@ -198,8 +210,13 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
                 {t('Defibeo Intelligence')}
               </div>
               <div
-                className="rounded-2xl rounded-bl-xs p-3.5 bg-white text-black shadow-2xs max-w-[90%]"
-                style={{ border: 'none' }}
+                className="rounded-2xl p-3.5 text-black shadow-none max-w-[90%]"
+                style={{
+                  backgroundColor: '#ebedee',
+                  border: '1px solid #dadada6e',
+                  fontSize: '18px',
+                  padding: '10px 15px',
+                }}
               >
                 <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
                   <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
@@ -222,31 +239,49 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
           }}
         >
           <form onSubmit={(e) => handleSendMessage(e)} className="space-y-3">
-            {/* Input bar */}
+            {/* Input bar: floating white container */}
             <div
               className="flex items-center gap-2 bg-white rounded-2xl p-2 pl-4 transition-all shadow-lg"
               style={{ border: '1px solid #dadada' }}
             >
-              <input
-                ref={inputRef}
-                type="text"
+              {/* Textarea multiline avec auto-height et alignement vertical centré initialement */}
+              <textarea
+                ref={textareaRef}
+                rows={1}
                 value={inputQuestion}
-                onChange={(e) => setInputQuestion(e.target.value)}
-                placeholder={t('Posez votre question sur vos données ou le logiciel...')}
+                onChange={(e) => {
+                  setInputQuestion(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${Math.max(28, Math.min(e.target.scrollHeight, 180))}px`;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="Votre question sur le logiciel ou vos données."
                 disabled={isLoading}
-                className="flex-1 bg-transparent border-0 outline-none text-black px-2 py-1 placeholder:text-slate-400"
+                className="flex-1 bg-transparent border-0 outline-none text-black px-1 placeholder:text-slate-400 resize-none overflow-y-auto"
                 style={{
                   fontSize: '18px',
+                  lineHeight: '26px',
+                  minHeight: '28px',
+                  height: '28px',
+                  maxHeight: '180px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  margin: 'auto 0',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 }}
               />
 
-              {/* Bouton Envoyer: pas d'icône send, font-size 18px */}
+              {/* Bouton Envoyer: pas d'icône send, font-size 18px, centré verticalement */}
               <button
                 type="submit"
                 disabled={!inputQuestion.trim() || isLoading}
                 id="btn-submit-defibeo-intelligence"
-                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center"
                 style={{
                   backgroundColor: '#3556ec',
                   boxShadow:
@@ -261,32 +296,38 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
               </button>
             </div>
 
-            {/* Ligne inférieure: Gélule d'avertissement + Bouton Quitter la conversation sur la même ligne */}
+            {/* Ligne inférieure: Texte d'avertissement simple + Bouton Quitter la conversation (background black, text white, pas de border) */}
             <div className="flex items-center justify-between gap-3 pt-0.5">
-              {/* Gélule en petit Defibeo Intelligence */}
+              {/* Texte sans gélule */}
               <div className="flex-1 min-w-0">
-                <span
-                  className="inline-block truncate max-w-full px-3.5 py-2 rounded-full text-xs font-medium text-slate-500 bg-white shadow-xs select-none text-center"
+                <p
                   style={{
-                    border: '1px solid #dadada',
+                    border: 'none',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    background: 'transparent',
+                    boxShadow: 'none',
+                    color: '#000000',
+                    fontSize: '12px',
+                    padding: '0px',
+                    margin: 0,
+                    lineHeight: '1.3',
                   }}
-                  title={t('Defibeo Intelligence est une IA expérimentale et peut se tromper.')}
                 >
                   {t('Defibeo Intelligence est une IA expérimentale et peut se tromper.')}
-                </span>
+                </p>
               </div>
 
-              {/* Bouton Quitter la conversation (background blanc, font-size 18px) */}
+              {/* Bouton Quitter la conversation : background black, text white, pas de border, font-size 18px */}
               <button
                 type="button"
                 onClick={handleQuitConversation}
                 id="btn-quit-defibeo-intelligence"
-                className="shrink-0 px-5 py-2 rounded-full font-bold transition-all cursor-pointer shadow-xs hover:bg-slate-50 active:scale-[0.98] whitespace-nowrap"
+                className="shrink-0 px-5 py-2 rounded-full font-bold transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] whitespace-nowrap"
                 style={{
-                  backgroundColor: '#ffffff',
-                  color: '#000000',
-                  border: '1px solid #dadada',
+                  backgroundColor: '#000000',
+                  color: '#ffffff',
+                  border: 'none',
+                  boxShadow: 'none',
                   fontSize: '18px',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 }}

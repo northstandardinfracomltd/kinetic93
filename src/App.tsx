@@ -1514,16 +1514,58 @@ export default function App() {
     localStorage.setItem(`defib_${tenantId}_messages_last_seen`, String(now));
   };
 
-  // Real-time listener for tenant messages to update badge & chat across all devices
+  // Real-time listener & periodic poll for tenant messages to update badge & chat across all devices
   useEffect(() => {
     if (!tenantId) return;
+
+    let isMounted = true;
+
+    // 1. Cross-tab storage listener pour sync instantanée 0ms entre onglets du même navigateur
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `defib_${tenantId}_tenant_messages` && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && isMounted) {
+            setTenantMessages(parsed);
+          }
+        } catch (_) {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // 2. Polling dynamique périodique (toutes les 2.5s)
+    const pollMessages = async () => {
+      try {
+        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(tenantId)}&_=${Date.now()}`);
+        if (resp.ok && isMounted) {
+          const data = await resp.json();
+          const remoteList: TenantMessage[] = Array.isArray(data?.value) ? data.value : (Array.isArray(data) ? data : []);
+          if (remoteList && remoteList.length >= 0) {
+            setTenantMessages((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
+                try {
+                  localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
+                } catch (_) {}
+                return remoteList;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (_) {}
+    };
+
+    const pollTimer = setInterval(pollMessages, 2500);
+
+    // 3. Listener Firestore
+    let unsubscribeFirestore: (() => void) | undefined;
     try {
       const colKey = getCollectionKey('tenantMessages', tenantId);
       const docRef = doc(db, 'appData', colKey);
-      const unsubscribe = onSnapshot(
+      unsubscribeFirestore = onSnapshot(
         docRef,
         (snapshot) => {
-          if (snapshot.exists()) {
+          if (snapshot.exists() && isMounted) {
             const data = snapshot.data();
             let remoteList: TenantMessage[] = [];
             if (Array.isArray(data?.value)) {
@@ -1532,10 +1574,15 @@ export default function App() {
               remoteList = data;
             }
             if (remoteList) {
-              setTenantMessages(remoteList);
-              try {
-                localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
-              } catch (_) {}
+              setTenantMessages((prev) => {
+                if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
+                  try {
+                    localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
+                  } catch (_) {}
+                  return remoteList;
+                }
+                return prev;
+              });
             }
           }
         },
@@ -1543,10 +1590,16 @@ export default function App() {
           console.warn('Real-time listener on tenantMessages in App:', error);
         }
       );
-      return () => unsubscribe();
     } catch (e) {
       console.warn('Error setting up onSnapshot for tenantMessages:', e);
     }
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(pollTimer);
+      if (unsubscribeFirestore) unsubscribeFirestore();
+    };
   }, [tenantId]);
 
 

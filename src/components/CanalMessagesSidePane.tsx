@@ -4,7 +4,6 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db, saveCollectionToFirestore, getCollectionKey } from '../firebase';
 import { TenantMessage } from '../types';
 import { t } from '../utils/translate';
-import { Trash2 } from 'lucide-react';
 
 export const CANAL_TAGS = [
   { name: 'Exploitation', bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe', dot: '#2563eb' },
@@ -51,9 +50,22 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
   };
 
-  // Close context menu on outside click or escape
+  // Close context menu on outside click with capture phase to avoid any stopPropagation issues
   useEffect(() => {
-    const handleGlobalClick = () => setContextMenu(null);
+    if (!contextMenu) return;
+    const handleClose = () => setContextMenu(null);
+    window.addEventListener('click', handleClose, true);
+    window.addEventListener('pointerdown', handleClose, true);
+    window.addEventListener('contextmenu', handleClose, true);
+    return () => {
+      window.removeEventListener('click', handleClose, true);
+      window.removeEventListener('pointerdown', handleClose, true);
+      window.removeEventListener('contextmenu', handleClose, true);
+    };
+  }, [contextMenu]);
+
+  // Handle escape key
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (contextMenu) setContextMenu(null);
@@ -61,11 +73,9 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       }
     };
     if (isOpen) {
-      window.addEventListener('click', handleGlobalClick);
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
-      window.removeEventListener('click', handleGlobalClick);
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, contextMenu, onClose]);
@@ -81,16 +91,62 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     }
   }, [isOpen, onMessagesRead]);
 
-  // Real-time Firestore sync
+  // Real-time Firestore sync & auto-refresh dynamic polling every 1s
   useEffect(() => {
     if (!isOpen || !tenantId) return;
+
+    let isMounted = true;
+
+    // 1. Polling dynamique ultra-rapide toutes les secondes (1000ms)
+    const fetchLatestServerMessages = async () => {
+      try {
+        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(tenantId)}&_=${Date.now()}`);
+        if (resp.ok && isMounted) {
+          const data = await resp.json();
+          const remoteList: TenantMessage[] = Array.isArray(data?.value) ? data.value : (Array.isArray(data) ? data : []);
+          if (remoteList && remoteList.length >= 0) {
+            setMessages((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
+                try {
+                  localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
+                } catch (_) {}
+                return remoteList;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (_) {}
+    };
+
+    // 2. Écoute des événements cross-tab storage pour mise à jour immédiate (0ms)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `defib_${tenantId}_tenant_messages` && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && isMounted) {
+            setMessages(parsed);
+          }
+        } catch (_) {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // Initial check
+    fetchLatestServerMessages();
+
+    // Timer auto-refresh toutes les 1000ms (1 seconde)
+    const refreshTimer = setInterval(fetchLatestServerMessages, 1000);
+
+    // 3. Listener Firestore en complément
+    let unsubscribeFirestore: (() => void) | undefined;
     try {
       const colKey = getCollectionKey('tenantMessages', tenantId);
       const docRef = doc(db, 'appData', colKey);
-      const unsubscribe = onSnapshot(
+      unsubscribeFirestore = onSnapshot(
         docRef,
         (snapshot) => {
-          if (snapshot.exists()) {
+          if (snapshot.exists() && isMounted) {
             const data = snapshot.data();
             let remoteList: TenantMessage[] = [];
             if (Array.isArray(data?.value)) {
@@ -99,8 +155,15 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               remoteList = data;
             }
             if (remoteList && remoteList.length >= 0) {
-              setMessages(remoteList);
-              localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
+              setMessages((prev) => {
+                if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
+                  try {
+                    localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
+                  } catch (_) {}
+                  return remoteList;
+                }
+                return prev;
+              });
             }
           }
         },
@@ -108,10 +171,16 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           console.warn('Real-time listener on tenantMessages notice:', error);
         }
       );
-      return () => unsubscribe();
     } catch (e) {
       console.warn('Error setting up onSnapshot for tenantMessages:', e);
     }
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(refreshTimer);
+      if (unsubscribeFirestore) unsubscribeFirestore();
+    };
   }, [isOpen, tenantId, setMessages]);
 
   // Scroll to bottom when new messages arrive
@@ -180,6 +249,15 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     localStorage.setItem(`defib_${tenantId}_messages_last_seen`, String(Date.now()));
 
     try {
+      fetch('/api/sync-collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName: 'tenantMessages',
+          tenantId,
+          value: updated,
+        }),
+      }).catch(() => {});
       await saveCollectionToFirestore('tenantMessages', updated, tenantId);
     } catch (err) {
       console.error('Erreur lors de la sauvegarde du message dans Firestore:', err);
@@ -198,6 +276,15 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(updated));
 
     try {
+      fetch('/api/sync-collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName: 'tenantMessages',
+          tenantId,
+          value: updated,
+        }),
+      }).catch(() => {});
       await saveCollectionToFirestore('tenantMessages', updated, tenantId);
     } catch (err) {
       console.error('Erreur lors de la suppression du message dans Firestore:', err);
@@ -209,7 +296,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     e.stopPropagation();
     setContextMenu({
       x: Math.min(e.clientX, window.innerWidth - 180),
-      y: Math.min(e.clientY, window.innerHeight - 100),
+      y: Math.min(e.clientY, window.innerHeight - 80),
       messageId: msgId,
     });
   };
@@ -276,7 +363,15 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             {/* 8 Required Tags (font-size 18px, sans border, AUCUN BOX-SHADOW, pas de gélule Tous) */}
             {CANAL_TAGS.map((tag) => {
               const isSelected = selectedFilterTag === tag.name;
-              const count = messages.filter((m) => m.tag === tag.name).length;
+              // Le rond de count nouveau inclut uniquement les messages récents des 2 dernières heures
+              const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+              const now = Date.now();
+              const recentCount = messages.filter((m) => {
+                if (m.tag !== tag.name) return false;
+                const msgTime = m.createdAt ? Number(m.createdAt) : 0;
+                return now - msgTime <= TWO_HOURS_MS;
+              }).length;
+
               return (
                 <button
                   key={tag.name}
@@ -297,7 +392,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                     style={{ backgroundColor: isSelected ? '#ffffff' : tag.dot }}
                   />
                   <span>{tag.name}</span>
-                  {count > 0 && (
+                  {recentCount > 0 && (
                     <span
                       className="inline-flex items-center justify-center rounded-full shrink-0 font-bold"
                       style={{
@@ -310,7 +405,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                         lineHeight: 1,
                       }}
                     >
-                      {count}
+                      {recentCount}
                     </span>
                   )}
                 </button>
@@ -459,25 +554,48 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
 
         {/* CONTEXT MENU ON RIGHT CLICK TO DELETE MESSAGE */}
         {contextMenu && (
-          <div
-            className="fixed bg-white rounded-xl shadow-2xl z-[100000] p-1 animate-scaleIn"
-            style={{
-              top: `${contextMenu.y}px`,
-              left: `${contextMenu.x}px`,
-              border: '1px solid #dadada',
-              minWidth: '140px',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => handleDeleteMessage(contextMenu.messageId)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors border-0 bg-transparent text-left"
+          <>
+            {/* Backdrop transparent pour masquer immédiatement le bouton quand on clique en dehors */}
+            <div
+              className="fixed inset-0 z-[99999]"
+              onClick={() => setContextMenu(null)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenu(null);
+              }}
+            />
+            <div
+              className="fixed z-[100000] p-0 animate-scaleIn"
+              style={{
+                top: `${contextMenu.y}px`,
+                left: `${contextMenu.x}px`,
+                backgroundColor: 'transparent',
+                border: 'none',
+                boxShadow: 'none',
+              }}
+              onClick={(e) => e.stopPropagation()}
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>{t('Supprimer')}</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => handleDeleteMessage(contextMenu.messageId)}
+                id="btn-delete-canal-message"
+                className="px-5 py-2.5 rounded-xl font-bold transition-all cursor-pointer shadow-md hover:opacity-90 active:scale-95"
+                style={{
+                  backgroundColor: 'rgb(163, 20, 20)',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '18px',
+                  textAlign: 'center',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  display: 'block',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {t('Supprimer')}
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>,
