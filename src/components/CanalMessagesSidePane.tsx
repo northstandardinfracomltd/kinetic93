@@ -173,7 +173,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     setMessageInput('');
 
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = '28px';
     }
 
     localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(updated));
@@ -241,28 +241,31 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
         }}
       >
-        {/* TOP TAGS BAR (SANS BACKGROUND, SANS BORDER-BOTTOM, SANS BOX-SHADOW) */}
+        {/* TOP TAGS BAR (AUCUN SPACING COUPÉ À GAUCHE/DROITE, SANS BACKGROUND, SANS BORDER-BOTTOM, SANS BOX-SHADOW) */}
         <div
-          className="px-4 py-3 shrink-0 z-10"
+          className="py-3 shrink-0 z-10 w-full"
           style={{
             background: 'transparent',
             backgroundColor: 'transparent',
             border: 'none',
             borderBottom: 'none',
             boxShadow: 'none',
+            paddingLeft: 0,
+            paddingRight: 0,
           }}
         >
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-            {/* Bouton Fermer : background noir et texte blanc (font-size 18px) */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 px-3 w-full">
+            {/* Bouton Fermer : background noir et texte blanc, font-size 18px, AUCUN BOX-SHADOW */}
             <button
               type="button"
               onClick={onClose}
               id="btn-close-canal-sidepane"
-              className="px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer shadow-xs hover:opacity-90 active:scale-[0.98]"
+              className="px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98]"
               style={{
                 backgroundColor: '#000000',
                 color: '#ffffff',
                 border: 'none',
+                boxShadow: 'none',
                 fontSize: '18px',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
               }}
@@ -270,7 +273,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               {t('Fermer')}
             </button>
 
-            {/* 8 Required Tags (font-size 18px, sans border, pas de gélule Tous) */}
+            {/* 8 Required Tags (font-size 18px, sans border, AUCUN BOX-SHADOW, pas de gélule Tous) */}
             {CANAL_TAGS.map((tag) => {
               const isSelected = selectedFilterTag === tag.name;
               const count = messages.filter((m) => m.tag === tag.name).length;
@@ -284,8 +287,8 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                     backgroundColor: isSelected ? tag.dot : tag.bg,
                     color: isSelected ? '#ffffff' : tag.text,
                     border: 'none',
+                    boxShadow: 'none',
                     fontSize: '18px',
-                    boxShadow: isSelected ? '0 2px 4px rgba(0,0,0,0.15)' : 'none',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
                 >
@@ -353,19 +356,28 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                   </span>
                 </div>
 
-                {/* Message Bubble (NO border, NO tag gelule inside bubble) */}
+                {/* Message Bubble : background-color: #ebedee; font-size: 18px; border: 1px solid #dadada6e; box-shadow: none; padding: 10px 15px; color: #000; cursor : default; */}
                 <div
-                  className="max-w-[85%] sm:max-w-[78%] rounded-2xl p-3.5 shadow-2xs transition-all relative"
+                  className="rounded-2xl transition-all relative select-text"
                   style={{
-                    backgroundColor: '#ffffff',
-                    border: 'none',
+                    maxWidth: isMine ? '85%' : '90%',
+                    backgroundColor: '#ebedee',
+                    fontSize: '18px',
+                    border: '1px solid #dadada6e',
+                    boxShadow: 'none',
+                    padding: '10px 15px',
                     color: '#000000',
+                    cursor: 'default',
                   }}
                   title={t('Clic droit pour supprimer')}
                 >
                   <p
-                    className="text-[15px] leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
-                    style={{ color: '#000000' }}
+                    className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                    style={{
+                      fontSize: '18px',
+                      color: '#000000',
+                      cursor: 'default',
+                    }}
                   >
                     {msg.content}
                   </p>
@@ -391,7 +403,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               className="flex items-center gap-2 bg-white rounded-2xl p-2 pl-4 transition-all shadow-lg"
               style={{ border: '1px solid #dadada' }}
             >
-              {/* Message textarea: auto-height, max 350 chars, font-size 18px, pas de sélecteur de tag */}
+              {/* Message textarea: auto-height, max 350 chars, font-size 18px, texte & placeholder centrés verticalement */}
               <textarea
                 ref={textareaRef}
                 rows={1}
@@ -400,7 +412,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 onChange={(e) => {
                   setMessageInput(e.target.value);
                   e.target.style.height = 'auto';
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 180)}px`;
+                  e.target.style.height = `${Math.max(28, Math.min(e.target.scrollHeight, 180))}px`;
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -408,23 +420,27 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                     handleSendMessage();
                   }
                 }}
-                placeholder={t('Écrivez votre message pour l’équipe...')}
-                className="flex-1 bg-transparent border-0 outline-none text-black px-2 py-1 placeholder:text-slate-400 resize-none overflow-y-auto"
+                placeholder="Entrez votre message."
+                className="flex-1 bg-transparent border-0 outline-none text-black px-1 placeholder:text-slate-400 resize-none overflow-y-auto"
                 style={{
                   fontSize: '18px',
-                  lineHeight: '1.4',
-                  minHeight: '44px',
+                  lineHeight: '26px',
+                  minHeight: '28px',
+                  height: '28px',
                   maxHeight: '180px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  margin: 'auto 0',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 }}
               />
 
-              {/* Submit button: font-size 18px, no send icon */}
+              {/* Submit button: font-size 18px, no send icon, centré verticalement */}
               <button
                 type="submit"
                 disabled={!messageInput.trim()}
                 id="btn-send-canal-message"
-                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-end"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center"
                 style={{
                   backgroundColor: '#3556ec',
                   boxShadow:
