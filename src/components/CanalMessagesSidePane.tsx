@@ -4,7 +4,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db, saveCollectionToFirestore, getCollectionKey } from '../firebase';
 import { TenantMessage } from '../types';
 import { t } from '../utils/translate';
-import { X, Send, Trash2, Tag as TagIcon, Check, ChevronUp } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
 export const CANAL_TAGS = [
   { name: 'Exploitation', bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe', dot: '#2563eb' },
@@ -40,13 +40,11 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
 }) => {
   const [selectedFilterTag, setSelectedFilterTag] = useState<string | null>(null);
   const [selectedInputTag, setSelectedInputTag] = useState<CanalTagName>('Exploitation');
-  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [messageInput, setMessageInput] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const tagDropdownRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Auto scroll to bottom
   const scrollToBottom = (smooth = true) => {
@@ -59,7 +57,6 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (contextMenu) setContextMenu(null);
-        else if (isTagDropdownOpen) setIsTagDropdownOpen(false);
         else onClose();
       }
     };
@@ -71,27 +68,16 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       window.removeEventListener('click', handleGlobalClick);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, contextMenu, isTagDropdownOpen, onClose]);
-
-  // Close tag selector on click outside
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (tagDropdownRef.current && !tagDropdownRef.current.contains(e.target as Node)) {
-        setIsTagDropdownOpen(false);
-      }
-    };
-    if (isTagDropdownOpen) {
-      document.addEventListener('mousedown', handleOutsideClick);
-    }
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [isTagDropdownOpen]);
+  }, [isOpen, contextMenu, onClose]);
 
   // Mark messages as read when opening
   useEffect(() => {
     if (isOpen) {
       if (onMessagesRead) onMessagesRead();
-      setTimeout(() => scrollToBottom(false), 80);
-      inputRef.current?.focus();
+      setTimeout(() => {
+        scrollToBottom(false);
+        textareaRef.current?.focus();
+      }, 80);
     }
   }, [isOpen, onMessagesRead]);
 
@@ -185,6 +171,11 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     const updated = [...messages, newMsg];
     setMessages(updated);
     setMessageInput('');
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+
     localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(updated));
     localStorage.setItem(`defib_${tenantId}_messages_last_seen`, String(Date.now()));
 
@@ -194,7 +185,10 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       console.error('Erreur lors de la sauvegarde du message dans Firestore:', err);
     }
 
-    setTimeout(() => scrollToBottom(true), 50);
+    setTimeout(() => {
+      scrollToBottom(true);
+      textareaRef.current?.focus();
+    }, 50);
   };
 
   const handleDeleteMessage = async (msgId: string) => {
@@ -249,61 +243,46 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
         }}
       >
-        {/* TOP HEADER */}
+        {/* FLOATING TAGS BAR AT THE VERY TOP (WITH FERMER BUTTON PRECEDING "TOUS") */}
         <div
-          className="px-6 py-4 bg-white flex items-center justify-between shrink-0"
+          className="px-4 py-3 bg-white/95 backdrop-blur-xs shrink-0 shadow-xs z-10"
           style={{ borderBottom: '1px solid #dadada' }}
         >
-          <div className="flex items-center gap-3">
-            <h3
-              className="text-xl font-bold tracking-tight text-black m-0"
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+            {/* Bouton type blanc "Fermer" pour fermer la side pane (font-size 18px) */}
+            <button
+              type="button"
+              onClick={onClose}
+              id="btn-close-canal-sidepane"
+              className="px-4 py-1.5 rounded-full font-bold shrink-0 transition-all cursor-pointer shadow-2xs hover:bg-slate-50 active:scale-[0.98]"
               style={{
-                fontSize: '20px',
+                backgroundColor: '#ffffff',
+                color: '#000000',
+                border: '1px solid #dadada',
+                fontSize: '18px',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
               }}
             >
-              {t('Canal Messages')}
-            </h3>
-            <span
-              className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium"
-              style={{ border: '1px solid #e2e8f0' }}
-            >
-              {t('Équipe')} ({messages.length})
-            </span>
-          </div>
+              {t('Fermer')}
+            </button>
 
-          <button
-            type="button"
-            onClick={onClose}
-            id="btn-close-canal-messages"
-            className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:text-black hover:bg-slate-100 transition-colors cursor-pointer border-0 bg-transparent"
-            title={t('Fermer')}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* FLOATING TAGS BAR AT THE VERY TOP */}
-        <div
-          className="px-4 py-2.5 bg-white/95 backdrop-blur-xs shrink-0 shadow-xs z-10"
-          style={{ borderBottom: '1px solid #dadada' }}
-        >
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-            {/* Filter "Tous" */}
+            {/* Filter "Tous" (font-size 16px, sans border) */}
             <button
               type="button"
               onClick={() => setSelectedFilterTag(null)}
-              className="px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer border"
+              className="px-3.5 py-1.5 rounded-full shrink-0 transition-all cursor-pointer font-medium"
               style={{
-                backgroundColor: selectedFilterTag === null ? '#000000' : '#ffffff',
-                color: selectedFilterTag === null ? '#ffffff' : '#475569',
-                borderColor: selectedFilterTag === null ? '#000000' : '#dadada',
+                backgroundColor: selectedFilterTag === null ? '#000000' : '#f1f5f9',
+                color: selectedFilterTag === null ? '#ffffff' : '#000000',
+                border: 'none',
+                fontSize: '16px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
               }}
             >
               {t('Tous')} ({messages.length})
             </button>
 
-            {/* 8 Required Tags */}
+            {/* 8 Required Tags (font-size 16px, sans border) */}
             {CANAL_TAGS.map((tag) => {
               const isSelected = selectedFilterTag === tag.name;
               const count = messages.filter((m) => m.tag === tag.name).length;
@@ -312,22 +291,24 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                   key={tag.name}
                   type="button"
                   onClick={() => setSelectedFilterTag(isSelected ? null : tag.name)}
-                  className="px-3 py-1 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer flex items-center gap-1.5 border"
+                  className="px-3.5 py-1.5 rounded-full shrink-0 transition-all cursor-pointer flex items-center gap-2 font-medium"
                   style={{
                     backgroundColor: isSelected ? tag.dot : tag.bg,
                     color: isSelected ? '#ffffff' : tag.text,
-                    borderColor: isSelected ? tag.dot : tag.border,
+                    border: 'none',
+                    fontSize: '16px',
                     boxShadow: isSelected ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
                 >
                   <span
-                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: isSelected ? '#ffffff' : tag.dot }}
                   />
                   <span>{tag.name}</span>
                   {count > 0 && (
                     <span
-                      className="ml-0.5 text-[10px] px-1 rounded-full"
+                      className="ml-0.5 text-xs px-1.5 py-0.2 rounded-full"
                       style={{
                         backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)',
                       }}
@@ -341,88 +322,63 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           </div>
         </div>
 
-        {/* MESSAGES LIST AREA */}
+        {/* MESSAGES LIST AREA (LEAVE EMPTY WHEN NO MESSAGES) */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#f8f9fa]">
-          {displayedMessages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-8 text-slate-400">
-              <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center mb-3 shadow-xs border border-[#dadada]">
-                <TagIcon className="w-6 h-6 text-slate-400" />
-              </div>
-              <p className="text-[16px] font-medium text-slate-600 mb-1">
-                {selectedFilterTag
-                  ? `${t('Aucun message pour')} « ${selectedFilterTag} »`
-                  : t('Aucun message pour le moment.')}
-              </p>
-              <p className="text-xs text-slate-400 max-w-sm">
-                {t('Commencez la discussion en envoyant un message avec un tag pour informer votre équipe.')}
-              </p>
-            </div>
-          ) : (
-            displayedMessages.map((msg) => {
-              const isMine =
-                currentUser.email &&
-                msg.authorEmail &&
-                currentUser.email.trim().toLowerCase() === msg.authorEmail.trim().toLowerCase();
-              const tagInfo = getTagInfo(msg.tag);
+          {displayedMessages.map((msg) => {
+            const isMine =
+              currentUser.email &&
+              msg.authorEmail &&
+              currentUser.email.trim().toLowerCase() === msg.authorEmail.trim().toLowerCase();
+            const tagInfo = getTagInfo(msg.tag);
 
-              return (
+            return (
+              <div
+                key={msg.id}
+                className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} group`}
+                onContextMenu={(e) => handleContextMenu(e, msg.id)}
+              >
+                {/* Author Name + Dot Tag Color + Horodatée (font color black) */}
                 <div
-                  key={msg.id}
-                  className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} group`}
-                  onContextMenu={(e) => handleContextMenu(e, msg.id)}
+                  className={`flex items-center gap-2 mb-1.5 px-1 ${
+                    isMine ? 'flex-row-reverse text-right' : 'flex-row text-left'
+                  }`}
                 >
-                  {/* Author Name + Time */}
-                  <div
-                    className={`flex items-center gap-2 mb-1 px-1 text-xs ${
-                      isMine ? 'flex-row-reverse text-right' : 'flex-row text-left'
-                    }`}
+                  <span className="font-bold text-black" style={{ fontSize: '14px' }}>
+                    {msg.authorName || t('Membre')}
+                  </span>
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: tagInfo.dot }}
+                    title={tagInfo.name}
+                  />
+                  <span
+                    className="text-[13px] font-normal"
+                    style={{ color: '#000000' }}
                   >
-                    <span className="font-bold text-black" style={{ fontSize: '13px' }}>
-                      {msg.authorName || t('Membre')}
-                    </span>
-                    <span className="text-slate-400 text-[11px] font-normal">{msg.dateStr}</span>
-                  </div>
-
-                  {/* Message Bubble */}
-                  <div
-                    className="max-w-[85%] sm:max-w-[78%] rounded-2xl p-3.5 shadow-2xs transition-all relative"
-                    style={{
-                      backgroundColor: isMine ? '#ffffff' : '#ffffff',
-                      border: isMine ? '1.5px solid #3556ec' : '1px solid #dadada',
-                      color: '#000000',
-                    }}
-                    title={t('Clic droit pour supprimer')}
-                  >
-                    {/* Tag badge in bubble */}
-                    <div className="mb-2">
-                      <span
-                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium border"
-                        style={{
-                          backgroundColor: tagInfo.bg,
-                          color: tagInfo.text,
-                          borderColor: tagInfo.border,
-                        }}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full shrink-0"
-                          style={{ backgroundColor: tagInfo.dot }}
-                        />
-                        {tagInfo.name}
-                      </span>
-                    </div>
-
-                    {/* Content */}
-                    <p
-                      className="text-[15px] leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
-                      style={{ color: '#000000' }}
-                    >
-                      {msg.content}
-                    </p>
-                  </div>
+                    {msg.dateStr}
+                  </span>
                 </div>
-              );
-            })
-          )}
+
+                {/* Message Bubble (NO border, NO tag gelule inside bubble) */}
+                <div
+                  className="max-w-[85%] sm:max-w-[78%] rounded-2xl p-3.5 shadow-2xs transition-all relative"
+                  style={{
+                    backgroundColor: '#ffffff',
+                    border: 'none',
+                    color: '#000000',
+                  }}
+                  title={t('Clic droit pour supprimer')}
+                >
+                  <p
+                    className="text-[15px] leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                    style={{ color: '#000000' }}
+                  >
+                    {msg.content}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
           <div ref={messagesEndRef} />
         </div>
 
@@ -433,107 +389,85 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
         >
           <form onSubmit={handleSendMessage} className="space-y-2">
             <div
-              className="flex items-center gap-2 bg-[#f8fafc] rounded-2xl p-1.5 pl-3 transition-all"
+              className="flex items-center gap-2 bg-[#f8fafc] rounded-2xl p-2 pl-3 transition-all"
               style={{ border: '1px solid #dadada' }}
             >
-              {/* Tag choice pill (gélule) */}
-              <div className="relative shrink-0" ref={tagDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsTagDropdownOpen((prev) => !prev)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all border shadow-2xs hover:brightness-95"
+              {/* Tag choice: Gélule à gauche sans flèche, sans border, font-size 16px, dropdown system */}
+              <div className="relative shrink-0 flex items-center">
+                <select
+                  value={selectedInputTag}
+                  onChange={(e) => setSelectedInputTag(e.target.value as CanalTagName)}
+                  className="outline-none cursor-pointer font-semibold rounded-full px-3.5 py-1.5 transition-all text-center"
                   style={{
+                    fontSize: '16px',
                     backgroundColor: currentInputTagObj.bg,
                     color: currentInputTagObj.text,
-                    borderColor: currentInputTagObj.border,
+                    border: 'none',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
                   title={t('Choisir le tag')}
                 >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: currentInputTagObj.dot }}
-                  />
-                  <span>{currentInputTagObj.name}</span>
-                  <ChevronUp
-                    className={`w-3.5 h-3.5 transition-transform ${
-                      isTagDropdownOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                </button>
-
-                {/* Tag Selection Popup Dropdown */}
-                {isTagDropdownOpen && (
-                  <div
-                    className="absolute bottom-full left-0 mb-2 w-56 bg-white rounded-xl shadow-xl z-50 p-1.5 animate-fadeIn"
-                    style={{ border: '1px solid #dadada' }}
-                  >
-                    <div className="text-[11px] font-bold text-slate-400 uppercase px-2 py-1">
-                      {t('Choisir un tag')}
-                    </div>
-                    <div className="space-y-0.5">
-                      {CANAL_TAGS.map((tItem) => {
-                        const isSelected = selectedInputTag === tItem.name;
-                        return (
-                          <button
-                            key={tItem.name}
-                            type="button"
-                            onClick={() => {
-                              setSelectedInputTag(tItem.name);
-                              setIsTagDropdownOpen(false);
-                              inputRef.current?.focus();
-                            }}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors text-left border-0 ${
-                              isSelected ? 'bg-slate-100 font-bold' : 'hover:bg-slate-50'
-                            }`}
-                            style={{ color: '#000000' }}
-                          >
-                            <span className="flex items-center gap-2">
-                              <span
-                                className="w-2 h-2 rounded-full"
-                                style={{ backgroundColor: tItem.dot }}
-                              />
-                              <span>{tItem.name}</span>
-                            </span>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                  {CANAL_TAGS.map((tItem) => (
+                    <option
+                      key={tItem.name}
+                      value={tItem.name}
+                      style={{
+                        color: '#000000',
+                        backgroundColor: '#ffffff',
+                        fontSize: '16px',
+                      }}
+                    >
+                      {tItem.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* Message text input */}
-              <input
-                ref={inputRef}
-                type="text"
+              {/* Message textarea: auto-height, max 350 chars, font-size 16px */}
+              <textarea
+                ref={textareaRef}
+                rows={1}
                 value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
+                maxLength={350}
+                onChange={(e) => {
+                  setMessageInput(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 180)}px`;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
                 placeholder={t('Écrivez votre message pour l’équipe...')}
-                className="flex-1 bg-transparent border-0 outline-none text-black text-[15px] px-2 py-1 placeholder:text-slate-400"
+                className="flex-1 bg-transparent border-0 outline-none text-black px-2 py-1 placeholder:text-slate-400 resize-none overflow-y-auto"
                 style={{
+                  fontSize: '16px',
+                  lineHeight: '1.4',
+                  minHeight: '40px',
+                  maxHeight: '180px',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 }}
               />
 
-              {/* Send Button */}
+              {/* Submit button: font-size 18px, no send icon */}
               <button
                 type="submit"
                 disabled={!messageInput.trim()}
                 id="btn-send-canal-message"
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-end"
                 style={{
                   backgroundColor: '#3556ec',
                   boxShadow:
                     'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
-                  fontSize: '15px',
+                  fontSize: '18px',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   opacity: !messageInput.trim() ? 0.45 : 1,
                   cursor: !messageInput.trim() ? 'not-allowed' : 'pointer',
                 }}
               >
                 <span>{t('Envoyer')}</span>
-                <Send className="w-3.5 h-3.5" />
               </button>
             </div>
           </form>

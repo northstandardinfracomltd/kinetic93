@@ -10,6 +10,7 @@ import { checkIfDefibIdentifiantExistsAnywhere, fetchCollectionFromFirestore } f
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { DefibTablePreloader } from './DefibTablePreloader';
 import { SafeDateInput } from './SafeDateInput';
+import { DefibeoIntelligenceSidePane } from './DefibeoIntelligenceSidePane';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -2034,6 +2035,49 @@ export default function DefibTab({
   });
   const [tempHiddenColumns, setTempHiddenColumns] = useState<Set<string>>(new Set());
   const [isColumnVisibilityPaneOpen, setIsColumnVisibilityPaneOpen] = useState(false);
+  const [isDefibeoIntelligenceOpen, setIsDefibeoIntelligenceOpen] = useState(false);
+
+  const tenantAiContext = useMemo(() => {
+    const clientsMap = new Map((clients || []).map((c) => [c.id, c.denomination]));
+    const varsMap = new Map((variables || []).map((v) => [v.id, { nom: v.nom, marque: v.marque }]));
+
+    const defibList = (defibrillateurs || []).map((d) => {
+      const vInfo = varsMap.get(d.modeleId);
+      return {
+        identifiant: d.identifiant || d.id,
+        numeroSerie: d.numeroSerie,
+        marque: vInfo?.marque || '',
+        modele: vInfo?.nom || '',
+        client: clientsMap.get(d.clientId) || d.nomSite || '',
+        site: d.nomSite || '',
+        derniereMaintenance: d.derniereMaintenance || '',
+        finGarantie: d.finGarantie || '',
+        peremptionElectrodeA: d.peremptionElectrodeA || '',
+        peremptionBatterie: d.peremptionBatterie || '',
+        peremptionElectrodeP: d.peremptionElectrodeP || '',
+        adresse: d.numVoie || '',
+        codePostal: d.cp || '',
+        ville: d.ville || '',
+      };
+    });
+
+    const clientList = (clients || []).map((c) => ({
+      id: c.id,
+      denomination: c.denomination || '',
+      ville: c.ville || '',
+      contact: c.nomPrenomSite || '',
+      telephone: c.phone || c.telephoneSite || '',
+      email: c.email || c.emailSite || '',
+    }));
+
+    return {
+      cabinet: companyInfo?.name || "Défibeo",
+      totalDefibrillateurs: defibList.length,
+      totalClients: clientList.length,
+      clients: clientList.slice(0, 300),
+      defibrillateurs: defibList.slice(0, 500),
+    };
+  }, [defibrillateurs, clients, variables, companyInfo?.name]);
 
   // Toggle function for visibility side pane: Black (visible) <-> Red (hidden)
   const toggleColumnVisibility = (colId: string) => {
@@ -3595,6 +3639,32 @@ export default function DefibTab({
             >
               <Eye size={10} className="shrink-0 text-black" color="#000000" />
               <span style={{ color: '#000000' }}>{t("Gérer la visibilité des colonnes")}</span>
+            </button>
+
+            <button
+              type="button"
+              id="btn-defibeo-intelligence-ai"
+              onClick={() => setIsDefibeoIntelligenceOpen(true)}
+              style={{
+                fontSize: '9px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                fontWeight: 100,
+                cursor: 'pointer',
+                background: 'transparent',
+                border: 'none',
+                padding: '2px 4px',
+                color: '#000000',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                textDecoration: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="hover:opacity-80 transition-all select-none cursor-pointer"
+              title={t("Interroger l’IA Defibeo Intelligence")}
+            >
+              <Sparkles size={10} className="shrink-0 text-black" color="#000000" />
+              <span style={{ color: '#000000' }}>{t("Interroger l’IA Defibeo Intelligence")}</span>
             </button>
           </div>
 
@@ -8603,6 +8673,11 @@ export default function DefibTab({
         document.body
       )}
 
+      <DefibeoIntelligenceSidePane
+        isOpen={isDefibeoIntelligenceOpen}
+        onClose={() => setIsDefibeoIntelligenceOpen(false)}
+        tenantContext={tenantAiContext}
+      />
 
     </div>
   );
