@@ -1323,9 +1323,7 @@ export default function App() {
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [logisticsNotifications, setLogisticsNotifications] = useState<LogisticsNotification[]>([]);
-  const [suspiciousActivityLogs, setSuspiciousActivityLogs] = useState<SuspiciousActivityLog[]>(() =>
-    getLocalTenantValue<SuspiciousActivityLog[]>('suspicious_activity_logs', [])
-  );
+  const [suspiciousActivityLogs, setSuspiciousActivityLogs] = useState<SuspiciousActivityLog[]>([]);
 
   useEffect(() => {
     const handleLogEvent = (e: any) => {
