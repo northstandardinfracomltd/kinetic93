@@ -5553,8 +5553,8 @@ export default function GmaoCorrectionForm({
                   aria-checked={mesPhotosValides}
                   onClick={() => setMesPhotosValides(!mesPhotosValides)}
                   style={{
-                    width: '51px',
-                    height: '31px',
+                    width: '46px',
+                    height: '24px',
                     borderRadius: '9999px',
                     backgroundColor: mesPhotosValides ? '#3556EC' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
@@ -5571,14 +5571,14 @@ export default function GmaoCorrectionForm({
                   <span
                     style={{
                       display: 'block',
-                      width: '27px',
-                      height: '27px',
+                      width: '20px',
+                      height: '20px',
                       borderRadius: '50%',
                       backgroundColor: '#ffffff',
                       boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
                       position: 'absolute',
                       top: '2px',
-                      left: mesPhotosValides ? '22px' : '2px',
+                      left: mesPhotosValides ? '24px' : '2px',
                       transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
                     }}
                   />
@@ -5610,8 +5610,8 @@ export default function GmaoCorrectionForm({
                   aria-checked={etiquetteObligatoireConforme}
                   onClick={() => setEtiquetteObligatoireConforme(!etiquetteObligatoireConforme)}
                   style={{
-                    width: '51px',
-                    height: '31px',
+                    width: '46px',
+                    height: '24px',
                     borderRadius: '9999px',
                     backgroundColor: etiquetteObligatoireConforme ? '#3556EC' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
@@ -5628,14 +5628,14 @@ export default function GmaoCorrectionForm({
                   <span
                     style={{
                       display: 'block',
-                      width: '27px',
-                      height: '27px',
+                      width: '20px',
+                      height: '20px',
                       borderRadius: '50%',
                       backgroundColor: '#ffffff',
                       boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
                       position: 'absolute',
                       top: '2px',
-                      left: etiquetteObligatoireConforme ? '22px' : '2px',
+                      left: etiquetteObligatoireConforme ? '24px' : '2px',
                       transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
                     }}
                   />
@@ -5667,8 +5667,8 @@ export default function GmaoCorrectionForm({
                   aria-checked={signaletiqueConforme === 'Oui'}
                   onClick={() => setSignaletiqueConforme(signaletiqueConforme === 'Oui' ? 'Non' : 'Oui')}
                   style={{
-                    width: '51px',
-                    height: '31px',
+                    width: '46px',
+                    height: '24px',
                     borderRadius: '9999px',
                     backgroundColor: signaletiqueConforme === 'Oui' ? '#3556EC' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
@@ -5685,14 +5685,14 @@ export default function GmaoCorrectionForm({
                   <span
                     style={{
                       display: 'block',
-                      width: '27px',
-                      height: '27px',
+                      width: '20px',
+                      height: '20px',
                       borderRadius: '50%',
                       backgroundColor: '#ffffff',
                       boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
                       position: 'absolute',
                       top: '2px',
-                      left: signaletiqueConforme === 'Oui' ? '22px' : '2px',
+                      left: signaletiqueConforme === 'Oui' ? '24px' : '2px',
                       transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
                     }}
                   />
@@ -5724,8 +5724,8 @@ export default function GmaoCorrectionForm({
                   aria-checked={scelleConforme}
                   onClick={() => setScelleConforme(!scelleConforme)}
                   style={{
-                    width: '51px',
-                    height: '31px',
+                    width: '46px',
+                    height: '24px',
                     borderRadius: '9999px',
                     backgroundColor: scelleConforme ? '#3556EC' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
@@ -5742,14 +5742,14 @@ export default function GmaoCorrectionForm({
                   <span
                     style={{
                       display: 'block',
-                      width: '27px',
-                      height: '27px',
+                      width: '20px',
+                      height: '20px',
                       borderRadius: '50%',
                       backgroundColor: '#ffffff',
                       boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
                       position: 'absolute',
                       top: '2px',
-                      left: scelleConforme ? '22px' : '2px',
+                      left: scelleConforme ? '24px' : '2px',
                       transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
                     }}
                   />
@@ -5781,8 +5781,8 @@ export default function GmaoCorrectionForm({
                   aria-checked={stickerEntrepriseApplique}
                   onClick={() => setStickerEntrepriseApplique(!stickerEntrepriseApplique)}
                   style={{
-                    width: '51px',
-                    height: '31px',
+                    width: '46px',
+                    height: '24px',
                     borderRadius: '9999px',
                     backgroundColor: stickerEntrepriseApplique ? '#3556EC' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
@@ -5799,14 +5799,14 @@ export default function GmaoCorrectionForm({
                   <span
                     style={{
                       display: 'block',
-                      width: '27px',
-                      height: '27px',
+                      width: '20px',
+                      height: '20px',
                       borderRadius: '50%',
                       backgroundColor: '#ffffff',
                       boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
                       position: 'absolute',
                       top: '2px',
-                      left: stickerEntrepriseApplique ? '22px' : '2px',
+                      left: stickerEntrepriseApplique ? '24px' : '2px',
                       transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
                     }}
                   />
@@ -5838,8 +5838,8 @@ export default function GmaoCorrectionForm({
                   aria-checked={demandeDevis}
                   onClick={() => setDemandeDevis(!demandeDevis)}
                   style={{
-                    width: '51px',
-                    height: '31px',
+                    width: '46px',
+                    height: '24px',
                     borderRadius: '9999px',
                     backgroundColor: demandeDevis ? '#3556EC' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
@@ -5856,14 +5856,14 @@ export default function GmaoCorrectionForm({
                   <span
                     style={{
                       display: 'block',
-                      width: '27px',
-                      height: '27px',
+                      width: '20px',
+                      height: '20px',
                       borderRadius: '50%',
                       backgroundColor: '#ffffff',
                       boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
                       position: 'absolute',
                       top: '2px',
-                      left: demandeDevis ? '22px' : '2px',
+                      left: demandeDevis ? '24px' : '2px',
                       transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
                     }}
                   />
@@ -5872,7 +5872,13 @@ export default function GmaoCorrectionForm({
 
               {/* Conditional Demande de devis fields */}
               {demandeDevis && (
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-4 animate-fadeIn">
+                <div 
+                  className="p-4 rounded-xl space-y-4 animate-fadeIn"
+                  style={{
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #dadada',
+                  }}
+                >
                   {/* Field 1: Multi-select with search */}
                   <div className="space-y-1.5 relative" ref={devisDropdownRef}>
                     <label className="block text-[11px] font-bold text-black uppercase">
@@ -5882,7 +5888,8 @@ export default function GmaoCorrectionForm({
                     {/* Chips container & dropdown trigger */}
                     <div 
                       onClick={() => setIsDevisDropdownOpen(prev => !prev)}
-                      className="min-h-[42px] p-2 bg-white border border-slate-200 rounded-lg flex flex-wrap gap-1.5 items-center cursor-pointer hover:border-slate-300 transition-colors"
+                      className="min-h-[42px] p-2 bg-white rounded-lg flex flex-wrap gap-1.5 items-center cursor-pointer transition-colors"
+                      style={{ border: '1px solid #dadada' }}
                     >
                       {devisArticlesSelectionnes.length === 0 ? (
                         <span className="text-xs text-slate-400 select-none">
@@ -5892,35 +5899,46 @@ export default function GmaoCorrectionForm({
                         devisArticlesSelectionnes.map((item) => (
                           <span 
                             key={item} 
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleDevisArticle(item);
+                            }}
+                            style={{
+                              backgroundColor: '#000000',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '100px',
+                              padding: '4px 12px',
+                              fontSize: '13px',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                            }}
+                            className="select-none transition-opacity hover:opacity-80"
+                            title="Cliquer pour supprimer"
                           >
                             <span>{item}</span>
-                            <button
-                              type="button"
-                              onClick={() => toggleDevisArticle(item)}
-                              className="text-indigo-400 hover:text-indigo-800 ml-0.5 font-bold cursor-pointer"
-                              title="Retirer"
-                            >
-                              ×
-                            </button>
                           </span>
                         ))
                       )}
-                      <span className="ml-auto text-xs text-slate-400 select-none">▾</span>
                     </div>
 
                     {/* Dropdown popup */}
                     {isDevisDropdownOpen && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-fadeIn">
+                      <div 
+                        className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl z-50 overflow-hidden animate-fadeIn"
+                        style={{ border: '1px solid #dadada' }}
+                      >
                         {/* Search input */}
-                        <div className="p-2 border-b border-slate-100 bg-slate-50">
+                        <div className="p-2 border-b border-slate-100 bg-white">
                           <input
                             type="text"
                             value={devisSearchQuery}
                             onChange={(e) => setDevisSearchQuery(e.target.value)}
                             placeholder="Rechercher une pièce, un service, un modèle..."
-                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-hidden focus:border-indigo-500"
+                            className="w-full px-3 py-1.5 bg-white rounded-lg text-xs text-black focus:outline-none"
+                            style={{ border: '1px solid #dadada' }}
                             autoFocus
                             onClick={(e) => e.stopPropagation()}
                           />
@@ -5934,15 +5952,17 @@ export default function GmaoCorrectionForm({
                               e.stopPropagation();
                               toggleDevisArticle('Autre');
                             }}
-                            className="flex items-center gap-2.5 px-3 py-2 hover:bg-indigo-50/60 cursor-pointer transition-colors bg-amber-50/30"
+                            className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${
+                              devisArticlesSelectionnes.includes('Autre') ? 'bg-[#ffecf8]/30' : 'hover:bg-slate-50'
+                            }`}
                           >
                             <input
-                              type="checkbox"
+                              type="radio"
                               checked={devisArticlesSelectionnes.includes('Autre')}
                               onChange={() => {}}
-                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                              className="cursor-pointer shrink-0"
                             />
-                            <span className="text-xs font-bold text-amber-900">
+                            <span className="text-xs font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                               Autre (saisie libre)
                             </span>
                           </div>
@@ -5961,21 +5981,33 @@ export default function GmaoCorrectionForm({
                                     e.stopPropagation();
                                     toggleDevisArticle(v.nom);
                                   }}
-                                  className={`flex items-center gap-2.5 px-3 py-2 hover:bg-indigo-50/60 cursor-pointer transition-colors ${
-                                    isChecked ? 'bg-indigo-50/40' : ''
+                                  className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${
+                                    isChecked ? 'bg-[#ffecf8]/30' : 'hover:bg-slate-50'
                                   }`}
                                 >
                                   <input
-                                    type="checkbox"
+                                    type="radio"
                                     checked={isChecked}
                                     onChange={() => {}}
-                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                    className="cursor-pointer shrink-0"
                                   />
                                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                                    <span className="text-[10px] uppercase font-bold text-slate-500 px-2 py-0.5 rounded-full bg-slate-100 shrink-0">
+                                    <span 
+                                      style={{
+                                        backgroundColor: '#000000',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '100px',
+                                        padding: '2px 8px',
+                                        fontSize: '11px',
+                                        textTransform: 'none',
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                      }}
+                                      className="font-normal shrink-0"
+                                    >
                                       {v.category.replace('Modèle ', '')}
                                     </span>
-                                    <span className="text-xs text-slate-800 font-medium truncate">
+                                    <span className="text-xs text-black font-medium truncate" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                       {v.nom}
                                     </span>
                                     {v.identifiant && (
@@ -6004,7 +6036,8 @@ export default function GmaoCorrectionForm({
                           value={devisAutreInfo}
                           onChange={(e) => setDevisAutreInfo(e.target.value)}
                           placeholder="Renseignez d’autres informations ou références nécessaires..."
-                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800"
+                          className="w-full px-3 py-1.5 bg-white rounded-lg text-xs text-black"
+                          style={{ border: '1px solid #dadada' }}
                         />
                       </div>
                     )}
@@ -6019,7 +6052,8 @@ export default function GmaoCorrectionForm({
                       id="devis-priorite"
                       value={devisPriorite}
                       onChange={(e) => setDevisPriorite(e.target.value as any)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                      className="w-full px-3 py-1.5 bg-white rounded-lg text-xs text-black cursor-pointer"
+                      style={{ border: '1px solid #dadada' }}
                     >
                       <option value="Basse">Basse</option>
                       <option value="Moyenne">Moyenne</option>
