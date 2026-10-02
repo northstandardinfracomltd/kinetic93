@@ -109,6 +109,53 @@ export function getCurrentUserName(fallbackUser?: { name?: string; email?: strin
   return 'Utilisateur';
 }
 
+export function deduplicateSuspiciousLogs(logs: SuspiciousActivityLog[]): SuspiciousActivityLog[] {
+  if (!Array.isArray(logs) || logs.length === 0) return [];
+  const result: SuspiciousActivityLog[] = [];
+  const seenIds = new Set<string>();
+
+  for (let i = 0; i < logs.length; i++) {
+    const item = logs[i];
+    if (!item || !item.id || seenIds.has(item.id)) continue;
+
+    // Check if this item is a near-duplicate of an already included item (e.g. double connection within 15 seconds)
+    const isDup = result.some((prev) => {
+      if (item.actionType === 'CONNEXION' && prev.actionType === 'CONNEXION') {
+        const tItem = new Date(item.timestamp).getTime();
+        const tPrev = new Date(prev.timestamp).getTime();
+        if (!isNaN(tItem) && !isNaN(tPrev) && Math.abs(tItem - tPrev) < 15000) {
+          // If previous log had 'local_ip' or 'Non renseignée' and this one has real IP, update previous
+          if (
+            (prev.userIp === 'local_ip' || prev.userIp === 'Non renseignée') &&
+            item.userIp &&
+            item.userIp !== 'local_ip' &&
+            item.userIp !== 'Non renseignée'
+          ) {
+            prev.userIp = item.userIp;
+            prev.message = prev.message.replace(/\(IP\s*:\s*(?:local_ip|Non renseignée)\)/i, `(IP : ${item.userIp})`);
+          }
+          return true;
+        }
+      }
+      if (item.actionType === prev.actionType && item.message === prev.message) {
+        const tItem = new Date(item.timestamp).getTime();
+        const tPrev = new Date(prev.timestamp).getTime();
+        if (!isNaN(tItem) && !isNaN(tPrev) && Math.abs(tItem - tPrev) < 5000) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (!isDup) {
+      seenIds.add(item.id);
+      result.push(item);
+    }
+  }
+
+  return result;
+}
+
 export function getTenantSuspiciousLogs(tenantId: string): SuspiciousActivityLog[] {
   const effectiveTenantId = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
   const key = `defib_${effectiveTenantId}_suspicious_activity_logs`;
@@ -116,7 +163,7 @@ export function getTenantSuspiciousLogs(tenantId: string): SuspiciousActivityLog
     const raw = localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) return deduplicateSuspiciousLogs(parsed);
     }
   } catch (_) {}
   return [];
@@ -134,8 +181,79 @@ export async function recordSuspiciousActivity(
   onLogsUpdated?: (logs: SuspiciousActivityLog[]) => void
 ): Promise<SuspiciousActivityLog> {
   const effectiveTenantId = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
-  const ip = entry.userIp || getCurrentCachedIp();
+  let ip = entry.userIp || getCurrentCachedIp();
+  if (ip === 'local_ip') {
+    const cached = getCurrentCachedIp();
+    if (cached && cached !== 'local_ip' && cached !== 'Non renseignée') {
+      ip = cached;
+    }
+  }
   const userName = entry.userName || getCurrentUserName();
+
+  const key = `defib_${effectiveTenantId}_suspicious_activity_logs`;
+  let existing: SuspiciousActivityLog[] = [];
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) existing = deduplicateSuspiciousLogs(parsed);
+    }
+  } catch (_) {}
+
+  const nowMs = Date.now();
+
+  // 1. Connection deduplication: Strictly prevent duplicate CONNEXION logs within 15 seconds
+  if (entry.actionType === 'CONNEXION') {
+    const recentConn = existing.find((l) => {
+      if (l.actionType !== 'CONNEXION') return false;
+      const t = new Date(l.timestamp).getTime();
+      return !isNaN(t) && Math.abs(nowMs - t) < 15000;
+    });
+    if (recentConn) {
+      // If previous entry had placeholder IP and current has a real IP, upgrade it in place
+      if (
+        (recentConn.userIp === 'local_ip' || recentConn.userIp === 'Non renseignée') &&
+        ip &&
+        ip !== 'local_ip' &&
+        ip !== 'Non renseignée'
+      ) {
+        recentConn.userIp = ip;
+        recentConn.message = recentConn.message.replace(/\(IP\s*:\s*(?:local_ip|Non renseignée)\)/i, `(IP : ${ip})`);
+        try {
+          localStorage.setItem(key, JSON.stringify(existing));
+          if (effectiveTenantId && effectiveTenantId !== 'demo') {
+            saveCollectionToFirestore('suspicious_activity_logs', existing, effectiveTenantId).catch(() => {});
+          }
+        } catch (_) {}
+      }
+      return recentConn;
+    }
+
+    if (
+      lastLoggedCall &&
+      lastLoggedCall.key.startsWith(`${effectiveTenantId}_CONNEXION`) &&
+      nowMs - lastLoggedCall.time < 15000
+    ) {
+      if (existing.length > 0) return existing[0];
+    }
+  }
+
+  // 2. Generic deduplication: Prevent duplicate records for the same action within 3 seconds
+  const dedupeKey = `${effectiveTenantId}_${entry.actionType}_${entry.message}`;
+  if (lastLoggedCall && lastLoggedCall.key === dedupeKey && (nowMs - lastLoggedCall.time) < 3000) {
+    if (existing.length > 0) return existing[0];
+  }
+  lastLoggedCall = { key: dedupeKey, time: nowMs };
+
+  if (existing.length > 0) {
+    const latest = existing[0];
+    if (latest.actionType === entry.actionType && latest.message === entry.message) {
+      const diffMs = Math.abs(nowMs - new Date(latest.timestamp).getTime());
+      if (diffMs < 3000) {
+        return latest;
+      }
+    }
+  }
 
   const newLog: SuspiciousActivityLog = {
     id: 'sus_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
@@ -148,35 +266,7 @@ export async function recordSuspiciousActivity(
     details: entry.details,
   };
 
-  const key = `defib_${effectiveTenantId}_suspicious_activity_logs`;
-  let existing: SuspiciousActivityLog[] = [];
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) existing = parsed;
-    }
-  } catch (_) {}
-
-  // Prevent duplicate records for the same action within 2.5 seconds
-  const dedupeKey = `${effectiveTenantId}_${entry.actionType}_${entry.message}`;
-  const nowMs = Date.now();
-  if (lastLoggedCall && lastLoggedCall.key === dedupeKey && (nowMs - lastLoggedCall.time) < 2500) {
-    if (existing[0]) return existing[0];
-  }
-  lastLoggedCall = { key: dedupeKey, time: nowMs };
-
-  if (existing.length > 0) {
-    const latest = existing[0];
-    if (latest.actionType === entry.actionType && latest.message === entry.message) {
-      const diffMs = Math.abs(nowMs - new Date(latest.timestamp).getTime());
-      if (diffMs < 2500) {
-        return latest;
-      }
-    }
-  }
-
-  const updated = [newLog, ...existing];
+  const updated = deduplicateSuspiciousLogs([newLog, ...existing]);
   try {
     localStorage.setItem(key, JSON.stringify(updated));
   } catch (_) {}
@@ -201,12 +291,12 @@ export async function recordSuspiciousActivity(
     );
   }
 
-  // If IP was not yet ready, fetch it asynchronously and update the log entry
-  if (ip === 'Non renseignée') {
+  // If IP was not yet ready (e.g. 'local_ip' or 'Non renseignée'), fetch it asynchronously and update the log entry
+  if (ip === 'Non renseignée' || ip === 'local_ip') {
     fetchCurrentIp().then((fetchedIp) => {
-      if (fetchedIp && fetchedIp !== 'Non renseignée') {
+      if (fetchedIp && fetchedIp !== 'Non renseignée' && fetchedIp !== 'local_ip') {
         newLog.userIp = fetchedIp;
-        newLog.message = newLog.message.replace('(IP : Non renseignée)', `(IP : ${fetchedIp})`);
+        newLog.message = newLog.message.replace(/\(IP\s*:\s*(?:local_ip|Non renseignée)\)/i, `(IP : ${fetchedIp})`);
         try {
           const rawCurrent = localStorage.getItem(key);
           if (rawCurrent) {
@@ -236,8 +326,16 @@ export async function logUserLogin(
   userName?: string,
   userIp?: string
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = userName || getCurrentUserName();
-  const effectiveIp = userIp || getCurrentCachedIp();
+  const effectiveName = (userName && userName.trim() !== '') ? userName.trim() : getCurrentUserName();
+  let effectiveIp = userIp;
+  if (!effectiveIp || effectiveIp === 'local_ip' || effectiveIp === 'Non renseignée') {
+    const cached = getCurrentCachedIp();
+    if (cached && cached !== 'local_ip' && cached !== 'Non renseignée') {
+      effectiveIp = cached;
+    } else {
+      effectiveIp = effectiveIp || cached || 'Non renseignée';
+    }
+  }
   const message = `L’utilisateur ${effectiveName} (IP : ${effectiveIp}), s’est connecté.`;
   return recordSuspiciousActivity(tenantId, {
     userName: effectiveName,

@@ -49,6 +49,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Satisfaction": "Satisfaction",
     "Statistiques": "Statistics",
     "Paramètres": "Settings",
+    "Messages internes": "Internal Messages",
+    "Ouvrir un canal": "Open a channel",
     "Chargement de votre environnement...": "Loading your environment...",
 
     // General Buttons & Actions
@@ -1430,6 +1432,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     "L'itinéraire et les horaires ont été recalculés et optimisés avec succès !": "Die Route und die Zeitpläne wurden erfolgreich neu berechnet und optimiert!",
     "Une erreur est survenue lors du calcul de la tournée.": "Bei der Berechnung der Tour ist ein Fehler aufgetreten.",
     "Impossible de déterminer les coordonnées de départ du technicien.": "Startkoordinaten des Technikers konnten nicht ermittelt werden.",
+    "Messages internes": "Interne Nachrichten",
+    "Ouvrir un canal": "Kanal öffnen",
     "Chargement de votre environnement...": "Lade Umgebung...",
 
     // General Buttons & Actions
@@ -2266,6 +2270,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     "L'itinéraire et les horaires ont été recalculés et optimisés avec succès !": "A rota e os horários foram recalculados e otimizados com sucesso!",
     "Une erreur est survenue lors du calcul de la tournée.": "Ocorreu um erro durante o cálculo da rota.",
     "Impossible de déterminer les coordonnées de départ du technicien.": "Não foi possível determinar as coordenadas de partida do técnico.",
+    "Messages internes": "Mensagens internas",
+    "Ouvrir un canal": "Abrir um canal",
     "Chargement de votre environnement...": "A carregar o seu ambiente...",
 
     // General Buttons & Actions
@@ -3103,6 +3109,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     "L'itinéraire et les horaires ont été recalculés et optimisés avec succès !": "¡La ruta y los horarios han sido recalculados y optimizados con éxito!",
     "Une erreur est survenue lors du calcul de la tournée.": "Ocurreu un error al calcular la ruta.",
     "Impossible de déterminer les coordonnées de départ du technicien.": "No se pudieron determinar las coordenadas de salida del técnico.",
+    "Messages internes": "Mensajes internos",
+    "Ouvrir un canal": "Abrir un canal",
     "Chargement de votre environnement...": "Cargando su entorno...",
 
     // General Buttons & Actions

@@ -469,6 +469,13 @@ export interface CompanyInfo {
   pdfCardBorderColor?: string;
   pdfCardBgColor?: string;
   pdfLabelTextColor?: string;
+  pdfHideElectrodeSecoursA?: 'Oui' | 'Non';
+  pdfHideElectrodeSecoursP?: 'Oui' | 'Non';
+  pdfHideKitSecours?: 'Oui' | 'Non';
+  pdfSimplifyCoffret?: 'Oui' | 'Non';
+  pdfHideVerificationsTechniques?: 'Oui' | 'Non';
+  pdfHideHorodatagesDiagnostic?: 'Oui' | 'Non';
+  pdfShowDemandeDevisDetails?: 'Oui' | 'Non';
   siret?: string;
   naf?: string;
   tva?: string;

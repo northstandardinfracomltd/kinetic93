@@ -1759,7 +1759,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
               <label htmlFor="crm-filter-date-start" className="text-xs font-semibold text-neutral-600 whitespace-nowrap">
-                Filtre Date Début
+                Début :
               </label>
               <input
                 type="date"
@@ -1769,8 +1769,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 style={{
                   border: '1px solid rgb(218, 218, 218)',
                   borderRadius: '12px',
-                  padding: '6px 10px',
+                  padding: '6px 8px',
                   fontSize: '14px',
+                  width: '125px',
                   backgroundColor: '#ffffff',
                   color: '#000000',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -1780,7 +1781,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             </div>
             <div className="flex items-center gap-1.5">
               <label htmlFor="crm-filter-date-end" className="text-xs font-semibold text-neutral-600 whitespace-nowrap">
-                Filtre Date Fin
+                Fin :
               </label>
               <input
                 type="date"
@@ -1790,8 +1791,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 style={{
                   border: '1px solid rgb(218, 218, 218)',
                   borderRadius: '12px',
-                  padding: '6px 10px',
+                  padding: '6px 8px',
                   fontSize: '14px',
+                  width: '125px',
                   backgroundColor: '#ffffff',
                   color: '#000000',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -1803,10 +1805,25 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               <button
                 type="button"
                 onClick={() => { setCrmDateStart(''); setCrmDateEnd(''); }}
-                className="text-xs text-rose-600 hover:text-rose-800 font-bold px-1.5 py-1 cursor-pointer"
-                title="Effacer le filtre date"
+                style={{
+                  backgroundColor: '#D71E1D',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  fontWeight: 600,
+                  borderRadius: '12px',
+                  border: 'none',
+                  padding: '6px 14px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: '1.2'
+                }}
+                className="hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer shadow-xs"
+                title="Réinitialiser le filtre date"
               >
-                ✕
+                Réinitialiser
               </button>
             )}
           </div>

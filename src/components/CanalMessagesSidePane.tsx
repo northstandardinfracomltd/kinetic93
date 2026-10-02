@@ -6,7 +6,7 @@ import { TenantMessage } from '../types';
 import { t } from '../utils/translate';
 
 export const CANAL_TAGS = [
-  { name: 'Exploitation', bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe', dot: '#2563eb' },
+  { name: 'Exploitation', bg: '#f1f5f9', text: '#1e293b', border: '#cbd5e1', dot: '#334155' },
   { name: 'Planification', bg: '#f5f3ff', text: '#6d28d9', border: '#ddd6fe', dot: '#7c3aed' },
   { name: 'Logistique', bg: '#fffbeb', text: '#b45309', border: '#fde68a', dot: '#d97706' },
   { name: 'ADV', bg: '#ecfdf5', text: '#047857', border: '#a7f3d0', dot: '#059669' },
@@ -360,27 +360,23 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               {t('Fermer')}
             </button>
 
-            {/* 8 Required Tags (font-size 18px, sans border, AUCUN BOX-SHADOW, pas de gélule Tous) */}
-            {CANAL_TAGS.map((tag) => {
-              const isSelected = selectedFilterTag === tag.name;
-              // Le rond de count nouveau inclut uniquement les messages récents des 2 dernières heures
+            {/* 1 Gélule du canal ouvert */}
+            {(() => {
+              const currentTag = CANAL_TAGS.find((t) => t.name === selectedFilterTag) || CANAL_TAGS[0];
               const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
               const now = Date.now();
               const recentCount = messages.filter((m) => {
-                if (m.tag !== tag.name) return false;
+                if (m.tag !== currentTag.name) return false;
                 const msgTime = m.createdAt ? Number(m.createdAt) : 0;
                 return now - msgTime <= TWO_HOURS_MS;
               }).length;
 
               return (
-                <button
-                  key={tag.name}
-                  type="button"
-                  onClick={() => setSelectedFilterTag(tag.name)}
-                  className="px-4 py-2 rounded-full shrink-0 transition-all cursor-pointer flex items-center gap-2 font-medium"
+                <div
+                  className="px-4 py-2 rounded-full shrink-0 flex items-center gap-2 font-medium"
                   style={{
-                    backgroundColor: isSelected ? tag.dot : tag.bg,
-                    color: isSelected ? '#ffffff' : tag.text,
+                    backgroundColor: currentTag.dot,
+                    color: '#ffffff',
                     border: 'none',
                     boxShadow: 'none',
                     fontSize: '18px',
@@ -388,10 +384,9 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                   }}
                 >
                   <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: isSelected ? '#ffffff' : tag.dot }}
+                    className="w-2.5 h-2.5 rounded-full shrink-0 bg-white"
                   />
-                  <span>{tag.name}</span>
+                  <span>{currentTag.name}</span>
                   {recentCount > 0 && (
                     <span
                       className="inline-flex items-center justify-center rounded-full shrink-0 font-bold"
@@ -408,9 +403,53 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                       {recentCount}
                     </span>
                   )}
-                </button>
+                </div>
               );
-            })}
+            })()}
+
+            {/* Bouton « Ouvrir un canal » avec system dropdown des catégories */}
+            <div className="relative inline-flex items-center shrink-0">
+              <button
+                type="button"
+                className="px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] flex items-center gap-2 pointer-events-none"
+                style={{
+                  backgroundColor: '#3556ec',
+                  color: '#ffffff',
+                  border: 'none',
+                  boxShadow: 'none',
+                  fontSize: '18px',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+              >
+                <span>{t('Ouvrir un canal')}</span>
+                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setSelectedFilterTag(e.target.value as CanalTagName);
+                  }
+                }}
+                aria-label={t('Ouvrir un canal')}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                style={{ fontSize: '16px' }}
+              >
+                <option value="" disabled hidden>
+                  {t('Ouvrir un canal')}
+                </option>
+                {CANAL_TAGS.filter((tag) => tag.name !== selectedFilterTag).map((tag) => {
+                  const count = messages.filter((m) => m.tag === tag.name).length;
+                  return (
+                    <option key={tag.name} value={tag.name} style={{ color: '#000000', backgroundColor: '#ffffff', fontSize: '16px' }}>
+                      {tag.name} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
           </div>
         </div>
 

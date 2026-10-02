@@ -4347,6 +4347,14 @@ export default function App() {
     const selBatterie = getStockPieceLabel(report.selectionBatterieRemplacee);
     const selKitSecours = getStockPieceLabel(report.selectionKitSecoursRemplace);
 
+    const pdfHideElectrodeSecoursA = companyInfo.pdfHideElectrodeSecoursA === 'Oui';
+    const pdfHideElectrodeSecoursP = companyInfo.pdfHideElectrodeSecoursP === 'Oui';
+    const pdfHideKitSecours = companyInfo.pdfHideKitSecours === 'Oui';
+    const pdfSimplifyCoffret = companyInfo.pdfSimplifyCoffret === 'Oui';
+    const pdfHideVerificationsTechniques = companyInfo.pdfHideVerificationsTechniques === 'Oui';
+    const pdfHideHorodatagesDiagnostic = companyInfo.pdfHideHorodatagesDiagnostic === 'Oui';
+    const pdfShowDemandeDevisDetails = companyInfo.pdfShowDemandeDevisDetails === 'Oui';
+
     const totalPages = hasLastPage ? 6 : 5;
     const docTitle = report.title ? report.title : 'Rapport d’intervention GMAO';
 
@@ -4593,15 +4601,18 @@ export default function App() {
                 <div class="pdf-card-body">
                   <div class="pdf-line"><span class="pdf-label">Modèle de boîtier :</span> <span class="pdf-bold">${coffretModelName || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Lot de boîtier :</span> <span class="pdf-bold">${snapshot.numeroLotCoffret || ''}</span></div>
+                  ${!pdfSimplifyCoffret ? `
                   <div class="pdf-line"><span class="pdf-label">Équipé d’une alarme :</span> <span class="pdf-bold">${report.equipeAlarme || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Alarme fonctionnelle :</span> <span class="pdf-bold">${report.alarme || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Dispositif d’armoire connectée :</span> <span class="pdf-bold">${report.armoireConnectee || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Dispositif handicap :</span> <span class="pdf-bold">${report.dispositifHandicap || ''}</span></div>
+                  ` : ''}
                   <div class="pdf-line"><span class="pdf-label">Signalétique conforme :</span> <span class="pdf-bold">${report.signaletiqueConforme || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Commentaire concernant le boîtier :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireCoffret || ''}</span></div>
                 </div>
               </div>
 
+              ${!pdfHideVerificationsTechniques ? `
               <!-- SECTION 3 -->
               <div class="pdf-card">
                 <div class="pdf-card-header">3 — Vérifications techniques.</div>
@@ -4616,6 +4627,7 @@ export default function App() {
                   ${isVisibleBranchementElectrodes ? `<div class="pdf-line"><span class="pdf-label">Branchement conforme des électrodes :</span> <span class="pdf-bold">${report.techBranchementElectrodesConforme || ''}</span></div>` : ''}
                 </div>
               </div>
+              ` : ''}
             </div>
 
             ${renderFooter(2, totalPages)}
@@ -4642,8 +4654,10 @@ export default function App() {
                   <div class="pdf-line"><span class="pdf-label">Électrode A remplacée :</span> <span class="pdf-bold">${report.electrodeARemplacee || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection de l'électrode remplacée :</span> <span class="pdf-bold">${selElectrodeA || ''}</span></div>
                   
+                  ${!pdfHideElectrodeSecoursA ? `
                   <div class="pdf-line"><span class="pdf-label">Électrode A Secours remplacée :</span> <span class="pdf-bold">${report.electrodeASecoursRemplacee || 'Non'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection de l'électrode Secours A remplacée :</span> <span class="pdf-bold">${selElectrodeASecours || ''}</span></div>
+                  ` : ''}
                   
                   <div class="pdf-line"><span class="pdf-label">Électrode A conforme et fonctionnelle :</span> <span class="pdf-bold">${report.electrodeAConformeSante || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Commentaire concernant l’électrode A :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireElectrodeA || ''}</span></div>
@@ -4665,8 +4679,10 @@ export default function App() {
                   <div class="pdf-line"><span class="pdf-label">Électrode P remplacée :</span> <span class="pdf-bold">${report.electrodePRemplacee || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection de l'électrode remplacée :</span> <span class="pdf-bold">${selElectrodeP || ''}</span></div>
                   
+                  ${!pdfHideElectrodeSecoursP ? `
                   <div class="pdf-line"><span class="pdf-label">Électrode P Secours remplacée :</span> <span class="pdf-bold">${report.electrodePSecoursRemplacee || 'Non'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection de l'électrode Secours P remplacée :</span> <span class="pdf-bold">${selElectrodePSecours || ''}</span></div>
+                  ` : ''}
                   
                   <div class="pdf-line"><span class="pdf-label">Électrode P conforme et fonctionnelle :</span> <span class="pdf-bold">${report.electrodePConformeSante || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Commentaire concernant l’électrode P :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireElectrodeP || ''}</span></div>
@@ -4707,6 +4723,7 @@ export default function App() {
                   <div class="pdf-line"><span class="pdf-label">Kit de secours remplacé ou ajouté :</span> <span class="pdf-bold">${report.kitSecoursRemplaceOuAjoute || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection d’un kit de secours :</span> <span class="pdf-bold">${selKitSecours || ''}</span></div>
                   ${isVisiblePeremptionTrousse ? `<div class="pdf-line"><span class="pdf-label">Péremption de la trousse :</span> <span class="pdf-bold">${report.kitPeremption || snapshot.peremptionTrousse || ''}</span></div>` : ''}
+                  ${!pdfHideKitSecours ? `
                   ${isVisibleCiseauxPresents ? `<div class="pdf-line"><span class="pdf-label">Ciseaux présents :</span> <span class="pdf-bold">${report.kitCiseauxPresents || ''}</span></div>` : ''}
                   ${isVisibleMasquePresent ? `<div class="pdf-line"><span class="pdf-label">Masque présent :</span> <span class="pdf-bold">${report.kitMasquePresent || ''}</span></div>` : ''}
                   ${isVisibleMasquePresent && isVisiblePeremptionMasque ? `<div class="pdf-line"><span class="pdf-label">Péremption du masque :</span> <span class="pdf-bold">${report.kitPeremptionMasque || ''}</span></div>` : ''}
@@ -4714,6 +4731,7 @@ export default function App() {
                   ${isVisibleServiettesPresentes && isVisiblePeremptionServiettes ? `<div class="pdf-line"><span class="pdf-label">Péremption des serviettes :</span> <span class="pdf-bold">${report.kitPeremptionServiettes || ''}</span></div>` : ''}
                   ${isVisibleGantsPresents ? `<div class="pdf-line"><span class="pdf-label">Paires de gants présents :</span> <span class="pdf-bold">${report.kitGantsPresents || ''}</span></div>` : ''}
                   ${isVisibleRasoir ? `<div class="pdf-line"><span class="pdf-label">Rasoir :</span> <span class="pdf-bold">${report.kitRasoirPresent || ''}</span></div>` : ''}
+                  ` : ''}
                 </div>
               </div>
             </div>
@@ -4733,6 +4751,7 @@ export default function App() {
                   <div class="pdf-line">
                     <span class="pdf-label">Défibrillateur conforme et prêt à l’usage :</span> <span class="pdf-bold">${snapshot.conforme === 'Oui' || report.conforme === 'Oui' ? 'Oui' : 'Non'}</span>
                   </div>
+                  ${!pdfHideHorodatagesDiagnostic ? `
                   <div class="pdf-line" style="margin-top: 15px;">
                     <span class="pdf-label">Horodatage entrant :</span> <span class="pdf-bold">${report.date || '-'}</span>
                   </div>
@@ -4742,6 +4761,25 @@ export default function App() {
                   <div class="pdf-line">
                     <span class="pdf-label">Durée :</span> <span class="pdf-bold">${computeDurationText(report.date, report.endTimeStamp)}</span>
                   </div>
+                  ` : ''}
+                  ${(pdfShowDemandeDevisDetails && (report.demandeDevis === true || report.demandeDevis === 'Oui' || snapshot.demandeDevis === true || snapshot.demandeDevis === 'Oui')) ? `
+                  <div class="pdf-line" style="margin-top: 10px;">
+                    <span class="pdf-label">Demande de devis :</span> <span class="pdf-bold">Oui</span>
+                  </div>
+                  <div class="pdf-line">
+                    <span class="pdf-label">Priorité :</span> <span class="pdf-bold">${report.devisPriorite || snapshot.devisPriorite || 'Moyenne'}</span>
+                  </div>
+                  <div class="pdf-line">
+                    <span class="pdf-label">Pièce(s) / Service(s) demandé(s) :</span>
+                    <span class="pdf-bold">${
+                      (Array.isArray(report.devisArticlesSelectionnes) && report.devisArticlesSelectionnes.length > 0)
+                        ? report.devisArticlesSelectionnes.join(', ')
+                        : (Array.isArray(snapshot.devisArticlesSelectionnes) && snapshot.devisArticlesSelectionnes.length > 0)
+                        ? snapshot.devisArticlesSelectionnes.join(', ')
+                        : (report.devisAutreInfo || snapshot.devisAutreInfo || 'Aucun')
+                    }</span>
+                  </div>
+                  ` : ''}
                   <div class="pdf-line" style="margin-top: 15px;">
                     <span class="pdf-label">Commentaire :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaire || report.defibSnapshot?.commentaire || '-'}</span>
                   </div>
@@ -5438,6 +5476,13 @@ export default function App() {
             pdfPageHeaderText: firestoreData.pdfPageHeaderText !== undefined ? firestoreData.pdfPageHeaderText : localData.pdfPageHeaderText,
             pdfPageFooterText: firestoreData.pdfPageFooterText !== undefined ? firestoreData.pdfPageFooterText : localData.pdfPageFooterText,
             pdfLastPageInfoText: firestoreData.pdfLastPageInfoText !== undefined ? firestoreData.pdfLastPageInfoText : localData.pdfLastPageInfoText,
+            pdfHideElectrodeSecoursA: firestoreData.pdfHideElectrodeSecoursA !== undefined ? firestoreData.pdfHideElectrodeSecoursA : (localData.pdfHideElectrodeSecoursA || 'Non'),
+            pdfHideElectrodeSecoursP: firestoreData.pdfHideElectrodeSecoursP !== undefined ? firestoreData.pdfHideElectrodeSecoursP : (localData.pdfHideElectrodeSecoursP || 'Non'),
+            pdfHideKitSecours: firestoreData.pdfHideKitSecours !== undefined ? firestoreData.pdfHideKitSecours : (localData.pdfHideKitSecours || 'Non'),
+            pdfSimplifyCoffret: firestoreData.pdfSimplifyCoffret !== undefined ? firestoreData.pdfSimplifyCoffret : (localData.pdfSimplifyCoffret || 'Non'),
+            pdfHideVerificationsTechniques: firestoreData.pdfHideVerificationsTechniques !== undefined ? firestoreData.pdfHideVerificationsTechniques : (localData.pdfHideVerificationsTechniques || 'Non'),
+            pdfHideHorodatagesDiagnostic: firestoreData.pdfHideHorodatagesDiagnostic !== undefined ? firestoreData.pdfHideHorodatagesDiagnostic : (localData.pdfHideHorodatagesDiagnostic || 'Non'),
+            pdfShowDemandeDevisDetails: firestoreData.pdfShowDemandeDevisDetails !== undefined ? firestoreData.pdfShowDemandeDevisDetails : (localData.pdfShowDemandeDevisDetails || 'Non'),
           };
           if (merged.customLocationNames) {
             setLocationNames(merged.customLocationNames);
@@ -5650,6 +5695,13 @@ export default function App() {
                 pdfPageHeaderText: data.pdfPageHeaderText !== undefined ? data.pdfPageHeaderText : prev?.pdfPageHeaderText,
                 pdfPageFooterText: data.pdfPageFooterText !== undefined ? data.pdfPageFooterText : prev?.pdfPageFooterText,
                 pdfLastPageInfoText: data.pdfLastPageInfoText !== undefined ? data.pdfLastPageInfoText : prev?.pdfLastPageInfoText,
+                pdfHideElectrodeSecoursA: data.pdfHideElectrodeSecoursA !== undefined ? data.pdfHideElectrodeSecoursA : prev?.pdfHideElectrodeSecoursA,
+                pdfHideElectrodeSecoursP: data.pdfHideElectrodeSecoursP !== undefined ? data.pdfHideElectrodeSecoursP : prev?.pdfHideElectrodeSecoursP,
+                pdfHideKitSecours: data.pdfHideKitSecours !== undefined ? data.pdfHideKitSecours : prev?.pdfHideKitSecours,
+                pdfSimplifyCoffret: data.pdfSimplifyCoffret !== undefined ? data.pdfSimplifyCoffret : prev?.pdfSimplifyCoffret,
+                pdfHideVerificationsTechniques: data.pdfHideVerificationsTechniques !== undefined ? data.pdfHideVerificationsTechniques : prev?.pdfHideVerificationsTechniques,
+                pdfHideHorodatagesDiagnostic: data.pdfHideHorodatagesDiagnostic !== undefined ? data.pdfHideHorodatagesDiagnostic : prev?.pdfHideHorodatagesDiagnostic,
+                pdfShowDemandeDevisDetails: data.pdfShowDemandeDevisDetails !== undefined ? data.pdfShowDemandeDevisDetails : prev?.pdfShowDemandeDevisDetails,
               };
               const strVal = JSON.stringify(merged);
               localStorage.setItem(`defib_${tenantId}_company_info`, strVal);
@@ -8084,15 +8136,21 @@ export default function App() {
               fontFamily: "DefibeoMain, Civilprom, sans-serif"
             }}
           >
-            <span>{t('Canal Messages')}</span>
-            {unreadMessagesCount > 0 && (
-              <span
-                className="ml-2 inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 text-[12px] font-extrabold rounded-full bg-rose-500 text-white shadow-xs"
-                style={{ lineHeight: 1 }}
-              >
-                {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
-              </span>
-            )}
+            <span>{t('Messages internes')}</span>
+            <span
+              className="inline-flex items-center justify-center rounded-full shrink-0 font-bold ml-1.5"
+              style={{
+                backgroundColor: 'rgb(163, 20, 20)',
+                color: '#ffffff',
+                fontSize: '14px',
+                width: '25px',
+                height: '25px',
+                padding: '3.5px',
+                lineHeight: 1,
+              }}
+            >
+              {tenantMessages?.length || 0}
+            </span>
           </button>
         </div>
       </aside>
@@ -15387,6 +15445,7 @@ export default function App() {
                         <div className="flex-1 overflow-y-auto bg-white font-sans relative">
                           <GmaoCorrectionForm
                             report={repToEdit}
+                            companyInfo={companyInfo}
                             isWebapp={false}
                             isMainSoftware={true}
                             hideReduceAndTimer={true}

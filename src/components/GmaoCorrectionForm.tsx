@@ -27,6 +27,7 @@ interface GmaoCorrectionFormProps {
   stocks?: StockRecord[];
   onUpdateStocks?: (updatedStocks: StockRecord[]) => void;
   members?: Member[];
+  companyInfo?: CompanyInfo;
   forceSmartphoneLayout?: boolean;
   isWebapp?: boolean;
   isMainSoftware?: boolean;
@@ -351,6 +352,7 @@ export default function GmaoCorrectionForm({
   stocks = [],
   onUpdateStocks,
   members = [],
+  companyInfo,
   forceSmartphoneLayout = false,
   isWebapp = false,
   isMainSoftware = false,
@@ -362,6 +364,24 @@ export default function GmaoCorrectionForm({
   const [internalMinimized, setInternalMinimized] = useState(false);
   const isReduced = isMinimized !== undefined ? isMinimized : internalMinimized;
   const handleToggleReduce = onToggleMinimize || (() => setInternalMinimized((prev) => !prev));
+
+  const effectiveCompanyInfo: CompanyInfo = useMemo(() => {
+    if (companyInfo && (companyInfo.name || companyInfo.pdfHideElectrodeSecoursA !== undefined)) {
+      return companyInfo;
+    }
+    try {
+      const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+      const raw = localStorage.getItem(`defib_${tenantId}_company_info`) || localStorage.getItem('defib_company_info');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return companyInfo || { name: '', logo: '', website: '', email: '', phone: '' };
+  }, [companyInfo]);
+
+  const hideElectrodeSecoursA = effectiveCompanyInfo.pdfHideElectrodeSecoursA === 'Oui';
+  const hideElectrodeSecoursP = effectiveCompanyInfo.pdfHideElectrodeSecoursP === 'Oui';
+  const hideKitSecours = effectiveCompanyInfo.pdfHideKitSecours === 'Oui';
+  const simplifyCoffret = effectiveCompanyInfo.pdfSimplifyCoffret === 'Oui';
+  const hideVerificationsTechniques = effectiveCompanyInfo.pdfHideVerificationsTechniques === 'Oui';
 
   const availableMembers = React.useMemo<Member[]>(() => {
     let list: Member[] = [];
@@ -905,20 +925,26 @@ export default function GmaoCorrectionForm({
   const isVisibleNettoyage = selectedModelVar ? (selectedModelVar.visibiliteNettoyage !== 'Non') : true;
   const isVisiblePiecesJointes = selectedModelVar ? (selectedModelVar.visibilitePiecesJointes !== 'Non') : true;
 
-  const SECTIONS_METADATA = useMemo(() => [
-    { id: 0, label: "0 — Configuration" },
-    { id: 1, label: "1 — Identification et photos" },
-    { id: 2, label: "2 — Client" },
-    { id: 3, label: "3 — Coffret" },
-    { id: 4, label: "4 — Accès" },
-    { id: 5, label: "5 — Dates" },
-    { id: 6, label: "6 — Électrode Adulte" },
-    { id: 7, label: "7 — Électrode Pédiatrique" },
-    { id: 8, label: "8 — Batterie" },
-    { id: 9, label: "9 — Vérifications" },
-    { id: 10, label: "10 — Kit de secours" },
-    { id: 11, label: "11 — Clôture" },
-  ], []);
+  const SECTIONS_METADATA = useMemo(() => {
+    const list = [
+      { id: 0, label: "0 — Configuration" },
+      { id: 1, label: "1 — Identification et photos" },
+      { id: 2, label: "2 — Client" },
+      { id: 3, label: "3 — Coffret" },
+      { id: 4, label: "4 — Accès" },
+      { id: 5, label: "5 — Dates" },
+      { id: 6, label: "6 — Électrode Adulte" },
+      { id: 7, label: "7 — Électrode Pédiatrique" },
+      { id: 8, label: "8 — Batterie" },
+      { id: 9, label: "9 — Vérifications" },
+      { id: 10, label: "10 — Kit de secours" },
+      { id: 11, label: "11 — Clôture" },
+    ];
+    if (hideVerificationsTechniques) {
+      return list.filter(s => s.id !== 9);
+    }
+    return list;
+  }, [hideVerificationsTechniques]);
 
   const availableLoaners = useMemo(() => {
     const list: { traceId: string; label: string }[] = [];
@@ -3717,66 +3743,70 @@ export default function GmaoCorrectionForm({
 
             {/* New additions Section 3 (Alarme, Armoire connected, Dispositif handicap, Signalétique, Commentaire) */}
             <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Équipé d’une alarme.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio 
-                    label="Oui" 
-                    checked={equipeAlarme === 'Oui'} 
-                    onChange={() => {
-                      setEquipeAlarme('Oui');
-                    }} 
-                  />
-                  <FormRadio 
-                    label="Non" 
-                    checked={equipeAlarme === 'Non'} 
-                    onChange={() => {
-                      setEquipeAlarme('Non');
-                      setAlarme('');
-                    }} 
-                  />
-                </div>
-              </div>
+              {!simplifyCoffret && (
+                <>
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Équipé d’une alarme.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio 
+                        label="Oui" 
+                        checked={equipeAlarme === 'Oui'} 
+                        onChange={() => {
+                          setEquipeAlarme('Oui');
+                        }} 
+                      />
+                      <FormRadio 
+                        label="Non" 
+                        checked={equipeAlarme === 'Non'} 
+                        onChange={() => {
+                          setEquipeAlarme('Non');
+                          setAlarme('');
+                        }} 
+                      />
+                    </div>
+                  </div>
 
-              <div className={`space-y-1 bg-white transition-opacity duration-200 ${equipeAlarme === 'Non' ? 'opacity-50 pointer-events-none' : ''}`}>
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Alarme fonctionnelle.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio 
-                    label="Oui" 
-                    checked={alarme === 'Oui' && equipeAlarme !== 'Non'} 
-                    onChange={() => equipeAlarme !== 'Non' && setAlarme('Oui')} 
-                  />
-                  <FormRadio 
-                    label="Non" 
-                    checked={alarme === 'Non' && equipeAlarme !== 'Non'} 
-                    onChange={() => equipeAlarme !== 'Non' && setAlarme('Non')} 
-                  />
-                </div>
-              </div>
+                  <div className={`space-y-1 bg-white transition-opacity duration-200 ${equipeAlarme === 'Non' ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Alarme fonctionnelle.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio 
+                        label="Oui" 
+                        checked={alarme === 'Oui' && equipeAlarme !== 'Non'} 
+                        onChange={() => equipeAlarme !== 'Non' && setAlarme('Oui')} 
+                      />
+                      <FormRadio 
+                        label="Non" 
+                        checked={alarme === 'Non' && equipeAlarme !== 'Non'} 
+                        onChange={() => equipeAlarme !== 'Non' && setAlarme('Non')} 
+                      />
+                    </div>
+                  </div>
 
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Dispositif d’armoire connectée.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={armoireConnectee === 'Oui'} onChange={() => setArmoireConnectee('Oui')} />
-                  <FormRadio label="Non" checked={armoireConnectee === 'Non'} onChange={() => setArmoireConnectee('Non')} />
-                </div>
-              </div>
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Dispositif d’armoire connectée.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={armoireConnectee === 'Oui'} onChange={() => setArmoireConnectee('Oui')} />
+                      <FormRadio label="Non" checked={armoireConnectee === 'Non'} onChange={() => setArmoireConnectee('Non')} />
+                    </div>
+                  </div>
 
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Dispositif handicap.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={dispositifHandicap === 'Oui'} onChange={() => setDispositifHandicap('Oui')} />
-                  <FormRadio label="Non" checked={dispositifHandicap === 'Non'} onChange={() => setDispositifHandicap('Non')} />
-                </div>
-              </div>
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Dispositif handicap.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={dispositifHandicap === 'Oui'} onChange={() => setDispositifHandicap('Oui')} />
+                      <FormRadio label="Non" checked={dispositifHandicap === 'Non'} onChange={() => setDispositifHandicap('Non')} />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="space-y-1 bg-white">
                 <label className="block text-[11px] font-bold text-black uppercase">
@@ -4269,88 +4299,92 @@ export default function GmaoCorrectionForm({
             )}
 
             {/* Secours Electrode A Replacement Fields */}
-            <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Électrode A Secours remplacée.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={electrodeASecoursRemplacee === 'Oui'} onChange={() => setElectrodeASecoursRemplacee('Oui')} />
-                  <FormRadio label="Non" checked={electrodeASecoursRemplacee === 'Non'} onChange={() => setElectrodeASecoursRemplacee('Non')} />
+            {!hideElectrodeSecoursA && (
+              <>
+                <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Électrode A Secours remplacée.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={electrodeASecoursRemplacee === 'Oui'} onChange={() => setElectrodeASecoursRemplacee('Oui')} />
+                      <FormRadio label="Non" checked={electrodeASecoursRemplacee === 'Non'} onChange={() => setElectrodeASecoursRemplacee('Non')} />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {electrodeASecoursRemplacee === 'Oui' && (
-              <div className="pt-3 space-y-1 bg-white animate-fadeIn">
-                <label htmlFor="select-electrode-a-secours-rempc" className="block text-[11px] font-bold text-black uppercase">
-                  Sélection de l'électrode Secours A remplacée.
-                </label>
-                <div className="flex gap-2">
-                  <select
-                    id="select-electrode-a-secours-rempc"
-                    value={selectionElectrodeASecoursRemplacee}
-                    onChange={(e) => {
-                      setSelectionElectrodeASecoursRemplacee(e.target.value);
-                      if (e.target.value !== 'Autre') {
-                        setCustomElectrodeASecoursRemplacee('');
-                      }
-                    }}
-                    className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
-                  >
-                    <option value="">Sélectionner l'électrode de secours stockée...</option>
-                    {getAvailableTraceabilities('Modèle Électrode').map(item => (
-                      <option key={item.traceId} value={item.traceId}>
-                        {item.label}
-                      </option>
-                    ))}
-                    <option value="Autre">Autre</option>
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setIsScanElectrodeASecoursOpen(true)}
-                    style={rowActionButton18Style}
-                    className="shrink-0 transition-colors cursor-pointer font-sans"
-                  >
-                    Scan
-                  </button>
-                </div>
-                {isScanElectrodeASecoursOpen && (
-                  <BarcodeScannerModal
-                    isOpen={isScanElectrodeASecoursOpen}
-                    onClose={() => setIsScanElectrodeASecoursOpen(false)}
-                    onScanSuccess={(scannedText) => {
-                      setIsScanElectrodeASecoursOpen(false);
-                      const cleanText = scannedText.trim();
-                      const traceList = getAvailableTraceabilities('Modèle Électrode');
-                      const matched = traceList.find(t => t.lotOrSerial.toLowerCase() === cleanText.toLowerCase());
-                      if (matched) {
-                        setSelectionElectrodeASecoursRemplacee(matched.traceId);
-                        setCustomElectrodeASecoursRemplacee('');
-                        handleSnapshotChange('lotElectrodeASecours', matched.lotOrSerial);
-                        if (matched.expirationDate) {
-                          handleSnapshotChange('peremptionSecoursElectrodeA', matched.expirationDate);
-                        }
-                      } else {
-                        setSelectionElectrodeASecoursRemplacee('Autre');
-                        setCustomElectrodeASecoursRemplacee(cleanText);
-                        handleSnapshotChange('lotElectrodeASecours', cleanText);
-                      }
-                    }}
-                  />
-                )}
-                {selectionElectrodeASecoursRemplacee === 'Autre' && (
-                  <div className="pt-2">
-                    <input
-                      type="text"
-                      placeholder="Référence libre (Référence ou Lot/Série)"
-                      value={customElectrodeASecoursRemplacee}
-                      onChange={(e) => setCustomElectrodeASecoursRemplacee(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                    />
+                {electrodeASecoursRemplacee === 'Oui' && (
+                  <div className="pt-3 space-y-1 bg-white animate-fadeIn">
+                    <label htmlFor="select-electrode-a-secours-rempc" className="block text-[11px] font-bold text-black uppercase">
+                      Sélection de l'électrode Secours A remplacée.
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        id="select-electrode-a-secours-rempc"
+                        value={selectionElectrodeASecoursRemplacee}
+                        onChange={(e) => {
+                          setSelectionElectrodeASecoursRemplacee(e.target.value);
+                          if (e.target.value !== 'Autre') {
+                            setCustomElectrodeASecoursRemplacee('');
+                          }
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                      >
+                        <option value="">Sélectionner l'électrode de secours stockée...</option>
+                        {getAvailableTraceabilities('Modèle Électrode').map(item => (
+                          <option key={item.traceId} value={item.traceId}>
+                            {item.label}
+                          </option>
+                        ))}
+                        <option value="Autre">Autre</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setIsScanElectrodeASecoursOpen(true)}
+                        style={rowActionButton18Style}
+                        className="shrink-0 transition-colors cursor-pointer font-sans"
+                      >
+                        Scan
+                      </button>
+                    </div>
+                    {isScanElectrodeASecoursOpen && (
+                      <BarcodeScannerModal
+                        isOpen={isScanElectrodeASecoursOpen}
+                        onClose={() => setIsScanElectrodeASecoursOpen(false)}
+                        onScanSuccess={(scannedText) => {
+                          setIsScanElectrodeASecoursOpen(false);
+                          const cleanText = scannedText.trim();
+                          const traceList = getAvailableTraceabilities('Modèle Électrode');
+                          const matched = traceList.find(t => t.lotOrSerial.toLowerCase() === cleanText.toLowerCase());
+                          if (matched) {
+                            setSelectionElectrodeASecoursRemplacee(matched.traceId);
+                            setCustomElectrodeASecoursRemplacee('');
+                            handleSnapshotChange('lotElectrodeASecours', matched.lotOrSerial);
+                            if (matched.expirationDate) {
+                              handleSnapshotChange('peremptionSecoursElectrodeA', matched.expirationDate);
+                            }
+                          } else {
+                            setSelectionElectrodeASecoursRemplacee('Autre');
+                            setCustomElectrodeASecoursRemplacee(cleanText);
+                            handleSnapshotChange('lotElectrodeASecours', cleanText);
+                          }
+                        }}
+                      />
+                    )}
+                    {selectionElectrodeASecoursRemplacee === 'Autre' && (
+                      <div className="pt-2">
+                        <input
+                          type="text"
+                          placeholder="Référence libre (Référence ou Lot/Série)"
+                          value={customElectrodeASecoursRemplacee}
+                          onChange={(e) => setCustomElectrodeASecoursRemplacee(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </>
             )}
 
             <div className="space-y-1 bg-white">
@@ -4648,88 +4682,92 @@ export default function GmaoCorrectionForm({
             )}
 
             {/* Secours Electrode P Replacement Fields */}
-            <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Électrode P Secours remplacée.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={electrodePSecoursRemplacee === 'Oui'} onChange={() => setElectrodePSecoursRemplacee('Oui')} />
-                  <FormRadio label="Non" checked={electrodePSecoursRemplacee === 'Non'} onChange={() => setElectrodePSecoursRemplacee('Non')} />
+            {!hideElectrodeSecoursP && (
+              <>
+                <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Électrode P Secours remplacée.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={electrodePSecoursRemplacee === 'Oui'} onChange={() => setElectrodePSecoursRemplacee('Oui')} />
+                      <FormRadio label="Non" checked={electrodePSecoursRemplacee === 'Non'} onChange={() => setElectrodePSecoursRemplacee('Non')} />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {electrodePSecoursRemplacee === 'Oui' && (
-              <div className="pt-3 space-y-1 bg-white animate-fadeIn">
-                <label htmlFor="select-electrode-p-secours-rempc" className="block text-[11px] font-bold text-black uppercase">
-                  Sélection de l'électrode Secours P remplacée.
-                </label>
-                <div className="flex gap-2">
-                  <select
-                    id="select-electrode-p-secours-rempc"
-                    value={selectionElectrodePSecoursRemplacee}
-                    onChange={(e) => {
-                      setSelectionElectrodePSecoursRemplacee(e.target.value);
-                      if (e.target.value !== 'Autre') {
-                        setCustomElectrodePSecoursRemplacee('');
-                      }
-                    }}
-                    className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
-                  >
-                    <option value="">Sélectionner l'électrode de secours stockée...</option>
-                    {getAvailableTraceabilities('Modèle Électrode').map(item => (
-                      <option key={item.traceId} value={item.traceId}>
-                        {item.label}
-                      </option>
-                    ))}
-                    <option value="Autre">Autre</option>
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setIsScanElectrodePSecoursOpen(true)}
-                    style={rowActionButton18Style}
-                    className="shrink-0 transition-colors cursor-pointer font-sans"
-                  >
-                    Scan
-                  </button>
-                </div>
-                {isScanElectrodePSecoursOpen && (
-                  <BarcodeScannerModal
-                    isOpen={isScanElectrodePSecoursOpen}
-                    onClose={() => setIsScanElectrodePSecoursOpen(false)}
-                    onScanSuccess={(scannedText) => {
-                      setIsScanElectrodePSecoursOpen(false);
-                      const cleanText = scannedText.trim();
-                      const traceList = getAvailableTraceabilities('Modèle Électrode');
-                      const matched = traceList.find(t => t.lotOrSerial.toLowerCase() === cleanText.toLowerCase());
-                      if (matched) {
-                        setSelectionElectrodePSecoursRemplacee(matched.traceId);
-                        setCustomElectrodePSecoursRemplacee('');
-                        handleSnapshotChange('lotElectrodePSecours', matched.lotOrSerial);
-                        if (matched.expirationDate) {
-                          handleSnapshotChange('peremptionSecoursElectrodeP', matched.expirationDate);
-                        }
-                      } else {
-                        setSelectionElectrodePSecoursRemplacee('Autre');
-                        setCustomElectrodePSecoursRemplacee(cleanText);
-                        handleSnapshotChange('lotElectrodePSecours', cleanText);
-                      }
-                    }}
-                  />
-                )}
-                {selectionElectrodePSecoursRemplacee === 'Autre' && (
-                  <div className="pt-2">
-                    <input
-                      type="text"
-                      placeholder="Référence libre (Référence ou Lot/Série)"
-                      value={customElectrodePSecoursRemplacee}
-                      onChange={(e) => setCustomElectrodePSecoursRemplacee(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                    />
+                {electrodePSecoursRemplacee === 'Oui' && (
+                  <div className="pt-3 space-y-1 bg-white animate-fadeIn">
+                    <label htmlFor="select-electrode-p-secours-rempc" className="block text-[11px] font-bold text-black uppercase">
+                      Sélection de l'électrode Secours P remplacée.
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        id="select-electrode-p-secours-rempc"
+                        value={selectionElectrodePSecoursRemplacee}
+                        onChange={(e) => {
+                          setSelectionElectrodePSecoursRemplacee(e.target.value);
+                          if (e.target.value !== 'Autre') {
+                            setCustomElectrodePSecoursRemplacee('');
+                          }
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                      >
+                        <option value="">Sélectionner l'électrode de secours stockée...</option>
+                        {getAvailableTraceabilities('Modèle Électrode').map(item => (
+                          <option key={item.traceId} value={item.traceId}>
+                            {item.label}
+                          </option>
+                        ))}
+                        <option value="Autre">Autre</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setIsScanElectrodePSecoursOpen(true)}
+                        style={rowActionButton18Style}
+                        className="shrink-0 transition-colors cursor-pointer font-sans"
+                      >
+                        Scan
+                      </button>
+                    </div>
+                    {isScanElectrodePSecoursOpen && (
+                      <BarcodeScannerModal
+                        isOpen={isScanElectrodePSecoursOpen}
+                        onClose={() => setIsScanElectrodePSecoursOpen(false)}
+                        onScanSuccess={(scannedText) => {
+                          setIsScanElectrodePSecoursOpen(false);
+                          const cleanText = scannedText.trim();
+                          const traceList = getAvailableTraceabilities('Modèle Électrode');
+                          const matched = traceList.find(t => t.lotOrSerial.toLowerCase() === cleanText.toLowerCase());
+                          if (matched) {
+                            setSelectionElectrodePSecoursRemplacee(matched.traceId);
+                            setCustomElectrodePSecoursRemplacee('');
+                            handleSnapshotChange('lotElectrodePSecours', matched.lotOrSerial);
+                            if (matched.expirationDate) {
+                              handleSnapshotChange('peremptionSecoursElectrodeP', matched.expirationDate);
+                            }
+                          } else {
+                            setSelectionElectrodePSecoursRemplacee('Autre');
+                            setCustomElectrodePSecoursRemplacee(cleanText);
+                            handleSnapshotChange('lotElectrodePSecours', cleanText);
+                          }
+                        }}
+                      />
+                    )}
+                    {selectionElectrodePSecoursRemplacee === 'Autre' && (
+                      <div className="pt-2">
+                        <input
+                          type="text"
+                          placeholder="Référence libre (Référence ou Lot/Série)"
+                          value={customElectrodePSecoursRemplacee}
+                          onChange={(e) => setCustomElectrodePSecoursRemplacee(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </>
             )}
 
             <div className="space-y-1 bg-white">
@@ -5061,150 +5099,152 @@ export default function GmaoCorrectionForm({
           </div>
 
           {/* Section 9 - Vérifications techniques */}
-          <div 
-            id="gmao-sec-9"
-            className="bg-white p-5 relative space-y-3"
-            style={{
-              border: '1px solid rgb(218, 218, 218)',
-              borderTop: 'none',
-            }}
-          >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#5C1B62',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                9 — Vérifications techniques
-              </span>
+          {!hideVerificationsTechniques && (
+            <div 
+              id="gmao-sec-9"
+              className="bg-white p-5 relative space-y-3"
+              style={{
+                border: '1px solid rgb(218, 218, 218)',
+                borderTop: 'none',
+              }}
+            >
+              <div className="mb-2 bg-transparent">
+                <span 
+                  className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                  style={{
+                    backgroundColor: '#5C1B62',
+                    borderRadius: '1000px',
+                    cursor: 'default',
+                    fontWeight: 100,
+                    textTransform: 'none',
+                  }}
+                >
+                  9 — Vérifications techniques
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
+                {/* Conforme à mon arrivée (Full width span) */}
+                <div className="col-span-1 md:col-span-2 space-y-1 bg-white pb-3">
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Conforme à mon arrivée.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio 
+                      label="Oui" 
+                      checked={techConformeArrivee === 'Oui'} 
+                      onChange={() => setTechConformeArrivee('Oui')} 
+                    />
+                    <FormRadio 
+                      label="Non" 
+                      checked={techConformeArrivee === 'Non'} 
+                      onChange={() => setTechConformeArrivee('Non')} 
+                    />
+                  </div>
+                </div>
+
+                {/* Commentaire sur l'état à mon arrivée (Full width span) */}
+                <div className="col-span-1 md:col-span-2 space-y-1 bg-white pb-3">
+                  <label htmlFor="techCommentaireArrivee" className="block text-[11px] font-bold text-black uppercase">
+                    Commentaire sur l’état à mon arrivée.
+                  </label>
+                  <input
+                    type="text"
+                    id="techCommentaireArrivee"
+                    value={techCommentaireArrivee}
+                    onChange={(e) => setTechCommentaireArrivee(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-805 rounded-lg text-xs"
+                    placeholder="Saisissez un commentaire sur l'état constaté à votre arrivée..."
+                  />
+                </div>
+
+                {/* 1. Nettoyage. (Moved first!) */}
+                <div className="space-y-1 bg-white animate-fadeIn">
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Nettoyage.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio label="Oui" checked={techNettoyage === 'Oui'} onChange={() => setTechNettoyage('Oui')} />
+                    <FormRadio label="Non" checked={techNettoyage === 'Non'} onChange={() => setTechNettoyage('Non')} />
+                  </div>
+                </div>
+
+                {/* 2. Voyant conforme. */}
+                <div className="space-y-1 bg-white">
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Voyant conforme.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio label="Oui" checked={techVoyantConforme === 'Oui'} onChange={() => setTechVoyantConforme('Oui')} />
+                    <FormRadio label="Non" checked={techVoyantConforme === 'Non'} onChange={() => setTechVoyantConforme('Non')} />
+                  </div>
+                </div>
+
+                {/* 3. Équipé d’un message numérique. (New!) */}
+                <div className="space-y-1 bg-white animate-fadeIn">
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Équipé d’un message numérique.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio 
+                      label="Oui" 
+                      checked={techEquipeMessageNumerique === 'Oui'} 
+                      onChange={() => setTechEquipeMessageNumerique('Oui')} 
+                    />
+                    <FormRadio 
+                      label="Non" 
+                      checked={techEquipeMessageNumerique === 'Non'} 
+                      onChange={() => {
+                        setTechEquipeMessageNumerique('Non');
+                        setTechMessageNumeroConforme('');
+                      }} 
+                    />
+                  </div>
+                </div>
+
+                {/* 4. Message numérique conforme. (Dependent on Equipé d'un message numérique) */}
+                <div className={`space-y-1 bg-white transition-opacity duration-200 ${techEquipeMessageNumerique === 'Non' ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Message numérique conforme.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio 
+                      label="Oui" 
+                      checked={techMessageNumeroConforme === 'Oui' && techEquipeMessageNumerique !== 'Non'} 
+                      onChange={() => techEquipeMessageNumerique !== 'Non' && setTechMessageNumeroConforme('Oui')} 
+                    />
+                    <FormRadio 
+                      label="Non" 
+                      checked={techMessageNumeroConforme === 'Non' && techEquipeMessageNumerique !== 'Non'} 
+                      onChange={() => techEquipeMessageNumerique !== 'Non' && setTechMessageNumeroConforme('Non')} 
+                    />
+                  </div>
+                </div>
+
+                {/* 5. Guides vocaux conformes. */}
+                <div className="space-y-1 bg-white">
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Guides vocaux conformes.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio label="Oui" checked={techGuidesVocauxConformes === 'Oui'} onChange={() => setTechGuidesVocauxConformes('Oui')} />
+                    <FormRadio label="Non" checked={techGuidesVocauxConformes === 'Non'} onChange={() => setTechGuidesVocauxConformes('Non')} />
+                  </div>
+                </div>
+
+                {/* 6. Branchement conforme des électrodes. */}
+                <div className="space-y-1 bg-white">
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Branchement conforme des électrodes.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio label="Oui" checked={techBranchementElectrodesConforme === 'Oui'} onChange={() => setTechBranchementElectrodesConforme('Oui')} />
+                    <FormRadio label="Non" checked={techBranchementElectrodesConforme === 'Non'} onChange={() => setTechBranchementElectrodesConforme('Non')} />
+                  </div>
+                </div>
+              </div>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
-              {/* Conforme à mon arrivée (Full width span) */}
-              <div className="col-span-1 md:col-span-2 space-y-1 bg-white pb-3">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Conforme à mon arrivée.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio 
-                    label="Oui" 
-                    checked={techConformeArrivee === 'Oui'} 
-                    onChange={() => setTechConformeArrivee('Oui')} 
-                  />
-                  <FormRadio 
-                    label="Non" 
-                    checked={techConformeArrivee === 'Non'} 
-                    onChange={() => setTechConformeArrivee('Non')} 
-                  />
-                </div>
-              </div>
-
-              {/* Commentaire sur l'état à mon arrivée (Full width span) */}
-              <div className="col-span-1 md:col-span-2 space-y-1 bg-white pb-3">
-                <label htmlFor="techCommentaireArrivee" className="block text-[11px] font-bold text-black uppercase">
-                  Commentaire sur l’état à mon arrivée.
-                </label>
-                <input
-                  type="text"
-                  id="techCommentaireArrivee"
-                  value={techCommentaireArrivee}
-                  onChange={(e) => setTechCommentaireArrivee(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-805 rounded-lg text-xs"
-                  placeholder="Saisissez un commentaire sur l'état constaté à votre arrivée..."
-                />
-              </div>
-
-              {/* 1. Nettoyage. (Moved first!) */}
-              <div className="space-y-1 bg-white animate-fadeIn">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Nettoyage.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={techNettoyage === 'Oui'} onChange={() => setTechNettoyage('Oui')} />
-                  <FormRadio label="Non" checked={techNettoyage === 'Non'} onChange={() => setTechNettoyage('Non')} />
-                </div>
-              </div>
-
-              {/* 2. Voyant conforme. */}
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Voyant conforme.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={techVoyantConforme === 'Oui'} onChange={() => setTechVoyantConforme('Oui')} />
-                  <FormRadio label="Non" checked={techVoyantConforme === 'Non'} onChange={() => setTechVoyantConforme('Non')} />
-                </div>
-              </div>
-
-              {/* 3. Équipé d’un message numérique. (New!) */}
-              <div className="space-y-1 bg-white animate-fadeIn">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Équipé d’un message numérique.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio 
-                    label="Oui" 
-                    checked={techEquipeMessageNumerique === 'Oui'} 
-                    onChange={() => setTechEquipeMessageNumerique('Oui')} 
-                  />
-                  <FormRadio 
-                    label="Non" 
-                    checked={techEquipeMessageNumerique === 'Non'} 
-                    onChange={() => {
-                      setTechEquipeMessageNumerique('Non');
-                      setTechMessageNumeroConforme('');
-                    }} 
-                  />
-                </div>
-              </div>
-
-              {/* 4. Message numérique conforme. (Dependent on Equipé d'un message numérique) */}
-              <div className={`space-y-1 bg-white transition-opacity duration-200 ${techEquipeMessageNumerique === 'Non' ? 'opacity-50 pointer-events-none' : ''}`}>
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Message numérique conforme.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio 
-                    label="Oui" 
-                    checked={techMessageNumeroConforme === 'Oui' && techEquipeMessageNumerique !== 'Non'} 
-                    onChange={() => techEquipeMessageNumerique !== 'Non' && setTechMessageNumeroConforme('Oui')} 
-                  />
-                  <FormRadio 
-                    label="Non" 
-                    checked={techMessageNumeroConforme === 'Non' && techEquipeMessageNumerique !== 'Non'} 
-                    onChange={() => techEquipeMessageNumerique !== 'Non' && setTechMessageNumeroConforme('Non')} 
-                  />
-                </div>
-              </div>
-
-              {/* 5. Guides vocaux conformes. */}
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Guides vocaux conformes.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={techGuidesVocauxConformes === 'Oui'} onChange={() => setTechGuidesVocauxConformes('Oui')} />
-                  <FormRadio label="Non" checked={techGuidesVocauxConformes === 'Non'} onChange={() => setTechGuidesVocauxConformes('Non')} />
-                </div>
-              </div>
-
-              {/* 6. Branchement conforme des électrodes. */}
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Branchement conforme des électrodes.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={techBranchementElectrodesConforme === 'Oui'} onChange={() => setTechBranchementElectrodesConforme('Oui')} />
-                  <FormRadio label="Non" checked={techBranchementElectrodesConforme === 'Non'} onChange={() => setTechBranchementElectrodesConforme('Non')} />
-                </div>
-              </div>
-            </div>
-          </div>
+          )}
 
           {/* Section 10 - Vérifications du kit de secours */}
           <div 
@@ -5342,92 +5382,94 @@ export default function GmaoCorrectionForm({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white pt-2">
-              {/* 3. Ciseaux présents */}
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Ciseaux présents.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={kitCiseauxPresents === 'Oui'} onChange={() => setKitCiseauxPresents('Oui')} />
-                  <FormRadio label="Non" checked={kitCiseauxPresents === 'Non'} onChange={() => setKitCiseauxPresents('Non')} />
+            {!hideKitSecours && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white pt-2">
+                {/* 3. Ciseaux présents */}
+                <div className="space-y-1 bg-white">
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Ciseaux présents.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio label="Oui" checked={kitCiseauxPresents === 'Oui'} onChange={() => setKitCiseauxPresents('Oui')} />
+                    <FormRadio label="Non" checked={kitCiseauxPresents === 'Non'} onChange={() => setKitCiseauxPresents('Non')} />
+                  </div>
+                </div>
+
+                {/* 4. Masque présent */}
+                <div className="space-y-1 bg-white">
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Masque présent.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio label="Oui" checked={kitMasquePresent === 'Oui'} onChange={() => setKitMasquePresent('Oui')} />
+                    <FormRadio label="Non" checked={kitMasquePresent === 'Non'} onChange={() => { setKitMasquePresent('Non'); setKitPeremptionMasque(''); }} />
+                  </div>
+                </div>
+
+                {/* 4b. Péremption du masque */}
+                <div className={`space-y-1 bg-white transition-opacity duration-200 ${kitMasquePresent !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <label htmlFor="kitPeremptionMasque" className="block text-[11px] font-bold text-black uppercase">
+                    Péremption du masque.
+                  </label>
+                  <input
+                    type="date"
+                    id="kitPeremptionMasque"
+                    value={kitPeremptionMasque || ''}
+                    onChange={(e) => setKitPeremptionMasque(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    disabled={kitMasquePresent !== 'Oui'}
+                  />
+                </div>
+
+                {/* 5. Serviettes présentes */}
+                <div className="space-y-1 bg-white">
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Serviettes présentes.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio label="Oui" checked={kitServiettesPresentes === 'Oui'} onChange={() => setKitServiettesPresentes('Oui')} />
+                    <FormRadio label="Non" checked={kitServiettesPresentes === 'Non'} onChange={() => { setKitServiettesPresentes('Non'); setKitPeremptionServiettes(''); }} />
+                  </div>
+                </div>
+
+                {/* 5b. Péremption des serviettes */}
+                <div className={`space-y-1 bg-white transition-opacity duration-200 ${kitServiettesPresentes !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <label htmlFor="kitPeremptionServiettes" className="block text-[11px] font-bold text-black uppercase">
+                    Péremption des serviettes.
+                  </label>
+                  <input
+                    type="date"
+                    id="kitPeremptionServiettes"
+                    value={kitPeremptionServiettes || ''}
+                    onChange={(e) => setKitPeremptionServiettes(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    disabled={kitServiettesPresentes !== 'Oui'}
+                  />
+                </div>
+
+                {/* 6. Paires de gants présents */}
+                <div className="space-y-1 bg-white">
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Paires de gants présents.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio label="Oui" checked={kitGantsPresents === 'Oui'} onChange={() => setKitGantsPresents('Oui')} />
+                    <FormRadio label="Non" checked={kitGantsPresents === 'Non'} onChange={() => setKitGantsPresents('Non')} />
+                  </div>
+                </div>
+
+                {/* 7. Rasoir */}
+                <div className="space-y-1 bg-white">
+                  <label className="block text-[11px] font-bold text-black uppercase">
+                    Rasoir.
+                  </label>
+                  <div className="flex gap-6 items-center pt-1 bg-white">
+                    <FormRadio label="Oui" checked={kitRasoirPresent === 'Oui'} onChange={() => setKitRasoirPresent('Oui')} />
+                    <FormRadio label="Non" checked={kitRasoirPresent === 'Non'} onChange={() => setKitRasoirPresent('Non')} />
+                  </div>
                 </div>
               </div>
-
-              {/* 4. Masque présent */}
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Masque présent.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={kitMasquePresent === 'Oui'} onChange={() => setKitMasquePresent('Oui')} />
-                  <FormRadio label="Non" checked={kitMasquePresent === 'Non'} onChange={() => { setKitMasquePresent('Non'); setKitPeremptionMasque(''); }} />
-                </div>
-              </div>
-
-              {/* 4b. Péremption du masque */}
-              <div className={`space-y-1 bg-white transition-opacity duration-200 ${kitMasquePresent !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
-                <label htmlFor="kitPeremptionMasque" className="block text-[11px] font-bold text-black uppercase">
-                  Péremption du masque.
-                </label>
-                <input
-                  type="date"
-                  id="kitPeremptionMasque"
-                  value={kitPeremptionMasque || ''}
-                  onChange={(e) => setKitPeremptionMasque(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  disabled={kitMasquePresent !== 'Oui'}
-                />
-              </div>
-
-              {/* 5. Serviettes présentes */}
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Serviettes présentes.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={kitServiettesPresentes === 'Oui'} onChange={() => setKitServiettesPresentes('Oui')} />
-                  <FormRadio label="Non" checked={kitServiettesPresentes === 'Non'} onChange={() => { setKitServiettesPresentes('Non'); setKitPeremptionServiettes(''); }} />
-                </div>
-              </div>
-
-              {/* 5b. Péremption des serviettes */}
-              <div className={`space-y-1 bg-white transition-opacity duration-200 ${kitServiettesPresentes !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
-                <label htmlFor="kitPeremptionServiettes" className="block text-[11px] font-bold text-black uppercase">
-                  Péremption des serviettes.
-                </label>
-                <input
-                  type="date"
-                  id="kitPeremptionServiettes"
-                  value={kitPeremptionServiettes || ''}
-                  onChange={(e) => setKitPeremptionServiettes(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  disabled={kitServiettesPresentes !== 'Oui'}
-                />
-              </div>
-
-              {/* 6. Paires de gants présents */}
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Paires de gants présents.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={kitGantsPresents === 'Oui'} onChange={() => setKitGantsPresents('Oui')} />
-                  <FormRadio label="Non" checked={kitGantsPresents === 'Non'} onChange={() => setKitGantsPresents('Non')} />
-                </div>
-              </div>
-
-              {/* 7. Rasoir */}
-              <div className="space-y-1 bg-white">
-                <label className="block text-[11px] font-bold text-black uppercase">
-                  Rasoir.
-                </label>
-                <div className="flex gap-6 items-center pt-1 bg-white">
-                  <FormRadio label="Oui" checked={kitRasoirPresent === 'Oui'} onChange={() => setKitRasoirPresent('Oui')} />
-                  <FormRadio label="Non" checked={kitRasoirPresent === 'Non'} onChange={() => setKitRasoirPresent('Non')} />
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Section 11 - Diagnostics et clôture */}

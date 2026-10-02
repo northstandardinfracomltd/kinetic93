@@ -1887,6 +1887,13 @@ export default function SettingsModal({
         { key: 'codePostalSiege', label: 'Code postal du siège' },
         { key: 'villeSiege', label: 'Ville du siège' },
         { key: 'paysSiege', label: 'Pays du siège' },
+        { key: 'pdfHideElectrodeSecoursA', label: 'Rapports PDF : Masquer Électrode A Secours' },
+        { key: 'pdfHideElectrodeSecoursP', label: 'Rapports PDF : Masquer Électrode P Secours' },
+        { key: 'pdfHideKitSecours', label: 'Rapports PDF : Masquer inventaire Kit Secours' },
+        { key: 'pdfSimplifyCoffret', label: 'Rapports PDF : Simplifier Coffret/Boîtier' },
+        { key: 'pdfHideVerificationsTechniques', label: 'Rapports PDF : Masquer Vérifications techniques' },
+        { key: 'pdfHideHorodatagesDiagnostic', label: 'Rapports PDF : Masquer Horodatages' },
+        { key: 'pdfShowDemandeDevisDetails', label: 'Rapports PDF : Afficher Demande de devis' },
       ];
 
       for (const f of checkFields) {
@@ -3053,6 +3060,104 @@ export default function SettingsModal({
                 >
                   {t("Réinitialiser les couleurs")}
                 </button>
+              </div>
+
+              {/* 7 Questions de Radio check Oui/Non */}
+              <div className="space-y-4 pt-4 border-t border-slate-100">
+                {[
+                  {
+                    key: 'pdfHideElectrodeSecoursA' as const,
+                    label: "Masquer les champs concernant l’Électrode Adulte ou Mixte (A) de secours.",
+                  },
+                  {
+                    key: 'pdfHideElectrodeSecoursP' as const,
+                    label: "Masquer les champs concernant l’Électrode Pédiatrique (P) de secours.",
+                  },
+                  {
+                    key: 'pdfHideKitSecours' as const,
+                    label: "Masquer l’inventaire du Kit/Trousse de secours.",
+                  },
+                  {
+                    key: 'pdfSimplifyCoffret' as const,
+                    label: "Simplifier les champs du Coffret/Boîtier.",
+                  },
+                  {
+                    key: 'pdfHideVerificationsTechniques' as const,
+                    label: "Masquer la section Vérifications techniques.",
+                  },
+                  {
+                    key: 'pdfHideHorodatagesDiagnostic' as const,
+                    label: "Masquer les horodatages de Début et Fin d’intervention à la section Diagnostic et Clôture.",
+                  },
+                  {
+                    key: 'pdfShowDemandeDevisDetails' as const,
+                    label: "Afficher les informations sur la demande de devis à la section Diagnostic et clôture.",
+                  },
+                ].map((opt) => {
+                  const currentValue = (localCompany[opt.key] as 'Oui' | 'Non') || 'Non';
+                  return (
+                    <div key={opt.key} className="space-y-2">
+                      <label className="block text-[16px] font-bold text-black font-sans leading-tight">
+                        {t(opt.label)}
+                      </label>
+                      <div className="flex items-center space-x-6 py-1 font-sans">
+                        <button
+                          type="button"
+                          disabled={!isCurrentUserSuperAdmin}
+                          onClick={() => {
+                            if (!isCurrentUserSuperAdmin) return;
+                            handleCompanyChange(opt.key, 'Oui');
+                          }}
+                          className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          <span 
+                            className="rounded-full flex items-center justify-center transition-all bg-white"
+                            style={{
+                              border: currentValue === 'Oui' ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                              width: '20px',
+                              height: '20px',
+                              minWidth: '20px',
+                              minHeight: '20px',
+                              backgroundColor: '#ffffff'
+                            }}
+                          >
+                            {currentValue === 'Oui' && (
+                              <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                            )}
+                          </span>
+                          <span className="text-[15px] font-semibold text-black">Oui</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={!isCurrentUserSuperAdmin}
+                          onClick={() => {
+                            if (!isCurrentUserSuperAdmin) return;
+                            handleCompanyChange(opt.key, 'Non');
+                          }}
+                          className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          <span 
+                            className="rounded-full flex items-center justify-center transition-all bg-white"
+                            style={{
+                              border: currentValue === 'Non' ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                              width: '20px',
+                              height: '20px',
+                              minWidth: '20px',
+                              minHeight: '20px',
+                              backgroundColor: '#ffffff'
+                            }}
+                          >
+                            {currentValue === 'Non' && (
+                              <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                            )}
+                          </span>
+                          <span className="text-[15px] font-semibold text-black">Non</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
