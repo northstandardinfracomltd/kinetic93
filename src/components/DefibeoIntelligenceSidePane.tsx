@@ -92,11 +92,16 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
     setIsLoading(true);
 
     try {
+      const activeTid = tenantContext?.tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') || 'demo' : 'demo');
       const resp = await fetch('/api/defibeo-intelligence', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-tenant-id': activeTid,
+        },
         body: JSON.stringify({
           question: query,
+          tenantId: activeTid,
           history: messages.slice(-4).map((m) => ({
             role: m.role,
             content: m.content,
@@ -105,11 +110,11 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
         }),
       });
 
+      const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        throw new Error("Bientôt disponible, revenez prochainement.");
+        throw new Error(data.error || data.answer || "Bientôt disponible, revenez prochainement.");
       }
 
-      const data = await resp.json();
       const assistantText = data.answer || "Bientôt disponible, revenez prochainement.";
 
       const assistantMsg: ChatMessage = {
@@ -120,11 +125,11 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
       };
 
       setMessages([...nextMessages, assistantMsg]);
-    } catch {
+    } catch (err: any) {
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
         role: 'assistant',
-        content: "Bientôt disponible, revenez prochainement.",
+        content: err?.message || "Bientôt disponible, revenez prochainement.",
         createdAt: Date.now(),
       };
       setMessages([...nextMessages, errorMsg]);

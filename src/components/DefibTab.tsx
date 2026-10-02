@@ -2071,13 +2071,14 @@ export default function DefibTab({
     }));
 
     return {
+      tenantId: activeTenantId,
       cabinet: companyInfo?.name || "Défibeo",
       totalDefibrillateurs: defibList.length,
       totalClients: clientList.length,
       clients: clientList.slice(0, 300),
       defibrillateurs: defibList.slice(0, 500),
     };
-  }, [defibrillateurs, clients, variables, companyInfo?.name]);
+  }, [defibrillateurs, clients, variables, companyInfo?.name, activeTenantId]);
 
   // Toggle function for visibility side pane: Black (visible) <-> Red (hidden)
   const toggleColumnVisibility = (colId: string) => {
