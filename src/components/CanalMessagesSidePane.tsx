@@ -41,14 +41,28 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   const [selectedFilterTag, setSelectedFilterTag] = useState<CanalTagName>('Exploitation');
   const [messageInput, setMessageInput] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: string } | null>(null);
+  const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const channelDropdownRef = useRef<HTMLDivElement | null>(null);
 
   // Auto scroll to bottom
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
   };
+
+  // Close channel dropdown on outside click
+  useEffect(() => {
+    if (!isChannelDropdownOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (channelDropdownRef.current && !channelDropdownRef.current.contains(e.target as Node)) {
+        setIsChannelDropdownOpen(false);
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, [isChannelDropdownOpen]);
 
   // Close context menu on outside click with capture phase to avoid any stopPropagation issues
   useEffect(() => {
@@ -68,7 +82,8 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (contextMenu) setContextMenu(null);
+        if (isChannelDropdownOpen) setIsChannelDropdownOpen(false);
+        else if (contextMenu) setContextMenu(null);
         else onClose();
       }
     };
@@ -78,7 +93,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, contextMenu, onClose]);
+  }, [isOpen, contextMenu, isChannelDropdownOpen, onClose]);
 
   // Mark messages as read when opening
   useEffect(() => {
@@ -89,7 +104,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
         textareaRef.current?.focus();
       }, 80);
     }
-  }, [isOpen, onMessagesRead]);
+  }, [isOpen]);
 
   // Real-time Firestore sync & auto-refresh dynamic polling every 1s
   useEffect(() => {
@@ -341,7 +356,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             paddingRight: 0,
           }}
         >
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 px-3 w-full">
+          <div className="flex items-center gap-2 py-0.5 px-3 w-full relative z-20 overflow-visible flex-wrap sm:flex-nowrap">
             {/* Bouton Fermer : background noir et texte blanc, font-size 18px, AUCUN BOX-SHADOW */}
             <button
               type="button"
@@ -407,11 +422,16 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               );
             })()}
 
-            {/* Bouton « Ouvrir un canal » avec system dropdown des catégories */}
-            <div className="relative inline-flex items-center shrink-0">
+            {/* Bouton « Ouvrir un canal » avec dropdown des catégories (sans arrow icon) */}
+            <div ref={channelDropdownRef} className="relative inline-flex items-center shrink-0">
               <button
                 type="button"
-                className="px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] flex items-center gap-2 pointer-events-none"
+                id="btn-ouvrir-un-canal"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsChannelDropdownOpen((prev) => !prev);
+                }}
+                className="px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] flex items-center justify-center"
                 style={{
                   backgroundColor: '#3556ec',
                   color: '#ffffff',
@@ -422,33 +442,58 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 }}
               >
                 <span>{t('Ouvrir un canal')}</span>
-                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                </svg>
               </button>
-              <select
-                value=""
-                onChange={(e) => {
-                  if (e.target.value) {
-                    setSelectedFilterTag(e.target.value as CanalTagName);
-                  }
-                }}
-                aria-label={t('Ouvrir un canal')}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                style={{ fontSize: '16px' }}
-              >
-                <option value="" disabled hidden>
-                  {t('Ouvrir un canal')}
-                </option>
-                {CANAL_TAGS.filter((tag) => tag.name !== selectedFilterTag).map((tag) => {
-                  const count = messages.filter((m) => m.tag === tag.name).length;
-                  return (
-                    <option key={tag.name} value={tag.name} style={{ color: '#000000', backgroundColor: '#ffffff', fontSize: '16px' }}>
-                      {tag.name} ({count})
-                    </option>
-                  );
-                })}
-              </select>
+
+              {isChannelDropdownOpen && (
+                <div
+                  className="absolute top-full right-0 sm:left-0 mt-2 min-w-[250px] bg-white rounded-2xl shadow-2xl py-2 z-50 animate-fadeIn"
+                  style={{
+                    border: '1px solid #dadada',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="max-h-72 overflow-y-auto py-1">
+                    {CANAL_TAGS.filter((tag) => tag.name !== selectedFilterTag).map((tag) => {
+                      const count = messages.filter((m) => m.tag === tag.name).length;
+                      return (
+                        <button
+                          key={tag.name}
+                          type="button"
+                          onClick={() => {
+                            setSelectedFilterTag(tag.name);
+                            setIsChannelDropdownOpen(false);
+                          }}
+                          className="w-full flex items-center justify-between px-4 py-2.5 text-left transition-all hover:bg-slate-100 cursor-pointer border-0 bg-transparent"
+                          style={{
+                            fontSize: '16px',
+                            color: '#000000',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          }}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span
+                              className="w-3 h-3 rounded-full shrink-0"
+                              style={{ backgroundColor: tag.dot }}
+                            />
+                            <span className="font-semibold truncate">{tag.name}</span>
+                          </div>
+                          <span
+                            className="inline-flex items-center justify-center rounded-full text-xs font-bold px-2 py-0.5 ml-2"
+                            style={{
+                              backgroundColor: count > 0 ? '#3556ec18' : '#f1f5f9',
+                              color: count > 0 ? '#3556ec' : '#64748b',
+                            }}
+                          >
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { getRegionsForCountry } from './utils/regions';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -1508,11 +1508,11 @@ export default function App() {
     ).length;
   }, [tenantMessages, lastSeenMessageTime, loggedUser?.email, isCanalMessagesOpen]);
 
-  const handleMessagesRead = () => {
+  const handleMessagesRead = useCallback(() => {
     const now = Date.now();
     setLastSeenMessageTime(now);
     localStorage.setItem(`defib_${tenantId}_messages_last_seen`, String(now));
-  };
+  }, [tenantId]);
 
   // Real-time listener & periodic poll for tenant messages to update badge & chat across all devices
   useEffect(() => {
@@ -4099,7 +4099,7 @@ export default function App() {
                   <div class="pdf-card-body" style="display: flex; flex-direction: column; gap: 4px;">
                     <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
                       <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Client :</span> <span class="pdf-bold">${clientName || ''}</span></div>
-                      <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Client ID :</span> <span class="pdf-bold">${clientIdField || '—'}</span></div>
+                      <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Client ID / Code Affaire :</span> <span class="pdf-bold">${clientIdField || '—'}</span></div>
                       <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Payeur ID :</span> <span class="pdf-bold">${payeurId || '—'}</span></div>
                     </div>
                     <div class="pdf-line"><span class="pdf-label">Contact sur place :</span> <span class="pdf-bold">${snapshot.nomPrenomSite || ''}</span></div>
@@ -4539,7 +4539,7 @@ export default function App() {
                 <div class="pdf-card-body" style="display: flex; flex-direction: column; gap: 4px;">
                   <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Client :</span> <span class="pdf-bold">${clientName || ''}</span></div>
-                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Client ID :</span> <span class="pdf-bold">${clientIdField || '—'}</span></div>
+                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Client ID / Code Affaire :</span> <span class="pdf-bold">${clientIdField || '—'}</span></div>
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Payeur ID :</span> <span class="pdf-bold">${payeurId || '—'}</span></div>
                   </div>
                   <div class="pdf-line"><span class="pdf-label">Contact :</span> <span class="pdf-bold">${snapshot.nomPrenomSite || ''}</span></div>
@@ -4547,26 +4547,6 @@ export default function App() {
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Téléphone du contact :</span> <span class="pdf-bold">${snapshot.telephoneSite || ''}</span></div>
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Email du contact :</span> <span class="pdf-bold">${snapshot.emailSite || ''}</span></div>
                   </div>
-                  <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Type matériel :</span> <span class="pdf-bold">${snapshot.categorie || 'Défibrillateur'}</span></div>
-                  ${isVisibleVersionLogiciel ? `<div class="pdf-line"><span class="pdf-label">Version du logiciel :</span> <span class="pdf-bold">${snapshot.versionLogiciel || '—'}</span></div>` : ''}
-                  <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
-                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Référence intervention :</span> <span class="pdf-bold">${report.interventionReference || '—'}</span></div>
-                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Autre référence :</span> <span class="pdf-bold">${autreReferenceVal || '—'}</span></div>
-                  </div>
-                  <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
-                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Identifiant :</span> <span class="pdf-bold">${snapshot.identifiant || ''}</span></div>
-                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Série :</span> <span class="pdf-bold">${snapshot.numeroSerie || ''}</span></div>
-                  </div>
-                  <div class="pdf-line"><span class="pdf-label">Modèle :</span> <span class="pdf-bold">${snapshot.modeleId ? defibModelName : ''}</span></div>
-                  <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Contrat :</span> <span class="pdf-bold">${snapshot.contrat || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Référence du contrat :</span> <span class="pdf-bold">${snapshot.referenceContrat || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Catégorie du contrat :</span> <span class="pdf-bold">${snapshot.nomContrat || ''}</span></div>
-                  ${isVisibleFactureBrouillon ? `
-                  <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
-                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Facture :</span> <span class="pdf-bold">${report.emettreFactureBrouillon || ''}</span></div>
-                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Service facturé :</span> <span class="pdf-bold">${report.serviceEmettreId ? getServiceLabel(report.serviceEmettreId) : ''}</span></div>
-                  </div>
-                  ` : ''}
                   <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Voie :</span> <span class="pdf-bold">${snapshot.numVoie || ''}</span></div>
                   <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Ville :</span> <span class="pdf-bold">${snapshot.ville || ''}</span></div>
@@ -4580,9 +4560,20 @@ export default function App() {
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Latitude GPS :</span> <span class="pdf-bold">${snapshot.latitude || ''}</span></div>
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Longitude GPS :</span> <span class="pdf-bold">${snapshot.longitude || ''}</span></div>
                   </div>
-                  <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Fabrication :</span> <span class="pdf-bold">${snapshot.fabrication || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Mise en service :</span> <span class="pdf-bold">${snapshot.miseEnService || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Fin de garantie :</span> <span class="pdf-bold">${snapshot.finGarantie || ''}</span></div>
+                  <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Type matériel :</span> <span class="pdf-bold">${snapshot.categorie || 'Défibrillateur'}</span></div>
+                  <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
+                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Référence intervention :</span> <span class="pdf-bold">${report.interventionReference || '—'}</span></div>
+                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Autre référence :</span> <span class="pdf-bold">${autreReferenceVal || '—'}</span></div>
+                  </div>
+                  <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
+                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Identifiant :</span> <span class="pdf-bold">${snapshot.identifiant || ''}</span></div>
+                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Série :</span> <span class="pdf-bold">${snapshot.numeroSerie || ''}</span></div>
+                  </div>
+                  <div class="pdf-line"><span class="pdf-label">Modèle :</span> <span class="pdf-bold">${snapshot.modeleId ? defibModelName : ''}</span></div>
+                  ${isVisibleVersionLogiciel ? `<div class="pdf-line"><span class="pdf-label">Version du logiciel :</span> <span class="pdf-bold">${snapshot.versionLogiciel || '—'}</span></div>` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Type Défibrillateur :</span> <span class="pdf-bold">${defibModel?.typeDefibrillateur || snapshot.typeDefibrillateur || 'DSA'}</span></div>
+                  <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Date Fabrication :</span> <span class="pdf-bold">${snapshot.fabrication || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Date Mise en service :</span> <span class="pdf-bold">${snapshot.miseEnService || ''}</span></div>
                 </div>
               </div>
             </div>
@@ -4597,18 +4588,19 @@ export default function App() {
             <div class="pdf-grid">
               <!-- SECTION 2 -->
               <div class="pdf-card">
-                <div class="pdf-card-header">2 — Coffret.</div>
+                <div class="pdf-card-header">2 — Batterie (B).</div>
                 <div class="pdf-card-body">
-                  <div class="pdf-line"><span class="pdf-label">Modèle de boîtier :</span> <span class="pdf-bold">${coffretModelName || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Lot de boîtier :</span> <span class="pdf-bold">${snapshot.numeroLotCoffret || ''}</span></div>
-                  ${!pdfSimplifyCoffret ? `
-                  <div class="pdf-line"><span class="pdf-label">Équipé d’une alarme :</span> <span class="pdf-bold">${report.equipeAlarme || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Alarme fonctionnelle :</span> <span class="pdf-bold">${report.alarme || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Dispositif d’armoire connectée :</span> <span class="pdf-bold">${report.armoireConnectee || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Dispositif handicap :</span> <span class="pdf-bold">${report.dispositifHandicap || ''}</span></div>
-                  ` : ''}
-                  <div class="pdf-line"><span class="pdf-label">Signalétique conforme :</span> <span class="pdf-bold">${report.signaletiqueConforme || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Commentaire concernant le boîtier :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireCoffret || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Référence de batterie :</span> <span class="pdf-bold">${batterieModelName || ''}</span></div>
+                  ${isVisiblePourcentageBatterie ? `<div class="pdf-line"><span class="pdf-label">Pourcentage de charge :</span> <span class="pdf-bold">${snapshot.pourcentageBatterie ? snapshot.pourcentageBatterie + '%' : ''}</span></div>` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Lot B :</span> <span class="pdf-bold">${snapshot.lotBatterie || ''}</span></div>
+                  ${isVisiblePeremptionBatterie ? `<div class="pdf-line"><span class="pdf-label">Péremption :</span> <span class="pdf-bold">${snapshot.peremptionBatterie || ''}</span></div>` : ''}
+                  ${isVisibleFabricationBatterie ? `<div class="pdf-line"><span class="pdf-label">Fabrication :</span> <span class="pdf-bold">${snapshot.fabricationBatterie || ''}</span></div>` : ''}
+                  ${isVisibleInsertionBatterie ? `<div class="pdf-line"><span class="pdf-label">Insertion :</span> <span class="pdf-bold">${snapshot.insertionBatterie || ''}</span></div>` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Batterie remplacée :</span> <span class="pdf-bold">${report.batterieRemplacee || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Sélection de la batterie remplacée :</span> <span class="pdf-bold">${selBatterie || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Pourcentage de charge nouvelle batterie :</span> <span class="pdf-bold">${(report.pourcentageChargeNouvelleBatterie || snapshot.pourcentageChargeNouvelleBatterie) ? (String(report.pourcentageChargeNouvelleBatterie || snapshot.pourcentageChargeNouvelleBatterie).includes('%') ? (report.pourcentageChargeNouvelleBatterie || snapshot.pourcentageChargeNouvelleBatterie) : (report.pourcentageChargeNouvelleBatterie || snapshot.pourcentageChargeNouvelleBatterie) + '%') : ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Batterie conforme et fonctionnelle :</span> <span class="pdf-bold">${report.batterieConformeSante || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Commentaire concernant la batterie :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireBatterie || ''}</span></div>
                 </div>
               </div>
 
@@ -4660,7 +4652,7 @@ export default function App() {
                   ` : ''}
                   
                   <div class="pdf-line"><span class="pdf-label">Électrode A conforme et fonctionnelle :</span> <span class="pdf-bold">${report.electrodeAConformeSante || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Commentaire concernant l’électrode A :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireElectrodeA || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Commentaire :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireElectrodeA || ''}</span></div>
                 </div>
               </div>
 
@@ -4700,18 +4692,19 @@ export default function App() {
             <div class="pdf-grid">
               <!-- SECTION 6 -->
               <div class="pdf-card">
-                <div class="pdf-card-header">6 — Batterie (B).</div>
+                <div class="pdf-card-header">6 — Coffret.</div>
                 <div class="pdf-card-body">
-                  <div class="pdf-line"><span class="pdf-label">Modèle de batterie :</span> <span class="pdf-bold">${batterieModelName || ''}</span></div>
-                  ${isVisiblePourcentageBatterie ? `<div class="pdf-line"><span class="pdf-label">Pourcentage de charge :</span> <span class="pdf-bold">${snapshot.pourcentageBatterie ? snapshot.pourcentageBatterie + '%' : ''}</span></div>` : ''}
-                  <div class="pdf-line"><span class="pdf-label">Lot B :</span> <span class="pdf-bold">${snapshot.lotBatterie || ''}</span></div>
-                  ${isVisiblePeremptionBatterie ? `<div class="pdf-line"><span class="pdf-label">Péremption :</span> <span class="pdf-bold">${snapshot.peremptionBatterie || ''}</span></div>` : ''}
-                  ${isVisibleFabricationBatterie ? `<div class="pdf-line"><span class="pdf-label">Fabrication :</span> <span class="pdf-bold">${snapshot.fabricationBatterie || ''}</span></div>` : ''}
-                  ${isVisibleInsertionBatterie ? `<div class="pdf-line"><span class="pdf-label">Insertion :</span> <span class="pdf-bold">${snapshot.insertionBatterie || ''}</span></div>` : ''}
-                  <div class="pdf-line"><span class="pdf-label">Batterie remplacée :</span> <span class="pdf-bold">${report.batterieRemplacee || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Sélection de la batterie remplacée :</span> <span class="pdf-bold">${selBatterie || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Batterie conforme et fonctionnelle :</span> <span class="pdf-bold">${report.batterieConformeSante || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Commentaire concernant la batterie :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireBatterie || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Modèle de boîtier :</span> <span class="pdf-bold">${coffretModelName || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Lot de boîtier :</span> <span class="pdf-bold">${snapshot.numeroLotCoffret || ''}</span></div>
+                  ${!pdfSimplifyCoffret ? `
+                  <div class="pdf-line"><span class="pdf-label">Équipé d’une alarme :</span> <span class="pdf-bold">${report.equipeAlarme || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Alarme fonctionnelle :</span> <span class="pdf-bold">${report.alarme || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Dispositif d’armoire connectée :</span> <span class="pdf-bold">${report.armoireConnectee || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Dispositif handicap :</span> <span class="pdf-bold">${report.dispositifHandicap || ''}</span></div>
+                  ` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Signalétique conforme :</span> <span class="pdf-bold">${report.signaletiqueConforme || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Installé en extérieur :</span> <span class="pdf-bold">${report.installeExterieur || snapshot.installeExterieur || (report.exterieur !== undefined ? (report.exterieur ? 'Oui' : 'Non') : '') || (snapshot.exterieur !== undefined ? (snapshot.exterieur ? 'Oui' : 'Non') : '') || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Commentaire :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireCoffret || ''}</span></div>
                 </div>
               </div>
 
@@ -4720,9 +4713,9 @@ export default function App() {
                 <div class="pdf-card-header">7 — Vérifications du kit de secours.</div>
                 <div class="pdf-card-body" style="gap: 3px;">
                   <div class="pdf-line"><span class="pdf-label">Trousse de secours présente :</span> <span class="pdf-bold">${report.kitTrousseSecoursPresent || ''}</span></div>
+                  ${isVisiblePeremptionTrousse ? `<div class="pdf-line"><span class="pdf-label">Péremption de la trousse :</span> <span class="pdf-bold">${report.kitPeremption || snapshot.peremptionTrousse || ''}</span></div>` : ''}
                   <div class="pdf-line"><span class="pdf-label">Kit de secours remplacé ou ajouté :</span> <span class="pdf-bold">${report.kitSecoursRemplaceOuAjoute || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection d’un kit de secours :</span> <span class="pdf-bold">${selKitSecours || ''}</span></div>
-                  ${isVisiblePeremptionTrousse ? `<div class="pdf-line"><span class="pdf-label">Péremption de la trousse :</span> <span class="pdf-bold">${report.kitPeremption || snapshot.peremptionTrousse || ''}</span></div>` : ''}
                   ${!pdfHideKitSecours ? `
                   ${isVisibleCiseauxPresents ? `<div class="pdf-line"><span class="pdf-label">Ciseaux présents :</span> <span class="pdf-bold">${report.kitCiseauxPresents || ''}</span></div>` : ''}
                   ${isVisibleMasquePresent ? `<div class="pdf-line"><span class="pdf-label">Masque présent :</span> <span class="pdf-bold">${report.kitMasquePresent || ''}</span></div>` : ''}
@@ -8138,10 +8131,12 @@ export default function App() {
           >
             <span>{t('Messages internes')}</span>
             <span
-              className="inline-flex items-center justify-center rounded-full shrink-0 font-bold ml-1.5"
+              className="inline-flex items-center justify-center rounded-full shrink-0 font-bold"
               style={{
-                backgroundColor: 'rgb(163, 20, 20)',
-                color: '#ffffff',
+                backgroundColor: 'transparent',
+                border: '1px solid #ffffff38',
+                color: 'rgb(255 255 255)',
+                marginLeft: '-2px',
                 fontSize: '14px',
                 width: '25px',
                 height: '25px',
