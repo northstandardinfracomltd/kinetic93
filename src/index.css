@@ -271,5 +271,52 @@ html.is-edge [style*="font-weight:100"] {
   will-change: left, right;
 }
 
+@keyframes reportDockDown {
+  0% {
+    transform: translateY(-85vh);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes reportExpandUp {
+  0% {
+    transform: translateY(100%);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-report-dock-down {
+  animation: reportDockDown 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-report-expand-up {
+  animation: reportExpandUp 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes floatPillEnter {
+  0% {
+    transform: translate(-50%, 15px) scale(0.92);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-float-pill {
+  animation: floatPillEnter 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
 
 

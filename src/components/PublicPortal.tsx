@@ -62,9 +62,11 @@ import {
   AppFaviconOption,
   formatPdfHeaderText,
   CttModelSetting,
+  TenantMessage,
 } from "../types";
 import EmargementsTab from "./EmargementsTab";
-import { REGIONS_FRANCAISES } from "../utils";
+import { REGIONS_FRANCAISES, INITIAL_TENANT_MESSAGES } from "../utils";
+import { CanalMessagesSidePane } from "./CanalMessagesSidePane";
 import { getRegionsForCountry } from "../utils/regions";
 import { getLanguage, t } from "../utils/translate";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
@@ -726,12 +728,83 @@ export default function PublicPortal({
   type WebappTab =
     | "interventions"
     | "rapports"
+    | "messages"
     | "planning"
     | "stocks"
     | "temps"
     | "frais"
     | "localisation";
   const [activeTab, setActiveTab] = useState<WebappTab>("interventions");
+
+  // Messages state & real-time sync for Technician Webapp
+  const [tenantMessages, setTenantMessages] = useState<TenantMessage[]>(() => {
+    try {
+      const tid = (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) || "demo";
+      const raw = localStorage.getItem(`defib_${tid}_tenant_messages`);
+      if (raw) return JSON.parse(raw);
+      return tid === "demo" ? INITIAL_TENANT_MESSAGES : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const techTenantId = useMemo(() => {
+    return (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) || "demo";
+  }, []);
+
+  const techCurrentUser = useMemo(() => {
+    return {
+      email: authenticatedUser?.email || "",
+      name: authenticatedUser?.name || "Technicien",
+    };
+  }, [authenticatedUser]);
+
+  useEffect(() => {
+    if (!techTenantId) return;
+
+    let isMounted = true;
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `defib_${techTenantId}_tenant_messages` && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && isMounted) {
+            setTenantMessages(parsed);
+          }
+        } catch (_) {}
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+
+    const syncServerMessages = async () => {
+      try {
+        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(techTenantId)}&_=${Date.now()}`);
+        if (resp.ok && isMounted) {
+          const data = await resp.json();
+          const remoteList: TenantMessage[] = Array.isArray(data?.value) ? data.value : (Array.isArray(data) ? data : []);
+          if (remoteList && remoteList.length >= 0) {
+            setTenantMessages((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
+                try {
+                  localStorage.setItem(`defib_${techTenantId}_tenant_messages`, JSON.stringify(remoteList));
+                } catch (_) {}
+                return remoteList;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (_) {}
+    };
+
+    syncServerMessages();
+    const interval = setInterval(syncServerMessages, 2500);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener("storage", handleStorageChange);
+      clearInterval(interval);
+    };
+  }, [techTenantId]);
 
   // Google Calendar Integration states
   const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(
@@ -890,6 +963,12 @@ export default function PublicPortal({
 
   const updateTourPauseState = (enabled: boolean, reason: string) => {
     const effectiveReason = reason || pauseReason || "Repas";
+
+    // Block turning Pause ON when a report is minimized / in progress
+    if (enabled && isReportOverlayOpen && isReportOverlayMinimized) {
+      alert("Action impossible : un rapport d’intervention est actuellement réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant de suspendre pour pause.");
+      return;
+    }
 
     // Check if turning OFF a "Repas" pause
     if (!enabled && (pauseReason === "Repas" || effectiveReason === "Repas")) {
@@ -5384,13 +5463,39 @@ export default function PublicPortal({
             {/* Top Bar Progress Animation for Tab Switching */}
             <TopBarProgress triggerKey={activeTab} duration={3000} height={3.5} zIndex={99999} />
 
+            {/* FLOATING CAPSULE « Rapport d’intervention en cours. » WHEN REPORT IS REDUCED */}
+            {isReportOverlayOpen && isReportOverlayMinimized && (
+              <div 
+                className="fixed bottom-[124px] left-1/2 -translate-x-1/2 z-[60] flex items-center justify-center pointer-events-auto select-none animate-float-pill cursor-pointer"
+                onClick={() => setIsReportOverlayMinimized(false)}
+                title="Cliquer pour agrandir le rapport d’intervention"
+              >
+                <div
+                  style={{
+                    backgroundColor: "#1e293b",
+                    color: "#ffffff",
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)",
+                  }}
+                  className="px-4 py-2 rounded-full border border-slate-700/60 flex items-center gap-2.5 cursor-pointer hover:bg-slate-800 transition-all active:scale-95"
+                >
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[13px] sm:text-[14px] font-semibold tracking-wide whitespace-nowrap font-sans">
+                    Rapport d’intervention en cours.
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* FULL WIDTH SPECIAL REPORT FORM OVERLAY */}
             {isReportOverlayOpen && (
               <div
                 className={
                   isReportOverlayMinimized
-                    ? "fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-slate-300 shadow-2xl flex flex-col overflow-hidden text-black animate-slideUp"
-                    : "fixed inset-0 bg-white z-50 flex flex-col overflow-y-auto p-0 animate-slideUp text-black"
+                    ? "fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-slate-300 shadow-2xl flex flex-col overflow-hidden text-black animate-report-dock-down"
+                    : "fixed inset-0 bg-white z-50 flex flex-col overflow-y-auto p-0 text-black animate-report-expand-up"
                 }
                 style={
                   isReportOverlayMinimized
@@ -7491,6 +7596,46 @@ export default function PublicPortal({
                   </button>
 
                   <button
+                    onClick={() => setActiveTab("messages")}
+                    id="webapp-tab-messages"
+                    style={
+                      activeTab === "messages"
+                        ? {
+                            background: "rgb(53, 86, 236)",
+                            color: "#ffffff",
+                            fontSize: "18px",
+                            fontWeight: "bold",
+                            borderRadius: "12px",
+                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          }
+                        : {
+                            color: "#ffffff",
+                            fontSize: "18px",
+                            fontWeight: "bold",
+                          }
+                    }
+                    className="px-5 py-2.5 rounded-[12px] flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <span>Messages</span>
+                    <span
+                      className="inline-flex items-center justify-center rounded-full shrink-0 font-bold"
+                      style={{
+                        backgroundColor: 'transparent',
+                        border: '1px solid #ffffff38',
+                        color: 'rgb(255 255 255)',
+                        marginLeft: '-2px',
+                        fontSize: '14px',
+                        width: '25px',
+                        height: '25px',
+                        padding: '3.5px',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {tenantMessages?.length || 0}
+                    </span>
+                  </button>
+
+                  <button
                     onClick={() => setActiveTab("planning")}
                     style={
                       activeTab === "planning"
@@ -7751,13 +7896,20 @@ export default function PublicPortal({
                             </span>
                             <button
                               type="button"
-                              onClick={() => updateTourPauseState(!pauseEnabled, pauseReason || "Repas")}
-                              className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
+                              onClick={() => {
+                                if (!pauseEnabled && isReportOverlayOpen && isReportOverlayMinimized) {
+                                  alert("Action impossible : un rapport d’intervention est actuellement réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant de suspendre pour pause.");
+                                  return;
+                                }
+                                updateTourPauseState(!pauseEnabled, pauseReason || "Repas");
+                              }}
+                              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${!pauseEnabled && isReportOverlayOpen && isReportOverlayMinimized ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                               style={{
                                 backgroundColor: pauseEnabled
                                   ? "#fe4eba"
                                   : "#cbd5e1",
                               }}
+                              title={!pauseEnabled && isReportOverlayOpen && isReportOverlayMinimized ? "Impossible d’activer une pause lorsqu'un rapport d'intervention est en cours (réduit)" : undefined}
                             >
                               <span
                                 className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
@@ -8256,6 +8408,10 @@ export default function PublicPortal({
                                           type="button"
                                           disabled={isFormationMission ? (isCompleted || !matchedEmargement) : isCompleted}
                                           onClick={() => {
+                                            if (!isFormationMission && isReportOverlayOpen && isReportOverlayMinimized) {
+                                              alert("Action impossible : un rapport d’intervention est actuellement réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant d’entamer un nouveau rapport.");
+                                              return;
+                                            }
                                             playTechSound2();
                                             if (isFormationMission) {
                                               if (matchedEmargement) {
@@ -8449,6 +8605,10 @@ export default function PublicPortal({
                                   type="button"
                                   disabled={t.status === "Terminé"}
                                   onClick={() => {
+                                    if (isReportOverlayOpen && isReportOverlayMinimized) {
+                                      alert("Action impossible : un rapport d’intervention est actuellement réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant de terminer la tournée.");
+                                      return;
+                                    }
                                     if (!attemptedEndTourIds.includes(t.id)) {
                                       setAttemptedEndTourIds((prev) => [
                                         ...prev,
@@ -8619,6 +8779,10 @@ export default function PublicPortal({
                   <button
                     type="button"
                     onClick={() => {
+                      if (isReportOverlayOpen && isReportOverlayMinimized) {
+                        alert("Action impossible : un rapport d’intervention est actuellement réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant d’entamer un nouveau rapport.");
+                        return;
+                      }
                       playTechSound2();
                       setSelectedOtherEquipmentUnique(null);
                       setSelectedDefibId("");
@@ -8916,6 +9080,10 @@ export default function PublicPortal({
                           <button
                             type="button"
                             onClick={() => {
+                              if (isReportOverlayOpen && isReportOverlayMinimized) {
+                                alert("Action impossible : un rapport d’intervention est déjà réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant d’ouvrir un autre rapport.");
+                                return;
+                              }
                               setReportToEdit(rep);
                               const targetDefibId = rep.defibId || rep.defibSnapshot?.id || "";
                               setSelectedDefibId(targetDefibId);
@@ -8966,6 +9134,24 @@ export default function PublicPortal({
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* ----------------- TAB: MESSAGES ----------------- */}
+              {activeTab === "messages" && (
+                <div
+                  className="w-full flex-1 flex flex-col pb-16 animate-fadeIn"
+                  id="tab-messages-screen"
+                >
+                  <CanalMessagesSidePane
+                    isOpen={true}
+                    embedded={true}
+                    onClose={() => setActiveTab("interventions")}
+                    tenantId={techTenantId}
+                    currentUser={techCurrentUser}
+                    messages={tenantMessages}
+                    setMessages={setTenantMessages}
+                  />
                 </div>
               )}
 

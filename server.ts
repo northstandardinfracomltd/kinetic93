@@ -783,6 +783,393 @@ Renvoie obligatoirement un objet JSON contenant :
     }
   });
 
+  // --- DEFIBEO AI INTELLIGENCE QUOTA & LOCAL ENGINE ---
+  const AI_QUOTAS_FILE = path.join(DATA_DIR, 'ai_quotas.json');
+  const aiQuotaUsageMap = new Map<string, number>();
+
+  function loadAiQuotasSync() {
+    try {
+      if (fs.existsSync(AI_QUOTAS_FILE)) {
+        const raw = fs.readFileSync(AI_QUOTAS_FILE, 'utf8');
+        const data = JSON.parse(raw);
+        if (data && typeof data === 'object') {
+          for (const [k, v] of Object.entries(data)) {
+            if (typeof v === 'number') {
+              aiQuotaUsageMap.set(k, v);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[AI Quotas] Error loading quotas:", e);
+    }
+  }
+
+  let aiQuotaSaveTimeout: NodeJS.Timeout | null = null;
+  function saveAiQuotasDebounced() {
+    if (aiQuotaSaveTimeout) clearTimeout(aiQuotaSaveTimeout);
+    aiQuotaSaveTimeout = setTimeout(() => {
+      try {
+        const obj: Record<string, number> = {};
+        for (const [k, v] of aiQuotaUsageMap.entries()) {
+          obj[k] = v;
+        }
+        fs.writeFileSync(AI_QUOTAS_FILE, JSON.stringify(obj, null, 2), 'utf8');
+      } catch (e) {
+        console.warn("[AI Quotas] Error saving quotas:", e);
+      }
+    }, 500);
+  }
+
+  loadAiQuotasSync();
+
+  function getTodayQuotaKey(tenantId: string): string {
+    const raw = String(tenantId || 'demo').trim().toLowerCase();
+    const cleanId = raw === 'demo' ? 'demo' : (raw.startsWith('d') && /^d\d+$/.test(raw) ? raw.replace(/^d/, '') : raw);
+    const today = new Date().toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }); // YYYY-MM-DD
+    return `t_${cleanId}_${today}`;
+  }
+
+  function getTenantQuestionsUsedToday(tenantId: string): number {
+    const key = getTodayQuotaKey(tenantId);
+    return aiQuotaUsageMap.get(key) || 0;
+  }
+
+  function incrementTenantQuestionsUsage(tenantId: string): number {
+    const key = getTodayQuotaKey(tenantId);
+    const current = aiQuotaUsageMap.get(key) || 0;
+    const next = current + 1;
+    aiQuotaUsageMap.set(key, next);
+    saveAiQuotasDebounced();
+    return next;
+  }
+
+  function parseFrDate(dateStr: any): Date | null {
+    if (!dateStr) return null;
+    const s = String(dateStr).trim();
+    if (!s) return null;
+    if (s.includes('/')) {
+      const parts = s.split('/');
+      if (parts.length === 3) {
+        const d = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const y = parseInt(parts[2], 10);
+        const dt = new Date(y, m, d);
+        if (!isNaN(dt.getTime())) return dt;
+      }
+    }
+    if (s.includes('-')) {
+      const parts = s.split('-');
+      if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        const dt = new Date(y, m, d);
+        if (!isNaN(dt.getTime())) return dt;
+      }
+    }
+    const dt = new Date(s);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  function isDateExpired(dateStr: any): boolean {
+    const dt = parseFrDate(dateStr);
+    if (!dt) return false;
+    return dt.getTime() < Date.now();
+  }
+
+  function isDateExpiringSoon(dateStr: any, days = 60): boolean {
+    const dt = parseFrDate(dateStr);
+    if (!dt) return false;
+    const now = Date.now();
+    const diffDays = (dt.getTime() - now) / (1000 * 60 * 60 * 24);
+    return diffDays >= 0 && diffDays <= days;
+  }
+
+  function answerTenantQuestionLocally(
+    question: string,
+    tenantContext: any,
+    activeTenantId: string,
+    serverDefibs?: any[],
+    serverClients?: any[]
+  ): string {
+    const qLower = question.toLowerCase().trim();
+
+    let defibs: any[] = [];
+    if (Array.isArray(tenantContext?.defibrillateurs) && tenantContext.defibrillateurs.length > 0) {
+      defibs = tenantContext.defibrillateurs;
+    } else if (Array.isArray(serverDefibs) && serverDefibs.length > 0) {
+      defibs = serverDefibs;
+    }
+
+    let clients: any[] = [];
+    if (Array.isArray(tenantContext?.clients) && tenantContext.clients.length > 0) {
+      clients = tenantContext.clients;
+    } else if (Array.isArray(serverClients) && serverClients.length > 0) {
+      clients = serverClients;
+    }
+
+    const cabinetName = tenantContext?.cabinet || "Défibeo";
+    const totalCount = tenantContext?.totalDefibrillateurs || defibs.length;
+
+    // 1. Software Usage Help
+    if (
+      qLower.includes("comment ajouter") ||
+      qLower.includes("créer un défibrillateur") ||
+      qLower.includes("nouveau défibrillateur") ||
+      qLower.includes("ajouter un appareil")
+    ) {
+      return `Pour ajouter un nouveau défibrillateur dans Défibeo :
+1. Rendez-vous dans l'onglet "Défibrillateurs".
+2. Cliquez sur le bouton bleu "+ Nouveau" situé en haut à gauche du tableau.
+3. Renseignez l'identifiant (ex: DEF-001), le numéro de série, la marque et le modèle, ainsi que le client et le site d'installation.
+4. Indiquez les dates de péremption des consommables (batterie, électrodes) et la date de prochaine maintenance.
+5. Cliquez sur "Enregistrer" pour sauvegarder l'appareil.`;
+    }
+
+    if (
+      qLower.includes("comment exporter") ||
+      qLower.includes("exporter") ||
+      qLower.includes("télécharger csv") ||
+      qLower.includes("export excel")
+    ) {
+      return `Pour exporter vos défibrillateurs :
+1. Rendez-vous dans l'onglet "Défibrillateurs".
+2. Cliquez sur le bouton "Télécharger CSV" situé en haut à droite du tableau.
+3. Le fichier CSV complet de votre parc sera automatiquement téléchargé sur votre appareil.`;
+    }
+
+    if (
+      qLower.includes("colonne") ||
+      qLower.includes("masquer") ||
+      qLower.includes("personnaliser l'affichage")
+    ) {
+      return `Pour personnaliser les colonnes affichées dans le tableau des défibrillateurs :
+1. Cliquez sur le bouton "Colonnes" au-dessus du tableau.
+2. Cliquez sur chaque colonne pour l'activer (noir) ou la masquer (rouge). Au minimum 4 colonnes doivent rester visibles.
+3. Cliquez sur "Valider" pour appliquer vos préférences d'affichage.`;
+    }
+
+    if (
+      qLower.includes("planning") ||
+      qLower.includes("tournée") ||
+      qLower.includes("planifier une maintenance")
+    ) {
+      return `Pour planifier une maintenance ou une tournée :
+1. Ouvrez l'onglet "Planning" ou l'onglet "FSM Tournées".
+2. Vous pouvez visualiser les interventions à planifier et optimiser les trajets de vos techniciens selon la proximité géographique.
+3. Vous pouvez également ouvrir la fiche d'un défibrillateur pour définir sa date de prochaine maintenance.`;
+    }
+
+    // 2. Battery Expiration Questions
+    if (
+      qLower.includes("batterie") &&
+      (qLower.includes("périm") || qLower.includes("expir") || qLower.includes("anomal") || qLower.includes("date") || qLower.includes("combien"))
+    ) {
+      const expiredList = defibs.filter((d) => isDateExpired(d.peremptionBatterie));
+      const expiringSoonList = defibs.filter((d) => isDateExpiringSoon(d.peremptionBatterie, 60));
+
+      if (expiredList.length === 0 && expiringSoonList.length === 0) {
+        return `Bonne nouvelle : aucun défibrillateur n'a de batterie périmée actuellement dans votre parc (${totalCount} appareils au total).`;
+      }
+
+      let response = `Sur votre parc de ${totalCount} défibrillateur(s) :\n`;
+      if (expiredList.length > 0) {
+        response += `• ${expiredList.length} appareil(s) ont une batterie périmée :\n`;
+        expiredList.slice(0, 8).forEach((d) => {
+          response += `  - ${d.identifiant || d.numeroSerie} (${d.client || d.site || 'Site non spécifié'}) : batterie périmée le ${d.peremptionBatterie}\n`;
+        });
+        if (expiredList.length > 8) {
+          response += `  ... et ${expiredList.length - 8} autre(s).\n`;
+        }
+      }
+      if (expiringSoonList.length > 0) {
+        response += `• ${expiringSoonList.length} appareil(s) ont une batterie qui expire dans les 60 prochains jours.\n`;
+      }
+      return response.trim();
+    }
+
+    // 3. Electrodes Expiration Questions
+    if (
+      (qLower.includes("électrode") || qLower.includes("electrode") || qLower.includes("patch")) &&
+      (qLower.includes("périm") || qLower.includes("expir") || qLower.includes("anomal") || qLower.includes("date") || qLower.includes("combien"))
+    ) {
+      const expiredList = defibs.filter((d) => isDateExpired(d.peremptionElectrodeA) || isDateExpired(d.peremptionElectrodeP));
+
+      if (expiredList.length === 0) {
+        return `Tous les défibrillateurs de votre parc ont des électrodes valides (aucun patch périmé sur ${totalCount} appareils).`;
+      }
+
+      let response = `Sur votre parc de ${totalCount} défibrillateur(s), ${expiredList.length} appareil(s) ont des électrodes périmées :\n`;
+      expiredList.slice(0, 8).forEach((d) => {
+        const expA = d.peremptionElectrodeA ? `Adulte: ${d.peremptionElectrodeA}` : '';
+        const expP = d.peremptionElectrodeP ? `Pédiatrique: ${d.peremptionElectrodeP}` : '';
+        const dates = [expA, expP].filter(Boolean).join(' | ');
+        response += `• ${d.identifiant || d.numeroSerie} chez ${d.client || d.site || 'Client'} (${dates})\n`;
+      });
+      if (expiredList.length > 8) {
+        response += `... et ${expiredList.length - 8} autre(s) appareil(s).`;
+      }
+      return response.trim();
+    }
+
+    // 4. Specific Search by Serial Number or Identifier
+    const tokens = question.match(/[a-zA-Z0-9\-_]{3,}/g) || [];
+    for (const token of tokens) {
+      const tClean = token.trim().toLowerCase();
+      if (['def', 'num', 'numero', 'serie', 'client', 'pour', 'avec', 'dans', 'quel', 'quels', 'quelle', 'quelles', 'les', 'des'].includes(tClean)) {
+        continue;
+      }
+      const found = defibs.find((d) => {
+        const idMatch = d.identifiant && String(d.identifiant).toLowerCase() === tClean;
+        const snMatch = d.numeroSerie && String(d.numeroSerie).toLowerCase() === tClean;
+        return idMatch || snMatch;
+      });
+
+      if (found) {
+        return `Fiche du défibrillateur ${found.identifiant || found.numeroSerie} :
+• Identifiant : ${found.identifiant || 'Non renseigné'}
+• N° de série : ${found.numeroSerie || 'Non renseigné'}
+• Marque / Modèle : ${[found.marque, found.modele].filter(Boolean).join(' ') || 'Non spécifié'}
+• Client : ${found.client || 'Non assigné'}
+• Site d'installation : ${found.site || found.nomSite || 'Non précisé'}
+• Emplacement : ${[found.adresse, found.codePostal, found.ville].filter(Boolean).join(', ') || 'Adresse non renseignée'}
+• Péremption Batterie : ${found.peremptionBatterie || 'Non renseignée'} ${isDateExpired(found.peremptionBatterie) ? '(PÉRIMÉE)' : ''}
+• Péremption Électrodes : ${found.peremptionElectrodeA || 'Non renseignée'} ${isDateExpired(found.peremptionElectrodeA) ? '(PÉRIMÉES)' : ''}
+• Dernière maintenance : ${found.derniereMaintenance || 'Aucune enregistrée'}
+• Fin de garantie : ${found.finGarantie || 'Non renseignée'}`;
+      }
+    }
+
+    // 5. Search by Client name
+    for (const c of clients) {
+      const cName = String(c.denomination || c.name || '').trim().toLowerCase();
+      if (cName.length >= 3 && qLower.includes(cName)) {
+        const clientDefibs = defibs.filter((d) => {
+          const dClient = String(d.client || '').toLowerCase();
+          const dSite = String(d.site || '').toLowerCase();
+          return dClient.includes(cName) || dSite.includes(cName);
+        });
+
+        if (clientDefibs.length === 0) {
+          return `Le client "${c.denomination}" est bien enregistré, mais aucun défibrillateur ne lui est actuellement associé.
+Contact : ${c.contact || 'Non précisé'} | Tél : ${c.telephone || 'Non renseigné'} | Ville : ${c.ville || 'Non précisée'}`;
+        }
+
+        let resp = `Le client "${c.denomination}" possède ${clientDefibs.length} défibrillateur(s) dans votre parc :\n`;
+        clientDefibs.slice(0, 6).forEach((d) => {
+          resp += `• ${d.identifiant || d.numeroSerie} (${[d.marque, d.modele].filter(Boolean).join(' ') || 'DAE'}) - Site: ${d.site || d.ville || 'Principal'}\n`;
+        });
+        if (clientDefibs.length > 6) {
+          resp += `... et ${clientDefibs.length - 6} autre(s) appareil(s).\n`;
+        }
+        resp += `Contact client : ${c.contact || 'Standard'} (${c.telephone || c.email || 'Aucun numéro'})`;
+        return resp.trim();
+      }
+    }
+
+    // 6. Clients Count Questions
+    if (
+      (qLower.includes("combien") || qLower.includes("nombre") || qLower.includes("liste")) &&
+      qLower.includes("client")
+    ) {
+      const totalClients = tenantContext?.totalClients || clients.length;
+      let resp = `Votre compte compte actuellement ${totalClients} client(s) enregistrés.\n`;
+      if (clients.length > 0) {
+        resp += `Exemples de clients : ${clients.slice(0, 5).map((c) => c.denomination).filter(Boolean).join(', ')}`;
+        if (clients.length > 5) resp += `...`;
+      }
+      return resp;
+    }
+
+    // 7. General Defibrillators Count & Breakdown Questions
+    if (
+      qLower.includes("combien de défibrillateur") ||
+      qLower.includes("combien de defibrillateur") ||
+      qLower.includes("combien d'appareil") ||
+      qLower.includes("nombre de défibrillateur") ||
+      qLower.includes("nombre de defibrillateur") ||
+      qLower.includes("total des défibrillateur") ||
+      qLower.includes("taille du parc") ||
+      qLower === "combien"
+    ) {
+      const brandCounts: Record<string, number> = {};
+      defibs.forEach((d) => {
+        const b = (d.marque || 'Autres').trim();
+        brandCounts[b] = (brandCounts[b] || 0) + 1;
+      });
+      const brandsText = Object.entries(brandCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([b, cnt]) => `${b} : ${cnt}`)
+        .join(', ');
+
+      return `Votre compte ${cabinetName} gère actuellement un total de **${totalCount} défibrillateur(s)**.
+${brandsText ? `Répartition principale par marque : ${brandsText}.` : ''}
+Tous les équipements sont accessibles et filtrables directement dans le tableau ci-dessous.`;
+    }
+
+    // 8. Maintenance Questions
+    if (qLower.includes("maintenance") || qLower.includes("révision") || qLower.includes("revision") || qLower.includes("visite")) {
+      const withMaint = defibs.filter((d) => d.derniereMaintenance);
+      return `Sur vos ${totalCount} défibrillateurs, ${withMaint.length} ont une date de dernière maintenance renseignée. Vous pouvez consulter et planifier les interventions directement depuis l'onglet "Planning" ou filtrer les prochaines échéances dans le tableau.`;
+    }
+
+    // 9. Semantic / Keyword Fallback on the Database
+    const searchWords = qLower.split(/\s+/).filter((w) => w.length >= 3 && !['les', 'des', 'une', 'qui', 'que', 'sur', 'pour', 'dans', 'avec', 'est', 'sont', 'avoir', 'donne', 'moi'].includes(w));
+    if (searchWords.length > 0) {
+      const matches = defibs.filter((d) => {
+        const fullText = `${d.identifiant} ${d.numeroSerie} ${d.marque} ${d.modele} ${d.client} ${d.site} ${d.ville}`.toLowerCase();
+        return searchWords.some((sw) => fullText.includes(sw));
+      });
+
+      if (matches.length > 0) {
+        let resp = `Voici ce que j'ai trouvé dans vos données pour votre recherche (${matches.length} résultat(s)) :\n`;
+        matches.slice(0, 5).forEach((d) => {
+          resp += `• ${d.identifiant || d.numeroSerie} : ${[d.marque, d.modele].filter(Boolean).join(' ')} - Client: ${d.client || 'Non assigné'} (${d.ville || 'Ville non spécifiée'})\n`;
+        });
+        if (matches.length > 5) {
+          resp += `... et ${matches.length - 5} autre(s) appareil(s).\n`;
+        }
+        resp += `N'hésitez pas à me demander des précisions sur un appareil ou une date en particulier.`;
+        return resp.trim();
+      }
+    }
+
+    // 10. Default helpful answer about the tenant's data
+    return `Je suis l'assistant Defibeo Intelligence pour votre compte "${cabinetName}".
+Votre base de données contient actuellement ${totalCount} défibrillateur(s) et ${(tenantContext?.totalClients || clients.length)} client(s).
+
+Vous pouvez me demander par exemple :
+• Le nombre d'appareils et la répartition par marque
+• Les défibrillateurs dont la batterie ou les électrodes sont périmées
+• Les détails d'un appareil par son numéro de série ou son identifiant
+• La liste des défibrillateurs installés chez un client donné
+• Des conseils sur l'utilisation du logiciel (création, export CSV, filtres)`;
+  }
+
+  // Quota endpoint for Defibeo Intelligence
+  app.get("/api/defibeo-intelligence/quota", (req, res) => {
+    try {
+      const rawTenantId = String(
+        req.query.tenantId ||
+        req.headers['x-tenant-id'] ||
+        'demo'
+      ).trim().toLowerCase();
+      const used = getTenantQuestionsUsedToday(rawTenantId);
+      const max = 8;
+      const remaining = Math.max(0, max - used);
+      return res.json({
+        questionsUsed: used,
+        maxQuestions: max,
+        remaining,
+        quotaExceeded: used >= max
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/defibeo-intelligence", async (req, res) => {
     try {
       const { question, history, tenantContext } = req.body;
@@ -895,25 +1282,51 @@ Renvoie obligatoirement un objet JSON contenant :
         }
       }
 
-      if (!GEMINI_API_KEY) {
-        return res.json({ answer: "Bientôt disponible, revenez prochainement." });
+      // --- CHECK DAILY QUOTA (LIMIT 8 QUESTIONS PER DAY PER TENANT) ---
+      const usedToday = getTenantQuestionsUsedToday(activeTenantId);
+      if (usedToday >= 8) {
+        return res.json({
+          answer: "Vous avez utilisé votre quota journalier de 8 questions pour ce compte. Revenez demain pour poser de nouvelles questions.",
+          quotaExceeded: true,
+          questionsUsed: 8,
+          maxQuestions: 8,
+          remaining: 0
+        });
       }
 
-      const { GoogleGenAI } = await import("@google/genai");
-      const aiClient = new GoogleGenAI({
-        apiKey: GEMINI_API_KEY,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
+      // Increment quota for this question
+      const newUsed = incrementTenantQuestionsUsage(activeTenantId);
+
+      // Preload server data if needed for fallback
+      let serverDefibs: any[] = [];
+      let serverClients: any[] = [];
+      try {
+        if (!tenantContext?.defibrillateurs || tenantContext.defibrillateurs.length === 0) {
+          serverDefibs = await fetchServerCollection('defibrillateurs', activeTenantId);
         }
-      });
+        if (!tenantContext?.clients || tenantContext.clients.length === 0) {
+          serverClients = await fetchServerCollection('clients', activeTenantId);
+        }
+      } catch (_) {}
 
-      const currentTenantDisplay = tenantContext?.cabinet 
-        ? `${tenantContext.cabinet} (${activeTenantId.toUpperCase()})` 
-        : activeTenantId.toUpperCase();
+      // Try calling Gemini API if key is present
+      if (GEMINI_API_KEY) {
+        try {
+          const { GoogleGenAI } = await import("@google/genai");
+          const aiClient = new GoogleGenAI({
+            apiKey: GEMINI_API_KEY,
+            httpOptions: {
+              headers: {
+                'User-Agent': 'aistudio-build',
+              }
+            }
+          });
 
-      const systemInstruction = `Tu es l'assistant d'IA interne "Defibeo Intelligence", intégré dans le logiciel de gestion de défibrillateurs Défibeo.
+          const currentTenantDisplay = tenantContext?.cabinet 
+            ? `${tenantContext.cabinet} (${activeTenantId.toUpperCase()})` 
+            : activeTenantId.toUpperCase();
+
+          const systemInstruction = `Tu es l'assistant d'IA interne "Defibeo Intelligence", intégré dans le logiciel de gestion de défibrillateurs Défibeo.
 Tu es STRICTEMENT et EXCLUSIVEMENT assigné au tenant actuel : "${currentTenantDisplay}".
 
 Ton rôle est UNIQUEMENT de répondre aux questions des utilisateurs concernant :
@@ -939,61 +1352,82 @@ RÈGLES STRICTES ET NON NÉGOCIABLES :
 4. FACTUALITÉ ET CLARTÉ :
 - Sois très simple, direct, factuel, concis et clair. Pas d'icônes, pas d'emojis superflus, pas de fioritures, réponds précisément à la question.`;
 
-      const contextDataStr = tenantContext ? JSON.stringify(tenantContext, null, 2) : "Aucune donnée de contexte disponible.";
-      const promptWithContext = `DONNÉES DU TENANT ACTUEL (${currentTenantDisplay}) :
+          const contextDataStr = tenantContext ? JSON.stringify(tenantContext, null, 2) : "Aucune donnée de contexte disponible.";
+          const promptWithContext = `DONNÉES DU TENANT ACTUEL (${currentTenantDisplay}) :
 ${contextDataStr}
 
 QUESTION DE L'UTILISATEUR :
 ${question}`;
 
-      const contentsPayload: any[] = [];
-      if (Array.isArray(history) && history.length > 0) {
-        const recentHistory = history.slice(-4);
-        for (const item of recentHistory) {
-          if (item && item.role && item.content) {
-            contentsPayload.push({
-              role: item.role === 'assistant' ? 'model' : 'user',
-              parts: [{ text: String(item.content) }]
+          const contentsPayload: any[] = [];
+          if (Array.isArray(history) && history.length > 0) {
+            const recentHistory = history.slice(-4);
+            for (const item of recentHistory) {
+              if (item && item.role && item.content) {
+                contentsPayload.push({
+                  role: item.role === 'assistant' ? 'model' : 'user',
+                  parts: [{ text: String(item.content) }]
+                });
+              }
+            }
+          }
+
+          contentsPayload.push({
+            role: "user",
+            parts: [{ text: promptWithContext }]
+          });
+
+          const response = await aiClient.models.generateContent({
+            model: "gemini-3.8-flash",
+            contents: contentsPayload,
+            config: {
+              systemInstruction,
+              temperature: 0.2,
+            }
+          });
+
+          let answerText = response.text || "";
+          if (answerText && answerText.trim()) {
+            const lowerAnswer = answerText.toLowerCase();
+            if (
+              (lowerAnswer.includes("autre tenant") || lowerAnswer.includes("autres tenants") || lowerAnswer.includes("dans un autre tenant")) &&
+              !lowerAnswer.includes("action bloquée")
+            ) {
+              answerText = TENANT_ISOLATION_REFUSAL;
+            }
+
+            return res.json({
+              answer: answerText,
+              questionsUsed: newUsed,
+              maxQuestions: 8,
+              remaining: Math.max(0, 8 - newUsed),
+              quotaExceeded: false
             });
           }
+        } catch (geminiError: any) {
+          console.warn("[Defibeo Intelligence] Gemini API error, falling back to local engine:", geminiError?.message || geminiError);
         }
       }
 
-      contentsPayload.push({
-        role: "user",
-        parts: [{ text: promptWithContext }]
+      // Local Intelligence Engine fallback when Gemini is unavailable, credits exhausted or fails
+      const localAnswer = answerTenantQuestionLocally(question, tenantContext, activeTenantId, serverDefibs, serverClients);
+      return res.json({
+        answer: localAnswer,
+        questionsUsed: newUsed,
+        maxQuestions: 8,
+        remaining: Math.max(0, 8 - newUsed),
+        quotaExceeded: false
       });
-
-      const response = await aiClient.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: contentsPayload,
-        config: {
-          systemInstruction,
-          temperature: 0.2,
-        }
-      });
-
-      let answerText = response.text || "Désolé, aucune réponse n'a pu être générée.";
-
-      // Post-check: ensure no cross-tenant information is leaked in response
-      const lowerAnswer = answerText.toLowerCase();
-      if (
-        (lowerAnswer.includes("autre tenant") || lowerAnswer.includes("autres tenants") || lowerAnswer.includes("dans un autre tenant")) &&
-        !lowerAnswer.includes("action bloquée")
-      ) {
-        answerText = TENANT_ISOLATION_REFUSAL;
-      }
-
-      return res.json({ answer: answerText });
     } catch (error: any) {
-      console.error("Defibeo Intelligence Error:", error);
-      const errMsg = String(error?.message || error || "");
-      if (errMsg.includes("402") || errMsg.includes("prepayment") || errMsg.includes("RESOURCE_EXHAUSTED")) {
-        return res.json({
-          answer: "Alerte compte Google AI Studio : Les crédits de prépaiement pour cette clé API Gemini sont épuisés (Erreur 402 RESOURCE_EXHAUSTED). Veuillez recharger vos crédits ou vérifier la facturation sur https://ai.studio/projects."
-        });
-      }
-      return res.json({ answer: "Bientôt disponible, revenez prochainement." });
+      console.error("Defibeo Intelligence Route Error:", error);
+      const fallbackAns = answerTenantQuestionLocally(req.body?.question || "", req.body?.tenantContext, "demo");
+      return res.json({
+        answer: fallbackAns,
+        questionsUsed: 1,
+        maxQuestions: 8,
+        remaining: 7,
+        quotaExceeded: false
+      });
     }
   });
 

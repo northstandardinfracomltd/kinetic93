@@ -24,6 +24,12 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputQuestion, setInputQuestion] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [quota, setQuota] = useState<{ used: number; max: number; remaining: number; exceeded: boolean }>({
+    used: 0,
+    max: 8,
+    remaining: 8,
+    exceeded: false,
+  });
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -32,8 +38,25 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
   };
 
+  const fetchQuota = async () => {
+    try {
+      const activeTid = tenantContext?.tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') || 'demo' : 'demo');
+      const resp = await fetch(`/api/defibeo-intelligence/quota?tenantId=${encodeURIComponent(activeTid)}&_=${Date.now()}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setQuota({
+          used: Number(data.questionsUsed) || 0,
+          max: Number(data.maxQuestions) || 8,
+          remaining: Number(data.remaining) || 0,
+          exceeded: Boolean(data.quotaExceeded || Number(data.questionsUsed) >= 8),
+        });
+      }
+    } catch (_) {}
+  };
+
   useEffect(() => {
     if (isOpen) {
+      fetchQuota();
       setTimeout(() => {
         textareaRef.current?.focus();
         scrollToBottom(false);
@@ -76,6 +99,10 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
     const query = (directText !== undefined ? directText : inputQuestion).trim();
     if (!query || isLoading) return;
 
+    if (quota.exceeded) {
+      return;
+    }
+
     const userMsg: ChatMessage = {
       id: `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       role: 'user',
@@ -111,11 +138,21 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
       });
 
       const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        throw new Error(data.error || data.answer || "Bientôt disponible, revenez prochainement.");
+
+      if (data.questionsUsed !== undefined) {
+        setQuota({
+          used: Number(data.questionsUsed) || 0,
+          max: Number(data.maxQuestions) || 8,
+          remaining: Number(data.remaining) || 0,
+          exceeded: Boolean(data.quotaExceeded || Number(data.questionsUsed) >= 8),
+        });
       }
 
-      const assistantText = data.answer || "Bientôt disponible, revenez prochainement.";
+      if (!resp.ok) {
+        throw new Error(data.error || data.answer || "Une erreur est survenue lors de la réponse.");
+      }
+
+      const assistantText = data.answer || "Désolé, aucune réponse n'a pu être formulée.";
 
       const assistantMsg: ChatMessage = {
         id: `ast-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -129,7 +166,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
         role: 'assistant',
-        content: err?.message || "Bientôt disponible, revenez prochainement.",
+        content: err?.message || "Une erreur est survenue lors de la communication avec l'assistant.",
         createdAt: Date.now(),
       };
       setMessages([...nextMessages, errorMsg]);
@@ -244,6 +281,29 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
           }}
         >
           <form onSubmit={(e) => handleSendMessage(e)} className="space-y-3">
+            {/* Bannière d'information si quota dépassé (8 questions max par jour) */}
+            {quota.exceeded && (
+              <div
+                className="p-3.5 rounded-2xl mb-2 flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-950 animate-fadeIn"
+                style={{
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+              >
+                <span className="text-xl shrink-0">⚠️</span>
+                <span className="text-[14px] sm:text-[15px] font-semibold leading-snug">
+                  {t("Vous avez utilisé votre quota journalier de 8 questions pour ce compte. Revenez demain pour poser de nouvelles questions.")}
+                </span>
+              </div>
+            )}
+
+            {/* Indicateur de quota journalier */}
+            <div className="flex items-center justify-between text-[13px] font-medium text-slate-500 px-1.5 pb-0.5">
+              <span>{t('Quota journalier')}</span>
+              <span className={quota.exceeded ? "font-bold text-amber-700" : "font-semibold text-slate-600"}>
+                {quota.used} / {quota.max} {t('questions')}
+              </span>
+            </div>
+
             {/* Input bar: floating white container */}
             <div
               className="flex items-center gap-2 bg-white rounded-2xl p-2 pl-4 transition-all shadow-lg"
@@ -265,8 +325,12 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
                     handleSendMessage();
                   }
                 }}
-                placeholder="Votre question sur le logiciel ou vos données."
-                disabled={isLoading}
+                placeholder={
+                  quota.exceeded
+                    ? "Quota journalier de 8 questions atteint (8/8). Revenez demain."
+                    : "Votre question sur le logiciel ou vos données."
+                }
+                disabled={isLoading || quota.exceeded}
                 className="flex-1 bg-transparent border-0 outline-none text-black px-1 placeholder:text-slate-400 resize-none overflow-y-auto"
                 style={{
                   fontSize: '18px',
@@ -284,7 +348,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
               {/* Bouton Envoyer: pas d'icône send, font-size 18px, centré verticalement */}
               <button
                 type="submit"
-                disabled={!inputQuestion.trim() || isLoading}
+                disabled={!inputQuestion.trim() || isLoading || quota.exceeded}
                 id="btn-submit-defibeo-intelligence"
                 className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center"
                 style={{
@@ -293,8 +357,8 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
                     'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
                   fontSize: '18px',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  opacity: !inputQuestion.trim() || isLoading ? 0.45 : 1,
-                  cursor: !inputQuestion.trim() || isLoading ? 'not-allowed' : 'pointer',
+                  opacity: !inputQuestion.trim() || isLoading || quota.exceeded ? 0.45 : 1,
+                  cursor: !inputQuestion.trim() || isLoading || quota.exceeded ? 'not-allowed' : 'pointer',
                 }}
               >
                 <span>{t('Envoyer')}</span>

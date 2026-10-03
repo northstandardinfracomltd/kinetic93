@@ -26,6 +26,7 @@ interface CanalMessagesSidePaneProps {
   messages: TenantMessage[];
   setMessages: React.Dispatch<React.SetStateAction<TenantMessage[]>>;
   onMessagesRead?: () => void;
+  embedded?: boolean;
 }
 
 export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
@@ -36,6 +37,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   messages,
   setMessages,
   onMessagesRead,
+  embedded = false,
 }) => {
   // Par défaut, le filtre est positionné sur 'Exploitation' (la gélule Tous ayant été supprimée)
   const [selectedFilterTag, setSelectedFilterTag] = useState<CanalTagName>('Exploitation');
@@ -309,14 +311,370 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   const handleContextMenu = (e: React.MouseEvent, msgId: string) => {
     e.preventDefault();
     e.stopPropagation();
+    const maxX = typeof window !== 'undefined' ? window.innerWidth - 140 : e.clientX;
+    const maxY = typeof window !== 'undefined' ? window.innerHeight - 60 : e.clientY;
     setContextMenu({
-      x: Math.min(e.clientX, window.innerWidth - 180),
-      y: Math.min(e.clientY, window.innerHeight - 80),
+      x: Math.max(10, Math.min(e.clientX, maxX)),
+      y: Math.max(10, Math.min(e.clientY, maxY)),
       messageId: msgId,
     });
   };
 
   if (!isOpen || typeof document === 'undefined') return null;
+
+  const sidepaneContent = (
+    <div
+      id="canal-messages-sidepane"
+      className={
+        embedded
+          ? "relative w-full max-w-4xl mx-auto bg-[#fbfbfb] rounded-2xl shadow-sm border border-[#dadada] flex flex-col h-[calc(100dvh-175px)] min-h-[500px] overflow-hidden font-sans"
+          : "relative w-full max-w-[760px] sm:w-[650px] lg:w-[760px] bg-[#fbfbfb] shadow-2xl flex flex-col h-full overflow-hidden animate-slideLeft font-sans"
+      }
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        ...(!embedded ? { borderLeft: '1px solid #dadada' } : {}),
+        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+      }}
+    >
+      {/* TOP TAGS BAR (AUCUN SPACING COUPÉ À GAUCHE/DROITE, SANS BACKGROUND, SANS BORDER-BOTTOM, SANS BOX-SHADOW) */}
+      <div
+        className="py-2.5 sm:py-3 shrink-0 z-10 w-full"
+        style={{
+          background: 'transparent',
+          backgroundColor: 'transparent',
+          border: 'none',
+          borderBottom: 'none',
+          boxShadow: 'none',
+          paddingLeft: 0,
+          paddingRight: 0,
+        }}
+      >
+        <div className="flex items-center gap-2 py-0.5 px-3 w-full relative z-20 overflow-visible flex-wrap sm:flex-nowrap">
+          {/* Bouton Fermer : background noir et texte blanc, responsive font-size, AUCUN BOX-SHADOW */}
+          <button
+            type="button"
+            onClick={onClose}
+            id="btn-close-canal-sidepane"
+            className="px-4 sm:px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] text-[15px] sm:text-[18px]"
+            style={{
+              backgroundColor: '#000000',
+              color: '#ffffff',
+              border: 'none',
+              boxShadow: 'none',
+              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            }}
+          >
+            {t('Fermer')}
+          </button>
+
+          {/* 1 Gélule du canal ouvert */}
+          {(() => {
+            const currentTag = CANAL_TAGS.find((t) => t.name === selectedFilterTag) || CANAL_TAGS[0];
+            const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+            const now = Date.now();
+            const recentCount = messages.filter((m) => {
+              if (m.tag !== currentTag.name) return false;
+              const msgTime = m.createdAt ? Number(m.createdAt) : 0;
+              return now - msgTime <= TWO_HOURS_MS;
+            }).length;
+
+            return (
+              <div
+                className="px-3.5 sm:px-4 py-2 rounded-full shrink-0 flex items-center gap-2 font-medium text-[15px] sm:text-[18px]"
+                style={{
+                  backgroundColor: currentTag.dot,
+                  color: '#ffffff',
+                  border: 'none',
+                  boxShadow: 'none',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0 bg-white"
+                />
+                <span className="truncate max-w-[130px] sm:max-w-none">{currentTag.name}</span>
+                {recentCount > 0 && (
+                  <span
+                    className="inline-flex items-center justify-center rounded-full shrink-0 font-bold"
+                    style={{
+                      backgroundColor: 'rgb(163, 20, 20)',
+                      color: '#ffffff',
+                      fontSize: '13px',
+                      width: '23px',
+                      height: '23px',
+                      padding: '2px',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {recentCount}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Bouton « Ouvrir un canal » avec dropdown des catégories (sans arrow icon) */}
+          <div ref={channelDropdownRef} className="relative inline-flex items-center shrink-0">
+            <button
+              type="button"
+              id="btn-ouvrir-un-canal"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsChannelDropdownOpen((prev) => !prev);
+              }}
+              className="px-4 sm:px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] flex items-center justify-center text-[15px] sm:text-[18px]"
+              style={{
+                backgroundColor: '#3556ec',
+                color: '#ffffff',
+                border: 'none',
+                boxShadow: 'none',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+            >
+              <span>{t('Ouvrir un canal')}</span>
+            </button>
+
+            {isChannelDropdownOpen && (
+              <div
+                className="absolute top-full left-0 sm:left-auto mt-2 min-w-[240px] sm:min-w-[250px] max-w-[calc(100vw-32px)] bg-white rounded-2xl shadow-2xl py-2 z-50 animate-fadeIn"
+                style={{
+                  border: '1px solid #dadada',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="max-h-72 overflow-y-auto py-1">
+                  {CANAL_TAGS.filter((tag) => tag.name !== selectedFilterTag).map((tag) => {
+                    const count = messages.filter((m) => m.tag === tag.name).length;
+                    return (
+                      <button
+                        key={tag.name}
+                        type="button"
+                        onClick={() => {
+                          setSelectedFilterTag(tag.name);
+                          setIsChannelDropdownOpen(false);
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-2.5 text-left transition-all hover:bg-slate-100 cursor-pointer border-0 bg-transparent"
+                        style={{
+                          fontSize: '16px',
+                          color: '#000000',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        }}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{ backgroundColor: tag.dot }}
+                          />
+                          <span className="font-semibold truncate">{tag.name}</span>
+                        </div>
+                        <span
+                          className="inline-flex items-center justify-center rounded-full text-xs font-bold px-2 py-0.5 ml-2"
+                          style={{
+                            backgroundColor: count > 0 ? '#3556ec18' : '#f1f5f9',
+                            color: count > 0 ? '#3556ec' : '#64748b',
+                          }}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* MESSAGES LIST AREA (LEAVE EMPTY WHEN NO MESSAGES) */}
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4 bg-[#f8f9fa]">
+        {displayedMessages.map((msg) => {
+          const isMine =
+            currentUser.email &&
+            msg.authorEmail &&
+            currentUser.email.trim().toLowerCase() === msg.authorEmail.trim().toLowerCase();
+          const tagInfo = getTagInfo(msg.tag);
+
+          return (
+            <div
+              key={msg.id}
+              className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} group`}
+              onContextMenu={(e) => handleContextMenu(e, msg.id)}
+            >
+              {/* Author Name + Dot Tag Color + Horodatée (font color black) */}
+              <div
+                className={`flex items-center gap-2 mb-1.5 px-1 ${
+                  isMine ? 'flex-row-reverse text-right' : 'flex-row text-left'
+                }`}
+              >
+                <span className="font-bold text-black" style={{ fontSize: '14px' }}>
+                  {msg.authorName || t('Membre')}
+                </span>
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: tagInfo.dot }}
+                  title={tagInfo.name}
+                />
+                <span
+                  className="text-[13px] font-normal"
+                  style={{ color: '#000000' }}
+                >
+                  {msg.dateStr}
+                </span>
+              </div>
+
+              {/* Message Bubble */}
+              <div
+                className="rounded-2xl transition-all relative select-text"
+                style={{
+                  maxWidth: isMine ? '88%' : '92%',
+                  backgroundColor: '#ebedee',
+                  fontSize: '17px',
+                  border: '1px solid #dadada6e',
+                  boxShadow: 'none',
+                  padding: '10px 14px',
+                  color: '#000000',
+                  cursor: 'default',
+                }}
+                title={t('Clic droit pour supprimer')}
+              >
+                <p
+                  className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                  style={{
+                    fontSize: '17px',
+                    color: '#000000',
+                    cursor: 'default',
+                  }}
+                >
+                  {msg.content}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* BOTTOM INPUT BAR FLOATING (SANS BACKGROUND ET SANS BORDER-TOP DERRIÈRE) */}
+      <div
+        className="p-2.5 sm:p-4 shrink-0"
+        style={{
+          background: 'transparent',
+          backgroundColor: 'transparent',
+          border: 'none',
+          borderTop: 'none',
+        }}
+      >
+        <form onSubmit={handleSendMessage}>
+          <div
+            className="flex items-center gap-2 bg-white rounded-2xl p-1.5 sm:p-2 pl-3 sm:pl-4 transition-all shadow-lg"
+            style={{ border: '1px solid #dadada' }}
+          >
+            {/* Message textarea: auto-height, max 350 chars, texte & placeholder centrés verticalement */}
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={messageInput}
+              maxLength={350}
+              onChange={(e) => {
+                setMessageInput(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = `${Math.max(28, Math.min(e.target.scrollHeight, 180))}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              placeholder="Entrez votre message."
+              className="flex-1 bg-transparent border-0 outline-none text-black px-1 placeholder:text-slate-400 resize-none overflow-y-auto text-[16px] sm:text-[18px]"
+              style={{
+                lineHeight: '24px',
+                minHeight: '28px',
+                height: '28px',
+                maxHeight: '180px',
+                display: 'flex',
+                alignItems: 'center',
+                margin: 'auto 0',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+            />
+
+            {/* Submit button: responsive font-size, centré verticalement */}
+            <button
+              type="submit"
+              disabled={!messageInput.trim()}
+              id="btn-send-canal-message"
+              className="inline-flex items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center text-[15px] sm:text-[18px]"
+              style={{
+                backgroundColor: '#3556ec',
+                boxShadow:
+                  'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                opacity: !messageInput.trim() ? 0.45 : 1,
+                cursor: !messageInput.trim() ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <span>{t('Envoyer')}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* CONTEXT MENU ON RIGHT CLICK TO DELETE MESSAGE */}
+      {contextMenu && (
+        <>
+          {/* Backdrop transparent pour masquer immédiatement le bouton quand on clique en dehors */}
+          <div
+            className="fixed inset-0 z-[99999]"
+            onClick={() => setContextMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setContextMenu(null);
+            }}
+          />
+          <div
+            className="fixed z-[100000] p-0 animate-scaleIn"
+            style={{
+              top: `${contextMenu.y}px`,
+              left: `${contextMenu.x}px`,
+              backgroundColor: 'transparent',
+              border: 'none',
+              boxShadow: 'none',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => handleDeleteMessage(contextMenu.messageId)}
+              id="btn-delete-canal-message"
+              className="px-5 py-2.5 rounded-xl font-bold transition-all cursor-pointer shadow-md hover:opacity-90 active:scale-95"
+              style={{
+                backgroundColor: 'rgb(163, 20, 20)',
+                color: '#ffffff',
+                border: 'none',
+                fontSize: '18px',
+                textAlign: 'center',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                display: 'block',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('Supprimer')}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  if (embedded) {
+    return sidepaneContent;
+  }
 
   return createPortal(
     <div
@@ -334,354 +692,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       }}
       onClick={onClose}
     >
-      <div
-        id="canal-messages-sidepane"
-        className="relative w-full max-w-[760px] sm:w-[650px] lg:w-[760px] bg-[#fbfbfb] shadow-2xl flex flex-col h-full overflow-hidden animate-slideLeft font-sans"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          borderLeft: '1px solid #dadada',
-          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-        }}
-      >
-        {/* TOP TAGS BAR (AUCUN SPACING COUPÉ À GAUCHE/DROITE, SANS BACKGROUND, SANS BORDER-BOTTOM, SANS BOX-SHADOW) */}
-        <div
-          className="py-3 shrink-0 z-10 w-full"
-          style={{
-            background: 'transparent',
-            backgroundColor: 'transparent',
-            border: 'none',
-            borderBottom: 'none',
-            boxShadow: 'none',
-            paddingLeft: 0,
-            paddingRight: 0,
-          }}
-        >
-          <div className="flex items-center gap-2 py-0.5 px-3 w-full relative z-20 overflow-visible flex-wrap sm:flex-nowrap">
-            {/* Bouton Fermer : background noir et texte blanc, font-size 18px, AUCUN BOX-SHADOW */}
-            <button
-              type="button"
-              onClick={onClose}
-              id="btn-close-canal-sidepane"
-              className="px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98]"
-              style={{
-                backgroundColor: '#000000',
-                color: '#ffffff',
-                border: 'none',
-                boxShadow: 'none',
-                fontSize: '18px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-              }}
-            >
-              {t('Fermer')}
-            </button>
-
-            {/* 1 Gélule du canal ouvert */}
-            {(() => {
-              const currentTag = CANAL_TAGS.find((t) => t.name === selectedFilterTag) || CANAL_TAGS[0];
-              const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-              const now = Date.now();
-              const recentCount = messages.filter((m) => {
-                if (m.tag !== currentTag.name) return false;
-                const msgTime = m.createdAt ? Number(m.createdAt) : 0;
-                return now - msgTime <= TWO_HOURS_MS;
-              }).length;
-
-              return (
-                <div
-                  className="px-4 py-2 rounded-full shrink-0 flex items-center gap-2 font-medium"
-                  style={{
-                    backgroundColor: currentTag.dot,
-                    color: '#ffffff',
-                    border: 'none',
-                    boxShadow: 'none',
-                    fontSize: '18px',
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  }}
-                >
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0 bg-white"
-                  />
-                  <span>{currentTag.name}</span>
-                  {recentCount > 0 && (
-                    <span
-                      className="inline-flex items-center justify-center rounded-full shrink-0 font-bold"
-                      style={{
-                        backgroundColor: 'rgb(163, 20, 20)',
-                        color: '#ffffff',
-                        fontSize: '14px',
-                        width: '25px',
-                        height: '25px',
-                        padding: '3.5px',
-                        lineHeight: 1,
-                      }}
-                    >
-                      {recentCount}
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Bouton « Ouvrir un canal » avec dropdown des catégories (sans arrow icon) */}
-            <div ref={channelDropdownRef} className="relative inline-flex items-center shrink-0">
-              <button
-                type="button"
-                id="btn-ouvrir-un-canal"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsChannelDropdownOpen((prev) => !prev);
-                }}
-                className="px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] flex items-center justify-center"
-                style={{
-                  backgroundColor: '#3556ec',
-                  color: '#ffffff',
-                  border: 'none',
-                  boxShadow: 'none',
-                  fontSize: '18px',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                }}
-              >
-                <span>{t('Ouvrir un canal')}</span>
-              </button>
-
-              {isChannelDropdownOpen && (
-                <div
-                  className="absolute top-full right-0 sm:left-0 mt-2 min-w-[250px] bg-white rounded-2xl shadow-2xl py-2 z-50 animate-fadeIn"
-                  style={{
-                    border: '1px solid #dadada',
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="max-h-72 overflow-y-auto py-1">
-                    {CANAL_TAGS.filter((tag) => tag.name !== selectedFilterTag).map((tag) => {
-                      const count = messages.filter((m) => m.tag === tag.name).length;
-                      return (
-                        <button
-                          key={tag.name}
-                          type="button"
-                          onClick={() => {
-                            setSelectedFilterTag(tag.name);
-                            setIsChannelDropdownOpen(false);
-                          }}
-                          className="w-full flex items-center justify-between px-4 py-2.5 text-left transition-all hover:bg-slate-100 cursor-pointer border-0 bg-transparent"
-                          style={{
-                            fontSize: '16px',
-                            color: '#000000',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          }}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span
-                              className="w-3 h-3 rounded-full shrink-0"
-                              style={{ backgroundColor: tag.dot }}
-                            />
-                            <span className="font-semibold truncate">{tag.name}</span>
-                          </div>
-                          <span
-                            className="inline-flex items-center justify-center rounded-full text-xs font-bold px-2 py-0.5 ml-2"
-                            style={{
-                              backgroundColor: count > 0 ? '#3556ec18' : '#f1f5f9',
-                              color: count > 0 ? '#3556ec' : '#64748b',
-                            }}
-                          >
-                            {count}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* MESSAGES LIST AREA (LEAVE EMPTY WHEN NO MESSAGES) */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#f8f9fa]">
-          {displayedMessages.map((msg) => {
-            const isMine =
-              currentUser.email &&
-              msg.authorEmail &&
-              currentUser.email.trim().toLowerCase() === msg.authorEmail.trim().toLowerCase();
-            const tagInfo = getTagInfo(msg.tag);
-
-            return (
-              <div
-                key={msg.id}
-                className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} group`}
-                onContextMenu={(e) => handleContextMenu(e, msg.id)}
-              >
-                {/* Author Name + Dot Tag Color + Horodatée (font color black) */}
-                <div
-                  className={`flex items-center gap-2 mb-1.5 px-1 ${
-                    isMine ? 'flex-row-reverse text-right' : 'flex-row text-left'
-                  }`}
-                >
-                  <span className="font-bold text-black" style={{ fontSize: '14px' }}>
-                    {msg.authorName || t('Membre')}
-                  </span>
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: tagInfo.dot }}
-                    title={tagInfo.name}
-                  />
-                  <span
-                    className="text-[13px] font-normal"
-                    style={{ color: '#000000' }}
-                  >
-                    {msg.dateStr}
-                  </span>
-                </div>
-
-                {/* Message Bubble : background-color: #ebedee; font-size: 18px; border: 1px solid #dadada6e; box-shadow: none; padding: 10px 15px; color: #000; cursor : default; */}
-                <div
-                  className="rounded-2xl transition-all relative select-text"
-                  style={{
-                    maxWidth: isMine ? '85%' : '90%',
-                    backgroundColor: '#ebedee',
-                    fontSize: '18px',
-                    border: '1px solid #dadada6e',
-                    boxShadow: 'none',
-                    padding: '10px 15px',
-                    color: '#000000',
-                    cursor: 'default',
-                  }}
-                  title={t('Clic droit pour supprimer')}
-                >
-                  <p
-                    className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
-                    style={{
-                      fontSize: '18px',
-                      color: '#000000',
-                      cursor: 'default',
-                    }}
-                  >
-                    {msg.content}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* BOTTOM INPUT BAR FLOATING (SANS BACKGROUND ET SANS BORDER-TOP DERRIÈRE) */}
-        <div
-          className="p-3 sm:p-4 shrink-0"
-          style={{
-            background: 'transparent',
-            backgroundColor: 'transparent',
-            border: 'none',
-            borderTop: 'none',
-          }}
-        >
-          <form onSubmit={handleSendMessage}>
-            <div
-              className="flex items-center gap-2 bg-white rounded-2xl p-2 pl-4 transition-all shadow-lg"
-              style={{ border: '1px solid #dadada' }}
-            >
-              {/* Message textarea: auto-height, max 350 chars, font-size 18px, texte & placeholder centrés verticalement */}
-              <textarea
-                ref={textareaRef}
-                rows={1}
-                value={messageInput}
-                maxLength={350}
-                onChange={(e) => {
-                  setMessageInput(e.target.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = `${Math.max(28, Math.min(e.target.scrollHeight, 180))}px`;
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                placeholder="Entrez votre message."
-                className="flex-1 bg-transparent border-0 outline-none text-black px-1 placeholder:text-slate-400 resize-none overflow-y-auto"
-                style={{
-                  fontSize: '18px',
-                  lineHeight: '26px',
-                  minHeight: '28px',
-                  height: '28px',
-                  maxHeight: '180px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  margin: 'auto 0',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                }}
-              />
-
-              {/* Submit button: font-size 18px, no send icon, centré verticalement */}
-              <button
-                type="submit"
-                disabled={!messageInput.trim()}
-                id="btn-send-canal-message"
-                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center"
-                style={{
-                  backgroundColor: '#3556ec',
-                  boxShadow:
-                    'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
-                  fontSize: '18px',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  opacity: !messageInput.trim() ? 0.45 : 1,
-                  cursor: !messageInput.trim() ? 'not-allowed' : 'pointer',
-                }}
-              >
-                <span>{t('Envoyer')}</span>
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* CONTEXT MENU ON RIGHT CLICK TO DELETE MESSAGE */}
-        {contextMenu && (
-          <>
-            {/* Backdrop transparent pour masquer immédiatement le bouton quand on clique en dehors */}
-            <div
-              className="fixed inset-0 z-[99999]"
-              onClick={() => setContextMenu(null)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setContextMenu(null);
-              }}
-            />
-            <div
-              className="fixed z-[100000] p-0 animate-scaleIn"
-              style={{
-                top: `${contextMenu.y}px`,
-                left: `${contextMenu.x}px`,
-                backgroundColor: 'transparent',
-                border: 'none',
-                boxShadow: 'none',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                onClick={() => handleDeleteMessage(contextMenu.messageId)}
-                id="btn-delete-canal-message"
-                className="px-5 py-2.5 rounded-xl font-bold transition-all cursor-pointer shadow-md hover:opacity-90 active:scale-95"
-                style={{
-                  backgroundColor: 'rgb(163, 20, 20)',
-                  color: '#ffffff',
-                  border: 'none',
-                  fontSize: '18px',
-                  textAlign: 'center',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  display: 'block',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {t('Supprimer')}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+      {sidepaneContent}
     </div>,
     document.body
   );

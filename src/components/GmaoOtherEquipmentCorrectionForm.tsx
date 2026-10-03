@@ -730,41 +730,42 @@ export default function GmaoOtherEquipmentCorrectionForm({
       )}
 
       {isWebapp && (
-        <button
-          type="button"
-          onClick={onCancel}
-          id="btn-close-other-eq-modal"
-          style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#000000', color: '#ffffff' }}
-          className="transition-colors cursor-pointer font-sans select-none"
-        >
-          Annuler
-        </button>
-      )}
+        <div className="w-full flex flex-col !m-0 !p-0 !space-y-0 shrink-0">
+          <button
+            type="button"
+            onClick={onCancel}
+            id="btn-close-other-eq-modal"
+            style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#000000', color: '#ffffff', margin: 0 }}
+            className="transition-colors cursor-pointer font-sans select-none block w-full"
+          >
+            Annuler
+          </button>
 
-      {isWebapp && (
-        <button
-          type="button"
-          onClick={handleToggleReduce}
-          id="btn-toggle-reduce-other-eq"
-          style={{
-            width: '100%',
-            borderRadius: '0px',
-            padding: '14px 20px',
-            backgroundColor: '#e5e7eb',
-            color: '#000000',
-            fontSize: '18px',
-            fontWeight: 'bold',
-            border: 'none',
-            borderTop: '1px solid #d1d5db',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer'
-          }}
-          className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none"
-        >
-          {isReduced ? "Agrandir" : "Réduire"}
-        </button>
+          <button
+            type="button"
+            onClick={handleToggleReduce}
+            id="btn-toggle-reduce-other-eq"
+            style={{
+              width: '100%',
+              borderRadius: '0px',
+              padding: '14px 20px',
+              backgroundColor: '#e5e7eb',
+              color: '#000000',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              border: 'none',
+              borderTop: '1px solid #d1d5db',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              margin: 0
+            }}
+            className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none block w-full !mt-0"
+          >
+            {isReduced ? "Agrandir" : "Réduire"}
+          </button>
+        </div>
       )}
 
       {!isReduced && (
