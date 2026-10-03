@@ -1136,16 +1136,8 @@ Tous les équipements sont accessibles et filtrables directement dans le tableau
       }
     }
 
-    // 10. Default helpful answer about the tenant's data
-    return `Je suis l'assistant Defibeo Intelligence pour votre compte "${cabinetName}".
-Votre base de données contient actuellement ${totalCount} défibrillateur(s) et ${(tenantContext?.totalClients || clients.length)} client(s).
-
-Vous pouvez me demander par exemple :
-• Le nombre d'appareils et la répartition par marque
-• Les défibrillateurs dont la batterie ou les électrodes sont périmées
-• Les détails d'un appareil par son numéro de série ou son identifiant
-• La liste des défibrillateurs installés chez un client donné
-• Des conseils sur l'utilisation du logiciel (création, export CSV, filtres)`;
+    // 10. Default helpful answer when Defibeo Intelligence cannot answer
+    return `Defibeo Intelligence est encore en développement et n’est pas en capacité de répondre à cette question pour le moment. Essayez à nouveau prochainement.`;
   }
 
   // Quota endpoint for Defibeo Intelligence
@@ -1286,7 +1278,7 @@ Vous pouvez me demander par exemple :
       const usedToday = getTenantQuestionsUsedToday(activeTenantId);
       if (usedToday >= 8) {
         return res.json({
-          answer: "Vous avez utilisé votre quota journalier de 8 questions pour ce compte. Revenez demain pour poser de nouvelles questions.",
+          answer: "Vous avez utilisé votre quota journalier pour ce compte. Revenez demain pour poser de nouvelles questions.",
           quotaExceeded: true,
           questionsUsed: 8,
           maxQuestions: 8,

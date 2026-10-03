@@ -635,7 +635,7 @@ function escapeHtml(str: string): string {
 }
 
 // Generate the high-quality, printable PDF HTML document
-function generateMonthlyPDFHTML(
+export function generateMonthlyPDFHTML(
   data: MonthlyTableData,
   tenantLogo: string,
   compName: string

@@ -9,6 +9,68 @@ interface ChatMessage {
   createdAt: number;
 }
 
+const TypingBubbleText: React.FC<{
+  content: string;
+  isTyping: boolean;
+  onDone: () => void;
+  onProgress?: () => void;
+}> = ({ content, isTyping, onDone, onProgress }) => {
+  const [displayedText, setDisplayedText] = useState(isTyping ? '' : content);
+  const [finished, setFinished] = useState(!isTyping);
+
+  useEffect(() => {
+    if (!isTyping) {
+      setDisplayedText(content);
+      setFinished(true);
+      return;
+    }
+
+    setDisplayedText('');
+    setFinished(false);
+
+    let charIndex = 0;
+    const totalChars = content.length;
+    // Dynamic typing speed: letter by letter for short answers, smooth chunking for longer responses
+    const chunkSize = totalChars > 500 ? 5 : totalChars > 250 ? 3 : totalChars > 80 ? 2 : 1;
+    const intervalMs = totalChars > 500 ? 12 : 16;
+
+    const intervalId = setInterval(() => {
+      charIndex += chunkSize;
+      if (charIndex >= totalChars) {
+        setDisplayedText(content);
+        setFinished(true);
+        clearInterval(intervalId);
+        onDone();
+        onProgress?.();
+      } else {
+        setDisplayedText(content.slice(0, charIndex));
+        onProgress?.();
+      }
+    }, intervalMs);
+
+    return () => clearInterval(intervalId);
+  }, [content, isTyping]);
+
+  return (
+    <p
+      className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+      style={{
+        fontSize: '18px',
+        color: '#000000',
+        cursor: 'default',
+      }}
+    >
+      {displayedText}
+      {isTyping && !finished && (
+        <span
+          className="inline-block w-[2px] h-[18px] ml-1 bg-black/70 align-middle animate-pulse"
+          style={{ verticalAlign: 'baseline' }}
+        />
+      )}
+    </p>
+  );
+};
+
 interface DefibeoIntelligenceSidePaneProps {
   isOpen: boolean;
   onClose: () => void;
@@ -22,6 +84,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
 }) => {
   // STRICTLY IN-MEMORY: Never stored in localStorage, sessionStorage, IndexedDB or Firebase!
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const [inputQuestion, setInputQuestion] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [quota, setQuota] = useState<{ used: number; max: number; remaining: number; exceeded: boolean }>({
@@ -86,6 +149,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
   const handleQuitConversation = () => {
     // Ephemeral wipe: clear conversation without persisting anything
     setMessages([]);
+    setTypingMessageId(null);
     setInputQuestion('');
     if (textareaRef.current) {
       textareaRef.current.style.height = '28px';
@@ -152,7 +216,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
         throw new Error(data.error || data.answer || "Une erreur est survenue lors de la réponse.");
       }
 
-      const assistantText = data.answer || "Désolé, aucune réponse n'a pu être formulée.";
+      const assistantText = data.answer || "Defibeo Intelligence est encore en développement et n’est pas en capacité de répondre à cette question pour le moment. Essayez à nouveau prochainement.";
 
       const assistantMsg: ChatMessage = {
         id: `ast-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -161,6 +225,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
         createdAt: Date.now(),
       };
 
+      setTypingMessageId(assistantMsg.id);
       setMessages([...nextMessages, assistantMsg]);
     } catch (err: any) {
       const errorMsg: ChatMessage = {
@@ -169,6 +234,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
         content: err?.message || "Une erreur est survenue lors de la communication avec l'assistant.",
         createdAt: Date.now(),
       };
+      setTypingMessageId(errorMsg.id);
       setMessages([...nextMessages, errorMsg]);
     } finally {
       setIsLoading(false);
@@ -231,16 +297,28 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
                     cursor: 'default',
                   }}
                 >
-                  <p
-                    className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
-                    style={{
-                      fontSize: '18px',
-                      color: '#000000',
-                      cursor: 'default',
-                    }}
-                  >
-                    {msg.content}
-                  </p>
+                  {isUser ? (
+                    <p
+                      className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                      style={{
+                        fontSize: '18px',
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      {msg.content}
+                    </p>
+                  ) : (
+                    <TypingBubbleText
+                      content={msg.content}
+                      isTyping={msg.id === typingMessageId}
+                      onProgress={() => scrollToBottom(true)}
+                      onDone={() => {
+                        setTypingMessageId(null);
+                        scrollToBottom(true);
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             );
@@ -281,33 +359,50 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
           }}
         >
           <form onSubmit={(e) => handleSendMessage(e)} className="space-y-3">
-            {/* Bannière d'information si quota dépassé (8 questions max par jour) */}
+            {/* Bannière d'information si quota dépassé */}
             {quota.exceeded && (
               <div
-                className="p-3.5 rounded-2xl mb-2 flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-950 animate-fadeIn"
+                className="p-3.5 rounded-2xl mb-2 flex items-center animate-fadeIn"
                 style={{
+                  background: 'white',
+                  backgroundColor: '#ffffff',
+                  fontSize: '16px',
+                  color: '#000000',
+                  border: '1px solid #dadada',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 }}
               >
-                <span className="text-xl shrink-0">⚠️</span>
-                <span className="text-[14px] sm:text-[15px] font-semibold leading-snug">
-                  {t("Vous avez utilisé votre quota journalier de 8 questions pour ce compte. Revenez demain pour poser de nouvelles questions.")}
+                <span
+                  style={{
+                    fontSize: '16px',
+                    color: '#000000',
+                    lineHeight: '1.4',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
+                  {t("Vous avez utilisé votre quota journalier pour ce compte. Revenez demain pour poser de nouvelles questions.")}
                 </span>
               </div>
             )}
 
-            {/* Indicateur de quota journalier */}
-            <div className="flex items-center justify-between text-[13px] font-medium text-slate-500 px-1.5 pb-0.5">
-              <span>{t('Quota journalier')}</span>
-              <span className={quota.exceeded ? "font-bold text-amber-700" : "font-semibold text-slate-600"}>
-                {quota.used} / {quota.max} {t('questions')}
-              </span>
+            {/* Indicateur de quota expérimental */}
+            <div
+              className="text-[13px] font-medium px-1.5 pb-0.5"
+              style={{
+                color: '#000000',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+            >
+              <span>{t('Quota d’usage limité en mode expérimental.')}</span>
             </div>
 
             {/* Input bar: floating white container */}
             <div
-              className="flex items-center gap-2 bg-white rounded-2xl p-2 pl-4 transition-all shadow-lg"
-              style={{ border: '1px solid #dadada' }}
+              className={`flex items-center gap-2 bg-white rounded-2xl p-2 pl-4 transition-all shadow-lg ${quota.exceeded ? 'cursor-not-allowed' : ''}`}
+              style={{
+                border: '1px solid #dadada',
+                cursor: quota.exceeded ? 'not-allowed' : undefined,
+              }}
             >
               {/* Textarea multiline avec auto-height et alignement vertical centré initialement */}
               <textarea
@@ -315,6 +410,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
                 rows={1}
                 value={inputQuestion}
                 onChange={(e) => {
+                  if (quota.exceeded) return;
                   setInputQuestion(e.target.value);
                   e.target.style.height = 'auto';
                   e.target.style.height = `${Math.max(28, Math.min(e.target.scrollHeight, 180))}px`;
@@ -322,16 +418,14 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    handleSendMessage();
+                    if (!quota.exceeded) {
+                      handleSendMessage();
+                    }
                   }
                 }}
-                placeholder={
-                  quota.exceeded
-                    ? "Quota journalier de 8 questions atteint (8/8). Revenez demain."
-                    : "Votre question sur le logiciel ou vos données."
-                }
+                placeholder={t("Votre question sur le logiciel ou vos données.")}
                 disabled={isLoading || quota.exceeded}
-                className="flex-1 bg-transparent border-0 outline-none text-black px-1 placeholder:text-slate-400 resize-none overflow-y-auto"
+                className={`flex-1 bg-transparent border-0 outline-none text-black px-1 placeholder:text-slate-400 resize-none overflow-y-auto ${quota.exceeded ? 'cursor-not-allowed' : ''}`}
                 style={{
                   fontSize: '18px',
                   lineHeight: '26px',
@@ -342,6 +436,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
                   alignItems: 'center',
                   margin: 'auto 0',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  cursor: quota.exceeded ? 'not-allowed' : undefined,
                 }}
               />
 

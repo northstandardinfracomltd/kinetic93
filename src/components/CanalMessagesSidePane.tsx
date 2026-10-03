@@ -327,7 +327,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       id="canal-messages-sidepane"
       className={
         embedded
-          ? "relative w-full max-w-4xl mx-auto bg-[#fbfbfb] rounded-2xl shadow-sm border border-[#dadada] flex flex-col h-[calc(100dvh-175px)] min-h-[500px] overflow-hidden font-sans"
+          ? "relative w-full h-full flex-1 bg-white flex flex-col overflow-hidden font-sans border-0 shadow-none rounded-none"
           : "relative w-full max-w-[760px] sm:w-[650px] lg:w-[760px] bg-[#fbfbfb] shadow-2xl flex flex-col h-full overflow-hidden animate-slideLeft font-sans"
       }
       onClick={(e) => e.stopPropagation()}
@@ -338,34 +338,39 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     >
       {/* TOP TAGS BAR (AUCUN SPACING COUPÉ À GAUCHE/DROITE, SANS BACKGROUND, SANS BORDER-BOTTOM, SANS BOX-SHADOW) */}
       <div
-        className="py-2.5 sm:py-3 shrink-0 z-10 w-full"
+        className={
+          embedded
+            ? "sticky top-0 z-20 w-full bg-white/95 backdrop-blur-xs py-2 px-2 shrink-0"
+            : "py-2.5 sm:py-3 shrink-0 z-10 w-full"
+        }
         style={{
-          background: 'transparent',
-          backgroundColor: 'transparent',
+          background: embedded ? '#ffffff' : 'transparent',
+          backgroundColor: embedded ? '#ffffff' : 'transparent',
           border: 'none',
-          borderBottom: 'none',
           boxShadow: 'none',
-          paddingLeft: 0,
-          paddingRight: 0,
+          paddingLeft: embedded ? '8px' : 0,
+          paddingRight: embedded ? '8px' : 0,
         }}
       >
-        <div className="flex items-center gap-2 py-0.5 px-3 w-full relative z-20 overflow-visible flex-wrap sm:flex-nowrap">
-          {/* Bouton Fermer : background noir et texte blanc, responsive font-size, AUCUN BOX-SHADOW */}
-          <button
-            type="button"
-            onClick={onClose}
-            id="btn-close-canal-sidepane"
-            className="px-4 sm:px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] text-[15px] sm:text-[18px]"
-            style={{
-              backgroundColor: '#000000',
-              color: '#ffffff',
-              border: 'none',
-              boxShadow: 'none',
-              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-            }}
-          >
-            {t('Fermer')}
-          </button>
+        <div className="flex items-center gap-2 py-0.5 w-full relative z-20 overflow-visible flex-wrap sm:flex-nowrap">
+          {/* Bouton Fermer : uniquement dans le logiciel principal, masqué dans la webapp */}
+          {!embedded && (
+            <button
+              type="button"
+              onClick={onClose}
+              id="btn-close-canal-sidepane"
+              className="px-4 sm:px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] text-[15px] sm:text-[18px]"
+              style={{
+                backgroundColor: '#000000',
+                color: '#ffffff',
+                border: 'none',
+                boxShadow: 'none',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+            >
+              {t('Fermer')}
+            </button>
+          )}
 
           {/* 1 Gélule du canal ouvert */}
           {(() => {
@@ -559,10 +564,14 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
 
       {/* BOTTOM INPUT BAR FLOATING (SANS BACKGROUND ET SANS BORDER-TOP DERRIÈRE) */}
       <div
-        className="p-2.5 sm:p-4 shrink-0"
+        className={
+          embedded
+            ? "sticky bottom-0 z-20 w-full px-2 pt-1 pb-2 sm:pb-2.5 bg-white/95 backdrop-blur-xs shrink-0"
+            : "p-2.5 sm:p-4 shrink-0"
+        }
         style={{
-          background: 'transparent',
-          backgroundColor: 'transparent',
+          background: embedded ? '#ffffff' : 'transparent',
+          backgroundColor: embedded ? '#ffffff' : 'transparent',
           border: 'none',
           borderTop: 'none',
         }}

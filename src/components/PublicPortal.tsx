@@ -81,6 +81,7 @@ import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from "../utils/fsmOptimizer";
 import { loadCttGlobalRules } from "../utils/cttRules";
 import { PlanningTab } from "./PlanningTab";
+import { getMonthlyWorkingDaysData, generateMonthlyPDFHTML } from "./TempsTab";
 import HelpBubble from "./HelpBubble";
 import TopBarProgress from "./TopBarProgress";
 import {
@@ -934,6 +935,12 @@ export default function PublicPortal({
   };
 
   const [pauseRepasError, setPauseRepasError] = useState<string | null>(null);
+
+  // Set of unrolled mission IDs for the read-more/accordion in Interventions tab
+  const [unrolledMissions, setUnrolledMissions] = useState<Set<string>>(new Set());
+
+  // Month & Year selection for technician CTT PDF download
+  const [selectedCttMonthYear, setSelectedCttMonthYear] = useState<string>("");
 
   const [selectedVolumeWeek, setSelectedVolumeWeek] = useState<string>("");
   const [cttModelSettings, setCttModelSettings] = useState<CttModelSetting[]>(() => {
@@ -4118,25 +4125,6 @@ export default function PublicPortal({
       }
     }
   }, [activeTab, activeSettingsSection, techSignature]);
-
-  // Auto-scroll to first mission with status "À faire" when arriving on Interventions tab (if tour open)
-  useEffect(() => {
-    if (activeTab === "interventions" && selectedTourId) {
-      const currentTour = tours.find((t) => t.id === selectedTourId);
-      if (currentTour && currentTour.status !== "Terminé" && currentTour.passages) {
-        const firstTodo = currentTour.passages.find((p: any) => p.status === "À faire");
-        if (firstTodo) {
-          const timer = setTimeout(() => {
-            const el = document.getElementById(`passage-card-${firstTodo.num}`);
-            if (el) {
-              el.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
-          }, 250);
-          return () => clearTimeout(timer);
-        }
-      }
-    }
-  }, [activeTab, selectedTourId, tours]);
 
   // Auto-geocode connected technician's start address
   useEffect(() => {
@@ -7550,7 +7538,13 @@ export default function PublicPortal({
                   style={{ background: "transparent" }}
                 >
                   <button
-                    onClick={() => setActiveTab("interventions")}
+                    onClick={() => {
+                      setActiveTab("interventions");
+                      const contentArea = document.getElementById("tab-content-area");
+                      if (contentArea) {
+                        contentArea.scrollTop = 0;
+                      }
+                    }}
                     style={
                       activeTab === "interventions"
                         ? {
@@ -7786,7 +7780,11 @@ export default function PublicPortal({
 
             {/* Scrollable Contents Body */}
             <div
-              className="flex-1 overflow-y-auto px-4 py-4 space-y-4 no-scrollbar"
+              className={
+                activeTab === "messages"
+                  ? "flex-1 overflow-hidden p-0 m-0 flex flex-col min-h-0"
+                  : "flex-1 overflow-y-auto px-4 py-4 space-y-4 no-scrollbar"
+              }
               id="tab-content-area"
             >
               {/* ----------------- TAB 1: INTERVENTIONS ----------------- */}
@@ -8229,8 +8227,18 @@ export default function PublicPortal({
                                             </span>
                                           </p>
 
-                                          <p style={{ color: "#000000" }}>
-                                            Téléphone :{" "}
+                                          {/* ACCORDION / LIRE PLUS: Subsequent mission details */}
+                                          {(() => {
+                                            const missionKey = String(p.id || p.num);
+                                            const isUnrolled = unrolledMissions.has(missionKey);
+
+                                            return (
+                                              <div
+                                                className="relative overflow-hidden space-y-1.5 transition-all"
+                                                style={{ maxHeight: isUnrolled ? "none" : "48px" }}
+                                              >
+                                                <p style={{ color: "#000000" }}>
+                                                  Téléphone :{" "}
                                             {equipmentPhone && equipmentPhone !== "Non renseigné" ? (
                                               <a
                                                 href={`tel:${equipmentPhone.replace(/\s+/g, "")}`}
@@ -8366,6 +8374,40 @@ export default function PublicPortal({
                                               </span>
                                             </p>
                                           )}
+
+                                                {/* Fade gradient overlay and blue Dérouler button when folded */}
+                                                {!isUnrolled && (
+                                                  <div
+                                                    className="absolute inset-0 flex items-end justify-center pb-0 pointer-events-auto"
+                                                    style={{
+                                                      background:
+                                                        "linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.75) 30%, #ffffff 90%)",
+                                                    }}
+                                                  >
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        setUnrolledMissions(
+                                                          (prev) =>
+                                                            new Set(prev).add(
+                                                              missionKey,
+                                                            ),
+                                                        )
+                                                      }
+                                                      className="font-bold text-[16px] hover:underline cursor-pointer bg-white/95 px-3 py-0.5 rounded-full"
+                                                      style={{
+                                                        color: "rgb(53, 86, 236)",
+                                                        fontFamily:
+                                                          "var(--font-sans), sans-serif",
+                                                      }}
+                                                    >
+                                                      Dérouler les infos
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          })()}
                                         </div>
                                       </div>
 
@@ -9077,59 +9119,69 @@ export default function PublicPortal({
                             Télécharger PDF
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (isReportOverlayOpen && isReportOverlayMinimized) {
-                                alert("Action impossible : un rapport d’intervention est déjà réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant d’ouvrir un autre rapport.");
-                                return;
-                              }
-                              setReportToEdit(rep);
-                              const targetDefibId = rep.defibId || rep.defibSnapshot?.id || "";
-                              setSelectedDefibId(targetDefibId);
-                              const defib = defibrillateurs.find(
-                                (d) =>
-                                  (targetDefibId && d.id === targetDefibId) ||
-                                  (rep.defibIdentifiant && d.identifiant?.trim().toLowerCase() === rep.defibIdentifiant.trim().toLowerCase()) ||
-                                  (rep.defibSnapshot?.identifiant && d.identifiant?.trim().toLowerCase() === rep.defibSnapshot.identifiant.trim().toLowerCase())
-                              );
-                              if (defib) {
-                                setSelectedDefibData(defib);
-                              } else if (rep.defibSnapshot) {
-                                setSelectedDefibData(rep.defibSnapshot);
-                              }
+                          {(() => {
+                            const isOwnReport = !!authenticatedUser?.name && (rep.techName || "").trim().toLowerCase() === (authenticatedUser.name || "").trim().toLowerCase();
+                            return (
+                              <button
+                                type="button"
+                                disabled={!isOwnReport}
+                                onClick={() => {
+                                  if (!isOwnReport) return;
+                                  if (isReportOverlayOpen && isReportOverlayMinimized) {
+                                    alert("Action impossible : un rapport d’intervention est déjà réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant d’ouvrir un autre rapport.");
+                                    return;
+                                  }
+                                  setReportToEdit(rep);
+                                  const targetDefibId = rep.defibId || rep.defibSnapshot?.id || "";
+                                  setSelectedDefibId(targetDefibId);
+                                  const defib = defibrillateurs.find(
+                                    (d) =>
+                                      (targetDefibId && d.id === targetDefibId) ||
+                                      (rep.defibIdentifiant && d.identifiant?.trim().toLowerCase() === rep.defibIdentifiant.trim().toLowerCase()) ||
+                                      (rep.defibSnapshot?.identifiant && d.identifiant?.trim().toLowerCase() === rep.defibSnapshot.identifiant.trim().toLowerCase())
+                                  );
+                                  if (defib) {
+                                    setSelectedDefibData(defib);
+                                  } else if (rep.defibSnapshot) {
+                                    setSelectedDefibData(rep.defibSnapshot);
+                                  }
 
-                              const matchedOther = otherEquipments.find(o => 
-                                o.id === rep.defibId || 
-                                o.id === (rep as any).otherEquipmentId || 
-                                (rep.defibIdentifiant && o.identifiant?.trim().toLowerCase() === rep.defibIdentifiant.trim().toLowerCase())
-                              );
-                              if (matchedOther && (rep.isOtherEquipment || (rep as any).equipmentType === 'OTHER')) {
-                                setSelectedOtherEquipmentUnique(matchedOther);
-                              } else {
-                                setSelectedOtherEquipmentUnique(null);
-                              }
+                                  const matchedOther = otherEquipments.find(o => 
+                                    o.id === rep.defibId || 
+                                    o.id === (rep as any).otherEquipmentId || 
+                                    (rep.defibIdentifiant && o.identifiant?.trim().toLowerCase() === rep.defibIdentifiant.trim().toLowerCase())
+                                  );
+                                  if (matchedOther && (rep.isOtherEquipment || (rep as any).equipmentType === 'OTHER')) {
+                                    setSelectedOtherEquipmentUnique(matchedOther);
+                                  } else {
+                                    setSelectedOtherEquipmentUnique(null);
+                                  }
 
-                              setIsReportOverlayOpen(true);
-                            }}
-                            style={{
-                              backgroundColor: "#000000",
-                              color: "#ffffff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                              borderRadius: "12px",
-                              padding: "12px 20px",
-                              border: "none",
-                              boxShadow:
-                                "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset",
-                              cursor: "pointer",
-                              width: "100%",
-                              marginTop: "8px",
-                            }}
-                            className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-                          >
-                            Corriger
-                          </button>
+                                  setIsReportOverlayOpen(true);
+                                }}
+                                style={{
+                                  backgroundColor: isOwnReport ? "#000000" : "#e2e8f0",
+                                  color: isOwnReport ? "#ffffff" : "#94a3b8",
+                                  fontSize: "18px",
+                                  fontWeight: "bold",
+                                  borderRadius: "12px",
+                                  padding: "12px 20px",
+                                  border: "none",
+                                  boxShadow: isOwnReport
+                                    ? "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset"
+                                    : "none",
+                                  cursor: isOwnReport ? "pointer" : "not-allowed",
+                                  width: "100%",
+                                  marginTop: "8px",
+                                  opacity: isOwnReport ? 1 : 0.6,
+                                }}
+                                className={isOwnReport ? "hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2" : "transition-all flex items-center justify-center gap-2"}
+                                title={!isOwnReport ? "Vous ne pouvez corriger que vos propres rapports d’intervention." : undefined}
+                              >
+                                Corriger
+                              </button>
+                            );
+                          })()}
                         </div>
                       );
                     })}
@@ -9140,7 +9192,7 @@ export default function PublicPortal({
               {/* ----------------- TAB: MESSAGES ----------------- */}
               {activeTab === "messages" && (
                 <div
-                  className="w-full flex-1 flex flex-col pb-16 animate-fadeIn"
+                  className="w-full h-full flex-1 flex flex-col p-0 m-0 overflow-hidden pb-0 min-h-0"
                   id="tab-messages-screen"
                 >
                   <CanalMessagesSidePane
@@ -11644,6 +11696,163 @@ export default function PublicPortal({
                             </>
                           )}
                         </div>
+
+                        {/* Téléchargez votre CTT Section */}
+                        <div className="pt-4 border-t border-slate-100 space-y-3">
+                          <label
+                            htmlFor="select-tech-ctt-month-year"
+                            className="block font-bold text-black"
+                            style={{ fontSize: "15px", fontFamily: "var(--font-sans), sans-serif" }}
+                          >
+                            {t("Téléchargez votre CTT")}
+                          </label>
+                          {(() => {
+                            const currentTech = authenticatedUser?.name || "";
+                            const FRENCH_MONTHS_NAMES = [
+                              "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                              "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+                            ];
+                            const availableCttMonths: { key: string; label: string; year: number; monthIndex: number }[] = [];
+                            const seenKeys = new Set<string>();
+
+                            const addOpt = (y: number, mIdx: number) => {
+                              const k = `${y}-${mIdx}`;
+                              if (seenKeys.has(k)) return;
+                              seenKeys.add(k);
+                              availableCttMonths.push({
+                                key: k,
+                                label: `${FRENCH_MONTHS_NAMES[mIdx]} ${y}`,
+                                year: y,
+                                monthIndex: mIdx,
+                              });
+                            };
+
+                            const safeTech = currentTech.trim().toLowerCase();
+                            const safePointages = (Array.isArray(pointages) ? pointages : []).filter(
+                              (p) => p && p.techName && String(p.techName).trim().toLowerCase() === safeTech
+                            );
+
+                            safePointages.forEach((p) => {
+                              if (!p.startDate) return;
+                              const clean = p.startDate.replace(/\//g, "-").trim();
+                              const parts = clean.split("-");
+                              let y = 0, mIdx = -1;
+                              if (parts.length === 3) {
+                                if (parts[0].length === 4) {
+                                  y = parseInt(parts[0], 10);
+                                  mIdx = parseInt(parts[1], 10) - 1;
+                                } else if (parts[2].length === 4) {
+                                  y = parseInt(parts[2], 10);
+                                  mIdx = parseInt(parts[1], 10) - 1;
+                                }
+                              }
+                              if (y > 2000 && mIdx >= 0 && mIdx <= 11) {
+                                addOpt(y, mIdx);
+                              }
+                            });
+
+                            if (availableCttMonths.length === 0) {
+                              const n = new Date();
+                              addOpt(n.getFullYear(), n.getMonth());
+                              const prev = new Date(n.getFullYear(), n.getMonth() - 1, 1);
+                              addOpt(prev.getFullYear(), prev.getMonth());
+                            }
+
+                            availableCttMonths.sort((a, b) => {
+                              if (a.year !== b.year) return b.year - a.year;
+                              return b.monthIndex - a.monthIndex;
+                            });
+
+                            return (
+                              <div className="space-y-3">
+                                <select
+                                  id="select-tech-ctt-month-year"
+                                  value={selectedCttMonthYear}
+                                  onChange={(e) => setSelectedCttMonthYear(e.target.value)}
+                                  style={{
+                                    border: "1px solid #c9bfcd",
+                                    borderRadius: "13px",
+                                    padding: "12px 16px",
+                                    fontSize: "16px",
+                                    width: "100%",
+                                    backgroundColor: "#ffffff",
+                                    color: "#000000",
+                                    fontFamily: "var(--font-sans), sans-serif",
+                                    cursor: "pointer",
+                                  }}
+                                  className="focus:outline-none"
+                                >
+                                  <option value="">{t("Sélection Mois & Année")}</option>
+                                  {availableCttMonths.map((m) => (
+                                    <option key={m.key} value={m.key}>
+                                      {m.label}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                {selectedCttMonthYear && (
+                                  <button
+                                    type="button"
+                                    id="btn-download-ctt-pdf-webapp"
+                                    onClick={() => {
+                                      const sel = availableCttMonths.find((m) => m.key === selectedCttMonthYear);
+                                      if (!sel || !authenticatedUser?.name) return;
+                                      const data = getMonthlyWorkingDaysData(
+                                        authenticatedUser.name,
+                                        sel.year,
+                                        sel.monthIndex,
+                                        pointages as any,
+                                        members as any,
+                                        cttModelSettings
+                                      );
+                                      let logoUrl = companyInfo?.logo || "";
+                                      try {
+                                        const tid = localStorage.getItem("defib_tenant_id") || "demo";
+                                        const cached = localStorage.getItem(`defib_${tid}_companyInfo`);
+                                        if (cached) {
+                                          const parsed = JSON.parse(cached);
+                                          if (parsed.logo && typeof parsed.logo === "string" && parsed.logo.trim() !== "") {
+                                            logoUrl = parsed.logo.trim();
+                                          }
+                                        }
+                                      } catch (_) {}
+                                      const compName = companyInfo?.name || "Défibeo Solutions";
+                                      const htmlContent = generateMonthlyPDFHTML(data, logoUrl, compName);
+                                      const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+                                      const url = URL.createObjectURL(blob);
+                                      const win = window.open(url, "_blank");
+                                      if (!win) {
+                                        const link = document.createElement("a");
+                                        link.href = url;
+                                        link.target = "_blank";
+                                        link.download = `CTT_${authenticatedUser.name.replace(/\s+/g, "_")}_${sel.label.replace(/\s+/g, "_")}.html`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                      }
+                                    }}
+                                    style={{
+                                      backgroundColor: "rgb(53, 86, 236)",
+                                      color: "#ffffff",
+                                      fontSize: "18px",
+                                      fontWeight: "bold",
+                                      borderRadius: "12px",
+                                      padding: "14px 20px",
+                                      border: "none",
+                                      boxShadow:
+                                        "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                      cursor: "pointer",
+                                      width: "100%",
+                                    }}
+                                    className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 font-bold"
+                                  >
+                                    {t("Télécharger PDF")}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </div>
                     );
                   })()}
@@ -12978,6 +13187,49 @@ export default function PublicPortal({
                           </div>
                         </div>
                       </div>
+
+                      {/* Réglages de l'entreprise (informatif) */}
+                      {(() => {
+                        const rules = loadCttGlobalRules();
+                        return (
+                          <div
+                            className="bg-white border px-4 py-5 space-y-2.5"
+                            style={{
+                              borderColor: "rgb(201, 190, 205)",
+                              borderRadius: "14px",
+                            }}
+                          >
+                            <h3
+                              style={{
+                                fontSize: "18px",
+                                fontWeight: "bold",
+                                color: "#000000",
+                                fontFamily: "var(--font-sans), sans-serif",
+                                margin: 0,
+                              }}
+                            >
+                              Réglages de l’entreprise.
+                            </h3>
+                            <div
+                              className="space-y-1.5 font-sans"
+                              style={{
+                                fontSize: "16px",
+                                color: "#000000",
+                              }}
+                            >
+                              <p>
+                                Amplitude maximale journalière : <span className="font-bold">{rules.maxDailyAmplitudeHours}h</span>
+                              </p>
+                              <p>
+                                Amplitude minimale de repos entre 2 jours consécutifs : <span className="font-bold">{rules.minConsecutiveRestHours}h</span>
+                              </p>
+                              <p>
+                                Amplitude minimale de repos pendant un pointage en cours (repas) : <span className="font-bold">{rules.minBreakRestMinutes}mins</span>
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       <button
                         type="button"
