@@ -8117,7 +8117,7 @@ export default function PublicPortal({
                                             if (!thumbUrl) return null;
                                             return (
                                               <div
-                                                className="w-10 h-10 sm:w-11 sm:h-11 rounded-[8px] bg-white border flex items-center justify-center p-1 shrink-0"
+                                                className="w-16 h-16 sm:w-18 sm:h-18 rounded-[12px] bg-white border flex items-center justify-center p-1.5 shrink-0 shadow-xs"
                                                 style={{ borderColor: "rgb(201, 190, 205)" }}
                                                 title="Modèle défibrillateur"
                                               >
@@ -8235,7 +8235,7 @@ export default function PublicPortal({
                                             return (
                                               <div
                                                 className="relative overflow-hidden space-y-1.5 transition-all"
-                                                style={{ maxHeight: isUnrolled ? "none" : "48px" }}
+                                                style={{ maxHeight: isUnrolled ? "none" : "100px" }}
                                               >
                                                 <p style={{ color: "#000000" }}>
                                                   Téléphone :{" "}
@@ -8378,10 +8378,10 @@ export default function PublicPortal({
                                                 {/* Fade gradient overlay and blue Dérouler button when folded */}
                                                 {!isUnrolled && (
                                                   <div
-                                                    className="absolute inset-0 flex items-end justify-center pb-0 pointer-events-auto"
+                                                    className="absolute inset-x-0 bottom-0 h-[105px] flex items-end justify-center pb-2.5 pt-6 pointer-events-auto"
                                                     style={{
                                                       background:
-                                                        "linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.75) 30%, #ffffff 90%)",
+                                                        "linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.45) 25%, rgba(255, 255, 255, 0.92) 55%, #ffffff 100%)",
                                                     }}
                                                   >
                                                     <button
@@ -8394,7 +8394,7 @@ export default function PublicPortal({
                                                             ),
                                                         )
                                                       }
-                                                      className="font-bold text-[16px] hover:underline cursor-pointer bg-white/95 px-3 py-0.5 rounded-full"
+                                                      className="font-bold text-[16px] hover:underline cursor-pointer bg-white/95 px-5 py-2 rounded-full shadow-xs transition-transform active:scale-95"
                                                       style={{
                                                         color: "rgb(53, 86, 236)",
                                                         fontFamily:
@@ -8402,6 +8402,28 @@ export default function PublicPortal({
                                                       }}
                                                     >
                                                       Dérouler les infos
+                                                    </button>
+                                                  </div>
+                                                )}
+
+                                                {isUnrolled && (
+                                                  <div className="pt-2 flex justify-center">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        setUnrolledMissions((prev) => {
+                                                          const next = new Set(prev);
+                                                          next.delete(missionKey);
+                                                          return next;
+                                                        })
+                                                      }
+                                                      className="font-bold text-[14px] hover:underline cursor-pointer text-slate-500 py-1"
+                                                      style={{
+                                                        fontFamily:
+                                                          "var(--font-sans), sans-serif",
+                                                      }}
+                                                    >
+                                                      Enrouler les infos
                                                     </button>
                                                   </div>
                                                 )}
@@ -11698,7 +11720,7 @@ export default function PublicPortal({
                         </div>
 
                         {/* Téléchargez votre CTT Section */}
-                        <div className="pt-4 border-t border-slate-100 space-y-3">
+                        <div className="pt-2 space-y-3">
                           <label
                             htmlFor="select-tech-ctt-month-year"
                             className="block font-bold text-black"

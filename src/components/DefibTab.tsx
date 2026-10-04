@@ -275,7 +275,7 @@ function getSafetyStatus(df: Defibrillateur): { colorClass: string; title: strin
   const datesToCheck: Date[] = [];
   
   // 1. Prochaine maintenance
-  const prochaineMaintStr = computeProchaineMaintenance(df.derniereMaintenance);
+  const prochaineMaintStr = (df as any).prochaineMaintenance || (df as any).prochaine_visite || (df as any).prochaine_v || computeProchaineMaintenance(df.derniereMaintenance);
   const mDate = parseDateHelper(prochaineMaintStr);
   if (mDate) datesToCheck.push(mDate);
 
@@ -372,7 +372,7 @@ interface DefibTabProps {
   onUpdateDefib: (defib: Defibrillateur) => void;
   onDeleteDefib: (id: string) => void;
   onBulkDelete: (ids: string[]) => void;
-  onBulkEdit: (ids: string[], updates: Partial<Omit<Defibrillateur, 'id'>>) => void;
+  onBulkEdit: (ids: string[], updates: Partial<Omit<Defibrillateur, 'id'>>) => void | Promise<void>;
   fsmTours?: any[];
   onUpdateFsmTours?: (updated: any[]) => void;
   setActiveTab?: (tab: any, bypassBlock?: boolean) => void;
@@ -825,6 +825,7 @@ export default function DefibTab({
   const [isClientSearchFocused, setIsClientSearchFocused] = useState(false);
   const [editingDefib, setEditingDefib] = useState<Defibrillateur | null>(null);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isLotScannerOpen, setIsLotScannerOpen] = useState(false);
   const [isSerieScannerOpen, setIsSerieScannerOpen] = useState(false);
@@ -1797,7 +1798,7 @@ export default function DefibTab({
       // 7. Dates logic (only executed if at least one date filter is active)
       if (needDates) {
         const timesToCheck: number[] = [];
-        const mDate = parseDateHelper(computeProchaineMaintenance(df.derniereMaintenance));
+        const mDate = parseDateHelper((df as any).prochaineMaintenance || (df as any).prochaine_visite || (df as any).prochaine_v || computeProchaineMaintenance(df.derniereMaintenance));
         if (mDate) { mDate.setHours(0, 0, 0, 0); timesToCheck.push(mDate.getTime()); }
         const eADate = parseDateHelper(df.peremptionElectrodeA);
         if (eADate) { eADate.setHours(0, 0, 0, 0); timesToCheck.push(eADate.getTime()); }
@@ -1861,7 +1862,7 @@ export default function DefibTab({
     } else if (sortFilter === 'closest_maintenance') {
       const dateMap = new Map<string, number>();
       for (const item of result) {
-        const next = computeProchaineMaintenance(item.derniereMaintenance);
+        const next = (item as any).prochaineMaintenance || (item as any).prochaine_visite || (item as any).prochaine_v || computeProchaineMaintenance(item.derniereMaintenance);
         const parsed = parseDateHelper(next);
         dateMap.set(item.id, parsed ? parsed.getTime() : Infinity);
       }
@@ -2209,7 +2210,7 @@ export default function DefibTab({
       const cl = clients.find(c => c.id === df.clientId);
       const model = variables.find(v => v.id === df.modeleId);
       const matchingTours = (fsmTours || []).filter(t => t.missions?.some((m: any) => m.defibIdentifiant === df.identifiant));
-      const prochaineMaint = computeProchaineMaintenance(df.derniereMaintenance);
+      const prochaineMaint = (df as any).prochaineMaintenance || (df as any).prochaine_visite || (df as any).prochaine_v || computeProchaineMaintenance(df.derniereMaintenance);
 
       const valuesMap: Record<string, string> = {
         identifiant: df.identifiant || '',
@@ -2935,56 +2936,258 @@ export default function DefibTab({
     }
   };
 
+  // Open Bulk Edit pane and prefill with current data from selected defibrillators
+  const handleOpenBulkEdit = () => {
+    if (selectedIds.length === 0) return;
+    const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
+    if (selectedDefibs.length === 0) return;
+
+    if (selectedDefibs.length === 1) {
+      const single = selectedDefibs[0];
+      const anySingle = single as any;
+      setBulkModeleId(single.modeleId || '');
+      setBulkCommentaire(single.commentaire || '');
+      setBulkDerniereMaint(single.derniereMaintenance || '');
+      setBulkProchaineMaint(anySingle.prochaineMaintenance || anySingle.prochaine_visite || anySingle.prochaine_v || '');
+      setBulkArchive(single.archive === 'Oui' ? 'Oui' : 'Non');
+      setBulkConforme(single.conforme === 'Non' || anySingle.statut === 'Non conforme' ? 'Non' : 'Oui');
+      setBulkFsmAutorise(single.fsmAutorise === 'Non' || anySingle.fsm_autorise === 'Non' || anySingle.maintenance_autorisee === 'Non' ? 'Non' : 'Oui');
+      setBulkRappelMensuelAuto(single.rappelMensuelAuto === 'Oui' ? 'Oui' : 'Non');
+
+      // For 1 item, pre-enable the toggles so the user can directly see and adjust any field
+      setBulkApplyModele(true);
+      setBulkApplyCommentaire(true);
+      setBulkApplyDerniereMaint(true);
+      setBulkApplyProchaineMaint(true);
+      setBulkApplyArchive(true);
+      setBulkApplyConforme(true);
+      setBulkApplyFsmAutorise(true);
+      setBulkApplyRappelMensuelAuto(true);
+    } else {
+      // Multiple items selected: prefill fields that share identical values
+      const first = selectedDefibs[0];
+      const anyFirst = first as any;
+
+      const sameModele = selectedDefibs.every(d => (d.modeleId || '') === (first.modeleId || ''));
+      setBulkModeleId(sameModele ? (first.modeleId || '') : '');
+
+      const sameComment = selectedDefibs.every(d => (d.commentaire || '') === (first.commentaire || ''));
+      setBulkCommentaire(sameComment ? (first.commentaire || '') : '');
+
+      const sameDerniere = selectedDefibs.every(d => (d.derniereMaintenance || '') === (first.derniereMaintenance || ''));
+      setBulkDerniereMaint(sameDerniere ? (first.derniereMaintenance || '') : '');
+
+      const firstProchaine = anyFirst.prochaineMaintenance || anyFirst.prochaine_visite || anyFirst.prochaine_v || '';
+      const sameProchaine = selectedDefibs.every(d => {
+        const p = (d as any).prochaineMaintenance || (d as any).prochaine_visite || (d as any).prochaine_v || '';
+        return p === firstProchaine;
+      });
+      setBulkProchaineMaint(sameProchaine ? firstProchaine : '');
+
+      const sameArchive = selectedDefibs.every(d => (d.archive || 'Non') === (first.archive || 'Non'));
+      setBulkArchive(sameArchive ? (first.archive === 'Oui' ? 'Oui' : 'Non') : 'Non');
+
+      const firstConforme = (first.conforme === 'Non' || anyFirst.statut === 'Non conforme') ? 'Non' : 'Oui';
+      const sameConforme = selectedDefibs.every(d => {
+        const c = (d.conforme === 'Non' || (d as any).statut === 'Non conforme') ? 'Non' : 'Oui';
+        return c === firstConforme;
+      });
+      setBulkConforme(sameConforme ? firstConforme : 'Oui');
+
+      const firstFsm = (first.fsmAutorise === 'Non' || anyFirst.fsm_autorise === 'Non' || anyFirst.maintenance_autorisee === 'Non') ? 'Non' : 'Oui';
+      const sameFsm = selectedDefibs.every(d => {
+        const f = (d.fsmAutorise === 'Non' || (d as any).fsm_autorise === 'Non' || (d as any).maintenance_autorisee === 'Non') ? 'Non' : 'Oui';
+        return f === firstFsm;
+      });
+      setBulkFsmAutorise(sameFsm ? firstFsm : 'Oui');
+
+      const sameRappel = selectedDefibs.every(d => (d.rappelMensuelAuto || 'Non') === (first.rappelMensuelAuto || 'Non'));
+      setBulkRappelMensuelAuto(sameRappel ? (first.rappelMensuelAuto === 'Oui' ? 'Oui' : 'Non') : 'Non');
+
+      // Leave toggles off initially so the user explicitly activates what they want to overwrite
+      setBulkApplyModele(false);
+      setBulkApplyCommentaire(false);
+      setBulkApplyDerniereMaint(false);
+      setBulkApplyProchaineMaint(false);
+      setBulkApplyArchive(false);
+      setBulkApplyConforme(false);
+      setBulkApplyFsmAutorise(false);
+      setBulkApplyRappelMensuelAuto(false);
+    }
+
+    setIsBulkEditOpen(true);
+  };
+
   // Bulk Edit submission
-  const handleBulkEditSubmit = (e: React.FormEvent) => {
+  const handleBulkEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const subtractOneYear = (dateStr: string): string => {
-      if (!dateStr) return '';
-      const p = dateStr.split('-');
-      if (p.length === 3) {
-        const year = parseInt(p[0], 10);
-        return `${year - 1}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
+    if (isBulkSubmitting) return;
+
+    const safeNormalizeDateISO = (dStr: string): string => {
+      if (!dStr) return '';
+      const trimmed = dStr.trim();
+      if (!trimmed) return '';
+
+      // Check if DD/MM/YYYY
+      if (trimmed.includes('/')) {
+        const parts = trimmed.split('/');
+        if (parts.length === 3) {
+          const d = parts[0].padStart(2, '0');
+          const m = parts[1].padStart(2, '0');
+          const y = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+          return `${y}-${m}-${d}`;
+        }
       }
-      return dateStr;
+
+      // Check if YYYY-MM-DD or DD-MM-YYYY
+      if (trimmed.includes('-')) {
+        const parts = trimmed.split('-');
+        if (parts.length === 3) {
+          if (parts[0].length === 4) {
+            return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+          } else {
+            return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+          }
+        }
+      }
+
+      const dt = new Date(trimmed);
+      if (!isNaN(dt.getTime())) {
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+      return trimmed;
     };
 
+    const subtractOneYear = (dateStr: string): string => {
+      const iso = safeNormalizeDateISO(dateStr);
+      if (!iso) return '';
+      const p = iso.split('-');
+      if (p.length === 3) {
+        const year = parseInt(p[0], 10);
+        if (!isNaN(year)) {
+          return `${year - 1}-${p[1]}-${p[2]}`;
+        }
+      }
+      return iso;
+    };
+
+    const effModeleId = bulkModeleId || (document.getElementById('bulk-modele-select') as HTMLSelectElement)?.value || '';
+    const effCommentaire = bulkCommentaire || (document.getElementById('bulk-commentaire-input') as HTMLInputElement)?.value || '';
+    const effDerniereMaint = bulkDerniereMaint || (document.getElementById('bulk-derniere-maint-input') as HTMLInputElement)?.value || '';
+    const effProchaineMaint = bulkProchaineMaint || (document.getElementById('bulk-prochaine-maint-input') as HTMLInputElement)?.value || '';
+
     const updates: Partial<Omit<Defibrillateur, 'id'>> = {};
-    if (bulkApplyModele) updates.modeleId = bulkModeleId;
-    if (bulkApplyCommentaire) updates.commentaire = bulkCommentaire;
-    if (bulkApplyDerniereMaint) updates.derniereMaintenance = bulkDerniereMaint;
+
+    if (bulkApplyModele) {
+      if (effModeleId) {
+        updates.modeleId = effModeleId;
+        const foundVar = (variables || []).find(v => v.id === effModeleId) || modelesDefib.find(m => m.id === effModeleId);
+        if (foundVar) {
+          (updates as any).modele = foundVar.nom || '';
+          if (foundVar.marque) {
+            (updates as any).marque = foundVar.marque;
+          }
+        }
+      }
+    }
+
+    if (bulkApplyCommentaire) {
+      updates.commentaire = effCommentaire;
+    }
+
+    if (bulkApplyDerniereMaint) {
+      if (effDerniereMaint) {
+        const normDerniere = safeNormalizeDateISO(effDerniereMaint);
+        updates.derniereMaintenance = normDerniere;
+        if (!bulkApplyProchaineMaint) {
+          const nextComputed = computeProchaineMaintenance(normDerniere);
+          (updates as any).prochaineMaintenance = nextComputed;
+          (updates as any).prochaine_visite = nextComputed;
+          (updates as any).prochaine_v = nextComputed;
+        }
+      }
+    }
+
     if (bulkApplyProchaineMaint) {
-      updates.derniereMaintenance = subtractOneYear(bulkProchaineMaint);
+      if (effProchaineMaint) {
+        const normProchaine = safeNormalizeDateISO(effProchaineMaint);
+        (updates as any).prochaineMaintenance = normProchaine;
+        (updates as any).prochaine_visite = normProchaine;
+        (updates as any).prochaine_v = normProchaine;
+        if (!bulkApplyDerniereMaint) {
+          const normDerniere = subtractOneYear(normProchaine);
+          updates.derniereMaintenance = normDerniere;
+        }
+      }
     }
-    if (bulkApplyArchive) updates.archive = bulkArchive;
-    if (bulkApplyConforme) updates.conforme = bulkConforme;
-    if (bulkApplyFsmAutorise) updates.fsmAutorise = bulkFsmAutorise;
-    if (bulkApplyRappelMensuelAuto) updates.rappelMensuelAuto = bulkRappelMensuelAuto;
 
-    if (Object.keys(updates).length > 0) {
-      onBulkEdit(selectedIds, updates);
+    if (bulkApplyArchive) {
+      updates.archive = bulkArchive;
+      (updates as any).estArchive = bulkArchive === 'Oui';
     }
 
-    // Reset fields to original/safe defaults
-    setBulkApplyModele(false);
-    setBulkModeleId('');
-    setBulkApplyCommentaire(false);
-    setBulkCommentaire('');
-    setBulkApplyDerniereMaint(false);
-    setBulkDerniereMaint('');
-    setBulkApplyProchaineMaint(false);
-    setBulkProchaineMaint('');
-    setBulkApplyArchive(false);
-    setBulkArchive('Non');
-    setBulkApplyConforme(false);
-    setBulkConforme('Oui');
-    setBulkApplyFsmAutorise(false);
-    setBulkFsmAutorise('Oui');
-    setBulkApplyRappelMensuelAuto(false);
-    setBulkRappelMensuelAuto('Non');
+    if (bulkApplyConforme) {
+      updates.conforme = bulkConforme;
+      (updates as any).conformite = bulkConforme;
+      (updates as any).statut = bulkConforme === 'Oui' ? 'Conforme' : 'Non conforme';
+    }
 
-    setIsBulkEditOpen(false);
-    setSelectedIds([]);
+    if (bulkApplyFsmAutorise) {
+      updates.fsmAutorise = bulkFsmAutorise;
+      (updates as any).maintenanceAutorisee = bulkFsmAutorise;
+      (updates as any).maintenance_autorisee = bulkFsmAutorise;
+      (updates as any).fsm_autorise = bulkFsmAutorise;
+    }
+
+    if (bulkApplyRappelMensuelAuto) {
+      updates.rappelMensuelAuto = bulkRappelMensuelAuto;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      alert("Veuillez renseigner une valeur valide pour le ou les champs sélectionnés avant de confirmer.");
+      return;
+    }
+
+    if (selectedIds.length === 0) {
+      setIsBulkEditOpen(false);
+      return;
+    }
+
+    setIsBulkSubmitting(true);
+    try {
+      await onBulkEdit(selectedIds, updates);
+      // Give sufficient time for UI state & Firebase sync, keeping button disabled & showing progress
+      await new Promise(r => setTimeout(r, 500));
+
+      // Reset fields to original/safe defaults
+      setBulkApplyModele(false);
+      setBulkModeleId('');
+      setBulkApplyCommentaire(false);
+      setBulkCommentaire('');
+      setBulkApplyDerniereMaint(false);
+      setBulkDerniereMaint('');
+      setBulkApplyProchaineMaint(false);
+      setBulkProchaineMaint('');
+      setBulkApplyArchive(false);
+      setBulkArchive('Non');
+      setBulkApplyConforme(false);
+      setBulkConforme('Oui');
+      setBulkApplyFsmAutorise(false);
+      setBulkFsmAutorise('Oui');
+      setBulkApplyRappelMensuelAuto(false);
+      setBulkRappelMensuelAuto('Non');
+
+      setIsBulkEditOpen(false);
+      setSelectedIds([]);
+    } catch (err) {
+      console.error("Erreur lors de la modification en masse :", err);
+      alert("Une erreur est survenue lors de la modification en masse.");
+    } finally {
+      setIsBulkSubmitting(false);
+    }
   };
 
   // Bulk deletion
@@ -3188,7 +3391,7 @@ export default function DefibTab({
                 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setIsBulkEditOpen(true)}
+                    onClick={handleOpenBulkEdit}
                     id="btn-bulk-modify"
                     style={rowActionButton18Style}
                     className="cursor-pointer"
@@ -3808,7 +4011,7 @@ export default function DefibTab({
                   const linkedModel = variableMap.get(df.modeleId);
                   const isChecked = selectedIds.includes(df.id);
                   const isPinned = pinnedDefibIds.includes(df.id);
-                  const prochaineMaint = computeProchaineMaintenance(df.derniereMaintenance);
+                  const prochaineMaint = (df as any).prochaineMaintenance || (df as any).prochaine_visite || (df as any).prochaine_v || computeProchaineMaintenance(df.derniereMaintenance);
 
                   const activeAlerts: any[] = [];
                   const modelIds = [
@@ -7161,9 +7364,13 @@ export default function DefibTab({
                   <div className="py-2">
                     <div className="relative">
                       <select
+                        id="bulk-modele-select"
                         value={bulkModeleId}
-                        onChange={(e) => setBulkModeleId(e.target.value)}
-                        style={{ ...filterInputStyle, appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none' }}
+                        onChange={(e) => {
+                          setBulkModeleId(e.target.value);
+                          setBulkApplyModele(true);
+                        }}
+                        style={{ ...filterInputStyle, appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', width: '100%' }}
                         className="w-full outline-none"
                       >
                         <option value="">-- Choisir un modèle --</option>
@@ -7202,11 +7409,15 @@ export default function DefibTab({
                   <div className="py-2">
                     <input
                       type="text"
+                      id="bulk-commentaire-input"
                       value={bulkCommentaire}
-                      onChange={(e) => setBulkCommentaire(e.target.value)}
+                      onChange={(e) => {
+                        setBulkCommentaire(e.target.value);
+                        setBulkApplyCommentaire(true);
+                      }}
                       placeholder="Entrez votre commentaire."
-                      style={filterInputStyle}
-                      className="outline-none"
+                      style={{ ...filterInputStyle, width: '100%' }}
+                      className="w-full outline-none"
                     />
                   </div>
                 )}
@@ -7236,11 +7447,21 @@ export default function DefibTab({
                 
                 {bulkApplyDerniereMaint && (
                   <div className="py-2">
-                    <SafeDateInput
+                    <input
+                      type="date"
+                      id="bulk-derniere-maint-input"
                       value={bulkDerniereMaint}
-                      onChange={(e) => setBulkDerniereMaint(e.target.value)}
-                      style={filterInputStyle}
-                      className="outline-none bg-white font-sans text-black [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                      onChange={(e) => {
+                        setBulkDerniereMaint(e.target.value);
+                        setBulkApplyDerniereMaint(true);
+                      }}
+                      onInput={(e) => {
+                        setBulkDerniereMaint((e.target as HTMLInputElement).value);
+                        setBulkApplyDerniereMaint(true);
+                      }}
+                      onClick={(e) => { try { (e.target as any).showPicker?.(); } catch(_) {} }}
+                      style={{ ...filterInputStyle, width: '100%' }}
+                      className="w-full outline-none bg-white font-sans text-black cursor-pointer"
                     />
                   </div>
                 )}
@@ -7270,11 +7491,21 @@ export default function DefibTab({
                 
                 {bulkApplyProchaineMaint && (
                   <div className="py-2">
-                    <SafeDateInput
+                    <input
+                      type="date"
+                      id="bulk-prochaine-maint-input"
                       value={bulkProchaineMaint}
-                      onChange={(e) => setBulkProchaineMaint(e.target.value)}
-                      style={filterInputStyle}
-                      className="outline-none bg-white font-sans text-black [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                      onChange={(e) => {
+                        setBulkProchaineMaint(e.target.value);
+                        setBulkApplyProchaineMaint(true);
+                      }}
+                      onInput={(e) => {
+                        setBulkProchaineMaint((e.target as HTMLInputElement).value);
+                        setBulkApplyProchaineMaint(true);
+                      }}
+                      onClick={(e) => { try { (e.target as any).showPicker?.(); } catch(_) {} }}
+                      style={{ ...filterInputStyle, width: '100%' }}
+                      className="w-full outline-none bg-white font-sans text-black cursor-pointer"
                     />
                   </div>
                 )}
@@ -7306,7 +7537,10 @@ export default function DefibTab({
                   <div className="py-2 flex items-center gap-6 font-sans">
                     <button
                       type="button"
-                      onClick={() => setBulkArchive('Oui')}
+                      onClick={() => {
+                        setBulkArchive('Oui');
+                        setBulkApplyArchive(true);
+                      }}
                       className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
                     >
                       <div 
@@ -7324,7 +7558,10 @@ export default function DefibTab({
 
                     <button
                       type="button"
-                      onClick={() => setBulkArchive('Non')}
+                      onClick={() => {
+                        setBulkArchive('Non');
+                        setBulkApplyArchive(true);
+                      }}
                       className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
                     >
                       <div 
@@ -7369,7 +7606,10 @@ export default function DefibTab({
                   <div className="py-2 flex items-center gap-6 font-sans">
                     <button
                       type="button"
-                      onClick={() => setBulkConforme('Oui')}
+                      onClick={() => {
+                        setBulkConforme('Oui');
+                        setBulkApplyConforme(true);
+                      }}
                       className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
                     >
                       <div 
@@ -7387,7 +7627,10 @@ export default function DefibTab({
 
                     <button
                       type="button"
-                      onClick={() => setBulkConforme('Non')}
+                      onClick={() => {
+                        setBulkConforme('Non');
+                        setBulkApplyConforme(true);
+                      }}
                       className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
                     >
                       <div 
@@ -7432,7 +7675,10 @@ export default function DefibTab({
                   <div className="py-2 flex items-center gap-6 font-sans">
                     <button
                       type="button"
-                      onClick={() => setBulkFsmAutorise('Oui')}
+                      onClick={() => {
+                        setBulkFsmAutorise('Oui');
+                        setBulkApplyFsmAutorise(true);
+                      }}
                       className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
                     >
                       <div 
@@ -7450,7 +7696,10 @@ export default function DefibTab({
 
                     <button
                       type="button"
-                      onClick={() => setBulkFsmAutorise('Non')}
+                      onClick={() => {
+                        setBulkFsmAutorise('Non');
+                        setBulkApplyFsmAutorise(true);
+                      }}
                       className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
                     >
                       <div 
@@ -7495,7 +7744,10 @@ export default function DefibTab({
                   <div className="py-2 flex items-center gap-6 font-sans">
                     <button
                       type="button"
-                      onClick={() => setBulkRappelMensuelAuto('Oui')}
+                      onClick={() => {
+                        setBulkRappelMensuelAuto('Oui');
+                        setBulkApplyRappelMensuelAuto(true);
+                      }}
                       className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
                     >
                       <div 
@@ -7513,7 +7765,10 @@ export default function DefibTab({
 
                     <button
                       type="button"
-                      onClick={() => setBulkRappelMensuelAuto('Non')}
+                      onClick={() => {
+                        setBulkRappelMensuelAuto('Non');
+                        setBulkApplyRappelMensuelAuto(true);
+                      }}
                       className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
                     >
                       <div 
@@ -7538,25 +7793,68 @@ export default function DefibTab({
             <div className="p-6 bg-white flex gap-4 shrink-0">
               <button
                 type="button"
+                disabled={isBulkSubmitting}
                 onClick={() => setIsBulkEditOpen(false)}
                 style={{ ...cancelFiltersButtonStyle, fontSize: '18px' }}
-                className="flex-1 text-center font-sans cursor-pointer animate-none"
+                className={`flex-1 text-center font-sans ${isBulkSubmitting ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} animate-none`}
               >
                 Annuler
               </button>
               <button
                 type="submit"
-                disabled={!bulkApplyModele && !bulkApplyCommentaire && !bulkApplyDerniereMaint && !bulkApplyProchaineMaint && !bulkApplyArchive && !bulkApplyConforme && !bulkApplyFsmAutorise && !bulkApplyRappelMensuelAuto}
+                disabled={
+                  isBulkSubmitting ||
+                  (!bulkApplyModele &&
+                    !bulkApplyCommentaire &&
+                    !bulkApplyDerniereMaint &&
+                    !bulkApplyProchaineMaint &&
+                    !bulkApplyArchive &&
+                    !bulkApplyConforme &&
+                    !bulkApplyFsmAutorise &&
+                    !bulkApplyRappelMensuelAuto)
+                }
                 style={{
                   ...applyFiltersButtonStyle,
                   backgroundColor: 'rgb(53, 86, 236)',
                   color: 'rgb(255, 255, 255)',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  boxShadow:
+                    'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                   fontSize: '18px',
+                  opacity:
+                    isBulkSubmitting ||
+                    (!bulkApplyModele &&
+                      !bulkApplyCommentaire &&
+                      !bulkApplyDerniereMaint &&
+                      !bulkApplyProchaineMaint &&
+                      !bulkApplyArchive &&
+                      !bulkApplyConforme &&
+                      !bulkApplyFsmAutorise &&
+                      !bulkApplyRappelMensuelAuto)
+                      ? 0.5
+                      : 1,
+                  cursor:
+                    isBulkSubmitting ||
+                    (!bulkApplyModele &&
+                      !bulkApplyCommentaire &&
+                      !bulkApplyDerniereMaint &&
+                      !bulkApplyProchaineMaint &&
+                      !bulkApplyArchive &&
+                      !bulkApplyConforme &&
+                      !bulkApplyFsmAutorise &&
+                      !bulkApplyRappelMensuelAuto)
+                      ? 'not-allowed'
+                      : 'pointer',
                 }}
-                className="flex-1 text-center font-sans cursor-pointer animate-none"
+                className="flex-1 text-center font-sans animate-none flex items-center justify-center gap-2"
               >
-                Confirmer
+                {isBulkSubmitting ? (
+                  <>
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Mise à jour en cours...</span>
+                  </>
+                ) : (
+                  <span>Confirmer</span>
+                )}
               </button>
             </div>
           </form>
@@ -7566,7 +7864,7 @@ export default function DefibTab({
       {/* Bulk side overlay background backdrop */}
       {isBulkEditOpen && (
         <div 
-          onClick={() => setIsBulkEditOpen(false)}
+          onClick={() => !isBulkSubmitting && setIsBulkEditOpen(false)}
           className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-[85]"
         />
       )}

@@ -7514,7 +7514,7 @@ export default function App() {
     saveDefibs(defibrillateurs.filter((df) => !ids.includes(df.id)));
   };
 
-  const handleBulkEditDefib = (ids: string[], updates: Partial<Omit<Defibrillateur, 'id'>>) => {
+  const handleBulkEditDefib = async (ids: string[], updates: Partial<Omit<Defibrillateur, 'id'>>) => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
@@ -7522,13 +7522,44 @@ export default function App() {
     // Log suspicious activity Event B: bulk edit defibs
     logBulkEditDefib(tenantId, loggedUser?.name, undefined, ids.length).catch(() => {});
 
+    const updatedDefibs: Defibrillateur[] = [];
+    const normalizedIds = ids.map((id) => String(id || '').trim().toUpperCase()).filter(Boolean);
     const updatedList = defibrillateurs.map((df) => {
-      if (ids.includes(df.id)) {
-        return { ...df, ...updates };
+      const isMatch = normalizedIds.some((normId) => {
+        return (
+          (df.id && String(df.id).trim().toUpperCase() === normId) ||
+          (df.identifiant && String(df.identifiant).trim().toUpperCase() === normId) ||
+          (df.numeroSerie && String(df.numeroSerie).trim().toUpperCase() === normId)
+        );
+      });
+      if (isMatch) {
+        const merged = { ...df, ...updates, updatedAt: new Date().toISOString() };
+        updatedDefibs.push(merged);
+        return merged;
       }
       return df;
     });
-    saveDefibs(updatedList);
+
+    setDefibrillateurs(updatedList);
+    await saveDefibs(updatedList);
+
+    // Sync each updated defib to live single-defib server index & chunk store
+    if (updatedDefibs.length > 0) {
+      try {
+        await Promise.all(
+          updatedDefibs.map((ud) =>
+            fetch('/api/sync-single-defib', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tenantId: tenantId || ud.envId || ud.tenantId || 'D27',
+                defib: ud
+              })
+            }).catch(() => {})
+          )
+        );
+      } catch (_) {}
+    }
   };
 
   // Public standalone portals accessible without authentication
