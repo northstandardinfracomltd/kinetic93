@@ -827,7 +827,6 @@ export default function DefibTab({
   const [editingDefib, setEditingDefib] = useState<Defibrillateur | null>(null);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
-  const [isBulkSuccess, setIsBulkSuccess] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isLotScannerOpen, setIsLotScannerOpen] = useState(false);
   const [isSerieScannerOpen, setIsSerieScannerOpen] = useState(false);
@@ -2964,8 +2963,6 @@ export default function DefibTab({
     setBulkApplyConforme(false);
     setBulkApplyFsmAutorise(false);
     setBulkApplyRappelMensuelAuto(false);
-    setIsBulkSubmitting(false);
-    setIsBulkSuccess(false);
 
     setIsBulkEditOpen(true);
   };
@@ -2973,134 +2970,128 @@ export default function DefibTab({
   // Bulk Edit submission
   const handleBulkEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isBulkSubmitting || isBulkSuccess) return;
+    if (isBulkSubmitting) return;
 
-    try {
-      const subtractOneYear = (dateStr: string): string => {
-        const iso = toISODateOnly(dateStr);
-        if (!iso) return '';
-        const p = iso.split('-');
-        if (p.length === 3) {
-          const year = parseInt(p[0], 10);
-          if (!isNaN(year)) {
-            return `${year - 1}-${p[1]}-${p[2]}`;
-          }
-        }
-        return iso;
-      };
-
-      const updates: Partial<Omit<Defibrillateur, 'id'>> = {};
-
-      if (bulkApplyModele) {
-        const effModeleId = bulkModeleId || (document.getElementById('bulk-modele-select') as HTMLSelectElement)?.value || '';
-        if (!effModeleId) {
-          alert("Veuillez sélectionner un modèle pour le champ Modèle.");
-          return;
-        }
-        updates.modeleId = effModeleId;
-        const foundVar = (variables || []).find(v => v.id === effModeleId) || modelesDefib.find(m => m.id === effModeleId);
-        if (foundVar) {
-          (updates as any).modele = foundVar.nom || '';
-          if (foundVar.marque) {
-            (updates as any).marque = foundVar.marque;
-          }
+    const subtractOneYear = (dateStr: string): string => {
+      const iso = toISODateOnly(dateStr);
+      if (!iso) return '';
+      const p = iso.split('-');
+      if (p.length === 3) {
+        const year = parseInt(p[0], 10);
+        if (!isNaN(year)) {
+          return `${year - 1}-${p[1]}-${p[2]}`;
         }
       }
+      return iso;
+    };
 
-      if (bulkApplyCommentaire) {
-        const effCommentaire = bulkCommentaire !== undefined ? bulkCommentaire : ((document.getElementById('bulk-commentaire-input') as HTMLInputElement)?.value || '');
-        updates.commentaire = effCommentaire;
+    const updates: Partial<Omit<Defibrillateur, 'id'>> = {};
+
+    if (bulkApplyModele) {
+      const effModeleId = bulkModeleId || (document.getElementById('bulk-modele-select') as HTMLSelectElement)?.value || '';
+      if (!effModeleId) {
+        alert("Veuillez sélectionner un modèle pour le champ Modèle.");
+        return;
       }
-
-      if (bulkApplyDerniereMaint) {
-        const rawDerniere = bulkDerniereMaint || (document.getElementById('bulk-derniere-maint-input') as HTMLInputElement)?.value || '';
-        const normDerniere = toISODateOnly(rawDerniere);
-        if (!normDerniere) {
-          alert("Veuillez renseigner une date valide pour la dernière maintenance.");
-          return;
+      updates.modeleId = effModeleId;
+      const foundVar = (variables || []).find(v => v.id === effModeleId) || modelesDefib.find(m => m.id === effModeleId);
+      if (foundVar) {
+        (updates as any).modele = foundVar.nom || '';
+        if (foundVar.marque) {
+          (updates as any).marque = foundVar.marque;
         }
+      }
+    }
+
+    if (bulkApplyCommentaire) {
+      const effCommentaire = bulkCommentaire !== undefined ? bulkCommentaire : ((document.getElementById('bulk-commentaire-input') as HTMLInputElement)?.value || '');
+      updates.commentaire = effCommentaire;
+    }
+
+    if (bulkApplyDerniereMaint) {
+      const rawDerniere = bulkDerniereMaint || (document.getElementById('bulk-derniere-maint-input') as HTMLInputElement)?.value || '';
+      const normDerniere = toISODateOnly(rawDerniere);
+      if (!normDerniere) {
+        alert("Veuillez renseigner une date valide pour la dernière maintenance.");
+        return;
+      }
+      updates.derniereMaintenance = normDerniere;
+      if (!bulkApplyProchaineMaint) {
+        const nextComputed = computeProchaineMaintenance(normDerniere);
+        (updates as any).prochaineMaintenance = nextComputed;
+        (updates as any).prochaine_visite = nextComputed;
+        (updates as any).prochaine_v = nextComputed;
+      }
+    }
+
+    if (bulkApplyProchaineMaint) {
+      const rawProchaine = bulkProchaineMaint || (document.getElementById('bulk-prochaine-maint-input') as HTMLInputElement)?.value || '';
+      const normProchaine = toISODateOnly(rawProchaine);
+      if (!normProchaine) {
+        alert("Veuillez renseigner une date valide pour la prochaine maintenance.");
+        return;
+      }
+      (updates as any).prochaineMaintenance = normProchaine;
+      (updates as any).prochaine_visite = normProchaine;
+      (updates as any).prochaine_v = normProchaine;
+      if (!bulkApplyDerniereMaint) {
+        const normDerniere = subtractOneYear(normProchaine);
         updates.derniereMaintenance = normDerniere;
-        (updates as any).derniere_maintenance = normDerniere;
-        (updates as any).date_derniere_maintenance = normDerniere;
-        if (!bulkApplyProchaineMaint) {
-          const nextComputed = computeProchaineMaintenance(normDerniere);
-          (updates as any).prochaineMaintenance = nextComputed;
-          (updates as any).prochaine_visite = nextComputed;
-          (updates as any).prochaine_v = nextComputed;
-        }
       }
+    }
 
-      if (bulkApplyProchaineMaint) {
-        const rawProchaine = bulkProchaineMaint || (document.getElementById('bulk-prochaine-maint-input') as HTMLInputElement)?.value || '';
-        const normProchaine = toISODateOnly(rawProchaine);
-        if (!normProchaine) {
-          alert("Veuillez renseigner une date valide pour la prochaine maintenance.");
-          return;
-        }
-        (updates as any).prochaineMaintenance = normProchaine;
-        (updates as any).prochaine_visite = normProchaine;
-        (updates as any).prochaine_v = normProchaine;
-        if (!bulkApplyDerniereMaint) {
-          const normDerniere = subtractOneYear(normProchaine);
-          updates.derniereMaintenance = normDerniere;
-          (updates as any).derniere_maintenance = normDerniere;
-        }
-      }
-
-      if (bulkApplyArchive) {
-        if (!bulkArchive) {
-          alert("Veuillez choisir 'Oui' ou 'Non' pour le champ Archivé.");
-          return;
-        }
-        updates.archive = bulkArchive;
-        (updates as any).estArchive = bulkArchive === 'Oui';
-      }
-
-      if (bulkApplyConforme) {
-        if (!bulkConforme) {
-          alert("Veuillez choisir 'Oui' ou 'Non' pour le champ Conforme.");
-          return;
-        }
-        updates.conforme = bulkConforme;
-        (updates as any).conformite = bulkConforme;
-        (updates as any).statut = bulkConforme === 'Oui' ? 'Conforme' : 'Non conforme';
-      }
-
-      if (bulkApplyFsmAutorise) {
-        if (!bulkFsmAutorise) {
-          alert("Veuillez choisir 'Oui' ou 'Non' pour la maintenance autorisée.");
-          return;
-        }
-        updates.fsmAutorise = bulkFsmAutorise;
-        (updates as any).maintenanceAutorisee = bulkFsmAutorise;
-        (updates as any).maintenance_autorisee = bulkFsmAutorise;
-        (updates as any).fsm_autorise = bulkFsmAutorise;
-      }
-
-      if (bulkApplyRappelMensuelAuto) {
-        if (!bulkRappelMensuelAuto) {
-          alert("Veuillez choisir 'Oui' ou 'Non' pour l'email mensuel d'auto-vigilance.");
-          return;
-        }
-        updates.rappelMensuelAuto = bulkRappelMensuelAuto;
-      }
-
-      if (Object.keys(updates).length === 0) {
-        alert("Veuillez sélectionner et renseigner au moins un champ à corriger avant de confirmer.");
+    if (bulkApplyArchive) {
+      if (!bulkArchive) {
+        alert("Veuillez choisir 'Oui' ou 'Non' pour le champ Archivé.");
         return;
       }
+      updates.archive = bulkArchive;
+      (updates as any).estArchive = bulkArchive === 'Oui';
+    }
 
-      if (selectedIds.length === 0) {
-        setIsBulkEditOpen(false);
+    if (bulkApplyConforme) {
+      if (!bulkConforme) {
+        alert("Veuillez choisir 'Oui' ou 'Non' pour le champ Conforme.");
         return;
       }
+      updates.conforme = bulkConforme;
+      (updates as any).conformite = bulkConforme;
+      (updates as any).statut = bulkConforme === 'Oui' ? 'Conforme' : 'Non conforme';
+    }
 
-      setIsBulkSubmitting(true);
+    if (bulkApplyFsmAutorise) {
+      if (!bulkFsmAutorise) {
+        alert("Veuillez choisir 'Oui' ou 'Non' pour la maintenance autorisée.");
+        return;
+      }
+      updates.fsmAutorise = bulkFsmAutorise;
+      (updates as any).maintenanceAutorisee = bulkFsmAutorise;
+      (updates as any).maintenance_autorisee = bulkFsmAutorise;
+      (updates as any).fsm_autorise = bulkFsmAutorise;
+    }
+
+    if (bulkApplyRappelMensuelAuto) {
+      if (!bulkRappelMensuelAuto) {
+        alert("Veuillez choisir 'Oui' ou 'Non' pour l'email mensuel d'auto-vigilance.");
+        return;
+      }
+      updates.rappelMensuelAuto = bulkRappelMensuelAuto;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      alert("Veuillez sélectionner et renseigner au moins un champ à corriger avant de confirmer.");
+      return;
+    }
+
+    if (selectedIds.length === 0) {
+      setIsBulkEditOpen(false);
+      return;
+    }
+
+    setIsBulkSubmitting(true);
+    try {
       await onBulkEdit(selectedIds, updates);
-
-      // Brief visual completion feedback
-      setIsBulkSuccess(true);
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 400));
 
       // Reset fields
       setBulkApplyModele(false);
@@ -3127,7 +3118,6 @@ export default function DefibTab({
       alert("Une erreur est survenue lors de la modification en masse.");
     } finally {
       setIsBulkSubmitting(false);
-      setIsBulkSuccess(false);
     }
   };
 
@@ -3332,10 +3322,17 @@ export default function DefibTab({
                 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleOpenBulkEdit}
+                    type="button"
+                    disabled={true}
+                    onClick={() => {}}
                     id="btn-bulk-modify"
-                    style={rowActionButton18Style}
-                    className="cursor-pointer"
+                    style={{
+                      ...rowActionButton18Style,
+                      opacity: 0.4,
+                      cursor: 'not-allowed'
+                    }}
+                    className="cursor-not-allowed opacity-40 select-none"
+                    title="Action temporairement désactivée"
                   >
                     Corriger
                   </button>

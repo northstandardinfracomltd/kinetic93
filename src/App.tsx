@@ -78,6 +78,7 @@ import FeedbackDrawer from './components/FeedbackDrawer';
 import { EmptyTablePlaceholder } from './components/EmptyTablePlaceholder';
 import TopBarProgress from './components/TopBarProgress';
 import { updateLoginSessionSlug } from './utils/sessionSlug';
+import { setAudioMutedInMainSoftware } from './utils/technicianAudio';
 import {
   SuspiciousActivityLog,
   logUserLogin,
@@ -1078,6 +1079,24 @@ export default function App() {
     phone: "+33 1 47 20 00 01"
   });
 
+  const isHelpTutorialsDisabled = useMemo(() => {
+    if (companyInfo?.disableHelpsAndTutorials === 'Oui') return true;
+    try {
+      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      let userEmail = '';
+      const saved = localStorage.getItem('defib_admin_logged_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.email) userEmail = parsed.email.toLowerCase().trim();
+      }
+      const userSpecificKey = userEmail ? `defib_${activeTenant}_user_${userEmail}_disable_helps_tutorials` : `defib_${activeTenant}_disable_helps_tutorials`;
+      if (localStorage.getItem(userSpecificKey) === 'Oui' || localStorage.getItem(`defib_${activeTenant}_disable_helps_tutorials`) === 'Oui') {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }, [companyInfo?.disableHelpsAndTutorials]);
+
   useEffect(() => {
     if (isFirebaseLoaded && tenantId === loadedTenantIdState && companyInfo) {
       let updated = false;
@@ -1670,6 +1689,16 @@ export default function App() {
     defibIdentifiant: string;
     siteMission: string;
   } | null>(null);
+
+  // Mute audio effects when side pane Corriger is open in the main software
+  useEffect(() => {
+    if (editingReportId) {
+      setAudioMutedInMainSoftware(true);
+      return () => {
+        setAudioMutedInMainSoftware(false);
+      };
+    }
+  }, [editingReportId]);
 
   const toggleGmaoTableFitView = () => {
     setGmaoIsTableFitView(prev => {
@@ -7581,23 +7610,25 @@ export default function App() {
     });
 
     setDefibrillateurs(updatedList);
+    await saveDefibs(updatedList);
 
-    // Sync each updated defib to live single-defib server index & chunk store in parallel with saveDefibs
-    const syncSinglePromises = updatedDefibs.map((ud) =>
-      fetch('/api/sync-single-defib', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: tenantId || ud.envId || ud.tenantId || 'D27',
-          defib: ud
-        })
-      }).catch(() => {})
-    );
-
-    await Promise.all([
-      saveDefibs(updatedList),
-      ...syncSinglePromises
-    ]);
+    // Sync each updated defib to live single-defib server index & chunk store
+    if (updatedDefibs.length > 0) {
+      try {
+        await Promise.all(
+          updatedDefibs.map((ud) =>
+            fetch('/api/sync-single-defib', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tenantId: tenantId || ud.envId || ud.tenantId || 'D27',
+                defib: ud
+              })
+            }).catch(() => {})
+          )
+        );
+      } catch (_) {}
+    }
   };
 
   // Public standalone portals accessible without authentication
@@ -9675,18 +9706,18 @@ export default function App() {
                                   </div>
                                 </div>
 
-                                <div className="space-y-1.5 text-xs text-neutral-700" style={{ cursor: 'default' }}>
-                                  <div style={{ cursor: 'default' }}>
-                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default' }}>Planificateur(s) : </span>
-                                    <span style={{ cursor: 'default' }}>{g.planners && g.planners.length > 0 ? g.planners.join(', ') : 'Aucun'}</span>
+                                <div className="space-y-1.5 text-neutral-700" style={{ cursor: 'default', fontSize: '16px' }}>
+                                  <div style={{ cursor: 'default', fontSize: '16px' }}>
+                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default', fontSize: '16px' }}>Planificateur(s) : </span>
+                                    <span style={{ cursor: 'default', fontSize: '16px' }}>{g.planners && g.planners.length > 0 ? g.planners.join(', ') : 'Aucun'}</span>
                                   </div>
-                                  <div style={{ cursor: 'default' }}>
-                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default' }}>Technicien(s) : </span>
-                                    <span style={{ cursor: 'default' }}>{g.technicians && g.technicians.length > 0 ? g.technicians.join(', ') : 'Aucun'}</span>
+                                  <div style={{ cursor: 'default', fontSize: '16px' }}>
+                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default', fontSize: '16px' }}>Technicien(s) : </span>
+                                    <span style={{ cursor: 'default', fontSize: '16px' }}>{g.technicians && g.technicians.length > 0 ? g.technicians.join(', ') : 'Aucun'}</span>
                                   </div>
-                                  <div style={{ cursor: 'default' }}>
-                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default' }}>Région(s) : </span>
-                                    <span style={{ cursor: 'default' }}>{g.regions && g.regions.length > 0 ? g.regions.join(', ') : 'Aucune'}</span>
+                                  <div style={{ cursor: 'default', fontSize: '16px' }}>
+                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default', fontSize: '16px' }}>Région(s) : </span>
+                                    <span style={{ cursor: 'default', fontSize: '16px' }}>{g.regions && g.regions.length > 0 ? g.regions.join(', ') : 'Aucune'}</span>
                                   </div>
                                 </div>
                               </div>
@@ -9838,15 +9869,15 @@ export default function App() {
                             <button
                               type="button"
                               id="btn-fsm-month-stats"
-                              className="inline-flex items-center justify-center text-center select-none hover:bg-slate-100 transition-colors"
+                              className="inline-flex items-center justify-center text-center select-none hover:opacity-90 active:scale-95 transition-all"
                               style={{
-                                backgroundColor: '#f8fafc',
-                                border: '1px solid rgb(218, 218, 218)',
+                                backgroundColor: '#000000',
+                                border: 'none',
                                 borderRadius: '13px',
                                 padding: '9px 18px',
-                                fontSize: '15px',
+                                fontSize: '18px',
                                 fontWeight: 600,
-                                color: '#000000',
+                                color: '#ffffff',
                                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                 textAlign: 'center',
                                 width: 'auto',
@@ -10100,16 +10131,17 @@ export default function App() {
                             <span
                               className="inline-flex items-center justify-center rounded-full shrink-0 font-bold ml-2.5"
                               style={{
-                                backgroundColor: '#3556ec',
-                                color: '#ffffff',
-                                fontSize: '12px',
-                                minWidth: '22px',
-                                height: '22px',
-                                padding: '0 6px',
+                                backgroundColor: 'rgb(255 255 255)',
+                                color: '#000',
+                                border: '1px solid #80808080',
+                                fontSize: '15px',
+                                minWidth: '26px',
+                                height: '26px',
+                                padding: '0px 6px',
                                 lineHeight: 1,
                               }}
                             >
-                              {aTrierCount}
+                              {aTrierCount > 9 ? '9+' : aTrierCount}
                             </span>
                           </button>
                         );
@@ -14334,7 +14366,7 @@ export default function App() {
                   </p>
                 </HelpBubble>
 
-                {!isGmaoAdminInfoDismissed && companyInfo?.disableHelpsAndTutorials !== 'Oui' && (
+                {!isGmaoAdminInfoDismissed && !isHelpTutorialsDisabled && (
                   <div 
                     className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
                     style={{
@@ -14498,7 +14530,7 @@ export default function App() {
                             <th className="px-4 py-3.5" style={thStyle}>Identifiant.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Technicien.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Réf. Intervention.</th>
-                            <th className="px-4 py-3.5 whitespace-nowrap" style={{ ...thStyle, whiteSpace: 'nowrap' }}>Autre référence</th>
+                            <th className="px-4 py-3.5 whitespace-nowrap shrink-0" style={{ ...thStyle, whiteSpace: 'nowrap', minWidth: 'max-content' }}>Autre&nbsp;référence.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Origine.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Planifié/Effectué.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Situation.</th>
@@ -14806,7 +14838,7 @@ export default function App() {
                                 </td>
 
                                 {/* Autre référence */}
-                                <td className="px-4 py-5 whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                                <td className="px-4 py-5 whitespace-nowrap shrink-0" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif', whiteSpace: 'nowrap', minWidth: 'max-content' }}>
                                   {(() => {
                                     let val = rep.autreReference || rep.customReference || '';
                                     if (!val) {
@@ -15364,7 +15396,7 @@ export default function App() {
 
                           {/* 3. Field: Commentaire du technicien. (Disabled textarea showing section 11 Commentaire interne) */}
                           <div className="space-y-2 pt-1">
-                            <label className="block text-[18px] font-medium text-[#000]">
+                            <label className="block text-[16px] font-medium text-[#000]">
                               Commentaire du technicien.
                             </label>
                             <textarea
@@ -15638,10 +15670,7 @@ export default function App() {
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
                       {/* Filter 1: Client */}
                       <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
-                            Client.
-                          </label>
+                        <div className="flex items-center justify-start pb-1">
                           <button
                             type="button"
                             onClick={() => setIsGmaoSearchClientOpen(true)}
@@ -15651,6 +15680,9 @@ export default function App() {
                             Rechercher
                           </button>
                         </div>
+                        <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                          Client.
+                        </label>
                         <div className="relative">
                           <select
                             value={draftGmaoFilters.client}
@@ -15695,9 +15727,9 @@ export default function App() {
                         </label>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <span className="block mb-1 font-sans font-medium" style={{ color: '#000000', fontSize: '16px' }}>
+                            <label className="block mb-1 font-sans" style={{ color: '#000', fontSize: '16px', fontWeight: 500 }}>
                               Date début.
-                            </span>
+                            </label>
                             <input
                               type="date"
                               value={draftGmaoFilters.startDate}
@@ -15707,9 +15739,9 @@ export default function App() {
                             />
                           </div>
                           <div>
-                            <span className="block mb-1 font-sans font-medium" style={{ color: '#000000', fontSize: '16px' }}>
+                            <label className="block mb-1 font-sans" style={{ color: '#000', fontSize: '16px', fontWeight: 500 }}>
                               Date fin.
-                            </span>
+                            </label>
                             <input
                               type="date"
                               value={draftGmaoFilters.endDate}
@@ -16086,7 +16118,9 @@ export default function App() {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setGmaoSearchQuery(refIntervention);
+                                    const targetFilter = r.validated ? 'validated' : (r.isUpcoming ? 'upcoming' : 'moderation');
+                                    setGmaoFilter(targetFilter);
+                                    setGmaoSearchQuery(r.interventionReference || refIntervention);
                                     setGmaoCurrentPage(1);
                                     setIsGmaoDevisPaneOpen(false);
                                   }}

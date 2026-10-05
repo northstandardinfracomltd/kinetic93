@@ -1865,7 +1865,8 @@ export default function SettingsModal({
       enableAutoEmails: enableAutoEmails,
       enableSatisfactionAvis: enableSatisfactionAvis,
       enableDevisFactures: enableDevisFactures,
-      communicationPortailClient: communicationPortailClient
+      communicationPortailClient: communicationPortailClient,
+      disableHelpsAndTutorials: disableHelpsAndTutorials
     };
 
     // Log suspicious activity event K for modified fields in Réglages

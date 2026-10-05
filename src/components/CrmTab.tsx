@@ -2386,15 +2386,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           <div 
                             className="absolute right-3 flex items-center justify-center rounded-full text-white font-bold font-sans pointer-events-none select-none"
                             style={{
-                              width: '40px',
-                              height: '40px',
+                              width: '35px',
+                              height: '35px',
                               minWidth: '25px',
                               minHeight: '25px',
-                              outline: '#8f1961 solid 3px',
-                              outlineOffset: '3px',
                               marginLeft: '10px',
-                              fontSize: '16px',
-                              backgroundColor: '#8f1961'
+                              fontSize: '13px',
+                              backgroundColor: 'rgb(143, 25, 97)'
                             }}
                             title={`Semaine ${getWeekNumberString(formOuverture)}`}
                           >
@@ -2560,7 +2558,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     </div>
 
                     {/* Situation Interlocuteur & Type Structure (4 options sur la même ligne : 2 options + 2 options) */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                       {/* Situation Interlocuteur (Prospect / Client) */}
                       <div>
                         <label>Situation Interlocuteur.</label>
@@ -2729,7 +2727,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       id="crm-commercial-section"
                     >
                       {/* Marché Public (40%) & Situation Devis (60%) sur la même ligne (2 + 3 options = 5 options) */}
-                      <div className="grid grid-cols-5 gap-3">
+                      <div className="grid grid-cols-5 gap-x-6 gap-y-3">
                         {/* Marché Public (2 cols = 40%) */}
                         <div className="col-span-2">
                           <label>Marché Public.</label>
@@ -2829,7 +2827,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                   backgroundColor: isSelected ? '#000000' : '#ffffff',
                                   color: isSelected ? '#ffffff' : '#000000',
-                                  border: isSelected ? '2.5px solid #000000' : '1.5px solid #dadada',
+                                  border: isSelected ? '1px solid #000000' : '1px solid #dadada',
                                   boxShadow: isSelected ? '0 2px 6px rgba(0,0,0,0.2)' : 'none',
                                   transition: 'all 0.15s ease'
                                 }}
@@ -2844,7 +2842,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       </div>
 
                       {/* Référence Devis & Lien Stockage Partagé Devis (50% 50% sur la même ligne) */}
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                         <div>
                           <label>Référence Devis.</label>
                           <input

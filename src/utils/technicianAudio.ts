@@ -24,6 +24,15 @@ const audioBuffers: Partial<Record<SoundKey, AudioBuffer>> = {};
 const rawArrayBuffers: Partial<Record<SoundKey, ArrayBuffer>> = {};
 const fallbackAudios: Partial<Record<SoundKey, HTMLAudioElement[]>> = {};
 
+// Flag to mute audio effects when running from or inside main software
+let audioMutedInMainSoftware = false;
+
+export const setAudioMutedInMainSoftware = (muted: boolean) => {
+  audioMutedInMainSoftware = muted;
+};
+
+export const isAudioMutedInMainSoftware = () => audioMutedInMainSoftware;
+
 const getAudioContext = (): AudioContext | null => {
   if (typeof window === "undefined") return null;
   if (!audioCtx) {
@@ -104,6 +113,7 @@ const decodeBuffer = async (key: SoundKey, arrayBuf: ArrayBuffer) => {
 
 // Play a preloaded sound instantly
 export const playSound = (key: SoundKey) => {
+  if (audioMutedInMainSoftware) return;
   try {
     const ctx = getAudioContext();
     if (ctx) {
