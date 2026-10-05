@@ -351,11 +351,11 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
 
         {/* BOTTOM FLOATING INPUT & CONTROLS */}
         <div
-          className="p-4 shrink-0 bg-transparent space-y-3"
+          className="w-full p-4 shrink-0 bg-[#fbfbfb] space-y-3"
           style={{
-            background: 'transparent',
-            backgroundColor: 'transparent',
-            border: 'none',
+            background: '#fbfbfb',
+            backgroundColor: '#fbfbfb',
+            borderTop: '1px solid #dadada',
           }}
         >
           <form onSubmit={(e) => handleSendMessage(e)} className="space-y-3">

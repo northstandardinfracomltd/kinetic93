@@ -638,6 +638,55 @@ export function parseFRDateToISO(dateStr: string): string {
   return dateStr;
 }
 
+export function toISODateOnly(val: string | number | Date | null | undefined): string {
+  if (!val) return '';
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return '';
+    // If it's already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return trimmed;
+    }
+    // If it starts with YYYY-MM-DD (e.g. ISO string YYYY-MM-DDTHH:mm:ss...)
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+      return trimmed.slice(0, 10);
+    }
+    // If it's French format DD/MM/YYYY or DD-MM-YYYY
+    const frMatch = trimmed.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+    if (frMatch) {
+      const day = frMatch[1].padStart(2, '0');
+      const month = frMatch[2].padStart(2, '0');
+      const year = frMatch[3];
+      return `${year}-${month}-${day}`;
+    }
+    // Try parsing as standard Date
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    return trimmed;
+  }
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    const yyyy = val.getFullYear();
+    const mm = String(val.getMonth() + 1).padStart(2, '0');
+    const dd = String(val.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  if (typeof val === 'number') {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+  }
+  return '';
+}
+
 export function computeProchaineMaintenance(derniereMaintenanceStr: string): string {
   if (!derniereMaintenanceStr) return '';
   try {
@@ -1035,8 +1084,8 @@ export const INITIAL_TENANT_MESSAGES: TenantMessage[] = [
     authorEmail: 's.martin@demo.com',
     tag: 'Planification',
     content: 'Bonjour l’équipe, le planning des tournées de maintenance FSM de la semaine prochaine a été ajusté.',
-    createdAt: 1790838900000,
-    dateStr: '01/10/2026 à 09:15',
+    createdAt: Date.now() - 2 * 3600 * 1000,
+    dateStr: 'Aujourd’hui à 09:15',
     tenantId: 'demo',
     envId: 'demo',
   },
@@ -1046,8 +1095,8 @@ export const INITIAL_TENANT_MESSAGES: TenantMessage[] = [
     authorEmail: 'm.laurent@demo.com',
     tag: 'Logistique',
     content: 'Réception confirmée de 20 nouveaux kits électrodes adultes à l’entrepôt central.',
-    createdAt: 1790847000000,
-    dateStr: '01/10/2026 à 11:30',
+    createdAt: Date.now() - 1 * 3600 * 1000,
+    dateStr: 'Aujourd’hui à 11:30',
     tenantId: 'demo',
     envId: 'demo',
   },
@@ -1057,8 +1106,8 @@ export const INITIAL_TENANT_MESSAGES: TenantMessage[] = [
     authorEmail: 'roesch.ronan@gmail.com',
     tag: 'Exploitation',
     content: 'Bien reçu, les techniciens peuvent passer récupérer leurs réassorts avant de partir en intervention.',
-    createdAt: 1790855100000,
-    dateStr: '01/10/2026 à 13:45',
+    createdAt: Date.now() - 25 * 60 * 1000,
+    dateStr: 'Aujourd’hui à 13:45',
     tenantId: 'demo',
     envId: 'demo',
   }

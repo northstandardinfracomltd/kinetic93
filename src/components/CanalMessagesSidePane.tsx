@@ -43,28 +43,14 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   const [selectedFilterTag, setSelectedFilterTag] = useState<CanalTagName>('Exploitation');
   const [messageInput, setMessageInput] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: string } | null>(null);
-  const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const channelDropdownRef = useRef<HTMLDivElement | null>(null);
 
   // Auto scroll to bottom
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
   };
-
-  // Close channel dropdown on outside click
-  useEffect(() => {
-    if (!isChannelDropdownOpen) return;
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (channelDropdownRef.current && !channelDropdownRef.current.contains(e.target as Node)) {
-        setIsChannelDropdownOpen(false);
-      }
-    };
-    window.addEventListener('click', handleOutsideClick);
-    return () => window.removeEventListener('click', handleOutsideClick);
-  }, [isChannelDropdownOpen]);
 
   // Close context menu on outside click with capture phase to avoid any stopPropagation issues
   useEffect(() => {
@@ -84,8 +70,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (isChannelDropdownOpen) setIsChannelDropdownOpen(false);
-        else if (contextMenu) setContextMenu(null);
+        if (contextMenu) setContextMenu(null);
         else onClose();
       }
     };
@@ -95,7 +80,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, contextMenu, isChannelDropdownOpen, onClose]);
+  }, [isOpen, contextMenu, onClose]);
 
   // Mark messages as read when opening
   useEffect(() => {
@@ -336,20 +321,21 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
       }}
     >
-      {/* TOP TAGS BAR (AUCUN SPACING COUPÉ À GAUCHE/DROITE, SANS BACKGROUND, SANS BORDER-BOTTOM, SANS BOX-SHADOW) */}
+      {/* TOP TAGS BAR (SPACING À GAUCHE DU BOUTON FERMER, BORDER-BOTTOM FULLWIDTH #dadada) */}
       <div
         className={
           embedded
-            ? "sticky top-0 z-20 w-full bg-white/95 backdrop-blur-xs py-2 px-2 shrink-0"
-            : "py-2.5 sm:py-3 shrink-0 z-10 w-full"
+            ? "sticky top-0 z-20 w-full bg-white/95 backdrop-blur-xs py-2.5 px-3 shrink-0"
+            : "sticky top-0 z-20 w-full py-2.5 sm:py-3 shrink-0 px-4 sm:px-5 bg-[#fbfbfb]"
         }
         style={{
-          background: embedded ? '#ffffff' : 'transparent',
-          backgroundColor: embedded ? '#ffffff' : 'transparent',
+          background: embedded ? '#ffffff' : '#fbfbfb',
+          backgroundColor: embedded ? '#ffffff' : '#fbfbfb',
           border: 'none',
+          borderBottom: '1px solid #dadada',
           boxShadow: 'none',
-          paddingLeft: embedded ? '8px' : 0,
-          paddingRight: embedded ? '8px' : 0,
+          paddingLeft: embedded ? '12px' : '20px',
+          paddingRight: embedded ? '12px' : '20px',
         }}
       >
         <div className="flex items-center gap-2 py-0.5 w-full relative z-20 overflow-visible flex-wrap sm:flex-nowrap">
@@ -372,7 +358,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             </button>
           )}
 
-          {/* 1 Gélule du canal ouvert */}
+          {/* 1 Gélule du canal ouvert (cursor default au hover) */}
           {(() => {
             const currentTag = CANAL_TAGS.find((t) => t.name === selectedFilterTag) || CANAL_TAGS[0];
             const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
@@ -385,12 +371,13 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
 
             return (
               <div
-                className="px-3.5 sm:px-4 py-2 rounded-full shrink-0 flex items-center gap-2 font-medium text-[15px] sm:text-[18px]"
+                className="px-3.5 sm:px-4 py-2 rounded-full shrink-0 flex items-center gap-2 font-medium text-[15px] sm:text-[18px] cursor-default select-none"
                 style={{
                   backgroundColor: currentTag.dot,
                   color: '#ffffff',
                   border: 'none',
                   boxShadow: 'none',
+                  cursor: 'default',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 }}
               >
@@ -418,16 +405,13 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             );
           })()}
 
-          {/* Bouton « Ouvrir un canal » avec dropdown des catégories (sans arrow icon) */}
-          <div ref={channelDropdownRef} className="relative inline-flex items-center shrink-0">
+          {/* Bouton « Ouvrir un canal » avec dropdown système non stylisé (sans arrow icon) */}
+          <div className="relative inline-flex items-center shrink-0">
             <button
               type="button"
               id="btn-ouvrir-un-canal"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsChannelDropdownOpen((prev) => !prev);
-              }}
-              className="px-4 sm:px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] flex items-center justify-center text-[15px] sm:text-[18px]"
+              tabIndex={-1}
+              className="px-4 sm:px-5 py-2 rounded-full font-bold shrink-0 transition-all text-white flex items-center justify-center text-[15px] sm:text-[18px] pointer-events-none"
               style={{
                 backgroundColor: '#3556ec',
                 color: '#ffffff',
@@ -438,57 +422,29 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             >
               <span>{t('Ouvrir un canal')}</span>
             </button>
-
-            {isChannelDropdownOpen && (
-              <div
-                className="absolute top-full left-0 sm:left-auto mt-2 min-w-[240px] sm:min-w-[250px] max-w-[calc(100vw-32px)] bg-white rounded-2xl shadow-2xl py-2 z-50 animate-fadeIn"
-                style={{
-                  border: '1px solid #dadada',
-                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="max-h-72 overflow-y-auto py-1">
-                  {CANAL_TAGS.filter((tag) => tag.name !== selectedFilterTag).map((tag) => {
-                    const count = messages.filter((m) => m.tag === tag.name).length;
-                    return (
-                      <button
-                        key={tag.name}
-                        type="button"
-                        onClick={() => {
-                          setSelectedFilterTag(tag.name);
-                          setIsChannelDropdownOpen(false);
-                        }}
-                        className="w-full flex items-center justify-between px-4 py-2.5 text-left transition-all hover:bg-slate-100 cursor-pointer border-0 bg-transparent"
-                        style={{
-                          fontSize: '16px',
-                          color: '#000000',
-                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        }}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span
-                            className="w-3 h-3 rounded-full shrink-0"
-                            style={{ backgroundColor: tag.dot }}
-                          />
-                          <span className="font-semibold truncate">{tag.name}</span>
-                        </div>
-                        <span
-                          className="inline-flex items-center justify-center rounded-full text-xs font-bold px-2 py-0.5 ml-2"
-                          style={{
-                            backgroundColor: count > 0 ? '#3556ec18' : '#f1f5f9',
-                            color: count > 0 ? '#3556ec' : '#64748b',
-                          }}
-                        >
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            <select
+              id="select-ouvrir-un-canal"
+              value=""
+              onChange={(e) => {
+                const newTag = e.target.value as CanalTagName;
+                if (newTag) {
+                  setSelectedFilterTag(newTag);
+                }
+                e.target.value = '';
+              }}
+              title={t('Ouvrir un canal')}
+              aria-label={t('Ouvrir un canal')}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            >
+              <option value="" disabled hidden>
+                {t('Ouvrir un canal')}
+              </option>
+              {CANAL_TAGS.map((tag) => (
+                <option key={tag.name} value={tag.name}>
+                  {tag.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -562,18 +518,17 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* BOTTOM INPUT BAR FLOATING (SANS BACKGROUND ET SANS BORDER-TOP DERRIÈRE) */}
+      {/* BOTTOM INPUT BAR (STICKY BOTTOM, BORDER-TOP FULL WIDTH #dadada) */}
       <div
         className={
           embedded
-            ? "sticky bottom-0 z-20 w-full px-2 pt-1 pb-2 sm:pb-2.5 bg-white/95 backdrop-blur-xs shrink-0"
-            : "p-2.5 sm:p-4 shrink-0"
+            ? "sticky bottom-0 z-20 w-full px-2 pt-2 pb-2 sm:pb-2.5 bg-white/95 backdrop-blur-xs shrink-0"
+            : "sticky bottom-0 z-10 w-full p-2.5 sm:p-4 shrink-0 bg-[#fbfbfb]"
         }
         style={{
-          background: embedded ? '#ffffff' : 'transparent',
-          backgroundColor: embedded ? '#ffffff' : 'transparent',
-          border: 'none',
-          borderTop: 'none',
+          background: embedded ? '#ffffff' : '#fbfbfb',
+          backgroundColor: embedded ? '#ffffff' : '#fbfbfb',
+          borderTop: '1px solid #dadada',
         }}
       >
         <form onSubmit={handleSendMessage}>

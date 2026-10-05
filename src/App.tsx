@@ -809,6 +809,14 @@ export default function App() {
   const [gmaoFilter, setGmaoFilter] = useState<'upcoming' | 'moderation' | 'validated'>('moderation');
   const [gmaoIncludeAutresMateriels, setGmaoIncludeAutresMateriels] = useState<boolean>(true);
   const [isGmaoFilterPaneOpen, setIsGmaoFilterPaneOpen] = useState<boolean>(false);
+  const [isGmaoSearchClientOpen, setIsGmaoSearchClientOpen] = useState<boolean>(false);
+  const [isGmaoAdminInfoDismissed, setIsGmaoAdminInfoDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('defib_gmao_admin_info_dismissed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [isGmaoDevisPaneOpen, setIsGmaoDevisPaneOpen] = useState<boolean>(false);
   const [gmaoDevisDateDebut, setGmaoDevisDateDebut] = useState<string>('');
   const [gmaoDevisDateFin, setGmaoDevisDateFin] = useState<string>('');
@@ -1483,7 +1491,24 @@ export default function App() {
     try {
       const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
       const raw = localStorage.getItem(`defib_${activeTenant}_tenant_messages`);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (activeTenant === 'demo') {
+            const now = Date.now();
+            return parsed.map((m: TenantMessage, idx: number) => {
+              if (m.id && m.id.startsWith('msg-demo-')) {
+                return {
+                  ...m,
+                  createdAt: now - (idx === 0 ? 2 * 3600 * 1000 : idx === 1 ? 1 * 3600 * 1000 : 25 * 60 * 1000),
+                };
+              }
+              return m;
+            });
+          }
+          return parsed;
+        }
+      }
       return activeTenant === 'demo' ? INITIAL_TENANT_MESSAGES : [];
     } catch {
       return [];
@@ -1507,6 +1532,21 @@ export default function App() {
       (m) => m.createdAt > lastSeenMessageTime && m.authorEmail?.trim().toLowerCase() !== myEmail
     ).length;
   }, [tenantMessages, lastSeenMessageTime, loggedUser?.email, isCanalMessagesOpen]);
+
+  // Count sum of all messages from the last 3 hours (capped from 1 to 8, > 8 => '9+')
+  const recentMessagesCount = useMemo(() => {
+    const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+    const threeHoursAgo = Date.now() - THREE_HOURS_MS;
+    return (tenantMessages || []).filter((m) => {
+      const msgTime = typeof m.createdAt === 'number' ? m.createdAt : Number(m.createdAt) || 0;
+      return msgTime >= threeHoursAgo;
+    }).length;
+  }, [tenantMessages]);
+
+  const recentMessagesDisplay = useMemo(() => {
+    if (recentMessagesCount > 8) return '9+';
+    return recentMessagesCount;
+  }, [recentMessagesCount]);
 
   const handleMessagesRead = useCallback(() => {
     const now = Date.now();
@@ -7541,25 +7581,23 @@ export default function App() {
     });
 
     setDefibrillateurs(updatedList);
-    await saveDefibs(updatedList);
 
-    // Sync each updated defib to live single-defib server index & chunk store
-    if (updatedDefibs.length > 0) {
-      try {
-        await Promise.all(
-          updatedDefibs.map((ud) =>
-            fetch('/api/sync-single-defib', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                tenantId: tenantId || ud.envId || ud.tenantId || 'D27',
-                defib: ud
-              })
-            }).catch(() => {})
-          )
-        );
-      } catch (_) {}
-    }
+    // Sync each updated defib to live single-defib server index & chunk store in parallel with saveDefibs
+    const syncSinglePromises = updatedDefibs.map((ud) =>
+      fetch('/api/sync-single-defib', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: tenantId || ud.envId || ud.tenantId || 'D27',
+          defib: ud
+        })
+      }).catch(() => {})
+    );
+
+    await Promise.all([
+      saveDefibs(updatedList),
+      ...syncSinglePromises
+    ]);
   };
 
   // Public standalone portals accessible without authentication
@@ -8168,14 +8206,14 @@ export default function App() {
                 border: '1px solid #ffffff38',
                 color: 'rgb(255 255 255)',
                 marginLeft: '-2px',
-                fontSize: '14px',
+                fontSize: recentMessagesDisplay === '9+' ? '12px' : '14px',
                 width: '25px',
                 height: '25px',
                 padding: '3.5px',
                 lineHeight: 1,
               }}
             >
-              {tenantMessages?.length || 0}
+              {recentMessagesDisplay}
             </span>
           </button>
         </div>
@@ -13659,6 +13697,7 @@ export default function App() {
               textTransform: 'none',
               color: '#000000',
               cursor: 'default',
+              whiteSpace: 'nowrap',
             };
 
             const filterInputStyle: React.CSSProperties = {
@@ -14295,50 +14334,73 @@ export default function App() {
                   </p>
                 </HelpBubble>
 
-                <div 
-                  className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
-                  style={{
-                    borderColor: 'rgb(218, 218, 218)',
-                    background: '#ffffff00',
-                    boxShadow: 'none',
-                    maxWidth: '98%',
-                    margin: '15px auto 5px auto',
-                  }}
-                >
-                  <p 
-                    className="font-sans leading-relaxed flex-1"
-                    style={{ 
-                      fontSize: '16px', 
-                      fontWeight: 100, 
-                      color: '#000000', 
-                      cursor: 'default' 
-                    }}
-                  >
-                    Uniquement un membre contrôleur ou administrateur-contrôleur est en capacité de modifier et valider les documents émis qui actualisent la base de données.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('parametres');
-                      setTimeout(() => {
-                        const el = document.getElementById('settings-section-members');
-                        if (el) {
-                          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }
-                      }, 300);
-                    }}
-                    className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 inline-flex items-center justify-center text-center whitespace-nowrap"
+                {!isGmaoAdminInfoDismissed && companyInfo?.disableHelpsAndTutorials !== 'Oui' && (
+                  <div 
+                    className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
                     style={{
-                      backgroundColor: '#000000',
-                      color: '#ffffff',
-                      fontSize: '18px',
-                      borderRadius: '13px',
-                      padding: '8px 20px',
+                      borderColor: 'rgb(218, 218, 218)',
+                      background: '#ffffff00',
+                      boxShadow: 'none',
+                      maxWidth: '98%',
+                      margin: '15px auto 5px auto',
                     }}
                   >
-                    Gérer les membres
-                  </button>
-                </div>
+                    <p 
+                      className="font-sans leading-relaxed flex-1"
+                      style={{ 
+                        fontSize: '16px', 
+                        fontWeight: 100, 
+                        color: '#000000', 
+                        cursor: 'default' 
+                      }}
+                    >
+                      Uniquement un membre contrôleur ou administrateur-contrôleur est en capacité de modifier et valider les documents émis qui actualisent la base de données.
+                    </p>
+                    <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsGmaoAdminInfoDismissed(true);
+                          try {
+                            localStorage.setItem('defib_gmao_admin_info_dismissed', 'true');
+                          } catch (_) {}
+                        }}
+                        className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 inline-flex items-center justify-center text-center whitespace-nowrap"
+                        style={{
+                          backgroundColor: '#000000',
+                          color: '#ffffff',
+                          fontSize: '18px',
+                          borderRadius: '13px',
+                          padding: '8px 20px',
+                        }}
+                      >
+                        {t("J'ai compris")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('parametres');
+                          setTimeout(() => {
+                            const el = document.getElementById('settings-section-members');
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                          }, 300);
+                        }}
+                        className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 inline-flex items-center justify-center text-center whitespace-nowrap"
+                        style={{
+                          backgroundColor: '#000000',
+                          color: '#ffffff',
+                          fontSize: '18px',
+                          borderRadius: '13px',
+                          padding: '8px 20px',
+                        }}
+                      >
+                        {t("Gérer les membres")}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {dropboxError && (
                   <div className="space-y-2 mt-4 mb-4">
@@ -14436,7 +14498,7 @@ export default function App() {
                             <th className="px-4 py-3.5" style={thStyle}>Identifiant.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Technicien.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Réf. Intervention.</th>
-                            <th className="px-4 py-3.5" style={thStyle}>Autre référence</th>
+                            <th className="px-4 py-3.5 whitespace-nowrap" style={{ ...thStyle, whiteSpace: 'nowrap' }}>Autre référence</th>
                             <th className="px-4 py-3.5" style={thStyle}>Origine.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Planifié/Effectué.</th>
                             <th className="px-4 py-3.5" style={thStyle}>Situation.</th>
@@ -15164,20 +15226,7 @@ export default function App() {
                       >
                         {/* Drawer Body without inner padding/border div */}
                         <div className="flex-1 overflow-y-auto p-6 pb-28 space-y-6 bg-white font-sans">
-                          {/* Field: Commentaire du technicien. (Disabled textarea showing section 11 Commentaire interne) */}
-                          <div className="space-y-2">
-                            <label className="block text-[18px] font-medium text-[#000]">
-                              Commentaire du technicien.
-                            </label>
-                            <textarea
-                              disabled
-                              rows={3}
-                              value={managingReport.defibSnapshot?.commentaireInterne || managingReport.commentaireInterne || ''}
-                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-100 resize-y min-h-[90px] focus:outline-none cursor-not-allowed opacity-90"
-                            />
-                          </div>
-
-                          {/* Field A: Drapeau ou indicateur */}
+                          {/* 1. Field: Drapeau ou indicateur */}
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
                               <label className="block text-[16px] font-medium text-[#000]">
@@ -15262,7 +15311,71 @@ export default function App() {
                             ) : null}
                           </div>
 
-                          {/* Field B: Commentaire interne */}
+                          {/* 2. Field: Situation. */}
+                          <div className="space-y-1.5 pt-1">
+                            <label className="block text-[16px] font-medium text-[#000]">
+                              Situation.
+                            </label>
+                            <select
+                              value={managingReport.missionStatus || (managingReport.isUpcoming ? 'Brouillon' : 'Effectué')}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updatedReports = generatedReports.map(r => 
+                                  r.id === managingReport.id ? { ...r, missionStatus: val } : r
+                                );
+                                saveReports(updatedReports);
+                              }}
+                              className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 cursor-pointer font-sans"
+                            >
+                              <option value="Effectué">Effectué</option>
+                              <option value="Rejet mission">Rejet mission</option>
+                              <option value="En cours">En cours</option>
+                              <option value="À faire">À faire</option>
+                              <option value="Attente">Attente</option>
+                              <option value="Attente Client">Attente Client</option>
+                              <option value="Accepté Client">Accepté Client</option>
+                              <option value="Refusé Client">Refusé Client</option>
+                              <option value="Brouillon">Brouillon</option>
+                            </select>
+                          </div>
+
+                          {/* Field: Raison de rejet (visible if situation is Rejet mission or intervention impossible) */}
+                          {(managingReport.missionStatus === 'Rejet mission' || managingReport.conforme === 'Intervention impossible' || managingReport.statutMaintenance === 'IMPOSSIBLE') && (
+                            <div className="space-y-1.5 pt-1">
+                              <label className="block text-[16px] font-medium text-[#000]">
+                                Raison de rejet de mission.
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={100}
+                                value={managingReport.rejectionReason || managingReport.reasonImpossible || managingReport.techCommentaireArrivee || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const updatedReports = generatedReports.map(r => 
+                                    r.id === managingReport.id ? { ...r, rejectionReason: val, reasonImpossible: val, techCommentaireArrivee: val } : r
+                                  );
+                                  saveReports(updatedReports);
+                                }}
+                                placeholder="Entrez la raison du rejet..."
+                                className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
+                              />
+                            </div>
+                          )}
+
+                          {/* 3. Field: Commentaire du technicien. (Disabled textarea showing section 11 Commentaire interne) */}
+                          <div className="space-y-2 pt-1">
+                            <label className="block text-[18px] font-medium text-[#000]">
+                              Commentaire du technicien.
+                            </label>
+                            <textarea
+                              disabled
+                              rows={3}
+                              value={managingReport.defibSnapshot?.commentaireInterne || managingReport.commentaireInterne || ''}
+                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-100 resize-y min-h-[90px] focus:outline-none cursor-not-allowed opacity-90"
+                            />
+                          </div>
+
+                          {/* 4. Field: Commentaire interne */}
                           <div className="space-y-1.5 pt-1">
                             <label className="block text-[16px] font-medium text-[#000]">
                               Commentaire interne.
@@ -15294,7 +15407,7 @@ export default function App() {
                             />
                           </div>
 
-                          {/* Toggle: Désactiver l'email au client. */}
+                          {/* 5. Toggle: Désactiver l'email au client. */}
                           <div className="flex items-center justify-between pt-1">
                             <span className="block text-[16px] font-medium text-[#000]">
                               Désactiver l’email au client.
@@ -15323,57 +15436,6 @@ export default function App() {
                               />
                             </button>
                           </div>
-
-                          {/* Field: Situation. */}
-                          <div className="space-y-1.5 pt-2">
-                            <label className="block text-[16px] font-medium text-[#000]">
-                              Situation.
-                            </label>
-                            <select
-                              value={managingReport.missionStatus || (managingReport.isUpcoming ? 'Brouillon' : 'Effectué')}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const updatedReports = generatedReports.map(r => 
-                                  r.id === managingReport.id ? { ...r, missionStatus: val } : r
-                                );
-                                saveReports(updatedReports);
-                              }}
-                              className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 cursor-pointer font-sans"
-                            >
-                              <option value="Effectué">Effectué</option>
-                              <option value="Rejet mission">Rejet mission</option>
-                              <option value="En cours">En cours</option>
-                              <option value="À faire">À faire</option>
-                              <option value="Attente">Attente</option>
-                              <option value="Attente Client">Attente Client</option>
-                              <option value="Accepté Client">Accepté Client</option>
-                              <option value="Refusé Client">Refusé Client</option>
-                              <option value="Brouillon">Brouillon</option>
-                            </select>
-                          </div>
-
-                          {/* Field: Raison de rejet (visible if situation is Rejet mission or intervention impossible) */}
-                          {(managingReport.missionStatus === 'Rejet mission' || managingReport.conforme === 'Intervention impossible' || managingReport.statutMaintenance === 'IMPOSSIBLE') && (
-                            <div className="space-y-1.5 pt-2">
-                              <label className="block text-[16px] font-medium text-[#000]">
-                                Raison de rejet de mission.
-                              </label>
-                              <input
-                                type="text"
-                                maxLength={100}
-                                value={managingReport.rejectionReason || managingReport.reasonImpossible || managingReport.techCommentaireArrivee || ''}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  const updatedReports = generatedReports.map(r => 
-                                    r.id === managingReport.id ? { ...r, rejectionReason: val, reasonImpossible: val, techCommentaireArrivee: val } : r
-                                  );
-                                  saveReports(updatedReports);
-                                }}
-                                placeholder="Entrez la raison du rejet..."
-                                className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
-                              />
-                            </div>
-                          )}
                         </div>
 
                         {/* Boutons floating en bas côtes à côtes */}
@@ -15576,9 +15638,19 @@ export default function App() {
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
                       {/* Filter 1: Client */}
                       <div className="space-y-1.5">
-                        <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
-                          Client.
-                        </label>
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                            Client.
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setIsGmaoSearchClientOpen(true)}
+                            className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline font-sans"
+                            style={{ textDecoration: 'none', background: 'transparent', border: 'none', padding: 0 }}
+                          >
+                            Rechercher
+                          </button>
+                        </div>
                         <div className="relative">
                           <select
                             value={draftGmaoFilters.client}
@@ -15623,7 +15695,9 @@ export default function App() {
                         </label>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <span className="block text-xs text-slate-500 mb-1">Date début</span>
+                            <span className="block mb-1 font-sans font-medium" style={{ color: '#000000', fontSize: '16px' }}>
+                              Date début.
+                            </span>
                             <input
                               type="date"
                               value={draftGmaoFilters.startDate}
@@ -15633,7 +15707,9 @@ export default function App() {
                             />
                           </div>
                           <div>
-                            <span className="block text-xs text-slate-500 mb-1">Date fin</span>
+                            <span className="block mb-1 font-sans font-medium" style={{ color: '#000000', fontSize: '16px' }}>
+                              Date fin.
+                            </span>
                             <input
                               type="date"
                               value={draftGmaoFilters.endDate}
@@ -15736,6 +15812,24 @@ export default function App() {
                   />
                 )}
 
+                {/* GMAO Filter Client Search Side Pane */}
+                <SearchSidePane
+                  isOpen={isGmaoSearchClientOpen}
+                  onClose={() => setIsGmaoSearchClientOpen(false)}
+                  paneId="gmao-filter-client-search-side-pane"
+                  items={sortedClients.map(c => ({
+                    id: c.id,
+                    title: c.denomination || c.nom || c.name || c.id,
+                    subtitle: c.email || c.ville || c.cp || '',
+                    badge: c.ville || '',
+                  }))}
+                  onSelect={(item) => {
+                    setDraftGmaoFilters(prev => ({ ...prev, client: item.id }));
+                    setIsGmaoSearchClientOpen(false);
+                  }}
+                  searchPlaceholder="Rechercher un client..."
+                />
+
                 {/* 🧭 GMAO DEVIS REQUESTS SIDE PANE / DRAWER 🧭 */}
                 {isGmaoDevisPaneOpen && (
                   <div 
@@ -15744,7 +15838,7 @@ export default function App() {
                     style={{ height: '100%' }}
                   >
                     {/* Fixed / Sticky Header in Side Pane */}
-                    <div className="p-5 border-b border-slate-200 bg-white space-y-3 shrink-0 shadow-2xs">
+                    <div className="p-5 bg-white space-y-3 shrink-0 shadow-2xs" style={{ borderBottom: '1px solid #dadada' }}>
                       {/* Choix de la période date / date */}
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
@@ -15830,19 +15924,30 @@ export default function App() {
                           return (
                             <div 
                               key={r.id} 
-                              className={`p-4 rounded-xl border transition-all space-y-3 shadow-xs ${
+                              className={`p-4 rounded-xl transition-all space-y-3 shadow-xs ${
                                 isTermine 
-                                  ? 'bg-slate-100/80 border-slate-200 opacity-80' 
-                                  : 'bg-white border-slate-200 hover:border-slate-300'
+                                  ? 'bg-slate-100/80 opacity-80' 
+                                  : 'bg-white'
                               }`}
+                              style={{
+                                border: '1px solid #dadada',
+                              }}
                             >
                               {/* Ligne 1: Référence à gauche, Date - Rond priorité à droite */}
                               <div className="flex items-center justify-between gap-3">
-                                <span className="font-bold text-base text-black font-sans tracking-tight">
+                                <span 
+                                  className="tracking-tight"
+                                  style={{
+                                    fontFamily: 'Alternative, sans-serif',
+                                    fontSize: '22px',
+                                    cursor: 'default',
+                                    color: '#000000',
+                                  }}
+                                >
                                   {refIntervention}
                                 </span>
-                                <div className="flex items-center gap-2 text-sm text-slate-600 font-sans">
-                                  <span>{dateIntervention || '-'}</span>
+                                <div className="flex items-center gap-2 text-sm font-sans" style={{ color: '#000000' }}>
+                                  <span style={{ color: '#000000' }}>{dateIntervention || '-'}</span>
                                   <span 
                                     className="w-3.5 h-3.5 rounded-full inline-block shrink-0 shadow-2xs" 
                                     style={{ backgroundColor: getPriorityColor(priorite, isTermine) }}
@@ -15852,25 +15957,53 @@ export default function App() {
                               </div>
 
                               {/* Ligne 2: Liste produits/services */}
-                              <div className="space-y-1">
-                                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider font-sans">
+                              <div className="space-y-1.5">
+                                <span 
+                                  className="block font-bold font-sans"
+                                  style={{
+                                    fontSize: '16px',
+                                    color: '#000000',
+                                    textTransform: 'none',
+                                    letterSpacing: 'normal',
+                                  }}
+                                >
                                   Produit(s) et service(s) demandés.
                                 </span>
-                                <div className="flex flex-wrap gap-1.5">
+                                <div className="flex flex-wrap gap-2 pt-0.5">
                                   {articlesList.length > 0 ? (
                                     articlesList.map((art: string, idx: number) => (
                                       <span 
                                         key={idx}
-                                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200"
+                                        className="inline-flex items-center rounded-full font-medium"
+                                        style={{
+                                          background: '#e9edff',
+                                          border: 'none',
+                                          color: '#3557ec',
+                                          fontSize: '16px',
+                                          padding: '8px 16px',
+                                          cursor: 'default',
+                                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                        }}
                                       >
                                         {art}
                                       </span>
                                     ))
                                   ) : (
-                                    <span className="text-xs text-slate-400 italic">Aucun article sélectionné</span>
+                                    <span className="text-sm text-slate-400 italic font-sans">Aucun article sélectionné</span>
                                   )}
                                   {autreInfo && (
-                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-900 border border-amber-200">
+                                    <span 
+                                      className="inline-flex items-center rounded-full font-medium"
+                                      style={{
+                                        background: '#e9edff',
+                                        border: 'none',
+                                        color: '#3557ec',
+                                        fontSize: '16px',
+                                        padding: '8px 16px',
+                                        cursor: 'default',
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                      }}
+                                    >
                                       Autre : {autreInfo}
                                     </span>
                                   )}
@@ -15878,17 +16011,37 @@ export default function App() {
                               </div>
 
                               {/* Ligne 3: Commentaire interne */}
-                              <div className="space-y-1">
-                                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider font-sans">
+                              <div className="space-y-1.5">
+                                <span 
+                                  className="block font-bold font-sans"
+                                  style={{
+                                    fontSize: '16px',
+                                    color: '#000000',
+                                    textTransform: 'none',
+                                    letterSpacing: 'normal',
+                                  }}
+                                >
                                   Commentaire interne du technicien.
                                 </span>
-                                <p className="text-xs text-slate-700 font-sans bg-slate-50 p-2.5 rounded-lg border border-slate-200 whitespace-pre-wrap">
+                                <p 
+                                  className="font-sans whitespace-pre-wrap leading-relaxed m-0"
+                                  style={{
+                                    background: '#fde6ff',
+                                    border: 'none',
+                                    color: '#6c2971',
+                                    fontSize: '16px',
+                                    padding: '13px 16px',
+                                    cursor: 'default',
+                                    borderRadius: '14px',
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  }}
+                                >
                                   {commInterne || "-"}
                                 </p>
                               </div>
 
-                              {/* Ligne 4: Bouton Terminé ou Supprimer */}
-                              <div className="pt-1">
+                              {/* Ligne 4: Bouton Terminé/Supprimer et Consulter Rapport */}
+                              <div className="pt-2 flex items-center gap-2.5 flex-wrap">
                                 {!isTermine ? (
                                   <button
                                     type="button"
@@ -15897,14 +16050,15 @@ export default function App() {
                                       backgroundColor: 'rgb(53, 86, 236)',
                                       color: '#ffffff',
                                       boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                      borderRadius: '10px',
-                                      fontSize: '14px',
-                                      padding: '7px 16px',
+                                      borderRadius: '12px',
+                                      fontSize: '18px',
+                                      padding: '8px 18px',
                                       fontWeight: 'bold',
                                       border: 'none',
                                       cursor: 'pointer',
+                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                     }}
-                                    className="cursor-pointer hover:opacity-90 transition-opacity"
+                                    className="cursor-pointer hover:opacity-90 active:scale-95 transition-all"
                                   >
                                     Terminé
                                   </button>
@@ -15915,18 +16069,43 @@ export default function App() {
                                     style={{
                                       backgroundColor: '#000000',
                                       color: '#ffffff',
-                                      borderRadius: '10px',
-                                      fontSize: '14px',
-                                      padding: '7px 16px',
+                                      borderRadius: '12px',
+                                      fontSize: '18px',
+                                      padding: '8px 18px',
                                       fontWeight: 'bold',
                                       border: 'none',
                                       cursor: 'pointer',
+                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                     }}
-                                    className="cursor-pointer hover:bg-slate-800 transition-colors"
+                                    className="cursor-pointer hover:bg-slate-800 active:scale-95 transition-all"
                                   >
                                     Supprimer
                                   </button>
                                 )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setGmaoSearchQuery(refIntervention);
+                                    setGmaoCurrentPage(1);
+                                    setIsGmaoDevisPaneOpen(false);
+                                  }}
+                                  style={{
+                                    backgroundColor: '#000000',
+                                    color: '#ffffff',
+                                    borderRadius: '12px',
+                                    fontSize: '18px',
+                                    padding: '8px 18px',
+                                    fontWeight: 'bold',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                                  }}
+                                  className="cursor-pointer hover:opacity-90 active:scale-95 transition-all"
+                                >
+                                  Consulter Rapport
+                                </button>
                               </div>
                             </div>
                           );

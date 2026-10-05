@@ -738,75 +738,6 @@ export default function SatisfactionTab({
               />
             </div>
 
-            {/* Bouton Date Début (comme dans la side pane performance) */}
-            <div className="relative inline-flex items-center">
-              <button
-                type="button"
-                id="btn-filter-sat-start-date"
-                style={{
-                  ...rowActionButtonStyle,
-                  width: 'auto',
-                  whiteSpace: 'nowrap',
-                  backgroundColor: satStartDate ? '#3556ec' : '#000000',
-                }}
-                className="cursor-pointer font-sans hover:opacity-80 transition-all select-none"
-              >
-                <span>{satStartDate ? `Début : ${formatToDisplayDate(satStartDate)}` : (t("Début.") || "Début.")}</span>
-              </button>
-              <input
-                type="date"
-                id="filter-sat-start-date"
-                value={satStartDate}
-                onChange={(e) => setSatStartDate(e.target.value)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                title={t("Filtrer par date de début")}
-              />
-            </div>
-
-            {/* Bouton Date Fin (comme dans la side pane performance) */}
-            <div className="relative inline-flex items-center">
-              <button
-                type="button"
-                id="btn-filter-sat-end-date"
-                style={{
-                  ...rowActionButtonStyle,
-                  width: 'auto',
-                  whiteSpace: 'nowrap',
-                  backgroundColor: satEndDate ? '#3556ec' : '#000000',
-                }}
-                className="cursor-pointer font-sans hover:opacity-80 transition-all select-none"
-              >
-                <span>{satEndDate ? `Fin : ${formatToDisplayDate(satEndDate)}` : (t("Fin.") || "Fin.")}</span>
-              </button>
-              <input
-                type="date"
-                id="filter-sat-end-date"
-                value={satEndDate}
-                onChange={(e) => setSatEndDate(e.target.value)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                title={t("Filtrer par date de fin")}
-              />
-            </div>
-
-            {(satStartDate || satEndDate) && (
-              <button
-                type="button"
-                id="btn-reset-sat-dates"
-                onClick={() => { setSatStartDate(''); setSatEndDate(''); }}
-                style={{
-                  ...rowActionButtonStyle,
-                  backgroundColor: 'rgb(222 29 29)',
-                  color: '#fff',
-                  width: 'auto',
-                  whiteSpace: 'nowrap',
-                }}
-                className="cursor-pointer font-sans hover:opacity-90 active:scale-95 transition-all select-none"
-                title={t("Réinitialiser les dates")}
-              >
-                <span>{t("Réinitialiser")}</span>
-              </button>
-            )}
-
             {/* Filter Month Button / Native Dropdown (Largeur auto selon le texte affiché) */}
             <div className="relative inline-flex items-center">
               <button
@@ -922,8 +853,88 @@ export default function SatisfactionTab({
         </a>
       </div>
 
+      {/* Filtres date à date au dessus du table view (exactement comme sur l’onglet CRM) */}
+      <div 
+        className="flex flex-wrap items-center justify-start gap-2 px-4 mt-6 mb-3"
+        style={{ maxWidth: '98%', margin: '24px auto 12px auto', padding: '0 4px' }}
+        id="satisfaction-filter-dates-wrapper"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="sat-filter-date-start" className="text-xs font-semibold text-neutral-600 whitespace-nowrap">
+              Début :
+            </label>
+            <input
+              type="date"
+              id="sat-filter-date-start"
+              value={satStartDate}
+              onChange={(e) => setSatStartDate(e.target.value)}
+              style={{
+                border: '1px solid rgb(218, 218, 218)',
+                borderRadius: '12px',
+                padding: '6px 8px',
+                fontSize: '14px',
+                width: '125px',
+                backgroundColor: '#ffffff',
+                color: '#000000',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                outline: 'none',
+              }}
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="sat-filter-date-end" className="text-xs font-semibold text-neutral-600 whitespace-nowrap">
+              Fin :
+            </label>
+            <input
+              type="date"
+              id="sat-filter-date-end"
+              value={satEndDate}
+              onChange={(e) => setSatEndDate(e.target.value)}
+              style={{
+                border: '1px solid rgb(218, 218, 218)',
+                borderRadius: '12px',
+                padding: '6px 8px',
+                fontSize: '14px',
+                width: '125px',
+                backgroundColor: '#ffffff',
+                color: '#000000',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                outline: 'none',
+              }}
+            />
+          </div>
+          {(satStartDate || satEndDate) && (
+            <button
+              type="button"
+              id="btn-reset-sat-dates"
+              onClick={() => { setSatStartDate(''); setSatEndDate(''); }}
+              style={{
+                backgroundColor: '#D71E1D',
+                color: '#ffffff',
+                fontSize: '18px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                fontWeight: 600,
+                borderRadius: '12px',
+                border: 'none',
+                padding: '6px 14px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: '1.2'
+              }}
+              className="hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer shadow-xs"
+              title={t("Réinitialiser le filtre date")}
+            >
+              {t("Réinitialiser")}
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Main Table Content */}
-      <div className="bg-white overflow-hidden mt-6 rounded-none animate-fadeIn" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
+      <div className="bg-white overflow-hidden mt-3 rounded-none animate-fadeIn" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         <div className="overflow-x-auto">
           <table className="w-full text-left font-sans border-collapse text-xs" id="satisfaction-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
             <thead>

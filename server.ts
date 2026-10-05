@@ -1822,6 +1822,34 @@ function matchesDefibWith(targetStr: string): (d: any) => boolean {
   };
 }
 
+function toISODateOnly(val: any): string {
+  if (!val) return '';
+  const s = String(val).trim();
+  if (!s || s === '-') return '';
+  const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
+  }
+  const frMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (frMatch) {
+    let y = frMatch[3];
+    if (y.length === 2) y = `20${y}`;
+    return `${y}-${frMatch[2].padStart(2, '0')}-${frMatch[1].padStart(2, '0')}`;
+  }
+  const mangledMatch = s.match(/^(\d{4})\D.*?(\d{1,2})-(\d{1,2})$/);
+  if (mangledMatch) {
+    return `${mangledMatch[1]}-${mangledMatch[2].padStart(2, '0')}-${mangledMatch[3].padStart(2, '0')}`;
+  }
+  const dt = new Date(s);
+  if (!isNaN(dt.getTime())) {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const d = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return '';
+}
+
 function formatDefibrillateurOutput(d: any): any {
   if (!d || typeof d !== 'object') return d;
 

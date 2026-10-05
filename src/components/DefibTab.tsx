@@ -200,7 +200,8 @@ import {
   exportToCSV,
   REGIONS_FRANCAISES,
   generateRandomShortCode,
-  computeProchaineMaintenance
+  computeProchaineMaintenance,
+  toISODateOnly
 } from '../utils';
 import { exportSelectedDefibsToPDF } from '../utils/exportDefibPdf';
 import { getRegionsForCountry, REGIONS_BY_COUNTRY } from '../utils/regions';
@@ -826,6 +827,7 @@ export default function DefibTab({
   const [editingDefib, setEditingDefib] = useState<Defibrillateur | null>(null);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+  const [isBulkSuccess, setIsBulkSuccess] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isLotScannerOpen, setIsLotScannerOpen] = useState(false);
   const [isSerieScannerOpen, setIsSerieScannerOpen] = useState(false);
@@ -2634,49 +2636,49 @@ export default function DefibTab({
       ]);
     }
 
-    setFinGarantie(df.finGarantie || anyDf.fin_garantie || '');
-    setFabrication(df.fabrication || anyDf.date_fabrication || '');
-    setMiseEnService(df.miseEnService || anyDf.mise_en_service || '');
-    setDerniereMaintenance(df.derniereMaintenance || anyDf.derniere_maintenance || anyDf.date_derniere_maintenance || '');
-    setSortieFabricant(df.sortieFabricant || anyDf.sortie_fabricant || '');
+    setFinGarantie(toISODateOnly(df.finGarantie || anyDf.fin_garantie || ''));
+    setFabrication(toISODateOnly(df.fabrication || anyDf.date_fabrication || ''));
+    setMiseEnService(toISODateOnly(df.miseEnService || anyDf.mise_en_service || ''));
+    setDerniereMaintenance(toISODateOnly(df.derniereMaintenance || anyDf.derniere_maintenance || anyDf.date_derniere_maintenance || ''));
+    setSortieFabricant(toISODateOnly(df.sortieFabricant || anyDf.sortie_fabricant || ''));
 
     setHasElectrodeASecours(df.hasElectrodeASecours || anyDf.has_electrode_a_secours || (df.modeleElectrodeASecoursId || anyDf.modele_secours_a || df.lotElectrodeASecours || anyDf.lot_secours_a || df.peremptionSecoursElectrodeA ? 'Oui' : 'Non'));
     setModeleElectrodeAId(resolveModelSelectValue(df.modeleElectrodeAId || anyDf.modeleElectrodeA || anyDf.modele_electrode_a || anyDf.modele_a, modelesElectrode));
     setLotElectrodeA(df.lotElectrodeA || anyDf.lot_electrode_a || anyDf.lot_a || anyDf.electrode_a_lot || '');
-    setInsertionElectrodeA(df.insertionElectrodeA || anyDf.insertion_electrode_a || anyDf.insertion_a || '');
-    setPeremptionElectrodeA(df.peremptionElectrodeA || anyDf.peremption_electrode_a || anyDf.peremption_a || anyDf.date_peremption_a || '');
-    setLivraisonElectrodeA(df.livraisonElectrodeA || anyDf.livraison_electrode_a || anyDf.livraison_a || '');
+    setInsertionElectrodeA(toISODateOnly(df.insertionElectrodeA || anyDf.insertion_electrode_a || anyDf.insertion_a || ''));
+    setPeremptionElectrodeA(toISODateOnly(df.peremptionElectrodeA || anyDf.peremption_electrode_a || anyDf.peremption_a || anyDf.date_peremption_a || ''));
+    setLivraisonElectrodeA(toISODateOnly(df.livraisonElectrodeA || anyDf.livraison_electrode_a || anyDf.livraison_a || ''));
     setSituationElectrodeA(df.situationElectrodeA || anyDf.situation_a || 'Vert');
     setCommentaireElectrodeA(df.commentaireElectrodeA || anyDf.commentaire_electrode_a || anyDf.commentaire_a || '');
-    setPeremptionSecoursElectrodeA(df.peremptionSecoursElectrodeA || anyDf.peremption_secours_a || '');
+    setPeremptionSecoursElectrodeA(toISODateOnly(df.peremptionSecoursElectrodeA || anyDf.peremption_secours_a || ''));
     setModeleElectrodeASecoursId(resolveModelSelectValue(df.modeleElectrodeASecoursId || anyDf.modeleElectrodeASecours || anyDf.modele_secours_a, modelesElectrode));
     setLotElectrodeASecours(df.lotElectrodeASecours || anyDf.lot_secours_a || '');
     setLotPadpakA(df.lotPadpakA || anyDf.lot_padpak_a || '');
-    setPeremptionPadpakA(df.peremptionPadpakA || anyDf.peremption_padpak_a || '');
+    setPeremptionPadpakA(toISODateOnly(df.peremptionPadpakA || anyDf.peremption_padpak_a || ''));
     setHasPadpakA(df.hasPadpakA || anyDf.has_padpak_a || (df.lotPadpakA || anyDf.lot_padpak_a || df.peremptionPadpakA ? 'Oui' : 'Non'));
 
     setHasElectrodePSecours(df.hasElectrodePSecours || anyDf.has_electrode_p_secours || (df.modeleElectrodePSecoursId || anyDf.modele_secours_p || df.lotElectrodePSecours || anyDf.lot_secours_p || df.peremptionSecoursElectrodeP ? 'Oui' : 'Non'));
     setModeleElectrodePId(resolveModelSelectValue(df.modeleElectrodePId || anyDf.modeleElectrodeP || anyDf.modele_electrode_p || anyDf.modele_p, modelesElectrode));
     setLotElectrodeP(df.lotElectrodeP || anyDf.lot_electrode_p || anyDf.lot_p || anyDf.electrode_p_lot || '');
-    setInsertionElectrodeP(df.insertionElectrodeP || anyDf.insertion_electrode_p || anyDf.insertion_p || '');
-    setPeremptionElectrodeP(df.peremptionElectrodeP || anyDf.peremption_electrode_p || anyDf.peremption_p || anyDf.date_peremption_p || '');
-    setLivraisonElectrodeP(df.livraisonElectrodeP || anyDf.livraison_electrode_p || anyDf.livraison_p || '');
+    setInsertionElectrodeP(toISODateOnly(df.insertionElectrodeP || anyDf.insertion_electrode_p || anyDf.insertion_p || ''));
+    setPeremptionElectrodeP(toISODateOnly(df.peremptionElectrodeP || anyDf.peremption_electrode_p || anyDf.peremption_p || anyDf.date_peremption_p || ''));
+    setLivraisonElectrodeP(toISODateOnly(df.livraisonElectrodeP || anyDf.livraison_electrode_p || anyDf.livraison_p || ''));
     setSituationElectrodeP(df.situationElectrodeP || anyDf.situation_p || 'Vert');
     setCommentaireElectrodeP(df.commentaireElectrodeP || anyDf.commentaire_electrode_p || anyDf.commentaire_p || '');
-    setPeremptionSecoursElectrodeP(df.peremptionSecoursElectrodeP || anyDf.peremption_secours_p || '');
+    setPeremptionSecoursElectrodeP(toISODateOnly(df.peremptionSecoursElectrodeP || anyDf.peremption_secours_p || ''));
     setModeleElectrodePSecoursId(resolveModelSelectValue(df.modeleElectrodePSecoursId || anyDf.modeleElectrodePSecours || anyDf.modele_secours_p, modelesElectrode));
     setLotElectrodePSecours(df.lotElectrodePSecours || anyDf.lot_secours_p || '');
     setLotPadpakP(df.lotPadpakP || anyDf.lot_padpak_p || '');
-    setPeremptionPadpakP(df.peremptionPadpakP || anyDf.peremption_padpak_p || '');
+    setPeremptionPadpakP(toISODateOnly(df.peremptionPadpakP || anyDf.peremption_padpak_p || ''));
     setHasPadpakP(df.hasPadpakP || anyDf.has_padpak_p || (df.lotPadpakP || anyDf.lot_padpak_p || df.peremptionPadpakP ? 'Oui' : 'Non'));
 
     setHasBatterieSecours(df.hasBatterieSecours || anyDf.has_batterie_secours || (df.modeleBatterieSecoursId || anyDf.modele_secours_b || df.lotBatterieSecours || anyDf.lot_secours_b || df.peremptionBatterieSecours ? 'Oui' : 'Non'));
     setModeleBatterieId(resolveModelSelectValue(df.modeleBatterieId || anyDf.modeleBatterie || anyDf.modele_batterie || anyDf.modele_b, modelesBatterie));
     setLotBatterie(df.lotBatterie || anyDf.lot_batterie || anyDf.lot_b || anyDf.batterie_lot || '');
-    setInsertionBatterie(df.insertionBatterie || anyDf.insertion_batterie || anyDf.insertion_b || '');
-    setFabricationBatterie(df.fabricationBatterie || anyDf.fabrication_b || anyDf.date_fabrication_batterie || '');
-    setPeremptionBatterie(df.peremptionBatterie || anyDf.peremption_batterie || anyDf.peremption_b || anyDf.date_peremption_batterie || '');
-    setLivraisonBatterie(df.livraisonBatterie || anyDf.livraison_batterie || anyDf.livraison_b || '');
+    setInsertionBatterie(toISODateOnly(df.insertionBatterie || anyDf.insertion_batterie || anyDf.insertion_b || ''));
+    setFabricationBatterie(toISODateOnly(df.fabricationBatterie || anyDf.fabrication_b || anyDf.date_fabrication_batterie || ''));
+    setPeremptionBatterie(toISODateOnly(df.peremptionBatterie || anyDf.peremption_batterie || anyDf.peremption_b || anyDf.date_peremption_batterie || ''));
+    setLivraisonBatterie(toISODateOnly(df.livraisonBatterie || anyDf.livraison_batterie || anyDf.livraison_b || ''));
     setSituationBatterie(df.situationBatterie || anyDf.situation_b || 'Vert');
     setPourcentageBatterie(df.pourcentageBatterie !== undefined && df.pourcentageBatterie !== '' ? String(df.pourcentageBatterie) : (anyDf.pourcentage_constate_b !== undefined ? String(anyDf.pourcentage_constate_b) : (anyDf.pourcentage_batterie !== undefined ? String(anyDf.pourcentage_batterie) : '100')));
     setCommentaireBatterie(df.commentaireBatterie || anyDf.commentaire_batterie || anyDf.commentaire_b || '');
@@ -2936,84 +2938,34 @@ export default function DefibTab({
     }
   };
 
-  // Open Bulk Edit pane and prefill with current data from selected defibrillators
+  // Open Bulk Edit pane with clean empty fields for mass correction
   const handleOpenBulkEdit = () => {
     if (selectedIds.length === 0) return;
     const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
     if (selectedDefibs.length === 0) return;
 
-    if (selectedDefibs.length === 1) {
-      const single = selectedDefibs[0];
-      const anySingle = single as any;
-      setBulkModeleId(single.modeleId || '');
-      setBulkCommentaire(single.commentaire || '');
-      setBulkDerniereMaint(single.derniereMaintenance || '');
-      setBulkProchaineMaint(anySingle.prochaineMaintenance || anySingle.prochaine_visite || anySingle.prochaine_v || '');
-      setBulkArchive(single.archive === 'Oui' ? 'Oui' : 'Non');
-      setBulkConforme(single.conforme === 'Non' || anySingle.statut === 'Non conforme' ? 'Non' : 'Oui');
-      setBulkFsmAutorise(single.fsmAutorise === 'Non' || anySingle.fsm_autorise === 'Non' || anySingle.maintenance_autorisee === 'Non' ? 'Non' : 'Oui');
-      setBulkRappelMensuelAuto(single.rappelMensuelAuto === 'Oui' ? 'Oui' : 'Non');
+    // Reset all bulk fields to empty as requested:
+    // fields must be empty and radio-checks indicate which fields to update
+    setBulkModeleId('');
+    setBulkCommentaire('');
+    setBulkDerniereMaint('');
+    setBulkProchaineMaint('');
+    setBulkArchive('');
+    setBulkConforme('');
+    setBulkFsmAutorise('');
+    setBulkRappelMensuelAuto('');
 
-      // For 1 item, pre-enable the toggles so the user can directly see and adjust any field
-      setBulkApplyModele(true);
-      setBulkApplyCommentaire(true);
-      setBulkApplyDerniereMaint(true);
-      setBulkApplyProchaineMaint(true);
-      setBulkApplyArchive(true);
-      setBulkApplyConforme(true);
-      setBulkApplyFsmAutorise(true);
-      setBulkApplyRappelMensuelAuto(true);
-    } else {
-      // Multiple items selected: prefill fields that share identical values
-      const first = selectedDefibs[0];
-      const anyFirst = first as any;
-
-      const sameModele = selectedDefibs.every(d => (d.modeleId || '') === (first.modeleId || ''));
-      setBulkModeleId(sameModele ? (first.modeleId || '') : '');
-
-      const sameComment = selectedDefibs.every(d => (d.commentaire || '') === (first.commentaire || ''));
-      setBulkCommentaire(sameComment ? (first.commentaire || '') : '');
-
-      const sameDerniere = selectedDefibs.every(d => (d.derniereMaintenance || '') === (first.derniereMaintenance || ''));
-      setBulkDerniereMaint(sameDerniere ? (first.derniereMaintenance || '') : '');
-
-      const firstProchaine = anyFirst.prochaineMaintenance || anyFirst.prochaine_visite || anyFirst.prochaine_v || '';
-      const sameProchaine = selectedDefibs.every(d => {
-        const p = (d as any).prochaineMaintenance || (d as any).prochaine_visite || (d as any).prochaine_v || '';
-        return p === firstProchaine;
-      });
-      setBulkProchaineMaint(sameProchaine ? firstProchaine : '');
-
-      const sameArchive = selectedDefibs.every(d => (d.archive || 'Non') === (first.archive || 'Non'));
-      setBulkArchive(sameArchive ? (first.archive === 'Oui' ? 'Oui' : 'Non') : 'Non');
-
-      const firstConforme = (first.conforme === 'Non' || anyFirst.statut === 'Non conforme') ? 'Non' : 'Oui';
-      const sameConforme = selectedDefibs.every(d => {
-        const c = (d.conforme === 'Non' || (d as any).statut === 'Non conforme') ? 'Non' : 'Oui';
-        return c === firstConforme;
-      });
-      setBulkConforme(sameConforme ? firstConforme : 'Oui');
-
-      const firstFsm = (first.fsmAutorise === 'Non' || anyFirst.fsm_autorise === 'Non' || anyFirst.maintenance_autorisee === 'Non') ? 'Non' : 'Oui';
-      const sameFsm = selectedDefibs.every(d => {
-        const f = (d.fsmAutorise === 'Non' || (d as any).fsm_autorise === 'Non' || (d as any).maintenance_autorisee === 'Non') ? 'Non' : 'Oui';
-        return f === firstFsm;
-      });
-      setBulkFsmAutorise(sameFsm ? firstFsm : 'Oui');
-
-      const sameRappel = selectedDefibs.every(d => (d.rappelMensuelAuto || 'Non') === (first.rappelMensuelAuto || 'Non'));
-      setBulkRappelMensuelAuto(sameRappel ? (first.rappelMensuelAuto === 'Oui' ? 'Oui' : 'Non') : 'Non');
-
-      // Leave toggles off initially so the user explicitly activates what they want to overwrite
-      setBulkApplyModele(false);
-      setBulkApplyCommentaire(false);
-      setBulkApplyDerniereMaint(false);
-      setBulkApplyProchaineMaint(false);
-      setBulkApplyArchive(false);
-      setBulkApplyConforme(false);
-      setBulkApplyFsmAutorise(false);
-      setBulkApplyRappelMensuelAuto(false);
-    }
+    // All radio-checks start unchecked
+    setBulkApplyModele(false);
+    setBulkApplyCommentaire(false);
+    setBulkApplyDerniereMaint(false);
+    setBulkApplyProchaineMaint(false);
+    setBulkApplyArchive(false);
+    setBulkApplyConforme(false);
+    setBulkApplyFsmAutorise(false);
+    setBulkApplyRappelMensuelAuto(false);
+    setIsBulkSubmitting(false);
+    setIsBulkSuccess(false);
 
     setIsBulkEditOpen(true);
   };
@@ -3021,68 +2973,30 @@ export default function DefibTab({
   // Bulk Edit submission
   const handleBulkEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isBulkSubmitting) return;
+    if (isBulkSubmitting || isBulkSuccess) return;
 
-    const safeNormalizeDateISO = (dStr: string): string => {
-      if (!dStr) return '';
-      const trimmed = dStr.trim();
-      if (!trimmed) return '';
-
-      // Check if DD/MM/YYYY
-      if (trimmed.includes('/')) {
-        const parts = trimmed.split('/');
-        if (parts.length === 3) {
-          const d = parts[0].padStart(2, '0');
-          const m = parts[1].padStart(2, '0');
-          const y = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
-          return `${y}-${m}-${d}`;
-        }
-      }
-
-      // Check if YYYY-MM-DD or DD-MM-YYYY
-      if (trimmed.includes('-')) {
-        const parts = trimmed.split('-');
-        if (parts.length === 3) {
-          if (parts[0].length === 4) {
-            return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-          } else {
-            return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    try {
+      const subtractOneYear = (dateStr: string): string => {
+        const iso = toISODateOnly(dateStr);
+        if (!iso) return '';
+        const p = iso.split('-');
+        if (p.length === 3) {
+          const year = parseInt(p[0], 10);
+          if (!isNaN(year)) {
+            return `${year - 1}-${p[1]}-${p[2]}`;
           }
         }
-      }
+        return iso;
+      };
 
-      const dt = new Date(trimmed);
-      if (!isNaN(dt.getTime())) {
-        const y = dt.getFullYear();
-        const m = String(dt.getMonth() + 1).padStart(2, '0');
-        const d = String(dt.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-      }
-      return trimmed;
-    };
+      const updates: Partial<Omit<Defibrillateur, 'id'>> = {};
 
-    const subtractOneYear = (dateStr: string): string => {
-      const iso = safeNormalizeDateISO(dateStr);
-      if (!iso) return '';
-      const p = iso.split('-');
-      if (p.length === 3) {
-        const year = parseInt(p[0], 10);
-        if (!isNaN(year)) {
-          return `${year - 1}-${p[1]}-${p[2]}`;
+      if (bulkApplyModele) {
+        const effModeleId = bulkModeleId || (document.getElementById('bulk-modele-select') as HTMLSelectElement)?.value || '';
+        if (!effModeleId) {
+          alert("Veuillez sélectionner un modèle pour le champ Modèle.");
+          return;
         }
-      }
-      return iso;
-    };
-
-    const effModeleId = bulkModeleId || (document.getElementById('bulk-modele-select') as HTMLSelectElement)?.value || '';
-    const effCommentaire = bulkCommentaire || (document.getElementById('bulk-commentaire-input') as HTMLInputElement)?.value || '';
-    const effDerniereMaint = bulkDerniereMaint || (document.getElementById('bulk-derniere-maint-input') as HTMLInputElement)?.value || '';
-    const effProchaineMaint = bulkProchaineMaint || (document.getElementById('bulk-prochaine-maint-input') as HTMLInputElement)?.value || '';
-
-    const updates: Partial<Omit<Defibrillateur, 'id'>> = {};
-
-    if (bulkApplyModele) {
-      if (effModeleId) {
         updates.modeleId = effModeleId;
         const foundVar = (variables || []).find(v => v.id === effModeleId) || modelesDefib.find(m => m.id === effModeleId);
         if (foundVar) {
@@ -3092,16 +3006,22 @@ export default function DefibTab({
           }
         }
       }
-    }
 
-    if (bulkApplyCommentaire) {
-      updates.commentaire = effCommentaire;
-    }
+      if (bulkApplyCommentaire) {
+        const effCommentaire = bulkCommentaire !== undefined ? bulkCommentaire : ((document.getElementById('bulk-commentaire-input') as HTMLInputElement)?.value || '');
+        updates.commentaire = effCommentaire;
+      }
 
-    if (bulkApplyDerniereMaint) {
-      if (effDerniereMaint) {
-        const normDerniere = safeNormalizeDateISO(effDerniereMaint);
+      if (bulkApplyDerniereMaint) {
+        const rawDerniere = bulkDerniereMaint || (document.getElementById('bulk-derniere-maint-input') as HTMLInputElement)?.value || '';
+        const normDerniere = toISODateOnly(rawDerniere);
+        if (!normDerniere) {
+          alert("Veuillez renseigner une date valide pour la dernière maintenance.");
+          return;
+        }
         updates.derniereMaintenance = normDerniere;
+        (updates as any).derniere_maintenance = normDerniere;
+        (updates as any).date_derniere_maintenance = normDerniere;
         if (!bulkApplyProchaineMaint) {
           const nextComputed = computeProchaineMaintenance(normDerniere);
           (updates as any).prochaineMaintenance = nextComputed;
@@ -3109,60 +3029,80 @@ export default function DefibTab({
           (updates as any).prochaine_v = nextComputed;
         }
       }
-    }
 
-    if (bulkApplyProchaineMaint) {
-      if (effProchaineMaint) {
-        const normProchaine = safeNormalizeDateISO(effProchaineMaint);
+      if (bulkApplyProchaineMaint) {
+        const rawProchaine = bulkProchaineMaint || (document.getElementById('bulk-prochaine-maint-input') as HTMLInputElement)?.value || '';
+        const normProchaine = toISODateOnly(rawProchaine);
+        if (!normProchaine) {
+          alert("Veuillez renseigner une date valide pour la prochaine maintenance.");
+          return;
+        }
         (updates as any).prochaineMaintenance = normProchaine;
         (updates as any).prochaine_visite = normProchaine;
         (updates as any).prochaine_v = normProchaine;
         if (!bulkApplyDerniereMaint) {
           const normDerniere = subtractOneYear(normProchaine);
           updates.derniereMaintenance = normDerniere;
+          (updates as any).derniere_maintenance = normDerniere;
         }
       }
-    }
 
-    if (bulkApplyArchive) {
-      updates.archive = bulkArchive;
-      (updates as any).estArchive = bulkArchive === 'Oui';
-    }
+      if (bulkApplyArchive) {
+        if (!bulkArchive) {
+          alert("Veuillez choisir 'Oui' ou 'Non' pour le champ Archivé.");
+          return;
+        }
+        updates.archive = bulkArchive;
+        (updates as any).estArchive = bulkArchive === 'Oui';
+      }
 
-    if (bulkApplyConforme) {
-      updates.conforme = bulkConforme;
-      (updates as any).conformite = bulkConforme;
-      (updates as any).statut = bulkConforme === 'Oui' ? 'Conforme' : 'Non conforme';
-    }
+      if (bulkApplyConforme) {
+        if (!bulkConforme) {
+          alert("Veuillez choisir 'Oui' ou 'Non' pour le champ Conforme.");
+          return;
+        }
+        updates.conforme = bulkConforme;
+        (updates as any).conformite = bulkConforme;
+        (updates as any).statut = bulkConforme === 'Oui' ? 'Conforme' : 'Non conforme';
+      }
 
-    if (bulkApplyFsmAutorise) {
-      updates.fsmAutorise = bulkFsmAutorise;
-      (updates as any).maintenanceAutorisee = bulkFsmAutorise;
-      (updates as any).maintenance_autorisee = bulkFsmAutorise;
-      (updates as any).fsm_autorise = bulkFsmAutorise;
-    }
+      if (bulkApplyFsmAutorise) {
+        if (!bulkFsmAutorise) {
+          alert("Veuillez choisir 'Oui' ou 'Non' pour la maintenance autorisée.");
+          return;
+        }
+        updates.fsmAutorise = bulkFsmAutorise;
+        (updates as any).maintenanceAutorisee = bulkFsmAutorise;
+        (updates as any).maintenance_autorisee = bulkFsmAutorise;
+        (updates as any).fsm_autorise = bulkFsmAutorise;
+      }
 
-    if (bulkApplyRappelMensuelAuto) {
-      updates.rappelMensuelAuto = bulkRappelMensuelAuto;
-    }
+      if (bulkApplyRappelMensuelAuto) {
+        if (!bulkRappelMensuelAuto) {
+          alert("Veuillez choisir 'Oui' ou 'Non' pour l'email mensuel d'auto-vigilance.");
+          return;
+        }
+        updates.rappelMensuelAuto = bulkRappelMensuelAuto;
+      }
 
-    if (Object.keys(updates).length === 0) {
-      alert("Veuillez renseigner une valeur valide pour le ou les champs sélectionnés avant de confirmer.");
-      return;
-    }
+      if (Object.keys(updates).length === 0) {
+        alert("Veuillez sélectionner et renseigner au moins un champ à corriger avant de confirmer.");
+        return;
+      }
 
-    if (selectedIds.length === 0) {
-      setIsBulkEditOpen(false);
-      return;
-    }
+      if (selectedIds.length === 0) {
+        setIsBulkEditOpen(false);
+        return;
+      }
 
-    setIsBulkSubmitting(true);
-    try {
+      setIsBulkSubmitting(true);
       await onBulkEdit(selectedIds, updates);
-      // Give sufficient time for UI state & Firebase sync, keeping button disabled & showing progress
-      await new Promise(r => setTimeout(r, 500));
 
-      // Reset fields to original/safe defaults
+      // Brief visual completion feedback
+      setIsBulkSuccess(true);
+      await new Promise(r => setTimeout(r, 600));
+
+      // Reset fields
       setBulkApplyModele(false);
       setBulkModeleId('');
       setBulkApplyCommentaire(false);
@@ -3172,13 +3112,13 @@ export default function DefibTab({
       setBulkApplyProchaineMaint(false);
       setBulkProchaineMaint('');
       setBulkApplyArchive(false);
-      setBulkArchive('Non');
+      setBulkArchive('');
       setBulkApplyConforme(false);
-      setBulkConforme('Oui');
+      setBulkConforme('');
       setBulkApplyFsmAutorise(false);
-      setBulkFsmAutorise('Oui');
+      setBulkFsmAutorise('');
       setBulkApplyRappelMensuelAuto(false);
-      setBulkRappelMensuelAuto('Non');
+      setBulkRappelMensuelAuto('');
 
       setIsBulkEditOpen(false);
       setSelectedIds([]);
@@ -3187,6 +3127,7 @@ export default function DefibTab({
       alert("Une erreur est survenue lors de la modification en masse.");
     } finally {
       setIsBulkSubmitting(false);
+      setIsBulkSuccess(false);
     }
   };
 
@@ -7450,13 +7391,13 @@ export default function DefibTab({
                     <input
                       type="date"
                       id="bulk-derniere-maint-input"
-                      value={bulkDerniereMaint}
+                      value={toISODateOnly(bulkDerniereMaint)}
                       onChange={(e) => {
-                        setBulkDerniereMaint(e.target.value);
+                        setBulkDerniereMaint(toISODateOnly(e.target.value));
                         setBulkApplyDerniereMaint(true);
                       }}
                       onInput={(e) => {
-                        setBulkDerniereMaint((e.target as HTMLInputElement).value);
+                        setBulkDerniereMaint(toISODateOnly((e.target as HTMLInputElement).value));
                         setBulkApplyDerniereMaint(true);
                       }}
                       onClick={(e) => { try { (e.target as any).showPicker?.(); } catch(_) {} }}
@@ -7494,13 +7435,13 @@ export default function DefibTab({
                     <input
                       type="date"
                       id="bulk-prochaine-maint-input"
-                      value={bulkProchaineMaint}
+                      value={toISODateOnly(bulkProchaineMaint)}
                       onChange={(e) => {
-                        setBulkProchaineMaint(e.target.value);
+                        setBulkProchaineMaint(toISODateOnly(e.target.value));
                         setBulkApplyProchaineMaint(true);
                       }}
                       onInput={(e) => {
-                        setBulkProchaineMaint((e.target as HTMLInputElement).value);
+                        setBulkProchaineMaint(toISODateOnly((e.target as HTMLInputElement).value));
                         setBulkApplyProchaineMaint(true);
                       }}
                       onClick={(e) => { try { (e.target as any).showPicker?.(); } catch(_) {} }}
@@ -7515,7 +7456,11 @@ export default function DefibTab({
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={() => setBulkApplyArchive(!bulkApplyArchive)}
+                  onClick={() => {
+                    const next = !bulkApplyArchive;
+                    setBulkApplyArchive(next);
+                    if (next && !bulkArchive) setBulkArchive('Non');
+                  }}
                   className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
                 >
                   <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyArchive ? 'bold' : 100 }}>
@@ -7584,7 +7529,11 @@ export default function DefibTab({
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={() => setBulkApplyConforme(!bulkApplyConforme)}
+                  onClick={() => {
+                    const next = !bulkApplyConforme;
+                    setBulkApplyConforme(next);
+                    if (next && !bulkConforme) setBulkConforme('Oui');
+                  }}
                   className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
                 >
                   <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyConforme ? 'bold' : 100 }}>
@@ -7653,7 +7602,11 @@ export default function DefibTab({
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={() => setBulkApplyFsmAutorise(!bulkApplyFsmAutorise)}
+                  onClick={() => {
+                    const next = !bulkApplyFsmAutorise;
+                    setBulkApplyFsmAutorise(next);
+                    if (next && !bulkFsmAutorise) setBulkFsmAutorise('Oui');
+                  }}
                   className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
                 >
                   <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyFsmAutorise ? 'bold' : 100 }}>
@@ -7722,7 +7675,11 @@ export default function DefibTab({
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={() => setBulkApplyRappelMensuelAuto(!bulkApplyRappelMensuelAuto)}
+                  onClick={() => {
+                    const next = !bulkApplyRappelMensuelAuto;
+                    setBulkApplyRappelMensuelAuto(next);
+                    if (next && !bulkRappelMensuelAuto) setBulkRappelMensuelAuto('Non');
+                  }}
                   className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
                 >
                   <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyRappelMensuelAuto ? 'bold' : 100 }}>

@@ -92,7 +92,7 @@ ${description}`;
         }}
         id="feedback-problem-btn"
       >
-        Feedback/Problème
+        Signaler
       </button>
 
       {/* Side Pane Drawer */}
