@@ -3763,9 +3763,7 @@ export default function DefibTab({
                 value={selectedDepartment || ''}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val === '__ALL__') {
-                    setSelectedDepartment('__ALL__');
-                  } else if (!val) {
+                  if (!val || val === '__ALL__') {
                     setSelectedDepartment(null);
                   } else {
                     setSelectedDepartment(val);
@@ -3791,13 +3789,10 @@ export default function DefibTab({
                   transition: 'all 0.15s ease'
                 }}
                 className="transition-all select-none"
-                title={t("Indicatif postal court (tous)")}
+                title={t("Filtrer selon indicatif postal")}
               >
-                <option value="" disabled hidden>
-                  {t("Indicatif postal court (tous)")}
-                </option>
-                <option value="__ALL__" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
-                  {t("Indicatif postal court (tous)")}
+                <option value="" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
+                  {t("Filtrer selon indicatif postal")}
                 </option>
                 {FRENCH_DEPARTMENTS.map((dept) => (
                   <option
