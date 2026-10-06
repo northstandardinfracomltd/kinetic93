@@ -280,6 +280,9 @@ export interface Defibrillateur {
   envId?: string;
   tenantId?: string;
   id_record?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  dateDerniereModification?: string;
 }
 
 export interface CommercialEvent {

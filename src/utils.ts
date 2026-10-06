@@ -638,26 +638,93 @@ export function parseFRDateToISO(dateStr: string): string {
   return dateStr;
 }
 
-export function toISODateOnly(val: string | number | Date | null | undefined): string {
+export function toISODateOnly(val: any): string {
   if (!val) return '';
+
+  // Handle Firestore Timestamp or Date object
+  if (typeof val === 'object') {
+    if (val instanceof Date && !isNaN(val.getTime())) {
+      const yyyy = val.getFullYear();
+      const mm = String(val.getMonth() + 1).padStart(2, '0');
+      const dd = String(val.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    if (typeof val.toDate === 'function') {
+      try {
+        const d = val.toDate();
+        if (d instanceof Date && !isNaN(d.getTime())) {
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          return `${yyyy}-${mm}-${dd}`;
+        }
+      } catch (_) {}
+    }
+    if (typeof val.seconds === 'number') {
+      const d = new Date(val.seconds * 1000);
+      if (!isNaN(d.getTime())) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+    }
+    if (typeof val._seconds === 'number') {
+      const d = new Date(val._seconds * 1000);
+      if (!isNaN(d.getTime())) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+    }
+  }
+
+if (typeof val === 'number') {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+  }
+
   if (typeof val === 'string') {
     const trimmed = val.trim();
-    if (!trimmed) return '';
+    if (!trimmed || trimmed === '-' || trimmed === 'N/A' || trimmed === 'null' || trimmed === 'undefined') return '';
+
     // If it's already YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
       return trimmed;
     }
-    // If it starts with YYYY-MM-DD (e.g. ISO string YYYY-MM-DDTHH:mm:ss...)
+    // If it starts with-YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
       return trimmed.slice(0, 10);
     }
-    // If it's French format DD/MM/YYYY or DD-MM-YYYY
-    const frMatch = trimmed.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+    // Starts with YYYY/MM/DD or YYYY.MM.DD (accepts 1 or 2 digits)
+    const isoSlashMatch = trimmed.match(/^(\d{4})[/x\.](\d{1,2})[\/\.](\d{1,2})/);
+    if (isoSlashMatch) {
+      const year = isoSlashMatch[1];
+      const month = isoSlashMatch[2].padStart(2, '0');
+      const day = isoSlashMatch[3].padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    // French format DD/MM/YYYY or DD-MM-YYYY or DD.mM.YYYY (support 2 or 4 digit years)
+    const frMatch = trimmed.match(/^(\d{1,2})[/x\-\.](\d{1,2})[\/x\-\.](\d{2,4})/);
     if (frMatch) {
       const day = frMatch[1].padStart(2, '0');
       const month = frMatch[2].padStart(2, '0');
-      const year = frMatch[3];
+      let year = frMatch[3];
+      if (year.length === 2) {
+        year = `20${year}`;
+      }
       return `${year}-${month}-${day}`;
+    }
+    // Generic YYYY-M-D with single digit month/day
+    const ymdMatch = trimmed.match(/^(\d{4})[\-\/](\d{1,2})[\-\/](\d{1,2})/);
+    if (ymdMatch) {
+      return `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`;
     }
     // Try parsing as standard Date
     const d = new Date(trimmed);
@@ -667,24 +734,39 @@ export function toISODateOnly(val: string | number | Date | null | undefined): s
       const dd = String(d.getDate()).padStart(2, '0');
       return `${yyyy}-${mm}-${dd}`;
     }
-    return trimmed;
   }
-  if (val instanceof Date && !isNaN(val.getTime())) {
-    const yyyy = val.getFullYear();
-    const mm = String(val.getMonth() + 1).padStart(2, '0');
-    const dd = String(val.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+
+  return '';
+}
+
+/**
+ * Computes a numeric timestamp representing the last addition or modification of a defibrillator.
+ * Falls back to ID timestamp extraction or provided array index.
+ */
+export function getDefibActivityTimestamp(df: any, fallbackIndex = 0): number {
+  if (!df) return 0;
+  // 1. Explicit modification dates
+  const modDate = df.updatedAt || df.dateDerniereModification || df.dateModification || df.modifiedAt;
+  if (modDate) {
+    const t = new Date(modDate).getTime();
+    if (!isNaN(t) && t > 0) return t;
   }
-  if (typeof val === 'number') {
-    const d = new Date(val);
-    if (!isNaN(d.getTime())) {
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      return `${yyyy}-${mm}-${dd}`;
+  // 2. Explicit creation dates
+  const createDate = df.createdAt || df.dateCreation || df.dateAjout;
+  if (createDate) {
+    const t = new Date(createDate).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  // 3. ID timestamp matching: df_1789421901076_...
+  if (typeof df.id === 'string') {
+    const match = df.id.match(/^df_(\d{10,14})/);
+    if (match) {
+      const t = Number(match[1]);
+      if (!isNaN(t) && t > 0) return t;
     }
   }
-  return '';
+  // 4. Fallback index based on array order
+  return fallbackIndex;
 }
 
 export function computeProchaineMaintenance(derniereMaintenanceStr: string): string {

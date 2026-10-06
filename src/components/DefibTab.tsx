@@ -201,7 +201,8 @@ import {
   REGIONS_FRANCAISES,
   generateRandomShortCode,
   computeProchaineMaintenance,
-  toISODateOnly
+  toISODateOnly,
+  getDefibActivityTimestamp
 } from '../utils';
 import { exportSelectedDefibsToPDF } from '../utils/exportDefibPdf';
 import { getRegionsForCountry, REGIONS_BY_COUNTRY } from '../utils/regions';
@@ -661,6 +662,7 @@ export default function DefibTab({
   const [activeFilters, setActiveFilters] = useState({
     region: 'Tous',
     modeleId: 'Tous',
+    clientId: 'Tous',
     action3To6: false,
     actionUnder3: false,
     actionExpired: false,
@@ -673,6 +675,7 @@ export default function DefibTab({
   const [draftFilters, setDraftFilters] = useState({
     region: 'Tous',
     modeleId: 'Tous',
+    clientId: 'Tous',
     action3To6: false,
     actionUnder3: false,
     actionExpired: false,
@@ -847,6 +850,23 @@ export default function DefibTab({
     emptyLabel?: string;
   } | null>(null);
   const [variableSidePaneSearch, setVariableSidePaneSearch] = useState('');
+  const [clientSearchTarget, setClientSearchTarget] = useState<'form' | 'filter'>('form');
+  const [cursorLoading, setCursorLoading] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!cursorLoading) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      setCursorLoading({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [cursorLoading !== null]);
+
+  const sortedClientsForFilter = useMemo(() => {
+    return [...clients].sort((a, b) => (a.denomination || '').localeCompare(b.denomination || '', 'fr', { sensitivity: 'base' }));
+  }, [clients]);
 
   const filteredSidePaneClients = useMemo(() => {
     if (!clientSidePaneSearch.trim()) return clients;
@@ -1740,6 +1760,7 @@ export default function DefibTab({
       // 1. Fast equality checks first (inexpensive)
       if (activeFilters.region !== 'Tous' && df.region !== activeFilters.region) return false;
       if (activeFilters.modeleId !== 'Tous' && df.modeleId !== activeFilters.modeleId) return false;
+      if (activeFilters.clientId && activeFilters.clientId !== 'Tous' && df.clientId !== activeFilters.clientId) return false;
 
       // 2. Catégorie match
       if (activeFilters.categorie !== 'Tous') {
@@ -1831,7 +1852,7 @@ export default function DefibTab({
       }
 
       // 8. Department filter (Indicatif postal court)
-      if (selectedDepartment) {
+      if (selectedDepartment && selectedDepartment !== '__ALL__') {
         const rawCp = ((df as any).codePostal || df.cp || '').toString().trim().replace(/\s+/g, '').toUpperCase();
         if (!rawCp) return false;
         if (selectedDepartment === '2A') {
@@ -1853,12 +1874,36 @@ export default function DefibTab({
       return true;
     });
 
-    if (sortFilter === 'recent') {
+    const hasSearch = Boolean(searchLower);
+    const hasSortFilter = Boolean(sortFilter);
+    const hasDeptFilter = Boolean(selectedDepartment !== null);
+    const hasActiveSidePaneFilter = Boolean(
+      activeFilters.region !== 'Tous' ||
+      activeFilters.modeleId !== 'Tous' ||
+      (activeFilters.clientId && activeFilters.clientId !== 'Tous') ||
+      activeFilters.categorie !== 'Tous' ||
+      activeFilters.contrat !== 'Tous' ||
+      activeFilters.action3To6 ||
+      activeFilters.actionUnder3 ||
+      activeFilters.actionExpired ||
+      activeFilters.actionRejected
+    );
+
+    const isInitial = !hasSearch && !hasSortFilter && !hasDeptFilter && !hasActiveSidePaneFilter;
+
+    if (isInitial) {
       const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, idx]));
       result = [...result].sort((a, b) => {
-        const idxA = indexMap.get(a.id) ?? 0;
-        const idxB = indexMap.get(b.id) ?? 0;
-        return idxB - idxA;
+        const timeA = getDefibActivityTimestamp(a, indexMap.get(a.id) ?? 0);
+        const timeB = getDefibActivityTimestamp(b, indexMap.get(b.id) ?? 0);
+        return timeB - timeA;
+      }).slice(0, 10);
+    } else if (sortFilter === 'recent') {
+      const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, idx]));
+      result = [...result].sort((a, b) => {
+        const timeA = getDefibActivityTimestamp(a, indexMap.get(a.id) ?? 0);
+        const timeB = getDefibActivityTimestamp(b, indexMap.get(b.id) ?? 0);
+        return timeB - timeA;
       });
     } else if (sortFilter === 'closest_maintenance') {
       const dateMap = new Map<string, number>();
@@ -1887,6 +1932,25 @@ export default function DefibTab({
 
     return result;
   }, [defibrillateurs, search, activeFilters, clientMap, variableMap, rejectedDefibSet, sortFilter, maintenanceFilter, pinnedDefibIds, selectedDepartment]);
+
+  // Derived state to know if we are in the initial lightweight 10-line view
+  const isInitialView = useMemo(() => {
+    const hasSearch = Boolean(search && search.trim().length > 0);
+    const hasSortFilter = Boolean(sortFilter);
+    const hasDeptFilter = Boolean(selectedDepartment !== null);
+    const hasActiveSidePaneFilter = Boolean(
+      activeFilters.region !== 'Tous' ||
+      activeFilters.modeleId !== 'Tous' ||
+      (activeFilters.clientId && activeFilters.clientId !== 'Tous') ||
+      activeFilters.categorie !== 'Tous' ||
+      activeFilters.contrat !== 'Tous' ||
+      activeFilters.action3To6 ||
+      activeFilters.actionUnder3 ||
+      activeFilters.actionExpired ||
+      activeFilters.actionRejected
+    );
+    return !hasSearch && !hasSortFilter && !hasDeptFilter && !hasActiveSidePaneFilter;
+  }, [search, sortFilter, selectedDepartment, activeFilters]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -2540,7 +2604,15 @@ export default function DefibTab({
   };
 
   // Populate state for editing
-  const openEditForm = (df: Defibrillateur) => {
+  const openEditForm = async (df: Defibrillateur, e?: React.MouseEvent) => {
+    if (e) {
+      setCursorLoading({ x: e.clientX, y: e.clientY });
+    } else {
+      setCursorLoading({ x: typeof window !== 'undefined' ? window.innerWidth / 2 : 200, y: typeof window !== 'undefined' ? window.innerHeight / 2 : 200 });
+    }
+    if (typeof document !== 'undefined') {
+      document.body.style.cursor = 'wait';
+    }
     const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
     setEditingDefib(df);
     setFormError('');
@@ -2565,28 +2637,28 @@ export default function DefibTab({
     setClientId(df.clientId || anyDf.client_id || '');
     const linkedClient = clients.find(c => c.id === (df.clientId || anyDf.client_id));
     setClientSearchQuery(linkedClient ? `${linkedClient.denomination} (${linkedClient.siret || ''})` : '');
-    setNomSite(df.nomSite || anyDf.nom_site || '');
+    setNomSite(df.nomSite || anyDf.nom_site || (linkedClient as any)?.nomSite || linkedClient?.denomination || '');
     setCategorieEtablissement(df.categorieEtablissement || anyDf.categorie_etablissement || '');
-    setNomPrenomSite(df.nomPrenomSite || anyDf.nom_prenom || '');
-    setTelephoneSite(df.telephoneSite || anyDf.telephone_portable || anyDf.telephone_site || anyDf.phone || '');
-    setEmailSite(df.emailSite || anyDf.email || anyDf.email_site || '');
-    setContrat(df.contrat || anyDf.nomContrat || anyDf.nom_contrat || 'Non');
-    setNomContrat(df.nomContrat || anyDf.nom_contrat || '');
-    setReferenceContrat(df.referenceContrat || anyDf.reference_contrat || '');
-    setDebutContrat(df.debutContrat || anyDf.debut_contrat || '');
-    setFinContrat(df.finContrat || anyDf.fin_contrat || '');
-    setPayeurId(df.payeurId || anyDf.payeur_id || '');
-    setClientIdField(df.clientIdField || anyDf.client_id_field || '');
+    setNomPrenomSite(df.nomPrenomSite || anyDf.nom_prenom || anyDf.contact || anyDf.nom_prenom_site || anyDf.contact_site || linkedClient?.nomPrenomSite || (linkedClient as any)?.responsable || (linkedClient as any)?.contact || '');
+    setTelephoneSite(df.telephoneSite || anyDf.telephone_portable || anyDf.telephone_site || anyDf.phone || anyDf.telephone || anyDf.tel || linkedClient?.telephoneSite || (linkedClient as any)?.telephone || (linkedClient as any)?.phone || '');
+    setEmailSite(df.emailSite || anyDf.email || anyDf.email_site || linkedClient?.emailSite || (linkedClient as any)?.email || '');
+    setContrat(df.contrat || anyDf.nomContrat || anyDf.nom_contrat || linkedClient?.contrat || 'Non');
+    setNomContrat(df.nomContrat || anyDf.nom_contrat || linkedClient?.nomContrat || '');
+    setReferenceContrat(df.referenceContrat || anyDf.reference_contrat || linkedClient?.referenceContrat || '');
+    setDebutContrat(toISODateOnly(df.debutContrat || anyDf.debut_contrat || linkedClient?.debutContrat || ''));
+    setFinContrat(toISODateOnly(df.finContrat || anyDf.fin_contrat || linkedClient?.finContrat || ''));
+    setPayeurId(df.payeurId || anyDf.payeur_id || linkedClient?.payeurId || '');
+    setClientIdField(df.clientIdField || anyDf.client_id_field || linkedClient?.clientIdField || '');
 
     setModeleCoffretId(resolveModelSelectValue(df.modeleCoffretId || anyDf.modeleCoffret || anyDf.boitier_modele || anyDf.modele_coffret || anyDf.coffret_modele, modelesCoffret));
     setNumeroLotCoffret(df.numeroLotCoffret || anyDf.boitier_lot || anyDf.lot_coffret || anyDf.lotCoffret || '');
     setCommentaireCoffret(df.commentaireCoffret || anyDf.commentaire_coffret || '');
-    setPeremptionTrousse(df.peremptionTrousse || anyDf.peremption_trousse || anyDf.date_peremption_trousse || '');
+    setPeremptionTrousse(toISODateOnly(df.peremptionTrousse || anyDf.peremption_trousse || anyDf.date_peremption_trousse || ''));
     setKitCiseauxPresents(df.kitCiseauxPresents || anyDf.ciseaux_presents || 'Oui');
     setKitMasquePresent(df.kitMasquePresent || anyDf.masque_present || 'Oui');
-    setKitPeremptionMasque(df.kitPeremptionMasque || anyDf.peremption_masque || '');
+    setKitPeremptionMasque(toISODateOnly(df.kitPeremptionMasque || anyDf.peremption_masque || ''));
     setKitServiettesPresentes(df.kitServiettesPresentes || anyDf.serviettes_presentes || 'Oui');
-    setKitPeremptionServiettes(df.kitPeremptionServiettes || anyDf.peremption_serviettes || '');
+    setKitPeremptionServiettes(toISODateOnly(df.kitPeremptionServiettes || anyDf.peremption_serviettes || ''));
     setKitGantsPresents(df.kitGantsPresents || anyDf.gants_presents || 'Oui');
     setKitRasoirPresent(df.kitRasoirPresent || anyDf.rasoir_present || anyDf.rasoir || 'Oui');
 
@@ -2635,17 +2707,17 @@ export default function DefibTab({
       ]);
     }
 
-    setFinGarantie(toISODateOnly(df.finGarantie || anyDf.fin_garantie || ''));
-    setFabrication(toISODateOnly(df.fabrication || anyDf.date_fabrication || ''));
-    setMiseEnService(toISODateOnly(df.miseEnService || anyDf.mise_en_service || ''));
-    setDerniereMaintenance(toISODateOnly(df.derniereMaintenance || anyDf.derniere_maintenance || anyDf.date_derniere_maintenance || ''));
-    setSortieFabricant(toISODateOnly(df.sortieFabricant || anyDf.sortie_fabricant || ''));
+    setFinGarantie(toISODateOnly(df.finGarantie || anyDf.fin_garantie || anyDf.expiration_garantie || anyDf.garantie || ''));
+    setFabrication(toISODateOnly(df.fabrication || anyDf.date_fabrication || anyDf.fabrication_date || ''));
+    setMiseEnService(toISODateOnly(df.miseEnService || anyDf.mise_en_service || anyDf.date_mise_en_service || ''));
+    setDerniereMaintenance(toISODateOnly(df.derniereMaintenance || anyDf.derniere_maintenance || anyDf.date_derniere_maintenance || anyDf.dermnt || anyDf.der_maint || anyDf.lastMaintenance || anyDf.last_maintenance || anyDf.derniereVisite || anyDf.derniere_visite || ''));
+    setSortieFabricant(toISODateOnly(df.sortieFabricant || anyDf.sortie_fabricant || anyDf.date_sortie_fabricant || ''));
 
     setHasElectrodeASecours(df.hasElectrodeASecours || anyDf.has_electrode_a_secours || (df.modeleElectrodeASecoursId || anyDf.modele_secours_a || df.lotElectrodeASecours || anyDf.lot_secours_a || df.peremptionSecoursElectrodeA ? 'Oui' : 'Non'));
     setModeleElectrodeAId(resolveModelSelectValue(df.modeleElectrodeAId || anyDf.modeleElectrodeA || anyDf.modele_electrode_a || anyDf.modele_a, modelesElectrode));
     setLotElectrodeA(df.lotElectrodeA || anyDf.lot_electrode_a || anyDf.lot_a || anyDf.electrode_a_lot || '');
     setInsertionElectrodeA(toISODateOnly(df.insertionElectrodeA || anyDf.insertion_electrode_a || anyDf.insertion_a || ''));
-    setPeremptionElectrodeA(toISODateOnly(df.peremptionElectrodeA || anyDf.peremption_electrode_a || anyDf.peremption_a || anyDf.date_peremption_a || ''));
+    setPeremptionElectrodeA(toISODateOnly(df.peremptionElectrodeA || anyDf.peremption_electrode_a || anyDf.peremption_a || anyDf.date_peremption_a || anyDf.date_peremption_electrode_a || anyDf.peremptionElecA || anyDf.electrode_a_expiry || ''));
     setLivraisonElectrodeA(toISODateOnly(df.livraisonElectrodeA || anyDf.livraison_electrode_a || anyDf.livraison_a || ''));
     setSituationElectrodeA(df.situationElectrodeA || anyDf.situation_a || 'Vert');
     setCommentaireElectrodeA(df.commentaireElectrodeA || anyDf.commentaire_electrode_a || anyDf.commentaire_a || '');
@@ -2660,7 +2732,7 @@ export default function DefibTab({
     setModeleElectrodePId(resolveModelSelectValue(df.modeleElectrodePId || anyDf.modeleElectrodeP || anyDf.modele_electrode_p || anyDf.modele_p, modelesElectrode));
     setLotElectrodeP(df.lotElectrodeP || anyDf.lot_electrode_p || anyDf.lot_p || anyDf.electrode_p_lot || '');
     setInsertionElectrodeP(toISODateOnly(df.insertionElectrodeP || anyDf.insertion_electrode_p || anyDf.insertion_p || ''));
-    setPeremptionElectrodeP(toISODateOnly(df.peremptionElectrodeP || anyDf.peremption_electrode_p || anyDf.peremption_p || anyDf.date_peremption_p || ''));
+    setPeremptionElectrodeP(toISODateOnly(df.peremptionElectrodeP || anyDf.peremption_electrode_p || anyDf.peremption_p || anyDf.date_peremption_p || anyDf.date_peremption_electrode_p || anyDf.peremptionElecP || anyDf.electrode_p_expiry || ''));
     setLivraisonElectrodeP(toISODateOnly(df.livraisonElectrodeP || anyDf.livraison_electrode_p || anyDf.livraison_p || ''));
     setSituationElectrodeP(df.situationElectrodeP || anyDf.situation_p || 'Vert');
     setCommentaireElectrodeP(df.commentaireElectrodeP || anyDf.commentaire_electrode_p || anyDf.commentaire_p || '');
@@ -2676,14 +2748,14 @@ export default function DefibTab({
     setLotBatterie(df.lotBatterie || anyDf.lot_batterie || anyDf.lot_b || anyDf.batterie_lot || '');
     setInsertionBatterie(toISODateOnly(df.insertionBatterie || anyDf.insertion_batterie || anyDf.insertion_b || ''));
     setFabricationBatterie(toISODateOnly(df.fabricationBatterie || anyDf.fabrication_b || anyDf.date_fabrication_batterie || ''));
-    setPeremptionBatterie(toISODateOnly(df.peremptionBatterie || anyDf.peremption_batterie || anyDf.peremption_b || anyDf.date_peremption_batterie || ''));
+    setPeremptionBatterie(toISODateOnly(df.peremptionBatterie || anyDf.peremption_batterie || anyDf.peremption_b || anyDf.date_peremption_batterie || anyDf.date_peremption_b || anyDf.peremptionBat || anyDf.battery_expiry || anyDf.expiry_battery || ''));
     setLivraisonBatterie(toISODateOnly(df.livraisonBatterie || anyDf.livraison_batterie || anyDf.livraison_b || ''));
     setSituationBatterie(df.situationBatterie || anyDf.situation_b || 'Vert');
     setPourcentageBatterie(df.pourcentageBatterie !== undefined && df.pourcentageBatterie !== '' ? String(df.pourcentageBatterie) : (anyDf.pourcentage_constate_b !== undefined ? String(anyDf.pourcentage_constate_b) : (anyDf.pourcentage_batterie !== undefined ? String(anyDf.pourcentage_batterie) : '100')));
     setCommentaireBatterie(df.commentaireBatterie || anyDf.commentaire_batterie || anyDf.commentaire_b || '');
     setModeleBatterieSecoursId(resolveModelSelectValue(df.modeleBatterieSecoursId || anyDf.modeleBatterieSecours || anyDf.modele_secours_b, modelesBatterie));
     setLotBatterieSecours(df.lotBatterieSecours || anyDf.lot_secours_b || '');
-    setPeremptionBatterieSecours(df.peremptionBatterieSecours || anyDf.peremption_secours_b || '');
+    setPeremptionBatterieSecours(toISODateOnly(df.peremptionBatterieSecours || anyDf.peremption_secours_b || anyDf.date_peremption_secours_b || ''));
 
     setLoue(df.loue || 'Non');
     setPrete(df.prete || 'Non');
@@ -2700,55 +2772,45 @@ export default function DefibTab({
     setRappelHebdoAuto(df.rappelHebdoAuto || 'Non');
     setRappelJournalierAuto(df.rappelJournalierAuto || 'Non');
 
-    // Live background refresh from server to ensure latest API updates (e.g. from developer API POST/PUT) are instantly reflected
-    const targetKey = df.identifiant || df.numeroSerie || df.id;
-    if (targetKey) {
-      const activeTenant = activeTenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : '') || 'demo';
-      fetch(`/api/sync-single-defib?id=${encodeURIComponent(targetKey)}&tenantId=${encodeURIComponent(activeTenant || 'D27')}`)
-        .then(res => res.ok ? res.json() : null)
-        .then(json => {
-          if (json && json.defib) {
-            const fresh = json.defib;
-            const anyFresh = fresh as any;
-            setEditingDefib(fresh);
-            if (fresh.commentaire !== undefined) setCommentaire(fresh.commentaire);
-            if (fresh.commentaireCoffret !== undefined) setCommentaireCoffret(fresh.commentaireCoffret);
-            if (fresh.numeroLotCoffret !== undefined) setNumeroLotCoffret(fresh.numeroLotCoffret);
-            if (fresh.modeleCoffretId || anyFresh.modeleCoffret) {
-              setModeleCoffretId(resolveModelSelectValue(fresh.modeleCoffretId || anyFresh.modeleCoffret, modelesCoffret));
-            }
-            if (fresh.lotBatterie !== undefined) setLotBatterie(fresh.lotBatterie);
-            if (fresh.commentaireBatterie !== undefined) setCommentaireBatterie(fresh.commentaireBatterie);
-            if (fresh.peremptionBatterie !== undefined) setPeremptionBatterie(fresh.peremptionBatterie);
-            if (fresh.pourcentageBatterie !== undefined) setPourcentageBatterie(fresh.pourcentageBatterie);
-            if (fresh.modeleBatterieId || anyFresh.modeleBatterie) {
-              setModeleBatterieId(resolveModelSelectValue(fresh.modeleBatterieId || anyFresh.modeleBatterie, modelesBatterie));
-            }
-            if (fresh.lotElectrodeA !== undefined) setLotElectrodeA(fresh.lotElectrodeA);
-            if (fresh.commentaireElectrodeA !== undefined) setCommentaireElectrodeA(fresh.commentaireElectrodeA);
-            if (fresh.peremptionElectrodeA !== undefined) setPeremptionElectrodeA(fresh.peremptionElectrodeA);
-            if (fresh.modeleElectrodeAId || anyFresh.modeleElectrodeA) {
-              setModeleElectrodeAId(resolveModelSelectValue(fresh.modeleElectrodeAId || anyFresh.modeleElectrodeA, modelesElectrode));
-            }
-            if (fresh.lotElectrodeP !== undefined) setLotElectrodeP(fresh.lotElectrodeP);
-            if (fresh.commentaireElectrodeP !== undefined) setCommentaireElectrodeP(fresh.commentaireElectrodeP);
-            if (fresh.peremptionElectrodeP !== undefined) setPeremptionElectrodeP(fresh.peremptionElectrodeP);
-            if (fresh.modeleElectrodePId || anyFresh.modeleElectrodeP) {
-              setModeleElectrodePId(resolveModelSelectValue(fresh.modeleElectrodePId || anyFresh.modeleElectrodeP, modelesElectrode));
-            }
-            if (fresh.modeleId || anyFresh.modele) {
-              setModeleId(resolveModelSelectValue(fresh.modeleId || anyFresh.modele, modelesDefib));
-            }
-            if (fresh.derniereMaintenance !== undefined) setDerniereMaintenance(fresh.derniereMaintenance);
-            if (onUpdateDefib) {
-              onUpdateDefib(fresh);
+    try {
+      const targetKey = df.identifiant || df.numeroSerie || df.id;
+      if (targetKey) {
+        const activeTenant = activeTenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : '') || 'demo';
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1200);
+          const res = await fetch(`/api/sync-single-defib?id=${encodeURIComponent(targetKey)}&tenantId=${encodeURIComponent(activeTenant || 'D27')}`, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            const json = await res.json();
+            if (json && json.defib) {
+              const fresh = json.defib;
+              if (fresh.commentaire?.trim()) setCommentaire(prev => prev || fresh.commentaire);
+              if (fresh.commentaireCoffret?.trim()) setCommentaireCoffret(prev => prev || fresh.commentaireCoffret);
+              if (fresh.numeroLotCoffret?.trim()) setNumeroLotCoffret(prev => prev || fresh.numeroLotCoffret);
+              if (fresh.lotBatterie?.trim()) setLotBatterie(prev => prev || fresh.lotBatterie);
+              if (fresh.commentaireBatterie?.trim()) setCommentaireBatterie(prev => prev || fresh.commentaireBatterie);
+              if (fresh.peremptionBatterie?.trim()) setPeremptionBatterie(prev => prev || toISODateOnly(fresh.peremptionBatterie));
+              if (fresh.lotElectrodeA?.trim()) setLotElectrodeA(prev => prev || fresh.lotElectrodeA);
+              if (fresh.commentaireElectrodeA?.trim()) setCommentaireElectrodeA(prev => prev || fresh.commentaireElectrodeA);
+              if (fresh.peremptionElectrodeA?.trim()) setPeremptionElectrodeA(prev => prev || toISODateOnly(fresh.peremptionElectrodeA));
+              if (fresh.lotElectrodeP?.trim()) setLotElectrodeP(prev => prev || fresh.lotElectrodeP);
+              if (fresh.commentaireElectrodeP?.trim()) setCommentaireElectrodeP(prev => prev || fresh.commentaireElectrodeP);
+              if (fresh.peremptionElectrodeP?.trim()) setPeremptionElectrodeP(prev => prev || toISODateOnly(fresh.peremptionElectrodeP));
+              if (fresh.derniereMaintenance?.trim()) setDerniereMaintenance(prev => prev || toISODateOnly(fresh.derniereMaintenance));
             }
           }
-        })
-        .catch(() => {});
-    }
+        } catch (_) {}
+      }
 
-    setIsFormOpen(true);
+      await new Promise(r => setTimeout(r, 120));
+      setIsFormOpen(true);
+    } finally {
+      if (typeof document !== 'undefined') {
+        document.body.style.cursor = '';
+      }
+      setCursorLoading(null);
+    }
   };
 
    // Submit handler
@@ -2912,13 +2974,22 @@ export default function DefibTab({
       rappelJournalierAuto,
     };
 
+    const nowIso = new Date().toISOString();
     if (editingDefib) {
       onUpdateDefib({
-        id: editingDefib.id,
+        ...editingDefib,
         ...payload,
+        id: editingDefib.id,
+        updatedAt: nowIso,
+        dateDerniereModification: nowIso,
       });
     } else {
-      onAddDefib(payload);
+      onAddDefib({
+        ...payload,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        dateDerniereModification: nowIso,
+      });
     }
 
     setIsFormOpen(false);
@@ -3258,6 +3329,7 @@ export default function DefibTab({
                     const count = [
                       activeFilters.region !== 'Tous',
                       activeFilters.modeleId !== 'Tous',
+                      activeFilters.clientId !== 'Tous',
                       activeFilters.action3To6 === true,
                       activeFilters.actionUnder3 === true,
                       activeFilters.actionExpired === true,
@@ -3649,7 +3721,7 @@ export default function DefibTab({
               }}
               className="transition-all"
             >
-              {t("Ajouté récemment")}
+              {t("Ajouté/modifié récemment")}
             </button>
 
             <button
@@ -3689,7 +3761,16 @@ export default function DefibTab({
               <select
                 id="filter-postal-court-select"
                 value={selectedDepartment || ''}
-                onChange={(e) => setSelectedDepartment(e.target.value || null)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '__ALL__') {
+                    setSelectedDepartment('__ALL__');
+                  } else if (!val) {
+                    setSelectedDepartment(null);
+                  } else {
+                    setSelectedDepartment(val);
+                  }
+                }}
                 style={{
                   borderRadius: '1000px',
                   padding: '8px 16px',
@@ -3712,7 +3793,10 @@ export default function DefibTab({
                 className="transition-all select-none"
                 title={t("Indicatif postal court (tous)")}
               >
-                <option value="" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
+                <option value="" disabled hidden>
+                  {t("Indicatif postal court (tous)")}
+                </option>
+                <option value="__ALL__" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
                   {t("Indicatif postal court (tous)")}
                 </option>
                 {FRENCH_DEPARTMENTS.map((dept) => (
@@ -3727,6 +3811,26 @@ export default function DefibTab({
               </select>
             </div>
           </div>
+
+          {/* Initial 10-item limit optimization notice */}
+          {isInitialView && (
+            <div 
+              className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl border border-pink-200 bg-[#fff5fa] text-[#fe4eba]"
+              style={{ maxWidth: '98%', margin: '10px auto 0 auto' }}
+            >
+              <div className="flex items-center gap-2 text-[14px] text-black">
+                <span className="font-bold text-[#fe4eba]">⚡ {t("Chargement optimisé")} :</span>
+                <span>{t("Affichage initial des 10 derniers défibrillateurs ajoutés ou modifiés.")}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSortFilter('recent')}
+                className="text-[13px] font-bold text-[#fe4eba] hover:underline cursor-pointer bg-white px-3 py-1 rounded-full border border-pink-300 shadow-2xs"
+              >
+                {t("Afficher tout")} ({defibrillateurs.length})
+              </button>
+            </div>
+          )}
 
           {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard + Gérer la visibilité des colonnes */}
           <div 
@@ -3977,7 +4081,7 @@ export default function DefibTab({
                     <tr
                       key={df.id}
                       id={`defib-row-${df.id}`}
-                      onClick={() => openEditForm(df)}
+                      onClick={(e) => openEditForm(df, e)}
                       className={`group hover:bg-[#ffecf8] transition-all cursor-pointer ${
                         isChecked ? 'bg-[#ffecf8]/60' : ''
                       }`}
@@ -4303,7 +4407,10 @@ export default function DefibTab({
                             {t("Rapport(s)")}
                           </button>
                           <button
-                            onClick={() => openEditForm(df)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditForm(df, e);
+                            }}
                             style={rowActionButton18Style}
                           >
                             Modifier
@@ -4348,6 +4455,10 @@ export default function DefibTab({
           {isDefibLoading && filteredDefibs.length <= 1 ? (
             <span className="text-slate-500 text-sm font-medium">
               {defibLoadingProgress?.message || 'Chargement en cours, Veuillez patienter.'}
+            </span>
+          ) : isInitialView ? (
+            <span>
+              {t("Affichage initial")} : {filteredDefibs.length} {t("derniers ajoutés ou modifiés")} ({defibrillateurs.length.toLocaleString('en-US')} {t("au total")}).
             </span>
           ) : (
             `${t('Total défibrillateurs (Tous)')} : ${defibrillateurs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
@@ -4904,6 +5015,7 @@ export default function DefibTab({
                           <button
                             type="button"
                             onClick={() => {
+                              setClientSearchTarget('form');
                               setIsSidePaneClientOpen(true);
                               setClientSidePaneSearch('');
                             }}
@@ -5872,7 +5984,12 @@ export default function DefibTab({
                         <input
                           type="text"
                           id="form-prochaine-maint"
-                          value={formatDateToFR(computeProchaineMaintenance(derniereMaintenance))}
+                          value={(() => {
+                            const explicitProchaine = (editingDefib as any)?.prochaineMaintenance || (editingDefib as any)?.prochaine_visite || (editingDefib as any)?.prochaine_v;
+                            const computed = computeProchaineMaintenance(derniereMaintenance);
+                            const target = explicitProchaine || computed;
+                            return formatDateToFR(target) || '-';
+                          })()}
                           readOnly
                           className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs bg-slate-50 text-slate-700 font-semibold"
                         />
@@ -8083,6 +8200,41 @@ export default function DefibTab({
               </div>
             </div>
 
+            {/* Filter: Client */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 100 }}>
+                  Client.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClientSearchTarget('filter');
+                    setIsSidePaneClientOpen(true);
+                    setClientSidePaneSearch('');
+                  }}
+                  className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                  style={{ textDecoration: 'none' }}
+                >
+                  Rechercher
+                </button>
+              </div>
+              <div className="relative">
+                <select
+                  value={draftFilters.clientId || 'Tous'}
+                  onChange={(e) => setDraftFilters({ ...draftFilters, clientId: e.target.value })}
+                  style={filterInputStyle}
+                >
+                  <option value="Tous">Tous les clients.</option>
+                  {sortedClientsForFilter.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.denomination || 'Client sans nom'} {c.siret ? `(${c.siret})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             {/* Filter 6: Catégorie */}
             <div className="space-y-1.5">
               <div className="relative">
@@ -8301,6 +8453,7 @@ export default function DefibTab({
                 const defaults = {
                   region: 'Tous',
                   modeleId: 'Tous',
+                  clientId: 'Tous',
                   action3To6: false,
                   actionUnder3: false,
                   actionExpired: false,
@@ -8426,6 +8579,32 @@ export default function DefibTab({
 
             {/* Client List */}
             <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+              {clientSearchTarget === 'filter' && (
+                <div
+                  onClick={() => {
+                    setDraftFilters(prev => ({ ...prev, clientId: 'Tous' }));
+                    setIsSidePaneClientOpen(false);
+                    setClientSidePaneSearch('');
+                  }}
+                  className={`p-3.5 rounded-xl cursor-pointer transition-all border ${
+                    draftFilters.clientId === 'Tous' 
+                      ? 'bg-[#ffecf8] border-[#fe4eba]' 
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <span 
+                    style={{ 
+                      fontSize: '18px', 
+                      color: '#000000', 
+                      fontWeight: 600,
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif' 
+                    }} 
+                    className="block truncate"
+                  >
+                    Tous les clients (Aucun filtre)
+                  </span>
+                </div>
+              )}
               {filteredSidePaneClients.length === 0 ? (
                 <div 
                   className="text-center py-12 text-slate-500 font-sans"
@@ -8435,12 +8614,18 @@ export default function DefibTab({
                 </div>
               ) : (
                 filteredSidePaneClients.map((c) => {
-                  const isSelected = c.id === clientId;
+                  const isSelected = clientSearchTarget === 'filter' 
+                    ? draftFilters.clientId === c.id 
+                    : c.id === clientId;
                   return (
                     <div
                       key={c.id}
                       onClick={() => {
-                        handleClientChange(c.id);
+                        if (clientSearchTarget === 'filter') {
+                          setDraftFilters(prev => ({ ...prev, clientId: c.id }));
+                        } else {
+                          handleClientChange(c.id);
+                        }
                         setIsSidePaneClientOpen(false);
                         setClientSidePaneSearch('');
                       }}
@@ -8940,6 +9125,40 @@ export default function DefibTab({
         onClose={() => setIsDefibeoIntelligenceOpen(false)}
         tenantContext={tenantAiContext}
       />
+
+      {/* 🖱️ Floating Cursor Loading Indicator 🖱️ */}
+      {cursorLoading && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            left: `${cursorLoading.x + 16}px`,
+            top: `${cursorLoading.y + 12}px`,
+            zIndex: 1000000,
+            pointerEvents: 'none',
+            backgroundColor: 'rgba(15, 23, 42, 0.94)',
+            color: '#ffffff',
+            fontSize: '13px',
+            fontWeight: 500,
+            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            padding: '5px 11px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            whiteSpace: 'nowrap',
+            backdropFilter: 'blur(4px)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+          }}
+        >
+          <svg className="animate-spin h-3.5 w-3.5 text-[#fe4eba]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <span>{t("Chargement…")}</span>
+        </div>,
+        document.body
+      )}
 
     </div>
   );

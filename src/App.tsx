@@ -7495,8 +7495,12 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    const nowIso = new Date().toISOString();
     const newDefib: Defibrillateur = {
       id: 'df_' + Date.now(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      dateDerniereModification: nowIso,
       ...defibData,
     };
     saveDefibs([...defibrillateurs, newDefib]);
@@ -7517,25 +7521,26 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    const nowIso = new Date().toISOString();
     const exists = defibrillateurs.some((df) => {
       const idMatch = !!(df.id && updated.id && df.id === updated.id);
       const identifiantMatch = !!(df.identifiant && updated.identifiant && df.identifiant.toUpperCase() === updated.identifiant.toUpperCase());
       return idMatch || identifiantMatch;
     });
 
-    let finalMerged: Defibrillateur = updated;
+    let finalMerged: Defibrillateur = { ...updated, updatedAt: nowIso, dateDerniereModification: nowIso };
     if (exists) {
       saveDefibs(defibrillateurs.map((df) => {
         const isMatch = !!((df.id && updated.id && df.id === updated.id) ||
                         (df.identifiant && updated.identifiant && df.identifiant.toUpperCase() === updated.identifiant.toUpperCase()));
         if (isMatch) {
-          finalMerged = { ...df, ...updated, id: df.id };
+          finalMerged = { ...df, ...updated, updatedAt: nowIso, dateDerniereModification: nowIso, id: df.id };
           return finalMerged;
         }
         return df;
       }));
     } else {
-      finalMerged = { ...updated, id: updated.id || 'df_' + Date.now() };
+      finalMerged = { ...updated, updatedAt: nowIso, dateDerniereModification: nowIso, id: updated.id || 'df_' + Date.now() };
       saveDefibs([...defibrillateurs, finalMerged]);
     }
 
