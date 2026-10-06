@@ -3812,26 +3812,6 @@ export default function DefibTab({
             </div>
           </div>
 
-          {/* Initial 10-item limit optimization notice */}
-          {isInitialView && (
-            <div 
-              className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl border border-pink-200 bg-[#fff5fa] text-[#fe4eba]"
-              style={{ maxWidth: '98%', margin: '10px auto 0 auto' }}
-            >
-              <div className="flex items-center gap-2 text-[14px] text-black">
-                <span className="font-bold text-[#fe4eba]">⚡ {t("Chargement optimisé")} :</span>
-                <span>{t("Affichage initial des 10 derniers défibrillateurs ajoutés ou modifiés.")}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSortFilter('recent')}
-                className="text-[13px] font-bold text-[#fe4eba] hover:underline cursor-pointer bg-white px-3 py-1 rounded-full border border-pink-300 shadow-2xs"
-              >
-                {t("Afficher tout")} ({defibrillateurs.length})
-              </button>
-            </div>
-          )}
-
           {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard + Gérer la visibilité des colonnes */}
           <div 
             className="flex items-center justify-start gap-4 flex-wrap"
@@ -4461,7 +4441,21 @@ export default function DefibTab({
               {t("Affichage initial")} : {filteredDefibs.length} {t("derniers ajoutés ou modifiés")} ({defibrillateurs.length.toLocaleString('en-US')} {t("au total")}).
             </span>
           ) : (
-            `${t('Total défibrillateurs (Tous)')} : ${defibrillateurs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
+            (search && search.trim().length > 0) ||
+            (selectedDepartment && selectedDepartment !== '__ALL__') ||
+            activeFilters.region !== 'Tous' ||
+            activeFilters.modeleId !== 'Tous' ||
+            (activeFilters.clientId && activeFilters.clientId !== 'Tous') ||
+            activeFilters.categorie !== 'Tous' ||
+            activeFilters.contrat !== 'Tous' ||
+            activeFilters.action3To6 ||
+            activeFilters.actionUnder3 ||
+            activeFilters.actionExpired ||
+            activeFilters.actionRejected ? (
+              `${t('Total défibrillateurs')} (${selectedDepartment && selectedDepartment !== '__ALL__' ? selectedDepartment : t('Filtre')}) : ${filteredDefibs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
+            ) : (
+              `${t('Total défibrillateurs (Tous)')} : ${defibrillateurs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
+            )
           )}
         </div>
 
@@ -9131,31 +9125,18 @@ export default function DefibTab({
         <div
           style={{
             position: 'fixed',
-            left: `${cursorLoading.x + 16}px`,
-            top: `${cursorLoading.y + 12}px`,
+            left: `${cursorLoading.x + 14}px`,
+            top: `${cursorLoading.y + 10}px`,
             zIndex: 1000000,
             pointerEvents: 'none',
-            backgroundColor: 'rgba(15, 23, 42, 0.94)',
-            color: '#ffffff',
-            fontSize: '13px',
-            fontWeight: 500,
+            color: '#000000',
+            fontSize: '12px',
+            fontWeight: 600,
             fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-            padding: '5px 11px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
             whiteSpace: 'nowrap',
-            backdropFilter: 'blur(4px)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
           }}
         >
-          <svg className="animate-spin h-3.5 w-3.5 text-[#fe4eba]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-          </svg>
-          <span>{t("Chargement…")}</span>
+          {t("Chargement...")}
         </div>,
         document.body
       )}
