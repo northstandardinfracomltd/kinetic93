@@ -919,7 +919,7 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
     console.warn(`[Cache] Error writing to local/indexed cache for ${key}:`, cacheErr);
   }
 
-  // Synchronous sync to server with chunking support for massive collections
+  // Server sync relay with chunking support and failure protection (stops on 503 / network failure)
   try {
     if (typeof fetch !== 'undefined') {
       if (Array.isArray(finalCleanValue) && finalCleanValue.length > 1000) {
@@ -928,29 +928,55 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
         const totalChunks = Math.ceil(items.length / CHUNK_SIZE);
         for (let i = 0; i < totalChunks; i++) {
           const chunk = items.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-          await fetch('/api/sync-collection-chunk', {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 5000);
+          try {
+            const res = await fetch('/api/sync-collection-chunk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              signal: controller.signal,
+              body: JSON.stringify({
+                collectionName,
+                tenantId: activeTenantId,
+                chunkIndex: i,
+                totalChunks,
+                chunkItems: chunk,
+                totalCount: items.length
+              })
+            });
+            clearTimeout(timer);
+            if (!res.ok) {
+              console.warn(`[Sync Server Relay] Chunk ${i + 1}/${totalChunks} failed with status ${res.status} (${res.statusText}). Halting chunk relay to avoid freezing.`);
+              break;
+            }
+          } catch (chunkErr) {
+            clearTimeout(timer);
+            console.warn(`[Sync Server Relay] Network error on chunk ${i + 1}/${totalChunks}:`, chunkErr);
+            break;
+          }
+        }
+      } else {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 5000);
+        try {
+          const res = await fetch('/api/sync-collection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
             body: JSON.stringify({
               collectionName,
               tenantId: activeTenantId,
-              chunkIndex: i,
-              totalChunks,
-              chunkItems: chunk,
-              totalCount: items.length
+              value: finalCleanValue
             })
           });
+          clearTimeout(timer);
+          if (!res.ok) {
+            console.warn(`[Sync Server Relay] Failed to sync ${collectionName}: status ${res.status}`);
+          }
+        } catch (singleErr) {
+          clearTimeout(timer);
+          console.warn(`[Sync Server Relay] Network error syncing ${collectionName}:`, singleErr);
         }
-      } else {
-        await fetch('/api/sync-collection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            collectionName,
-            tenantId: activeTenantId,
-            value: finalCleanValue
-          })
-        });
       }
     }
   } catch (syncErr) {

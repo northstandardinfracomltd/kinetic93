@@ -7234,7 +7234,9 @@ export default function App() {
 
     loadedDataRef.current.defibrillateurs = getCollectionFingerprint(newDefibs);
     if (tenantId) {
-      await saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId);
+      saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId).catch((err) => {
+        console.warn('[saveDefibs] Erreur lors de la sauvegarde d’arrière-plan Firestore:', err);
+      });
     }
   };
 
@@ -7611,21 +7613,42 @@ export default function App() {
     setDefibrillateurs(updatedList);
     await saveDefibs(updatedList);
 
-    // Sync each updated defib to live single-defib server index & chunk store
+    // Sync only the modified defibs to server store & index (fast batch sync)
     if (updatedDefibs.length > 0) {
       try {
-        await Promise.all(
-          updatedDefibs.map((ud) =>
-            fetch('/api/sync-single-defib', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                tenantId: tenantId || ud.envId || ud.tenantId || 'D27',
-                defib: ud
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch('/api/sync-batch-defibs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            tenantId: tenantId || 'D27',
+            defibs: updatedDefibs
+          })
+        }).catch(() => null);
+        clearTimeout(timer);
+
+        if (!res || !res.ok) {
+          // Fallback to parallel single sync if batch endpoint is unavailable
+          await Promise.all(
+            updatedDefibs.slice(0, 50).map((ud) => {
+              const singleCtrl = new AbortController();
+              const singleTimer = setTimeout(() => singleCtrl.abort(), 3000);
+              return fetch('/api/sync-single-defib', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                signal: singleCtrl.signal,
+                body: JSON.stringify({
+                  tenantId: tenantId || ud.envId || ud.tenantId || 'D27',
+                  defib: ud
+                })
               })
-            }).catch(() => {})
-          )
-        );
+                .then(() => clearTimeout(singleTimer))
+                .catch(() => clearTimeout(singleTimer));
+            })
+          );
+        }
       } catch (_) {}
     }
   };

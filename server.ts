@@ -2942,6 +2942,70 @@ async function warmupDefibrillateursStore() {
     }
   });
 
+  // Fast batch defibrillators sync endpoint for mass modifications (Corriger)
+  app.post("/api/sync-batch-defibs", async (req, res) => {
+    try {
+      const { tenantId, defibs } = req.body;
+      if (!Array.isArray(defibs) || defibs.length === 0) {
+        return res.status(400).json({ error: "defibs array requis." });
+      }
+      const rawTenant = String(tenantId || 'D27').trim();
+      const candidateKeys = [
+        rawTenant === 'demo' ? 'defibrillateurs' : `${rawTenant}_defibrillateurs`,
+        'D27_defibrillateurs',
+        'D58_defibrillateurs'
+      ];
+
+      const updatedIds: string[] = [];
+
+      for (const defib of defibs) {
+        if (!defib || typeof defib !== 'object') continue;
+        const targetId = (defib.id || defib.identifiant || defib.numeroSerie || defib.num_serie || '').trim();
+        if (!targetId) continue;
+
+        const formatted = formatDefibrillateurOutput(defib);
+        indexDefibrillateur(formatted, rawTenant);
+
+        const locKey = normalizeDefibLookupKey(targetId);
+        let tuple = defibLocationIndex.get(locKey);
+        if (!tuple) {
+          const idLower = targetId.toLowerCase();
+          for (const [k, tup] of defibLocationIndex.entries()) {
+            if (k === idLower || (idLower.length > 5 && k.includes(idLower))) {
+              tuple = tup;
+              break;
+            }
+          }
+        }
+        const chunkIdx = tuple && typeof tuple[3] === 'number' ? tuple[3] : undefined;
+        if (typeof chunkIdx === 'number') {
+          saveSingleDefibrillateurToChunk(formatted, chunkIdx, 'D27_defibrillateurs');
+        }
+
+        for (const ck of candidateKeys) {
+          if (serverMemoryStore.has(ck)) {
+            const arr = serverMemoryStore.get(ck);
+            if (Array.isArray(arr)) {
+              const idx = arr.findIndex(d => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
+              if (idx >= 0) {
+                arr[idx] = { ...arr[idx], ...formatted };
+              } else {
+                arr.push(formatted);
+              }
+            }
+          }
+        }
+        updatedIds.push(targetId);
+      }
+
+      persistServerStoreToDisk();
+      return res.json({ status: "success", count: updatedIds.length, updatedIds });
+    } catch (err: any) {
+      console.error("Error in /api/sync-batch-defibs:", err);
+      return res.status(500).json({ error: err.message || "Erreur de synchronisation en masse." });
+    }
+  });
+
   // Fast single defibrillator fetch endpoint for live WebApp modal sync
   app.get("/api/sync-single-defib", async (req, res) => {
     try {

@@ -3088,8 +3088,11 @@ export default function DefibTab({
 
     setIsBulkSubmitting(true);
     try {
-      await onBulkEdit(selectedIds, updates);
-      await new Promise(r => setTimeout(r, 400));
+      await Promise.race([
+        onBulkEdit(selectedIds, updates),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout de l’opération")), 8000))
+      ]);
+      await new Promise(r => setTimeout(r, 200));
 
       setSelectedBulkField('');
       setBulkFieldValue('');
@@ -3097,7 +3100,11 @@ export default function DefibTab({
       setSelectedIds([]);
     } catch (err) {
       console.error("Erreur lors de la modification en masse :", err);
-      alert("Une erreur est survenue lors de la modification en masse.");
+      // Close pane and clear selection so user is never locked out
+      setSelectedBulkField('');
+      setBulkFieldValue('');
+      setIsBulkEditOpen(false);
+      setSelectedIds([]);
     } finally {
       setIsBulkSubmitting(false);
     }
@@ -7288,7 +7295,7 @@ export default function DefibTab({
           style={{ height: "100%" }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-slate-100">
+          <div className="flex items-center justify-between px-6 py-4 shrink-0">
             <h3 className="text-md font-bold font-sans animate-none" style={{ fontSize: "18px", color: "#000000", cursor: "default" }}>
               Modification de {selectedIds.length} défibrillateur(s).
             </h3>
@@ -7296,13 +7303,10 @@ export default function DefibTab({
 
           <form onSubmit={handleBulkEditSubmit} className="flex-1 flex flex-col min-h-0" id="bulk-edit-form">
             {/* Scroll Area containing fields */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
               
               {/* Field selector system dropdown */}
-              <div className="space-y-2">
-                <label htmlFor="bulk-field-select" className="block text-[11px] font-bold text-slate-500 uppercase">
-                  Champ à modifier.
-                </label>
+              <div>
                 <select
                   id="bulk-field-select"
                   value={selectedBulkField}
@@ -7321,9 +7325,13 @@ export default function DefibTab({
                     border: "1px solid #dedede",
                     borderRadius: "10px",
                     outline: "none",
-                    cursor: "pointer"
+                    cursor: "pointer",
+                    appearance: "none",
+                    WebkitAppearance: "none",
+                    MozAppearance: "none",
+                    backgroundImage: "none"
                   }}
-                  className="outline-none"
+                  className="outline-none appearance-none"
                 >
                   <option value="">-- Choisir le champ à modifier --</option>
                   <option value="modele">Modèle. (Défibrillateur)</option>
@@ -7339,10 +7347,7 @@ export default function DefibTab({
 
               {/* Dynamic input according to selected field characteristics */}
               {selectedBulkField === "modele" && (
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <label htmlFor="bulk-input-modele" className="block text-[11px] font-bold text-slate-500 uppercase">
-                    Modèle. (Défibrillateur)
-                  </label>
+                <div>
                   <select
                     id="bulk-input-modele"
                     value={bulkFieldValue}
@@ -7358,9 +7363,13 @@ export default function DefibTab({
                       border: "1px solid #dedede",
                       borderRadius: "10px",
                       outline: "none",
-                      cursor: "pointer"
+                      cursor: "pointer",
+                      appearance: "none",
+                      WebkitAppearance: "none",
+                      MozAppearance: "none",
+                      backgroundImage: "none"
                     }}
-                    className="outline-none"
+                    className="outline-none appearance-none"
                   >
                     <option value="" disabled>-- Choisir un modèle --</option>
                     {modelesDefib.map((m) => (
@@ -7373,10 +7382,7 @@ export default function DefibTab({
               )}
 
               {selectedBulkField === "nomPrenomSite" && (
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <label htmlFor="bulk-input-nomprenom" className="block text-[11px] font-bold text-slate-500 uppercase">
-                    Nom et prénom. (Section client)
-                  </label>
+                <div>
                   <input
                     type="text"
                     id="bulk-input-nomprenom"
@@ -7400,10 +7406,7 @@ export default function DefibTab({
               )}
 
               {selectedBulkField === "telephoneSite" && (
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <label htmlFor="bulk-input-telephone" className="block text-[11px] font-bold text-slate-500 uppercase">
-                    Téléphone portable. (Section client)
-                  </label>
+                <div>
                   <input
                     type="tel"
                     id="bulk-input-telephone"
@@ -7427,10 +7430,7 @@ export default function DefibTab({
               )}
 
               {selectedBulkField === "emailSite" && (
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <label htmlFor="bulk-input-email" className="block text-[11px] font-bold text-slate-500 uppercase">
-                    Email. (Section client)
-                  </label>
+                <div>
                   <input
                     type="email"
                     id="bulk-input-email"
@@ -7454,10 +7454,7 @@ export default function DefibTab({
               )}
 
               {selectedBulkField === "prochaineMaintenance" && (
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <label htmlFor="bulk-input-prochainemaint" className="block text-[11px] font-bold text-slate-500 uppercase">
-                    Prochaine maintenance. (Date)
-                  </label>
+                <div>
                   <input
                     type="date"
                     id="bulk-input-prochainemaint"
@@ -7481,10 +7478,7 @@ export default function DefibTab({
               )}
 
               {selectedBulkField === "fsmAutorise" && (
-                <div className="space-y-3 pt-2 border-t border-slate-100">
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase">
-                    Maintenance autorisée. (Catégories)
-                  </label>
+                <div>
                   <div className="flex items-center gap-6 pt-1">
                     <button
                       type="button"
@@ -7513,10 +7507,7 @@ export default function DefibTab({
               )}
 
               {selectedBulkField === "commentaireAdresse" && (
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <label htmlFor="bulk-input-adresse-aide" className="block text-[11px] font-bold text-slate-500 uppercase">
-                    Aide d’accès. (Localisation)
-                  </label>
+                <div>
                   <textarea
                     id="bulk-input-adresse-aide"
                     rows={4}
@@ -7541,10 +7532,7 @@ export default function DefibTab({
               )}
 
               {selectedBulkField === "commentaire" && (
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <label htmlFor="bulk-input-commentaire-general" className="block text-[11px] font-bold text-slate-500 uppercase">
-                    Commentaire Général. (Défibrillateur)
-                  </label>
+                <div>
                   <textarea
                     id="bulk-input-commentaire-general"
                     rows={4}
@@ -7571,7 +7559,7 @@ export default function DefibTab({
             </div>
 
             {/* Footer Actions: Annuler & Appliquer */}
-            <div className="p-6 bg-white flex gap-4 shrink-0 border-t border-slate-100">
+            <div className="p-6 bg-white flex gap-4 shrink-0">
               <button
                 type="button"
                 disabled={isBulkSubmitting}
@@ -7608,16 +7596,9 @@ export default function DefibTab({
                     opacity: isBulkSubmitting ? 0.5 : 1,
                     cursor: isBulkSubmitting ? "not-allowed" : "pointer",
                   }}
-                  className={`flex-1 text-center font-sans justify-center select-none flex items-center gap-2 ${isBulkSubmitting ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+                  className={`flex-1 text-center font-sans justify-center select-none flex items-center justify-center ${isBulkSubmitting ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
                 >
-                  {isBulkSubmitting ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Application...</span>
-                    </>
-                  ) : (
-                    <span>Appliquer</span>
-                  )}
+                  <span>Appliquer</span>
                 </button>
               )}
             </div>
