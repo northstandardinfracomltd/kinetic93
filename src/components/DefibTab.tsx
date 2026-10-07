@@ -378,6 +378,8 @@ interface DefibTabProps {
   fsmTours?: any[];
   onUpdateFsmTours?: (updated: any[]) => void;
   setActiveTab?: (tab: any, bypassBlock?: boolean) => void;
+  initialSearch?: string;
+  onSearchChange?: (search: string) => void;
   onShowGmaoReports?: (defibIdentifiant: string) => void;
   companyInfo?: CompanyInfo;
   members?: any[];
@@ -543,6 +545,8 @@ export default function DefibTab({
   fsmTours = [],
   onUpdateFsmTours,
   setActiveTab,
+  initialSearch,
+  onSearchChange,
   onShowGmaoReports,
   companyInfo,
   members = [],
@@ -554,7 +558,13 @@ export default function DefibTab({
   const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
 
   // Navigation, Search & Filters State
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch || '');
+
+  useEffect(() => {
+    if (initialSearch !== undefined) {
+      setSearch(initialSearch);
+    }
+  }, [initialSearch]);
   const [isFilterPaneOpen, setIsFilterPaneOpen] = useState(false);
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -1612,30 +1622,9 @@ export default function DefibTab({
 
   const [formError, setFormError] = useState('');
 
-  // --- BULK EDIT FIELDS ---
-  const [bulkApplyModele, setBulkApplyModele] = useState(false);
-  const [bulkModeleId, setBulkModeleId] = useState('');
-
-  const [bulkApplyCommentaire, setBulkApplyCommentaire] = useState(false);
-  const [bulkCommentaire, setBulkCommentaire] = useState('');
-
-  const [bulkApplyDerniereMaint, setBulkApplyDerniereMaint] = useState(false);
-  const [bulkDerniereMaint, setBulkDerniereMaint] = useState('');
-
-  const [bulkApplyProchaineMaint, setBulkApplyProchaineMaint] = useState(false);
-  const [bulkProchaineMaint, setBulkProchaineMaint] = useState('');
-
-  const [bulkApplyArchive, setBulkApplyArchive] = useState(false);
-  const [bulkArchive, setBulkArchive] = useState<'Oui' | 'Non'>('Non');
-
-  const [bulkApplyConforme, setBulkApplyConforme] = useState(false);
-  const [bulkConforme, setBulkConforme] = useState<'Oui' | 'Non'>('Oui');
-
-  const [bulkApplyFsmAutorise, setBulkApplyFsmAutorise] = useState(false);
-  const [bulkFsmAutorise, setBulkFsmAutorise] = useState<'Oui' | 'Non'>('Oui');
-
-  const [bulkApplyRappelMensuelAuto, setBulkApplyRappelMensuelAuto] = useState(false);
-  const [bulkRappelMensuelAuto, setBulkRappelMensuelAuto] = useState<'Oui' | 'Non'>('Non');
+  // --- BULK EDIT FIELDS (Refait à zéro: 1 seul champ à modifier) ---
+  const [selectedBulkField, setSelectedBulkField] = useState<string>('');
+  const [bulkFieldValue, setBulkFieldValue] = useState<string>('');
   const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('oui');
@@ -3011,146 +3000,84 @@ export default function DefibTab({
   // Open Bulk Edit pane with clean empty fields for mass correction
   const handleOpenBulkEdit = () => {
     if (selectedIds.length === 0) return;
-    const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
-    if (selectedDefibs.length === 0) return;
-
-    // Reset all bulk fields to empty as requested:
-    // fields must be empty and radio-checks indicate which fields to update
-    setBulkModeleId('');
-    setBulkCommentaire('');
-    setBulkDerniereMaint('');
-    setBulkProchaineMaint('');
-    setBulkArchive('');
-    setBulkConforme('');
-    setBulkFsmAutorise('');
-    setBulkRappelMensuelAuto('');
-
-    // All radio-checks start unchecked
-    setBulkApplyModele(false);
-    setBulkApplyCommentaire(false);
-    setBulkApplyDerniereMaint(false);
-    setBulkApplyProchaineMaint(false);
-    setBulkApplyArchive(false);
-    setBulkApplyConforme(false);
-    setBulkApplyFsmAutorise(false);
-    setBulkApplyRappelMensuelAuto(false);
-
+    setSelectedBulkField('');
+    setBulkFieldValue('');
     setIsBulkEditOpen(true);
   };
 
-  // Bulk Edit submission
+  // Bulk Edit submission (Refait à zéro: 1 seul champ)
   const handleBulkEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isBulkSubmitting) return;
 
-    const subtractOneYear = (dateStr: string): string => {
-      const iso = toISODateOnly(dateStr);
-      if (!iso) return '';
-      const p = iso.split('-');
-      if (p.length === 3) {
-        const year = parseInt(p[0], 10);
-        if (!isNaN(year)) {
-          return `${year - 1}-${p[1]}-${p[2]}`;
-        }
-      }
-      return iso;
-    };
+    if (!selectedBulkField) {
+      alert("Veuillez sélectionner un champ à modifier.");
+      return;
+    }
+
+    if (bulkFieldValue === undefined || bulkFieldValue === '') {
+      alert("Veuillez renseigner ou sélectionner une valeur.");
+      return;
+    }
 
     const updates: Partial<Omit<Defibrillateur, 'id'>> = {};
 
-    if (bulkApplyModele) {
-      const effModeleId = bulkModeleId || (document.getElementById('bulk-modele-select') as HTMLSelectElement)?.value || '';
-      if (!effModeleId) {
-        alert("Veuillez sélectionner un modèle pour le champ Modèle.");
-        return;
-      }
-      updates.modeleId = effModeleId;
-      const foundVar = (variables || []).find(v => v.id === effModeleId) || modelesDefib.find(m => m.id === effModeleId);
-      if (foundVar) {
-        (updates as any).modele = foundVar.nom || '';
-        if (foundVar.marque) {
-          (updates as any).marque = foundVar.marque;
+    switch (selectedBulkField) {
+      case 'modele': {
+        updates.modeleId = bulkFieldValue;
+        const foundVar = (variables || []).find(v => v.id === bulkFieldValue) || modelesDefib.find(m => m.id === bulkFieldValue);
+        if (foundVar) {
+          (updates as any).modele = foundVar.nom || '';
+          if (foundVar.marque) {
+            (updates as any).marque = foundVar.marque;
+          }
         }
+        break;
       }
-    }
-
-    if (bulkApplyCommentaire) {
-      const effCommentaire = bulkCommentaire !== undefined ? bulkCommentaire : ((document.getElementById('bulk-commentaire-input') as HTMLInputElement)?.value || '');
-      updates.commentaire = effCommentaire;
-    }
-
-    if (bulkApplyDerniereMaint) {
-      const rawDerniere = bulkDerniereMaint || (document.getElementById('bulk-derniere-maint-input') as HTMLInputElement)?.value || '';
-      const normDerniere = toISODateOnly(rawDerniere);
-      if (!normDerniere) {
-        alert("Veuillez renseigner une date valide pour la dernière maintenance.");
+      case 'nomPrenomSite': {
+        updates.nomPrenomSite = bulkFieldValue.trim();
+        break;
+      }
+      case 'telephoneSite': {
+        updates.telephoneSite = bulkFieldValue.trim();
+        break;
+      }
+      case 'emailSite': {
+        updates.emailSite = bulkFieldValue.trim();
+        break;
+      }
+      case 'prochaineMaintenance': {
+        const iso = toISODateOnly(bulkFieldValue);
+        if (!iso) {
+          alert("Veuillez renseigner une date valide pour la prochaine maintenance.");
+          return;
+        }
+        (updates as any).prochaineMaintenance = iso;
+        (updates as any).prochaine_visite = iso;
+        (updates as any).prochaine_v = iso;
+        break;
+      }
+      case 'fsmAutorise': {
+        updates.fsmAutorise = bulkFieldValue as 'Oui' | 'Non';
+        (updates as any).maintenanceAutorisee = bulkFieldValue;
+        (updates as any).maintenance_autorisee = bulkFieldValue;
+        (updates as any).fsm_autorise = bulkFieldValue;
+        break;
+      }
+      case 'commentaireAdresse': {
+        updates.commentaireAdresse = bulkFieldValue.trim();
+        break;
+      }
+      case 'commentaire': {
+        updates.commentaire = bulkFieldValue.trim();
+        break;
+      }
+      default:
         return;
-      }
-      updates.derniereMaintenance = normDerniere;
-      if (!bulkApplyProchaineMaint) {
-        const nextComputed = computeProchaineMaintenance(normDerniere);
-        (updates as any).prochaineMaintenance = nextComputed;
-        (updates as any).prochaine_visite = nextComputed;
-        (updates as any).prochaine_v = nextComputed;
-      }
-    }
-
-    if (bulkApplyProchaineMaint) {
-      const rawProchaine = bulkProchaineMaint || (document.getElementById('bulk-prochaine-maint-input') as HTMLInputElement)?.value || '';
-      const normProchaine = toISODateOnly(rawProchaine);
-      if (!normProchaine) {
-        alert("Veuillez renseigner une date valide pour la prochaine maintenance.");
-        return;
-      }
-      (updates as any).prochaineMaintenance = normProchaine;
-      (updates as any).prochaine_visite = normProchaine;
-      (updates as any).prochaine_v = normProchaine;
-      if (!bulkApplyDerniereMaint) {
-        const normDerniere = subtractOneYear(normProchaine);
-        updates.derniereMaintenance = normDerniere;
-      }
-    }
-
-    if (bulkApplyArchive) {
-      if (!bulkArchive) {
-        alert("Veuillez choisir 'Oui' ou 'Non' pour le champ Archivé.");
-        return;
-      }
-      updates.archive = bulkArchive;
-      (updates as any).estArchive = bulkArchive === 'Oui';
-    }
-
-    if (bulkApplyConforme) {
-      if (!bulkConforme) {
-        alert("Veuillez choisir 'Oui' ou 'Non' pour le champ Conforme.");
-        return;
-      }
-      updates.conforme = bulkConforme;
-      (updates as any).conformite = bulkConforme;
-      (updates as any).statut = bulkConforme === 'Oui' ? 'Conforme' : 'Non conforme';
-    }
-
-    if (bulkApplyFsmAutorise) {
-      if (!bulkFsmAutorise) {
-        alert("Veuillez choisir 'Oui' ou 'Non' pour la maintenance autorisée.");
-        return;
-      }
-      updates.fsmAutorise = bulkFsmAutorise;
-      (updates as any).maintenanceAutorisee = bulkFsmAutorise;
-      (updates as any).maintenance_autorisee = bulkFsmAutorise;
-      (updates as any).fsm_autorise = bulkFsmAutorise;
-    }
-
-    if (bulkApplyRappelMensuelAuto) {
-      if (!bulkRappelMensuelAuto) {
-        alert("Veuillez choisir 'Oui' ou 'Non' pour l'email mensuel d'auto-vigilance.");
-        return;
-      }
-      updates.rappelMensuelAuto = bulkRappelMensuelAuto;
     }
 
     if (Object.keys(updates).length === 0) {
-      alert("Veuillez sélectionner et renseigner au moins un champ à corriger avant de confirmer.");
+      alert("Veuillez renseigner une valeur valide.");
       return;
     }
 
@@ -3164,24 +3091,8 @@ export default function DefibTab({
       await onBulkEdit(selectedIds, updates);
       await new Promise(r => setTimeout(r, 400));
 
-      // Reset fields
-      setBulkApplyModele(false);
-      setBulkModeleId('');
-      setBulkApplyCommentaire(false);
-      setBulkCommentaire('');
-      setBulkApplyDerniereMaint(false);
-      setBulkDerniereMaint('');
-      setBulkApplyProchaineMaint(false);
-      setBulkProchaineMaint('');
-      setBulkApplyArchive(false);
-      setBulkArchive('');
-      setBulkApplyConforme(false);
-      setBulkConforme('');
-      setBulkApplyFsmAutorise(false);
-      setBulkFsmAutorise('');
-      setBulkApplyRappelMensuelAuto(false);
-      setBulkRappelMensuelAuto('');
-
+      setSelectedBulkField('');
+      setBulkFieldValue('');
       setIsBulkEditOpen(false);
       setSelectedIds([]);
     } catch (err) {
@@ -3201,6 +3112,9 @@ export default function DefibTab({
   // Safe search resetting helper
   const clearFilters = () => {
     setSearch('');
+    if (onSearchChange) {
+      onSearchChange('');
+    }
     setSelectedDepartment(null);
     setSortFilter(null);
     const defaults = {
@@ -3238,7 +3152,12 @@ export default function DefibTab({
                     type="text"
                     id="search-defibs-input"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      if (onSearchChange) {
+                        onSearchChange(e.target.value);
+                      }
+                    }}
                     placeholder={t('Recherche.')}
                     className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
                     style={searchInputStyle}
@@ -3395,16 +3314,15 @@ export default function DefibTab({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    disabled={true}
-                    onClick={() => {}}
-                    id="btn-bulk-modify"
-                    style={{
-                      ...rowActionButton18Style,
-                      opacity: 0.4,
-                      cursor: 'not-allowed'
+                    onClick={() => {
+                      setSelectedBulkField('');
+                      setBulkFieldValue('');
+                      setIsBulkEditOpen(true);
                     }}
-                    className="cursor-not-allowed opacity-40 select-none"
-                    title="Action temporairement désactivée"
+                    id="btn-bulk-modify"
+                    style={rowActionButton18Style}
+                    className="cursor-pointer select-none"
+                    title="Corriger en masse la sélection"
                   >
                     Corriger
                   </button>
@@ -3763,9 +3681,7 @@ export default function DefibTab({
                 value={selectedDepartment || ''}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (!val || val === '__ALL__') {
-                    setSelectedDepartment(null);
-                  } else {
+                  if (val && val !== '__ALL__') {
                     setSelectedDepartment(val);
                   }
                 }}
@@ -3791,7 +3707,7 @@ export default function DefibTab({
                 className="transition-all select-none"
                 title={t("Filtrer selon indicatif postal")}
               >
-                <option value="" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
+                <option value="" disabled style={{ backgroundColor: '#ffffff', color: '#000000' }}>
                   {t("Filtrer selon indicatif postal")}
                 </option>
                 {FRENCH_DEPARTMENTS.map((dept) => (
@@ -7369,553 +7285,341 @@ export default function DefibTab({
         <div 
           className="fixed inset-y-0 right-0 w-80 sm:w-96 bg-white shadow-2xl z-[90] flex flex-col border-l border-slate-200 transform transition-transform animate-none" 
           id="bulk-side-pane"
-          style={{ height: '100%' }}
+          style={{ height: "100%" }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 shrink-0">
-            <h3 className="text-md font-bold font-sans animate-none" style={{ fontSize: '18px', color: '#000000', cursor: 'default' }}>
+          <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-slate-100">
+            <h3 className="text-md font-bold font-sans animate-none" style={{ fontSize: "18px", color: "#000000", cursor: "default" }}>
               Modification de {selectedIds.length} défibrillateur(s).
             </h3>
           </div>
 
           <form onSubmit={handleBulkEditSubmit} className="flex-1 flex flex-col min-h-0" id="bulk-edit-form">
-            {/* Scroll Area containing all fields */}
+            {/* Scroll Area containing fields */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-
-              {/* Toggle 1: Modèle. */}
+              
+              {/* Field selector system dropdown */}
               <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setBulkApplyModele(!bulkApplyModele)}
-                  className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
-                >
-                  <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyModele ? 'bold' : 100 }}>
-                    Modèle.
-                  </span>
-                  <div 
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      bulkApplyModele ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                    }`}
-                    style={{ borderWidth: '2.5px' }}
-                  >
-                    {bulkApplyModele && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                    )}
-                  </div>
-                </button>
-                
-                {bulkApplyModele && (
-                  <div className="py-2">
-                    <div className="relative">
-                      <select
-                        id="bulk-modele-select"
-                        value={bulkModeleId}
-                        onChange={(e) => {
-                          setBulkModeleId(e.target.value);
-                          setBulkApplyModele(true);
-                        }}
-                        style={{ ...filterInputStyle, appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', width: '100%' }}
-                        className="w-full outline-none"
-                      >
-                        <option value="">-- Choisir un modèle --</option>
-                        {modelesDefib.map(m => (
-                          <option key={m.id} value={m.id}>{m.nom}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Toggle 2: Commentaire. */}
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setBulkApplyCommentaire(!bulkApplyCommentaire)}
-                  className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
-                >
-                  <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyCommentaire ? 'bold' : 100 }}>
-                    Commentaire.
-                  </span>
-                  <div 
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      bulkApplyCommentaire ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                    }`}
-                    style={{ borderWidth: '2.5px' }}
-                  >
-                    {bulkApplyCommentaire && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                    )}
-                  </div>
-                </button>
-                
-                {bulkApplyCommentaire && (
-                  <div className="py-2">
-                    <input
-                      type="text"
-                      id="bulk-commentaire-input"
-                      value={bulkCommentaire}
-                      onChange={(e) => {
-                        setBulkCommentaire(e.target.value);
-                        setBulkApplyCommentaire(true);
-                      }}
-                      placeholder="Entrez votre commentaire."
-                      style={{ ...filterInputStyle, width: '100%' }}
-                      className="w-full outline-none"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Toggle 3: Dernière maintenance. */}
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setBulkApplyDerniereMaint(!bulkApplyDerniereMaint)}
-                  className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
-                >
-                  <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyDerniereMaint ? 'bold' : 100 }}>
-                    Dernière maintenance.
-                  </span>
-                  <div 
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      bulkApplyDerniereMaint ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                    }`}
-                    style={{ borderWidth: '2.5px' }}
-                  >
-                    {bulkApplyDerniereMaint && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                    )}
-                  </div>
-                </button>
-                
-                {bulkApplyDerniereMaint && (
-                  <div className="py-2">
-                    <input
-                      type="date"
-                      id="bulk-derniere-maint-input"
-                      value={toISODateOnly(bulkDerniereMaint)}
-                      onChange={(e) => {
-                        setBulkDerniereMaint(toISODateOnly(e.target.value));
-                        setBulkApplyDerniereMaint(true);
-                      }}
-                      onInput={(e) => {
-                        setBulkDerniereMaint(toISODateOnly((e.target as HTMLInputElement).value));
-                        setBulkApplyDerniereMaint(true);
-                      }}
-                      onClick={(e) => { try { (e.target as any).showPicker?.(); } catch(_) {} }}
-                      style={{ ...filterInputStyle, width: '100%' }}
-                      className="w-full outline-none bg-white font-sans text-black cursor-pointer"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Toggle 4: Prochaine maintenance. */}
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setBulkApplyProchaineMaint(!bulkApplyProchaineMaint)}
-                  className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
-                >
-                  <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyProchaineMaint ? 'bold' : 100 }}>
-                    Prochaine maintenance.
-                  </span>
-                  <div 
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      bulkApplyProchaineMaint ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                    }`}
-                    style={{ borderWidth: '2.5px' }}
-                  >
-                    {bulkApplyProchaineMaint && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                    )}
-                  </div>
-                </button>
-                
-                {bulkApplyProchaineMaint && (
-                  <div className="py-2">
-                    <input
-                      type="date"
-                      id="bulk-prochaine-maint-input"
-                      value={toISODateOnly(bulkProchaineMaint)}
-                      onChange={(e) => {
-                        setBulkProchaineMaint(toISODateOnly(e.target.value));
-                        setBulkApplyProchaineMaint(true);
-                      }}
-                      onInput={(e) => {
-                        setBulkProchaineMaint(toISODateOnly((e.target as HTMLInputElement).value));
-                        setBulkApplyProchaineMaint(true);
-                      }}
-                      onClick={(e) => { try { (e.target as any).showPicker?.(); } catch(_) {} }}
-                      style={{ ...filterInputStyle, width: '100%' }}
-                      className="w-full outline-none bg-white font-sans text-black cursor-pointer"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Toggle 5: Archivé. */}
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !bulkApplyArchive;
-                    setBulkApplyArchive(next);
-                    if (next && !bulkArchive) setBulkArchive('Non');
+                <label htmlFor="bulk-field-select" className="block text-[11px] font-bold text-slate-500 uppercase">
+                  Champ à modifier.
+                </label>
+                <select
+                  id="bulk-field-select"
+                  value={selectedBulkField}
+                  onChange={(e) => {
+                    setSelectedBulkField(e.target.value);
+                    setBulkFieldValue("");
                   }}
-                  className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
-                >
-                  <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyArchive ? 'bold' : 100 }}>
-                    Archivé.
-                  </span>
-                  <div 
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      bulkApplyArchive ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                    }`}
-                    style={{ borderWidth: '2.5px' }}
-                  >
-                    {bulkApplyArchive && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                    )}
-                  </div>
-                </button>
-                
-                {bulkApplyArchive && (
-                  <div className="py-2 flex items-center gap-6 font-sans">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBulkArchive('Oui');
-                        setBulkApplyArchive(true);
-                      }}
-                      className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
-                    >
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                          bulkArchive === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                        }`} 
-                        style={{ borderWidth: '2.5px' }}
-                      >
-                        {bulkArchive === 'Oui' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                        )}
-                      </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBulkArchive('Non');
-                        setBulkApplyArchive(true);
-                      }}
-                      className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
-                    >
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                          bulkArchive === 'Non' ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                        }`} 
-                        style={{ borderWidth: '2.5px' }}
-                      >
-                        {bulkArchive === 'Non' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                        )}
-                      </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Toggle 6: Conforme. */}
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !bulkApplyConforme;
-                    setBulkApplyConforme(next);
-                    if (next && !bulkConforme) setBulkConforme('Oui');
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    fontSize: "16px",
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    fontWeight: 100,
+                    backgroundColor: "#ffffff",
+                    color: "#000000",
+                    border: "1px solid #dedede",
+                    borderRadius: "10px",
+                    outline: "none",
+                    cursor: "pointer"
                   }}
-                  className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
+                  className="outline-none"
                 >
-                  <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyConforme ? 'bold' : 100 }}>
-                    Conforme.
-                  </span>
-                  <div 
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      bulkApplyConforme ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                    }`}
-                    style={{ borderWidth: '2.5px' }}
-                  >
-                    {bulkApplyConforme && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                    )}
-                  </div>
-                </button>
-                
-                {bulkApplyConforme && (
-                  <div className="py-2 flex items-center gap-6 font-sans">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBulkConforme('Oui');
-                        setBulkApplyConforme(true);
-                      }}
-                      className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
-                    >
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                          bulkConforme === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                        }`} 
-                        style={{ borderWidth: '2.5px' }}
-                      >
-                        {bulkConforme === 'Oui' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                        )}
-                      </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBulkConforme('Non');
-                        setBulkApplyConforme(true);
-                      }}
-                      className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
-                    >
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                          bulkConforme === 'Non' ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                        }`} 
-                        style={{ borderWidth: '2.5px' }}
-                      >
-                        {bulkConforme === 'Non' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                        )}
-                      </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
-                    </button>
-                  </div>
-                )}
+                  <option value="">-- Choisir le champ à modifier --</option>
+                  <option value="modele">Modèle. (Défibrillateur)</option>
+                  <option value="nomPrenomSite">Nom et prénom. (Section client)</option>
+                  <option value="telephoneSite">Téléphone portable. (Section client)</option>
+                  <option value="emailSite">Email. (Section client)</option>
+                  <option value="prochaineMaintenance">Prochaine maintenance. (Date)</option>
+                  <option value="fsmAutorise">Maintenance autorisée. (Catégories)</option>
+                  <option value="commentaireAdresse">Aide d’accès. (Localisation)</option>
+                  <option value="commentaire">Commentaire Général. (Défibrillateur)</option>
+                </select>
               </div>
 
-              {/* Toggle 7: Maintenance autorisée. */}
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !bulkApplyFsmAutorise;
-                    setBulkApplyFsmAutorise(next);
-                    if (next && !bulkFsmAutorise) setBulkFsmAutorise('Oui');
-                  }}
-                  className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
-                >
-                  <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyFsmAutorise ? 'bold' : 100 }}>
-                    Maintenance autorisée.
-                  </span>
-                  <div 
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      bulkApplyFsmAutorise ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                    }`}
-                    style={{ borderWidth: '2.5px' }}
+              {/* Dynamic input according to selected field characteristics */}
+              {selectedBulkField === "modele" && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label htmlFor="bulk-input-modele" className="block text-[11px] font-bold text-slate-500 uppercase">
+                    Modèle. (Défibrillateur)
+                  </label>
+                  <select
+                    id="bulk-input-modele"
+                    value={bulkFieldValue}
+                    onChange={(e) => setBulkFieldValue(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      fontSize: "16px",
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontWeight: 100,
+                      backgroundColor: "#ffffff",
+                      color: "#000000",
+                      border: "1px solid #dedede",
+                      borderRadius: "10px",
+                      outline: "none",
+                      cursor: "pointer"
+                    }}
+                    className="outline-none"
                   >
-                    {bulkApplyFsmAutorise && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                    )}
-                  </div>
-                </button>
-                
-                {bulkApplyFsmAutorise && (
-                  <div className="py-2 flex items-center gap-6 font-sans">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBulkFsmAutorise('Oui');
-                        setBulkApplyFsmAutorise(true);
-                      }}
-                      className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
-                    >
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                          bulkFsmAutorise === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                        }`} 
-                        style={{ borderWidth: '2.5px' }}
-                      >
-                        {bulkFsmAutorise === 'Oui' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                        )}
-                      </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
-                    </button>
+                    <option value="" disabled>-- Choisir un modèle --</option>
+                    {modelesDefib.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBulkFsmAutorise('Non');
-                        setBulkApplyFsmAutorise(true);
-                      }}
-                      className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
-                    >
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                          bulkFsmAutorise === 'Non' ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                        }`} 
-                        style={{ borderWidth: '2.5px' }}
-                      >
-                        {bulkFsmAutorise === 'Non' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                        )}
-                      </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+              {selectedBulkField === "nomPrenomSite" && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label htmlFor="bulk-input-nomprenom" className="block text-[11px] font-bold text-slate-500 uppercase">
+                    Nom et prénom. (Section client)
+                  </label>
+                  <input
+                    type="text"
+                    id="bulk-input-nomprenom"
+                    value={bulkFieldValue}
+                    onChange={(e) => setBulkFieldValue(e.target.value)}
+                    placeholder="Entrez nom et prénom."
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      fontSize: "16px",
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontWeight: 100,
+                      backgroundColor: "#ffffff",
+                      color: "#000000",
+                      border: "1px solid #dedede",
+                      borderRadius: "10px",
+                      outline: "none"
+                    }}
+                  />
+                </div>
+              )}
 
-              {/* Toggle 8: Email Mensuel AutoVigilance. */}
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !bulkApplyRappelMensuelAuto;
-                    setBulkApplyRappelMensuelAuto(next);
-                    if (next && !bulkRappelMensuelAuto) setBulkRappelMensuelAuto('Non');
-                  }}
-                  className="w-full flex items-center justify-between cursor-pointer focus:outline-hidden bg-transparent border-0 text-left p-0 pb-1"
-                >
-                  <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: bulkApplyRappelMensuelAuto ? 'bold' : 100 }}>
-                    {t("Email mensuel d'auto-vigilance")}.
-                  </span>
-                  <div 
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      bulkApplyRappelMensuelAuto ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                    }`}
-                    style={{ borderWidth: '2.5px' }}
-                  >
-                    {bulkApplyRappelMensuelAuto && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                    )}
-                  </div>
-                </button>
-                
-                {bulkApplyRappelMensuelAuto && (
-                  <div className="py-2 flex items-center gap-6 font-sans">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBulkRappelMensuelAuto('Oui');
-                        setBulkApplyRappelMensuelAuto(true);
-                      }}
-                      className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
-                    >
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                          bulkRappelMensuelAuto === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                        }`} 
-                        style={{ borderWidth: '2.5px' }}
-                      >
-                        {bulkRappelMensuelAuto === 'Oui' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                        )}
-                      </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Oui</span>
-                    </button>
+              {selectedBulkField === "telephoneSite" && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label htmlFor="bulk-input-telephone" className="block text-[11px] font-bold text-slate-500 uppercase">
+                    Téléphone portable. (Section client)
+                  </label>
+                  <input
+                    type="tel"
+                    id="bulk-input-telephone"
+                    value={bulkFieldValue}
+                    onChange={(e) => setBulkFieldValue(e.target.value)}
+                    placeholder="Entrez numéro de téléphone."
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      fontSize: "16px",
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontWeight: 100,
+                      backgroundColor: "#ffffff",
+                      color: "#000000",
+                      border: "1px solid #dedede",
+                      borderRadius: "10px",
+                      outline: "none"
+                    }}
+                  />
+                </div>
+              )}
 
+              {selectedBulkField === "emailSite" && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label htmlFor="bulk-input-email" className="block text-[11px] font-bold text-slate-500 uppercase">
+                    Email. (Section client)
+                  </label>
+                  <input
+                    type="email"
+                    id="bulk-input-email"
+                    value={bulkFieldValue}
+                    onChange={(e) => setBulkFieldValue(e.target.value)}
+                    placeholder="Entrez adresse email."
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      fontSize: "16px",
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontWeight: 100,
+                      backgroundColor: "#ffffff",
+                      color: "#000000",
+                      border: "1px solid #dedede",
+                      borderRadius: "10px",
+                      outline: "none"
+                    }}
+                  />
+                </div>
+              )}
+
+              {selectedBulkField === "prochaineMaintenance" && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label htmlFor="bulk-input-prochainemaint" className="block text-[11px] font-bold text-slate-500 uppercase">
+                    Prochaine maintenance. (Date)
+                  </label>
+                  <input
+                    type="date"
+                    id="bulk-input-prochainemaint"
+                    value={bulkFieldValue}
+                    onChange={(e) => setBulkFieldValue(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      fontSize: "16px",
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontWeight: 100,
+                      backgroundColor: "#ffffff",
+                      color: "#000000",
+                      border: "1px solid #dedede",
+                      borderRadius: "10px",
+                      outline: "none",
+                      cursor: "pointer"
+                    }}
+                  />
+                </div>
+              )}
+
+              {selectedBulkField === "fsmAutorise" && (
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase">
+                    Maintenance autorisée. (Catégories)
+                  </label>
+                  <div className="flex items-center gap-6 pt-1">
                     <button
                       type="button"
-                      onClick={() => {
-                        setBulkRappelMensuelAuto('Non');
-                        setBulkApplyRappelMensuelAuto(true);
-                      }}
-                      className="flex items-center gap-2 cursor-pointer focus:outline-hidden bg-transparent border-0"
+                      onClick={() => setBulkFieldValue("Oui")}
+                      className="inline-flex items-center cursor-pointer gap-2 select-none bg-transparent border-0 p-0"
+                      style={{ fontSize: "16px", color: "#000000", fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                     >
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                          bulkRappelMensuelAuto === 'Non' ? 'border-[#fe4eba]' : 'border-slate-400 bg-white'
-                        }`} 
-                        style={{ borderWidth: '2.5px' }}
-                      >
-                        {bulkRappelMensuelAuto === 'Non' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
-                        )}
-                      </div>
-                      <span className="text-[16px] text-black font-sans" style={{ fontWeight: 100 }}>Non</span>
+                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${bulkFieldValue === "Oui" ? "border-[#fe4eba]" : "border-slate-300 bg-white"}`}>
+                        {bulkFieldValue === "Oui" && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                      </span>
+                      <span>Oui</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkFieldValue("Non")}
+                      className="inline-flex items-center cursor-pointer gap-2 select-none bg-transparent border-0 p-0"
+                      style={{ fontSize: "16px", color: "#000000", fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                    >
+                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${bulkFieldValue === "Non" ? "border-[#fe4eba]" : "border-slate-300 bg-white"}`}>
+                        {bulkFieldValue === "Non" && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                      </span>
+                      <span>Non</span>
                     </button>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {selectedBulkField === "commentaireAdresse" && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label htmlFor="bulk-input-adresse-aide" className="block text-[11px] font-bold text-slate-500 uppercase">
+                    Aide d’accès. (Localisation)
+                  </label>
+                  <textarea
+                    id="bulk-input-adresse-aide"
+                    rows={4}
+                    value={bulkFieldValue}
+                    onChange={(e) => setBulkFieldValue(e.target.value)}
+                    placeholder="Entrez aide d'accès."
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      fontSize: "16px",
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontWeight: 100,
+                      backgroundColor: "#ffffff",
+                      color: "#000000",
+                      border: "1px solid #dedede",
+                      borderRadius: "10px",
+                      outline: "none",
+                      resize: "vertical"
+                    }}
+                  />
+                </div>
+              )}
+
+              {selectedBulkField === "commentaire" && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label htmlFor="bulk-input-commentaire-general" className="block text-[11px] font-bold text-slate-500 uppercase">
+                    Commentaire Général. (Défibrillateur)
+                  </label>
+                  <textarea
+                    id="bulk-input-commentaire-general"
+                    rows={4}
+                    value={bulkFieldValue}
+                    onChange={(e) => setBulkFieldValue(e.target.value)}
+                    placeholder="Entrez commentaire général."
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      fontSize: "16px",
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontWeight: 100,
+                      backgroundColor: "#ffffff",
+                      color: "#000000",
+                      border: "1px solid #dedede",
+                      borderRadius: "10px",
+                      outline: "none",
+                      resize: "vertical"
+                    }}
+                  />
+                </div>
+              )}
 
             </div>
 
-            {/* Footer Actions matching Filters side pane button styles */}
-            <div className="p-6 bg-white flex gap-4 shrink-0">
+            {/* Footer Actions: Annuler & Appliquer */}
+            <div className="p-6 bg-white flex gap-4 shrink-0 border-t border-slate-100">
               <button
                 type="button"
                 disabled={isBulkSubmitting}
-                onClick={() => setIsBulkEditOpen(false)}
-                style={{ ...cancelFiltersButtonStyle, fontSize: '18px' }}
-                className={`flex-1 text-center font-sans ${isBulkSubmitting ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} animate-none`}
+                onClick={() => {
+                  if (!isBulkSubmitting) {
+                    setIsBulkEditOpen(false);
+                    setSelectedBulkField("");
+                    setBulkFieldValue("");
+                  }
+                }}
+                id="btn-cancel-bulk-edit"
+                style={{
+                  ...rowActionButton18Style,
+                  backgroundColor: "#000000",
+                  color: "#ffffff",
+                  opacity: isBulkSubmitting ? 0.4 : 1,
+                  cursor: isBulkSubmitting ? "not-allowed" : "pointer"
+                }}
+                className={`flex-1 text-center font-sans justify-center select-none ${isBulkSubmitting ? "cursor-not-allowed opacity-40" : "cursor-pointer"}`}
               >
                 Annuler
               </button>
-              <button
-                type="submit"
-                disabled={
-                  isBulkSubmitting ||
-                  (!bulkApplyModele &&
-                    !bulkApplyCommentaire &&
-                    !bulkApplyDerniereMaint &&
-                    !bulkApplyProchaineMaint &&
-                    !bulkApplyArchive &&
-                    !bulkApplyConforme &&
-                    !bulkApplyFsmAutorise &&
-                    !bulkApplyRappelMensuelAuto)
-                }
-                style={{
-                  ...applyFiltersButtonStyle,
-                  backgroundColor: 'rgb(53, 86, 236)',
-                  color: 'rgb(255, 255, 255)',
-                  boxShadow:
-                    'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                  fontSize: '18px',
-                  opacity:
-                    isBulkSubmitting ||
-                    (!bulkApplyModele &&
-                      !bulkApplyCommentaire &&
-                      !bulkApplyDerniereMaint &&
-                      !bulkApplyProchaineMaint &&
-                      !bulkApplyArchive &&
-                      !bulkApplyConforme &&
-                      !bulkApplyFsmAutorise &&
-                      !bulkApplyRappelMensuelAuto)
-                      ? 0.5
-                      : 1,
-                  cursor:
-                    isBulkSubmitting ||
-                    (!bulkApplyModele &&
-                      !bulkApplyCommentaire &&
-                      !bulkApplyDerniereMaint &&
-                      !bulkApplyProchaineMaint &&
-                      !bulkApplyArchive &&
-                      !bulkApplyConforme &&
-                      !bulkApplyFsmAutorise &&
-                      !bulkApplyRappelMensuelAuto)
-                      ? 'not-allowed'
-                      : 'pointer',
-                }}
-                className="flex-1 text-center font-sans animate-none flex items-center justify-center gap-2"
-              >
-                {isBulkSubmitting ? (
-                  <>
-                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Mise à jour en cours...</span>
-                  </>
-                ) : (
-                  <span>Confirmer</span>
-                )}
-              </button>
+
+              {Boolean(selectedBulkField && bulkFieldValue !== "") && (
+                <button
+                  type="submit"
+                  disabled={isBulkSubmitting}
+                  id="btn-apply-bulk-edit"
+                  style={{
+                    ...rowActionButton18Style,
+                    backgroundColor: "rgb(53, 86, 236)",
+                    color: "#ffffff",
+                    boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                    opacity: isBulkSubmitting ? 0.5 : 1,
+                    cursor: isBulkSubmitting ? "not-allowed" : "pointer",
+                  }}
+                  className={`flex-1 text-center font-sans justify-center select-none flex items-center gap-2 ${isBulkSubmitting ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+                >
+                  {isBulkSubmitting ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Application...</span>
+                    </>
+                  ) : (
+                    <span>Appliquer</span>
+                  )}
+                </button>
+              )}
             </div>
           </form>
         </div>

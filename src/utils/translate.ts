@@ -1,6 +1,10 @@
 // Multi-language translation dictionaries
 const dictionaries: Record<string, Record<string, string>> = {
   English: {
+    "Defibeo est déjà ouvert dans un autre onglet. Veuillez n’utiliser qu’un seul onglet afin d’éviter les erreurs de fonctionnement et les incohérences de données.": "Defibeo is already open in another tab. Please only use a single tab to prevent operational errors and data inconsistencies.",
+    "Il semble que vous ne soyez pas connecté à Internet. Veuillez vérifier votre réseau.": "It seems that you are not connected to the Internet. Please check your network.",
+    "Filtrer selon indicatif postal": "Filter by postal code",
+    "Utiliser cet onglet": "Use this tab",
     "J'ai compris": "Understood",
     "Remonter": "Back to top",
     "Seules les tournées marquées « À faire » et attribuées au technicien peuvent être sélectionnées.": "Only tours marked 'To do' and assigned to the technician can be selected.",
@@ -1392,6 +1396,10 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Afficher les statistiques": "Show statistics"
   },
   Deutsch: {
+    "Defibeo est déjà ouvert dans un autre onglet. Veuillez n’utiliser qu’un seul onglet afin d’éviter les erreurs de fonctionnement et les incohérences de données.": "Defibeo ist bereits in einem anderen Tab geöffnet. Bitte verwenden Sie nur einen Tab, um Betriebsfehler und Dateninkonsistenzen zu vermeiden.",
+    "Il semble que vous ne soyez pas connecté à Internet. Veuillez vérifier votre réseau.": "Es scheint, dass Sie nicht mit dem Internet verbunden sind. Bitte überprüfen Sie Ihr Netzwerk.",
+    "Filtrer selon indicatif postal": "Nach Postleitzahl filtern",
+    "Utiliser cet onglet": "Diesen Tab verwenden",
     "Bienvenue! Pour commencer, vous devez planifier un appel de présentation avec un spécialiste Défibeo afin d'être guidé dans vos premiers pas.": "Willkommen! Um zu beginnen, müssen Sie ein Einführungsgespräch mit einem Défibeo-Spezialisten vereinbaren, der Sie bei Ihren ersten Schritten begleitet.",
     // Navigation / Sidebar Tabs
     "Ajouté récemment": "Kürzlich hinzugefügt",
@@ -2231,6 +2239,10 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Afficher les statistiques": "Statistiken anzeigen"
   },
   Português: {
+    "Defibeo est déjà ouvert dans un autre onglet. Veuillez n’utiliser qu’un seul onglet afin d’éviter les erreurs de fonctionnement et les incohérences de données.": "O Defibeo já está aberto em outra aba. Por favor, use apenas uma aba para evitar erros operacionais e inconsistências de dados.",
+    "Il semble que vous ne soyez pas connecté à Internet. Veuillez vérifier votre réseau.": "Parece que você não está conectado à Internet. Por favor, verifique sua rede.",
+    "Filtrer selon indicatif postal": "Filtrar por código postal",
+    "Utiliser cet onglet": "Usar esta aba",
     "Bienvenue! Pour commencer, vous devez planifier un appel de présentation avec un spécialiste Défibeo afin d'être guidé dans vos premiers pas.": "Bem-vindo! Para começar, deve agendar uma chamada de apresentação com um especialista Défibeo para o orientar nos seus primeiros passos.",
     // Navigation / Sidebar Tabs
     "Ajouté récemment": "Adicionado recentemente",
@@ -3071,6 +3083,10 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Afficher les statistiques": "Mostrar estatísticas"
   },
   Español: {
+    "Defibeo est déjà ouvert dans un autre onglet. Veuillez n’utiliser qu’un seul onglet afin d’éviter les erreurs de fonctionnement et les incohérences de données.": "Defibeo ya está abierto en otra pestaña. Utilice únicamente una pestaña para evitar errores operativos e inconsistencias de datos.",
+    "Il semble que vous ne soyez pas connecté à Internet. Veuillez vérifier votre réseau.": "Parece que no estás conectado a Internet. Por favor, comprueba tu red.",
+    "Filtrer selon indicatif postal": "Filtrar por código postal",
+    "Utiliser cet onglet": "Usar esta pestaña",
     "Bienvenue! Pour commencer, vous devez planifier un appel de présentation avec un spécialiste Défibeo afin d'être guidé dans vos premiers pas.": "¡Bienvenido! Para empezar, debe programar una llamada de presentación con un especialista de Défibeo para que le guíe en sus primeros pasos.",
     // Navigation / Sidebar Tabs
     "Ajouté récemment": "Añadido recientemente",

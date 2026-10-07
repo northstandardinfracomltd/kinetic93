@@ -84,6 +84,7 @@ import { PlanningTab } from "./PlanningTab";
 import { getMonthlyWorkingDaysData, generateMonthlyPDFHTML } from "./TempsTab";
 import HelpBubble from "./HelpBubble";
 import TopBarProgress from "./TopBarProgress";
+import { useNetworkStatus } from "../utils/useNetworkStatus";
 import {
   triggerPublicPortalOpenSound,
   playTechSound2,
@@ -1101,6 +1102,7 @@ export default function PublicPortal({
   const [windowWidth, setWindowWidth] = useState<number>(() =>
     typeof window !== "undefined" ? window.innerWidth : 1000
   );
+  const isNetworkUnavailable = useNetworkStatus();
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -5370,6 +5372,25 @@ export default function PublicPortal({
     }
     return cleanZone;
   };
+
+  if (isNetworkUnavailable) {
+    return (
+      <div 
+        className="fixed inset-0 z-[999999] flex flex-col items-center justify-center text-center font-sans p-6 select-none" 
+        style={{ 
+          background: currentTechTheme.color,
+          color: '#ffffff'
+        }}
+        id="offline-warning-overlay-webapp"
+      >
+        <div className="flex flex-col items-center gap-4 max-w-lg">
+          <span className="text-white text-[18px] font-sans font-medium leading-relaxed">
+            {t("Il semble que vous ne soyez pas connecté à Internet. Veuillez vérifier votre réseau.")}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   if (windowWidth > 1100) {
     return (

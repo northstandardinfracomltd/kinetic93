@@ -40,6 +40,8 @@ import {
   triggerEmailSoumettreAuClient
 } from './utils/emailService';
 import { getParisTimestamp } from './utils/dateUtils';
+import { useSingleTabGuard } from './utils/useSingleTabGuard';
+import { useNetworkStatus } from './utils/useNetworkStatus';
 
 import DefibTab from './components/DefibTab';
 import HelpBubble from './components/HelpBubble';
@@ -339,12 +341,6 @@ export default function App() {
   const [minEnvLoading, setMinEnvLoading] = useState<boolean>(true);
   const [envReloadTrigger, setEnvReloadTrigger] = useState<number>(0);
   const [avisageConfirmTour, setAvisageConfirmTour] = useState<any | null>(null);
-  const [isOffline, setIsOffline] = useState<boolean>(() => {
-    if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
-      return !navigator.onLine;
-    }
-    return false;
-  });
   const [windowWidth, setWindowWidth] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth;
@@ -352,22 +348,19 @@ export default function App() {
     return 1000;
   });
 
+  const { isDuplicateTab, claimLeadership } = useSingleTabGuard();
+  const isNetworkUnavailable = useNetworkStatus();
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     startDOMTranslation();
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
     };
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
 
     window.addEventListener('resize', handleResize);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
     return () => {
       window.removeEventListener('resize', handleResize);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -806,6 +799,7 @@ export default function App() {
   const [fsmOpenPieceDropdownId, setFsmOpenPieceDropdownId] = useState<string | null>(null);
   const [fsmPieceSearch, setFsmPieceSearch] = useState('');
   const [fsmSearchQuery, setFsmSearchQuery] = useState('');
+  const [defibSearchQuery, setDefibSearchQuery] = useState('');
   const [gmaoSearchQuery, setGmaoSearchQuery] = useState('');
   const [gmaoFilter, setGmaoFilter] = useState<'upcoming' | 'moderation' | 'validated'>('moderation');
   const [gmaoIncludeAutresMateriels, setGmaoIncludeAutresMateriels] = useState<boolean>(true);
@@ -7636,6 +7630,84 @@ export default function App() {
     }
   };
 
+  // Cross-tab single instance guard (Logiciel principal ou Webapp)
+  if (isDuplicateTab) {
+    const isWebappActive = Boolean(
+      isPublicPortalOpen ||
+      (typeof localStorage !== 'undefined' && localStorage.getItem('defib_logged_user_role') === 'technicien') ||
+      loggedUser?.email === 'tech.ouest@defibeo.com'
+    );
+    let webappThemeColor: string | null = null;
+    if (isWebappActive && typeof localStorage !== 'undefined') {
+      const rawTheme = localStorage.getItem(`defib_${tenantId}_theme`) ||
+        localStorage.getItem('defib_current_user_theme') ||
+        localStorage.getItem('defib_tech_theme');
+      if (rawTheme) {
+        const found = APP_THEMES.find(t => t.id === rawTheme || t.color.toLowerCase() === rawTheme.toLowerCase());
+        webappThemeColor = found ? found.color : (rawTheme.startsWith('#') || rawTheme.startsWith('rgb') ? rawTheme : null);
+      }
+    }
+    const overlayBg = isWebappActive
+      ? (webappThemeColor || currentSidebarTheme?.color || '#1e293b')
+      : (currentSidebarTheme?.color || '#1e293b');
+
+    return (
+      <div 
+        className="fixed inset-0 z-[999999] flex flex-col items-center justify-center text-center font-sans p-6 select-none" 
+        style={{ 
+          background: overlayBg,
+          color: '#ffffff'
+        }}
+        id="duplicate-tab-warning-overlay"
+      >
+        <div className="flex flex-col items-center gap-4 max-w-lg">
+          <span className="text-white text-[18px] font-sans font-medium leading-relaxed">
+            {t("Defibeo est déjà ouvert dans un autre onglet. Veuillez n’utiliser qu’un seul onglet afin d’éviter les erreurs de fonctionnement et les incohérences de données.")}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Network connection guard (No internet OR 3G) (Logiciel principal ou Webapp)
+  if (isNetworkUnavailable) {
+    const isWebappActive = Boolean(
+      isPublicPortalOpen ||
+      (typeof localStorage !== 'undefined' && localStorage.getItem('defib_logged_user_role') === 'technicien') ||
+      loggedUser?.email === 'tech.ouest@defibeo.com'
+    );
+    let webappThemeColor: string | null = null;
+    if (isWebappActive && typeof localStorage !== 'undefined') {
+      const rawTheme = localStorage.getItem(`defib_${tenantId}_theme`) ||
+        localStorage.getItem('defib_current_user_theme') ||
+        localStorage.getItem('defib_tech_theme');
+      if (rawTheme) {
+        const found = APP_THEMES.find(t => t.id === rawTheme || t.color.toLowerCase() === rawTheme.toLowerCase());
+        webappThemeColor = found ? found.color : (rawTheme.startsWith('#') || rawTheme.startsWith('rgb') ? rawTheme : null);
+      }
+    }
+    const overlayBg = isWebappActive
+      ? (webappThemeColor || currentSidebarTheme?.color || '#1e293b')
+      : (currentSidebarTheme?.color || '#1e293b');
+
+    return (
+      <div 
+        className="fixed inset-0 z-[999999] flex flex-col items-center justify-center text-center font-sans p-6 select-none" 
+        style={{ 
+          background: overlayBg,
+          color: '#ffffff'
+        }}
+        id="offline-warning-overlay"
+      >
+        <div className="flex flex-col items-center gap-4 max-w-lg">
+          <span className="text-white text-[18px] font-sans font-medium leading-relaxed">
+            {t("Il semble que vous ne soyez pas connecté à Internet. Veuillez vérifier votre réseau.")}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   // Public standalone portals accessible without authentication
   if (isMissionValidationPage) {
     return <MissionValidationPage />;
@@ -7852,25 +7924,6 @@ export default function App() {
         <div className="flex flex-col items-center gap-6 max-w-lg">
           <span className="text-white text-[18px] font-sans font-medium leading-relaxed">
             {getPrezBlockMessage()}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  if (isOffline) {
-    return (
-      <div 
-        className="fixed inset-0 z-[99999] flex flex-col items-center justify-center text-center font-sans p-6" 
-        style={{ 
-          background: 'radial-gradient(#7e2e86, #36093a)',
-          color: '#ffffff'
-        }}
-        id="offline-warning-overlay"
-      >
-        <div className="flex flex-col items-center gap-4 max-w-lg">
-          <span className="text-white text-[18px] font-sans font-medium leading-relaxed">
-            Attention, la connexion à internet est manquante ou instable. Essayez à nouveau.
           </span>
         </div>
       </div>
@@ -8304,6 +8357,8 @@ export default function App() {
               fsmTours={fsmTours}
               onUpdateFsmTours={saveFsmTours}
               setActiveTab={setActiveTab}
+              initialSearch={defibSearchQuery}
+              onSearchChange={setDefibSearchQuery}
               onShowGmaoReports={(identifiant) => {
                 setActiveTab('gmao');
                 setGmaoSearchQuery(identifiant);
@@ -8343,6 +8398,10 @@ export default function App() {
               onDeleteClient={handleDeleteClient}
               companyInfo={companyInfo}
               setActiveTab={setActiveTab}
+              onShowClientDefibs={(clientName) => {
+                setDefibSearchQuery(clientName);
+                setActiveTab('defibrillateurs');
+              }}
               isDeveloper={isDeveloper}
               isReadOnly={isDeveloper}
             />

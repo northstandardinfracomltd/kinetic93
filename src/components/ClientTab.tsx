@@ -147,6 +147,7 @@ interface ClientTabProps {
   onDeleteClient: (id: string) => void;
   companyInfo: CompanyInfo;
   setActiveTab?: (tab: any, bypassBlock?: boolean) => void;
+  onShowClientDefibs?: (clientName: string) => void;
   isDeveloper?: boolean;
   isReadOnly?: boolean;
 }
@@ -160,6 +161,7 @@ export default function ClientTab({
   onDeleteClient,
   companyInfo,
   setActiveTab,
+  onShowClientDefibs,
   isDeveloper = false,
   isReadOnly = false,
 }: ClientTabProps) {
@@ -2269,9 +2271,28 @@ export default function ClientTab({
                       {(() => {
                         const defibCount = defibrillateurs.filter(d => d.clientId === client.id).length;
                         const isDeleteDisabled = defibCount > 0;
+                        const clientName = (client.denomination || (client as any).nomSite || (client as any).nom || (client as any).entreprise || '').trim();
                         return (
                           <div className="inline-flex gap-2">
                             <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onShowClientDefibs) {
+                                  onShowClientDefibs(clientName);
+                                } else if (setActiveTab) {
+                                  setActiveTab('defibrillateurs');
+                                }
+                              }}
+                              id={`btn-view-defibs-client-${client.id}`}
+                              style={rowActionButton18Style}
+                              className="cursor-pointer"
+                              title={`Voir les défibrillateurs de ${clientName || 'ce client'}`}
+                            >
+                              {t('Défibrillateurs')}
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => openEditModal(client)}
                               id={`btn-edit-client-${client.id}`}
                               style={rowActionButton18Style}
@@ -2280,6 +2301,7 @@ export default function ClientTab({
                               Modifier
                             </button>
                             <button
+                              type="button"
                               onClick={() => {
                                 if (isDeleteDisabled) return;
                                 onDeleteClient(client.id);
