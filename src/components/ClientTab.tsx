@@ -694,8 +694,31 @@ export default function ClientTab({
     cursor: 'default',
   };
 
-  // Search filter
+  // Search filter and initial empty state optimization
+  const hasSearchQuery = Boolean(search && search.trim().length > 0);
+
+  const totalClientsCount = useMemo(() => {
+    return (clients || []).filter((c) => {
+      if (!c || typeof c !== 'object') return false;
+      if ((c as any).numeroSerie && !c.denomination && !c.siret) return false;
+      return true;
+    }).length;
+  }, [clients]);
+
+  // Fast defib count lookup by client ID (O(1) instead of iterating 18,000 items)
+  const defibCountByClientId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const d of (defibrillateurs || [])) {
+      if (d && d.clientId) {
+        map.set(d.clientId, (map.get(d.clientId) || 0) + 1);
+      }
+    }
+    return map;
+  }, [defibrillateurs]);
+
   const filteredClients = useMemo(() => {
+    const s = (search || '').trim().toLowerCase();
+    if (!s) return [];
     return (clients || []).filter(
       (c) => {
         if (!c || typeof c !== 'object') return false;
@@ -706,7 +729,6 @@ export default function ClientTab({
         const email = (c.email || '').toLowerCase();
         const nomSite = (c.nomPrenomSite || '').toLowerCase();
         const nomContrat = (c.nomContrat || '').toLowerCase();
-        const s = (search || '').toLowerCase();
         return denom.includes(s) || siret.includes(s) || email.includes(s) || nomSite.includes(s) || nomContrat.includes(s);
       }
     );
@@ -2199,7 +2221,16 @@ export default function ClientTab({
       {/* Main Table Records Sheet */}
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         <div className="overflow-x-auto">
-          {filteredClients.length === 0 ? (
+          {!hasSearchQuery ? (
+            <div className="p-16 text-center font-sans lg:py-24">
+              <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
+                {t("Recherchez un client pour le/les afficher.")}
+              </p>
+              <p style={{ color: '#000000', fontSize: '14px', fontWeight: 100, marginTop: '6px' }}>
+                {`Vous avez ${totalClientsCount} client(s) sur Defibeo.`}
+              </p>
+            </div>
+          ) : filteredClients.length === 0 ? (
             <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
           ) : (
             <table className="w-full text-left font-sans border-collapse text-xs" id="clients-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
@@ -2223,7 +2254,7 @@ export default function ClientTab({
                     {/* Defib count pill */}
                     <td className="px-4 py-5 text-center whitespace-nowrap">
                       {(() => {
-                        const count = defibrillateurs.filter(d => d.clientId === client.id).length;
+                        const count = defibCountByClientId.get(client.id) || 0;
                         return (
                           <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1 text-[11px] font-black text-white bg-[#fe4eba] rounded-full font-sans">
                             {count}
@@ -2329,44 +2360,48 @@ export default function ClientTab({
         </div>
       </div>
 
-      <div 
-        className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4" 
-        id="client-tab-total-summary"
-      >
-        <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
-          Total clients (Tous) : {clients.length} ({paginatedClients.length} sur cette page).
-        </div>
+      {hasSearchQuery && filteredClients.length > 0 && (
+        <div 
+          className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4" 
+          id="client-tab-total-summary"
+        >
+          <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
+            Total clients : {filteredClients.length} ({paginatedClients.length} sur cette page).
+          </div>
 
-        {/* Pagination Controls */}
-        <div className="flex items-center gap-2">
-          <select
-            value={currentPage}
-            onChange={(e) => setCurrentPage(Number(e.target.value))}
-            id="select-client-page"
-            className="appearance-none cursor-pointer focus:outline-none px-5 py-2"
-            style={{
-              fontSize: '18px',
-              borderRadius: '13px',
-              boxShadow: 'none',
-              backgroundColor: '#000000',
-              borderColor: '#000000',
-              borderWidth: '1px',
-              borderStyle: 'solid',
-              color: '#ffffff',
-              textAlign: 'center',
-              textAlignLast: 'center',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <option key={p} value={p} style={{ backgroundColor: '#000000', color: '#ffffff', textAlign: 'center' }}>
-                Page {p}
-              </option>
-            ))}
-          </select>
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <select
+                value={currentPage}
+                onChange={(e) => setCurrentPage(Number(e.target.value))}
+                id="select-client-page"
+                className="appearance-none cursor-pointer focus:outline-none px-5 py-2"
+                style={{
+                  fontSize: '18px',
+                  borderRadius: '13px',
+                  boxShadow: 'none',
+                  backgroundColor: '#000000',
+                  borderColor: '#000000',
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  color: '#ffffff',
+                  textAlign: 'center',
+                  textAlignLast: 'center',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <option key={p} value={p} style={{ backgroundColor: '#000000', color: '#ffffff', textAlign: 'center' }}>
+                    Page {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
