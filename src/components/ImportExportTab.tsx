@@ -419,7 +419,8 @@ const validateAndParseDefibs = (
   csvText: string,
   currentVars: Variable[],
   existingDefibs: Defibrillateur[],
-  existingClients: Client[] = []
+  existingClients: Client[] = [],
+  tenantId?: string
 ): { success: boolean; data: Defibrillateur[]; errorMessage?: string } => {
   let hasLineBreaksInCells = false;
   let hasInvalidValues = false;
@@ -1113,7 +1114,9 @@ const validateAndParseDefibs = (
       victimeSurvie: 'Non',
       victimeSansSurvie: 'Non',
       ageVictime: '',
-      commentaireCampagneRappel: ''
+      commentaireCampagneRappel: '',
+      envId: tenantId || 'D27',
+      tenantId: tenantId || 'D27'
     });
   }
 
@@ -1536,7 +1539,11 @@ export default function ImportExportTab({
           const cleanedRecords = cloudRecords.filter(r => !isRecordExpired(r));
           
           setRecords(cleanedRecords);
-          localStorage.setItem(key, JSON.stringify(cleanedRecords));
+          try {
+            localStorage.setItem(key, JSON.stringify(cleanedRecords));
+          } catch (e) {
+            console.warn("Could not save importExportRecords to localStorage:", e);
+          }
           
           // Save back if some were cleaned up
           if (cleanedRecords.length !== cloudRecords.length) {
@@ -1550,7 +1557,11 @@ export default function ImportExportTab({
       const cleaned = localRecords.filter(r => !isRecordExpired(r));
 
       setRecords(cleaned);
-      localStorage.setItem(key, JSON.stringify(cleaned));
+      try {
+        localStorage.setItem(key, JSON.stringify(cleaned));
+      } catch (e) {
+        console.warn("Could not save importExportRecords to localStorage:", e);
+      }
       if (isFirebaseLoaded) {
         await saveCollectionToFirestore('importExportRecords', cleaned);
       }
@@ -1576,7 +1587,11 @@ export default function ImportExportTab({
       if (expiredFound) {
         setRecords(cleaned);
         const key = `defib_import_export_records_${tenantId}`;
-        localStorage.setItem(key, JSON.stringify(cleaned));
+        try {
+          localStorage.setItem(key, JSON.stringify(cleaned));
+        } catch (e) {
+          console.warn("Could not save importExportRecords to localStorage:", e);
+        }
         if (isFirebaseLoaded) {
           await saveCollectionToFirestore('importExportRecords', cleaned);
         }
@@ -1616,13 +1631,13 @@ export default function ImportExportTab({
 
       let parsedData: any[] | null = null;
       if (formCategorie === 'Défibrillateurs.') {
-        const valResult = validateAndParseDefibs(uploadedCsvContent, variables, defibrillateurs, clients);
+        const valResult = validateAndParseDefibs(uploadedCsvContent, variables, defibrillateurs, clients, tenantId);
         if (!valResult.success) {
           setValidationError(valResult.errorMessage || 'Fichier invalide : une ou plusieurs colonnes contiennent des valeurs invalides.');
           return;
         }
         parsedData = valResult.data;
-        setImportSuccessMessage("Votre fichier est valide, en cours d’importation.");
+        setImportSuccessMessage(`Votre fichier est valide (${parsedData.length} défibrillateur(s)), en cours d’importation...`);
       } else if (formCategorie === 'Clients.') {
         const valResult = validateAndParseClients(uploadedCsvContent);
         if (!valResult.success) {
@@ -1667,19 +1682,42 @@ export default function ImportExportTab({
       setImportSuccessMessage("Validation réussie. Enregistrement sécurisé dans la base de données...");
 
       try {
+        const importCount = Array.isArray(parsedData) ? parsedData.length : 0;
+
         if (formCategorie === 'Défibrillateurs.' && saveDefibs) {
+          setImportSuccessMessage(`Enregistrement de ${importCount} défibrillateur(s) sur le serveur...`);
+
+          // 1. Sync newly imported defibs to server chunk storage & fast index
+          try {
+            const BATCH_SIZE = 150;
+            for (let i = 0; i < parsedData.length; i += BATCH_SIZE) {
+              const slice = parsedData.slice(i, i + BATCH_SIZE);
+              await fetch('/api/sync-batch-defibs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  tenantId: tenantId || 'D27',
+                  defibs: slice
+                })
+              });
+            }
+          } catch (syncErr) {
+            console.warn('[Import] Warning during server batch defib sync:', syncErr);
+          }
+
+          setImportSuccessMessage(`Enregistrement de ${importCount} défibrillateur(s) dans le Cloud...`);
           const combined = [...defibrillateurs, ...parsedData];
-          setImportSuccessMessage(`Enregistrement de ${combined.length} défibrillateurs dans le Cloud et le serveur...`);
           await saveDefibs(combined);
         } else if (formCategorie === 'Clients.' && saveClients) {
+          setImportSuccessMessage(`Enregistrement de ${importCount} client(s)...`);
           const combined = [...clients, ...parsedData];
-          setImportSuccessMessage(`Enregistrement de ${combined.length} clients...`);
           await saveClients(combined);
         } else if (formCategorie === 'Stocks.' && saveStocks) {
+          setImportSuccessMessage(`Enregistrement de ${importCount} stock(s)...`);
           const combined = [...stocks, ...parsedData];
-          setImportSuccessMessage(`Enregistrement de ${combined.length} stocks...`);
           await saveStocks(combined);
         } else if (formCategorie.startsWith('Variable — ') && saveVariables) {
+          setImportSuccessMessage(`Enregistrement de ${importCount} variable(s)...`);
           const combined = [...variables, ...parsedData];
           await saveVariables(combined);
         }
@@ -1703,12 +1741,24 @@ export default function ImportExportTab({
         const updated = [newRecord, ...records];
         setRecords(updated);
         const key = `defib_import_export_records_${tenantId}`;
-        localStorage.setItem(key, JSON.stringify(updated));
+        try {
+          localStorage.setItem(key, JSON.stringify(updated));
+        } catch (e) {
+          console.warn("Could not save importExportRecords to localStorage:", e);
+        }
         if (isFirebaseLoaded) {
           await saveCollectionToFirestore('importExportRecords', updated);
         }
 
-        setImportSuccessMessage("Importation terminée avec succès !");
+        const labelItem = formCategorie === 'Défibrillateurs.' 
+          ? `${importCount} défibrillateur(s)`
+          : formCategorie === 'Clients.'
+          ? `${importCount} client(s)`
+          : formCategorie === 'Stocks.'
+          ? `${importCount} stock(s)`
+          : `${importCount} élément(s)`;
+
+        setImportSuccessMessage(`Importation terminée avec succès ! (${labelItem} importé(s))`);
         setTimeout(() => {
           setIsSaving(false);
           setShowForm(false);
@@ -1719,7 +1769,7 @@ export default function ImportExportTab({
           if (formCategorie === 'Défibrillateurs.' && setActiveTab) {
             setActiveTab('defibrillateurs');
           }
-        }, 700);
+        }, 2200);
       } catch (err: any) {
         console.error(err);
         setIsSaving(false);
@@ -1732,6 +1782,35 @@ export default function ImportExportTab({
 
     // Exportation path
     setValidationError(null);
+
+    let itemsCount = 0;
+    switch (formCategorie) {
+      case 'Défibrillateurs.':
+        itemsCount = (defibrillateurs || []).length;
+        break;
+      case 'Clients.':
+        itemsCount = (clients || []).length;
+        break;
+      case 'Stocks.':
+        itemsCount = (stocks || []).length;
+        break;
+      case 'Temps.':
+        itemsCount = (pointages || []).length;
+        break;
+      default:
+        if (formCategorie.startsWith('Variable')) {
+          itemsCount = (variables || []).length;
+        }
+        break;
+    }
+
+    const MAX_EXPORT_LINES = 5000;
+    if (itemsCount > MAX_EXPORT_LINES) {
+      setIsSaving(false);
+      setValidationError("Le volume maximum de lignes autorisés pour l'export est dépassé. Veuillez contacter le support.");
+      return;
+    }
+
     setIsSaving(true);
 
     setTimeout(async () => {
@@ -1767,17 +1846,27 @@ export default function ImportExportTab({
         };
 
         const updated = [newRecord, ...records];
+
+        // Save to LocalStorage first to check storage quota
+        const key = `defib_import_export_records_${tenantId}`;
+        try {
+          localStorage.setItem(key, JSON.stringify(updated));
+        } catch (storageErr: any) {
+          console.error("Storage quota error during export save:", storageErr);
+          setIsSaving(false);
+          setValidationError("Le volume maximum de lignes autorisés pour l'export est dépassé. Veuillez contacter le support.");
+          return;
+        }
+
+        if (isFirebaseLoaded) {
+          await saveCollectionToFirestore('importExportRecords', updated);
+        }
+
+        // Only commit to records in UI state once storage successfully accepted the file
         setRecords(updated);
         
         // Log suspicious activity event C
         logBulkExport(tenantId, undefined, undefined, formCategorie).catch(() => {});
-
-        // Save to LocalStorage and Firestore
-        const key = `defib_import_export_records_${tenantId}`;
-        localStorage.setItem(key, JSON.stringify(updated));
-        if (isFirebaseLoaded) {
-          await saveCollectionToFirestore('importExportRecords', updated);
-        }
 
         setDropboxError(null);
         if (dropboxActive && dropboxAccessToken) {
@@ -1805,10 +1894,18 @@ export default function ImportExportTab({
         setFormDate(new Date().toISOString().split('T')[0]);
         setFormType('Importation.');
         setFormCategorie('Défibrillateurs.');
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
         setIsSaving(false);
-        setValidationError('Une erreur est survenue lors de l’exportation.');
+        if (
+          err?.name === 'QuotaExceededError' ||
+          String(err).toLowerCase().includes('quota') ||
+          String(err?.message).toLowerCase().includes('quota')
+        ) {
+          setValidationError("Le volume maximum de lignes autorisés pour l'export est dépassé. Veuillez contacter le support.");
+        } else {
+          setValidationError('Une erreur est survenue lors de l’exportation.');
+        }
       }
     }, 1000);
   };
@@ -1818,7 +1915,11 @@ export default function ImportExportTab({
     setRecords(updated);
     
     const key = `defib_import_export_records_${tenantId}`;
-    localStorage.setItem(key, JSON.stringify(updated));
+    try {
+      localStorage.setItem(key, JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Could not save importExportRecords to localStorage:", e);
+    }
     if (isFirebaseLoaded) {
       await saveCollectionToFirestore('importExportRecords', updated);
     }

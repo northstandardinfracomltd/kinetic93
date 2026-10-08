@@ -20,6 +20,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Quel est l’usage ? Les techniciens sont aussi des observateurs sur le terrain, ils peuvent relever des défibrillateurs en notant le nom du mainteneur actuel et la date de prochaine maintenance. Le but : c’est ensuite de contacter le client final et de lui proposer un service en adéquation avec ce que le technicien a observé.": "What is the usage? Technicians are also observers in the field; they can record third-party defibrillators by noting the name of the current maintainer and the date of the next maintenance. The goal: subsequently contact the end customer and offer them a service aligned with what the technician observed.",
     "Bienvenue! Pour commencer, vous devez planifier un appel de présentation avec un spécialiste Défibeo afin d'être guidé dans vos premiers pas.": "Welcome! To get started, you must schedule an introductory call with a Défibeo specialist to guide you through your first steps.",
     "Recherchez un client pour le/les afficher.": "Search for a client to display them.",
+    "Saisissez au moins 2 caractères pour rechercher.": "Enter at least 2 characters to search.",
+    "Nous affichons le(s) client(s) que vous venez de modifier ou créer.": "We display the client(s) you just modified or created.",
     // Navigation / Sidebar Tabs
     "Ajouté récemment": "Recently added",
     "Pro.Main au plus proche": "Next Maint. nearest",
@@ -1398,6 +1400,8 @@ const dictionaries: Record<string, Record<string, string>> = {
   },
   Deutsch: {
     "Recherchez un client pour le/les afficher.": "Suchen Sie nach einem Kunden, um ihn anzuzeigen.",
+    "Saisissez au moins 2 caractères pour rechercher.": "Geben Sie mindestens 2 Zeichen ein, um zu suchen.",
+    "Nous affichons le(s) client(s) que vous venez de modifier ou créer.": "Wir zeigen den/die Kunden an, den/die Sie gerade geändert oder erstellt haben.",
     "Defibeo est déjà ouvert dans un autre onglet. Veuillez n’utiliser qu’un seul onglet afin d’éviter les erreurs de fonctionnement et les incohérences de données.": "Defibeo ist bereits in einem anderen Tab geöffnet. Bitte verwenden Sie nur einen Tab, um Betriebsfehler und Dateninkonsistenzen zu vermeiden.",
     "Il semble que vous ne soyez pas connecté à Internet. Veuillez vérifier votre réseau.": "Es scheint, dass Sie nicht mit dem Internet verbunden sind. Bitte überprüfen Sie Ihr Netzwerk.",
     "Filtrer selon indicatif postal": "Nach Postleitzahl filtern",
@@ -2242,6 +2246,8 @@ const dictionaries: Record<string, Record<string, string>> = {
   },
   Português: {
     "Recherchez un client pour le/les afficher.": "Pesquise um cliente para exibi-lo(s).",
+    "Saisissez au moins 2 caractères pour rechercher.": "Digite pelo menos 2 caracteres para pesquisar.",
+    "Nous affichons le(s) client(s) que vous venez de modifier ou créer.": "Exibimos o(s) cliente(s) que você acabou de modificar ou criar.",
     "Defibeo est déjà ouvert dans un autre onglet. Veuillez n’utiliser qu’un seul onglet afin d’éviter les erreurs de fonctionnement et les incohérences de données.": "O Defibeo já está aberto em outra aba. Por favor, use apenas uma aba para evitar erros operacionais e inconsistências de dados.",
     "Il semble que vous ne soyez pas connecté à Internet. Veuillez vérifier votre réseau.": "Parece que você não está conectado à Internet. Por favor, verifique sua rede.",
     "Filtrer selon indicatif postal": "Filtrar por código postal",
@@ -3087,6 +3093,8 @@ const dictionaries: Record<string, Record<string, string>> = {
   },
   Español: {
     "Recherchez un client pour le/les afficher.": "Busque un cliente para mostrarlo(s).",
+    "Saisissez au moins 2 caractères pour rechercher.": "Introduzca al menos 2 caracteres para buscar.",
+    "Nous affichons le(s) client(s) que vous venez de modifier ou créer.": "Mostramos el/los cliente(s) que acaba de modificar o crear.",
     "Defibeo est déjà ouvert dans un autre onglet. Veuillez n’utiliser qu’un seul onglet afin d’éviter les erreurs de fonctionnement et les incohérences de données.": "Defibeo ya está abierto en otra pestaña. Utilice únicamente una pestaña para evitar errores operativos e inconsistencias de datos.",
     "Il semble que vous ne soyez pas connecté à Internet. Veuillez vérifier votre réseau.": "Parece que no estás conectado a Internet. Por favor, comprueba tu red.",
     "Filtrer selon indicatif postal": "Filtrar por código postal",

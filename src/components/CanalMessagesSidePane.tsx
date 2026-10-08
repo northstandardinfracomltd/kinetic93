@@ -99,10 +99,15 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
 
     let isMounted = true;
 
-    // 1. Polling dynamique ultra-rapide toutes les secondes (1000ms)
+    // 1. Polling de secours périodique (toutes les 30s) avec timeout strict
     const fetchLatestServerMessages = async () => {
+      const controller = new AbortController();
+      const timerId = setTimeout(() => controller.abort(), 6000);
       try {
-        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(tenantId)}&_=${Date.now()}`);
+        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(tenantId)}&_=${Date.now()}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timerId);
         if (resp.ok && isMounted) {
           const data = await resp.json();
           const remoteList: TenantMessage[] = Array.isArray(data?.value) ? data.value : (Array.isArray(data) ? data : []);
@@ -118,7 +123,9 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             });
           }
         }
-      } catch (_) {}
+      } catch (_) {
+        clearTimeout(timerId);
+      }
     };
 
     // 2. Écoute des événements cross-tab storage pour mise à jour immédiate (0ms)
@@ -137,8 +144,8 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     // Initial check
     fetchLatestServerMessages();
 
-    // Timer auto-refresh toutes les 1000ms (1 seconde)
-    const refreshTimer = setInterval(fetchLatestServerMessages, 1000);
+    // Timer auto-refresh fallback toutes les 30s
+    const refreshTimer = setInterval(fetchLatestServerMessages, 30000);
 
     // 3. Listener Firestore en complément
     let unsubscribeFirestore: (() => void) | undefined;

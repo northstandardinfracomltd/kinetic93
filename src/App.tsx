@@ -1586,10 +1586,15 @@ export default function App() {
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // 2. Polling dynamique périodique (toutes les 2.5s)
+    // 2. Polling de secours périodique (toutes les 30s) avec timeout strict
     const pollMessages = async () => {
+      const controller = new AbortController();
+      const timerId = setTimeout(() => controller.abort(), 6000);
       try {
-        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(tenantId)}&_=${Date.now()}`);
+        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(tenantId)}&_=${Date.now()}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timerId);
         if (resp.ok && isMounted) {
           const data = await resp.json();
           const remoteList: TenantMessage[] = Array.isArray(data?.value) ? data.value : (Array.isArray(data) ? data : []);
@@ -1605,10 +1610,12 @@ export default function App() {
             });
           }
         }
-      } catch (_) {}
+      } catch (_) {
+        clearTimeout(timerId);
+      }
     };
 
-    const pollTimer = setInterval(pollMessages, 2500);
+    const pollTimer = setInterval(pollMessages, 30000);
 
     // 3. Listener Firestore
     let unsubscribeFirestore: (() => void) | undefined;
@@ -5381,7 +5388,7 @@ export default function App() {
             const data = await fetchCollectionFromFirestore<T>(collectionName, activeRunTenantId, onProgress);
             if (activeRunTenantId !== loadedTenantIdRef.current && activeRunTenantId !== tenantId) return;
             if (data !== null) {
-              let finalData = data;
+              let finalData: any = data;
               if (customTransformer) {
                 finalData = await customTransformer(data);
               }
@@ -5391,6 +5398,12 @@ export default function App() {
                 let currentLen = 0;
                 if (collectionName === 'defibrillateurs') {
                   currentLen = defibrillateurs?.length || 0;
+                  try {
+                    const localCached = await idbGet<any[]>(`defib_${activeRunTenantId}_defibrillateurs`);
+                    if (Array.isArray(localCached) && localCached.length > finalData.length) {
+                      finalData = mergeCollectionItems('defibrillateurs', [...finalData, ...localCached]);
+                    }
+                  } catch (_) {}
                 } else {
                   const currentSavedStr = loadedDataRef.current[localStorageKeySuffix] || loadedDataRef.current[collectionName];
                   if (currentSavedStr) {
@@ -5406,7 +5419,7 @@ export default function App() {
                 }
               }
 
-              stateSetter(finalData);
+              stateSetter(finalData as T);
 
               // For large collections (e.g. 18,000+ defibrillateurs), NEVER serialize 34MB to localStorage!
               // Store directly into IndexedDB, keeping browser thread fast and responsive.
@@ -7233,10 +7246,12 @@ export default function App() {
     }
 
     loadedDataRef.current.defibrillateurs = getCollectionFingerprint(newDefibs);
-    if (tenantId) {
-      saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId).catch((err) => {
-        console.warn('[saveDefibs] Erreur lors de la sauvegarde d’arrière-plan Firestore:', err);
-      });
+    if (tenantId && newDefibs.length <= 250) {
+      try {
+        await saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId);
+      } catch (err) {
+        console.warn('[saveDefibs] Erreur lors de la sauvegarde Firestore:', err);
+      }
     }
   };
 
@@ -7398,14 +7413,17 @@ export default function App() {
   };
 
   // CLIENT CRUD HANDLERS
-  const handleAddClient = (clientData: Omit<Client, 'id'>) => {
+  const handleAddClient = (clientData: Omit<Client, 'id'> & { id?: string }) => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    const nowIso = new Date().toISOString();
     const newClient: Client = {
-      id: 'c_' + Date.now(),
+      id: clientData.id || ('c_' + Date.now()),
       ...clientData,
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
     saveClients([...clients, newClient]);
   };
@@ -7415,7 +7433,11 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
-    saveClients(clients.map((c) => (c.id === updated.id ? updated : c)));
+    const withUpdated: Client = {
+      ...updated,
+      updatedAt: new Date().toISOString()
+    };
+    saveClients(clients.map((c) => (c.id === updated.id ? withUpdated : c)));
   };
 
   const handleDeleteClient = (id: string) => {

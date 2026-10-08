@@ -778,8 +778,13 @@ export default function PublicPortal({
     window.addEventListener("storage", handleStorageChange);
 
     const syncServerMessages = async () => {
+      const controller = new AbortController();
+      const timerId = setTimeout(() => controller.abort(), 6000);
       try {
-        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(techTenantId)}&_=${Date.now()}`);
+        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(techTenantId)}&_=${Date.now()}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timerId);
         if (resp.ok && isMounted) {
           const data = await resp.json();
           const remoteList: TenantMessage[] = Array.isArray(data?.value) ? data.value : (Array.isArray(data) ? data : []);
@@ -795,11 +800,13 @@ export default function PublicPortal({
             });
           }
         }
-      } catch (_) {}
+      } catch (_) {
+        clearTimeout(timerId);
+      }
     };
 
     syncServerMessages();
-    const interval = setInterval(syncServerMessages, 2500);
+    const interval = setInterval(syncServerMessages, 30000);
 
     return () => {
       isMounted = false;

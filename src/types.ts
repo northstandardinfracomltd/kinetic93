@@ -71,6 +71,8 @@ export interface Client {
   clientIdField?: string;
   valeurContrat?: string;
   autresContrats?: ClientContract[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type VariableCategory =

@@ -694,8 +694,71 @@ export default function ClientTab({
     cursor: 'default',
   };
 
-  // Search filter and initial empty state optimization
-  const hasSearchQuery = Boolean(search && search.trim().length > 0);
+  const FIVE_MINUTES_MS = 5 * 60 * 1000;
+
+  // Track client IDs added/modified in the last 5 minutes (in memory + sessionStorage)
+  const [recentClientTimestamps, setRecentClientTimestamps] = useState<Record<string, number>>(() => {
+    try {
+      const saved = sessionStorage.getItem('defib_recent_client_timestamps');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const now = Date.now();
+        const valid: Record<string, number> = {};
+        for (const [id, ts] of Object.entries(parsed)) {
+          if (typeof ts === 'number' && now - ts < FIVE_MINUTES_MS) {
+            valid[id] = ts;
+          }
+        }
+        return valid;
+      }
+    } catch (_) {}
+    return {};
+  });
+
+  const recordRecentClientChange = (clientId: string) => {
+    setRecentClientTimestamps((prev) => {
+      const updated = { ...prev, [clientId]: Date.now() };
+      try {
+        sessionStorage.setItem('defib_recent_client_timestamps', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
+  };
+
+  const removeRecentClientChange = (clientId: string) => {
+    setRecentClientTimestamps((prev) => {
+      const updated = { ...prev };
+      delete updated[clientId];
+      try {
+        sessionStorage.setItem('defib_recent_client_timestamps', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
+  };
+
+  // Periodically refresh recent client expiry
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setRecentClientTimestamps((prev) => {
+        let changed = false;
+        const valid: Record<string, number> = {};
+        for (const [id, ts] of Object.entries(prev)) {
+          const numTs = typeof ts === 'number' ? ts : Number(ts);
+          if (!isNaN(numTs) && now - numTs < FIVE_MINUTES_MS) {
+            valid[id] = numTs;
+          } else {
+            changed = true;
+          }
+        }
+        return changed ? valid : prev;
+      });
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Search filter: Ne filtrer que à partir de 2 caractères dans le search bar
+  const isSearchActive = Boolean(search && search.trim().length >= 2);
 
   const totalClientsCount = useMemo(() => {
     return (clients || []).filter((c) => {
@@ -716,33 +779,92 @@ export default function ClientTab({
     return map;
   }, [defibrillateurs]);
 
-  const filteredClients = useMemo(() => {
-    const s = (search || '').trim().toLowerCase();
-    if (!s) return [];
-    return (clients || []).filter(
-      (c) => {
-        if (!c || typeof c !== 'object') return false;
-        // Ignore corrupted entries or misplaced defibs
-        if ((c as any).numeroSerie && !c.denomination && !c.siret) return false;
-        const denom = (c.denomination || (c as any).nomSite || (c as any).nom || '').toLowerCase();
-        const siret = (c.siret || '').toLowerCase();
-        const email = (c.email || '').toLowerCase();
-        const nomSite = (c.nomPrenomSite || '').toLowerCase();
-        const nomContrat = (c.nomContrat || '').toLowerCase();
-        return denom.includes(s) || siret.includes(s) || email.includes(s) || nomSite.includes(s) || nomContrat.includes(s);
+  // Clients added or modified in the last 5 minutes
+  const recentClients = useMemo(() => {
+    const now = Date.now();
+    const list = (clients || []).filter((c) => {
+      if (!c || typeof c !== 'object') return false;
+      if ((c as any).numeroSerie && !c.denomination && !c.siret) return false;
+      const recordedTs = recentClientTimestamps[c.id];
+      if (recordedTs && now - recordedTs < FIVE_MINUTES_MS) {
+        return true;
       }
-    );
-  }, [clients, search]);
+      if (c.updatedAt) {
+        const t = new Date(c.updatedAt).getTime();
+        if (!isNaN(t) && now - t < FIVE_MINUTES_MS) {
+          return true;
+        }
+      }
+      if (c.createdAt) {
+        const t = new Date(c.createdAt).getTime();
+        if (!isNaN(t) && now - t < FIVE_MINUTES_MS) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    // Trier les plus récemment modifiés/créés en premier
+    list.sort((a, b) => {
+      const tsA = recentClientTimestamps[a.id] || (a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0));
+      const tsB = recentClientTimestamps[b.id] || (b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0));
+      return tsB - tsA;
+    });
+
+    return list.slice(0, 10);
+  }, [clients, recentClientTimestamps]);
+
+  // Quand on recherche, limiter l'affichage (et chargement réel) à 10 clients
+  const filteredClients = useMemo(() => {
+    if (!isSearchActive) return [];
+    const s = (search || '').trim().toLowerCase();
+    const results: Client[] = [];
+    for (const c of (clients || [])) {
+      if (!c || typeof c !== 'object') continue;
+      // Ignore corrupted entries or misplaced defibs
+      if ((c as any).numeroSerie && !c.denomination && !c.siret) continue;
+      const denom = (c.denomination || (c as any).nomSite || (c as any).nom || '').toLowerCase();
+      const siret = (c.siret || '').toLowerCase();
+      const email = (c.email || '').toLowerCase();
+      const nomSite = (c.nomPrenomSite || '').toLowerCase();
+      const nomContrat = (c.nomContrat || '').toLowerCase();
+      const phone = (c.phone || '').toLowerCase();
+      const telSite = (c.telephoneSite || '').toLowerCase();
+      const clientId = (c.clientIdField || c.id || '').toLowerCase();
+      if (
+        denom.includes(s) ||
+        siret.includes(s) ||
+        email.includes(s) ||
+        nomSite.includes(s) ||
+        nomContrat.includes(s) ||
+        phone.includes(s) ||
+        telSite.includes(s) ||
+        clientId.includes(s)
+      ) {
+        results.push(c);
+        if (results.length >= 10) {
+          break; // Hard limit at 10 clients
+        }
+      }
+    }
+    return results;
+  }, [clients, search, isSearchActive]);
+
+  // Affichage : Si recherche active -> filteredClients (max 10)
+  // Si pas de recherche active et clients récents -> recentClients (max 10) avec gélule info
+  // Sinon -> aucun client affiché (état initial)
+  const showRecentModifiedPill = !isSearchActive && recentClients.length > 0;
+  const displayedClients = isSearchActive ? filteredClients : (showRecentModifiedPill ? recentClients : []);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const ITEMS_PER_PAGE = 100;
+  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     setCurrentPage(1);
   }, [search]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredClients.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(displayedClients.length / ITEMS_PER_PAGE));
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -752,8 +874,8 @@ export default function ClientTab({
 
   const paginatedClients = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredClients.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredClients, currentPage]);
+    return displayedClients.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [displayedClients, currentPage]);
 
   const openAddModal = () => {
     setEditingClient(null);
@@ -967,16 +1089,27 @@ export default function ClientTab({
       autresContrats: autresContrats,
     };
 
+    const nowIso = new Date().toISOString();
     if (editingClient) {
       onUpdateClient({
         id: editingClient.id,
         ...payload,
         signaturePins: editingClient.signaturePins,
+        updatedAt: nowIso,
       });
+      recordRecentClientChange(editingClient.id);
     } else {
-      onAddClient(payload);
+      const newId = 'c_' + Date.now();
+      onAddClient({
+        id: newId,
+        ...payload,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      } as any);
+      recordRecentClientChange(newId);
     }
 
+    setSearch('');
     setIsModalOpen(false);
   };
 
@@ -2220,17 +2353,42 @@ export default function ClientTab({
 
       {/* Main Table Records Sheet */}
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
+        {showRecentModifiedPill && (
+          <div className="mb-4 flex items-center justify-start px-1" id="recent-client-info-pill">
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 16px',
+                backgroundColor: '#eff6ff',
+                color: '#1d4ed8',
+                borderRadius: '9999px',
+                fontSize: '13px',
+                fontWeight: 100,
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                border: '1px solid #bfdbfe'
+              }}
+            >
+              <span style={{ width: '6px', height: '6px', borderRadius: '9999px', backgroundColor: 'rgb(53, 86, 236)' }} />
+              {t("Nous affichons le(s) client(s) que vous venez de modifier ou créer.")}
+            </span>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
-          {!hasSearchQuery ? (
+          {!isSearchActive && !showRecentModifiedPill ? (
             <div className="p-16 text-center font-sans lg:py-24">
               <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
-                {t("Recherchez un client pour le/les afficher.")}
+                {search.trim().length === 1 
+                  ? t("Saisissez au moins 2 caractères pour rechercher.") 
+                  : t("Recherchez un client pour le/les afficher.")}
               </p>
               <p style={{ color: '#000000', fontSize: '14px', fontWeight: 100, marginTop: '6px' }}>
                 {`Vous avez ${totalClientsCount} client(s) sur Defibeo.`}
               </p>
             </div>
-          ) : filteredClients.length === 0 ? (
+          ) : displayedClients.length === 0 ? (
             <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
           ) : (
             <table className="w-full text-left font-sans border-collapse text-xs" id="clients-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
@@ -2336,6 +2494,7 @@ export default function ClientTab({
                               onClick={() => {
                                 if (isDeleteDisabled) return;
                                 onDeleteClient(client.id);
+                                removeRecentClientChange(client.id);
                               }}
                               disabled={isDeleteDisabled}
                               id={`btn-delete-client-${client.id}`}
@@ -2360,46 +2519,25 @@ export default function ClientTab({
         </div>
       </div>
 
-      {hasSearchQuery && filteredClients.length > 0 && (
+      {isSearchActive && filteredClients.length > 0 && (
         <div 
           className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4" 
           id="client-tab-total-summary"
         >
           <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
-            Total clients : {filteredClients.length} ({paginatedClients.length} sur cette page).
+            Total clients : {filteredClients.length} (limité à 10 maximum).
           </div>
+        </div>
+      )}
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center gap-2">
-              <select
-                value={currentPage}
-                onChange={(e) => setCurrentPage(Number(e.target.value))}
-                id="select-client-page"
-                className="appearance-none cursor-pointer focus:outline-none px-5 py-2"
-                style={{
-                  fontSize: '18px',
-                  borderRadius: '13px',
-                  boxShadow: 'none',
-                  backgroundColor: '#000000',
-                  borderColor: '#000000',
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
-                  color: '#ffffff',
-                  textAlign: 'center',
-                  textAlignLast: 'center',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <option key={p} value={p} style={{ backgroundColor: '#000000', color: '#ffffff', textAlign: 'center' }}>
-                    Page {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+      {!isSearchActive && showRecentModifiedPill && recentClients.length > 0 && (
+        <div 
+          className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4" 
+          id="client-tab-recent-summary"
+        >
+          <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
+            Client(s) récent(s) affiché(s) : {recentClients.length}.
+          </div>
         </div>
       )}
     </div>
