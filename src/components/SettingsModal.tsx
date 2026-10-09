@@ -692,6 +692,12 @@ export default function SettingsModal({
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
         }, 300);
+      } else {
+        const savedSection = localStorage.getItem('settings_active_section');
+        if (savedSection) {
+          localStorage.removeItem('settings_active_section');
+          setActiveSection(savedSection as SettingsSectionKey);
+        }
       }
     }
   }, [isOpen, isPage]);
@@ -1788,27 +1794,38 @@ export default function SettingsModal({
       };
     }));
     const myTenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+    const effectiveTenantId = myTenantId || 'demo';
+
+    const fallbackName = (companyInfo?.name || '').trim() || 'Mon Cabinet';
+    const fallbackEmail = (companyInfo?.email || '').trim() || 'contact@defibeo.com';
+    const fallbackNomLogiciel = (companyInfo?.nomLogiciel || '').trim() || 'Défibeo';
+
+    const compName = (localCompany.name || '').trim() || fallbackName;
+    const compEmail = (localCompany.email || '').trim() || fallbackEmail;
+    const compNomLogiciel = (localCompany.nomLogiciel || '').trim() || fallbackNomLogiciel;
 
     try {
-      if (!localCompany.name || !localCompany.name.trim()) {
-        alert("Le champ 'Nom commercial' est requis.");
-        setIsSaving(false);
-        setIsVerifyingEmail(false);
-        return;
-      }
+      if (activeSection === 'reglages') {
+        if (!localCompany.name || !localCompany.name.trim()) {
+          alert("Le champ 'Nom commercial' est requis.");
+          setIsSaving(false);
+          setIsVerifyingEmail(false);
+          return;
+        }
 
-      if (!localCompany.email || !localCompany.email.trim()) {
-        alert("Le champ 'Email de l'entreprise' est requis.");
-        setIsSaving(false);
-        setIsVerifyingEmail(false);
-        return;
-      }
+        if (!localCompany.email || !localCompany.email.trim()) {
+          alert("Le champ 'Email de l'entreprise' est requis.");
+          setIsSaving(false);
+          setIsVerifyingEmail(false);
+          return;
+        }
 
-      if (!localCompany.nomLogiciel || !localCompany.nomLogiciel.trim()) {
-        alert("Le champ 'Nom du logiciel' est requis.");
-        setIsSaving(false);
-        setIsVerifyingEmail(false);
-        return;
+        if (!localCompany.nomLogiciel || !localCompany.nomLogiciel.trim()) {
+          alert("Le champ 'Nom du logiciel' est requis.");
+          setIsSaving(false);
+          setIsVerifyingEmail(false);
+          return;
+        }
       }
 
       if (localCompany.gmailPartageLocalisation && localCompany.gmailPartageLocalisation.trim()) {
@@ -1861,6 +1878,9 @@ export default function SettingsModal({
 
     const companyToSave = {
       ...localCompany,
+      name: compName,
+      email: compEmail,
+      nomLogiciel: compNomLogiciel,
       customLocationNames: localLocationNames,
       enableAutoEmails: enableAutoEmails,
       enableSatisfactionAvis: enableSatisfactionAvis,
@@ -1925,14 +1945,41 @@ export default function SettingsModal({
     // Save directly to Firestore for environments to guarantee persistence and solve the Mercedes AMG sync bug
     const promises: Promise<any>[] = [];
 
-    if (myTenantId && myTenantId !== 'demo') {
+    // Always persist to local storage immediately
+    try {
+      const membersJson = JSON.stringify(membersToSave);
+      const companyJson = JSON.stringify(companyToSave);
+      localStorage.setItem('defib_members', membersJson);
+      localStorage.setItem(`defib_${effectiveTenantId}_members`, membersJson);
+      localStorage.setItem(`fs_cache_${effectiveTenantId}_members`, membersJson);
+      localStorage.setItem('defib_company_info', companyJson);
+      localStorage.setItem(`defib_${effectiveTenantId}_company_info`, companyJson);
+      localStorage.setItem(`fs_cache_${effectiveTenantId}_company_info`, companyJson);
+
+      const activeTechSession = localStorage.getItem('defib_active_tech_session');
+      if (activeTechSession) {
+        const parsed = JSON.parse(activeTechSession);
+        const matched = membersToSave.find(m => 
+          (m.id && parsed.id && m.id === parsed.id) ||
+          (m.email && parsed.email && m.email.toLowerCase().trim() === parsed.email.toLowerCase().trim()) ||
+          (m.name && parsed.name && m.name.toLowerCase().trim() === parsed.name.toLowerCase().trim())
+        );
+        if (matched) {
+          localStorage.setItem('defib_active_tech_session', JSON.stringify({ ...parsed, ...matched }));
+        }
+      }
+    } catch (cacheErr) {
+      console.warn("Error updating local storage cache for members/company:", cacheErr);
+    }
+
+    if (effectiveTenantId && effectiveTenantId !== 'demo') {
       promises.push(
-        saveCollectionToFirestore('companyInfo', companyToSave).catch(err =>
+        saveCollectionToFirestore('companyInfo', companyToSave, effectiveTenantId).catch(err =>
           console.error('Error saving company info directly to Firestore:', err)
         )
       );
       promises.push(
-        saveCollectionToFirestore('members', membersToSave).catch(err =>
+        saveCollectionToFirestore('members', membersToSave, effectiveTenantId).catch(err =>
           console.error('Error saving members directly to Firestore:', err)
         )
       );
@@ -2068,7 +2115,11 @@ export default function SettingsModal({
     
     // Set reload flags to automatically reopen settings and scroll to members
     localStorage.setItem('open_settings_after_reload', 'true');
-    localStorage.setItem('scroll_to_members', 'true');
+    if (activeSection === 'membres') {
+      localStorage.setItem('scroll_to_members', 'true');
+    } else if (activeSection) {
+      localStorage.setItem('settings_active_section', activeSection);
+    }
 
     // Wait at most 800ms for all writes to hit offline/network layer, then reload the page
     const timeoutPromise = new Promise<void>(resolve => setTimeout(resolve, 800));
@@ -5242,12 +5293,9 @@ export default function SettingsModal({
           <div className="pt-2 w-full animate-fadeIn" style={{ order: 99 }}>
             <button
               type="button"
-              onClick={() => {
-                setActiveSection(null);
-                const hub = document.getElementById('settings-accordion-hub');
-                if (hub) {
-                  hub.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+              disabled={isSaving}
+              onClick={async () => {
+                await handleSaveAll();
               }}
               style={{
                 ...rowActionButtonStyle,
@@ -5259,13 +5307,24 @@ export default function SettingsModal({
                 borderRadius: '13px',
                 fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: isSaving ? 'not-allowed' : 'pointer',
+                opacity: isSaving ? 0.7 : 1,
                 border: 'none',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
               }}
-              className="transition-all hover:opacity-90 active:scale-[0.99] text-white"
+              className="transition-all hover:opacity-90 active:scale-[0.99] text-white flex items-center justify-center gap-2"
             >
-              {t("Terminé")}
+              {isSaving ? (
+                <>
+                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>{t("Enregistrement en cours...")}</span>
+                </>
+              ) : (
+                t("Terminé")
+              )}
             </button>
           </div>
         )}

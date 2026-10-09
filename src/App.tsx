@@ -15671,7 +15671,7 @@ export default function App() {
                           borderLeft: '1px solid #e2e8f0',
                         }}
                       >
-                        <div className="flex-1 overflow-y-auto bg-white font-sans relative">
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden bg-white font-sans relative w-full max-w-full" style={{ overflowX: 'hidden', overscrollBehaviorX: 'none' }}>
                           <GmaoCorrectionForm
                             report={repToEdit}
                             companyInfo={companyInfo}

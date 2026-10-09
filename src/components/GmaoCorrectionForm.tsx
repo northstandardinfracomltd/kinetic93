@@ -888,6 +888,7 @@ export default function GmaoCorrectionForm({
 
   // Active Section horizontal navigation bar on mobile
   const [activeSection, setActiveSection] = useState<number>(0);
+  const [previewModalPhoto, setPreviewModalPhoto] = useState<{ url: string; title: string } | null>(null);
   const pillsContainerRef = useRef<HTMLDivElement>(null);
 
   const selectedModelVar = useMemo(() => {
@@ -978,45 +979,6 @@ export default function GmaoCorrectionForm({
   }, [stocks, variables]);
 
   useEffect(() => {
-    const handleScroll = () => {
-      const sectionIds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-      let currentActive = 0;
-      let minDiff = Infinity;
-      const refLine = 120; // threshold from the top of the viewport
-
-      for (const id of sectionIds) {
-        const el = document.getElementById(`gmao-sec-${id}`);
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          const diff = Math.abs(rect.top - refLine);
-          if (diff < minDiff) {
-            minDiff = diff;
-            currentActive = id;
-          }
-        }
-      }
-      setActiveSection(currentActive);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    
-    const overlay = document.getElementById('report-form-overlay');
-    if (overlay) {
-      overlay.addEventListener('scroll', handleScroll, { passive: true });
-    }
-
-    const interval = setInterval(handleScroll, 400);
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      if (overlay) {
-        overlay.removeEventListener('scroll', handleScroll);
-      }
-      clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
     if (pillsContainerRef.current) {
       const activePill = pillsContainerRef.current.querySelector(`[data-pill-id="${activeSection}"]`);
       if (activePill) {
@@ -1034,26 +996,18 @@ export default function GmaoCorrectionForm({
   }, [activeSection]);
 
   const scrollToSection = (id: number) => {
-    const el = document.getElementById(`gmao-sec-${id}`);
-    if (el) {
-      const overlay = document.getElementById('report-form-overlay');
-      if (overlay) {
-        const containerRect = overlay.getBoundingClientRect();
-        const elRect = el.getBoundingClientRect();
-        const relativeTop = elRect.top - containerRect.top + overlay.scrollTop;
-        overlay.scrollTo({
-          top: relativeTop - 10,
-          behavior: 'smooth'
-        });
-      } else {
-        const rect = el.getBoundingClientRect();
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        window.scrollTo({
-          top: rect.top + scrollTop - 80,
-          behavior: 'smooth'
-        });
-      }
-      setActiveSection(id);
+    setActiveSection(id);
+    const overlay = document.getElementById('report-form-overlay');
+    if (overlay) {
+      overlay.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    } else {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
     }
   };
 
@@ -2114,12 +2068,34 @@ export default function GmaoCorrectionForm({
     }
 
     if (errors.length > 0) {
+      const firstErr = (errors[0] || '').toLowerCase();
+      if (firstErr.includes("section 11") || firstErr.includes("prêt à l’usage")) {
+        setActiveSection(11);
+      } else if (firstErr.includes("section 9") || firstErr.includes("arrivée")) {
+        setActiveSection(9);
+      } else if (firstErr.includes("section 10") || firstErr.includes("kit")) {
+        setActiveSection(10);
+      } else if (firstErr.includes("section 8") || firstErr.includes("batterie")) {
+        setActiveSection(8);
+      } else if (firstErr.includes("section 7") || firstErr.includes("pédiatrique")) {
+        setActiveSection(7);
+      } else if (firstErr.includes("section 6") || firstErr.includes("adulte") || firstErr.includes("électrode a")) {
+        setActiveSection(6);
+      } else if (firstErr.includes("client")) {
+        setActiveSection(2);
+      } else if (firstErr.includes("identifiant") || firstErr.includes("série") || firstErr.includes("modèle")) {
+        setActiveSection(1);
+      }
+
       if (!hasClickedOnce) {
         setAlertInfoErrors(errors);
         setHasClickedOnce(true);
-        setTimeout(() => {
-          document.getElementById('custom-alert-info-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
+        const overlay = document.getElementById('report-form-overlay');
+        if (overlay) {
+          overlay.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
         return;
       } else {
         const hasBlocking = errors.some(err => 
@@ -2131,9 +2107,12 @@ export default function GmaoCorrectionForm({
         if (hasBlocking) {
           setAlertInfoErrors(errors);
           setErrorText("Veuillez corriger les erreurs bloquantes avant d'enregistrer.");
-          setTimeout(() => {
-            document.getElementById('custom-alert-info-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }, 100);
+          const overlay = document.getElementById('report-form-overlay');
+          if (overlay) {
+            overlay.scrollTo({ top: 0, behavior: 'smooth' });
+          } else {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
           return;
         }
       }
@@ -2441,7 +2420,11 @@ export default function GmaoCorrectionForm({
   };
 
   return (
-    <div className={isWebapp || forceSmartphoneLayout ? `w-full ${isReduced ? 'space-y-0 pb-0' : 'space-y-6 pb-48'} font-sans animate-fadeIn max-w-full text-black px-0 bg-white relative` : "w-full space-y-6 font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black pb-48 px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl"} id="gmao-correction-layout">
+    <div 
+      className={isWebapp || forceSmartphoneLayout ? `w-full ${isReduced ? 'space-y-0 pb-0' : 'space-y-6 pb-48'} font-sans animate-fadeIn max-w-full text-black px-0 bg-white relative overflow-x-hidden` : "w-full space-y-6 font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black pb-48 px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl overflow-x-hidden"} 
+      id="gmao-correction-layout"
+      style={{ overflowX: 'hidden', maxWidth: '100%', width: '100%', overscrollBehaviorX: 'none' }}
+    >
       {shouldShowChronoAndReduce && !isReduced && (
         <div 
           className="fixed top-0 right-0 z-[60] flex items-center px-3.5 py-1.5 text-white font-sans pointer-events-auto select-none shadow-sm"
@@ -2571,8 +2554,22 @@ export default function GmaoCorrectionForm({
       )}
 
       {/* Main core form */}
-      <form onSubmit={handleSubmit} id="gmao-correction-form" className="space-y-6">
+      <form onSubmit={handleSubmit} id="gmao-correction-form" noValidate className="space-y-6 w-full max-w-full overflow-x-hidden" style={{ overflowX: 'hidden', maxWidth: '100%', width: '100%' }}>
         <style>{`
+          #report-form-overlay,
+          #gmao-correction-layout,
+          #gmao-correction-form {
+            overflow-x: hidden !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            overscroll-behavior-x: none !important;
+            box-sizing: border-box !important;
+          }
+          #error-code-helper-panel {
+            overflow-x: hidden !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+          }
           #gmao-correction-form input:not([type="radio"]):not([type="checkbox"]),
           #gmao-correction-form select,
           #gmao-correction-form textarea {
@@ -2761,6 +2758,7 @@ export default function GmaoCorrectionForm({
             style={{
               border: '1px solid rgb(218, 218, 218)',
               borderRadius: '0px',
+              display: activeSection === 0 ? 'block' : 'none',
             }}
           >
             <div className="mb-2 bg-transparent">
@@ -3041,7 +3039,8 @@ export default function GmaoCorrectionForm({
             className="bg-white p-5 relative space-y-3"
             style={{
               border: '1px solid rgb(218, 218, 218)',
-              borderTop: 'none',
+              borderRadius: '0px',
+              display: activeSection === 1 ? 'block' : 'none',
             }}
           >
             <div className="mb-2 bg-transparent">
@@ -3315,6 +3314,40 @@ export default function GmaoCorrectionForm({
                     className="hidden"
                   />
 
+                  {/* Carré Miniature */}
+                  <div
+                    onClick={() => {
+                      if (photoUrl) {
+                        setPreviewModalPhoto({ url: photoUrl, title: "Photographie globale du défibrillateur" });
+                      } else {
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    className="w-14 h-14 rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center shrink-0 cursor-pointer overflow-hidden transition-all hover:border-slate-400 relative group"
+                    title={photoUrl ? "Miniature. (Cliquer pour agrandir)" : "Miniature. (Cliquer pour photographier)"}
+                  >
+                    {photoUrl ? (
+                      <>
+                        <img
+                          src={photoUrl}
+                          alt="Miniature."
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
+                          Voir
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-1 text-center select-none">
+                        <svg className="w-4 h-4 text-slate-400 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Miniature.</span>
+                      </div>
+                    )}
+                  </div>
+
                   {photoUrl && (
                     <button
                       type="button"
@@ -3358,6 +3391,40 @@ export default function GmaoCorrectionForm({
                     onChange={handleFileChangeArriere}
                     className="hidden"
                   />
+
+                  {/* Carré Miniature */}
+                  <div
+                    onClick={() => {
+                      if (photoArriereUrl) {
+                        setPreviewModalPhoto({ url: photoArriereUrl, title: "Photographie arrière / étiquette" });
+                      } else {
+                        fileInputArriereRef.current?.click();
+                      }
+                    }}
+                    className="w-14 h-14 rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center shrink-0 cursor-pointer overflow-hidden transition-all hover:border-slate-400 relative group"
+                    title={photoArriereUrl ? "Miniature. (Cliquer pour agrandir)" : "Miniature. (Cliquer pour photographier)"}
+                  >
+                    {photoArriereUrl ? (
+                      <>
+                        <img
+                          src={photoArriereUrl}
+                          alt="Miniature."
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
+                          Voir
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-1 text-center select-none">
+                        <svg className="w-4 h-4 text-slate-400 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Miniature.</span>
+                      </div>
+                    )}
+                  </div>
 
                   {photoArriereUrl && (
                     <button
@@ -3403,6 +3470,40 @@ export default function GmaoCorrectionForm({
                     className="hidden"
                   />
 
+                  {/* Carré Miniature */}
+                  <div
+                    onClick={() => {
+                      if (photoResultatTestUrl) {
+                        setPreviewModalPhoto({ url: photoResultatTestUrl, title: "Résultat du test" });
+                      } else {
+                        fileInputResultatTestRef.current?.click();
+                      }
+                    }}
+                    className="w-14 h-14 rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center shrink-0 cursor-pointer overflow-hidden transition-all hover:border-slate-400 relative group"
+                    title={photoResultatTestUrl ? "Miniature. (Cliquer pour agrandir)" : "Miniature. (Cliquer pour photographier)"}
+                  >
+                    {photoResultatTestUrl ? (
+                      <>
+                        <img
+                          src={photoResultatTestUrl}
+                          alt="Miniature."
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
+                          Voir
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-1 text-center select-none">
+                        <svg className="w-4 h-4 text-slate-400 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Miniature.</span>
+                      </div>
+                    )}
+                  </div>
+
                   {photoResultatTestUrl && (
                     <button
                       type="button"
@@ -3427,7 +3528,8 @@ export default function GmaoCorrectionForm({
             className="bg-white p-5 relative space-y-3"
             style={{
               border: '1px solid rgb(218, 218, 218)',
-              borderTop: 'none',
+              borderRadius: '0px',
+              display: activeSection === 2 ? 'block' : 'none',
             }}
           >
             <div className="mb-2 bg-transparent">
@@ -3674,7 +3776,8 @@ export default function GmaoCorrectionForm({
             className="bg-white p-5 relative space-y-3"
             style={{
               border: '1px solid rgb(218, 218, 218)',
-              borderTop: 'none',
+              borderRadius: '0px',
+              display: activeSection === 3 ? 'block' : 'none',
             }}
           >
             <div className="mb-2 bg-transparent">
@@ -3854,7 +3957,8 @@ export default function GmaoCorrectionForm({
             className="bg-white p-5 relative space-y-3"
             style={{
               border: '1px solid rgb(218, 218, 218)',
-              borderTop: 'none',
+              borderRadius: '0px',
+              display: activeSection === 4 ? 'block' : 'none',
             }}
           >
             <div className="mb-2 bg-transparent">
@@ -4004,7 +4108,8 @@ export default function GmaoCorrectionForm({
             className="bg-white p-5 relative space-y-3"
             style={{
               border: '1px solid rgb(218, 218, 218)',
-              borderTop: 'none',
+              borderRadius: '0px',
+              display: activeSection === 5 ? 'block' : 'none',
             }}
           >
             <div className="mb-2 bg-transparent">
@@ -4071,7 +4176,8 @@ export default function GmaoCorrectionForm({
             className="bg-white p-5 relative space-y-3"
             style={{
               border: '1px solid rgb(218, 218, 218)',
-              borderTop: 'none',
+              borderRadius: '0px',
+              display: activeSection === 6 ? 'block' : 'none',
             }}
           >
             <div className="mb-2 bg-transparent">
@@ -4452,7 +4558,8 @@ export default function GmaoCorrectionForm({
             className="bg-white p-5 relative space-y-3"
             style={{
               border: '1px solid rgb(218, 218, 218)',
-              borderTop: 'none',
+              borderRadius: '0px',
+              display: activeSection === 7 ? 'block' : 'none',
             }}
           >
             <div className="mb-2 bg-transparent">
@@ -4835,7 +4942,8 @@ export default function GmaoCorrectionForm({
             className="bg-white p-5 relative space-y-3"
             style={{
               border: '1px solid rgb(218, 218, 218)',
-              borderTop: 'none',
+              borderRadius: '0px',
+              display: activeSection === 8 ? 'block' : 'none',
             }}
           >
             <div className="mb-2 bg-transparent">
@@ -5109,7 +5217,8 @@ export default function GmaoCorrectionForm({
               className="bg-white p-5 relative space-y-3"
               style={{
                 border: '1px solid rgb(218, 218, 218)',
-                borderTop: 'none',
+                borderRadius: '0px',
+                display: activeSection === 9 ? 'block' : 'none',
               }}
             >
               <div className="mb-2 bg-transparent">
@@ -5256,7 +5365,8 @@ export default function GmaoCorrectionForm({
             className="bg-white p-5 relative space-y-3"
             style={{
               border: '1px solid rgb(218, 218, 218)',
-              borderTop: 'none',
+              borderRadius: '0px',
+              display: activeSection === 10 ? 'block' : 'none',
             }}
           >
             <div className="mb-2 bg-transparent">
@@ -5482,8 +5592,8 @@ export default function GmaoCorrectionForm({
             className="bg-white p-5 relative space-y-3"
             style={{
               border: '1px solid rgb(218, 218, 218)',
-              borderTop: 'none',
               borderRadius: '0px',
+              display: activeSection === 11 ? 'block' : 'none',
             }}
           >
             <div className="mb-2 bg-transparent">
@@ -6202,30 +6312,34 @@ export default function GmaoCorrectionForm({
 
       {/* Fixed Error Code Helper Box */}
       <div 
-        className={isWebapp || forceSmartphoneLayout ? "sticky bottom-0 left-0 right-0 bg-white border border-b-0 border-slate-200 p-2.5 px-3 z-40 space-y-2 w-full animate-fade-in" : "fixed bottom-0 left-0 right-0 bg-white border border-b-0 border-slate-200 p-2.5 px-3 z-40 space-y-2 w-full animate-fade-in"} 
+        className={isWebapp || forceSmartphoneLayout ? "sticky bottom-0 left-0 right-0 bg-white border border-b-0 border-slate-200 p-2.5 px-3 z-40 space-y-2 w-full max-w-full overflow-x-hidden animate-fade-in" : "fixed bottom-0 left-0 right-0 bg-white border border-b-0 border-slate-200 p-2.5 px-3 z-40 space-y-2 w-full max-w-full overflow-x-hidden animate-fade-in"} 
         style={{ 
           boxShadow: '0 -4px 20px -2px rgba(0, 0, 0, 0.08)',
           maxWidth: isWebapp || forceSmartphoneLayout ? '100%' : '1000px',
           marginLeft: 'auto',
           marginRight: 'auto',
           borderTopLeftRadius: '0px',
-          borderTopRightRadius: '0px'
+          borderTopRightRadius: '0px',
+          overflowX: 'hidden',
+          boxSizing: 'border-box'
         }} 
         id="error-code-helper-panel"
       >
         {/* Horizontal Sections Carousel Selector */}
-        <div className="relative w-[calc(100%+1.5rem)] -mx-3 overflow-hidden">
+        <div className="relative w-full max-w-full overflow-hidden">
           {/* Left Fade Overlay */}
-          <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent pointer-events-none z-10" />
+          <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-white to-transparent pointer-events-none z-10" />
           
           {/* Right Fade Overlay */}
-          <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
+          <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
 
           <div 
             ref={pillsContainerRef}
-            className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 whitespace-nowrap px-6"
+            className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 whitespace-nowrap px-4"
             style={{
               WebkitOverflowScrolling: 'touch',
+              maxWidth: '100%',
+              touchAction: 'pan-x'
             }}
           >
             {SECTIONS_METADATA.map((sec) => {
@@ -6402,6 +6516,45 @@ export default function GmaoCorrectionForm({
                 className="flex-1 py-3 hover:bg-blue-700 text-white font-bold transition-all cursor-pointer font-sans"
               >
                 Valider
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Photo Preview Modal for Miniatures */}
+      {previewModalPhoto && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-[120] flex flex-col items-center justify-center p-4 animate-fadeIn"
+          onClick={() => setPreviewModalPhoto(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-lg w-full overflow-hidden flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <h4 className="font-bold text-base text-black font-sans">{previewModalPhoto.title}</h4>
+              <button
+                type="button"
+                onClick={() => setPreviewModalPhoto(null)}
+                className="text-slate-500 hover:text-black font-bold p-1 text-lg leading-none cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-3 bg-neutral-900 flex items-center justify-center max-h-[70vh] overflow-hidden">
+              <img 
+                src={previewModalPhoto.url} 
+                alt={previewModalPhoto.title} 
+                className="max-h-[65vh] w-auto max-w-full object-contain rounded" 
+              />
+            </div>
+            <div className="p-3 bg-white flex justify-end">
+              <button
+                type="button"
+                onClick={() => setPreviewModalPhoto(null)}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg font-medium text-sm hover:bg-black cursor-pointer"
+              >
+                Fermer
               </button>
             </div>
           </div>

@@ -529,19 +529,20 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       <div
         className={
           embedded
-            ? "sticky bottom-0 z-20 w-full px-2 pt-2 pb-2 sm:pb-2.5 bg-white/95 backdrop-blur-xs shrink-0"
+            ? "sticky bottom-0 z-20 w-full px-2 pt-2 pb-2 sm:pb-2.5 bg-white shadow-none shrink-0"
             : "sticky bottom-0 z-10 w-full p-2.5 sm:p-4 shrink-0 bg-[#fbfbfb]"
         }
         style={{
           background: embedded ? '#ffffff' : '#fbfbfb',
           backgroundColor: embedded ? '#ffffff' : '#fbfbfb',
           borderTop: '1px solid #dadada',
+          boxShadow: 'none',
         }}
       >
         <form onSubmit={handleSendMessage}>
           <div
-            className="flex items-center gap-2 bg-white rounded-2xl p-1.5 sm:p-2 pl-3 sm:pl-4 transition-all shadow-lg"
-            style={{ border: '1px solid #dadada' }}
+            className="flex items-center gap-2 bg-white rounded-2xl p-1.5 sm:p-2 pl-3 sm:pl-4 transition-all shadow-none"
+            style={{ border: '1px solid #dadada', boxShadow: 'none' }}
           >
             {/* Message textarea: auto-height, max 350 chars, texte & placeholder centrés verticalement */}
             <textarea

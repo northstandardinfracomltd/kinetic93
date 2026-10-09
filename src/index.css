@@ -318,5 +318,34 @@ html.is-edge [style*="font-weight:100"] {
   animation: floatPillEnter 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
+@keyframes headerMenuNudgeHint {
+  0% {
+    transform: translateX(0px);
+  }
+  18% {
+    transform: translateX(36px);
+  }
+  38% {
+    transform: translateX(-10px);
+  }
+  48% {
+    transform: translateX(0px);
+  }
+  66% {
+    transform: translateX(36px);
+  }
+  86% {
+    transform: translateX(-10px);
+  }
+  100% {
+    transform: translateX(0px);
+  }
+}
+
+.animate-header-menu-nudge {
+  animation: headerMenuNudgeHint 1.25s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  will-change: transform;
+}
+
 
 

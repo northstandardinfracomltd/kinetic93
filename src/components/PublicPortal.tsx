@@ -691,6 +691,7 @@ export default function PublicPortal({
   // Webapp preloader animation state
   const [showPreloader, setShowPreloader] = useState<boolean>(true);
   const [isSlidingUp, setIsSlidingUp] = useState<boolean>(false);
+  const [isHeaderNudging, setIsHeaderNudging] = useState<boolean>(false);
   const preloaderTouchStartY = useRef<number | null>(null);
 
   const triggerPreloader = () => {
@@ -701,6 +702,13 @@ export default function PublicPortal({
   const dismissPreloader = () => {
     if (isSlidingUp) return;
     setIsSlidingUp(true);
+    // Incitation visuelle au glissement horizontal des items du header (nudge vers la droite puis gauche x2)
+    setTimeout(() => {
+      setIsHeaderNudging(true);
+    }, 280);
+    setTimeout(() => {
+      setIsHeaderNudging(false);
+    }, 1600);
     setTimeout(() => {
       setShowPreloader(false);
       setIsSlidingUp(false);
@@ -5426,12 +5434,14 @@ export default function PublicPortal({
       {/* PRELOADER OVERLAY WITH MANUAL SWIPE-UP TO HIDE */}
       {showPreloader && (
         <div
-          className={`fixed inset-0 z-[999999] flex flex-col items-center justify-between py-12 text-center font-sans transition-transform duration-700 ease-in-out cursor-pointer select-none ${
+          className={`fixed inset-0 z-[999999] flex flex-col items-center justify-between py-12 text-center font-sans transition-transform duration-700 ease-in-out cursor-pointer select-none rounded-none ${
             isSlidingUp ? "pointer-events-none" : "pointer-events-auto"
           }`}
           style={{
             background: currentTechTheme.color,
-            borderRadius: "0px 0px 13px 13px",
+            borderRadius: "0px",
+            borderBottomLeftRadius: "0px",
+            borderBottomRightRadius: "0px",
             transform: isSlidingUp ? "translateY(-100%)" : "translateY(0%)",
             boxShadow: isSlidingUp ? "0 10px 25px -5px rgba(0, 0, 0, 0.3)" : "none",
             willChange: "transform",
@@ -5511,12 +5521,12 @@ export default function PublicPortal({
                 className={
                   isReportOverlayMinimized
                     ? "fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-slate-300 shadow-2xl flex flex-col overflow-hidden text-black animate-report-dock-down"
-                    : "fixed inset-0 bg-white z-50 flex flex-col overflow-y-auto p-0 text-black animate-report-expand-up"
+                    : "fixed inset-0 bg-white z-50 flex flex-col overflow-y-auto overflow-x-hidden p-0 text-black animate-report-expand-up max-w-[100vw] w-full"
                 }
                 style={
                   isReportOverlayMinimized
                     ? { maxHeight: "116px", height: "auto" }
-                    : undefined
+                    : { overflowX: "hidden", maxWidth: "100vw", width: "100%", overscrollBehaviorX: "none", touchAction: "pan-y" }
                 }
                 id="report-form-overlay"
               >
@@ -7552,17 +7562,21 @@ export default function PublicPortal({
             )}
 
             {/* Top Bar Navigation and Tab Selector Wrapper with Theme Color */}
-            <div style={{ background: currentTechTheme.color, padding: "6px 0px", borderRadius: "0px 0px 13px 13px" }}>
+            <div style={{ background: currentTechTheme.color, padding: "6px 0px", borderRadius: "0px 0px 13px 13px", overflow: "hidden" }}>
               {/* TAB SELECTOR: Horizontal capsule switch toggle layout with dynamic fades */}
               <nav
-                className="py-0 px-0 relative shrink-0"
+                className="py-0 px-0 relative shrink-0 overflow-hidden"
                 id="nav-tabs"
                 style={{ background: "transparent" }}
               >
                 <div
                   ref={navRef}
                   onScroll={handleNavScroll}
-                  className="flex py-1 px-2.5 gap-3.5 shrink-0 overflow-x-auto no-scrollbar scroll-smooth min-w-full"
+                  onTouchStart={() => setIsHeaderNudging(false)}
+                  onMouseDown={() => setIsHeaderNudging(false)}
+                  className={`flex py-1 px-2.5 gap-3.5 shrink-0 overflow-x-auto no-scrollbar scroll-smooth min-w-full ${
+                    isHeaderNudging ? "animate-header-menu-nudge" : ""
+                  }`}
                   style={{ background: "transparent" }}
                 >
                   <button
@@ -8036,7 +8050,7 @@ export default function PublicPortal({
                                   return (
                                     <div
                                       key={p.num}
-                                      className="bg-white p-5 space-y-4"
+                                      className="bg-white p-4 space-y-3.5"
                                       style={{
                                         border: "1px solid rgb(201, 190, 205)",
                                         borderRadius: "14px",
@@ -8172,7 +8186,7 @@ export default function PublicPortal({
                                           {/* Site */}
                                           {!isFormationMission && (
                                             <p style={{ color: "#000000" }}>
-                                              Site :{" "}
+                                              <span style={{ color: "#9f9f9f" }}>Site :</span>{" "}
                                               <span
                                                 className="font-semibold"
                                                 style={{ color: "#000000" }}
@@ -8187,7 +8201,7 @@ export default function PublicPortal({
 
                                           {/* Client */}
                                           <p style={{ color: "#000000" }}>
-                                            Client :{" "}
+                                            <span style={{ color: "#9f9f9f" }}>Client :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "#000000" }}
@@ -8208,7 +8222,7 @@ export default function PublicPortal({
                                           {/* Matériel */}
                                           {!isFormationMission && (
                                             <p style={{ color: "#000000" }}>
-                                              Matériel :{" "}
+                                              <span style={{ color: "#9f9f9f" }}>Matériel :</span>{" "}
                                               <span
                                                 className="font-semibold"
                                                 style={{ color: "#000000" }}
@@ -8222,7 +8236,7 @@ export default function PublicPortal({
                                           {/* Modèle */}
                                           {!isFormationMission && (
                                             <p style={{ color: "#000000" }}>
-                                              Modèle :{" "}
+                                              <span style={{ color: "#9f9f9f" }}>Modèle :</span>{" "}
                                               <span
                                                 className="font-semibold"
                                                 style={{ color: "#000000" }}
@@ -8234,7 +8248,7 @@ export default function PublicPortal({
 
                                           {/* Localisation */}
                                           <p style={{ color: "#000000" }}>
-                                            Localisation :{" "}
+                                            <span style={{ color: "#9f9f9f" }}>Localisation :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "#000000" }}
@@ -8266,7 +8280,7 @@ export default function PublicPortal({
                                                 style={{ maxHeight: isUnrolled ? "none" : "100px" }}
                                               >
                                                 <p style={{ color: "#000000" }}>
-                                                  Téléphone :{" "}
+                                                  <span style={{ color: "#9f9f9f" }}>Téléphone :</span>{" "}
                                             {equipmentPhone && equipmentPhone !== "Non renseigné" ? (
                                               <a
                                                 href={`tel:${equipmentPhone.replace(/\s+/g, "")}`}
@@ -8285,7 +8299,7 @@ export default function PublicPortal({
                                           </p>
 
                                           <p style={{ color: "#000000" }}>
-                                            Référence intervention :{" "}
+                                            <span style={{ color: "#9f9f9f" }}>Référence intervention :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "#000000" }}
@@ -8295,7 +8309,7 @@ export default function PublicPortal({
                                           </p>
 
                                           <p style={{ color: "#000000" }}>
-                                            Autre référence :{" "}
+                                            <span style={{ color: "#9f9f9f" }}>Autre référence :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "#000000" }}
@@ -8306,7 +8320,7 @@ export default function PublicPortal({
 
                                           {/* Bon de commande */}
                                           <p style={{ color: "#000000" }}>
-                                            Bon de commande :{" "}
+                                            <span style={{ color: "#9f9f9f" }}>Bon de commande :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "#000000" }}
@@ -8321,7 +8335,7 @@ export default function PublicPortal({
                                           {/* Coordonnées GPS */}
                                           {!isFormationMission && (
                                             <p style={{ color: "#000000" }}>
-                                              Coordonnées GPS :{" "}
+                                              <span style={{ color: "#9f9f9f" }}>Coordonnées GPS :</span>{" "}
                                               {(() => {
                                                 const lat = matchedDefib?.latitude || matchedOther?.latitude || "";
                                                 const lng = matchedDefib?.longitude || matchedOther?.longitude || "";
@@ -8345,7 +8359,7 @@ export default function PublicPortal({
                                           )}
 
                                           <p style={{ color: "#000000" }}>
-                                            Date estimée :{" "}
+                                            <span style={{ color: "#9f9f9f" }}>Date estimée :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "#000000" }}
@@ -8370,7 +8384,7 @@ export default function PublicPortal({
                                             </span>
                                           </p>
                                           <p style={{ color: "#000000" }}>
-                                            Créneau estimé :{" "}
+                                            <span style={{ color: "#9f9f9f" }}>Créneau estimé :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "#000000" }}
@@ -8382,7 +8396,7 @@ export default function PublicPortal({
                                           {/* Pièce(s) requise(s) */}
                                           {!isFormationMission && (
                                             <p style={{ color: "#000000" }}>
-                                              Pièce(s) requise(s) :{" "}
+                                              <span style={{ color: "#9f9f9f" }}>Pièce(s) requise(s) :</span>{" "}
                                               <span
                                                 className="font-semibold"
                                                 style={{ color: "#000000" }}
@@ -8406,10 +8420,10 @@ export default function PublicPortal({
                                                 {/* Fade gradient overlay and blue Dérouler button when folded */}
                                                 {!isUnrolled && (
                                                   <div
-                                                    className="absolute inset-x-0 bottom-0 h-[105px] flex items-end justify-center pb-2.5 pt-6 pointer-events-auto"
+                                                    className="absolute inset-x-0 bottom-0 h-[140px] flex items-end justify-center pb-2.5 pt-6 pointer-events-auto"
                                                     style={{
                                                       background:
-                                                        "linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.45) 25%, rgba(255, 255, 255, 0.92) 55%, #ffffff 100%)",
+                                                        "linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.5) 20%, rgba(255, 255, 255, 0.92) 45%, #ffffff 65%, #ffffff 100%)",
                                                     }}
                                                   >
                                                     <button
@@ -8422,9 +8436,13 @@ export default function PublicPortal({
                                                             ),
                                                         )
                                                       }
-                                                      className="font-bold text-[16px] hover:underline cursor-pointer bg-white/95 px-5 py-2 rounded-full shadow-xs transition-transform active:scale-95"
+                                                      className="font-bold text-[16px] hover:underline cursor-pointer transition-transform active:scale-95"
                                                       style={{
                                                         color: "rgb(53, 86, 236)",
+                                                        background: "transparent",
+                                                        backgroundColor: "transparent",
+                                                        border: "none",
+                                                        boxShadow: "none",
                                                         fontFamily:
                                                           "var(--font-sans), sans-serif",
                                                       }}
@@ -9072,7 +9090,7 @@ export default function PublicPortal({
                               return (
                                 <>
                                   <p style={{ color: "#000000" }}>
-                                    Document :{" "}
+                                    <span style={{ color: "#9f9f9f" }}>Document :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "#000000" }}
@@ -9081,7 +9099,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "#000000" }}>
-                                    Identifiant :{" "}
+                                    <span style={{ color: "#9f9f9f" }}>Identifiant :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "#000000" }}
@@ -9090,7 +9108,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "#000000" }}>
-                                    Série :{" "}
+                                    <span style={{ color: "#9f9f9f" }}>Série :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "#000000" }}
@@ -9099,7 +9117,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "#000000" }}>
-                                    Site :{" "}
+                                    <span style={{ color: "#9f9f9f" }}>Site :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "#000000" }}
@@ -9108,7 +9126,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "#000000" }}>
-                                    Client :{" "}
+                                    <span style={{ color: "#9f9f9f" }}>Client :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "#000000" }}
@@ -9117,7 +9135,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "#000000" }}>
-                                    Matériel :{" "}
+                                    <span style={{ color: "#9f9f9f" }}>Matériel :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "#000000" }}
@@ -9126,7 +9144,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "#000000" }}>
-                                    Technicien :{" "}
+                                    <span style={{ color: "#9f9f9f" }}>Technicien :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "#000000" }}
@@ -9135,7 +9153,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "#000000" }}>
-                                    Localisation :{" "}
+                                    <span style={{ color: "#9f9f9f" }}>Localisation :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "#000000" }}
@@ -9242,7 +9260,8 @@ export default function PublicPortal({
               {/* ----------------- TAB: MESSAGES ----------------- */}
               {activeTab === "messages" && (
                 <div
-                  className="w-full h-full flex-1 flex flex-col p-0 m-0 overflow-hidden pb-0 min-h-0"
+                  className="w-full h-full flex-1 flex flex-col p-0 m-0 overflow-hidden pb-0 min-h-0 bg-white shadow-none"
+                  style={{ background: "#ffffff", boxShadow: "none" }}
                   id="tab-messages-screen"
                 >
                   <CanalMessagesSidePane
