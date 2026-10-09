@@ -8055,14 +8055,14 @@ export default function App() {
               { id: 'defibrillateurs', label: t('Défibrillateurs'), icon: Heart },
               ...(enableOtherEquipments === "Oui" ? [{ id: 'autres-materiels', label: t('Autres matériels'), icon: Layers }] : []),
               { id: 'clients', label: t('Clients'), icon: User },
-              { id: 'devis', label: t('Commandes'), icon: FileSpreadsheet },
               { id: 'fsm', label: t('Tournées & Missions'), icon: Flame },
               { id: 'gmao', label: t('Rapports PDF'), icon: Wrench },
+              { id: 'crm', label: t('CRM'), icon: FolderSync },
+              { id: 'satisfaction', label: t('Satisfaction'), icon: ThumbsUp },
+              { id: 'devis', label: t('Commandes'), icon: FileSpreadsheet },
               { id: 'stocks', label: t('Centrale des stocks'), icon: Inbox },
               { id: 'stocks-distribues', label: t('Stocks distribués'), icon: Layers },
               { id: 'achats-fournisseurs', label: t('Achats fournisseurs'), icon: ShoppingBag },
-              { id: 'crm', label: t('CRM'), icon: FolderSync },
-              { id: 'satisfaction', label: t('Satisfaction'), icon: ThumbsUp },
               { id: 'temps', label: t('Temps'), icon: Clock },
               { id: 'localisations', label: t('Localisations'), icon: MapPin },
               { id: 'tickets', label: t('Tickets Caisse'), icon: Ticket },
@@ -8184,22 +8184,6 @@ export default function App() {
                     {equipGroup.map(gt => renderButton(gt))}
                   </div>
                 );
-              } else if (devisGroupIds.includes(tab.id)) {
-                const devisGroup: typeof rawTabs = [];
-                while (i < filteredTabs.length && devisGroupIds.includes(filteredTabs[i].id)) {
-                  devisGroup.push(filteredTabs[i]);
-                  i++;
-                }
-                elements.push(
-                  <div
-                    key="devis-group-container"
-                    className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
-                  >
-                    {renderSectionTitle(t('Ventes'))}
-                    {devisGroup.map(gt => renderButton(gt))}
-                  </div>
-                );
               } else if (fsmGroupIds.includes(tab.id)) {
                 const fsmGroup: typeof rawTabs = [];
                 while (i < filteredTabs.length && fsmGroupIds.includes(filteredTabs[i].id)) {
@@ -8216,22 +8200,6 @@ export default function App() {
                     {fsmGroup.map(gt => renderButton(gt))}
                   </div>
                 );
-              } else if (stockGroupIds.includes(tab.id)) {
-                const stockGroup: typeof rawTabs = [];
-                while (i < filteredTabs.length && stockGroupIds.includes(filteredTabs[i].id)) {
-                  stockGroup.push(filteredTabs[i]);
-                  i++;
-                }
-                elements.push(
-                  <div
-                    key="stock-group-container"
-                    className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
-                  >
-                    {renderSectionTitle(t('Gestion des stocks'))}
-                    {stockGroup.map(gt => renderButton(gt))}
-                  </div>
-                );
               } else if (crmGroupIds.includes(tab.id)) {
                 const crmGroup: typeof rawTabs = [];
                 while (i < filteredTabs.length && crmGroupIds.includes(filteredTabs[i].id)) {
@@ -8246,6 +8214,38 @@ export default function App() {
                   >
                     {renderSectionTitle(t('Données Clients'))}
                     {crmGroup.map(gt => renderButton(gt))}
+                  </div>
+                );
+              } else if (devisGroupIds.includes(tab.id)) {
+                const devisGroup: typeof rawTabs = [];
+                while (i < filteredTabs.length && devisGroupIds.includes(filteredTabs[i].id)) {
+                  devisGroup.push(filteredTabs[i]);
+                  i++;
+                }
+                elements.push(
+                  <div
+                    key="devis-group-container"
+                    className="p-2 space-y-2 rounded-2xl"
+                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
+                  >
+                    {renderSectionTitle(t('Ventes'))}
+                    {devisGroup.map(gt => renderButton(gt))}
+                  </div>
+                );
+              } else if (stockGroupIds.includes(tab.id)) {
+                const stockGroup: typeof rawTabs = [];
+                while (i < filteredTabs.length && stockGroupIds.includes(filteredTabs[i].id)) {
+                  stockGroup.push(filteredTabs[i]);
+                  i++;
+                }
+                elements.push(
+                  <div
+                    key="stock-group-container"
+                    className="p-2 space-y-2 rounded-2xl"
+                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
+                  >
+                    {renderSectionTitle(t('Gestion des stocks'))}
+                    {stockGroup.map(gt => renderButton(gt))}
                   </div>
                 );
               } else if (newGroupIds.includes(tab.id)) {
@@ -10028,7 +10028,7 @@ export default function App() {
                         id="fsm-avg-intervention-time-indicator"
                         style={{
                           padding: '9px 20px',
-                          backgroundColor: '#f8fafc',
+                          backgroundColor: 'transparent',
                           border: '1px solid rgb(218, 218, 218)',
                           borderRadius: '1000px',
                           display: 'inline-flex',
@@ -10039,7 +10039,7 @@ export default function App() {
                           cursor: 'default',
                         }}
                       >
-                        <span style={{ fontWeight: 400, color: '#475569', marginRight: '6px' }}>
+                        <span style={{ fontWeight: 400, color: '#000000', marginRight: '6px' }}>
                           {translate("Temps moyen d’une intervention :")}
                         </span>
                         <span style={{ fontWeight: 700, color: '#000000' }}>
@@ -10052,7 +10052,7 @@ export default function App() {
                         id="fsm-co2-preserved-indicator"
                         style={{
                           padding: '9px 20px',
-                          backgroundColor: '#f8fafc',
+                          backgroundColor: 'transparent',
                           border: '1px solid rgb(218, 218, 218)',
                           borderRadius: '1000px',
                           display: 'inline-flex',
@@ -10066,7 +10066,7 @@ export default function App() {
                         <span style={{ fontWeight: 700, color: '#000000', marginRight: '6px' }}>
                           {formattedCo2Str} kg
                         </span>
-                        <span style={{ fontWeight: 400, color: '#475569' }}>
+                        <span style={{ fontWeight: 400, color: '#000000' }}>
                           {translate("Co2e d’émissions préservée(s)")}
                         </span>
                       </div>
@@ -10076,7 +10076,7 @@ export default function App() {
                         id="fsm-mission-completion-rate-indicator"
                         style={{
                           padding: '9px 20px',
-                          backgroundColor: '#f8fafc',
+                          backgroundColor: 'transparent',
                           border: '1px solid rgb(218, 218, 218)',
                           borderRadius: '1000px',
                           display: 'inline-flex',
@@ -10087,7 +10087,7 @@ export default function App() {
                           cursor: 'default',
                         }}
                       >
-                        <span style={{ fontWeight: 400, color: '#475569', marginRight: '6px' }}>
+                        <span style={{ fontWeight: 400, color: '#000000', marginRight: '6px' }}>
                           {translate("Taux de complétion des missions :")}
                         </span>
                         <span style={{ fontWeight: 700, color: '#000000' }}>

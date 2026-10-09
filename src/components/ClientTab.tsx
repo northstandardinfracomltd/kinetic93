@@ -2361,16 +2361,17 @@ export default function ClientTab({
                 alignItems: 'center',
                 gap: '8px',
                 padding: '6px 16px',
-                backgroundColor: '#eff6ff',
-                color: '#1d4ed8',
+                backgroundColor: 'rgb(230 225 255)',
+                color: 'rgb(86 72 152)',
                 borderRadius: '9999px',
-                fontSize: '13px',
+                fontSize: '16px',
                 fontWeight: 100,
-                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                border: '1px solid #bfdbfe'
+                fontFamily: 'DefibeoMain, Civilprom, sans-serif',
+                border: 'none',
+                marginTop: '18px',
+                marginLeft: '10px'
               }}
             >
-              <span style={{ width: '6px', height: '6px', borderRadius: '9999px', backgroundColor: 'rgb(53, 86, 236)' }} />
               {t("Nous affichons le(s) client(s) que vous venez de modifier ou créer.")}
             </span>
           </div>
