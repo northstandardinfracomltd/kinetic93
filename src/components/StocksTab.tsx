@@ -2769,7 +2769,7 @@ export default function StocksTab({
 
                     {/* Form Nouveau Inventaire */}
                     {showTraceabilityForm && (
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 gap-4 flex flex-col font-sans mb-3 text-xs">
+                      <div className="bg-slate-50 border rounded-xl p-4 gap-4 flex flex-col font-sans mb-3 text-xs" style={{ borderColor: '#dadada' }}>
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-transparent">
                           {/* Sélection du mouvement */}
                           <div className="flex flex-col gap-1 bg-transparent">
@@ -2777,8 +2777,8 @@ export default function StocksTab({
                             <select
                               value={selectedMovementId}
                               onChange={(e) => setSelectedMovementId(e.target.value)}
-                              className="w-full bg-white text-black p-2 rounded border border-slate-200"
-                              style={{ minHeight: '36px' }}
+                              className="w-full bg-white text-black p-2 rounded border"
+                              style={{ minHeight: '36px', borderColor: '#dadada' }}
                               required
                             >
                               <option value="" disabled hidden>Sélectionnez un mouvement</option>
@@ -2799,21 +2799,21 @@ export default function StocksTab({
                               value={lotOrSerial}
                               onChange={(e) => setLotOrSerial(e.target.value)}
                               placeholder="Lot / Série"
-                              className="w-full bg-white p-2 border border-slate-200 rounded text-black font-semibold text-xs"
-                              style={{ minHeight: '36px' }}
+                              className="w-full bg-white p-2 border rounded text-black font-semibold text-xs"
+                              style={{ minHeight: '36px', borderColor: '#dadada' }}
                               required
                             />
                           </div>
 
                           {/* Date de péremption */}
-                          <div className="flex flex-col gap-1 bg-transparent">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t("Date de péremption")}</label>
+                          <div className="flex flex-col gap-1 bg-transparent min-w-0 overflow-hidden">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t("Date de péremption (si applicable).")}</label>
                             <input
                               type="date"
                               value={expirationDate}
                               onChange={(e) => setExpirationDate(e.target.value)}
-                              className="w-full bg-white p-2 border border-slate-200 rounded text-black font-semibold text-xs"
-                              style={{ minHeight: '36px' }}
+                              className="w-full bg-white p-2 border rounded text-black font-semibold text-xs min-w-0 max-w-full block box-border"
+                              style={{ minHeight: '36px', borderColor: '#dadada', WebkitAppearance: 'none', appearance: 'none' }}
                             />
                           </div>
 
@@ -2825,8 +2825,8 @@ export default function StocksTab({
                               value={1}
                               disabled
                               readOnly
-                              className="w-full bg-slate-100 p-2 border border-slate-200 rounded text-slate-500 font-semibold text-xs cursor-not-allowed"
-                              style={{ minHeight: '36px' }}
+                              className="w-full bg-slate-100 p-2 border rounded text-slate-500 font-semibold text-xs cursor-not-allowed"
+                              style={{ minHeight: '36px', borderColor: '#dadada' }}
                             />
                           </div>
 
@@ -2836,8 +2836,8 @@ export default function StocksTab({
                             <select
                               value={situation}
                               onChange={(e) => setSituation(e.target.value as any)}
-                              className="w-full bg-white text-black p-2 rounded border border-slate-200"
-                              style={{ minHeight: '36px' }}
+                              className="w-full bg-white text-black p-2 rounded border"
+                              style={{ minHeight: '36px', borderColor: '#dadada' }}
                               required
                             >
                               <option value="Disponible">Disponible</option>

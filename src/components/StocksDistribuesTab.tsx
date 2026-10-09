@@ -1285,7 +1285,7 @@ export default function StocksDistribuesTab({
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-5 bg-white">
                   {/* Volume Disponible */}
                   <div className="flex flex-col gap-1 bg-white md:col-span-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Volume disponible *</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Volume total disponible *</label>
                     <input
                       type="number"
                       min="0"

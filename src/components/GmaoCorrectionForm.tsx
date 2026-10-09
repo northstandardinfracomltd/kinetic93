@@ -2421,9 +2421,9 @@ export default function GmaoCorrectionForm({
 
   return (
     <div 
-      className={isWebapp || forceSmartphoneLayout ? `w-full ${isReduced ? 'space-y-0 pb-0' : 'space-y-6 pb-48'} font-sans animate-fadeIn max-w-full text-black px-0 bg-white relative overflow-x-hidden` : "w-full space-y-6 font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black pb-48 px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl overflow-x-hidden"} 
+      className={isWebapp || forceSmartphoneLayout ? `w-full ${isReduced ? 'space-y-0 pb-0 min-h-0' : 'min-h-full flex-1 flex flex-col justify-between space-y-6'} font-sans animate-fadeIn max-w-full text-black px-0 bg-white relative overflow-x-hidden` : `w-full ${isReduced ? 'space-y-0 pb-0 min-h-0' : 'min-h-full flex-1 flex flex-col justify-between space-y-6'} font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl overflow-x-hidden`} 
       id="gmao-correction-layout"
-      style={{ overflowX: 'hidden', maxWidth: '100%', width: '100%', overscrollBehaviorX: 'none' }}
+      style={{ overflowX: 'hidden', maxWidth: '100%', width: '100%', overscrollBehaviorX: 'none', ...(isReduced ? {} : { minHeight: '100%' }) }}
     >
       {shouldShowChronoAndReduce && !isReduced && (
         <div 
@@ -2554,7 +2554,7 @@ export default function GmaoCorrectionForm({
       )}
 
       {/* Main core form */}
-      <form onSubmit={handleSubmit} id="gmao-correction-form" noValidate className="space-y-6 w-full max-w-full overflow-x-hidden" style={{ overflowX: 'hidden', maxWidth: '100%', width: '100%' }}>
+      <form onSubmit={handleSubmit} id="gmao-correction-form" noValidate className="space-y-6 w-full max-w-full overflow-x-hidden flex-1 pb-44" style={{ overflowX: 'hidden', maxWidth: '100%', width: '100%' }}>
         <style>{`
           #report-form-overlay,
           #gmao-correction-layout,
@@ -6312,7 +6312,7 @@ export default function GmaoCorrectionForm({
 
       {/* Fixed Error Code Helper Box */}
       <div 
-        className={isWebapp || forceSmartphoneLayout ? "sticky bottom-0 left-0 right-0 bg-white border border-b-0 border-slate-200 p-2.5 px-3 z-40 space-y-2 w-full max-w-full overflow-x-hidden animate-fade-in" : "fixed bottom-0 left-0 right-0 bg-white border border-b-0 border-slate-200 p-2.5 px-3 z-40 space-y-2 w-full max-w-full overflow-x-hidden animate-fade-in"} 
+        className="sticky bottom-0 left-0 right-0 bg-white border border-b-0 border-slate-200 p-2.5 px-3 z-40 space-y-2 w-full max-w-full overflow-x-hidden shrink-0 animate-fade-in" 
         style={{ 
           boxShadow: '0 -4px 20px -2px rgba(0, 0, 0, 0.08)',
           maxWidth: isWebapp || forceSmartphoneLayout ? '100%' : '1000px',

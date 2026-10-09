@@ -288,7 +288,7 @@ html.is-edge [style*="font-weight:100"] {
     opacity: 0.95;
   }
   100% {
-    transform: translateY(0);
+    transform: none;
     opacity: 1;
   }
 }

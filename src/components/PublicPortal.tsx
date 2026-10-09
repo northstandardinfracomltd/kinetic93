@@ -9303,6 +9303,30 @@ export default function PublicPortal({
                   className="space-y-4 pb-16 animate-fadeIn"
                   id="tab-stocks-screen"
                 >
+                  <style>{`
+                    #tab-stocks-screen input,
+                    #tab-stocks-screen textarea,
+                    #tab-stocks-screen select {
+                      box-sizing: border-box !important;
+                      max-width: 100% !important;
+                    }
+                    #tab-stocks-screen input[type="date"] {
+                      -webkit-appearance: none !important;
+                      appearance: none !important;
+                      box-sizing: border-box !important;
+                      width: 100% !important;
+                      max-width: 100% !important;
+                      min-width: 0 !important;
+                      display: block !important;
+                    }
+                    #tab-stocks-screen input[type="date"]::-webkit-date-and-time-value {
+                      text-align: center !important;
+                      margin: 0 !important;
+                      padding: 0 !important;
+                      min-height: 1.2em !important;
+                      line-height: normal !important;
+                    }
+                  `}</style>
                   <HelpBubble
                     cacheKey="help_webapp_stocks_improvement"
                     text="Cette page est en cours d'amélioration. Un peu de patience : votre onglet sera bientôt encore plus intuitif et agréable à utiliser !"
@@ -9513,10 +9537,10 @@ export default function PublicPortal({
                         />
                       </div>
 
-                      {/* 3. Volume disponible */}
+                      {/* 3. Volume total disponible */}
                       <div className="flex flex-col gap-1">
                         <label className="font-bold font-sans" style={{ color: "#000000", fontSize: "16px" }}>
-                          Volume disponible *
+                          Volume total disponible *
                         </label>
                         <input
                           type="number"
@@ -9576,18 +9600,20 @@ export default function PublicPortal({
 
                       {/* Sub-section Inventaire de traçabilité pour nouveau stock */}
                       {newDistribTraceabilityEnabled && (
-                        <div className="border p-4 rounded-xl space-y-3 bg-slate-50/50" style={{ borderColor: "#D5D5D5", borderRadius: "14px" }}>
-                          <div className="flex items-center justify-between select-none">
-                            <span
-                              className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
-                              style={{
-                                color: "#fff",
-                                backgroundColor: "#5f1f66",
-                                fontSize: "16px",
-                              }}
-                            >
-                              Inventaire de traçabilité
-                            </span>
+                        <div className="p-4 rounded-xl space-y-3 bg-slate-50/50" style={{ border: "1px solid #dadada", borderRadius: "14px" }}>
+                          <div className="flex flex-col gap-2.5 select-none w-full">
+                            <div>
+                              <span
+                                className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
+                                style={{
+                                  color: "#fff",
+                                  backgroundColor: "#5f1f66",
+                                  fontSize: "16px",
+                                }}
+                              >
+                                Inventaire de traçabilité
+                              </span>
+                            </div>
                             <button
                               type="button"
                               onClick={() => setShowNewDistribTraceForm(!showNewDistribTraceForm)}
@@ -9597,20 +9623,21 @@ export default function PublicPortal({
                                 borderRadius: "11px",
                                 fontSize: "16px",
                                 fontWeight: "bold",
-                                padding: "8px 14px",
+                                padding: "12px 16px",
                                 border: "none",
+                                width: "100%",
                               }}
-                              className="font-sans active:scale-[0.98] transition-all"
+                              className="font-sans active:scale-[0.98] transition-all w-full text-center cursor-pointer block"
                             >
-                              + Nouveau
+                              Nouveau
                             </button>
                           </div>
 
                           {/* Traceability Sub-form for mobile vertical layout */}
                           {showNewDistribTraceForm && (
-                            <div className="bg-white p-4 border rounded-xl space-y-3 text-left font-sans animate-fadeIn" style={{ borderColor: "#cbd5e1" }}>
+                            <div className="bg-white p-4 rounded-xl space-y-3 text-left font-sans animate-fadeIn" style={{ border: "1px solid #dadada" }}>
                               {/* 1. Mouvement */}
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1 w-full min-w-0">
                                 <label className="font-bold font-sans text-black text-[15px]">
                                   Sélection du mouvement *
                                 </label>
@@ -9620,12 +9647,15 @@ export default function PublicPortal({
                                   style={{
                                     color: "#000000",
                                     fontSize: "16px",
-                                    borderColor: "#cbd5e1",
+                                    borderColor: "#dadada",
                                     borderWidth: "1px",
+                                    borderStyle: "solid",
                                     borderRadius: "10px",
                                     padding: "8px 10px",
                                     backgroundColor: "#ffffff",
                                     width: "100%",
+                                    maxWidth: "100%",
+                                    boxSizing: "border-box",
                                     textAlign: "center",
                                     textAlignLast: "center",
                                   }}
@@ -9644,7 +9674,7 @@ export default function PublicPortal({
                               </div>
 
                               {/* 2. Lot ou Série */}
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1 w-full min-w-0">
                                 <label className="font-bold font-sans text-black text-[15px]">
                                   Numéro de lot ou série *
                                 </label>
@@ -9656,11 +9686,14 @@ export default function PublicPortal({
                                   style={{
                                     color: "#000000",
                                     fontSize: "16px",
-                                    borderColor: "#cbd5e1",
+                                    borderColor: "#dadada",
                                     borderWidth: "1px",
+                                    borderStyle: "solid",
                                     borderRadius: "10px",
                                     padding: "8px 10px",
                                     width: "100%",
+                                    maxWidth: "100%",
+                                    boxSizing: "border-box",
                                     textAlign: "center",
                                   }}
                                   className="font-sans font-semibold"
@@ -9668,9 +9701,9 @@ export default function PublicPortal({
                               </div>
 
                               {/* 3. Expiration */}
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1 w-full min-w-0 overflow-hidden">
                                 <label className="font-bold font-sans text-black text-[15px]">
-                                  Date de péremption
+                                  Date de péremption (si applicable).
                                 </label>
                                 <input
                                   type="date"
@@ -9679,19 +9712,26 @@ export default function PublicPortal({
                                   style={{
                                     color: "#000000",
                                     fontSize: "16px",
-                                    borderColor: "#cbd5e1",
+                                    borderColor: "#dadada",
                                     borderWidth: "1px",
+                                    borderStyle: "solid",
                                     borderRadius: "10px",
                                     padding: "8px 10px",
                                     width: "100%",
+                                    maxWidth: "100%",
+                                    minWidth: "0px",
+                                    boxSizing: "border-box",
+                                    display: "block",
+                                    WebkitAppearance: "none",
+                                    appearance: "none",
                                     textAlign: "center",
                                   }}
-                                  className="font-sans font-medium"
+                                  className="font-sans font-medium w-full min-w-0 max-w-full block box-border"
                                 />
                               </div>
 
                               {/* 4. Volume */}
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1 w-full min-w-0">
                                 <label className="font-bold font-sans text-black text-[15px]">
                                   Volume *
                                 </label>
@@ -9703,12 +9743,15 @@ export default function PublicPortal({
                                   style={{
                                     color: "#000000",
                                     fontSize: "16px",
-                                    borderColor: "#cbd5e1",
+                                    borderColor: "#dadada",
                                     borderWidth: "1px",
+                                    borderStyle: "solid",
                                     borderRadius: "10px",
                                     padding: "8px 10px",
                                     backgroundColor: "#f1f5f9",
                                     width: "100%",
+                                    maxWidth: "100%",
+                                    boxSizing: "border-box",
                                     textAlign: "center",
                                   }}
                                   className="font-sans font-semibold cursor-not-allowed"
@@ -9716,7 +9759,7 @@ export default function PublicPortal({
                               </div>
 
                               {/* 5. Situation */}
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1 w-full min-w-0">
                                 <label className="font-bold font-sans text-black text-[15px]">
                                   Situation *
                                 </label>
@@ -9726,12 +9769,15 @@ export default function PublicPortal({
                                   style={{
                                     color: "#000000",
                                     fontSize: "16px",
-                                    borderColor: "#cbd5e1",
+                                    borderColor: "#dadada",
                                     borderWidth: "1px",
+                                    borderStyle: "solid",
                                     borderRadius: "10px",
                                     padding: "8px 10px",
                                     backgroundColor: "#ffffff",
                                     width: "100%",
+                                    maxWidth: "100%",
+                                    boxSizing: "border-box",
                                     textAlign: "center",
                                     textAlignLast: "center",
                                   }}
@@ -10575,7 +10621,7 @@ export default function PublicPortal({
                             <div
                               className="bg-white p-4 my-3 flex flex-col gap-4 font-sans text-xs border rounded-xl animate-fadeIn"
                               style={{
-                                borderColor: "#cbd5e1",
+                                borderColor: "#dadada",
                                 borderRadius: "16px",
                                 width: "100%",
                                 boxSizing: "border-box",
@@ -10594,7 +10640,7 @@ export default function PublicPortal({
                                     style={{
                                       color: "#000000",
                                       fontSize: "18px",
-                                      borderColor: "#cbd5e1",
+                                      borderColor: "#dadada",
                                       borderWidth: "1px",
                                       borderStyle: "solid",
                                       borderRadius: "13px",
@@ -10636,7 +10682,7 @@ export default function PublicPortal({
                                     style={{
                                       color: "#000000",
                                       fontSize: "18px",
-                                      borderColor: "#cbd5e1",
+                                      borderColor: "#dadada",
                                       borderWidth: "1px",
                                       borderStyle: "solid",
                                       borderRadius: "13px",
@@ -10653,9 +10699,9 @@ export default function PublicPortal({
                                 </div>
 
                                 {/* 3. Date de péremption */}
-                                <div className="flex flex-col gap-1 w-full">
+                                <div className="flex flex-col gap-1 w-full min-w-0 overflow-hidden">
                                   <label className="font-bold font-sans" style={{ color: "#000000", fontSize: "16px" }}>
-                                    Date de péremption
+                                    Date de péremption (si applicable).
                                   </label>
                                   <input
                                     type="date"
@@ -10664,18 +10710,23 @@ export default function PublicPortal({
                                     style={{
                                       color: "#000000",
                                       fontSize: "18px",
-                                      borderColor: "#cbd5e1",
+                                      borderColor: "#dadada",
                                       borderWidth: "1px",
                                       borderStyle: "solid",
                                       borderRadius: "13px",
                                       padding: "10px 12px",
                                       backgroundColor: "#ffffff",
                                       width: "100%",
+                                      maxWidth: "100%",
+                                      minWidth: "0px",
                                       boxSizing: "border-box",
+                                      display: "block",
+                                      WebkitAppearance: "none",
+                                      appearance: "none",
                                       outline: "none",
                                       textAlign: "center",
                                     }}
-                                    className="font-sans font-medium"
+                                    className="font-sans font-medium w-full min-w-0 max-w-full block box-border"
                                   />
                                 </div>
 
@@ -10692,7 +10743,7 @@ export default function PublicPortal({
                                     style={{
                                       color: "#000000",
                                       fontSize: "18px",
-                                      borderColor: "#cbd5e1",
+                                      borderColor: "#dadada",
                                       borderWidth: "1px",
                                       borderStyle: "solid",
                                       borderRadius: "13px",
@@ -10728,7 +10779,7 @@ export default function PublicPortal({
                                     style={{
                                       color: "#000000",
                                       fontSize: "18px",
-                                      borderColor: "#cbd5e1",
+                                      borderColor: "#dadada",
                                       borderWidth: "1px",
                                       borderStyle: "solid",
                                       borderRadius: "13px",
@@ -11522,454 +11573,484 @@ export default function PublicPortal({
                     );
                   })()}
 
-                  {/* Section: Consulter mon volume horaire calculé à la semaine */}
-                  {(() => {
-                    const FRENCH_MONTHS = [
-                      "Juin", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-                      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
-                    ];
-                    // Real 0-indexed months
-                    const MONTH_NAMES_FR = [
-                      "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-                      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
-                    ];
-                    const DAY_KEYS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+                  {/* Section combinée : Volume horaire/CTT & Date et heure (collés l'un à l'autre) */}
+                  <div className="space-y-0">
+                    {(() => {
+                      const FRENCH_MONTHS = [
+                        "Juin", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                        "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+                      ];
+                      // Real 0-indexed months
+                      const MONTH_NAMES_FR = [
+                        "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                        "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+                      ];
+                      const DAY_KEYS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
-                    const getWeekDataFromIso = (isoStr: string) => {
-                      if (!isoStr) return null;
-                      const parts = isoStr.split("-").map(Number);
-                      if (parts.length !== 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return null;
-                      const d = new Date(parts[0], parts[1] - 1, parts[2]);
-                      if (isNaN(d.getTime())) return null;
+                      const getWeekDataFromIso = (isoStr: string) => {
+                        if (!isoStr) return null;
+                        const parts = isoStr.split("-").map(Number);
+                        if (parts.length !== 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return null;
+                        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                        if (isNaN(d.getTime())) return null;
 
-                      const day = d.getDay();
+                        const day = d.getDay();
+                        const diffToMon = day === 0 ? -6 : 1 - day;
+                        const monday = new Date(d);
+                        monday.setDate(d.getDate() + diffToMon);
+                        monday.setHours(0, 0, 0, 0);
+
+                        const sunday = new Date(monday);
+                        sunday.setDate(monday.getDate() + 6);
+                        sunday.setHours(23, 59, 59, 999);
+
+                        // ISO week number
+                        const target = new Date(monday.valueOf());
+                        const dayNr = (monday.getDay() + 6) % 7;
+                        target.setDate(target.getDate() - dayNr + 3);
+                        const firstThursday = target.valueOf();
+                        target.setMonth(0, 1);
+                        if (target.getDay() !== 4) {
+                          target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+                        }
+                        const weekNum = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+
+                        const mondayIso = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
+                        const sundayIso = `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, "0")}-${String(sunday.getDate()).padStart(2, "0")}`;
+
+                        const label = `S${weekNum} du ${monday.getDate()} ${MONTH_NAMES_FR[monday.getMonth()]} à ${sunday.getDate()} ${MONTH_NAMES_FR[sunday.getMonth()]}`;
+
+                        return {
+                          weekKey: mondayIso,
+                          weekNum,
+                          label,
+                          monday,
+                          sunday,
+                          mondayIso,
+                          sundayIso,
+                        };
+                      };
+
+                      interface TechWeekVolume {
+                        weekKey: string;
+                        label: string;
+                        mondayIso: string;
+                        sundayIso: string;
+                        pointages: any[];
+                      }
+
+                      const safeAllPointages = Array.isArray(pointages) ? pointages.filter(Boolean) : [];
+                      const currentTechName = authenticatedUser?.name || "";
+                      const techPointages = safeAllPointages.filter((p) => p && p.techName && String(p.techName).trim().toLowerCase() === currentTechName.trim().toLowerCase());
+                      const weeksMap = new Map<string, TechWeekVolume>();
+
+                      techPointages.forEach((p) => {
+                        const iso = getIsoDate(p.startDate);
+                        const wInfo = getWeekDataFromIso(iso);
+                        if (!wInfo) return;
+                        if (!weeksMap.has(wInfo.weekKey)) {
+                          weeksMap.set(wInfo.weekKey, {
+                            weekKey: wInfo.weekKey,
+                            label: wInfo.label,
+                            mondayIso: wInfo.mondayIso,
+                            sundayIso: wInfo.sundayIso,
+                            pointages: [],
+                          });
+                        }
+                        weeksMap.get(wInfo.weekKey)!.pointages.push(p);
+                      });
+
+                      const availableWeeks: TechWeekVolume[] = Array.from(weeksMap.values());
+                      availableWeeks.sort((a, b) => b.mondayIso.localeCompare(a.mondayIso));
+                      const activeWeekKey = selectedVolumeWeek && weeksMap.has(selectedVolumeWeek) ? selectedVolumeWeek : (availableWeeks[0]?.weekKey || "");
+                      const selectedWeekData = weeksMap.get(activeWeekKey);
+                      const weekPts = selectedWeekData ? selectedWeekData.pointages : [];
+
+                      let totalWeekMins = 0;
+                      const liveHHMM =
+                        String(currentTime.getHours()).padStart(2, "0") +
+                        ":" +
+                        String(currentTime.getMinutes()).padStart(2, "0");
+
+                      weekPts.forEach((p) => {
+                        if (!p) return;
+                        const startTime = p.startTime || "00:00";
+                        const endTime = p.isOngoing ? p.endTime || liveHHMM : p.endTime || "00:00";
+                        const sMins = timeToMins(startTime);
+                        const eMins = timeToMins(endTime);
+                        const ampMins = Math.max(0, eMins - sMins);
+                        const tm = timeToMins(p.trajetMatin);
+                        const ts = timeToMins(p.trajetSoir);
+                        const repas = timeToMins(p.tempsRepas);
+                        let effectifMins = Math.max(0, ampMins - tm - ts - repas);
+
+                        if (Array.isArray(cttModelSettings) && cttModelSettings.length > 0) {
+                          const pIso = getIsoDate(p.startDate);
+                          const parts = pIso.split("-").map(Number);
+                          if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+                            const dObj = new Date(parts[0], parts[1] - 1, parts[2]);
+                            const dayLabel = DAY_KEYS[dObj.getDay()];
+                            if (dayLabel) {
+                              cttModelSettings.filter(Boolean).forEach((s) => {
+                                if (!s || !Array.isArray(s.setting1) || !s.setting1.includes(dayLabel)) return;
+                                const mins = Math.min(500, Math.max(1, typeof s.setting5 === 'number' && !isNaN(s.setting5) ? s.setting5 : parseInt(String(s.setting5), 10) || 0));
+                                if (mins <= 0) return;
+                                if (s.setting2) {
+                                  effectifMins = Math.max(0, effectifMins - mins);
+                                } else if (s.setting3) {
+                                  effectifMins = effectifMins + mins;
+                                }
+                              });
+                            }
+                          }
+                        }
+                        totalWeekMins += effectifMins;
+                      });
+
+                      const weekHours = Math.floor(totalWeekMins / 60);
+                      const weekMins = totalWeekMins % 60;
+
+                      return (
+                        <div
+                          style={{
+                            backgroundColor: "#ffffff",
+                            border: "1px solid #dadada",
+                            borderRadius: "16px 16px 0px 0px",
+                            padding: "20px",
+                          }}
+                          className="space-y-4 shadow-xs"
+                          id="tech-volume-horaire-semaine"
+                        >
+                          <div
+                            style={{
+                              fontSize: "18px",
+                              color: "#000000",
+                              fontWeight: "bold",
+                              fontFamily: "var(--font-sans), sans-serif",
+                            }}
+                          >
+                            {t("Consulter mon volume horaire calculé à la semaine.")}
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor="select-volume-semaine"
+                              className="block mb-1.5 font-bold text-black"
+                              style={{ fontSize: "15px", fontFamily: "var(--font-sans), sans-serif" }}
+                            >
+                              {t("Sélection Semaine")}
+                            </label>
+                            <select
+                              id="select-volume-semaine"
+                              value={activeWeekKey}
+                              onChange={(e) => setSelectedVolumeWeek(e.target.value)}
+                              style={{
+                                border: "1px solid #c9bfcd",
+                                borderRadius: "13px",
+                                padding: "12px 16px",
+                                fontSize: "16px",
+                                width: "100%",
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontFamily: "var(--font-sans), sans-serif",
+                                cursor: "pointer",
+                              }}
+                              className="focus:outline-none"
+                            >
+                              {availableWeeks.length === 0 ? (
+                                <option value="">{t("Aucun pointage disponible.")}</option>
+                              ) : (
+                                availableWeeks.map((w) => (
+                                  <option key={w.weekKey} value={w.weekKey}>
+                                    {w.label}
+                                  </option>
+                                ))
+                              )}
+                            </select>
+                          </div>
+
+                          {/* Gros titre du volume horaire */}
+                          <div className="pt-1 flex items-baseline gap-0.5 text-black font-sans">
+                            <span
+                              style={{
+                                fontSize: "48px",
+                                fontWeight: "800",
+                                lineHeight: 1,
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              }}
+                            >
+                              {weekHours}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "24px",
+                                fontWeight: "700",
+                                color: "#000000",
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              }}
+                            >
+                              h
+                            </span>
+                            {weekMins > 0 && (
+                              <>
+                                <span
+                                  style={{
+                                    fontSize: "48px",
+                                    fontWeight: "800",
+                                    lineHeight: 1,
+                                    marginLeft: "8px",
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  }}
+                                >
+                                  {weekMins}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: "24px",
+                                    fontWeight: "700",
+                                    color: "#000000",
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  }}
+                                >
+                                  min
+                                </span>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Téléchargez votre CTT Section */}
+                          <div className="pt-2 space-y-3">
+                            <label
+                              htmlFor="select-tech-ctt-month-year"
+                              className="block font-bold text-black"
+                              style={{ fontSize: "15px", fontFamily: "var(--font-sans), sans-serif" }}
+                            >
+                              {t("Téléchargez votre CTT.")}
+                            </label>
+                            {(() => {
+                              const currentTech = authenticatedUser?.name || "";
+                              const FRENCH_MONTHS_NAMES = [
+                                "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                                "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+                              ];
+                              const availableCttMonths: { key: string; label: string; year: number; monthIndex: number }[] = [];
+                              const seenKeys = new Set<string>();
+
+                              const addOpt = (y: number, mIdx: number) => {
+                                const k = `${y}-${mIdx}`;
+                                if (seenKeys.has(k)) return;
+                                seenKeys.add(k);
+                                availableCttMonths.push({
+                                  key: k,
+                                  label: `${FRENCH_MONTHS_NAMES[mIdx]} ${y}`,
+                                  year: y,
+                                  monthIndex: mIdx,
+                                });
+                              };
+
+                              const safeTech = currentTech.trim().toLowerCase();
+                              const safePointages = (Array.isArray(pointages) ? pointages : []).filter(
+                                (p) => p && p.techName && String(p.techName).trim().toLowerCase() === safeTech
+                              );
+
+                              safePointages.forEach((p) => {
+                                if (!p.startDate) return;
+                                const clean = p.startDate.replace(/\//g, "-").trim();
+                                const parts = clean.split("-");
+                                let y = 0, mIdx = -1;
+                                if (parts.length === 3) {
+                                  if (parts[0].length === 4) {
+                                    y = parseInt(parts[0], 10);
+                                    mIdx = parseInt(parts[1], 10) - 1;
+                                  } else if (parts[2].length === 4) {
+                                    y = parseInt(parts[2], 10);
+                                    mIdx = parseInt(parts[1], 10) - 1;
+                                  }
+                                }
+                                if (y > 2000 && mIdx >= 0 && mIdx <= 11) {
+                                  addOpt(y, mIdx);
+                                }
+                              });
+
+                              if (availableCttMonths.length === 0) {
+                                const n = new Date();
+                                addOpt(n.getFullYear(), n.getMonth());
+                                const prev = new Date(n.getFullYear(), n.getMonth() - 1, 1);
+                                addOpt(prev.getFullYear(), prev.getMonth());
+                              }
+
+                              availableCttMonths.sort((a, b) => {
+                                if (a.year !== b.year) return b.year - a.year;
+                                return b.monthIndex - a.monthIndex;
+                              });
+
+                              return (
+                                <div className="space-y-3">
+                                  <select
+                                    id="select-tech-ctt-month-year"
+                                    value={selectedCttMonthYear}
+                                    onChange={(e) => setSelectedCttMonthYear(e.target.value)}
+                                    style={{
+                                      border: "1px solid #c9bfcd",
+                                      borderRadius: "13px",
+                                      padding: "12px 16px",
+                                      fontSize: "16px",
+                                      width: "100%",
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontFamily: "var(--font-sans), sans-serif",
+                                      cursor: "pointer",
+                                    }}
+                                    className="focus:outline-none"
+                                  >
+                                    <option value="">{t("Sélection Mois & Année")}</option>
+                                    {availableCttMonths.map((m) => (
+                                      <option key={m.key} value={m.key}>
+                                        {m.label}
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  {selectedCttMonthYear && (
+                                    <button
+                                      type="button"
+                                      id="btn-download-ctt-pdf-webapp"
+                                      onClick={() => {
+                                        const sel = availableCttMonths.find((m) => m.key === selectedCttMonthYear);
+                                        if (!sel || !authenticatedUser?.name) return;
+                                        const data = getMonthlyWorkingDaysData(
+                                          authenticatedUser.name,
+                                          sel.year,
+                                          sel.monthIndex,
+                                          pointages as any,
+                                          members as any,
+                                          cttModelSettings
+                                        );
+                                        let logoUrl = companyInfo?.logo || "";
+                                        try {
+                                          const tid = localStorage.getItem("defib_tenant_id") || "demo";
+                                          const cached = localStorage.getItem(`defib_${tid}_companyInfo`);
+                                          if (cached) {
+                                            const parsed = JSON.parse(cached);
+                                            if (parsed.logo && typeof parsed.logo === "string" && parsed.logo.trim() !== "") {
+                                              logoUrl = parsed.logo.trim();
+                                            }
+                                          }
+                                        } catch (_) {}
+                                        const compName = companyInfo?.name || "Défibeo Solutions";
+                                        const htmlContent = generateMonthlyPDFHTML(data, logoUrl, compName);
+                                        const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+                                        const url = URL.createObjectURL(blob);
+                                        const win = window.open(url, "_blank");
+                                        if (!win) {
+                                          const link = document.createElement("a");
+                                          link.href = url;
+                                          link.target = "_blank";
+                                          link.download = `CTT_${authenticatedUser.name.replace(/\s+/g, "_")}_${sel.label.replace(/\s+/g, "_")}.html`;
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                        }
+                                      }}
+                                      style={{
+                                        backgroundColor: "rgb(53, 86, 236)",
+                                        color: "#ffffff",
+                                        fontSize: "18px",
+                                        fontWeight: "bold",
+                                        borderRadius: "12px",
+                                        padding: "14px 20px",
+                                        border: "none",
+                                        boxShadow:
+                                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                        cursor: "pointer",
+                                        width: "100%",
+                                      }}
+                                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 font-bold"
+                                    >
+                                      {t("Télécharger PDF")}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Digital Clock Section */}
+                    <div
+                      style={{
+                        backgroundColor: "#000",
+                        color: "#fff",
+                        borderRadius: "0px 0px 16px 16px",
+                      }}
+                      className="p-5 text-center space-y-2"
+                    >
+                      <span
+                        style={{
+                          fontSize: "18px",
+                          color: "#fff",
+                          fontFamily: "var(--font-sans), sans-serif",
+                        }}
+                        className="font-normal block"
+                      >
+                        {t("Date et heure.")}
+                      </span>
+                      <div
+                        style={{
+                          fontSize: "18px",
+                          color: "#fff",
+                          fontFamily: "var(--font-sans), sans-serif",
+                        }}
+                        className="font-bold"
+                      >
+                        {currentTime.toLocaleDateString(
+                          getLanguage() === "English" ? "en-US" : 
+                          getLanguage() === "Deutsch" ? "de-DE" : 
+                          getLanguage() === "Português" ? "pt-PT" : 
+                          getLanguage() === "Español" ? "es-ES" : "fr-FR"
+                        )}{" "}
+                        -{" "}
+                        {currentTime.toLocaleTimeString(
+                          getLanguage() === "English" ? "en-US" : 
+                          getLanguage() === "Deutsch" ? "de-DE" : 
+                          getLanguage() === "Português" ? "pt-PT" : 
+                          getLanguage() === "Español" ? "es-ES" : "fr-FR"
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pointages registered log list (semaine en cours uniquement, maximum 7) */}
+                  <div className="space-y-4">
+                    {(() => {
+                      const currentTech = (authenticatedUser?.name || "").trim().toLowerCase();
+                      const now = new Date();
+                      const day = now.getDay();
                       const diffToMon = day === 0 ? -6 : 1 - day;
-                      const monday = new Date(d);
-                      monday.setDate(d.getDate() + diffToMon);
+                      const monday = new Date(now);
+                      monday.setDate(now.getDate() + diffToMon);
                       monday.setHours(0, 0, 0, 0);
 
                       const sunday = new Date(monday);
                       sunday.setDate(monday.getDate() + 6);
                       sunday.setHours(23, 59, 59, 999);
 
-                      // ISO week number
-                      const target = new Date(monday.valueOf());
-                      const dayNr = (monday.getDay() + 6) % 7;
-                      target.setDate(target.getDate() - dayNr + 3);
-                      const firstThursday = target.valueOf();
-                      target.setMonth(0, 1);
-                      if (target.getDay() !== 4) {
-                        target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
-                      }
-                      const weekNum = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
-
                       const mondayIso = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
                       const sundayIso = `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, "0")}-${String(sunday.getDate()).padStart(2, "0")}`;
 
-                      const label = `S${weekNum} du ${monday.getDate()} ${MONTH_NAMES_FR[monday.getMonth()]} à ${sunday.getDate()} ${MONTH_NAMES_FR[sunday.getMonth()]}`;
+                      const weekPointages = (Array.isArray(pointages) ? pointages : [])
+                        .filter((p) => {
+                          if (!p || !p.techName || String(p.techName).trim().toLowerCase() !== currentTech) return false;
+                          if (p.isOngoing) return true;
+                          const iso = getIsoDate(p.startDate);
+                          if (!iso) return false;
+                          return iso >= mondayIso && iso <= sundayIso;
+                        })
+                        .slice(0, 7);
 
-                      return {
-                        weekKey: mondayIso,
-                        weekNum,
-                        label,
-                        monday,
-                        sunday,
-                        mondayIso,
-                        sundayIso,
-                      };
-                    };
-
-                    interface TechWeekVolume {
-                      weekKey: string;
-                      label: string;
-                      mondayIso: string;
-                      sundayIso: string;
-                      pointages: any[];
-                    }
-
-                    const safeAllPointages = Array.isArray(pointages) ? pointages.filter(Boolean) : [];
-                    const currentTechName = authenticatedUser?.name || "";
-                    const techPointages = safeAllPointages.filter((p) => p && p.techName && String(p.techName).trim().toLowerCase() === currentTechName.trim().toLowerCase());
-                    const weeksMap = new Map<string, TechWeekVolume>();
-
-                    techPointages.forEach((p) => {
-                      const iso = getIsoDate(p.startDate);
-                      const wInfo = getWeekDataFromIso(iso);
-                      if (!wInfo) return;
-                      if (!weeksMap.has(wInfo.weekKey)) {
-                        weeksMap.set(wInfo.weekKey, {
-                          weekKey: wInfo.weekKey,
-                          label: wInfo.label,
-                          mondayIso: wInfo.mondayIso,
-                          sundayIso: wInfo.sundayIso,
-                          pointages: [],
-                        });
-                      }
-                      weeksMap.get(wInfo.weekKey)!.pointages.push(p);
-                    });
-
-                    const availableWeeks: TechWeekVolume[] = Array.from(weeksMap.values());
-                    availableWeeks.sort((a, b) => b.mondayIso.localeCompare(a.mondayIso));
-                    const activeWeekKey = selectedVolumeWeek && weeksMap.has(selectedVolumeWeek) ? selectedVolumeWeek : (availableWeeks[0]?.weekKey || "");
-                    const selectedWeekData = weeksMap.get(activeWeekKey);
-                    const weekPts = selectedWeekData ? selectedWeekData.pointages : [];
-
-                    let totalWeekMins = 0;
-                    const liveHHMM =
-                      String(currentTime.getHours()).padStart(2, "0") +
-                      ":" +
-                      String(currentTime.getMinutes()).padStart(2, "0");
-
-                    weekPts.forEach((p) => {
-                      if (!p) return;
-                      const startTime = p.startTime || "00:00";
-                      const endTime = p.isOngoing ? p.endTime || liveHHMM : p.endTime || "00:00";
-                      const sMins = timeToMins(startTime);
-                      const eMins = timeToMins(endTime);
-                      const ampMins = Math.max(0, eMins - sMins);
-                      const tm = timeToMins(p.trajetMatin);
-                      const ts = timeToMins(p.trajetSoir);
-                      const repas = timeToMins(p.tempsRepas);
-                      let effectifMins = Math.max(0, ampMins - tm - ts - repas);
-
-                      if (Array.isArray(cttModelSettings) && cttModelSettings.length > 0) {
-                        const pIso = getIsoDate(p.startDate);
-                        const parts = pIso.split("-").map(Number);
-                        if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-                          const dObj = new Date(parts[0], parts[1] - 1, parts[2]);
-                          const dayLabel = DAY_KEYS[dObj.getDay()];
-                          if (dayLabel) {
-                            cttModelSettings.filter(Boolean).forEach((s) => {
-                              if (!s || !Array.isArray(s.setting1) || !s.setting1.includes(dayLabel)) return;
-                              const mins = Math.min(500, Math.max(1, typeof s.setting5 === 'number' && !isNaN(s.setting5) ? s.setting5 : parseInt(String(s.setting5), 10) || 0));
-                              if (mins <= 0) return;
-                              if (s.setting2) {
-                                effectifMins = Math.max(0, effectifMins - mins);
-                              } else if (s.setting3) {
-                                effectifMins = effectifMins + mins;
-                              }
-                            });
-                          }
-                        }
-                      }
-                      totalWeekMins += effectifMins;
-                    });
-
-                    const weekHours = Math.floor(totalWeekMins / 60);
-                    const weekMins = totalWeekMins % 60;
-
-                    return (
-                      <div
-                        style={{
-                          backgroundColor: "#ffffff",
-                          border: "1px solid #dadada",
-                          borderRadius: "16px",
-                          padding: "20px",
-                        }}
-                        className="space-y-4 shadow-xs"
-                        id="tech-volume-horaire-semaine"
-                      >
-                        <div
-                          style={{
-                            fontSize: "18px",
-                            color: "#000000",
-                            fontWeight: "bold",
-                            fontFamily: "var(--font-sans), sans-serif",
-                          }}
-                        >
-                          {t("Consulter mon volume horaire calculé à la semaine.")}
-                        </div>
-
-                        <div>
-                          <label
-                            htmlFor="select-volume-semaine"
-                            className="block mb-1.5 font-bold text-black"
-                            style={{ fontSize: "15px", fontFamily: "var(--font-sans), sans-serif" }}
-                          >
-                            {t("Sélection Semaine")}
-                          </label>
-                          <select
-                            id="select-volume-semaine"
-                            value={activeWeekKey}
-                            onChange={(e) => setSelectedVolumeWeek(e.target.value)}
-                            style={{
-                              border: "1px solid #c9bfcd",
-                              borderRadius: "13px",
-                              padding: "12px 16px",
-                              fontSize: "16px",
-                              width: "100%",
-                              backgroundColor: "#ffffff",
-                              color: "#000000",
-                              fontFamily: "var(--font-sans), sans-serif",
-                              cursor: "pointer",
-                            }}
-                            className="focus:outline-none"
-                          >
-                            {availableWeeks.length === 0 ? (
-                              <option value="">{t("Aucun pointage disponible.")}</option>
-                            ) : (
-                              availableWeeks.map((w) => (
-                                <option key={w.weekKey} value={w.weekKey}>
-                                  {w.label}
-                                </option>
-                              ))
-                            )}
-                          </select>
-                        </div>
-
-                        {/* Gros titre du volume horaire */}
-                        <div className="pt-1 flex items-baseline gap-0.5 text-black font-sans">
-                          <span
-                            style={{
-                              fontSize: "48px",
-                              fontWeight: "800",
-                              lineHeight: 1,
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            }}
-                          >
-                            {weekHours}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: "24px",
-                              fontWeight: "700",
-                              color: "#000000",
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            }}
-                          >
-                            h
-                          </span>
-                          {weekMins > 0 && (
-                            <>
-                              <span
-                                style={{
-                                  fontSize: "48px",
-                                  fontWeight: "800",
-                                  lineHeight: 1,
-                                  marginLeft: "8px",
-                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                }}
-                              >
-                                {weekMins}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: "24px",
-                                  fontWeight: "700",
-                                  color: "#000000",
-                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                }}
-                              >
-                                min
-                              </span>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Téléchargez votre CTT Section */}
-                        <div className="pt-2 space-y-3">
-                          <label
-                            htmlFor="select-tech-ctt-month-year"
-                            className="block font-bold text-black"
-                            style={{ fontSize: "15px", fontFamily: "var(--font-sans), sans-serif" }}
-                          >
-                            {t("Téléchargez votre CTT")}
-                          </label>
-                          {(() => {
-                            const currentTech = authenticatedUser?.name || "";
-                            const FRENCH_MONTHS_NAMES = [
-                              "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-                              "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
-                            ];
-                            const availableCttMonths: { key: string; label: string; year: number; monthIndex: number }[] = [];
-                            const seenKeys = new Set<string>();
-
-                            const addOpt = (y: number, mIdx: number) => {
-                              const k = `${y}-${mIdx}`;
-                              if (seenKeys.has(k)) return;
-                              seenKeys.add(k);
-                              availableCttMonths.push({
-                                key: k,
-                                label: `${FRENCH_MONTHS_NAMES[mIdx]} ${y}`,
-                                year: y,
-                                monthIndex: mIdx,
-                              });
-                            };
-
-                            const safeTech = currentTech.trim().toLowerCase();
-                            const safePointages = (Array.isArray(pointages) ? pointages : []).filter(
-                              (p) => p && p.techName && String(p.techName).trim().toLowerCase() === safeTech
-                            );
-
-                            safePointages.forEach((p) => {
-                              if (!p.startDate) return;
-                              const clean = p.startDate.replace(/\//g, "-").trim();
-                              const parts = clean.split("-");
-                              let y = 0, mIdx = -1;
-                              if (parts.length === 3) {
-                                if (parts[0].length === 4) {
-                                  y = parseInt(parts[0], 10);
-                                  mIdx = parseInt(parts[1], 10) - 1;
-                                } else if (parts[2].length === 4) {
-                                  y = parseInt(parts[2], 10);
-                                  mIdx = parseInt(parts[1], 10) - 1;
-                                }
-                              }
-                              if (y > 2000 && mIdx >= 0 && mIdx <= 11) {
-                                addOpt(y, mIdx);
-                              }
-                            });
-
-                            if (availableCttMonths.length === 0) {
-                              const n = new Date();
-                              addOpt(n.getFullYear(), n.getMonth());
-                              const prev = new Date(n.getFullYear(), n.getMonth() - 1, 1);
-                              addOpt(prev.getFullYear(), prev.getMonth());
-                            }
-
-                            availableCttMonths.sort((a, b) => {
-                              if (a.year !== b.year) return b.year - a.year;
-                              return b.monthIndex - a.monthIndex;
-                            });
-
-                            return (
-                              <div className="space-y-3">
-                                <select
-                                  id="select-tech-ctt-month-year"
-                                  value={selectedCttMonthYear}
-                                  onChange={(e) => setSelectedCttMonthYear(e.target.value)}
-                                  style={{
-                                    border: "1px solid #c9bfcd",
-                                    borderRadius: "13px",
-                                    padding: "12px 16px",
-                                    fontSize: "16px",
-                                    width: "100%",
-                                    backgroundColor: "#ffffff",
-                                    color: "#000000",
-                                    fontFamily: "var(--font-sans), sans-serif",
-                                    cursor: "pointer",
-                                  }}
-                                  className="focus:outline-none"
-                                >
-                                  <option value="">{t("Sélection Mois & Année")}</option>
-                                  {availableCttMonths.map((m) => (
-                                    <option key={m.key} value={m.key}>
-                                      {m.label}
-                                    </option>
-                                  ))}
-                                </select>
-
-                                {selectedCttMonthYear && (
-                                  <button
-                                    type="button"
-                                    id="btn-download-ctt-pdf-webapp"
-                                    onClick={() => {
-                                      const sel = availableCttMonths.find((m) => m.key === selectedCttMonthYear);
-                                      if (!sel || !authenticatedUser?.name) return;
-                                      const data = getMonthlyWorkingDaysData(
-                                        authenticatedUser.name,
-                                        sel.year,
-                                        sel.monthIndex,
-                                        pointages as any,
-                                        members as any,
-                                        cttModelSettings
-                                      );
-                                      let logoUrl = companyInfo?.logo || "";
-                                      try {
-                                        const tid = localStorage.getItem("defib_tenant_id") || "demo";
-                                        const cached = localStorage.getItem(`defib_${tid}_companyInfo`);
-                                        if (cached) {
-                                          const parsed = JSON.parse(cached);
-                                          if (parsed.logo && typeof parsed.logo === "string" && parsed.logo.trim() !== "") {
-                                            logoUrl = parsed.logo.trim();
-                                          }
-                                        }
-                                      } catch (_) {}
-                                      const compName = companyInfo?.name || "Défibeo Solutions";
-                                      const htmlContent = generateMonthlyPDFHTML(data, logoUrl, compName);
-                                      const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
-                                      const url = URL.createObjectURL(blob);
-                                      const win = window.open(url, "_blank");
-                                      if (!win) {
-                                        const link = document.createElement("a");
-                                        link.href = url;
-                                        link.target = "_blank";
-                                        link.download = `CTT_${authenticatedUser.name.replace(/\s+/g, "_")}_${sel.label.replace(/\s+/g, "_")}.html`;
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                      }
-                                    }}
-                                    style={{
-                                      backgroundColor: "rgb(53, 86, 236)",
-                                      color: "#ffffff",
-                                      fontSize: "18px",
-                                      fontWeight: "bold",
-                                      borderRadius: "12px",
-                                      padding: "14px 20px",
-                                      border: "none",
-                                      boxShadow:
-                                        "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                                      cursor: "pointer",
-                                      width: "100%",
-                                    }}
-                                    className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 font-bold"
-                                  >
-                                    {t("Télécharger PDF")}
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Digital Clock Section */}
-                  <div
-                    style={{ backgroundColor: "#000", color: "#fff" }}
-                    className="p-5 rounded-2xl text-center space-y-2"
-                  >
-                    <span
-                      style={{
-                        fontSize: "18px",
-                        color: "#fff",
-                        fontFamily: "var(--font-sans), sans-serif",
-                      }}
-                      className="font-normal block"
-                    >
-                      {t("Date et heure.")}
-                    </span>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        color: "#fff",
-                        fontFamily: "var(--font-sans), sans-serif",
-                      }}
-                      className="font-bold"
-                    >
-                      {currentTime.toLocaleDateString(
-                        getLanguage() === "English" ? "en-US" : 
-                        getLanguage() === "Deutsch" ? "de-DE" : 
-                        getLanguage() === "Português" ? "pt-PT" : 
-                        getLanguage() === "Español" ? "es-ES" : "fr-FR"
-                      )}{" "}
-                      -{" "}
-                      {currentTime.toLocaleTimeString(
-                        getLanguage() === "English" ? "en-US" : 
-                        getLanguage() === "Deutsch" ? "de-DE" : 
-                        getLanguage() === "Português" ? "pt-PT" : 
-                        getLanguage() === "Español" ? "es-ES" : "fr-FR"
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Pointages registered log list */}
-                  <div className="space-y-4">
-                    {(Array.isArray(pointages) ? pointages : [])
-                      .filter((p) => p && p.techName && String(p.techName).trim().toLowerCase() === (authenticatedUser?.name || "").trim().toLowerCase())
-                      .map((p) => {
+                      return weekPointages.map((p) => {
                         if (!p) return null;
                         const liveHHMM =
                           String(currentTime.getHours()).padStart(2, "0") +
@@ -12563,7 +12644,8 @@ export default function PublicPortal({
                             )}
                           </div>
                         );
-                      })}
+                      });
+                    })()}
                   </div>
                 </div>
               )}
