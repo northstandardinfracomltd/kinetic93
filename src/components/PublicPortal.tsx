@@ -5492,23 +5492,34 @@ export default function PublicPortal({
             {/* FLOATING CAPSULE « Rapport d’intervention en cours. » WHEN REPORT IS REDUCED */}
             {isReportOverlayOpen && isReportOverlayMinimized && (
               <div 
-                className="fixed bottom-[124px] left-1/2 -translate-x-1/2 z-[60] flex items-center justify-center pointer-events-auto select-none animate-float-pill cursor-pointer"
-                onClick={() => setIsReportOverlayMinimized(false)}
-                title="Cliquer pour agrandir le rapport d’intervention"
+                className="fixed inset-x-0 bottom-[124px] z-[60] flex items-center justify-center pointer-events-none px-4"
               >
                 <div
+                  onClick={() => setIsReportOverlayMinimized(false)}
+                  title="Cliquer pour agrandir le rapport d’intervention"
                   style={{
-                    backgroundColor: "#1e293b",
-                    color: "#ffffff",
-                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)",
+                    backgroundColor: "#fff",
+                    border: "1px solid #dadada",
+                    color: "#000",
+                    fontSize: "16px",
+                    textAlign: "center",
+                    borderRadius: "1000px",
                   }}
-                  className="px-4 py-2 rounded-full border border-slate-700/60 flex items-center gap-2.5 cursor-pointer hover:bg-slate-800 transition-all active:scale-95"
+                  className="pointer-events-auto select-none px-5 py-2 flex items-center justify-center gap-2.5 cursor-pointer shadow-md transition-all active:scale-95 hover:bg-slate-50"
                 >
-                  <span className="relative flex h-2.5 w-2.5">
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                   </span>
-                  <span className="text-[13px] sm:text-[14px] font-semibold tracking-wide whitespace-nowrap font-sans">
+                  <span
+                    style={{
+                      color: "#000",
+                      fontSize: "16px",
+                      textAlign: "center",
+                      fontFamily: "var(--font-sans), sans-serif",
+                    }}
+                    className="font-medium tracking-normal whitespace-nowrap"
+                  >
                     Rapport d’intervention en cours.
                   </span>
                 </div>
@@ -8277,7 +8288,7 @@ export default function PublicPortal({
                                             return (
                                               <div
                                                 className="relative overflow-hidden space-y-1.5 transition-all"
-                                                style={{ maxHeight: isUnrolled ? "none" : "100px" }}
+                                                style={{ maxHeight: isUnrolled ? "none" : "68px" }}
                                               >
                                                 <p style={{ color: "#000000" }}>
                                                   <span style={{ color: "#9f9f9f" }}>Téléphone :</span>{" "}
@@ -8420,10 +8431,10 @@ export default function PublicPortal({
                                                 {/* Fade gradient overlay and blue Dérouler button when folded */}
                                                 {!isUnrolled && (
                                                   <div
-                                                    className="absolute inset-x-0 bottom-0 h-[140px] flex items-end justify-center pb-2.5 pt-6 pointer-events-auto"
+                                                    className="absolute inset-x-0 bottom-0 h-full flex items-end justify-center pb-1 pointer-events-auto"
                                                     style={{
                                                       background:
-                                                        "linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.5) 20%, rgba(255, 255, 255, 0.92) 45%, #ffffff 65%, #ffffff 100%)",
+                                                        "linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.6) 20%, rgba(255, 255, 255, 0.95) 55%, #ffffff 80%, #ffffff 100%)",
                                                     }}
                                                   >
                                                     <button
@@ -11715,6 +11726,7 @@ export default function PublicPortal({
                           style={{
                             backgroundColor: "#ffffff",
                             border: "1px solid #dadada",
+                            borderBottom: "0px solid transparent",
                             borderRadius: "16px 16px 0px 0px",
                             padding: "20px",
                           }}
@@ -11732,13 +11744,13 @@ export default function PublicPortal({
                             {t("Consulter mon volume horaire calculé à la semaine.")}
                           </div>
 
-                          <div>
+                          <div style={{ paddingTop: "8px" }}>
                             <label
                               htmlFor="select-volume-semaine"
                               className="block mb-1.5 font-bold text-black"
                               style={{ fontSize: "15px", fontFamily: "var(--font-sans), sans-serif" }}
                             >
-                              {t("Sélection Semaine")}
+                              {t("Sélection Semaine.")}
                             </label>
                             <select
                               id="select-volume-semaine"

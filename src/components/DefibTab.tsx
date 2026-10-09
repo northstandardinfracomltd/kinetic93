@@ -4214,8 +4214,16 @@ export default function DefibTab({
                         <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={df.nomSite}>
                           <div>{df.nomSite || ''}</div>
                           {df.categorieEtablissement ? (
-                            <div className="text-[10px] text-slate-400 font-mono mt-0.5" title="Catégorie d'établissement">
-                              Catégorie: {df.categorieEtablissement}
+                            <div 
+                              className="mt-0.5" 
+                              style={{
+                                color: '#000',
+                                fontFamily: "'DefibeoMain', sans-serif",
+                                fontSize: '12px'
+                              }}
+                              title="Catégorie d'établissement"
+                            >
+                              Catégorie : {df.categorieEtablissement}
                             </div>
                           ) : null}
                         </td>

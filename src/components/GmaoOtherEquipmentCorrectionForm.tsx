@@ -730,12 +730,12 @@ export default function GmaoOtherEquipmentCorrectionForm({
       )}
 
       {isWebapp && (
-        <div className="w-full flex flex-col !m-0 !p-0 !space-y-0 shrink-0">
+        <div className="w-full flex flex-col !m-0 !p-0 !space-y-0 shrink-0 relative" style={{ position: 'relative' }}>
           <button
             type="button"
             onClick={onCancel}
             id="btn-close-other-eq-modal"
-            style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#000000', color: '#ffffff', margin: 0 }}
+            style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#000000', color: '#ffffff', margin: 0, position: 'relative' }}
             className="transition-colors cursor-pointer font-sans select-none block w-full"
           >
             Annuler
@@ -759,7 +759,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              margin: 0
+              margin: 0,
+              position: 'relative'
             }}
             className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none block w-full !mt-0"
           >

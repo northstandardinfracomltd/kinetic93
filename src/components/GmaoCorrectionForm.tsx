@@ -2444,14 +2444,14 @@ export default function GmaoCorrectionForm({
         </div>
       )}
 
-      {/* Action Buttons Group: Annuler + Réduire / Agrandir (collé / sans espace) */}
-      <div className="w-full flex flex-col !m-0 !p-0 !space-y-0 shrink-0">
+      {/* Action Buttons Group: Annuler + Réduire / Agrandir (collé / sans espace, flux normal non-sticky) */}
+      <div className="w-full flex flex-col !m-0 !p-0 !space-y-0 shrink-0 relative" style={{ position: 'relative' }}>
         {/* Button Annuler */}
         <button
           type="button"
           onClick={onCancel}
           id="btn-close-gmao-modal"
-          style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#000000', color: '#ffffff', margin: 0 }}
+          style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#000000', color: '#ffffff', margin: 0, position: 'relative' }}
           className="transition-colors cursor-pointer font-sans select-none block w-full"
         >
           Annuler
@@ -2477,7 +2477,8 @@ export default function GmaoCorrectionForm({
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              margin: 0
+              margin: 0,
+              position: 'relative'
             }}
             className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none block w-full !mt-0"
           >
@@ -2569,6 +2570,7 @@ export default function GmaoCorrectionForm({
             overflow-x: hidden !important;
             max-width: 100% !important;
             box-sizing: border-box !important;
+            box-shadow: none !important;
           }
           #gmao-correction-form input:not([type="radio"]):not([type="checkbox"]),
           #gmao-correction-form select,
@@ -6312,9 +6314,9 @@ export default function GmaoCorrectionForm({
 
       {/* Fixed Error Code Helper Box */}
       <div 
-        className="sticky bottom-0 left-0 right-0 bg-white border border-b-0 border-slate-200 p-2.5 px-3 z-40 space-y-2 w-full max-w-full overflow-x-hidden shrink-0 animate-fade-in" 
+        className="sticky bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-2.5 px-3 z-40 space-y-2 w-full max-w-full overflow-x-hidden shrink-0 animate-fade-in !mt-0" 
         style={{ 
-          boxShadow: '0 -4px 20px -2px rgba(0, 0, 0, 0.08)',
+          boxShadow: 'none',
           maxWidth: isWebapp || forceSmartphoneLayout ? '100%' : '1000px',
           marginLeft: 'auto',
           marginRight: 'auto',
