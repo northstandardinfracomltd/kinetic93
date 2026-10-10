@@ -3227,7 +3227,7 @@ export default function App() {
     }
 
     if (newStatus === 'À faire' && oldStatus !== 'À faire' && existingTour) {
-      const companyName = companyInfo.name || 'Défibeo Suite';
+      const companyName = (companyInfo.nomCommercial || companyInfo.name || '').trim() || 'Défibeo Solutions';
       const companyEmail = companyInfo.email || '';
       
       const tourTitle = fields.title !== undefined ? fields.title : (existingTour.title || '');
@@ -3930,7 +3930,7 @@ export default function App() {
 
   const handleExecuteAvisage = async (tour: any) => {
     if (!tour) return;
-    const companyName = companyInfo.name || 'Défibeo Suite';
+    const companyName = (companyInfo.nomCommercial || companyInfo.name || '').trim() || 'Défibeo Solutions';
     const companyEmail = companyInfo.email || '';
     const toursMissions = tour.missions || [];
     let updatedClientsList = [...clients];
@@ -4065,7 +4065,7 @@ export default function App() {
 
     const customerMainEmail = client?.email || client?.emailSite || uniqueEmails[0] || '';
     const customerPassword = client?.accessKey || 'Non défini';
-    const companyName = companyInfo.name || 'Défibeo Suite';
+    const companyName = (companyInfo.nomCommercial || companyInfo.name || '').trim() || 'Défibeo Solutions';
     const companyEmail = companyInfo.email || 'defibeo@gmail.com';
 
     // Ensure interventionReference is set
@@ -7746,7 +7746,7 @@ export default function App() {
     try {
       triggerEmail4Signalement(
         ticketData.identifiant || 'Inconnu',
-        companyInfo.name || 'Défibeo Suite',
+        (companyInfo.nomCommercial || companyInfo.name || '').trim() || 'Défibeo Solutions',
         companyInfo.email || ''
       ).catch(e => console.error("Error triggering Email 4:", e));
     } catch (err) {
@@ -7802,7 +7802,7 @@ export default function App() {
         triggerEmail7CrmReply(
           ticketObj.email.trim(),
           responseText,
-          companyInfo.name || 'Défibeo Suite',
+          (companyInfo.nomCommercial || companyInfo.name || '').trim() || 'Défibeo Solutions',
           companyInfo.email || ''
         ).catch(e => console.error("Error triggering Email 7:", e));
       } catch (err7) {
@@ -15879,7 +15879,7 @@ export default function App() {
                                                   clientEmail.trim(),
                                                   snap.identifiant || rep.defibIdentifiant || '',
                                                   rep.date || new Date().toLocaleString('fr-FR'),
-                                                  companyInfo.name || 'Défibeo Suite',
+                                                  (companyInfo.nomCommercial || companyInfo.name || '').trim() || 'Défibeo Solutions',
                                                   companyInfo.email || ''
                                                 ).catch(e => console.error("Error triggering Email 6 during GMAO validation:", e));
                                               }

@@ -86,6 +86,104 @@ export async function saveAppsScriptUrl(url: string): Promise<void> {
 }
 
 /**
+ * Helper to retrieve the current active tenant's commercial name ("Nom_Commercial_Tenant").
+ * Checks:
+ * 1. Explicit tenant company name stored in localStorage (`defib_${tenantId}_tenant_company_name`)
+ * 2. Current tenant company info stored in localStorage (`defib_${tenantId}_company_info` or `companyInfo`)
+ * 3. Registered tenants cache (`fs_cache_registered_tenants` or `registered_tenants`)
+ * 4. Fallback company name (if non-generic)
+ * 5. Tenant ID display if not demo
+ * 6. Defaults to 'Défibeo Solutions' for demo, NEVER just 'defibeo'.
+ */
+export function getActiveTenantCommercialName(fallbackCompanyName?: string): string {
+  const isGeneric = (val?: string | null): boolean => {
+    if (!val || typeof val !== 'string') return true;
+    const clean = val.trim().toLowerCase();
+    return (
+      !clean ||
+      clean === 'defibeo' ||
+      clean === 'défibeo' ||
+      clean === 'defibeo suite' ||
+      clean === 'défibeo suite' ||
+      clean === 'mon cabinet' ||
+      clean === 'default'
+    );
+  };
+
+  try {
+    const tenantId = (localStorage.getItem('defib_tenant_id') || 'demo').trim();
+
+    // 1. Check explicit cached tenant commercial name
+    const explicitTenantName = localStorage.getItem(`defib_${tenantId}_tenant_company_name`);
+    if (!isGeneric(explicitTenantName)) {
+      return explicitTenantName!.trim();
+    }
+
+    // 2. Check candidate keys for companyInfo in localStorage for this tenant
+    const candidateKeys = [
+      `defib_${tenantId}_company_info`,
+      `defib_${tenantId}_companyInfo`,
+      `defib_${tenantId.toUpperCase()}_company_info`,
+      'defib_company_info',
+      'defib_companyInfo'
+    ];
+    for (const key of candidateKeys) {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          const candidate = parsed?.nomCommercial || parsed?.name || parsed?.denomination || parsed?.nomLogiciel;
+          if (!isGeneric(candidate)) {
+            return candidate.trim();
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 3. Check registered_tenants cache in localStorage
+    const tenantCacheKeys = ['fs_cache_registered_tenants', 'registered_tenants'];
+    for (const tKey of tenantCacheKeys) {
+      const raw = localStorage.getItem(tKey);
+      if (raw) {
+        try {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const match = list.find((t: any) => 
+              t?.id?.toLowerCase() === tenantId.toLowerCase() ||
+              t?.shortEnvId?.toLowerCase() === tenantId.toLowerCase()
+            );
+            if (match && !isGeneric(match.companyName)) {
+              return match.companyName.trim();
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 4. If fallbackCompanyName was passed and is not generic
+    if (!isGeneric(fallbackCompanyName)) {
+      return fallbackCompanyName!.trim();
+    }
+
+    // 5. If tenant is demo
+    if (tenantId === 'demo') {
+      return 'Défibeo Solutions';
+    }
+
+    // 6. Non-demo tenant with specific ID
+    if (tenantId && tenantId !== 'demo') {
+      return `Défibeo (${tenantId.toUpperCase()})`;
+    }
+  } catch (_) {}
+
+  if (!isGeneric(fallbackCompanyName)) {
+    return fallbackCompanyName!.trim();
+  }
+
+  return 'Défibeo Solutions';
+}
+
+/**
  * Core helper that performs the fetch post request to the user's Google Apps Script backend.
  */
 export async function sendScriptEmail(payload: {
@@ -94,6 +192,11 @@ export async function sendScriptEmail(payload: {
   body: string;
   htmlBody?: string;
   replyTo: string;
+  name?: string;
+  senderName?: string;
+  fromName?: string;
+  displayName?: string;
+  isSystemAuthEmail?: boolean;
 }): Promise<boolean> {
   try {
     const scriptUrl = await getAppsScriptUrl();
@@ -102,7 +205,24 @@ export async function sendScriptEmail(payload: {
       return false;
     }
 
-    console.log(`[Email Service] Dispatching email "${payload.subject}" to: ${payload.to}`);
+    // For all tenant-emitted emails, the Sender Name MUST be the Nom_Commercial_Tenant and NEVER 'defibeo'
+    let resolvedSenderName = (payload.name || payload.senderName || payload.fromName || payload.displayName || '').trim();
+    if (payload.isSystemAuthEmail) {
+      if (!resolvedSenderName) resolvedSenderName = 'Défibeo';
+    } else {
+      resolvedSenderName = getActiveTenantCommercialName(resolvedSenderName);
+    }
+
+    console.log(`[Email Service] Dispatching email "${payload.subject}" to: ${payload.to} (sender: "${resolvedSenderName}")`);
+
+    const finalPayload = {
+      ...payload,
+      name: resolvedSenderName,
+      senderName: resolvedSenderName,
+      fromName: resolvedSenderName,
+      displayName: resolvedSenderName,
+      scriptUrl
+    };
 
     // 1. Try backend server-side proxy route first (bypasses browser CORS & extensions, handles redirects)
     try {
@@ -111,10 +231,7 @@ export async function sendScriptEmail(payload: {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          ...payload,
-          scriptUrl
-        })
+        body: JSON.stringify(finalPayload)
       });
 
       if (serverResp.ok) {
@@ -134,7 +251,7 @@ export async function sendScriptEmail(payload: {
       headers: {
         'Content-Type': 'text/plain;charset=utf-8'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(finalPayload)
     });
 
     console.log('[Email Service] Dispatched directly to Apps Script via no-cors fallback.');
@@ -169,7 +286,10 @@ export async function triggerEmail1Inscription(emailEntreprise: string, password
     to: `defibeo@gmail.com, ${emailEntreprise}`,
     subject,
     body,
-    replyTo: "defibeo@gmail.com"
+    replyTo: "defibeo@gmail.com",
+    name: "Défibeo",
+    senderName: "Défibeo",
+    isSystemAuthEmail: true
   });
 }
 
@@ -183,14 +303,17 @@ export async function triggerEmail2TechnicianConnexion(
   companyName: string, 
   companyEmail: string
 ): Promise<boolean> {
-  const subject = `Défibeo : Informations de connexion à votre compte Technicien pour ${companyName}.`;
+  const senderName = getActiveTenantCommercialName(companyName);
+  const subject = `${senderName} : Informations de connexion à votre compte Technicien pour ${companyName}.`;
   const body = `${companyName} vous a ajouté en tant que membre technicien. Utilisez l’email ${emailTechnicien} et le mot de passe ${pinCode} pour vous connecter. Accédez à defibeo.com puis cliquez sur Connexion en tant que Technicien.`;
   
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${emailTechnicien}`,
     subject,
     body,
-    replyTo: companyEmail || "defibeo@gmail.com"
+    replyTo: companyEmail || "defibeo@gmail.com",
+    name: senderName,
+    senderName
   });
 }
 
@@ -204,14 +327,17 @@ export async function triggerEmail3AdminConnexion(
   companyName: string, 
   companyEmail: string
 ): Promise<boolean> {
-  const subject = `Défibeo : Informations de connexion à votre compte utilisateur pour ${companyName}.`;
+  const senderName = getActiveTenantCommercialName(companyName);
+  const subject = `${senderName} : Informations de connexion à votre compte utilisateur pour ${companyName}.`;
   const body = `${companyName} vous a ajouté en tant que membre administrateur. Utilisez l’email ${emailAdmin} et le mot de passe ${pinCode} pour vous connecter. Accédez à defibeo.com puis cliquez sur Connexion en tant que Admin.`;
   
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${emailAdmin}`,
     subject,
     body,
-    replyTo: companyEmail || "defibeo@gmail.com"
+    replyTo: companyEmail || "defibeo@gmail.com",
+    name: senderName,
+    senderName
   });
 }
 
@@ -226,8 +352,9 @@ export async function triggerEmailNewMemberAdded(
   companyEmail: string,
   roleType: string = 'Admin'
 ): Promise<boolean> {
+  const senderName = getActiveTenantCommercialName(companyName);
   const resolvedRole = roleType === 'Administrateur' ? 'Admin' : (roleType || 'Admin');
-  const resolvedCompany = (companyName || '').trim() || 'Defibeo';
+  const resolvedCompany = (companyName || '').trim() || senderName;
   const subject = `${resolvedCompany} : Vous avez été ajouté au logiciel Defibeo.`;
   const body = `Bonjour, vous avez été ajouté au logiciel Defibeo de ${resolvedCompany} \nPour y accéder, ouvrez https://consoledefibeo.deroesch.com/ et connectez-vous en tant que ${resolvedRole}, avec votre email ${userEmail}, et le mot de passe: ${passwordCode}.`;
 
@@ -235,7 +362,9 @@ export async function triggerEmailNewMemberAdded(
     to: `defibeo@gmail.com, ${userEmail}`,
     subject,
     body,
-    replyTo: companyEmail || "defibeo@gmail.com"
+    replyTo: companyEmail || "defibeo@gmail.com",
+    name: senderName,
+    senderName
   });
 }
 
@@ -248,14 +377,17 @@ export async function triggerEmail4Signalement(
   companyName: string, 
   companyEmail: string
 ): Promise<boolean> {
-  const subject = "Défibeo : Vous avez reçu un message.";
+  const senderName = getActiveTenantCommercialName(companyName);
+  const subject = `${senderName} : Vous avez reçu un message.`;
   const body = `${companyName}, vous avez reçu un signalement ou une demande d’un client ou d’un passant concernant le défibrillateur ${defibIdentifiant}, accédez à l’onglet CRM pour en savoir plus.`;
   
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${companyEmail}`,
     subject,
     body,
-    replyTo: "defibeo@gmail.com"
+    replyTo: "defibeo@gmail.com",
+    name: senderName,
+    senderName
   });
 }
 
@@ -278,7 +410,8 @@ export async function triggerEmail5AvisageFSM(
     console.log(`[Email 5] Avisage FSM to ${clientEmail} skipped because automatic emails are disabled.`);
     return false;
   }
-  const subject = `${companyName} : Nouvelle visite prévue pour votre matériel.`;
+  const senderName = getActiveTenantCommercialName(companyName);
+  const subject = `${senderName} : Nouvelle visite prévue pour votre matériel.`;
   const pinText = pinCode ? `\n\nVoici le code pin à fournir au technicien pour signer la visite sur site : ${pinCode}\n` : '';
   const slotStr = estimatedSlot || '09:00am';
   const body = `${companyName} a prévu une visite sur votre matériel ${defibIdentifiant} le ${periodDate} (estimé) à ${slotStr} (estimé).${pinText}\nSi vous souhaitez en savoir plus ou vous opposer à l’intervention, répondez simplement au présent email.`;
@@ -287,7 +420,9 @@ export async function triggerEmail5AvisageFSM(
     to: `defibeo@gmail.com, ${clientEmail}`,
     subject,
     body,
-    replyTo: companyEmail || "defibeo@gmail.com"
+    replyTo: companyEmail || "defibeo@gmail.com",
+    name: senderName,
+    senderName
   });
 }
 
@@ -309,7 +444,8 @@ export async function triggerEmail6RapportIntervention(
     console.log(`[Email 6] Rapport Intervention to ${clientEmail} skipped because automatic emails are disabled.`);
     return false;
   }
-  const subject = `${companyName} : Document relatif à votre matériel.`;
+  const senderName = getActiveTenantCommercialName(companyName);
+  const subject = `${senderName} : Document relatif à votre matériel.`;
   const enableAvis = localStorage.getItem(`defib_${tenantId}_enable_satisfaction_avis`) !== 'Non';
   
   const queryParams = new URLSearchParams();
@@ -328,7 +464,9 @@ export async function triggerEmail6RapportIntervention(
     to: `defibeo@gmail.com, ${clientEmail}`,
     subject,
     body,
-    replyTo: companyEmail || "defibeo@gmail.com"
+    replyTo: companyEmail || "defibeo@gmail.com",
+    name: senderName,
+    senderName
   });
 }
 
@@ -342,14 +480,17 @@ export async function triggerEmail7CrmReply(
   companyName: string, 
   companyEmail: string
 ): Promise<boolean> {
-  const subject = `${companyName} : Vous avez reçu une réponse.`;
+  const senderName = getActiveTenantCommercialName(companyName);
+  const subject = `${senderName} : Vous avez reçu une réponse.`;
   const body = replyText;
   
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${crmSenderEmail}`,
     subject,
     body,
-    replyTo: companyEmail || "defibeo@gmail.com"
+    replyTo: companyEmail || "defibeo@gmail.com",
+    name: senderName,
+    senderName
   });
 }
 
@@ -364,14 +505,17 @@ export async function triggerEmail8NouvelleTourneeTech(
   companyName: string, 
   companyEmail: string
 ): Promise<boolean> {
-  const subject = `${companyName} : Vous avez été attribué à une nouvelle tournée.`;
+  const senderName = getActiveTenantCommercialName(companyName);
+  const subject = `${senderName} : Vous avez été attribué à une nouvelle tournée.`;
   const body = `Vous avez été attribué a la tournée ${tourName} pour la période du ${periodDate} par ${companyName}, ouvrez votre webapp pour en savoir plus.`;
   
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${techEmail}`,
     subject,
     body,
-    replyTo: companyEmail || "defibeo@gmail.com"
+    replyTo: companyEmail || "defibeo@gmail.com",
+    name: senderName,
+    senderName
   });
 }
 
@@ -385,14 +529,17 @@ export async function triggerEmail9RappelMensuelVigilance(
   companyName: string, 
   companyEmail: string
 ): Promise<boolean> {
-  const subject = `${companyName} : Vérification mensuelle auto-vigilance défibrillateur.`;
+  const senderName = getActiveTenantCommercialName(companyName);
+  const subject = `${senderName} : Vérification mensuelle auto-vigilance défibrillateur.`;
   const body = `Bonjour, nous vous invitons a vérifier la disponibilité technique et d’accessibilité de votre défibrillateur ${defibIdentifiant}.`;
   
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${clientEmail}`,
     subject,
     body,
-    replyTo: companyEmail || "defibeo@gmail.com"
+    replyTo: companyEmail || "defibeo@gmail.com",
+    name: senderName,
+    senderName
   });
 }
 
@@ -448,7 +595,8 @@ export async function triggerEmailSoumettreAuClient(
 ): Promise<boolean> {
   const cleanRecipients = Array.from(new Set(['defibeo@gmail.com', ...recipientEmails].filter(Boolean)));
   const to = cleanRecipients.join(', ');
-  const subject = `${companyName} : (Attention requise) Proposition de date et créneau.`;
+  const senderName = getActiveTenantCommercialName(companyName);
+  const subject = `${senderName} : (Attention requise) Proposition de date et créneau.`;
   
   const refText = missionDetails?.interventionRef ? `Référence de l'intervention : ${missionDetails.interventionRef}\n` : '';
   const autreRefText = `Autre référence : ${missionDetails?.autreReference || ''}\n`;
@@ -510,7 +658,9 @@ Vous remerciant pour votre retour.`;
     subject,
     body,
     htmlBody,
-    replyTo: companyEmail || "defibeo@gmail.com"
+    replyTo: companyEmail || "defibeo@gmail.com",
+    name: senderName,
+    senderName
   });
 }
 
@@ -533,7 +683,10 @@ export async function triggerAuthCodeEmail(userEmail: string, authCode: string):
     to,
     subject,
     body,
-    replyTo: "defibeo@gmail.com"
+    replyTo: "defibeo@gmail.com",
+    name: "Défibeo",
+    senderName: "Défibeo",
+    isSystemAuthEmail: true
   });
 }
 

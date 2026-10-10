@@ -5,7 +5,7 @@ import { SupportTicket, Member, Client, CompanyInfo, CommercialEvent, SupportMes
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
 import { INITIAL_TICKETS } from '../utils';
-import { sendScriptEmail } from '../utils/emailService';
+import { sendScriptEmail, getActiveTenantCommercialName } from '../utils/emailService';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore } from '../firebase';
 import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from '../utils/googleDrive';
 
@@ -862,11 +862,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setIsSendingSupportMessage(true);
     try {
       const replyTo = supportEmailReplyTo.trim() || companyInfo?.email || 'contact@defibeo.com';
+      const senderName = getActiveTenantCommercialName(companyInfo?.name);
       await sendScriptEmail({
         to: targetEmail,
         subject: newMessageObjet.trim(),
         body: newMessageBody.trim(),
-        replyTo
+        replyTo,
+        name: senderName,
+        senderName
       });
 
       const now = new Date();
@@ -1077,13 +1080,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
       const subject = `Relance - ${refDevis}`;
       const replyTo = relanceEmailReplyTo.trim() || companyInfo?.email || 'contact@defibeo.com';
+      const senderName = getActiveTenantCommercialName(companyInfo?.name);
 
       try {
         await sendScriptEmail({
           to: targetEmail,
           subject,
           body: bodyText,
-          replyTo
+          replyTo,
+          name: senderName,
+          senderName
         });
         sentCount++;
       } catch (err) {

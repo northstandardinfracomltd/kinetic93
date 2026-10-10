@@ -8686,7 +8686,8 @@ export default function DefibTab({
       {/* 🧭 FILTER SIDE PANE / DRAWER 🧭 */}
       {isFilterPaneOpen && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 flex justify-end bg-slate-900/30 backdrop-blur-xs animate-fadeIn"
+          className="fixed inset-0 z-[99990] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+          id="filter-side-pane-container"
           style={{
             position: 'fixed',
             top: 0,
@@ -8705,14 +8706,16 @@ export default function DefibTab({
             setIsFilterPaneOpen(false);
           }}
         >
+          {/* Side Pane */}
           <div 
-            className="relative w-80 sm:w-96 bg-white shadow-2xl flex flex-col border-l border-slate-200" 
+            className="relative w-80 sm:w-96 bg-white shadow-2xl flex flex-col border-l border-slate-200 shrink-0 transform transition-transform duration-200 ease-in-out" 
             id="filter-side-pane"
             onClick={(e) => e.stopPropagation()}
             style={{
               height: '100vh',
               minHeight: '100dvh',
               maxHeight: '100dvh',
+              backgroundColor: '#ffffff',
             }}
           >
           {/* Scroll Area containing all fields */}

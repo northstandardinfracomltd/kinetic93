@@ -77,6 +77,7 @@ import GmaoOtherEquipmentCorrectionForm from "./GmaoOtherEquipmentCorrectionForm
 import {
   triggerEmail6RapportIntervention,
   sendScriptEmail,
+  getActiveTenantCommercialName,
 } from "../utils/emailService";
 import { auth, saveCollectionToFirestore } from "../firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
@@ -1477,11 +1478,14 @@ export default function PublicPortal({
     const body = `${techName} a besoin de stock pour le pièce/service ${pieceName} UGS ${ugsCode}.`;
 
     try {
+      const senderName = getActiveTenantCommercialName(techName);
       const sent = await sendScriptEmail({
         to: logisticsMember.email,
         subject,
         body,
         replyTo: authenticatedUser?.email || "noreply@defibeo.com",
+        name: senderName,
+        senderName
       });
       if (sent) {
         if (onAddLogisticsNotification) {

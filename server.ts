@@ -4198,7 +4198,7 @@ async function warmupDefibrillateursStore() {
   // Dedicated email dispatch proxy via Google Apps Script (handles redirections, logs, avoids browser CORS/extensions)
   app.post("/api/send-email", async (req, res) => {
     try {
-      const { to, subject, body, htmlBody, replyTo, scriptUrl } = req.body || {};
+      const { to, subject, body, htmlBody, replyTo, scriptUrl, name, senderName } = req.body || {};
       if (!to || !subject) {
         return res.status(400).json({ status: "error", message: "Missing recipient (to) or subject" });
       }
@@ -4216,8 +4216,18 @@ async function warmupDefibrillateursStore() {
       if (htmlBody) {
         payload.htmlBody = htmlBody;
       }
+      let resolvedSenderName = (name || senderName || req.body.fromName || req.body.displayName || '').trim();
+      const isSystemAuth = req.body.isSystemAuthEmail === true;
+      if (!resolvedSenderName || resolvedSenderName.toLowerCase() === 'defibeo' || resolvedSenderName.toLowerCase() === 'défibeo') {
+        resolvedSenderName = isSystemAuth ? 'Défibeo' : 'Défibeo Solutions';
+      }
 
-      console.log(`[API /api/send-email] Dispatching email to "${payload.to}" with subject "${payload.subject}" via Apps Script: ${targetUrl}`);
+      payload.name = resolvedSenderName;
+      payload.senderName = resolvedSenderName;
+      payload.fromName = resolvedSenderName;
+      payload.displayName = resolvedSenderName;
+
+      console.log(`[API /api/send-email] Dispatching email to "${payload.to}" with subject "${payload.subject}" (sender: "${payload.name || 'default'}") via Apps Script: ${targetUrl}`);
 
       const response = await fetch(targetUrl, {
         method: 'POST',
