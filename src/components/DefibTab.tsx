@@ -8684,12 +8684,37 @@ export default function DefibTab({
       )}
 
       {/* 🧭 FILTER SIDE PANE / DRAWER 🧭 */}
-      {isFilterPaneOpen && (
+      {isFilterPaneOpen && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-y-0 right-0 w-80 sm:w-96 bg-white shadow-2xl z-[90] flex flex-col border-l border-slate-200 transform transition-transform relative" 
-          id="filter-side-pane"
-          style={{ height: '100%' }}
+          className="fixed inset-0 flex justify-end bg-slate-900/30 backdrop-blur-xs animate-fadeIn"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            minHeight: '100dvh',
+            maxHeight: '100dvh',
+            zIndex: 99990,
+          }}
+          onClick={() => {
+            setDraftFilters(activeFilters);
+            setAdvancedSearchInputValue('');
+            setIsFilterPaneOpen(false);
+          }}
         >
+          <div 
+            className="relative w-80 sm:w-96 bg-white shadow-2xl flex flex-col border-l border-slate-200" 
+            id="filter-side-pane"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+            }}
+          >
           {/* Scroll Area containing all fields */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28">
             
@@ -9156,19 +9181,9 @@ export default function DefibTab({
             </button>
           </div>
         </div>
-      )}
-
-      {/* Drawer Overlay backdrop */}
-      {isFilterPaneOpen && (
-        <div 
-          onClick={() => {
-            setDraftFilters(activeFilters);
-            setAdvancedSearchInputValue('');
-            setIsFilterPaneOpen(false);
-          }}
-          className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-[85]"
-        />
-      )}
+      </div>,
+      document.body
+    )}
 
       {/* 👤 CLIENT SEARCH SIDE PANE 👤 */}
       {isSidePaneClientOpen && typeof document !== 'undefined' && createPortal(

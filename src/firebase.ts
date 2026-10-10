@@ -1059,6 +1059,12 @@ export function sanitizeUndefined(obj: any): any {
   return obj;
 }
 
+let firestoreQuotaExhaustedUntil = 0;
+
+export function isFirestoreQuotaExhausted(): boolean {
+  return Date.now() < firestoreQuotaExhaustedUntil;
+}
+
 /**
  * Saves a collection array or object to Firestore (auto-chunking if needed).
  */
@@ -1184,6 +1190,11 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
     console.warn(`[Sync Server Relay] Error syncing collection ${collectionName} to server:`, syncErr);
   }
 
+  if (isFirestoreQuotaExhausted()) {
+    // Quota reached for today; data is already stored safely in local storage & server sync
+    return;
+  }
+
   try {
     const primaryKey = getCollectionKey(collectionName, activeTenantId);
     const writeKeys = [primaryKey];
@@ -1240,10 +1251,22 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
       await Promise.race([
         Promise.all(docBatch),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 2000))
-      ]).catch(e => console.warn(`[Firestore Safe Write] Non-blocking write notice for ${primaryKey}:`, e?.message));
+      ]).catch(e => {
+        const msg = String(e?.message || e || '').toLowerCase();
+        if (msg.includes('quota') || msg.includes('resource-exhausted') || (e as any)?.code === 'resource-exhausted') {
+          firestoreQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
+        } else {
+          console.warn(`[Firestore Safe Write] Non-blocking write notice for ${primaryKey}:`, e?.message);
+        }
+      });
       console.log(`Successfully synced ${primaryKey} to Firestore.`);
     }
-  } catch (error) {
+  } catch (error: any) {
+    const msg = String(error?.message || error || '').toLowerCase();
+    if (msg.includes('quota') || msg.includes('resource-exhausted') || error?.code === 'resource-exhausted') {
+      firestoreQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
+      return;
+    }
     console.warn(`Error saving collection ${collectionName} to Firestore (kept in cache):`, error);
   }
 }
