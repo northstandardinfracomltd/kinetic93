@@ -403,6 +403,170 @@ function saveSingleDefibrillateurToChunk(defib: any, chunkIdx: number, prefix: s
   }
 }
 
+function deleteDefibrillateursFromStore(
+  targets: Array<{ id?: string; identifiant?: string; numeroSerie?: string }>,
+  tenantId?: string,
+  prefix: string = 'D27_defibrillateurs'
+): { deletedCount: number; deletedKeys: string[] } {
+  if (!Array.isArray(targets) || targets.length === 0) {
+    return { deletedCount: 0, deletedKeys: [] };
+  }
+
+  const normalizedKeysToMatch = new Set<string>();
+  const deletedKeysList: string[] = [];
+
+  for (const t of targets) {
+    if (!t) continue;
+    if (t.id) {
+      const s = String(t.id).trim().toLowerCase();
+      normalizedKeysToMatch.add(s);
+      deletedKeysList.push(String(t.id).trim());
+    }
+    if (t.identifiant) {
+      const s = String(t.identifiant).trim().toLowerCase();
+      normalizedKeysToMatch.add(s);
+      deletedKeysList.push(String(t.identifiant).trim());
+    }
+    if (t.numeroSerie) {
+      const s = String(t.numeroSerie).trim().toLowerCase();
+      normalizedKeysToMatch.add(s);
+      deletedKeysList.push(String(t.numeroSerie).trim());
+    }
+  }
+
+  if (normalizedKeysToMatch.size === 0) {
+    return { deletedCount: 0, deletedKeys: [] };
+  }
+
+  const isMatchingItem = (item: any): boolean => {
+    if (!item || typeof item !== 'object') return false;
+    const id = item.id ? String(item.id).trim().toLowerCase() : '';
+    const identifiant = item.identifiant ? String(item.identifiant).trim().toLowerCase() : '';
+    const numSerie = item.numeroSerie || item.num_serie ? String(item.numeroSerie || item.num_serie).trim().toLowerCase() : '';
+    return (id && normalizedKeysToMatch.has(id)) ||
+           (identifiant && normalizedKeysToMatch.has(identifiant)) ||
+           (numSerie && normalizedKeysToMatch.has(numSerie));
+  };
+
+  // 1. Remove from fastDefibIndex & defibLocationIndex
+  for (const k of normalizedKeysToMatch) {
+    fastDefibIndex.delete(k);
+    defibLocationIndex.delete(k);
+  }
+
+  // 2. Persist deleted keys to disk
+  try {
+    const deletedLogFile = path.join(DATA_DIR, 'deleted_defib_keys.json');
+    let existingDeleted: string[] = [];
+    if (fs.existsSync(deletedLogFile)) {
+      try {
+        existingDeleted = JSON.parse(fs.readFileSync(deletedLogFile, 'utf-8'));
+      } catch (_) {}
+    }
+    const combinedDeleted = Array.from(new Set([...existingDeleted, ...deletedKeysList]));
+    fs.writeFileSync(deletedLogFile, JSON.stringify(combinedDeleted), 'utf-8');
+  } catch (_) {}
+
+  let totalDeletedFromChunks = 0;
+  const candidateDirs = [
+    CHUNKS_DIR,
+    path.join(process.cwd(), 'data', 'chunks'),
+    path.join(process.cwd(), '.data', 'chunks'),
+    path.join(currentDirname, 'data', 'chunks'),
+    path.join(currentDirname, 'dist', 'data', 'chunks')
+  ];
+
+  // 3. Scan chunks in CHUNKS_DIR to remove from files and memory cache
+  const highestIdx = findHighestChunkIndex(prefix);
+  const maxIdxToScan = highestIdx >= 0 ? highestIdx : 50;
+
+  for (let cIdx = 0; cIdx <= maxIdxToScan; cIdx++) {
+    let modified = false;
+    let chunkItems = loadedChunkCache.get(cIdx);
+
+    for (const dir of candidateDirs) {
+      const p = path.join(dir, `${prefix}_chunk_${cIdx}.json`);
+      if (fs.existsSync(p)) {
+        try {
+          const fileItems = JSON.parse(fs.readFileSync(p, 'utf-8'));
+          if (Array.isArray(fileItems)) {
+            const beforeLen = fileItems.length;
+            const filtered = fileItems.filter(item => !isMatchingItem(item));
+            if (filtered.length !== beforeLen) {
+              totalDeletedFromChunks += (beforeLen - filtered.length);
+              fs.writeFileSync(p, JSON.stringify(filtered), 'utf-8');
+              chunkItems = filtered;
+              modified = true;
+              try {
+                const stat = fs.statSync(p);
+                loadedChunkMtime.set(cIdx, stat.mtimeMs);
+              } catch (_) {}
+
+              // Also update Firestore in background for that chunk
+              (async () => {
+                try {
+                  const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${cIdx}`);
+                  await setDoc(chunkDocRef, { value: filtered }, { merge: true });
+                } catch (_) {}
+              })().catch(() => {});
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (modified && chunkItems) {
+      loadedChunkCache.set(cIdx, chunkItems);
+    } else if (chunkItems && Array.isArray(chunkItems)) {
+      const filtered = chunkItems.filter(item => !isMatchingItem(item));
+      if (filtered.length !== chunkItems.length) {
+        loadedChunkCache.set(cIdx, filtered);
+      }
+    }
+  }
+
+  // 4. Remove from serverMemoryStore & collections files
+  const rawTenant = String(tenantId || 'D27').trim();
+  const tenantCandidateKeys = [
+    rawTenant === 'demo' ? 'defibrillateurs' : `${rawTenant}_defibrillateurs`,
+    'D27_defibrillateurs',
+    'D58_defibrillateurs',
+    'defibrillateurs'
+  ];
+
+  for (const tk of tenantCandidateKeys) {
+    let items: any[] = [];
+    if (serverMemoryStore.has(tk)) {
+      items = serverMemoryStore.get(tk);
+    } else {
+      const diskFile = path.join(COLLECTIONS_DIR, `${tk}.json`);
+      if (fs.existsSync(diskFile)) {
+        try {
+          items = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
+        } catch (_) {
+          items = [];
+        }
+      }
+    }
+    if (Array.isArray(items) && items.length > 0) {
+      const before = items.length;
+      const filtered = items.filter(item => !isMatchingItem(item));
+      if (filtered.length !== before) {
+        serverMemoryStore.set(tk, filtered);
+        persistSingleCollectionToDisk(tk, filtered);
+        (async () => {
+          try {
+            const docRef = doc(db, 'appData', tk);
+            await setDoc(docRef, { value: filtered, updatedAt: new Date().toISOString() }, { merge: true });
+          } catch (_) {}
+        })().catch(() => {});
+      }
+    }
+  }
+
+  return { deletedCount: totalDeletedFromChunks, deletedKeys: deletedKeysList };
+}
+
 async function fetchChunkRest(chunkIdx: number, prefix: string = 'D27_defibrillateurs'): Promise<any[] | null> {
   if (loadedChunkCache.has(chunkIdx)) {
     return loadedChunkCache.get(chunkIdx)!;
@@ -2581,6 +2745,9 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
       const numItemEnv = isItemDNum || isItemNum ? itemEnv.replace(/^d/i, '') : '';
 
       if (isDemo) {
+        if (colName === 'stocks' || colName === 'distributed_stocks' || colName === 'stock' || colName === 'distributedStocks') {
+          return true;
+        }
         if (itemEnv && itemEnv !== 'demo') return false;
         return true;
       }
@@ -2659,6 +2826,12 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     candidateLookupKeys.push(
       colName,
       `demo_${colName}`,
+      `D27_${colName}`,
+      `d27_${colName}`,
+      `27_${colName}`,
+      `D58_${colName}`,
+      `d58_${colName}`,
+      `58_${colName}`,
       `D18_${colName}`,
       `d18_${colName}`,
       colName === 'distributed_stocks' ? 'distributedStocks' : 'distributed_stocks',
@@ -3335,6 +3508,55 @@ async function warmupDefibrillateursStore() {
     }
   });
 
+  // Real-time single defibrillator deletion endpoint
+  app.post("/api/delete-single-defib", async (req, res) => {
+    try {
+      const { tenantId, id, identifiant, numeroSerie } = req.body;
+      const targetId = String(id || identifiant || numeroSerie || '').trim();
+      if (!targetId) {
+        return res.status(400).json({ error: "id, identifiant ou numeroSerie requis pour la suppression." });
+      }
+      const rawTenant = String(tenantId || 'D27').trim();
+      const result = deleteDefibrillateursFromStore([
+        { id: String(id || ''), identifiant: String(identifiant || ''), numeroSerie: String(numeroSerie || '') }
+      ], rawTenant);
+
+      persistServerStoreToDisk();
+      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys });
+    } catch (err: any) {
+      console.error("Error in /api/delete-single-defib:", err);
+      return res.status(500).json({ error: err.message || "Erreur lors de la suppression du défibrillateur." });
+    }
+  });
+
+  // Batch defibrillators deletion endpoint
+  app.post("/api/delete-batch-defibs", async (req, res) => {
+    try {
+      const { tenantId, ids } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "ids array requis pour la suppression en masse." });
+      }
+      const rawTenant = String(tenantId || 'D27').trim();
+      const targets = ids.map((item: any) => {
+        if (typeof item === 'string') {
+          return { id: item, identifiant: item, numeroSerie: item };
+        }
+        return {
+          id: String(item.id || ''),
+          identifiant: String(item.identifiant || ''),
+          numeroSerie: String(item.numeroSerie || item.num_serie || '')
+        };
+      });
+
+      const result = deleteDefibrillateursFromStore(targets, rawTenant);
+      persistServerStoreToDisk();
+      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys });
+    } catch (err: any) {
+      console.error("Error in /api/delete-batch-defibs:", err);
+      return res.status(500).json({ error: err.message || "Erreur lors de la suppression en masse." });
+    }
+  });
+
   // Fast single defibrillator fetch endpoint for live WebApp modal sync
   app.get("/api/sync-single-defib", async (req, res) => {
     try {
@@ -3396,7 +3618,7 @@ async function warmupDefibrillateursStore() {
         return res.status(404).json({ error: "Fichier chunk non trouvé." });
       }
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Cache-Control', 'public, max-age=60');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       return res.sendFile(filePath);
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
@@ -3498,20 +3720,22 @@ async function warmupDefibrillateursStore() {
           }
         }
 
-        // Cross-tenant resilience for stocks & distributed_stocks: mirror between demo, D18, and base names
+        // Cross-tenant resilience for stocks & distributed_stocks: mirror between demo, D27, D58, D18, and base names
         if (collectionName === 'distributed_stocks' || collectionName === 'distributedStocks' || collectionName === 'stocks' || collectionName === 'stock') {
+          const crossTenants = ['demo', 'D27', 'd27', '27', 'D58', 'd58', '58', 'D18', 'd18', '18'];
           for (const cName of colAliases) {
             serverMemoryStore.set(cName, finalValueToStore);
             serverStoreTimestamps.set(cName, Date.now());
-            serverMemoryStore.set(`demo_${cName}`, finalValueToStore);
-            serverStoreTimestamps.set(`demo_${cName}`, Date.now());
-            serverMemoryStore.set(`D18_${cName}`, finalValueToStore);
-            serverStoreTimestamps.set(`D18_${cName}`, Date.now());
-            serverMemoryStore.set(`d18_${cName}`, finalValueToStore);
-            serverStoreTimestamps.set(`d18_${cName}`, Date.now());
             persistSingleCollectionToDisk(cName, finalValueToStore);
-            persistSingleCollectionToDisk(`demo_${cName}`, finalValueToStore);
-            persistSingleCollectionToDisk(`D18_${cName}`, finalValueToStore);
+
+            for (const ct of crossTenants) {
+              const ctKey = ct === 'demo' ? `demo_${cName}` : `${ct}_${cName}`;
+              serverMemoryStore.set(ctKey, finalValueToStore);
+              serverStoreTimestamps.set(ctKey, Date.now());
+              if (ct.startsWith('D') || ct === 'demo') {
+                persistSingleCollectionToDisk(ctKey, finalValueToStore);
+              }
+            }
           }
           persistServerStoreToDiskNow();
         } else if (Array.isArray(value) && value.length > 20) {

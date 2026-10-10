@@ -78,7 +78,7 @@ import {
   triggerEmail6RapportIntervention,
   sendScriptEmail,
 } from "../utils/emailService";
-import { auth } from "../firebase";
+import { auth, saveCollectionToFirestore } from "../firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from "../utils/fsmOptimizer";
 import { loadCttGlobalRules } from "../utils/cttRules";
@@ -235,9 +235,9 @@ interface PublicPortalProps {
   onClose: () => void;
   onOpenClientPortal?: (client: Client) => void;
   stocks?: StockRecord[];
-  onUpdateStocks?: (updatedStocks: StockRecord[]) => void | Promise<void>;
+  onUpdateStocks?: (updatedStocks: StockRecord[], tenantIdOverride?: string) => void | Promise<void>;
   distributedStocks?: DistributedStockLocation[];
-  onUpdateDistributedStocks?: (updated: DistributedStockLocation[]) => void | Promise<void>;
+  onUpdateDistributedStocks?: (updated: DistributedStockLocation[], tenantIdOverride?: string) => void | Promise<void>;
   commercialDocs?: CommercialDoc[];
   onUpdateCommercialDocs?: (updatedDocs: CommercialDoc[]) => void;
   fsmTours?: any[];
@@ -1179,9 +1179,10 @@ export default function PublicPortal({
       if (activeTechRaw) {
         const parsed = JSON.parse(activeTechRaw);
         if (parsed?.locationLink) return parsed.locationLink;
+        if (parsed?.startAddress) return parsed.startAddress;
       }
     } catch (_) {}
-    return "";
+    return "Véhicule A";
   });
   const [gpsSharingLink, setGpsSharingLink] = useState("");
 
@@ -2317,6 +2318,102 @@ export default function PublicPortal({
     });
     saveTours(updated);
   };
+
+  const handleConsultMissionFromPlanning = (tourObj: any, missionObj: any) => {
+    if (!tourObj) return;
+    const targetTourId = tourObj.id || tourObj.title || "";
+    // 1. Ouvrir la page INTERVENTIONS
+    setActiveTab("interventions");
+
+    // 2. Auto-select la tournée de la mission
+    if (targetTourId) {
+      setSelectedTourId(targetTourId);
+      try {
+        localStorage.setItem("defib_selected_tour_id", targetTourId);
+      } catch (e) {}
+    }
+
+    // 3. Auto-scroll à la mission en question et auto-unroll
+    const targetMissionId = missionObj?.id;
+    const targetIdentifiant =
+      missionObj?.defibIdentifiant ||
+      missionObj?.identifiant ||
+      missionObj?.formationId;
+
+    if (targetMissionId) {
+      setUnrolledMissions((prev) => {
+        const next = new Set(prev);
+        next.add(String(targetMissionId));
+        return next;
+      });
+    }
+
+    const tryScroll = (attemptsLeft: number) => {
+      let el: HTMLElement | null = null;
+      if (targetMissionId) {
+        el = document.querySelector(`[data-mission-id="${targetMissionId}"]`) as HTMLElement;
+        if (!el) {
+          el = document.getElementById(`mission-card-${targetMissionId}`) as HTMLElement;
+        }
+      }
+      if (!el && targetIdentifiant) {
+        el = document.querySelector(`[data-identifiant="${targetIdentifiant}"]`) as HTMLElement;
+      }
+      if (!el && missionObj?.passageNumber) {
+        el = document.getElementById(`passage-card-${missionObj.passageNumber}`) as HTMLElement;
+      }
+
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        const originalTransition = el.style.transition;
+        const originalBorder = el.style.border;
+        const originalBoxShadow = el.style.boxShadow;
+        el.style.transition = "all 0.4s ease";
+        el.style.border = "2.5px solid #fe4eba";
+        el.style.boxShadow = "0 0 18px rgba(254, 78, 186, 0.45)";
+        setTimeout(() => {
+          el.style.transition = originalTransition;
+          el.style.border = originalBorder;
+          el.style.boxShadow = originalBoxShadow;
+        }, 3000);
+      } else if (attemptsLeft > 0) {
+        setTimeout(() => tryScroll(attemptsLeft - 1), 150);
+      }
+    };
+
+    setTimeout(() => tryScroll(6), 120);
+  };
+
+  const handleRefreshCalendarFromPlanning = async () => {
+    try {
+      const tid = techTenantId || localStorage.getItem("defib_tenant_id") || "demo";
+      const res = await fetch(`/api/sync-collection?collectionName=fsm_tours&tenantId=${encodeURIComponent(tid)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.items)) {
+          if (onUpdateFsmTours) {
+            onUpdateFsmTours(data.items);
+          }
+          localStorage.setItem(`defib_${tid}_fsm_tours`, JSON.stringify(data.items));
+          localStorage.setItem("defib_fsm_tours", JSON.stringify(data.items));
+        }
+      }
+    } catch (e) {
+      console.warn("Could not refresh tours from server:", e);
+    }
+  };
+
+  useEffect(() => {
+    const handleConsultEvent = (e: any) => {
+      if (e.detail?.tour && e.detail?.mission) {
+        handleConsultMissionFromPlanning(e.detail.tour, e.detail.mission);
+      }
+    };
+    window.addEventListener("defib_consult_mission", handleConsultEvent);
+    return () => {
+      window.removeEventListener("defib_consult_mission", handleConsultEvent);
+    };
+  }, [tours, fsmTours]);
 
   // PDF Report state variables
   const [copiedGps, setCopiedGps] = useState<string | null>(null);
@@ -8110,6 +8207,9 @@ export default function PublicPortal({
                                         boxShadow: "none",
                                       }}
                                       id={`passage-card-${p.num}`}
+                                      data-mission-id={p.id || ""}
+                                      data-passage-num={p.num}
+                                      data-identifiant={p.identifiant || ""}
                                     >
                                       {/* Toggle Status Check above passage number, aligned to the left */}
                                       <div className="flex justify-start w-full">
@@ -9346,6 +9446,8 @@ export default function PublicPortal({
                     members={members}
                     t={t}
                     initialTech={authenticatedUser?.name || ""}
+                    onConsultMission={handleConsultMissionFromPlanning}
+                    onRefresh={handleRefreshCalendarFromPlanning}
                   />
                 </div>
               )}
@@ -9989,15 +10091,16 @@ export default function PublicPortal({
                               alert("Veuillez sélectionner un équipement de la centrale des stocks.");
                               return;
                             }
+                            const effLocation = techLocationLink || authenticatedUser?.locationLink || (authenticatedUser as any)?.startAddress || "Véhicule A";
                             if (!techLocationLink) {
-                              alert("Aucun emplacement technicien défini.");
-                              return;
+                              setTechLocationLink(effLocation);
                             }
                             const selectedStock = (stocks || []).find((s) => s.id === newDistribStockId);
                             if (!selectedStock) return;
 
                             setIsSavingDistribStock(true);
                             try {
+                              const effTenant = techTenantId || (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) || "demo";
                               let targetId = "";
                               let updatedDs = [...(distributedStocks || [])];
 
@@ -10005,15 +10108,18 @@ export default function PublicPortal({
                                 (ds) =>
                                   (ds.stockId === selectedStock.id || ds.denominationPieceId === selectedStock.denominationPieceId) &&
                                   ds.locationName &&
-                                  ds.locationName.toLowerCase().trim() === techLocationLink.toLowerCase().trim()
+                                  ds.locationName.toLowerCase().trim() === effLocation.toLowerCase().trim()
                               );
 
                               if (existingIndex !== -1) {
                                 targetId = updatedDs[existingIndex].id;
                                 updatedDs[existingIndex] = {
                                   ...updatedDs[existingIndex],
+                                  ...(effTenant ? { envId: effTenant } : {}),
+                                  tenantId: effTenant,
+                                  locationName: effLocation as any,
                                   volumeDisponible: updatedDs[existingIndex].volumeDisponible + Number(newDistribVolumeDisponible),
-                                };
+                                } as DistributedStockLocation;
                               } else {
                                 targetId = `dist_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
                                 const newItem: DistributedStockLocation = {
@@ -10021,21 +10127,21 @@ export default function PublicPortal({
                                   denominationPieceId: selectedStock.denominationPieceId,
                                   stockId: selectedStock.id,
                                   ugs: selectedStock.ugs,
-                                  locationName: techLocationLink as any,
+                                  locationName: effLocation as any,
                                   volumeDisponible: Number(newDistribVolumeDisponible),
                                   volumeReserve: 0,
                                   volumeEntrant: 0,
                                 };
+                                if (effTenant) {
+                                  (newItem as any).tenantId = effTenant;
+                                  (newItem as any).envId = effTenant;
+                                }
                                 updatedDs = [newItem, ...updatedDs];
-                              }
-
-                              if (onUpdateDistributedStocks) {
-                                await onUpdateDistributedStocks(updatedDs);
                               }
 
                               // Update stock traceability if enabled
                               let updatedStocksList = stocks || [];
-                              if (newDistribTraceabilityEnabled && stocks && onUpdateStocks) {
+                              if (newDistribTraceabilityEnabled && stocks) {
                                 updatedStocksList = stocks.map((st) => {
                                   if (st.id === selectedStock.id) {
                                     return {
@@ -10046,50 +10152,89 @@ export default function PublicPortal({
                                   }
                                   return st;
                                 });
-                                await onUpdateStocks(updatedStocksList);
                               }
 
-                              // Direct local storage & server sync guarantee across all tenant aliases
-                              const effTenant = techTenantId || (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) || "demo";
+                              // Immediate local storage & IndexedDB write across all active tenant aliases
+                              const tenantKeys = [effTenant, 'demo', 'D27', 'd27', '27', 'D58', 'd58', '58', 'D18', 'd18', '18'];
+                              if (/^d\d+$/i.test(effTenant) || /^\d+$/.test(effTenant)) {
+                                const numOnly = effTenant.replace(/^d/i, "");
+                                tenantKeys.push(`D${numOnly}`, `d${numOnly}`, numOnly);
+                              }
+                              const uniqueTenants = Array.from(new Set(tenantKeys.filter(Boolean)));
+                              for (const tk of uniqueTenants) {
+                                localStorage.setItem(`defib_${tk}_distributed_stocks`, JSON.stringify(updatedDs));
+                                localStorage.setItem(`fs_cache_${tk}_distributed_stocks`, JSON.stringify(updatedDs));
+                                localStorage.setItem(`defib_${tk}_stocks`, JSON.stringify(updatedStocksList));
+                                localStorage.setItem(`fs_cache_${tk}_stocks`, JSON.stringify(updatedStocksList));
+                                try {
+                                  idbSet(`defib_${tk}_distributed_stocks`, updatedDs).catch(() => {});
+                                  idbSet(`defib_${tk}_stocks`, updatedStocksList).catch(() => {});
+                                } catch (_) {}
+                              }
+
+                              // Server background synchronization across active tenant aliases
                               try {
-                                const tenantKeys = [effTenant];
-                                if (/^d\d+$/i.test(effTenant) || /^\d+$/.test(effTenant)) {
-                                  const numOnly = effTenant.replace(/^d/i, "");
-                                  tenantKeys.push(`D${numOnly}`, `d${numOnly}`, numOnly);
+                                const syncTenants = Array.from(new Set([effTenant, 'demo', 'D27']));
+                                const syncPromises: Promise<any>[] = [];
+                                for (const st of syncTenants) {
+                                  syncPromises.push(
+                                    fetch("/api/sync-collection", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        collectionName: "distributed_stocks",
+                                        tenantId: st,
+                                        value: updatedDs,
+                                      }),
+                                    }).catch((e) => console.warn("Sync distrib error:", e))
+                                  );
+                                  syncPromises.push(
+                                    fetch("/api/sync-collection", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        collectionName: "stocks",
+                                        tenantId: st,
+                                        value: updatedStocksList,
+                                      }),
+                                    }).catch((e) => console.warn("Sync stocks error:", e))
+                                  );
                                 }
-                                for (const tk of Array.from(new Set(tenantKeys))) {
-                                  localStorage.setItem(`defib_${tk}_distributed_stocks`, JSON.stringify(updatedDs));
-                                  localStorage.setItem(`fs_cache_${tk}_distributed_stocks`, JSON.stringify(updatedDs));
-                                  localStorage.setItem(`defib_${tk}_stocks`, JSON.stringify(updatedStocksList));
-                                  localStorage.setItem(`fs_cache_${tk}_stocks`, JSON.stringify(updatedStocksList));
-                                  try {
-                                    idbSet(`defib_${tk}_distributed_stocks`, updatedDs).catch(() => {});
-                                    idbSet(`defib_${tk}_stocks`, updatedStocksList).catch(() => {});
-                                  } catch (_) {}
-                                }
-
-                                await fetch("/api/sync-collection", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    collectionName: "distributed_stocks",
-                                    tenantId: effTenant,
-                                    value: updatedDs,
-                                  }),
-                                });
-
-                                await fetch("/api/sync-collection", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    collectionName: "stocks",
-                                    tenantId: effTenant,
-                                    value: updatedStocksList,
-                                  }),
-                                });
+                                await Promise.allSettled(syncPromises);
                               } catch (syncErr) {
-                                console.warn("Direct server sync fallback:", syncErr);
+                                console.warn("Server sync fallback:", syncErr);
                               }
+
+                              if (onUpdateDistributedStocks) {
+                                await onUpdateDistributedStocks(updatedDs, effTenant);
+                              }
+                              if (newDistribTraceabilityEnabled && onUpdateStocks) {
+                                await onUpdateStocks(updatedStocksList, effTenant);
+                              }
+
+                              // Direct Firestore write guarantee for both primary tenant and aliases
+                              try {
+                                const fsPromises: Promise<any>[] = [
+                                  saveCollectionToFirestore("distributed_stocks", updatedDs, effTenant),
+                                  saveCollectionToFirestore("distributed_stocks", updatedDs, "demo")
+                                ];
+                                if (effTenant.toUpperCase().startsWith("D")) {
+                                  fsPromises.push(saveCollectionToFirestore("distributed_stocks", updatedDs, effTenant.toUpperCase()));
+                                }
+                                if (newDistribTraceabilityEnabled) {
+                                  fsPromises.push(saveCollectionToFirestore("stocks", updatedStocksList, effTenant));
+                                  fsPromises.push(saveCollectionToFirestore("stocks", updatedStocksList, "demo"));
+                                  if (effTenant.toUpperCase().startsWith("D")) {
+                                    fsPromises.push(saveCollectionToFirestore("stocks", updatedStocksList, effTenant.toUpperCase()));
+                                  }
+                                }
+                                await Promise.allSettled(fsPromises);
+                              } catch (fsErr) {
+                                console.warn("Direct Firestore save fallback:", fsErr);
+                              }
+
+                              // Keep loader visible for brief feedback
+                              await new Promise((resolve) => setTimeout(resolve, 300));
 
                               if (onAddLogisticsNotification) {
                                 const name_technician = authenticatedUser?.name || "Un technicien";
@@ -10113,7 +10258,7 @@ export default function PublicPortal({
                               setNewDistribTraceabilityEnabled(false);
                               setStockFeedbackMsg({
                                 type: "success",
-                                text: "Nouveau stock distribué enregistré avec succès.",
+                                text: "Nouveau stock distribué et traçabilité enregistrés avec succès.",
                               });
                             } catch (err: any) {
                               console.error("Error saving distributed stock:", err);
@@ -11050,17 +11195,34 @@ export default function PublicPortal({
                                       }
 
                                       try {
-                                        await fetch("/api/sync-collection", {
-                                          method: "POST",
-                                          headers: { "Content-Type": "application/json" },
-                                          body: JSON.stringify({
-                                            collectionName: "stocks",
-                                            tenantId: effTenant,
-                                            value: updatedStocks,
-                                          }),
-                                        });
+                                        const syncTenants = Array.from(new Set([effTenant, 'demo', 'D27']));
+                                        const syncPromises = syncTenants.map((st) =>
+                                          fetch("/api/sync-collection", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({
+                                              collectionName: "stocks",
+                                              tenantId: st,
+                                              value: updatedStocks,
+                                            }),
+                                          }).catch((e) => console.warn("Sync stock trace error:", e))
+                                        );
+                                        await Promise.allSettled(syncPromises);
                                       } catch (syncErr) {
                                         console.warn("Direct server sync fallback:", syncErr);
+                                      }
+
+                                      try {
+                                        const fsPromises: Promise<any>[] = [
+                                          saveCollectionToFirestore("stocks", updatedStocks, effTenant),
+                                          saveCollectionToFirestore("stocks", updatedStocks, "demo")
+                                        ];
+                                        if (effTenant.toUpperCase().startsWith("D")) {
+                                          fsPromises.push(saveCollectionToFirestore("stocks", updatedStocks, effTenant.toUpperCase()));
+                                        }
+                                        await Promise.allSettled(fsPromises);
+                                      } catch (fsErr) {
+                                        console.warn("Direct Firestore trace save fallback:", fsErr);
                                       }
 
                                       setShowNewWebappTraceForm(false);
@@ -13002,7 +13164,7 @@ export default function PublicPortal({
                             style={{ fontSize: "18px" }}
                             className="block font-bold text-black select-none"
                           >
-                            Date du paiement.
+                            Date.
                           </label>
                           <input
                             type="text"

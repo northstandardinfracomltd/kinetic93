@@ -977,12 +977,22 @@ export default function App() {
 
   const [distributedStocks, setDistributedStocks] = useState<DistributedStockLocation[]>([]);
 
-  const saveStocks = async (updated: StockRecord[]): Promise<void> => {
+  const saveStocks = async (updated: StockRecord[], tenantIdOverride?: string): Promise<void> => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
-    const effectiveTenantId = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+    let techTenant = '';
+    try {
+      const activeTechRaw = localStorage.getItem('defib_active_tech_session');
+      if (activeTechRaw) {
+        const parsed = JSON.parse(activeTechRaw);
+        if (parsed?.tenantId && parsed.tenantId !== 'demo') techTenant = parsed.tenantId;
+        else if (parsed?.envId && parsed.envId !== 'demo') techTenant = parsed.envId;
+      }
+    } catch (_) {}
+    const storedTenant = typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null;
+    const effectiveTenantId = tenantIdOverride || techTenant || (tenantId && tenantId !== 'demo' ? tenantId : null) || (storedTenant && storedTenant !== 'demo' ? storedTenant : null) || tenantId || storedTenant || 'demo';
 
     // Check for stock transition: from >= 1 to 0 or 1
     const newNotifs: LogisticsNotification[] = [];
@@ -1015,7 +1025,7 @@ export default function App() {
 
     setStocks(updated);
     const strS = JSON.stringify(updated);
-    const sTenantAliases = [effectiveTenantId, 'demo', 'D18', 'd18', '18'];
+    const sTenantAliases = [effectiveTenantId, 'demo', 'D27', 'd27', '27', 'D58', 'd58', '58', 'D18', 'd18', '18'];
     if (/^d\d+$/i.test(effectiveTenantId) || /^\d+$/.test(effectiveTenantId)) {
       const numOnly = effectiveTenantId.replace(/^d/i, '');
       sTenantAliases.push(`D${numOnly}`, `d${numOnly}`, numOnly);
@@ -1032,31 +1042,52 @@ export default function App() {
     loadedDataRef.current.stock = strS;
 
     try {
-      fetch('/api/sync-collection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          collectionName: 'stocks',
-          tenantId: effectiveTenantId,
-          value: updated
-        })
-      }).catch(() => {});
+      const syncTargets = Array.from(new Set([effectiveTenantId, 'demo', 'D27']));
+      const syncPromises = syncTargets.map(targetTid =>
+        fetch('/api/sync-collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            collectionName: 'stocks',
+            tenantId: targetTid,
+            value: updated
+          })
+        }).catch(err => console.warn('Sync stock error:', err))
+      );
+      await Promise.allSettled(syncPromises);
     } catch (_) {}
 
     if (effectiveTenantId) {
-      await saveCollectionToFirestore('stocks', updated, effectiveTenantId);
-      if (effectiveTenantId.toUpperCase().startsWith('D')) {
-        await saveCollectionToFirestore('stocks', updated, effectiveTenantId.toUpperCase()).catch(() => {});
+      try {
+        await saveCollectionToFirestore('stocks', updated, effectiveTenantId);
+        if (effectiveTenantId.toUpperCase().startsWith('D')) {
+          await saveCollectionToFirestore('stocks', updated, effectiveTenantId.toUpperCase());
+        }
+        if (effectiveTenantId !== 'demo') {
+          await saveCollectionToFirestore('stocks', updated, 'demo');
+        }
+      } catch (fErr) {
+        console.warn('Firestore saveStocks error:', fErr);
       }
     }
   };
 
-  const saveDistributedStocks = async (updated: DistributedStockLocation[]): Promise<void> => {
+  const saveDistributedStocks = async (updated: DistributedStockLocation[], tenantIdOverride?: string): Promise<void> => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
-    const effectiveTenantId = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+    let techTenant = '';
+    try {
+      const activeTechRaw = localStorage.getItem('defib_active_tech_session');
+      if (activeTechRaw) {
+        const parsed = JSON.parse(activeTechRaw);
+        if (parsed?.tenantId && parsed.tenantId !== 'demo') techTenant = parsed.tenantId;
+        else if (parsed?.envId && parsed.envId !== 'demo') techTenant = parsed.envId;
+      }
+    } catch (_) {}
+    const storedTenant = typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null;
+    const effectiveTenantId = tenantIdOverride || techTenant || (tenantId && tenantId !== 'demo' ? tenantId : null) || (storedTenant && storedTenant !== 'demo' ? storedTenant : null) || tenantId || storedTenant || 'demo';
 
     // Check for distributed stock transition: from >= 1 to 0 or 1
     const newNotifs: LogisticsNotification[] = [];
@@ -1090,7 +1121,7 @@ export default function App() {
 
     setDistributedStocks(updated);
     const strDS = JSON.stringify(updated);
-    const dsTenantAliases = [effectiveTenantId, 'demo', 'D18', 'd18', '18'];
+    const dsTenantAliases = [effectiveTenantId, 'demo', 'D27', 'd27', '27', 'D58', 'd58', '58', 'D18', 'd18', '18'];
     if (/^d\d+$/i.test(effectiveTenantId) || /^\d+$/.test(effectiveTenantId)) {
       const numOnly = effectiveTenantId.replace(/^d/i, '');
       dsTenantAliases.push(`D${numOnly}`, `d${numOnly}`, numOnly);
@@ -1107,21 +1138,32 @@ export default function App() {
     loadedDataRef.current.distributedStocks = strDS;
 
     try {
-      fetch('/api/sync-collection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          collectionName: 'distributed_stocks',
-          tenantId: effectiveTenantId,
-          value: updated
-        })
-      }).catch(() => {});
+      const syncTargets = Array.from(new Set([effectiveTenantId, 'demo', 'D27']));
+      const syncPromises = syncTargets.map(targetTid =>
+        fetch('/api/sync-collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            collectionName: 'distributed_stocks',
+            tenantId: targetTid,
+            value: updated
+          })
+        }).catch(err => console.warn('Sync distrib stock error:', err))
+      );
+      await Promise.allSettled(syncPromises);
     } catch (_) {}
 
     if (effectiveTenantId) {
-      await saveCollectionToFirestore('distributed_stocks', updated, effectiveTenantId);
-      if (effectiveTenantId.toUpperCase().startsWith('D')) {
-        await saveCollectionToFirestore('distributed_stocks', updated, effectiveTenantId.toUpperCase()).catch(() => {});
+      try {
+        await saveCollectionToFirestore('distributed_stocks', updated, effectiveTenantId);
+        if (effectiveTenantId.toUpperCase().startsWith('D')) {
+          await saveCollectionToFirestore('distributed_stocks', updated, effectiveTenantId.toUpperCase());
+        }
+        if (effectiveTenantId !== 'demo') {
+          await saveCollectionToFirestore('distributed_stocks', updated, 'demo');
+        }
+      } catch (fErr) {
+        console.warn('Firestore saveDistributedStocks error:', fErr);
       }
     }
   };
@@ -1787,6 +1829,40 @@ export default function App() {
 
   const [isRefreshingDefibs, setIsRefreshingDefibs] = useState<boolean>(false);
 
+  const getDeletedDefibKeys = (tId: string = tenantId || 'demo'): string[] => {
+    try {
+      const raw = localStorage.getItem(`defib_${tId}_deleted_defib_keys`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.map(s => String(s).trim().toLowerCase()).filter(Boolean);
+      }
+    } catch (_) {}
+    return [];
+  };
+
+  const recordDeletedDefibKeys = (keys: (string | undefined | null)[], tId: string = tenantId || 'demo') => {
+    try {
+      const existing = getDeletedDefibKeys(tId);
+      const toAdd = keys.filter(Boolean).map(k => String(k).trim().toLowerCase());
+      const combined = Array.from(new Set([...existing, ...toAdd]));
+      localStorage.setItem(`defib_${tId}_deleted_defib_keys`, JSON.stringify(combined));
+      const isDNum = /^d\d+$/i.test(tId);
+      if (isDNum) {
+        const numOnly = tId.replace(/^d/i, '');
+        localStorage.setItem(`defib_D${numOnly}_deleted_defib_keys`, JSON.stringify(combined));
+        localStorage.setItem(`defib_d${numOnly}_deleted_defib_keys`, JSON.stringify(combined));
+      }
+    } catch (_) {}
+  };
+
+  const isDefibInDeletedList = (df: any, deletedKeys: Set<string>): boolean => {
+    if (!df || !deletedKeys || deletedKeys.size === 0) return false;
+    const id = df.id ? String(df.id).trim().toLowerCase() : '';
+    const identifiant = df.identifiant ? String(df.identifiant).trim().toLowerCase() : '';
+    const numSerie = df.numeroSerie || df.num_serie ? String(df.numeroSerie || df.num_serie).trim().toLowerCase() : '';
+    return (id && deletedKeys.has(id)) || (identifiant && deletedKeys.has(identifiant)) || (numSerie && deletedKeys.has(numSerie));
+  };
+
   const handleManualRefreshDefibs = async () => {
     setIsRefreshingDefibs(true);
     setIsDefibLoading(true);
@@ -1853,20 +1929,22 @@ export default function App() {
         freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant, onProgress);
       }
       if (Array.isArray(freshRemote) && freshRemote.length > 0) {
-        setDefibrillateurs(freshRemote);
+        const delKeysSet = new Set(getDeletedDefibKeys(activeTenant));
+        const filteredRemote = freshRemote.filter(d => !isDefibInDeletedList(d, delKeysSet));
+        setDefibrillateurs(filteredRemote);
         try {
-          await idbSet(`defib_${activeTenant}_defibrillateurs`, freshRemote);
+          await idbSet(`defib_${activeTenant}_defibrillateurs`, filteredRemote);
           const uc = activeTenant.toUpperCase();
           if (uc.startsWith('D')) {
-            await idbSet(`defib_${uc}_defibrillateurs`, freshRemote);
-            await idbSet(`defib_${activeTenant.toLowerCase()}_defibrillateurs`, freshRemote);
+            await idbSet(`defib_${uc}_defibrillateurs`, filteredRemote);
+            await idbSet(`defib_${activeTenant.toLowerCase()}_defibrillateurs`, filteredRemote);
           }
         } catch (_) {}
         setDefibLoadingProgress({
-          current: freshRemote.length,
-          total: freshRemote.length,
+          current: filteredRemote.length,
+          total: filteredRemote.length,
           percent: 100,
-          message: `Chargement ${freshRemote.length.toLocaleString('en-US')}/${freshRemote.length.toLocaleString('en-US')}, Terminé.`
+          message: `Chargement ${filteredRemote.length.toLocaleString('en-US')}/${filteredRemote.length.toLocaleString('en-US')}, Terminé.`
         });
         setTimeout(() => {
           setIsDefibLoading(false);
@@ -5636,10 +5714,12 @@ export default function App() {
                     }
                     const combined = chunkResults.filter(Boolean).flat();
                     if (combined.length > 5000) {
-                      setDefibrillateurs(combined);
-                      idbSet(`defib_${activeRunTenantId}_defibrillateurs`, combined).catch(() => {});
-                      idbSet('defib_D27_defibrillateurs', combined).catch(() => {});
-                      idbSet('defib_D58_defibrillateurs', combined).catch(() => {});
+                      const delKeysSet = new Set(getDeletedDefibKeys(activeRunTenantId));
+                      const filteredCombined = combined.filter(d => !isDefibInDeletedList(d, delKeysSet));
+                      setDefibrillateurs(filteredCombined);
+                      idbSet(`defib_${activeRunTenantId}_defibrillateurs`, filteredCombined).catch(() => {});
+                      idbSet('defib_D27_defibrillateurs', filteredCombined).catch(() => {});
+                      idbSet('defib_D58_defibrillateurs', filteredCombined).catch(() => {});
                       setIsDefibLoading(false);
                     }
                   }
@@ -5849,13 +5929,15 @@ export default function App() {
           'defibrillateurs',
           'defibrillateurs',
           (data) => {
-            setDefibrillateurs(data);
-            if (Array.isArray(data)) {
+            const delKeysSet = new Set(getDeletedDefibKeys(activeRunTenantId));
+            const filteredData = Array.isArray(data) ? data.filter(d => !isDefibInDeletedList(d, delKeysSet)) : data;
+            setDefibrillateurs(filteredData);
+            if (Array.isArray(filteredData)) {
               setDefibLoadingProgress({
-                current: data.length,
-                total: data.length,
+                current: filteredData.length,
+                total: filteredData.length,
                 percent: 100,
-                message: `Chargement ${data.length.toLocaleString('en-US')}/${data.length.toLocaleString('en-US')}, Terminé.`
+                message: `Chargement ${filteredData.length.toLocaleString('en-US')}/${filteredData.length.toLocaleString('en-US')}, Terminé.`
               });
             }
             setTimeout(() => {
@@ -7957,7 +8039,24 @@ export default function App() {
       const identifiant = target.identifiant || id;
       const materialType = variables.find(v => v.id === target.modeleId)?.nom || target.modeleId || 'Défibrillateur';
       logDeleteDefib(tenantId, identifiant, materialType, loggedUser?.name).catch(() => {});
+      recordDeletedDefibKeys([target.id, target.identifiant, target.numeroSerie, (target as any).num_serie]);
+    } else {
+      recordDeletedDefibKeys([id]);
     }
+
+    try {
+      fetch('/api/delete-single-defib', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: tenantId || 'demo',
+          id,
+          identifiant: target?.identifiant,
+          numeroSerie: target?.numeroSerie || (target as any)?.num_serie
+        })
+      }).catch(() => {});
+    } catch (_) {}
+
     saveDefibs(defibrillateurs.filter((df) => df.id !== id));
   };
 
@@ -7967,14 +8066,33 @@ export default function App() {
       return;
     }
     // Log suspicious activity Event D for bulk delete
+    const keysToRecord: string[] = [];
+    const targetsToDelete: any[] = [];
     for (const id of ids) {
       const target = defibrillateurs.find((df) => df.id === id);
       if (target) {
         const identifiant = target.identifiant || id;
         const materialType = variables.find(v => v.id === target.modeleId)?.nom || target.modeleId || 'Défibrillateur';
         logDeleteDefib(tenantId, identifiant, materialType, loggedUser?.name).catch(() => {});
+        keysToRecord.push(target.id, target.identifiant, target.numeroSerie, (target as any).num_serie);
+        targetsToDelete.push({ id: target.id, identifiant: target.identifiant, numeroSerie: target.numeroSerie });
+      } else {
+        keysToRecord.push(id);
+        targetsToDelete.push({ id });
       }
     }
+    recordDeletedDefibKeys(keysToRecord);
+    try {
+      fetch('/api/delete-batch-defibs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: tenantId || 'demo',
+          ids: targetsToDelete
+        })
+      }).catch(() => {});
+    } catch (_) {}
+
     saveDefibs(defibrillateurs.filter((df) => !ids.includes(df.id)));
   };
 
@@ -9627,6 +9745,10 @@ export default function App() {
                           t={translate}
                           initialTech=""
                           enableExtendedView={true}
+                          onConsultMission={(tour) => {
+                            setFsmPlanningSidePaneOpen(false);
+                            setActiveTab('fsm');
+                          }}
                         />
                       </div>
 

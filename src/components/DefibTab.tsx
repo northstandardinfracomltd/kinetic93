@@ -1878,6 +1878,20 @@ export default function DefibTab({
     return set;
   }, [fsmTours, activeFilters.actionRejected]);
 
+  // Set of deleted defib keys to prevent resurrection
+  const deletedDefibSet = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          return new Set<string>(arr.map((s: any) => String(s).trim().toLowerCase()).filter(Boolean));
+        }
+      }
+    } catch (_) {}
+    return new Set<string>();
+  }, [activeTenantId, defibrillateurs]);
+
   // List search & filters computation - highly optimized for datasets of 18,000+ items across all browsers
   const filteredDefibs = useMemo(() => {
     const searchLower = (search || '').toLowerCase().trim();
@@ -1887,6 +1901,15 @@ export default function DefibTab({
     const todayTime = today.getTime();
 
     let result = defibrillateurs.filter(df => {
+      // 0. Exclude deleted defibs
+      if (deletedDefibSet.size > 0) {
+        const idLower = df.id ? df.id.trim().toLowerCase() : '';
+        const idfLower = df.identifiant ? df.identifiant.trim().toLowerCase() : '';
+        const numLower = df.numeroSerie ? df.numeroSerie.trim().toLowerCase() : (df as any).num_serie ? String((df as any).num_serie).trim().toLowerCase() : '';
+        if ((idLower && deletedDefibSet.has(idLower)) || (idfLower && deletedDefibSet.has(idfLower)) || (numLower && deletedDefibSet.has(numLower))) {
+          return false;
+        }
+      }
       // 1. Fast equality checks first (inexpensive)
       if (activeFilters.region !== 'Tous' && df.region !== activeFilters.region) return false;
       if (activeFilters.modeleId !== 'Tous' && df.modeleId !== activeFilters.modeleId) return false;
@@ -3474,7 +3497,7 @@ export default function DefibTab({
               {/* Both search and buttons are placed directly next to the title */}
               <div className="flex flex-wrap items-center gap-3">
                 {/* Field recherche (Search input) */}
-                <div className="relative w-full sm:w-80 md:w-96">
+                <div className="relative w-full sm:w-60 md:w-64">
                   <input
                     type="text"
                     id="search-defibs-input"
@@ -4198,16 +4221,6 @@ export default function DefibTab({
 
       {/* Main Table Records Sheet */}
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
-        {/* Banner preloader if loading and multiple records are already displayed */}
-        {isDefibLoading && filteredDefibs.length > 1 && (
-          <DefibTablePreloader 
-            variant="banner"
-            current={defibLoadingProgress?.current}
-            total={defibLoadingProgress?.total}
-            percent={defibLoadingProgress?.percent}
-            message={defibLoadingProgress?.message}
-          />
-        )}
         {/* Scrollbar supérieur pour faciliter la navigation horizontale sur ordinateur fixe */}
         {!isDefibLoading && filteredDefibs.length > 0 && tableScrollWidth > 0 && !isTableFitView && (
           <div 
@@ -4707,6 +4720,23 @@ export default function DefibTab({
                                 return;
                               }
                               if (window.confirm(t("Êtes-vous sûr de vouloir supprimer ce défibrillateur ?"))) {
+                                try {
+                                  const raw = localStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
+                                  const parsed = raw ? JSON.parse(raw) : [];
+                                  const keysToAdd = [df.id, df.identifiant, df.numeroSerie, (df as any).num_serie].filter(Boolean).map(s => String(s).trim().toLowerCase());
+                                  const combined = Array.from(new Set([...parsed, ...keysToAdd]));
+                                  localStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
+                                  fetch('/api/delete-single-defib', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      tenantId: activeTenantId,
+                                      id: df.id,
+                                      identifiant: df.identifiant,
+                                      numeroSerie: df.numeroSerie || (df as any).num_serie
+                                    })
+                                  }).catch(() => {});
+                                } catch (_) {}
                                 onDeleteDefib(df.id);
                                 setSelectedIds(prev => prev.filter(id => id !== df.id));
                               }
@@ -8656,12 +8686,12 @@ export default function DefibTab({
       {/* 🧭 FILTER SIDE PANE / DRAWER 🧭 */}
       {isFilterPaneOpen && (
         <div 
-          className="fixed inset-y-0 right-0 w-80 sm:w-96 bg-white shadow-2xl z-[90] flex flex-col border-l border-slate-200 transform transition-transform" 
+          className="fixed inset-y-0 right-0 w-80 sm:w-96 bg-white shadow-2xl z-[90] flex flex-col border-l border-slate-200 transform transition-transform relative" 
           id="filter-side-pane"
           style={{ height: '100%' }}
         >
           {/* Scroll Area containing all fields */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28">
             
             {/* Termes de recherche avancée */}
             <div className="space-y-1.5">
@@ -8669,7 +8699,7 @@ export default function DefibTab({
                 <label 
                   htmlFor="advanced-search-input"
                   className="text-[16px] text-black font-sans font-semibold" 
-                  style={{ fontWeight: 100, cursor: 'pointer' }}
+                  style={{ fontWeight: 100, cursor: 'pointer', color: '#000000' }}
                 >
                   Termes de recherche avancée.
                 </label>
@@ -8680,15 +8710,16 @@ export default function DefibTab({
                       setDraftFilters(prev => ({ ...prev, advancedSearchTerms: [] }));
                       setAdvancedSearchInputValue('');
                     }}
-                    className="text-[12px] text-slate-400 hover:text-red-500 font-sans cursor-pointer bg-transparent border-0 p-0 transition-colors"
+                    style={{ color: '#000000' }}
+                    className="text-[12px] text-black hover:text-red-600 font-sans cursor-pointer bg-transparent border-0 p-0 transition-colors"
                     title="Effacer tous les termes"
                   >
                     Effacer tout
                   </button>
                 )}
               </div>
-              <p className="text-[12px] text-slate-500 font-sans leading-tight px-1">
-                Pour chaque terme, entrez au moins 3 lettres et saisissez une barre oblique ou entrer au clavier afin de séparer chaque terme.
+              <p className="text-[12px] text-black font-sans leading-tight px-1" style={{ color: '#000000' }}>
+                Pour chaque terme, entrez au moins 3 lettres et saisissez ‘entrer’ au clavier afin de séparer chaque terme.
               </p>
 
               {/* Textarea-like auto-height search container */}
@@ -8720,27 +8751,31 @@ export default function DefibTab({
                       e.stopPropagation();
                       handleRemoveAdvancedTerm(tIdx);
                     }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#dc2626';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#000000';
+                    }}
                     title="Cliquer pour supprimer ce terme"
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '4px',
-                      backgroundColor: '#ffecf8',
-                      border: '1px solid #fe4eba',
-                      color: '#000000',
+                      backgroundColor: '#000000',
+                      border: 'none',
+                      color: '#ffffff',
                       borderRadius: '9999px',
-                      padding: '3px 10px',
+                      padding: '4px 12px',
                       fontSize: '14px',
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                       fontWeight: 500,
                       cursor: 'pointer',
                       userSelect: 'none',
-                      transition: 'all 0.15s ease',
+                      transition: 'background-color 0.15s ease',
                     }}
-                    className="hover:bg-red-50 hover:border-red-400 hover:text-red-600 group"
+                    className="hover:!bg-red-600 cursor-pointer"
                   >
                     <span>{term}</span>
-                    <span className="text-[11px] opacity-60 group-hover:opacity-100 group-hover:text-red-600 ml-0.5 font-bold">✕</span>
                   </span>
                 ))}
 
@@ -8760,13 +8795,49 @@ export default function DefibTab({
                       setAdvancedSearchInputValue('');
                     }
                   }}
-                  placeholder={(draftFilters.advancedSearchTerms || []).length === 0 ? "Tapez un terme (ex: 12345, Lyon)..." : ""}
-                  className="flex-1 min-w-[120px] bg-transparent outline-none border-none text-[15px] text-black font-sans font-light placeholder:text-slate-400"
+                  placeholder={(draftFilters.advancedSearchTerms || []).length === 0 ? "Entrez vos termes, mots-clés, villes, numéros de série, etc." : ""}
+                  className="flex-1 min-w-[120px] bg-transparent outline-none border-none text-[15px] text-black font-sans font-light placeholder:text-black placeholder:opacity-100"
                   style={{
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                     padding: '2px 4px',
+                    color: '#000000',
                   }}
                 />
+              </div>
+            </div>
+
+            {/* Filter: Client (Remonté directement en dessous du field des termes de recherche) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 100 }}>
+                  Client.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClientSearchTarget('filter');
+                    setIsSidePaneClientOpen(true);
+                    setClientSidePaneSearch('');
+                  }}
+                  className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                  style={{ textDecoration: 'none' }}
+                >
+                  Rechercher
+                </button>
+              </div>
+              <div className="relative">
+                <select
+                  value={draftFilters.clientId || 'Tous'}
+                  onChange={(e) => setDraftFilters({ ...draftFilters, clientId: e.target.value })}
+                  style={filterInputStyle}
+                >
+                  <option value="Tous">Tous les clients.</option>
+                  {sortedClientsForFilter.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.denomination || 'Client sans nom'} {c.siret ? `(${c.siret})` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             
@@ -8797,41 +8868,6 @@ export default function DefibTab({
                   <option value="Tous">Tous modèles.</option>
                   {modelesDefib.map(m => (
                     <option key={m.id} value={m.id}>{m.nom}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Filter: Client */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[16px] text-black font-sans font-semibold" style={{ fontWeight: 100 }}>
-                  Client.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setClientSearchTarget('filter');
-                    setIsSidePaneClientOpen(true);
-                    setClientSidePaneSearch('');
-                  }}
-                  className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
-                  style={{ textDecoration: 'none' }}
-                >
-                  Rechercher
-                </button>
-              </div>
-              <div className="relative">
-                <select
-                  value={draftFilters.clientId || 'Tous'}
-                  onChange={(e) => setDraftFilters({ ...draftFilters, clientId: e.target.value })}
-                  style={filterInputStyle}
-                >
-                  <option value="Tous">Tous les clients.</option>
-                  {sortedClientsForFilter.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.denomination || 'Client sans nom'} {c.siret ? `(${c.siret})` : ''}
-                    </option>
                   ))}
                 </select>
               </div>
@@ -9048,8 +9084,11 @@ export default function DefibTab({
 
           </div>
 
-          {/* Footer Actions - 50/50 Side by side with zero top divider, matching active column action button styles */}
-          <div className="p-6 bg-white flex gap-4 shrink-0">
+          {/* Floating Actions - floating over bottom contents (sans fond white) */}
+          <div 
+            className="absolute bottom-0 left-0 right-0 p-6 flex gap-4 z-20 pointer-events-none"
+            style={{ backgroundColor: 'transparent', background: 'transparent' }}
+          >
             <button
               onClick={() => {
                 const defaults = {
@@ -9081,7 +9120,7 @@ export default function DefibTab({
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
               }}
-              className="flex-1 text-center cursor-pointer animate-none"
+              className="flex-1 text-center cursor-pointer animate-none pointer-events-auto"
             >
               Annuler
             </button>
@@ -9111,7 +9150,7 @@ export default function DefibTab({
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
               }}
-              className="flex-1 text-center cursor-pointer animate-none"
+              className="flex-1 text-center cursor-pointer animate-none pointer-events-auto"
             >
               Appliquer
             </button>

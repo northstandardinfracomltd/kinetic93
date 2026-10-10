@@ -283,7 +283,15 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
     if (!item || typeof item !== 'object') continue;
 
     let key = '';
-    if (item.id && String(item.id).trim()) {
+    if (collectionName === 'distributed_stocks' || collectionName === 'distributedStocks') {
+      const loc = item.locationName ? String(item.locationName).trim().toLowerCase() : '';
+      const ref = item.stockId || item.denominationPieceId || item.ugs || '';
+      if (ref && loc) {
+        key = `ds_${ref}_${loc}`;
+      } else if (item.id) {
+        key = `id_${String(item.id).trim()}`;
+      }
+    } else if (item.id && String(item.id).trim()) {
       key = `id_${String(item.id).trim()}`;
     } else if (isClient) {
       if (item.clientCode && String(item.clientCode).trim()) {
@@ -319,10 +327,6 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
       } else if (item.denominationPieceId) {
         key = `dp_${String(item.denominationPieceId).trim()}`;
       }
-    } else if (collectionName === 'distributed_stocks' || collectionName === 'distributedStocks') {
-      if ((item.stockId || item.denominationPieceId) && item.locationName) {
-        key = `ds_${item.stockId || item.denominationPieceId}_${String(item.locationName).trim().toLowerCase()}`;
-      }
     }
 
     if (!key) {
@@ -348,7 +352,25 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
       for (const [prop, val] of Object.entries(item)) {
         if (val !== undefined && val !== null && val !== '') {
           const current = merged[prop];
-          if (incomingTakesPrecedence) {
+          if (prop === 'traceabilities' && (Array.isArray(val) || Array.isArray(current))) {
+            const arrVal = Array.isArray(val) ? val : [];
+            const arrCur = Array.isArray(current) ? current : [];
+            const traceMap = new Map<string, any>();
+            for (const t of [...arrCur, ...arrVal]) {
+              if (t && typeof t === 'object') {
+                const tKey = t.id || t.lotOrSerial || JSON.stringify(t);
+                traceMap.set(tKey, t);
+              }
+            }
+            merged[prop] = Array.from(traceMap.values());
+            if (merged[prop].length > 0) {
+              merged.traceabilityEnabled = true;
+            }
+          } else if (prop === 'volumeDisponible' && (collectionName === 'distributed_stocks' || collectionName === 'distributedStocks')) {
+            const vVal = Number(val || 0);
+            const vCur = Number(current || 0);
+            merged[prop] = Math.max(vVal, vCur);
+          } else if (incomingTakesPrecedence) {
             merged[prop] = val;
           } else if (current === undefined || current === null || current === '') {
             merged[prop] = val;
@@ -486,6 +508,9 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
     const numItemEnv = isItemDNum || isItemNum ? itemEnv.replace(/^d/i, '') : '';
 
     if (isDemo) {
+      if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
+        return true;
+      }
       // In demo mode: discard items explicitly created for specific customer tenants
       if (itemEnv && itemEnv !== 'demo') {
         return false;
@@ -763,7 +788,21 @@ export async function fetchCollectionFromFirestore<T>(
     // 2. Check if any candidate has a populated array (>1 item, or >=5000 items for defibrillateurs catalog)
     const populatedCandidate = metaSnaps.find(m => m.exists && Array.isArray(m.value) && (isDefibCol ? m.value.length >= 5000 : m.value.length > 1));
     if (populatedCandidate) {
-      const merged = mergeCollectionItems(collectionName, populatedCandidate.value);
+      let combinedVal = populatedCandidate.value;
+      if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
+        let localExisting: any[] = [];
+        for (const ck of candidateKeys) {
+          const cv = getFromLocalCache<any>(ck);
+          if (Array.isArray(cv) && cv.length > 0) {
+            localExisting = cv;
+            break;
+          }
+        }
+        if (localExisting.length > 0) {
+          combinedVal = mergeCollectionItems(collectionName, [...combinedVal, ...localExisting]);
+        }
+      }
+      const merged = mergeCollectionItems(collectionName, combinedVal);
       const sanitizedVal = filterCollectionForTenant(merged as unknown as T, collectionName, activeTenantId);
       idbSet(populatedCandidate.key, sanitizedVal).catch(() => {});
       idbSet(`${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
@@ -1200,7 +1239,7 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
       });
       await Promise.race([
         Promise.all(docBatch),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 8000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 2000))
       ]).catch(e => console.warn(`[Firestore Safe Write] Non-blocking write notice for ${primaryKey}:`, e?.message));
       console.log(`Successfully synced ${primaryKey} to Firestore.`);
     }

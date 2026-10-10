@@ -7,6 +7,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Utiliser cet onglet": "Use this tab",
     "J'ai compris": "Understood",
     "Remonter": "Back to top",
+    "Consulter": "View",
     "Seules les tournées marquées « À faire » et attribuées au technicien peuvent être sélectionnées.": "Only tours marked 'To do' and assigned to the technician can be selected.",
     "Désactiver les aides et tutoriels.": "Disable help and tutorials.",
     "Le compartiment de la centrale des stocks vous permet de créer et gérer des pièces et services tous emplacements confondus. Retrouvez ensuite dans l’onglet des stocks distribués la répartition des pièces et services pour chaque emplacement. Pour rappel, un seul emplacement peut être dédié à un technicien par exemple, comme un véhicule ; il est aussi possible de gérer des emplacements de type entrepôt afin de savoir où est placé chaque élément.": "The central stocks section allows you to create and manage parts and services across all locations. You can then find the distribution of parts and services for each location under the distributed stocks tab. As a reminder, a single location can be dedicated to a technician, for example, such as a vehicle; it is also possible to manage warehouse-type locations to know where each item is placed.",

@@ -492,7 +492,7 @@ export default function TicketsCaisseTab({
 
               {/* Date d'achat */}
               <div className="flex flex-col gap-1 bg-white">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider tickets-label-style">{t("Date du paiement.")}</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider tickets-label-style">{t("Date.")}</label>
                 <input
                   type="text"
                   value={dateStr}

@@ -347,5 +347,10 @@ html.is-edge [style*="font-weight:100"] {
   will-change: transform;
 }
 
+#advanced-search-input::placeholder {
+  color: #000000 !important;
+  opacity: 1 !important;
+}
+
 
 

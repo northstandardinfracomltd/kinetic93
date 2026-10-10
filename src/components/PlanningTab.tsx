@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { Loader2 } from 'lucide-react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence } from '../types';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
 import { getActiveTenantCountry, getHolidaysForYear, SupportedCountry } from '../utils/holidays';
@@ -36,6 +37,8 @@ interface PlanningTabProps {
   t: (key: string) => string;
   initialTech?: string;
   enableExtendedView?: boolean;
+  onConsultMission?: (tour: any, mission: any) => void;
+  onRefresh?: () => void | Promise<void>;
 }
 
 const MONTH_NAMES_FR = [
@@ -178,7 +181,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   members = [],
   t,
   initialTech,
-  enableExtendedView = false
+  enableExtendedView = false,
+  onConsultMission,
+  onRefresh,
 }) => {
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
@@ -673,6 +678,50 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     } catch (_) {
       window.scrollTo(0, 0);
     }
+  };
+
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  const handleRefreshCalendar = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+      try {
+        const remoteEvts = await fetchCollectionFromFirestore<SpontaneousEvent[]>('spontaneous_events');
+        if (remoteEvts && Array.isArray(remoteEvts)) {
+          setSpontaneousEvents(remoteEvts);
+          localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(remoteEvts));
+          localStorage.setItem('defib_spontaneous_events', JSON.stringify(remoteEvts));
+        }
+      } catch (e) {
+        console.warn('Could not refresh spontaneous events:', e);
+      }
+
+      if (onRefresh) {
+        await onRefresh();
+      }
+
+      window.dispatchEvent(new CustomEvent('defib_reload_tours'));
+      window.dispatchEvent(new Event('storage'));
+      await new Promise((r) => setTimeout(r, 600));
+    } catch (err) {
+      console.error('Error refreshing calendar:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleConsultMission = (tourObj: any, missionObj: any) => {
+    if (onConsultMission) {
+      onConsultMission(tourObj, missionObj);
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent('defib_consult_mission', {
+        detail: { tour: tourObj, mission: missionObj },
+      })
+    );
   };
 
   const handleSaveSpontaneousEvent = () => {
@@ -1442,6 +1491,31 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         const missionKey = `plan-${tour.id || 'tour'}-${mission.id || mIdx}`;
                         const isExpanded = !!expandedMissions[missionKey];
 
+                        const isConsultEnabled = (() => {
+                          const norm = (s?: string) =>
+                            (s || '')
+                              .trim()
+                              .toLowerCase()
+                              .normalize("NFD")
+                              .replace(/[\u0300-\u036f]/g, "");
+
+                          // Critère 1: La tournée de la mission en question est en statut « À faire »
+                          const tourStatusNorm = norm(tour.status);
+                          if (tourStatusNorm !== 'a faire') return false;
+
+                          // Critère 2: La mission est en statut « À faire » ou « Accepté Client »
+                          // Par défaut disabled si pas de statut ou autre
+                          const rawStatus = mission.status || mission.missionStatus || mission.situation;
+                          if (!rawStatus) return false;
+
+                          const missionStatusNorm = norm(rawStatus);
+                          return (
+                            missionStatusNorm === 'a faire' ||
+                            missionStatusNorm === 'accepte client' ||
+                            missionStatusNorm === 'accepte par le client'
+                          );
+                        })();
+
                         return (
                           <div
                             key={`m-${mIdx}`}
@@ -1451,7 +1525,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                               borderRadius: "14px",
                             }}
                           >
-                            {/* Gélules Client, Créneau, Type et Situation & Bouton Dérouler / Réduire */}
+                            {/* Gélules Client, Créneau, Type et Situation & Boutons Consulter / Dérouler */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
                                 {/* Gélule 1 : Client */}
@@ -1491,28 +1565,65 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 </span>
                               </div>
 
-                              <button
-                                type="button"
-                                onClick={() => toggleMissionExpanded(missionKey)}
-                                style={{
-                                  color: "rgb(255, 255, 255)",
-                                  background: "rgb(20, 87, 236)",
-                                  boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
-                                  padding: "10px 20px",
-                                  fontSize: "18px",
-                                  border: "none",
-                                  borderRadius: "13px",
-                                  fontWeight: 700,
-                                  cursor: "pointer",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  gap: "6px"
-                                }}
-                                className="w-full sm:w-auto mx-0 sm:ml-10 sm:mr-2.5 shrink-0 select-none"
-                              >
-                                {isExpanded ? "Réduire" : "Dérouler"}
-                              </button>
+                              <div className="flex flex-col gap-2 w-full sm:w-auto mx-0 sm:ml-10 sm:mr-2.5 shrink-0 select-none">
+                                <button
+                                  type="button"
+                                  disabled={!isConsultEnabled}
+                                  onClick={() => {
+                                    if (isConsultEnabled) {
+                                      handleConsultMission(tour, mission);
+                                    }
+                                  }}
+                                  title={
+                                    !isConsultEnabled
+                                      ? "Consultation accessible uniquement si la tournée est « À faire » et la mission est « À faire » ou « Accepté Client »"
+                                      : "Consulter la mission dans l'onglet Interventions"
+                                  }
+                                  style={{
+                                    color: "rgb(255, 255, 255)",
+                                    background: isConsultEnabled ? "rgb(20, 87, 236)" : "rgb(156, 163, 175)",
+                                    boxShadow: isConsultEnabled
+                                      ? "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset"
+                                      : "none",
+                                    padding: "10px 20px",
+                                    fontSize: "18px",
+                                    border: "none",
+                                    borderRadius: "13px",
+                                    fontWeight: 700,
+                                    cursor: isConsultEnabled ? "pointer" : "not-allowed",
+                                    opacity: isConsultEnabled ? 1 : 0.45,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "6px"
+                                  }}
+                                  className="w-full sm:w-auto shrink-0 select-none transition-all"
+                                >
+                                  {t("Consulter")}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleMissionExpanded(missionKey)}
+                                  style={{
+                                    color: "rgb(255, 255, 255)",
+                                    background: "rgb(20, 87, 236)",
+                                    boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
+                                    padding: "10px 20px",
+                                    fontSize: "18px",
+                                    border: "none",
+                                    borderRadius: "13px",
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "6px"
+                                  }}
+                                  className="w-full sm:w-auto shrink-0 select-none"
+                                >
+                                  {isExpanded ? "Réduire" : "Dérouler"}
+                                </button>
+                              </div>
                             </div>
 
                             {/* Details (Déroulés si actif) */}
@@ -1548,9 +1659,32 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
         </div>
       )}
 
-      {/* Floating Button "Remonter" when header is not visible (>200px scroll) */}
+      {/* Floating Buttons "Actualiser" & "Remonter" when header is not visible (>200px scroll) */}
       {showScrollTop && (
-        <div className="fixed bottom-4 right-4 sm:bottom-4 sm:right-6 z-40 animate-fade-in">
+        <div className="fixed bottom-4 right-4 sm:bottom-4 sm:right-6 z-40 animate-fade-in flex items-center gap-2.5 sm:gap-3">
+          <button
+            type="button"
+            onClick={handleRefreshCalendar}
+            disabled={isRefreshing}
+            className="text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none hover:opacity-95 active:scale-95 disabled:opacity-75"
+            style={{
+              backgroundColor: "#000000",
+              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
+              borderRadius: "13px",
+              padding: "10px 20px",
+              fontSize: "18px",
+              border: "none",
+            }}
+          >
+            {isRefreshing ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                {t("Actualisation...") || "Actualisation..."}
+              </span>
+            ) : (
+              t("Actualiser")
+            )}
+          </button>
           <button
             type="button"
             onClick={handleScrollToTop}
