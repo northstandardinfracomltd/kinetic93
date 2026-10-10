@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Maximize2, Minimize2, BarChart3, Calendar, Trash2 } from 'lucide-react';
-import { SupportTicket, Member, Client, CompanyInfo, CommercialEvent, SupportMessage } from '../types';
+import { createPortal } from 'react-dom';
+import { Maximize2, Minimize2, BarChart3, Calendar, Trash2, Upload, Eye, RefreshCw } from 'lucide-react';
+import { SupportTicket, Member, Client, CompanyInfo, CommercialEvent, SupportMessage, CommercialFileAttachment } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
 import { INITIAL_TICKETS } from '../utils';
 import { sendScriptEmail } from '../utils/emailService';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore } from '../firebase';
+import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from '../utils/googleDrive';
 
 export const getWeekNumberString = (dateStr?: string): string => {
   if (!dateStr) return '';
@@ -70,6 +72,70 @@ export const getCriticiteColor = (crit?: string): string => {
   return '#38917a';
 };
 
+const AutoResizeEventTextarea: React.FC<{
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+}> = ({ value, onChange, placeholder }) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const resize = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.max(textareaRef.current.scrollHeight, 38)}px`;
+    }
+  };
+
+  useEffect(() => {
+    resize();
+  }, [value]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      rows={1}
+      value={value}
+      onInput={resize}
+      onChange={(e) => {
+        onChange(e.target.value);
+        resize();
+      }}
+      placeholder={placeholder || "Entrez un compte-rendu ou commentaire..."}
+      className="crm-event-textarea"
+    />
+  );
+};
+
+export interface CrmColumnConfig {
+  id: string;
+  label: string;
+  category: 'Commercial' | 'Non Commercial';
+}
+
+export const CRM_CONFIGURABLE_COLUMNS: CrmColumnConfig[] = [
+  // Commercial
+  { id: 'ouv_comm', label: 'Ouverture (Commercial)', category: 'Commercial' },
+  { id: 'sit_comm', label: 'Situation (Commercial)', category: 'Commercial' },
+  { id: 'cp_comm', label: 'Indicatif Postal (Commercial)', category: 'Commercial' },
+  { id: 'cli_comm', label: 'Client (Commercial)', category: 'Commercial' },
+  { id: 'interloc_comm', label: 'Interlocuteur (Commercial)', category: 'Commercial' },
+  { id: 'type_comm', label: 'Type (Commercial)', category: 'Commercial' },
+  { id: 'famille_comm', label: 'Famille (Commercial)', category: 'Commercial' },
+  { id: 'lead_comm', label: 'Origine Lead (Commercial)', category: 'Commercial' },
+  { id: 'datedevis_comm', label: 'Date Devis (Commercial)', category: 'Commercial' },
+  { id: 'refdevis_comm', label: 'Référence Devis (Commercial)', category: 'Commercial' },
+  { id: 'dateprorelance_comm', label: 'Date Pro Relance (Commercial)', category: 'Commercial' },
+  { id: 'collab_comm', label: 'Collaborateur (Commercial)', category: 'Commercial' },
+
+  // Non Commercial
+  { id: 'ouv_noncomm', label: 'Ouverture (Non Commercial)', category: 'Non Commercial' },
+  { id: 'sit_noncomm', label: 'Situation (Non Commercial)', category: 'Non Commercial' },
+  { id: 'cp_noncomm', label: 'Indicatif Postal (Non Commercial)', category: 'Non Commercial' },
+  { id: 'cli_noncomm', label: 'Client (Non Commercial)', category: 'Non Commercial' },
+  { id: 'objet_noncomm', label: 'Objet (Non Commercial)', category: 'Non Commercial' },
+  { id: 'collab_noncomm', label: 'Collaborateur (Non Commercial)', category: 'Non Commercial' },
+];
+
 interface CrmTabProps {
   tickets: SupportTicket[];
   members: Member[];
@@ -77,6 +143,8 @@ interface CrmTabProps {
   companyInfo: CompanyInfo;
   tenantId?: string;
   onSaveTickets: (updated: SupportTicket[]) => void;
+  onRefreshData?: () => Promise<void> | void;
+  isRefreshing?: boolean;
   t: (key: string) => string;
 }
 
@@ -87,6 +155,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   companyInfo,
   tenantId,
   onSaveTickets,
+  onRefreshData,
+  isRefreshing,
   t
 }) => {
   const [ticketSearch, setTicketSearch] = useState('');
@@ -97,6 +167,76 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [isSendingRelance, setIsSendingRelance] = useState(false);
   const [relanceBannerMsg, setRelanceBannerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Column visibility state (identical to DefibTab with sensitivity to commercial / non-commercial)
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('crm_table_hidden_columns');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return new Set(parsed);
+          }
+        }
+      } catch (e) {}
+    }
+    return new Set();
+  });
+  const [tempHiddenColumns, setTempHiddenColumns] = useState<Set<string>>(new Set());
+  const [isColumnVisibilityPaneOpen, setIsColumnVisibilityPaneOpen] = useState(false);
+  const [columnFilterScope, setColumnFilterScope] = useState<'Actif' | 'Commercial' | 'Non Commercial' | 'Toutes'>('Actif');
+
+  // Manual refresh state
+  const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
+  const effectiveRefreshing = Boolean(isRefreshing || isLocalRefreshing);
+
+  const handleRefreshCrmClick = async () => {
+    if (effectiveRefreshing) return;
+    setIsLocalRefreshing(true);
+    try {
+      if (onRefreshData) {
+        await onRefreshData();
+      } else {
+        const activeTenant = tenantId || 'demo';
+        const rawTickets = await fetchCollectionFromFirestore<SupportTicket[]>('tickets', activeTenant);
+        if (Array.isArray(rawTickets)) {
+          onSaveTickets(rawTickets);
+        }
+      }
+    } catch (err) {
+      console.warn("Manual refresh error in CRM:", err);
+    } finally {
+      setTimeout(() => setIsLocalRefreshing(false), 500);
+    }
+  };
+
+  const toggleColumnVisibility = (colId: string) => {
+    setTempHiddenColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(colId)) {
+        next.delete(colId);
+      } else {
+        next.add(colId);
+      }
+      return next;
+    });
+  };
+
+  const visibleConfigurableColumns = useMemo(() => {
+    if (columnFilterScope === 'Commercial') {
+      return CRM_CONFIGURABLE_COLUMNS.filter(c => c.category === 'Commercial');
+    }
+    if (columnFilterScope === 'Non Commercial') {
+      return CRM_CONFIGURABLE_COLUMNS.filter(c => c.category === 'Non Commercial');
+    }
+    if (columnFilterScope === 'Actif') {
+      return ticketCategoryFilter === 'Commercial'
+        ? CRM_CONFIGURABLE_COLUMNS.filter(c => c.category === 'Commercial')
+        : CRM_CONFIGURABLE_COLUMNS.filter(c => c.category === 'Non Commercial');
+    }
+    return CRM_CONFIGURABLE_COLUMNS;
+  }, [columnFilterScope, ticketCategoryFilter]);
 
   // Fit View / Unzoom feature like DefibTab
   const [isTableFitView, setIsTableFitView] = useState<boolean>(false);
@@ -371,13 +511,26 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formTotalAffaireHT, setFormTotalAffaireHT] = useState('');
   const [formFamille, setFormFamille] = useState('');
   const [formIndicatifPostal, setFormIndicatifPostal] = useState('');
-  const [formOrigineLead, setFormOrigineLead] = useState<'Service Client' | 'Direct' | 'Internet' | 'Planification' | 'Autre.' | string>('Service Client');
+  const [formOrigineLead, setFormOrigineLead] = useState<'Service Client' | 'Direct' | 'Internet' | 'Planification' | 'Autre' | string>('Service Client');
   const [formDescriptionOffreDevis, setFormDescriptionOffreDevis] = useState('');
   const [formDateDevis, setFormDateDevis] = useState('');
   const [formDateProchaineRelance, setFormDateProchaineRelance] = useState('');
   const [formDateCommande, setFormDateCommande] = useState('');
   const [formLienDevis, setFormLienDevis] = useState('');
+  const [formFichiersDevis, setFormFichiersDevis] = useState<CommercialFileAttachment[]>([]);
+  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(false);
+  const [googleDriveAccessToken, setGoogleDriveAccessToken] = useState<string>('');
+  const [isUploadingFile, setIsUploadingFile] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formCommercialEvents, setFormCommercialEvents] = useState<CommercialEvent[]>([]);
+
+  // Load Google Drive status for active tenant
+  useEffect(() => {
+    fetchGoogleDriveStatus(activeTenant).then(status => {
+      setGoogleDriveActive(status.active);
+      setGoogleDriveAccessToken(status.accessToken);
+    });
+  }, [activeTenant]);
 
   // Support messages (Technique / Réclamation / Sans Catégorie)
   const [formSupportMessages, setFormSupportMessages] = useState<SupportMessage[]>([]);
@@ -394,7 +547,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     const el = descriptionTextareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.max(el.scrollHeight, 100)}px`;
+    el.style.height = `${Math.max(el.scrollHeight, 44)}px`;
   };
 
   useEffect(() => {
@@ -494,6 +647,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormDateProchaineRelance('');
     setFormDateCommande('');
     setFormLienDevis('');
+    setFormFichiersDevis([]);
     setFormCommercialEvents([]);
     setFormSupportMessages([]);
     setIsNewMessageOpen(false);
@@ -562,6 +716,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormDateProchaineRelance(ticket.dateProchaineRelance || '');
     setFormDateCommande(ticket.dateCommande || '');
     setFormLienDevis(ticket.lienStockagePartageDevis || '');
+    let initialFiles: CommercialFileAttachment[] = [];
+    if (Array.isArray((ticket as any).fichiersDevis)) {
+      initialFiles = (ticket as any).fichiersDevis;
+    } else if (ticket.lienStockagePartageDevis && ticket.lienStockagePartageDevis.trim()) {
+      initialFiles = [{
+        name: 'Fichier devis',
+        url: ticket.lienStockagePartageDevis.trim(),
+        dateAjout: ticket.dateDevis || ticket.dateOuverture || getTodayFormatted(),
+      }];
+    }
+    setFormFichiersDevis(initialFiles);
     setFormCommercialEvents(Array.isArray(ticket.evenementsCommercial) ? ticket.evenementsCommercial : []);
 
     // Support messages
@@ -574,17 +739,46 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setIsPaneOpen(true);
   };
 
+  // Google Drive file upload handler
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!googleDriveActive || !googleDriveAccessToken) {
+      alert("Le connecteur Google Drive n'est pas actif. Veuillez l'activer dans les réglages.");
+      return;
+    }
+    setIsUploadingFile(true);
+    try {
+      const driveUrl = await uploadFileToGoogleDrive(googleDriveAccessToken, file);
+      const newFile: CommercialFileAttachment = {
+        name: file.name,
+        url: driveUrl,
+        dateAjout: getTodayFormatted(),
+      };
+      setFormFichiersDevis(prev => [...prev, newFile]);
+      setFormLienDevis(driveUrl);
+    } catch (err: any) {
+      console.error("Erreur d'upload Google Drive:", err);
+      alert(err.message || "Erreur lors du téléchargement du fichier sur Google Drive.");
+    } finally {
+      setIsUploadingFile(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   // Client dropdown change handler: auto-populate email & contact info
   const handleClientChange = (val: string) => {
     setFormClientSelect(val);
     if (val !== 'Autre') {
+      setFormSituationInterlocuteur('Client');
       const found = clients.find(c => (c.denomination || (c as any).name || c.id) === val);
       if (found) {
         const clientEmail = found.email || found.emailSite || '';
         if (clientEmail) {
           setFormEmail(clientEmail);
         }
-        setFormSituationInterlocuteur('Client');
         if (found.phone || found.telephoneSite) {
           setFormTelephone(found.phone || found.telephoneSite || '');
         }
@@ -707,7 +901,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       }
 
       setIsNewMessageOpen(false);
-      setSupportMessageSentToast(`✓ Message envoyé avec succès à ${targetEmail}`);
+      setSupportMessageSentToast('Message envoyé.');
       setTimeout(() => setSupportMessageSentToast(null), 4000);
     } catch (err: any) {
       console.error("Erreur envoi message support:", err);
@@ -745,7 +939,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       dateDevis: formDateDevis.trim(),
       dateProchaineRelance: formDateProchaineRelance.trim(),
       dateCommande: formDateCommande.trim(),
-      lienStockagePartageDevis: formLienDevis.trim(),
+      lienStockagePartageDevis: formFichiersDevis.length > 0 ? formFichiersDevis[0].url : formLienDevis.trim(),
+      fichiersDevis: formFichiersDevis,
       evenementsCommercial: formCommercialEvents,
     } : {};
 
@@ -1543,9 +1738,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   return (
     <div className="space-y-6 animate-fadeIn" id="crm-tab-container">
       <style>{`
-        #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-crm-input),
+        #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-crm-input):not(.crm-event-date-input),
         #crm-tab-container select,
-        #crm-tab-container textarea:not(#crm-embed-textarea):not(#crm-relance-email-textarea) {
+        #crm-tab-container textarea:not(#crm-embed-textarea):not(#crm-relance-email-textarea):not(.crm-event-textarea) {
           padding: 10px 12px !important;
           border: 1px solid #dadada !important;
           border-radius: 13px !important;
@@ -1558,6 +1753,41 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           outline: none !important;
           transition: all 0s !important;
           width: 100% !important;
+        }
+        #crm-tab-container input[type="date"]::-webkit-calendar-picker-indicator {
+          display: block !important;
+          cursor: pointer !important;
+          opacity: 1 !important;
+          filter: none !important;
+        }
+        #crm-tab-container input.crm-event-date-input {
+          width: 100% !important;
+          padding: 8px 10px !important;
+          border: 1px solid #dadada !important;
+          border-radius: 10px !important;
+          font-size: 15px !important;
+          background: #ffffff !important;
+          color: #000000 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+          box-sizing: border-box !important;
+          outline: none !important;
+          cursor: pointer !important;
+        }
+        #crm-tab-container textarea.crm-event-textarea {
+          width: 100% !important;
+          padding: 8px 10px !important;
+          border: 1px solid #dadada !important;
+          border-radius: 10px !important;
+          font-size: 15px !important;
+          background: #ffffff !important;
+          color: #000000 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+          box-sizing: border-box !important;
+          outline: none !important;
+          resize: none !important;
+          overflow: hidden !important;
+          min-height: 38px !important;
+          line-height: 1.4 !important;
         }
         #crm-tab-container select {
           appearance: none !important;
@@ -1830,10 +2060,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         </div>
       </div>
 
-      {/* Feature « Minimiser et ajuster l’affichage » (Identique à l'onglet Défibrillateur) */}
+      {/* Feature « Minimiser et ajuster l’affichage », « Gérer la visibilité des colonnes » & « Actualiser les données » (Identique à l'onglet Défibrillateur) */}
       <div 
-        className="flex items-center justify-start px-4"
-        style={{ maxWidth: '98%', margin: '0 auto', marginTop: '6px', padding: '0px' }}
+        className="flex items-center justify-start gap-4 flex-wrap"
+        style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
       >
         <button
           type="button"
@@ -1863,6 +2093,63 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             <Minimize2 size={10} className="shrink-0 text-black" color="#000000" />
           )}
           <span style={{ color: '#000000' }}>{isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
+        </button>
+
+        <button
+          type="button"
+          id="btn-manage-crm-columns-visibility"
+          onClick={() => {
+            setTempHiddenColumns(new Set(hiddenColumns));
+            setColumnFilterScope('Actif');
+            setIsColumnVisibilityPaneOpen(true);
+          }}
+          style={{
+            fontSize: '9px',
+            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            fontWeight: 100,
+            cursor: 'pointer',
+            background: 'transparent',
+            border: 'none',
+            padding: '2px 4px',
+            color: '#000000',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            textDecoration: 'none',
+            transition: 'all 0.15s ease'
+          }}
+          className="hover:opacity-80 transition-all select-none cursor-pointer"
+          title={t("Gérer la visibilité des colonnes")}
+        >
+          <Eye size={10} className="shrink-0 text-black" color="#000000" />
+          <span style={{ color: '#000000' }}>{t("Gérer la visibilité des colonnes")}</span>
+        </button>
+
+        <button
+          type="button"
+          id="btn-refresh-crm-data"
+          onClick={handleRefreshCrmClick}
+          disabled={effectiveRefreshing}
+          style={{
+            fontSize: '9px',
+            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            fontWeight: 100,
+            cursor: effectiveRefreshing ? 'wait' : 'pointer',
+            background: 'transparent',
+            border: 'none',
+            padding: '2px 4px',
+            color: '#000000',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            textDecoration: 'none',
+            transition: 'all 0.15s ease'
+          }}
+          className="hover:opacity-80 transition-all select-none cursor-pointer"
+          title={t("Actualiser les données")}
+        >
+          <RefreshCw size={10} className={`shrink-0 text-black ${effectiveRefreshing ? 'animate-spin' : ''}`} color="#000000" />
+          <span style={{ color: '#000000' }}>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
         </button>
       </div>
 
@@ -2013,26 +2300,66 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </th>
                   <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Référence.</th>
                   <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Criticité.</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Ouverture.</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Situation.</th>
-                  <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Indicatif Postal.</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Client.</th>
 
                   {ticketCategoryFilter === 'Commercial' ? (
                     <>
-                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Interlocuteur.</th>
-                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Type.</th>
-                      <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Famille.</th>
-                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Origine Lead.</th>
-                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Date Devis.</th>
-                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Référence Devis.</th>
-                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Date Pro. Relance.</th>
-                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Collaborateur.</th>
+                      {!hiddenColumns.has('ouv_comm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Ouverture.</th>
+                      )}
+                      {!hiddenColumns.has('sit_comm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Situation.</th>
+                      )}
+                      {!hiddenColumns.has('cp_comm') && (
+                        <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Indicatif Postal.</th>
+                      )}
+                      {!hiddenColumns.has('cli_comm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Client.</th>
+                      )}
+                      {!hiddenColumns.has('interloc_comm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Interlocuteur.</th>
+                      )}
+                      {!hiddenColumns.has('type_comm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Type.</th>
+                      )}
+                      {!hiddenColumns.has('famille_comm') && (
+                        <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Famille.</th>
+                      )}
+                      {!hiddenColumns.has('lead_comm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Origine Lead.</th>
+                      )}
+                      {!hiddenColumns.has('datedevis_comm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Date Devis.</th>
+                      )}
+                      {!hiddenColumns.has('refdevis_comm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Référence Devis.</th>
+                      )}
+                      {!hiddenColumns.has('dateprorelance_comm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Date Pro. Relance.</th>
+                      )}
+                      {!hiddenColumns.has('collab_comm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Collaborateur.</th>
+                      )}
                     </>
                   ) : (
                     <>
-                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Objet.</th>
-                      <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Collaborateur.</th>
+                      {!hiddenColumns.has('ouv_noncomm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Ouverture.</th>
+                      )}
+                      {!hiddenColumns.has('sit_noncomm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Situation.</th>
+                      )}
+                      {!hiddenColumns.has('cp_noncomm') && (
+                        <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Indicatif Postal.</th>
+                      )}
+                      {!hiddenColumns.has('cli_noncomm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Client.</th>
+                      )}
+                      {!hiddenColumns.has('objet_noncomm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Objet.</th>
+                      )}
+                      {!hiddenColumns.has('collab_noncomm') && (
+                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Collaborateur.</th>
+                      )}
                     </>
                   )}
 
@@ -2111,117 +2438,183 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </span>
                       </td>
 
-                      {/* Ouverture. (Date + rond numéro Semaine) */}
-                      <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                        <div className="inline-flex items-center gap-2">
-                          <span>{ouvVal}</span>
-                          {weekNum && (
-                            <span 
-                              className="inline-flex items-center justify-center rounded-full text-white font-bold font-sans select-none"
-                              style={{ 
-                                width: '40px', 
-                                height: '40px', 
-                                minWidth: '25px', 
-                                minHeight: '25px', 
-                                outline: '#8f1961 solid 3px', 
-                                outlineOffset: '3px', 
-                                marginLeft: '10px', 
-                                fontSize: '16px', 
-                                backgroundColor: '#8f1961' 
-                              }}
-                              title={`Semaine ${weekNum}`}
-                            >
-                              {weekNum}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Situation. (in gelule) */}
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span style={geluleStyle}>
-                          {sitVal}
-                        </span>
-                      </td>
-
-                      {/* Indicatif Postal. */}
-                      <td className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
-                        <span className="font-semibold text-slate-800">{indicatifPostalVal}</span>
-                      </td>
-
-                      {/* Client. (Dénomination) */}
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span style={geluleStyle} title={t.email ? `Email : ${t.email}` : undefined}>
-                          {cliVal}
-                        </span>
-                      </td>
-
                       {ticketCategoryFilter === 'Commercial' ? (
                         <>
-                          {/* Interlocuteur. (Prospect/client) */}
-                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                            {t.situationInterlocuteur ? (
-                              <span 
-                                className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold"
-                                style={{
-                                  backgroundColor: t.situationInterlocuteur === 'Client' ? '#dcfce7' : '#fef3c7',
-                                  color: t.situationInterlocuteur === 'Client' ? '#166534' : '#92400e',
-                                  border: t.situationInterlocuteur === 'Client' ? '1px solid #bbf7d0' : '1px solid #fde68a',
-                                }}
-                              >
-                                {t.situationInterlocuteur}
+                          {/* Ouverture. (Commercial) */}
+                          {!hiddenColumns.has('ouv_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                              <div className="inline-flex items-center gap-2">
+                                <span>{ouvVal}</span>
+                                {weekNum && (
+                                  <span 
+                                    className="inline-flex items-center justify-center rounded-full text-white font-bold font-sans select-none"
+                                    style={{ 
+                                      width: '40px', 
+                                      height: '40px', 
+                                      minWidth: '25px', 
+                                      minHeight: '25px', 
+                                      marginLeft: '10px', 
+                                      fontSize: '16px', 
+                                      backgroundColor: '#8f1961' 
+                                    }}
+                                    title={`Semaine ${weekNum}`}
+                                  >
+                                    {weekNum}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Situation. (Commercial) */}
+                          {!hiddenColumns.has('sit_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <span style={geluleStyle}>
+                                {sitVal}
                               </span>
-                            ) : '—'}
-                          </td>
+                            </td>
+                          )}
 
-                          {/* Type. (Collectivité/entreprise) */}
-                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                            {t.typeStructure || '—'}
-                          </td>
+                          {/* Indicatif Postal. (Commercial) */}
+                          {!hiddenColumns.has('cp_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
+                              <span className="font-semibold text-slate-800">{indicatifPostalVal}</span>
+                            </td>
+                          )}
 
-                          {/* Famille. */}
-                          <td className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
-                            <span className="font-bold text-slate-900">{t.famille || '—'}</span>
-                          </td>
+                          {/* Client. (Commercial) */}
+                          {!hiddenColumns.has('cli_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <span style={geluleStyle} title={t.email ? `Email : ${t.email}` : undefined}>
+                                {cliVal}
+                              </span>
+                            </td>
+                          )}
 
-                          {/* Origine Lead. */}
-                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                            {t.origineLead || '—'}
-                          </td>
+                          {/* Interlocuteur. (Commercial) - standard text as Type */}
+                          {!hiddenColumns.has('interloc_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                              {t.situationInterlocuteur || '—'}
+                            </td>
+                          )}
 
-                          {/* Date Devis. */}
-                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                            {formatDateDisplay(t.dateDevis)}
-                          </td>
+                          {/* Type. (Commercial) */}
+                          {!hiddenColumns.has('type_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                              {t.typeStructure || '—'}
+                            </td>
+                          )}
 
-                          {/* Référence Devis. */}
-                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                            {t.referenceDevis ? (
-                              <span style={geluleStyle}>{t.referenceDevis}</span>
-                            ) : '—'}
-                          </td>
+                          {/* Famille. (Commercial) */}
+                          {!hiddenColumns.has('famille_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
+                              <span className="font-bold text-slate-900">{t.famille || '—'}</span>
+                            </td>
+                          )}
 
-                          {/* Date Pro. Relance */}
-                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                            {formatDateDisplay(t.dateProchaineRelance)}
-                          </td>
+                          {/* Origine Lead. (Commercial) */}
+                          {!hiddenColumns.has('lead_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                              {t.origineLead || '—'}
+                            </td>
+                          )}
 
-                          {/* Collaborateur. */}
-                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                            {colVal}
-                          </td>
+                          {/* Date Devis. (Commercial) */}
+                          {!hiddenColumns.has('datedevis_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                              {formatDateDisplay(t.dateDevis)}
+                            </td>
+                          )}
+
+                          {/* Référence Devis. (Commercial) */}
+                          {!hiddenColumns.has('refdevis_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                              {t.referenceDevis ? (
+                                <span style={geluleStyle}>{t.referenceDevis}</span>
+                              ) : '—'}
+                            </td>
+                          )}
+
+                          {/* Date Pro. Relance (Commercial) */}
+                          {!hiddenColumns.has('dateprorelance_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                              {formatDateDisplay(t.dateProchaineRelance)}
+                            </td>
+                          )}
+
+                          {/* Collaborateur. (Commercial) */}
+                          {!hiddenColumns.has('collab_comm') && (
+                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                              {colVal}
+                            </td>
+                          )}
                         </>
                       ) : (
                         <>
-                          {/* Objet. (max 40 chars) */}
-                          <td className="px-4 py-4 whitespace-nowrap max-w-[260px] truncate" style={cellTextStyle} title={rawObjet}>
-                            {truncatedObjet}
-                          </td>
+                          {/* Ouverture. (Non Commercial) */}
+                          {!hiddenColumns.has('ouv_noncomm') && (
+                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                              <div className="inline-flex items-center gap-2">
+                                <span>{ouvVal}</span>
+                                {weekNum && (
+                                  <span 
+                                    className="inline-flex items-center justify-center rounded-full text-white font-bold font-sans select-none"
+                                    style={{ 
+                                      width: '40px', 
+                                      height: '40px', 
+                                      minWidth: '25px', 
+                                      minHeight: '25px', 
+                                      marginLeft: '10px', 
+                                      fontSize: '16px', 
+                                      backgroundColor: '#8f1961' 
+                                    }}
+                                    title={`Semaine ${weekNum}`}
+                                  >
+                                    {weekNum}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          )}
 
-                          {/* Collaborateur. */}
-                          <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                            {colVal}
-                          </td>
+                          {/* Situation. (Non Commercial) */}
+                          {!hiddenColumns.has('sit_noncomm') && (
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <span style={geluleStyle}>
+                                {sitVal}
+                              </span>
+                            </td>
+                          )}
+
+                          {/* Indicatif Postal. (Non Commercial) */}
+                          {!hiddenColumns.has('cp_noncomm') && (
+                            <td className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
+                              <span className="font-semibold text-slate-800">{indicatifPostalVal}</span>
+                            </td>
+                          )}
+
+                          {/* Client. (Non Commercial) */}
+                          {!hiddenColumns.has('cli_noncomm') && (
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <span style={geluleStyle} title={t.email ? `Email : ${t.email}` : undefined}>
+                                {cliVal}
+                              </span>
+                            </td>
+                          )}
+
+                          {/* Objet. (Non Commercial) */}
+                          {!hiddenColumns.has('objet_noncomm') && (
+                            <td className="px-4 py-4 whitespace-nowrap max-w-[260px] truncate" style={cellTextStyle} title={rawObjet}>
+                              {truncatedObjet}
+                            </td>
+                          )}
+
+                          {/* Collaborateur. (Non Commercial) */}
+                          {!hiddenColumns.has('collab_noncomm') && (
+                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                              {colVal}
+                            </td>
+                          )}
                         </>
                       )}
 
@@ -2298,146 +2691,143 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               {/* Form */}
               <form onSubmit={handleSaveForm} className="space-y-6 flex-1 flex flex-col justify-between pt-2">
                 <div className="space-y-6">
-                  {/* 1. Situation (3 cards in 33% 33% 33% with pink radio check) */}
+                  {/* 1. Situation: Toggle glissant de 3 items avec un background white commun, un border commun #dadada et le bouton de la Situation active en button color rose avec un text color rose */}
                   <div 
-                    className="space-y-2"
+                    className="flex p-1 rounded-xl bg-white select-none transition-all"
                     style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
-                      borderRadius: '14px',
-                      padding: '20px',
+                      border: '1px solid #dadada',
                       backgroundColor: '#ffffff'
                     }}
                   >
-                    <label>Situation.</label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {(['Nouveau', 'En cours', 'Terminé'] as const).map((sit) => {
-                        const isSelected = formSituation === sit;
-                        return (
-                          <div
-                            key={sit}
-                            onClick={() => setFormSituation(sit)}
-                            className="flex items-center justify-start gap-2.5 p-3 rounded-xl cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
-                            style={{ border: '1px solid #dadada' }}
-                            id={`crm-situation-${sit.toLowerCase().replace(/\s+/g, '-')}`}
-                          >
-                            <span 
-                              className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                              style={{
-                                border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
-                                width: '20px',
-                                height: '20px',
-                                minWidth: '20px',
-                                minHeight: '20px',
-                                backgroundColor: '#ffffff'
-                              }}
-                            >
-                              {isSelected && (
-                                <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
-                              )}
-                            </span>
-                            <span className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
-                              {sit}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* 2. Référence, Ouverture, Dernière actualisation (Side-by-side 33% 33% 33%, light-grey disabled, 18px font) */}
-                  <div 
-                    className="grid grid-cols-3 gap-3"
-                    style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
-                      borderRadius: '14px',
-                      padding: '20px',
-                      backgroundColor: '#ffffff'
-                    }}
-                  >
-                    <div>
-                      <label>Référence.</label>
-                      <input
-                        type="text"
-                        value={formRef}
-                        disabled
-                        readOnly
-                        style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#000000', cursor: 'not-allowed' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label>Ouverture.</label>
-                      <div className="relative flex items-center">
-                        <input
-                          type="text"
-                          value={formOuverture}
-                          onChange={(e) => setFormOuverture(e.target.value)}
-                          placeholder="DD/MM/YYYY"
+                    {(['Nouveau', 'En cours', 'Terminé'] as const).map((sit) => {
+                      const isSelected = formSituation === sit;
+                      return (
+                        <button
+                          key={sit}
+                          type="button"
+                          onClick={() => setFormSituation(sit)}
+                          id={`crm-situation-${sit.toLowerCase().replace(/\s+/g, '-')}`}
+                          className={`flex-1 py-2.5 px-3 rounded-lg font-bold font-sans transition-all cursor-pointer flex items-center justify-center text-center ${
+                            isSelected 
+                              ? 'shadow-xs' 
+                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                          }`}
                           style={{
                             fontSize: '18px',
-                            backgroundColor: '#ffffff',
-                            color: '#000000',
-                            paddingRight: getWeekNumberString(formOuverture) ? '70px' : undefined
+                            backgroundColor: isSelected ? '#ffecf8' : 'transparent',
+                            color: isSelected ? '#fe4eba' : '#475569',
+                            border: isSelected ? '1px solid #fbcfe8' : '1px solid transparent',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                           }}
+                        >
+                          {sit}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 2 & 3. Référence, Dates & Catégorie, Criticité, Collaborateur: Collées verticalement */}
+                  <div className="flex flex-col">
+                    {/* Première div parente : border-radius en bas à droite et bas à gauche 0px et border-bottom 0px */}
+                    <div 
+                      className="grid grid-cols-3 gap-3"
+                      style={{
+                        border: '1px solid rgb(218, 218, 218)',
+                        borderBottom: '0px',
+                        borderTopLeftRadius: '14px',
+                        borderTopRightRadius: '14px',
+                        borderBottomLeftRadius: '0px',
+                        borderBottomRightRadius: '0px',
+                        boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
+                        padding: '20px',
+                        backgroundColor: '#ffffff'
+                      }}
+                    >
+                      <div>
+                        <label>Référence.</label>
+                        <input
+                          type="text"
+                          value={formRef}
+                          disabled
+                          readOnly
+                          style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#000000', cursor: 'not-allowed' }}
                         />
-                        {getWeekNumberString(formOuverture) && (
-                          <div 
-                            className="absolute right-3 flex items-center justify-center rounded-full text-white font-bold font-sans pointer-events-none select-none"
+                      </div>
+
+                      <div>
+                        <label>Ouverture.</label>
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            value={formOuverture}
+                            onChange={(e) => setFormOuverture(e.target.value)}
+                            placeholder="DD/MM/YYYY"
                             style={{
-                              width: '35px',
-                              height: '35px',
-                              minWidth: '25px',
-                              minHeight: '25px',
-                              marginLeft: '10px',
-                              fontSize: '13px',
-                              backgroundColor: 'rgb(143, 25, 97)'
+                              fontSize: '18px',
+                              backgroundColor: '#ffffff',
+                              color: '#000000',
+                              paddingRight: getWeekNumberString(formOuverture) ? '70px' : undefined
                             }}
-                            title={`Semaine ${getWeekNumberString(formOuverture)}`}
-                          >
-                            {getWeekNumberString(formOuverture)}
-                          </div>
-                        )}
+                          />
+                          {getWeekNumberString(formOuverture) && (
+                            <div 
+                              className="absolute right-3 flex items-center justify-center rounded-full text-white font-bold font-sans pointer-events-none select-none"
+                              style={{
+                                width: '35px',
+                                height: '35px',
+                                minWidth: '25px',
+                                minHeight: '25px',
+                                marginLeft: '10px',
+                                fontSize: '13px',
+                                backgroundColor: 'rgb(143, 25, 97)'
+                              }}
+                              title={`Semaine ${getWeekNumberString(formOuverture)}`}
+                            >
+                              {getWeekNumberString(formOuverture)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label>Actualisation.</label>
+                        <input
+                          type="text"
+                          value={formDerActual}
+                          disabled
+                          readOnly
+                          style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#000000', cursor: 'not-allowed' }}
+                        />
                       </div>
                     </div>
 
-                    <div>
-                      <label>Actualisation.</label>
-                      <input
-                        type="text"
-                        value={formDerActual}
-                        disabled
-                        readOnly
-                        style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#000000', cursor: 'not-allowed' }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* 3. Catégorie, Criticité & Collaborateur (Side-by-side 33% 33% 33%) */}
-                  <div 
-                    className="grid grid-cols-3 gap-3"
-                    style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
-                      borderRadius: '14px',
-                      padding: '20px',
-                      backgroundColor: '#ffffff'
-                    }}
-                  >
-                    <div>
-                      <label>Catégorie.</label>
-                      <select
-                        id="crm-form-categorie-select"
-                        value={formCategorie}
-                        onChange={(e: any) => {
-                          const val = e.target.value;
-                          setFormCategorie(val);
-                          if (val === 'Commercial' && formTypeStructure === 'Collectivité') {
-                            setFormMarchePublic('Oui');
-                          }
-                        }}
-                        disabled={Boolean(editingTicketId && (tickets.find(t => t.id === editingTicketId)?.categorie === 'Commercial' || formCategorie === 'Commercial'))}
+                    {/* Div parente du dessous : border-radius en haut à droite et en haut à gauche 0px */}
+                    <div 
+                      className="grid grid-cols-3 gap-3"
+                      style={{
+                        border: '1px solid rgb(218, 218, 218)',
+                        borderTopLeftRadius: '0px',
+                        borderTopRightRadius: '0px',
+                        borderBottomLeftRadius: '14px',
+                        borderBottomRightRadius: '14px',
+                        boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
+                        padding: '20px',
+                        backgroundColor: '#ffffff'
+                      }}
+                    >
+                      <div>
+                        <label>Catégorie.</label>
+                        <select
+                          id="crm-form-categorie-select"
+                          value={formCategorie}
+                          onChange={(e: any) => {
+                            const val = e.target.value;
+                            setFormCategorie(val);
+                            if (val === 'Commercial' && formTypeStructure === 'Collectivité') {
+                              setFormMarchePublic('Oui');
+                            }
+                          }}
+                          disabled={Boolean(editingTicketId && (tickets.find(t => t.id === editingTicketId)?.categorie === 'Commercial' || formCategorie === 'Commercial'))}
                         style={{
                           ...selectStyle,
                           textAlign: 'center',
@@ -2490,6 +2880,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       </select>
                     </div>
                   </div>
+                  </div>
 
                   {/* 4. Encart: Client ou Prospect, Email, Situation/Structure, Contact, Objet, Description */}
                   <div 
@@ -2538,7 +2929,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         <div className="mt-2">
                           <input
                             type="text"
-                            placeholder="Entrez le nom du client ou prospect"
+                            placeholder="Dénomination du prospect."
                             value={formCustomClientName}
                             onChange={(e) => setFormCustomClientName(e.target.value)}
                           />
@@ -2551,7 +2942,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       <label>Email.</label>
                       <input
                         type="email"
-                        placeholder="email@client.com"
+                        placeholder="Entrez un email valide."
                         value={formEmail}
                         onChange={(e) => setFormEmail(e.target.value)}
                       />
@@ -2587,7 +2978,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
                                   )}
                                 </span>
-                                <span className="text-[15px] sm:text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
+                                <span className="text-[18px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px' }}>
                                   {sit}
                                 </span>
                               </div>
@@ -2629,7 +3020,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
                                   )}
                                 </span>
-                                <span className="text-[15px] sm:text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
+                                <span className="text-[18px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px' }}>
                                   {typ}
                                 </span>
                               </div>
@@ -2645,7 +3036,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         <label>Prénom Nom.</label>
                         <input
                           type="text"
-                          placeholder="Prénom Nom"
+                          placeholder="Ex: Jean Dupont."
                           value={formPrenomNom}
                           onChange={(e) => setFormPrenomNom(e.target.value)}
                         />
@@ -2655,7 +3046,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         <label>Fonction.</label>
                         <input
                           type="text"
-                          placeholder="Fonction"
+                          placeholder="Ex: Responsable des achats."
                           value={formFonction}
                           onChange={(e) => setFormFonction(e.target.value)}
                         />
@@ -2665,7 +3056,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         <label>Téléphone.</label>
                         <input
                           type="tel"
-                          placeholder="Ex: 06 12 34 56 78"
+                          placeholder="Ex: 06 12 34 56 78."
                           value={formTelephone}
                           onChange={(e) => setFormTelephone(e.target.value)}
                         />
@@ -2678,14 +3069,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       <input
                         type="text"
                         maxLength={55}
-                        placeholder="Entrez un objet (max 55 caractères)"
+                        placeholder="Entrez un titre court."
                         value={formObjet}
                         onChange={(e) => setFormObjet(e.target.value)}
                         required
                       />
-                      <div className="text-right text-xs text-slate-500 mt-1 font-sans">
-                        {formObjet.length}/55
-                      </div>
                     </div>
 
                     {/* Description */}
@@ -2694,17 +3082,18 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       <textarea
                         ref={descriptionTextareaRef}
                         id="crm-form-description-textarea"
-                        placeholder="Entrez une description détaillée..."
+                        placeholder="Entrez une description détaillée."
                         value={formDescription}
                         onInput={adjustDescriptionHeight}
                         onChange={(e) => {
                           setFormDescription(e.target.value);
                           adjustDescriptionHeight();
                         }}
+                        rows={1}
                         style={{
                           resize: 'none',
                           overflow: 'hidden',
-                          minHeight: '100px',
+                          minHeight: '44px',
                           lineHeight: '1.5',
                           display: 'block',
                           width: '100%',
@@ -2756,7 +3145,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                       <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
                                     )}
                                   </span>
-                                  <span className="text-[15px] sm:text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
+                                  <span className="text-[18px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px' }}>
                                     {opt}
                                   </span>
                                 </div>
@@ -2793,7 +3182,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                       <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
                                     )}
                                   </span>
-                                  <span className="text-[15px] sm:text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap">
+                                  <span className="text-[18px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px' }}>
                                     {sitDevis}
                                   </span>
                                 </div>
@@ -2803,92 +3192,166 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </div>
                       </div>
 
-                      {/* Score Potentiel Conversion (8 ronds 1 à 8 avec toggle select/deselect) */}
-                      <div>
-                        <label>Score Potentiel Conversion.</label>
-                        <div className="flex items-center gap-2.5 flex-wrap pt-1">
-                          {[1, 2, 3, 4, 5, 6, 7, 8].map((scoreNum) => {
-                            const isSelected = formScoreConversion === scoreNum;
-                            return (
-                              <button
-                                key={scoreNum}
-                                type="button"
-                                onClick={() => setFormScoreConversion(prev => prev === scoreNum ? null : scoreNum)}
-                                style={{
-                                  width: '42px',
-                                  height: '42px',
-                                  borderRadius: '50%',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '17px',
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                  backgroundColor: isSelected ? '#000000' : '#ffffff',
-                                  color: isSelected ? '#ffffff' : '#000000',
-                                  border: isSelected ? '1px solid #000000' : '1px solid #dadada',
-                                  boxShadow: isSelected ? '0 2px 6px rgba(0,0,0,0.2)' : 'none',
-                                  transition: 'all 0.15s ease'
-                                }}
-                                className="hover:scale-105 active:scale-95 transition-transform"
-                                title={`Score : ${scoreNum}`}
-                              >
-                                {scoreNum}
-                              </button>
-                            );
-                          })}
+                      {/* Score Potentiel Conversion à gauche & Référence Devis à droite */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 items-end">
+                        {/* Score Potentiel Conversion (8 ronds 1 à 8 avec toggle select/deselect) */}
+                        <div>
+                          <label>Score Potentiel Conversion.</label>
+                          <div className="flex items-center gap-2 flex-wrap pt-1">
+                            {[1, 2, 3, 4, 5, 6, 7, 8].map((scoreNum) => {
+                              const isSelected = formScoreConversion === scoreNum;
+                              return (
+                                <button
+                                  key={scoreNum}
+                                  type="button"
+                                  onClick={() => setFormScoreConversion(prev => prev === scoreNum ? null : scoreNum)}
+                                  style={{
+                                    width: '38px',
+                                    height: '38px',
+                                    borderRadius: '50%',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '17px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    backgroundColor: isSelected ? '#000000' : '#ffffff',
+                                    color: isSelected ? '#ffffff' : '#000000',
+                                    border: isSelected ? '1px solid #000000' : '1px solid #dadada',
+                                    boxShadow: isSelected ? '0 2px 6px rgba(0,0,0,0.2)' : 'none',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                  className="hover:scale-105 active:scale-95 transition-transform"
+                                  title={`Score : ${scoreNum}`}
+                                >
+                                  {scoreNum}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Référence Devis & Lien Stockage Partagé Devis (50% 50% sur la même ligne) */}
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                        {/* Référence Devis à droite */}
                         <div>
                           <label>Référence Devis.</label>
                           <input
                             type="text"
-                            placeholder="Ex: DEV-2026-081"
+                            placeholder="Entrez la référence de l’offre."
                             value={formReferenceDevis}
                             onChange={(e) => setFormReferenceDevis(e.target.value)}
                           />
                         </div>
-
-                        <div>
-                          <label>Lien Stockage Partagé Devis.</label>
-                          <div className="relative flex items-center">
-                            <input
-                              type="url"
-                              placeholder="https://drive.google.com/... ou lien partagé"
-                              value={formLienDevis}
-                              onChange={(e) => setFormLienDevis(e.target.value)}
-                              style={{ paddingRight: formLienDevis.trim() ? '90px' : undefined }}
-                            />
-                            {formLienDevis.trim() && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  let targetUrl = formLienDevis.trim();
-                                  if (!/^https?:\/\//i.test(targetUrl)) {
-                                    targetUrl = 'https://' + targetUrl;
-                                  }
-                                  window.open(targetUrl, '_blank', 'noopener,noreferrer');
-                                }}
-                                className="absolute right-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-black text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-                                title="Ouvrir le lien dans un nouvel onglet"
-                              >
-                                Ouvrir
-                              </button>
-                            )}
-                          </div>
-                        </div>
                       </div>
 
-                      {/* Description Offre Devis. (remonté en dessous de Référence Devis) */}
+                      {/* Full width en dessous : Bouton Télécharger un fichier + sub-divs */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            disabled={!googleDriveActive || isUploadingFile}
+                            onClick={() => fileInputRef.current?.click()}
+                            style={{
+                              backgroundColor: !googleDriveActive ? '#94a3b8' : '#3556ec',
+                              color: '#ffffff',
+                              borderRadius: '12px',
+                              fontSize: '16px',
+                              padding: '10px 20px',
+                              fontWeight: 'bold',
+                              border: 'none',
+                              cursor: !googleDriveActive || isUploadingFile ? 'not-allowed' : 'pointer',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '8px'
+                            }}
+                            className={!googleDriveActive ? 'opacity-60 select-none' : 'hover:opacity-90 active:scale-95 transition-all cursor-pointer'}
+                            title={!googleDriveActive ? "Connecteur Google Drive inactif dans les réglages" : undefined}
+                          >
+                            <Upload className="w-5 h-5" />
+                            {isUploadingFile ? "Téléchargement en cours..." : "Télécharger un fichier"}
+                          </button>
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileUpload}
+                            style={{ display: 'none' }}
+                          />
+                        </div>
+
+                        {/* Sub-div affichant les fichiers attachés sans label */}
+                        {formFichiersDevis.length > 0 && (
+                          <div className="space-y-2 pt-1">
+                            {formFichiersDevis.map((f, idx) => {
+                              const displayName = f.name.length > 15 ? `${f.name.slice(0, 15)}...` : f.name;
+                              return (
+                                <div 
+                                  key={idx}
+                                  className="flex items-center justify-between gap-3 p-3 bg-white rounded-xl shadow-xs"
+                                  style={{ border: '1px solid #dadada' }}
+                                >
+                                  <div className="flex items-center gap-4 text-[16px] text-black font-sans">
+                                    <span className="font-semibold text-black whitespace-nowrap">
+                                      {f.dateAjout}
+                                    </span>
+                                    <span className="font-medium text-black whitespace-nowrap" title={f.name}>
+                                      {displayName}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => window.open(f.url, '_blank', 'noopener,noreferrer')}
+                                      style={{
+                                        backgroundColor: '#000000',
+                                        color: '#ffffff',
+                                        borderRadius: '10px',
+                                        fontSize: '14px',
+                                        fontWeight: 600,
+                                        padding: '6px 14px',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                      }}
+                                      className="hover:bg-zinc-800 transition-colors"
+                                    >
+                                      Aperçu
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setFormFichiersDevis(prev => prev.filter((_, i) => i !== idx));
+                                      }}
+                                      style={{
+                                        backgroundColor: 'rgb(203, 20, 20)',
+                                        color: '#ffffff',
+                                        borderRadius: '10px',
+                                        fontSize: '14px',
+                                        fontWeight: 600,
+                                        padding: '6px 14px',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                      }}
+                                      className="hover:bg-red-700 transition-colors"
+                                    >
+                                      Supprimer
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Description Offre Devis. (limité à max 55 caractères) */}
                       <div>
                         <label>Description Offre Devis.</label>
                         <input
                           type="text"
-                          placeholder="Ex: Remplacement électrodes et pack batterie..."
+                          maxLength={55}
+                          placeholder="Entrez un résumé court de l’offre."
                           value={formDescriptionOffreDevis}
                           onChange={(e) => setFormDescriptionOffreDevis(e.target.value)}
                         />
@@ -2908,7 +3371,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               onChange={(e) => setFormTotalAffaireHT(e.target.value)}
                               style={{ paddingRight: '48px' }}
                             />
-                            <span className="absolute right-3 text-xs font-semibold text-slate-500 font-sans pointer-events-none">
+                            <span className="absolute right-3 text-xs font-semibold font-sans pointer-events-none" style={{ color: '#000000' }}>
                               € HT
                             </span>
                           </div>
@@ -2919,7 +3382,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           <input
                             type="text"
                             maxLength={1}
-                            placeholder="A"
+                            placeholder="Ex: A."
                             value={formFamille}
                             onChange={(e) => setFormFamille(e.target.value.slice(0, 1).toUpperCase())}
                             style={{ textTransform: 'uppercase', textAlign: 'center', fontSize: '18px', fontWeight: 600 }}
@@ -2931,7 +3394,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           <input
                             type="text"
                             maxLength={2}
-                            placeholder="75"
+                            placeholder="Ex: 49."
                             value={formIndicatifPostal}
                             onChange={(e) => setFormIndicatifPostal(e.target.value.replace(/\D/g, '').slice(0, 2))}
                             style={{ textAlign: 'center', fontSize: '18px', fontWeight: 600 }}
@@ -2949,7 +3412,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             <option value="Direct">Direct</option>
                             <option value="Internet">Internet</option>
                             <option value="Planification">Planification</option>
-                            <option value="Autre.">Autre.</option>
+                            <option value="Autre">Autre</option>
                           </select>
                         </div>
                       </div>
@@ -3007,64 +3470,64 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
                         {formCommercialEvents.length > 0 && (
                           <div className="space-y-3">
-                            {formCommercialEvents.map((evt) => (
-                              <div key={evt.id} className="p-3.5 bg-white rounded-xl space-y-2.5 shadow-xs" style={{ border: '1px solid #dadada' }}>
-                                <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <label className="text-xs !font-semibold text-slate-600 !mb-1">Date.</label>
-                                    <input
-                                      type="text"
-                                      value={evt.date}
-                                      onChange={(e) => handleUpdateCommercialEvent(evt.id, 'date', e.target.value)}
-                                      placeholder="DD/MM/YYYY"
+                            {formCommercialEvents.map((evt) => {
+                              const toInputDate = (d: string) => {
+                                if (!d) return '';
+                                if (d.includes('/')) return d.split('/').reverse().join('-');
+                                return d;
+                              };
+                              const fromInputDate = (d: string) => {
+                                if (!d) return '';
+                                if (d.includes('-')) return d.split('-').reverse().join('/');
+                                return d;
+                              };
+                              return (
+                                <div key={evt.id} className="p-3.5 bg-white rounded-xl space-y-2.5 shadow-xs" style={{ border: '1px solid #dadada' }}>
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div style={{ width: '180px', maxWidth: '180px' }} className="shrink-0">
+                                      <label className="text-xs !font-semibold text-slate-600 !mb-1">Date.</label>
+                                      <div className="relative flex items-center">
+                                        <input
+                                          type="date"
+                                          value={toInputDate(evt.date)}
+                                          onChange={(e) => handleUpdateCommercialEvent(evt.id, 'date', fromInputDate(e.target.value))}
+                                          className="crm-event-date-input"
+                                          style={{ paddingRight: '32px' }}
+                                        />
+                                        <Calendar className="w-4 h-4 text-slate-500 absolute right-2.5 pointer-events-none" />
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveCommercialEvent(evt.id)}
                                       style={{
-                                        width: '140px !important',
-                                        padding: '6px 10px !important',
-                                        fontSize: '14px !important',
-                                        borderRadius: '8px !important',
-                                        border: '1px solid #dadada !important',
+                                        backgroundColor: 'rgb(203, 20, 20)',
+                                        color: '#ffffff',
+                                        borderRadius: '13px',
+                                        padding: '10px 19px',
+                                        fontSize: '18px',
+                                        fontWeight: 600,
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                                       }}
+                                      className="hover:bg-red-700 transition-colors shadow-xs"
+                                      title="Supprimer l'événement"
+                                    >
+                                      Supprimer
+                                    </button>
+                                  </div>
+                                  <div>
+                                    <label className="text-xs !font-semibold text-slate-600 !mb-1">Commentaire.</label>
+                                    <AutoResizeEventTextarea
+                                      value={evt.commentaire}
+                                      onChange={(val) => handleUpdateCommercialEvent(evt.id, 'commentaire', val)}
+                                      placeholder="Entrez un compte-rendu ou commentaire..."
                                     />
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveCommercialEvent(evt.id)}
-                                    style={{
-                                      backgroundColor: 'rgb(203, 20, 20)',
-                                      color: '#ffffff',
-                                      borderRadius: '13px',
-                                      padding: '10px 19px',
-                                      fontSize: '18px',
-                                      fontWeight: 600,
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                                    }}
-                                    className="hover:bg-red-700 transition-colors shadow-xs"
-                                    title="Supprimer l'événement"
-                                  >
-                                    Supprimer
-                                  </button>
                                 </div>
-                                <div>
-                                  <label className="text-xs !font-semibold text-slate-600 !mb-1">Commentaire.</label>
-                                  <textarea
-                                    rows={3}
-                                    value={evt.commentaire}
-                                    onChange={(e) => handleUpdateCommercialEvent(evt.id, 'commentaire', e.target.value)}
-                                    placeholder="Entrez un compte-rendu ou commentaire..."
-                                    style={{
-                                      fontSize: '15px !important',
-                                      padding: '8px 10px !important',
-                                      borderRadius: '8px !important',
-                                      border: '1px solid #dadada !important',
-                                      resize: 'vertical',
-                                      width: '100%'
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -3094,7 +3557,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             backgroundColor: '#000000',
                             color: '#ffffff',
                             borderRadius: '10px',
-                            fontSize: '16px',
+                            fontSize: '18px',
                             padding: '8px 16px',
                             border: 'none',
                             cursor: 'pointer',
@@ -3107,34 +3570,27 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       </div>
 
                       {supportMessageSentToast && (
-                        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm font-medium animate-fadeIn">
-                          {supportMessageSentToast}
+                        <div className="font-semibold text-green-600 animate-fadeIn" style={{ color: '#16a34a', fontSize: '18px' }}>
+                          Message envoyé.
                         </div>
                       )}
 
                       {/* Sub-form: Nouveau message */}
                       {isNewMessageOpen && (
-                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3.5 shadow-xs animate-fadeIn">
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="text-xs !font-semibold text-slate-600 !mb-0">Destinataire.</label>
-                              <span className="text-xs text-slate-500 font-sans">
-                                {formEmail.trim() ? (
-                                  <span className="font-mono text-slate-700">{formEmail.trim()}</span>
-                                ) : (
-                                  <span className="text-amber-600">Aucun email renseigné (veuillez saisir le champ Email au-dessus)</span>
-                                )}
-                              </span>
-                            </div>
-                          </div>
-
+                        <div 
+                          className="p-4 rounded-xl space-y-3.5 shadow-xs animate-fadeIn"
+                          style={{
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #dadada',
+                          }}
+                        >
                           <div>
                             <label className="text-xs !font-semibold text-slate-600 !mb-1">Objet.</label>
                             <input
                               type="text"
                               value={newMessageObjet}
                               onChange={(e) => setNewMessageObjet(e.target.value)}
-                              placeholder="Objet du message..."
+                              placeholder="Entrez un objet court."
                               style={{
                                 fontSize: '15px !important',
                                 padding: '8px 12px !important',
@@ -3150,7 +3606,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               rows={5}
                               value={newMessageBody}
                               onChange={(e) => setNewMessageBody(e.target.value)}
-                              placeholder="Rédigez votre message au client..."
+                              placeholder="Ex: Entrez un message."
                               style={{
                                 fontSize: '15px !important',
                                 padding: '10px 12px !important',
@@ -3171,7 +3627,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 color: '#ffffff',
                                 borderRadius: '12px',
                                 padding: '8px 18px',
-                                fontSize: '16px',
+                                fontSize: '18px',
                                 fontWeight: 500,
                                 border: 'none',
                                 cursor: 'pointer',
@@ -3190,7 +3646,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 color: '#ffffff',
                                 borderRadius: '12px',
                                 padding: '8px 22px',
-                                fontSize: '16px',
+                                fontSize: '18px',
                                 fontWeight: 600,
                                 border: 'none',
                                 cursor: isSendingSupportMessage ? 'wait' : 'pointer',
@@ -3208,16 +3664,23 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       {formSupportMessages.length > 0 && (
                         <div className="space-y-3 pt-1">
                           {formSupportMessages.map((msg) => (
-                            <div key={msg.id} className="p-3.5 bg-slate-50 hover:bg-slate-100/90 border border-slate-200 rounded-xl space-y-2 transition-colors">
-                              <div className="text-xs font-semibold text-slate-800 font-sans">
+                            <div 
+                              key={msg.id} 
+                              className="p-3.5 rounded-xl space-y-2 transition-colors"
+                              style={{
+                                backgroundColor: '#ffffff',
+                                border: '1px solid #dadada',
+                              }}
+                            >
+                              <div className="font-sans font-medium" style={{ fontSize: '16px', color: '#000000' }}>
                                 {msg.date} à {msg.heure}
                               </div>
 
-                              <div className="text-[15px] font-semibold text-slate-900 font-sans">
+                              <div className="font-sans font-bold" style={{ fontSize: '16px', color: '#000000' }}>
                                 {msg.objet}
                               </div>
 
-                              <div className="text-[14px] text-slate-700 font-sans whitespace-pre-wrap leading-relaxed">
+                              <div className="font-sans whitespace-pre-wrap leading-relaxed" style={{ fontSize: '16px', color: '#000000' }}>
                                 {msg.message}
                               </div>
                             </div>
@@ -4159,6 +4622,154 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 👁️ COLUMNS VISIBILITY SIDE PANE 👁️ */}
+      {isColumnVisibilityPaneOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[100] flex justify-end"
+          id="crm-columns-visibility-side-pane-container"
+        >
+          {/* Backdrop */}
+          <div 
+            onClick={() => {
+              setTempHiddenColumns(new Set(hiddenColumns));
+              setIsColumnVisibilityPaneOpen(false);
+            }}
+            className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs"
+          />
+
+          {/* Side Pane */}
+          <div 
+            className="relative w-full sm:w-[480px] bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out z-10" 
+            id="crm-columns-visibility-side-pane"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              borderLeft: '1px solid #e2e8f0',
+            }}
+          >
+            {/* Sensibilité de catégorie: Filtre rapide ou onglets pour basculer facilement */}
+            <div className="p-6 pb-2 pt-8">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                {(['Actif', 'Commercial', 'Non Commercial', 'Toutes'] as const).map((tab) => {
+                  const isActive = columnFilterScope === tab;
+                  const label = tab === 'Actif'
+                    ? `Affichage actif (${ticketCategoryFilter === 'Commercial' ? 'Commercial' : 'Non Commercial'})`
+                    : tab;
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setColumnFilterScope(tab)}
+                      style={{
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        padding: '6px 14px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        backgroundColor: isActive ? '#000000' : '#f1f5f9',
+                        color: isActive ? '#ffffff' : '#475569',
+                        transition: 'all 0.15s ease'
+                      }}
+                      className="cursor-pointer select-none"
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Nuage de boutons initialement tous background noir - Pas de titre, Pas de line divider, Pas de cross-close icon */}
+            <div className="flex-1 overflow-y-auto px-6 pb-6">
+              <div className="flex flex-wrap gap-2.5 sm:gap-3 items-center">
+                {visibleConfigurableColumns.map((col) => {
+                  const isHidden = tempHiddenColumns.has(col.id);
+                  return (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => toggleColumnVisibility(col.id)}
+                      style={{
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        fontSize: '18px',
+                        fontWeight: 600,
+                        borderRadius: '14px',
+                        padding: '12px 18px',
+                        backgroundColor: isHidden ? '#dc2626' : '#000000',
+                        color: '#ffffff',
+                        border: isHidden ? '1px solid #dc2626' : '1px solid #000000',
+                        boxShadow: 'rgba(0, 0, 0, 0.08) 0px 2px 8px -2px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease-in-out',
+                      }}
+                      className="hover:scale-[1.02] active:scale-[0.98] select-none cursor-pointer"
+                    >
+                      {col.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Floating Black & Blue Buttons side by side at bottom */}
+            <div className="p-5 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setTempHiddenColumns(new Set(hiddenColumns));
+                  setIsColumnVisibilityPaneOpen(false);
+                }}
+                style={{
+                  backgroundColor: '#000000',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  borderRadius: '13px',
+                  padding: '14px 20px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                }}
+                className="flex-1 text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+              >
+                Fermer
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setHiddenColumns(new Set(tempHiddenColumns));
+                  try {
+                    localStorage.setItem('crm_table_hidden_columns', JSON.stringify(Array.from(tempHiddenColumns)));
+                  } catch (e) {}
+                  setIsColumnVisibilityPaneOpen(false);
+                }}
+                style={{
+                  backgroundColor: 'rgb(53, 86, 236)',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  borderRadius: '13px',
+                  padding: '14px 20px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                }}
+                className="flex-1 text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+              >
+                Appliquer
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* Side Pane Search for Client ou Prospect */}

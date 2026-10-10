@@ -1809,7 +1809,49 @@ export default function App() {
         });
       };
 
-      const freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant, onProgress);
+      let freshRemote: Defibrillateur[] | null = null;
+      try {
+        const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(activeTenant)}`);
+        if (metaRes.ok) {
+          const meta = await metaRes.json();
+          const totalChunks = meta.totalChunks || 0;
+          if (totalChunks > 0) {
+            const chunkResults: any[][] = new Array(totalChunks);
+            let loadedCount = 0;
+            const CONCURRENCY = 6;
+            for (let i = 0; i < totalChunks; i += CONCURRENCY) {
+              const batchPromises = [];
+              const batchEnd = Math.min(i + CONCURRENCY, totalChunks);
+              for (let c = i; c < batchEnd; c++) {
+                batchPromises.push((async (cIdx) => {
+                  try {
+                    const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix || 'D27_defibrillateurs')}`);
+                    if (chunkRes.ok) {
+                      const arr = await chunkRes.json();
+                      if (Array.isArray(arr)) {
+                        chunkResults[cIdx] = arr;
+                        loadedCount += arr.length;
+                      }
+                    }
+                  } catch (_) {}
+                })(c));
+              }
+              await Promise.all(batchPromises);
+              onProgress(loadedCount, meta.totalCount || 17814);
+            }
+            const combined = chunkResults.filter(Boolean).flat();
+            if (combined.length > 0) {
+              freshRemote = combined;
+            }
+          }
+        }
+      } catch (chunkErr) {
+        console.warn('Chunk download error, falling back to standard sync:', chunkErr);
+      }
+
+      if (!freshRemote || freshRemote.length === 0) {
+        freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant, onProgress);
+      }
       if (Array.isArray(freshRemote) && freshRemote.length > 0) {
         setDefibrillateurs(freshRemote);
         try {
@@ -5505,6 +5547,50 @@ export default function App() {
               message: `Chargement ${idbDefibs.length.toLocaleString('en-US')}/${idbDefibs.length.toLocaleString('en-US')}, Terminé.`
             });
             setIsDefibLoading(false);
+          } else {
+            // Background preload chunks automatically to ensure the 18,000 catalog is populated
+            (async () => {
+              try {
+                const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(activeRunTenantId)}`);
+                if (metaRes.ok) {
+                  const meta = await metaRes.json();
+                  const totalChunks = meta.totalChunks || 0;
+                  if (totalChunks > 0) {
+                    setIsDefibLoading(true);
+                    const chunkResults: any[][] = new Array(totalChunks);
+                    let loadedCount = 0;
+                    const CONCURRENCY = 6;
+                    for (let i = 0; i < totalChunks; i += CONCURRENCY) {
+                      const batchPromises = [];
+                      const batchEnd = Math.min(i + CONCURRENCY, totalChunks);
+                      for (let c = i; c < batchEnd; c++) {
+                        batchPromises.push((async (cIdx) => {
+                          try {
+                            const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix || 'D27_defibrillateurs')}`);
+                            if (chunkRes.ok) {
+                              const arr = await chunkRes.json();
+                              if (Array.isArray(arr)) {
+                                chunkResults[cIdx] = arr;
+                                loadedCount += arr.length;
+                              }
+                            }
+                          } catch (_) {}
+                        })(c));
+                      }
+                      await Promise.all(batchPromises);
+                    }
+                    const combined = chunkResults.filter(Boolean).flat();
+                    if (combined.length > 5000) {
+                      setDefibrillateurs(combined);
+                      idbSet(`defib_${activeRunTenantId}_defibrillateurs`, combined).catch(() => {});
+                      idbSet('defib_D27_defibrillateurs', combined).catch(() => {});
+                      idbSet('defib_D58_defibrillateurs', combined).catch(() => {});
+                      setIsDefibLoading(false);
+                    }
+                  }
+                }
+              } catch (_) {}
+            })();
           }
           const idbClients = await idbGet<Client[]>(`defib_${activeRunTenantId}_clients`);
           if (Array.isArray(idbClients) && idbClients.length > 0) {
@@ -6081,8 +6167,13 @@ export default function App() {
       const fp = getCollectionFingerprint(defibrillateurs);
       if (loadedDataRef.current.defibrillateurs === fp) return;
       loadedDataRef.current.defibrillateurs = fp;
-      if (defibrillateurs.length <= 250) {
-        saveCollectionToFirestore('defibrillateurs', defibrillateurs, tenantId);
+      if (defibrillateurs.length > 5000) {
+        // Only update local cache and IndexedDB; do NOT overwrite Firestore catalog with partial array
+        try {
+          idbSet(`defib_${tenantId}_defibrillateurs`, defibrillateurs);
+          idbSet(`fs_cache_${tenantId}_defibrillateurs`, defibrillateurs);
+        } catch (_) {}
+      } else if (defibrillateurs.length > 0) {
         safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, JSON.stringify(defibrillateurs));
       }
       try {
@@ -14166,6 +14257,149 @@ export default function App() {
               saveReports(updatedReports);
             };
 
+            const handleCreateTicketFromDevis = (r: any) => {
+              if (!r) return;
+
+              // Generate sequential ticket reference matching CRM conventions
+              const now = new Date();
+              const mm = String(now.getMonth() + 1).padStart(2, '0');
+              const yy = String(now.getFullYear()).slice(-2);
+              let envCode = (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null);
+              if (!envCode) {
+                if (tenantId && tenantId !== 'demo') {
+                  envCode = tenantId.toUpperCase().startsWith('D') ? tenantId.toUpperCase() : `D${tenantId.toUpperCase()}`;
+                } else {
+                  envCode = 'D18';
+                }
+              }
+
+              let maxNum = tickets.length;
+              tickets.forEach((t) => {
+                const ref = t.reference || t.id;
+                if (ref) {
+                  const match = ref.match(/^(\d{1,5})/);
+                  if (match) {
+                    const parsed = parseInt(match[1], 10);
+                    if (!isNaN(parsed) && parsed > maxNum) {
+                      maxNum = parsed;
+                    }
+                  }
+                }
+              });
+
+              const nextIndex = maxNum + 1;
+              const numPadded = String(nextIndex).padStart(5, '0');
+              const ticketRef = `${numPadded}-${envCode}-${mm}${yy}`;
+
+              const day = String(now.getDate()).padStart(2, '0');
+              const month = String(now.getMonth() + 1).padStart(2, '0');
+              const year = now.getFullYear();
+              const todayFormatted = `${day}/${month}/${year}`;
+
+              // Auto-resolve Defibrillator details
+              const defibIdOrIdent = r.defibIdentifiant || r.defibSnapshot?.identifiant || r.identifiant || r.defibSnapshot?.id || '';
+              const foundDefib = defibrillateurs.find(d => 
+                (defibIdOrIdent && (d.identifiant === defibIdOrIdent || d.id === defibIdOrIdent)) ||
+                (r.defibSnapshot?.numeroSerie && d.numeroSerie === r.defibSnapshot.numeroSerie)
+              );
+
+              // Auto-resolve Client details
+              const candidateClientId = foundDefib?.clientId || foundDefib?.clientIdField || r.clientId;
+              const candidateClientNom = foundDefib?.clientNom || r.clientName || r.clientNom || r.siteMission || r.defibSnapshot?.clientNom;
+
+              let foundClient = clients.find(c => 
+                (candidateClientId && (c.id === candidateClientId || c.id_record === candidateClientId)) ||
+                (candidateClientNom && (c.denomination?.trim().toLowerCase() === candidateClientNom.trim().toLowerCase() || c.nom?.trim().toLowerCase() === candidateClientNom.trim().toLowerCase()))
+              );
+
+              if (!foundClient && candidateClientNom) {
+                foundClient = clients.find(c => 
+                  c.denomination?.toLowerCase().includes(candidateClientNom.toLowerCase()) ||
+                  candidateClientNom.toLowerCase().includes(c.denomination?.toLowerCase())
+                );
+              }
+
+              const resolvedClientName = foundClient?.denomination || foundClient?.nom || candidateClientNom || 'Client';
+
+              // Format Description exactly as requested:
+              // Label fixe « Produit(s) et service(s) demandés: » + liste des values
+              // Label fixe « Commentaire interne du technicien: » + value
+              const articlesList = r.devisArticlesSelectionnes || r.defibSnapshot?.devisArticlesSelectionnes || [];
+              const autreInfo = r.devisAutreInfo || r.defibSnapshot?.devisAutreInfo || '';
+              const commInterne = r.commentaireInterne || r.defibSnapshot?.commentaireInterne || '';
+
+              const allItems = [...articlesList];
+              if (autreInfo && autreInfo.trim()) {
+                allItems.push(`Autre : ${autreInfo.trim()}`);
+              }
+              const itemsText = allItems.length > 0 ? allItems.join(', ') : 'Aucun';
+
+              const descriptionText = `Produit(s) et service(s) demandés:\n${itemsText}\n\nCommentaire interne du technicien:\n${commInterne || 'Aucun'}`;
+
+              const priorite = r.devisPriorite || r.defibSnapshot?.devisPriorite || 'Moyenne';
+              const criticite = priorite === 'Haute' ? 'Urgent' : (priorite === 'Basse' ? 'Mois prochain' : 'Ce mois');
+              const refIntervention = r.interventionReference || r.autreReference || r.customReference || r.identifiant || r.defibIdentifiant || r.id;
+
+              const newTicket: SupportTicket = {
+                id: ticketRef,
+                reference: ticketRef,
+                identifiant: ticketRef,
+                categorie: 'Commercial',
+                situation: 'Nouveau',
+                status: 'Nouveau',
+                criticite: criticite,
+                dateOuverture: todayFormatted,
+                dateDerniereActualisation: todayFormatted,
+                date: todayFormatted,
+                objet: 'Demande Devis lors d’un Rapport/Visite',
+                collaborateur: r.techName || r.technicien || '',
+                client: resolvedClientName,
+                isCustomClient: !foundClient,
+                customClientName: !foundClient ? resolvedClientName : '',
+                email: foundClient?.email || foundClient?.contactEmail || '',
+                phone: foundClient?.telephone || foundClient?.tel || '',
+                description: descriptionText,
+                message: descriptionText,
+                indicatifPostal: foundClient?.cp || foundClient?.codePostal || '',
+                typeStructure: (foundClient?.typeStructure as any) || undefined,
+                situationInterlocuteur: 'Client',
+                prenomNom: foundClient?.contactNom || foundClient?.contactPrenomNom || foundClient?.signataireNom || '',
+                situationDevis: 'Non renseigné',
+                referenceDevis: refIntervention || '',
+                reportId: r.id,
+                origineLead: 'Planification',
+                envId: tenantId || 'demo',
+                tenantId: tenantId || 'demo',
+              };
+
+              // 1. Save Ticket to CRM state & persistent storage
+              const updatedTickets = [newTicket, ...tickets];
+              setTickets(updatedTickets);
+              const strTickets = JSON.stringify(updatedTickets);
+              safeSetLocalStorage(`defib_${tenantId}_support_tickets`, strTickets);
+              loadedDataRef.current.tickets = strTickets;
+              if (tenantId) {
+                saveCollectionToFirestore('tickets', updatedTickets, tenantId);
+              }
+
+              // 2. Mark report with ticketCrmCreated = true and persist
+              const updatedReports = generatedReports.map(rep => {
+                if (rep.id === r.id) {
+                  const updatedDefibSnapshot = rep.defibSnapshot
+                    ? { ...rep.defibSnapshot, ticketCrmCreated: true, ticketCrmId: ticketRef }
+                    : undefined;
+                  return {
+                    ...rep,
+                    ticketCrmCreated: true,
+                    ticketCrmId: ticketRef,
+                    ...(updatedDefibSnapshot ? { defibSnapshot: updatedDefibSnapshot } : {})
+                  };
+                }
+                return rep;
+              });
+              saveReports(updatedReports);
+            };
+
             const handleExportDevisCSV = () => {
               const headers = [
                 "Référence intervention",
@@ -16291,6 +16525,12 @@ export default function App() {
                           const articlesList = r.devisArticlesSelectionnes || r.defibSnapshot?.devisArticlesSelectionnes || [];
                           const autreInfo = r.devisAutreInfo || r.defibSnapshot?.devisAutreInfo || '';
                           const commInterne = r.commentaireInterne || r.defibSnapshot?.commentaireInterne || '';
+                          const isTicketCrmCreated = Boolean(
+                            r.ticketCrmCreated ||
+                            r.defibSnapshot?.ticketCrmCreated ||
+                            r.ticketCrmId ||
+                            (r.id && tickets.some(t => t.reportId === r.id || (t.objet === 'Demande Devis lors d’un Rapport/Visite' && t.referenceDevis === refIntervention)))
+                          );
 
                           return (
                             <div 
@@ -16478,6 +16718,30 @@ export default function App() {
                                   className="cursor-pointer hover:opacity-90 active:scale-95 transition-all"
                                 >
                                   Consulter Rapport
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={isTicketCrmCreated}
+                                  onClick={() => handleCreateTicketFromDevis(r)}
+                                  style={{
+                                    backgroundColor: isTicketCrmCreated ? '#e2e8f0' : 'rgb(53, 86, 236)',
+                                    color: isTicketCrmCreated ? '#94a3b8' : '#ffffff',
+                                    borderRadius: '12px',
+                                    fontSize: '18px',
+                                    padding: '8px 18px',
+                                    fontWeight: 'bold',
+                                    border: 'none',
+                                    cursor: isTicketCrmCreated ? 'not-allowed' : 'pointer',
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    boxShadow: isTicketCrmCreated
+                                      ? 'none'
+                                      : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                  }}
+                                  className={isTicketCrmCreated ? 'opacity-60 select-none' : 'cursor-pointer hover:opacity-90 active:scale-95 transition-all'}
+                                  title={isTicketCrmCreated ? "Ticket CRM Commercial déjà créé" : "Créer un ticket CRM Commercial"}
+                                >
+                                  Ticket CRM Commercial
                                 </button>
                               </div>
                             </div>

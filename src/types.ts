@@ -304,6 +304,12 @@ export interface SupportMessage {
   expediteur?: string;
 }
 
+export interface CommercialFileAttachment {
+  name: string;
+  url: string;
+  dateAjout: string;
+}
+
 export interface SupportTicket {
   id: string; // e.g. 00001-DEFIB-0826 or #123456
   reference?: string;
@@ -325,6 +331,7 @@ export interface SupportTicket {
   date?: string;
   status?: 'Nouveau' | 'En cours' | 'Résolu' | 'Terminé' | string;
   reponse?: string;
+  reportId?: string;
   envId?: string;
   tenantId?: string;
 
@@ -349,6 +356,7 @@ export interface SupportTicket {
   dateProchaineRelance?: string;
   dateCommande?: string;
   lienStockagePartageDevis?: string;
+  fichiersDevis?: CommercialFileAttachment[];
   evenementsCommercial?: CommercialEvent[];
   messagesSupport?: SupportMessage[];
 }

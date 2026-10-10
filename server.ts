@@ -1,4 +1,5 @@
 import express from "express";
+import compression from "compression";
 import path from "path";
 import fs from "fs";
 import zlib from "zlib";
@@ -794,6 +795,7 @@ function sendOptimizedJson(req: express.Request, res: express.Response, data: an
 
 async function startServer() {
   const app = express();
+  app.use(compression());
   const PORT = Number(process.env.PORT) || 3000;
 
   // CORS support and preflight handling for CRM website form embedding & Defibeo Public API

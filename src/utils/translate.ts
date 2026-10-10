@@ -1005,6 +1005,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Retourner l’affichage standard": "Return to standard display",
     "Retourner l'affichage standard": "Return to standard display",
     "Gérer la visibilité des colonnes": "Manage column visibility",
+    "Actualiser les données": "Refresh data",
+    "Actualisation...": "Refreshing...",
     "Inclure Autres Matériels": "Include Other Equipment",
     "Télécharger la sélection en PDF": "Download selection as PDF",
 
