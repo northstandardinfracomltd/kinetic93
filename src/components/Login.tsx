@@ -426,6 +426,40 @@ const VALID_AUTH_CODES = [
   'ZX0202'
 ];
 
+/**
+ * Détermine si la double authentification par code email est requise aujourd'hui.
+ * Règle demandée :
+ * Ne demander la double-auth que les lundi, jeudi, samedi et dimanche.
+ * Les autres jours (mardi, mercredi, vendredi), l'utilisateur est connecté directement
+ * après la saisie du mot de passe valide, sans demander le code 2FA.
+ * 
+ * JS Date.getDay():
+ * 0 = Dimanche (Sunday)   -> OUI (2FA requis)
+ * 1 = Lundi (Monday)      -> OUI (2FA requis)
+ * 2 = Mardi (Tuesday)     -> NON (Connexion directe)
+ * 3 = Mercredi (Wednesday) -> NON (Connexion directe)
+ * 4 = Jeudi (Thursday)    -> OUI (2FA requis)
+ * 5 = Vendredi (Friday)   -> NON (Connexion directe)
+ * 6 = Samedi (Saturday)   -> OUI (2FA requis)
+ */
+export const isDoubleAuthRequiredToday = (testDate?: Date): boolean => {
+  try {
+    if (typeof window !== 'undefined') {
+      const forced = localStorage.getItem('defib_force_2fa_day');
+      if (forced !== null) {
+        const parsed = parseInt(forced, 10);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 6) {
+          return parsed === 0 || parsed === 1 || parsed === 4 || parsed === 6;
+        }
+      }
+    }
+  } catch {}
+
+  const day = (testDate || new Date()).getDay();
+  // 0: Dimanche, 1: Lundi, 4: Jeudi, 6: Samedi
+  return day === 0 || day === 1 || day === 4 || day === 6;
+};
+
 export default function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -560,6 +594,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     role?: string;
     targetEmail: string;
   }) => {
+    // Si la double-authentification n'est pas requise aujourd'hui (mardi, mercredi, vendredi),
+    // connecter l'utilisateur directement après la saisie du mot de passe valide.
+    if (!isDoubleAuthRequiredToday()) {
+      handleSuccessLogin(userData.email, userData.name, userData.tenantId, userData.role);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError('');
     const randomCode = VALID_AUTH_CODES[Math.floor(Math.random() * VALID_AUTH_CODES.length)];
@@ -774,7 +816,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     try {
       if (loginRole === 'admin') {
         if (emailLower === 'account@demo.com' && pass === '123456') {
-          handleSuccessLogin('account@demo.com', 'Admin Démo', 'demo', 'admin');
+          await sendAuthCodeAndPrompt({
+            email: 'account@demo.com',
+            name: 'Admin Démo',
+            tenantId: 'demo',
+            role: 'admin',
+            targetEmail: 'account@demo.com'
+          });
           return;
         }
 
@@ -785,7 +833,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             setIsLoading(false);
             return;
           }
-          handleSuccessLogin(tenant.adminEmail, tenant.adminName, tenant.id, 'admin');
+          await sendAuthCodeAndPrompt({
+            email: tenant.adminEmail,
+            name: tenant.adminName,
+            tenantId: tenant.id,
+            role: 'admin',
+            targetEmail: tenant.adminEmail
+          });
+          return;
         } else {
           // Check for sub-account "Administrateur" members across all tenants in parallel
           const tenants = await getRegisteredTenants();

@@ -37,6 +37,7 @@ import {
   Zap,
   Calendar,
   Printer,
+  Loader2,
 } from "lucide-react";
 import {
   CompanyInfo,
@@ -67,6 +68,7 @@ import {
 import EmargementsTab from "./EmargementsTab";
 import { REGIONS_FRANCAISES, INITIAL_TENANT_MESSAGES } from "../utils";
 import { CanalMessagesSidePane } from "./CanalMessagesSidePane";
+import { idbSet } from "../idb";
 import { getRegionsForCountry } from "../utils/regions";
 import { getLanguage, t } from "../utils/translate";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
@@ -233,9 +235,9 @@ interface PublicPortalProps {
   onClose: () => void;
   onOpenClientPortal?: (client: Client) => void;
   stocks?: StockRecord[];
-  onUpdateStocks?: (updatedStocks: StockRecord[]) => void;
+  onUpdateStocks?: (updatedStocks: StockRecord[]) => void | Promise<void>;
   distributedStocks?: DistributedStockLocation[];
-  onUpdateDistributedStocks?: (updated: DistributedStockLocation[]) => void;
+  onUpdateDistributedStocks?: (updated: DistributedStockLocation[]) => void | Promise<void>;
   commercialDocs?: CommercialDoc[];
   onUpdateCommercialDocs?: (updatedDocs: CommercialDoc[]) => void;
   fsmTours?: any[];
@@ -258,6 +260,7 @@ interface PublicPortalProps {
   saveLogisticsNotifications?: (updated: LogisticsNotification[]) => void;
   onAddLogisticsNotification?: (description: string, ugs: string) => void;
   onAddNotification?: (category: 'Stocks' | 'Défibrillateurs' | 'Interventions' | 'Factures & Devis' | 'Système', title: string) => void;
+  tenantId?: string;
 }
 
 // Receipt expense type
@@ -325,6 +328,7 @@ export default function PublicPortal({
   saveLogisticsNotifications,
   onAddLogisticsNotification,
   onAddNotification,
+  tenantId: propTenantId,
 }: PublicPortalProps) {
   const getNextDocRef = (
     type: "Devis" | "Facture" | "Proforma",
@@ -409,11 +413,25 @@ export default function PublicPortal({
     }
     const matched = members.find((m) => m.pin === trimmedPin);
     if (matched) {
-      setAuthenticatedUser(matched);
+      const activeTenant = (propTenantId && propTenantId !== 'demo')
+        ? propTenantId
+        : ((matched as any).envId || (matched as any).tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo');
+      const techSession = {
+        ...matched,
+        tenantId: activeTenant,
+        envId: activeTenant
+      };
+      setAuthenticatedUser(techSession as Member);
       localStorage.setItem(
         "defib_active_tech_session",
-        JSON.stringify(matched),
+        JSON.stringify(techSession),
       );
+      if (matched.locationLink) {
+        setTechLocationLink(matched.locationLink);
+      }
+      if (activeTenant && activeTenant !== 'demo') {
+        localStorage.setItem("defib_tenant_id", activeTenant);
+      }
       setInlineTechPin("");
       setActiveInlineLogin(null);
       triggerPreloader();
@@ -759,8 +777,15 @@ export default function PublicPortal({
   });
 
   const techTenantId = useMemo(() => {
-    return (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) || "demo";
-  }, []);
+    if (propTenantId && propTenantId !== "demo") return propTenantId;
+    const stored = typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null;
+    if (stored && stored !== "demo") return stored;
+    if (authenticatedUser) {
+      const uTenant = (authenticatedUser as any).tenantId || (authenticatedUser as any).envId;
+      if (uTenant && uTenant !== "demo") return uTenant;
+    }
+    return propTenantId || stored || "demo";
+  }, [propTenantId, authenticatedUser]);
 
   const techCurrentUser = useMemo(() => {
     return {
@@ -1148,7 +1173,16 @@ export default function PublicPortal({
   const [attemptedEndTourIds, setAttemptedEndTourIds] = useState<string[]>([]);
 
   // Localisation form states for the connected technician
-  const [techLocationLink, setTechLocationLink] = useState("");
+  const [techLocationLink, setTechLocationLink] = useState<string>(() => {
+    try {
+      const activeTechRaw = typeof window !== "undefined" ? localStorage.getItem("defib_active_tech_session") : null;
+      if (activeTechRaw) {
+        const parsed = JSON.parse(activeTechRaw);
+        if (parsed?.locationLink) return parsed.locationLink;
+      }
+    } catch (_) {}
+    return "";
+  });
   const [gpsSharingLink, setGpsSharingLink] = useState("");
 
   // Signature pad states and references for PublicPortal
@@ -1277,6 +1311,11 @@ export default function PublicPortal({
   const [newWebappSituation, setNewWebappSituation] = useState<
     "Disponible" | "Utilisé" | "Indisponible" | "Signalé manquant" | "Prêté"
   >("Disponible");
+
+  const [isSavingDistribStock, setIsSavingDistribStock] = useState<boolean>(false);
+  const [isSavingWebappTrace, setIsSavingWebappTrace] = useState<boolean>(false);
+  const [isSavingInventory, setIsSavingInventory] = useState<boolean>(false);
+  const [stockFeedbackMsg, setStockFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // helper for technician stocks tab lookup & changes
   const techActiveStocks = useMemo(() => {
@@ -4076,6 +4115,9 @@ export default function PublicPortal({
         setTechSignature(liveMember.signature);
       } else {
         // Fallback or read from localStorage if any
+        if (authenticatedUser.locationLink) {
+          setTechLocationLink(authenticatedUser.locationLink);
+        }
         const envId = localStorage.getItem("defib_tenant_id") || "demo";
         setTechStartStreet(localStorage.getItem(`defib_${envId}_tech_start_street_${authenticatedUser.name}`) || "");
         setTechStartCity(localStorage.getItem(`defib_${envId}_tech_start_city_${authenticatedUser.name}`) || "");
@@ -9314,6 +9356,21 @@ export default function PublicPortal({
                   className="space-y-4 pb-16 animate-fadeIn"
                   id="tab-stocks-screen"
                 >
+                  {(isSavingDistribStock || isSavingWebappTrace || isSavingInventory) && (
+                    <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-white font-sans p-6 select-none animate-fadeIn">
+                      <div className="bg-white text-black rounded-2xl p-6 shadow-2xl flex flex-col items-center gap-4 max-w-sm w-full text-center">
+                        <Loader2 className="w-10 h-10 animate-spin text-[#3556ec]" />
+                        <span className="font-bold text-lg text-slate-900">Enregistrement en cours...</span>
+                        <span className="text-sm text-slate-600">
+                          {isSavingDistribStock
+                            ? "Synchronisation du stock distribué et de la traçabilité dans la base de données..."
+                            : isSavingWebappTrace
+                            ? "Synchronisation de la pièce et de la traçabilité..."
+                            : "Enregistrement de l’inventaire..."}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   <style>{`
                     #tab-stocks-screen input,
                     #tab-stocks-screen textarea,
@@ -9413,6 +9470,32 @@ export default function PublicPortal({
                       );
                     })}
                   </select>
+
+                  {stockFeedbackMsg && (
+                    <div
+                      className={`p-3.5 mb-3 rounded-xl font-sans text-[15px] font-semibold flex items-center justify-between shadow-xs transition-all ${
+                        stockFeedbackMsg.type === "success"
+                          ? "bg-emerald-50 text-emerald-800 border border-emerald-300"
+                          : "bg-red-50 text-red-800 border border-red-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {stockFeedbackMsg.type === "success" ? (
+                          <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+                        )}
+                        <span>{stockFeedbackMsg.text}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setStockFeedbackMsg(null)}
+                        className="text-xs font-bold underline ml-2 cursor-pointer hover:opacity-80"
+                      >
+                        Fermer
+                      </button>
+                    </div>
+                  )}
 
                   {/* Button: Nouveau stock distribué */}
                   {!selectedTechStock && (
@@ -9900,7 +9983,8 @@ export default function PublicPortal({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
+                          disabled={isSavingDistribStock}
+                          onClick={async () => {
                             if (!newDistribStockId) {
                               alert("Veuillez sélectionner un équipement de la centrale des stocks.");
                               return;
@@ -9909,82 +9993,140 @@ export default function PublicPortal({
                               alert("Aucun emplacement technicien défini.");
                               return;
                             }
-                            const selectedStock = stocks.find((s) => s.id === newDistribStockId);
+                            const selectedStock = (stocks || []).find((s) => s.id === newDistribStockId);
                             if (!selectedStock) return;
 
-                            let targetId = "";
-                            let updatedDs = [...distributedStocks];
+                            setIsSavingDistribStock(true);
+                            try {
+                              let targetId = "";
+                              let updatedDs = [...(distributedStocks || [])];
 
-                            const existingIndex = updatedDs.findIndex(
-                              (ds) =>
-                                (ds.stockId === selectedStock.id || ds.denominationPieceId === selectedStock.denominationPieceId) &&
-                                ds.locationName &&
-                                ds.locationName.toLowerCase().trim() === techLocationLink.toLowerCase().trim()
-                            );
-
-                            if (existingIndex !== -1) {
-                              targetId = updatedDs[existingIndex].id;
-                              updatedDs[existingIndex] = {
-                                ...updatedDs[existingIndex],
-                                volumeDisponible: updatedDs[existingIndex].volumeDisponible + Number(newDistribVolumeDisponible),
-                              };
-                            } else {
-                              targetId = `dist_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-                              const newItem: DistributedStockLocation = {
-                                id: targetId,
-                                denominationPieceId: selectedStock.denominationPieceId,
-                                stockId: selectedStock.id,
-                                ugs: selectedStock.ugs,
-                                locationName: techLocationLink as any,
-                                volumeDisponible: Number(newDistribVolumeDisponible),
-                                volumeReserve: 0,
-                                volumeEntrant: 0,
-                              };
-                              updatedDs = [newItem, ...updatedDs];
-                            }
-
-                            if (onUpdateDistributedStocks) {
-                              onUpdateDistributedStocks(updatedDs);
-                            }
-
-                            // Update stock traceability if enabled
-                            if (newDistribTraceabilityEnabled && stocks && onUpdateStocks) {
-                              const updatedStocks = stocks.map((st) => {
-                                if (st.id === selectedStock.id) {
-                                  return {
-                                    ...st,
-                                    traceabilityEnabled: true,
-                                    traceabilities: [...(st.traceabilities || []), ...pendingNewDistribTraceabilities],
-                                  };
-                                }
-                                return st;
-                              });
-                              onUpdateStocks(updatedStocks);
-                            }
-
-                            if (onAddLogisticsNotification) {
-                              const name_technician = authenticatedUser?.name || "Un technicien";
-                              const location_name = techLocationLink || "Emplacement";
-                              const vObj = variables.find((v) => v.id === selectedStock.denominationPieceId);
-                              const pieceName = vObj?.nom || "Pièce inconnue";
-                              const ugsStr = selectedStock.ugs ? ` (${selectedStock.ugs})` : "";
-                              const ugsRef = `${pieceName}${ugsStr}`;
-
-                              onAddLogisticsNotification(
-                                `Le technicien ${name_technician} (${location_name}) a créé un nouveau stock distribué ${ugsRef}.`,
-                                selectedStock.ugs || pieceName
+                              const existingIndex = updatedDs.findIndex(
+                                (ds) =>
+                                  (ds.stockId === selectedStock.id || ds.denominationPieceId === selectedStock.denominationPieceId) &&
+                                  ds.locationName &&
+                                  ds.locationName.toLowerCase().trim() === techLocationLink.toLowerCase().trim()
                               );
-                            }
 
-                            setSelectedTechDistributedStockId(targetId);
-                            setShowNewDistribStockForm(false);
-                            setNewDistribStockId("");
-                            setNewDistribVolumeDisponible(1);
-                            setPendingNewDistribTraceabilities([]);
-                            setNewDistribTraceabilityEnabled(false);
+                              if (existingIndex !== -1) {
+                                targetId = updatedDs[existingIndex].id;
+                                updatedDs[existingIndex] = {
+                                  ...updatedDs[existingIndex],
+                                  volumeDisponible: updatedDs[existingIndex].volumeDisponible + Number(newDistribVolumeDisponible),
+                                };
+                              } else {
+                                targetId = `dist_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                                const newItem: DistributedStockLocation = {
+                                  id: targetId,
+                                  denominationPieceId: selectedStock.denominationPieceId,
+                                  stockId: selectedStock.id,
+                                  ugs: selectedStock.ugs,
+                                  locationName: techLocationLink as any,
+                                  volumeDisponible: Number(newDistribVolumeDisponible),
+                                  volumeReserve: 0,
+                                  volumeEntrant: 0,
+                                };
+                                updatedDs = [newItem, ...updatedDs];
+                              }
+
+                              if (onUpdateDistributedStocks) {
+                                await onUpdateDistributedStocks(updatedDs);
+                              }
+
+                              // Update stock traceability if enabled
+                              let updatedStocksList = stocks || [];
+                              if (newDistribTraceabilityEnabled && stocks && onUpdateStocks) {
+                                updatedStocksList = stocks.map((st) => {
+                                  if (st.id === selectedStock.id) {
+                                    return {
+                                      ...st,
+                                      traceabilityEnabled: true,
+                                      traceabilities: [...(st.traceabilities || []), ...pendingNewDistribTraceabilities],
+                                    };
+                                  }
+                                  return st;
+                                });
+                                await onUpdateStocks(updatedStocksList);
+                              }
+
+                              // Direct local storage & server sync guarantee across all tenant aliases
+                              const effTenant = techTenantId || (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) || "demo";
+                              try {
+                                const tenantKeys = [effTenant];
+                                if (/^d\d+$/i.test(effTenant) || /^\d+$/.test(effTenant)) {
+                                  const numOnly = effTenant.replace(/^d/i, "");
+                                  tenantKeys.push(`D${numOnly}`, `d${numOnly}`, numOnly);
+                                }
+                                for (const tk of Array.from(new Set(tenantKeys))) {
+                                  localStorage.setItem(`defib_${tk}_distributed_stocks`, JSON.stringify(updatedDs));
+                                  localStorage.setItem(`fs_cache_${tk}_distributed_stocks`, JSON.stringify(updatedDs));
+                                  localStorage.setItem(`defib_${tk}_stocks`, JSON.stringify(updatedStocksList));
+                                  localStorage.setItem(`fs_cache_${tk}_stocks`, JSON.stringify(updatedStocksList));
+                                  try {
+                                    idbSet(`defib_${tk}_distributed_stocks`, updatedDs).catch(() => {});
+                                    idbSet(`defib_${tk}_stocks`, updatedStocksList).catch(() => {});
+                                  } catch (_) {}
+                                }
+
+                                await fetch("/api/sync-collection", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    collectionName: "distributed_stocks",
+                                    tenantId: effTenant,
+                                    value: updatedDs,
+                                  }),
+                                });
+
+                                await fetch("/api/sync-collection", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    collectionName: "stocks",
+                                    tenantId: effTenant,
+                                    value: updatedStocksList,
+                                  }),
+                                });
+                              } catch (syncErr) {
+                                console.warn("Direct server sync fallback:", syncErr);
+                              }
+
+                              if (onAddLogisticsNotification) {
+                                const name_technician = authenticatedUser?.name || "Un technicien";
+                                const location_name = techLocationLink || "Emplacement";
+                                const vObj = variables.find((v) => v.id === selectedStock.denominationPieceId);
+                                const pieceName = vObj?.nom || "Pièce inconnue";
+                                const ugsStr = selectedStock.ugs ? ` (${selectedStock.ugs})` : "";
+                                const ugsRef = `${pieceName}${ugsStr}`;
+
+                                onAddLogisticsNotification(
+                                  `Le technicien ${name_technician} (${location_name}) a créé un nouveau stock distribué ${ugsRef}.`,
+                                  selectedStock.ugs || pieceName
+                                );
+                              }
+
+                              setSelectedTechDistributedStockId(targetId);
+                              setShowNewDistribStockForm(false);
+                              setNewDistribStockId("");
+                              setNewDistribVolumeDisponible(1);
+                              setPendingNewDistribTraceabilities([]);
+                              setNewDistribTraceabilityEnabled(false);
+                              setStockFeedbackMsg({
+                                type: "success",
+                                text: "Nouveau stock distribué enregistré avec succès.",
+                              });
+                            } catch (err: any) {
+                              console.error("Error saving distributed stock:", err);
+                              setStockFeedbackMsg({
+                                type: "error",
+                                text: "Erreur lors de l'enregistrement du stock : " + (err.message || "Erreur inconnue"),
+                              });
+                            } finally {
+                              setIsSavingDistribStock(false);
+                            }
                           }}
                           style={{
-                            backgroundColor: "rgb(53, 86, 236)",
+                            backgroundColor: isSavingDistribStock ? "rgb(120, 140, 240)" : "rgb(53, 86, 236)",
                             color: "#ffffff",
                             fontSize: "18px",
                             borderRadius: "13px",
@@ -9992,11 +10134,18 @@ export default function PublicPortal({
                             border: "none",
                             boxShadow:
                               "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                            cursor: "pointer",
+                            cursor: isSavingDistribStock ? "not-allowed" : "pointer",
                           }}
                           className="flex-1 font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
                         >
-                          Enregistrer
+                          {isSavingDistribStock ? (
+                            <span className="flex items-center justify-center gap-2">
+                              <Loader2 className="w-5 h-5 animate-spin inline" />
+                              Enregistrement en cours...
+                            </span>
+                          ) : (
+                            "Enregistrer"
+                          )}
                         </button>
                       </div>
                     </div>
@@ -10837,7 +10986,8 @@ export default function PublicPortal({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => {
+                                  disabled={isSavingWebappTrace}
+                                  onClick={async () => {
                                     if (!newWebappLotOrSerial.trim()) {
                                       alert("Le numéro de lot ou série est requis.");
                                       return;
@@ -10856,64 +11006,115 @@ export default function PublicPortal({
 
                                     if (!matchedStockRecord || !stocks || !onUpdateStocks) return;
 
-                                    const newTrace: StockTraceability = {
-                                      id: "tr_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
-                                      movementId: newWebappMovementId || "Autre (Aucun mouvement)",
-                                      lotOrSerial: newWebappLotOrSerial.trim(),
-                                      expirationDate: newWebappExpirationDate || undefined,
-                                      volume: 1,
-                                      situation: newWebappSituation || "Disponible",
-                                      emplacement: selectedTechStock?.locationName || techLocationLink || "Centrale des stocks",
-                                    };
+                                    setIsSavingWebappTrace(true);
+                                    try {
+                                      const newTrace: StockTraceability = {
+                                        id: "tr_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+                                        movementId: newWebappMovementId || "Autre (Aucun mouvement)",
+                                        lotOrSerial: newWebappLotOrSerial.trim(),
+                                        expirationDate: newWebappExpirationDate || undefined,
+                                        volume: 1,
+                                        situation: newWebappSituation || "Disponible",
+                                        emplacement: selectedTechStock?.locationName || techLocationLink || "Centrale des stocks",
+                                      };
 
-                                    const currentTraces = matchedStockRecord.traceabilities || [];
-                                    const updatedTraceabilities = [...currentTraces, newTrace];
+                                      const currentTraces = matchedStockRecord.traceabilities || [];
+                                      const updatedTraceabilities = [...currentTraces, newTrace];
 
-                                    const updatedStocks = stocks.map((st) => {
-                                      if (st.id === matchedStockRecord.id) {
-                                        return {
-                                          ...st,
-                                          traceabilityEnabled: true,
-                                          traceabilities: updatedTraceabilities,
-                                        };
+                                      const updatedStocks = stocks.map((st) => {
+                                        if (st.id === matchedStockRecord.id) {
+                                          return {
+                                            ...st,
+                                            traceabilityEnabled: true,
+                                            traceabilities: updatedTraceabilities,
+                                          };
+                                        }
+                                        return st;
+                                      });
+
+                                      await onUpdateStocks(updatedStocks);
+
+                                      // Direct local storage & server sync guarantee across all tenant aliases
+                                      const effTenant = techTenantId || (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) || "demo";
+                                      const tenantKeys = [effTenant];
+                                      if (/^d\d+$/i.test(effTenant) || /^\d+$/.test(effTenant)) {
+                                        const numOnly = effTenant.replace(/^d/i, "");
+                                        tenantKeys.push(`D${numOnly}`, `d${numOnly}`, numOnly);
                                       }
-                                      return st;
-                                    });
+                                      for (const tk of Array.from(new Set(tenantKeys))) {
+                                        localStorage.setItem(`defib_${tk}_stocks`, JSON.stringify(updatedStocks));
+                                        localStorage.setItem(`fs_cache_${tk}_stocks`, JSON.stringify(updatedStocks));
+                                        try {
+                                          idbSet(`defib_${tk}_stocks`, updatedStocks).catch(() => {});
+                                        } catch (_) {}
+                                      }
 
-                                    onUpdateStocks(updatedStocks);
+                                      try {
+                                        await fetch("/api/sync-collection", {
+                                          method: "POST",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({
+                                            collectionName: "stocks",
+                                            tenantId: effTenant,
+                                            value: updatedStocks,
+                                          }),
+                                        });
+                                      } catch (syncErr) {
+                                        console.warn("Direct server sync fallback:", syncErr);
+                                      }
 
-                                    // Reset form
-                                    setShowNewWebappTraceForm(false);
-                                    if (onAddLogisticsNotification) {
-                                      const name_technician = authenticatedUser?.name || "Un technicien";
-                                      const location_name = selectedTechStock?.locationName || techLocationLink || "Emplacement";
-                                      const pieceName = selectedStockVariable?.nom || "Pièce inconnue";
-                                      const ugsStr = matchedStockRecord?.ugs ? ` (${matchedStockRecord.ugs})` : "";
-                                      const ugsRef = `${pieceName}${ugsStr}`;
-                                      const lotStr = newWebappLotOrSerial.trim();
+                                      setShowNewWebappTraceForm(false);
+                                      setStockFeedbackMsg({
+                                        type: "success",
+                                        text: "Inventaire de traçabilité enregistré avec succès.",
+                                      });
 
-                                      onAddLogisticsNotification(
-                                        `Le technicien ${name_technician} (${location_name}) a modifié la pièce ${ugsRef}, pièce(s) : ${lotStr}.`,
-                                        matchedStockRecord?.ugs || pieceName
-                                      );
+                                      if (onAddLogisticsNotification) {
+                                        const name_technician = authenticatedUser?.name || "Un technicien";
+                                        const location_name = selectedTechStock?.locationName || techLocationLink || "Emplacement";
+                                        const pieceName = selectedStockVariable?.nom || "Pièce inconnue";
+                                        const ugsStr = matchedStockRecord?.ugs ? ` (${matchedStockRecord.ugs})` : "";
+                                        const ugsRef = `${pieceName}${ugsStr}`;
+                                        const lotStr = newWebappLotOrSerial.trim();
+
+                                        onAddLogisticsNotification(
+                                          `Le technicien ${name_technician} (${location_name}) a modifié la pièce ${ugsRef}, pièce(s) : ${lotStr}.`,
+                                          matchedStockRecord?.ugs || pieceName
+                                        );
+                                      }
+                                      setNewWebappLotOrSerial("");
+                                      setNewWebappExpirationDate("");
+                                      setNewWebappSituation("Disponible");
+                                      setNewWebappMovementId("Autre (Aucun mouvement)");
+                                    } catch (err: any) {
+                                      console.error("Error saving webapp trace:", err);
+                                      setStockFeedbackMsg({
+                                        type: "error",
+                                        text: "Erreur lors de l'enregistrement de la traçabilité : " + (err.message || "Erreur inconnue"),
+                                      });
+                                    } finally {
+                                      setIsSavingWebappTrace(false);
                                     }
-                                    setNewWebappLotOrSerial("");
-                                    setNewWebappExpirationDate("");
-                                    setNewWebappSituation("Disponible");
-                                    setNewWebappMovementId("Autre (Aucun mouvement)");
                                   }}
                                   style={{
-                                    backgroundColor: "rgb(53, 86, 236)",
+                                    backgroundColor: isSavingWebappTrace ? "rgb(120, 140, 240)" : "rgb(53, 86, 236)",
                                     color: "#ffffff",
                                     fontSize: "18px",
                                     borderRadius: "13px",
                                     padding: "12px 16px",
                                     border: "none",
-                                    cursor: "pointer",
+                                    cursor: isSavingWebappTrace ? "not-allowed" : "pointer",
                                   }}
                                   className="flex-1 font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
                                 >
-                                  Enregistrer
+                                  {isSavingWebappTrace ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                      <Loader2 className="w-5 h-5 animate-spin inline" />
+                                      Enregistrement...
+                                    </span>
+                                  ) : (
+                                    "Enregistrer"
+                                  )}
                                 </button>
                               </div>
                             </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Defibrillateur, Client, Variable } from '../types';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -762,9 +762,36 @@ export default function MapModal({
     return itemsWithCoords.slice(0, renderedCount);
   }, [itemsWithCoords, renderedCount]);
 
-  // Trigger map view target or auto-zoom to region when opened or when region changes
+  // Keep refs for itemsWithCoords and clientMap so background updates don't cause map view target resets
+  const itemsWithCoordsRef = useRef(itemsWithCoords);
   useEffect(() => {
-    if (!isOpen) return;
+    itemsWithCoordsRef.current = itemsWithCoords;
+  }, [itemsWithCoords]);
+
+  const clientMapRef = useRef(clientMap);
+  useEffect(() => {
+    clientMapRef.current = clientMap;
+  }, [clientMap]);
+
+  const prevIsOpenRef = useRef(false);
+  const prevRegionRef = useRef<string | null>(null);
+
+  // Trigger map view target or auto-zoom to region ONLY when opened initially or when region explicitly changes
+  useEffect(() => {
+    if (!isOpen) {
+      prevIsOpenRef.current = false;
+      return;
+    }
+
+    const justOpened = !prevIsOpenRef.current && isOpen;
+    const regionChanged = prevRegionRef.current !== activeFilters.region;
+    prevIsOpenRef.current = isOpen;
+    prevRegionRef.current = activeFilters.region;
+
+    // Do nothing if neither opened nor region changed (prevents snapping back when user zooms, pans, or selects)
+    if (!justOpened && !regionChanged) {
+      return;
+    }
 
     if (activeFilters.region === 'Tous') {
       setViewTarget({
@@ -775,8 +802,11 @@ export default function MapModal({
       return;
     }
 
-    const regionItems = itemsWithCoords.filter(({ item }) => {
-      const r = getItemRegion(item, clientMap);
+    const currentItemsWithCoords = itemsWithCoordsRef.current;
+    const currentClientMap = clientMapRef.current;
+
+    const regionItems = currentItemsWithCoords.filter(({ item }) => {
+      const r = getItemRegion(item, currentClientMap);
       return r.toLowerCase() === activeFilters.region.toLowerCase();
     });
 
@@ -822,7 +852,7 @@ export default function MapModal({
         });
       }
     }
-  }, [isOpen, activeFilters.region, itemsWithCoords, clientMap]);
+  }, [isOpen, activeFilters.region]);
 
   // Set initial selected item when opened
   useEffect(() => {

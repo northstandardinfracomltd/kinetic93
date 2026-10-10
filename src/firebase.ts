@@ -312,6 +312,16 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
       } else if (item.name && String(item.name).trim()) {
         key = `m_name_${String(item.name).trim().toLowerCase()}`;
       }
+    } else if (collectionName === 'stocks' || collectionName === 'stock' || collectionName === 'stockItems') {
+      if (item.ugs) {
+        key = `ugs_${String(item.ugs).trim().toLowerCase()}`;
+      } else if (item.denominationPieceId) {
+        key = `dp_${String(item.denominationPieceId).trim()}`;
+      }
+    } else if (collectionName === 'distributed_stocks' || collectionName === 'distributedStocks') {
+      if ((item.stockId || item.denominationPieceId) && item.locationName) {
+        key = `ds_${item.stockId || item.denominationPieceId}_${String(item.locationName).trim().toLowerCase()}`;
+      }
     }
 
     if (!key) {
@@ -485,7 +495,14 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
     // In customer tenant mode (e.g. D1, D2, D19, D58, D67, etc.):
     // If the item has an explicit envId/tenantId, it MUST match this tenant or recognized aliases
     if (itemEnv) {
-      if (itemEnv === 'demo') return false;
+      if (itemEnv === 'demo') {
+        if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
+          item.envId = activeTenantId;
+          item.tenantId = activeTenantId;
+          return true;
+        }
+        return false;
+      }
       if (itemEnv === cleanTid) return true;
       if (numTid && numItemEnv && numTid === numItemEnv) return true;
       // Recognized linked tenants sharing defibrillateurs catalog (e.g. D27 & D58)
@@ -497,7 +514,18 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
       if (collectionName === 'clients' && ((cleanTid === 'd58' && itemEnv === 'd27') || (cleanTid === 'd27' && itemEnv === 'd58'))) {
         return true;
       }
+      if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
+        item.envId = activeTenantId;
+        item.tenantId = activeTenantId;
+        return true;
+      }
       return false; // Rejects items belonging to another tenant!
+    }
+
+    if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
+      item.envId = activeTenantId;
+      item.tenantId = activeTenantId;
+      return true;
     }
 
     // Never leak demo-specific mock items into customer environments
@@ -768,15 +796,79 @@ export async function fetchCollectionFromFirestore<T>(
         const json = await resp.json();
         if (json && json.value !== undefined) {
           const val = filterCollectionForTenant(json.value as T, collectionName, activeTenantId);
+          const primaryKey = candidateKeys[0] || `${collectionName}_${activeTenantId}`;
+
           if (Array.isArray(val) && val.length > 0) {
             onProgress?.(val.length, val.length, `Chargement ${val.length.toLocaleString('en-US')}/${val.length.toLocaleString('en-US')}, Terminé.`);
+            idbSet(primaryKey, val).catch(() => {});
+            idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
+            saveToLocalCache(primaryKey, val);
+            return val;
+          } else if (Array.isArray(val) && val.length === 0) {
+            // CRITICAL PROTECTION: The server returned an empty array.
+            // Check if local cache or IndexedDB already has items before wiping out!
+            let localExisting: any = getFromLocalCache<any>(primaryKey);
+            if (!localExisting || (Array.isArray(localExisting) && localExisting.length === 0)) {
+              for (const ck of candidateKeys) {
+                const cv = getFromLocalCache<any>(ck);
+                if (Array.isArray(cv) && cv.length > 0) {
+                  localExisting = cv;
+                  break;
+                }
+              }
+            }
+            if (!localExisting || (Array.isArray(localExisting) && localExisting.length === 0)) {
+              try {
+                const rawDefib = localStorage.getItem(`defib_${activeTenantId}_${collectionName}`) ||
+                  localStorage.getItem(`fs_cache_${activeTenantId}_${collectionName}`);
+                if (rawDefib) {
+                  const parsed = JSON.parse(rawDefib);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    localExisting = parsed;
+                  }
+                }
+              } catch (_) {}
+            }
+            if (!localExisting || (Array.isArray(localExisting) && localExisting.length === 0)) {
+              try {
+                const idbCached = await idbGet<any>(primaryKey);
+                if (Array.isArray(idbCached) && idbCached.length > 0) {
+                  localExisting = idbCached;
+                } else {
+                  const altIdb = await idbGet<any>(`defib_${activeTenantId}_${collectionName}`);
+                  if (Array.isArray(altIdb) && altIdb.length > 0) {
+                    localExisting = altIdb;
+                  }
+                }
+              } catch (_) {}
+            }
+
+            if (Array.isArray(localExisting) && localExisting.length > 0) {
+              console.warn(`[Sync Server Relay] Remote ${collectionName} returned empty array, but local cache has ${localExisting.length} items. Preserving local data and re-syncing to server.`);
+              fetch('/api/sync-collection', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  collectionName,
+                  tenantId: activeTenantId,
+                  value: localExisting
+                })
+              }).catch(() => {});
+              return filterCollectionForTenant(localExisting as T, collectionName, activeTenantId);
+            }
+
+            // Both remote and local are genuinely empty
+            idbSet(primaryKey, val).catch(() => {});
+            idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
+            saveToLocalCache(primaryKey, val);
+            return val;
+          } else {
+            // Non-array object/primitive
+            idbSet(primaryKey, val).catch(() => {});
+            idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
+            saveToLocalCache(primaryKey, val);
+            return val;
           }
-          const primaryKey = candidateKeys[0] || `${collectionName}_${activeTenantId}`;
-          // Persist to local cache and IndexedDB without freezing UI
-          idbSet(primaryKey, val).catch(() => {});
-          idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
-          saveToLocalCache(primaryKey, val);
-          return val;
         }
       }
     } catch (apiErr) {

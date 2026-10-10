@@ -1622,9 +1622,42 @@ export default function DefibTab({
 
   const [formError, setFormError] = useState('');
 
-  // --- BULK EDIT FIELDS (Refait à zéro: 1 seul champ à modifier) ---
-  const [selectedBulkField, setSelectedBulkField] = useState<string>('');
-  const [bulkFieldValue, setBulkFieldValue] = useState<string>('');
+  // --- BULK EDIT FIELDS (Jusqu'à 5 champs) ---
+  const [bulkFields, setBulkFields] = useState<Array<{ id: string; field: string; value: string }>>([
+    { id: '1', field: '', value: '' }
+  ]);
+
+  const handleAddBulkField = () => {
+    if (bulkFields.length >= 5) return;
+    setBulkFields(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, field: '', value: '' }]);
+  };
+
+  const handleRemoveBulkField = (indexToRemove: number) => {
+    setBulkFields(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleUpdateBulkFieldType = (index: number, newField: string) => {
+    setBulkFields(prev => prev.map((item, idx) => {
+      if (idx === index) {
+        return { ...item, field: newField, value: '' };
+      }
+      return item;
+    }));
+  };
+
+  const handleUpdateBulkFieldValue = (index: number, newValue: string) => {
+    setBulkFields(prev => prev.map((item, idx) => {
+      if (idx === index) {
+        return { ...item, value: newValue };
+      }
+      return item;
+    }));
+  };
+
+  const isAllBulkFieldsCompleted = useMemo(() => {
+    if (bulkFields.length === 0) return false;
+    return bulkFields.every(item => Boolean(item.field && item.value !== undefined && item.value.trim() !== ''));
+  }, [bulkFields]);
   const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('oui');
@@ -3000,168 +3033,165 @@ export default function DefibTab({
   // Open Bulk Edit pane with clean empty fields for mass correction
   const handleOpenBulkEdit = () => {
     if (selectedIds.length === 0) return;
-    setSelectedBulkField('');
-    setBulkFieldValue('');
+    setBulkFields([{ id: Date.now().toString(), field: '', value: '' }]);
     setIsBulkEditOpen(true);
   };
 
-  // Bulk Edit submission (Refait à zéro: 1 seul champ)
+  // Bulk Edit submission (Enregistrement propre de chaque valeur de champ modifié un par un)
   const handleBulkEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isBulkSubmitting) return;
 
-    if (!selectedBulkField) {
-      alert("Veuillez sélectionner un champ à modifier.");
-      return;
-    }
-
-    if (bulkFieldValue === undefined || bulkFieldValue === '') {
-      alert("Veuillez renseigner ou sélectionner une valeur.");
+    if (!isAllBulkFieldsCompleted || bulkFields.length === 0) {
+      alert("Veuillez renseigner tous les champs sélectionnés.");
       return;
     }
 
     const updates: Partial<Omit<Defibrillateur, 'id'>> = {};
 
-    switch (selectedBulkField) {
-      case 'modele': {
-        updates.modeleId = bulkFieldValue;
-        const foundVar = (variables || []).find(v => v.id === bulkFieldValue) || modelesDefib.find(m => m.id === bulkFieldValue);
-        if (foundVar) {
-          (updates as any).modele = foundVar.nom || '';
-          if (foundVar.marque) {
-            (updates as any).marque = foundVar.marque;
+    for (const item of bulkFields) {
+      const { field, value } = item;
+      switch (field) {
+        case 'modele': {
+          updates.modeleId = value;
+          const foundVar = (variables || []).find(v => v.id === value) || modelesDefib.find(m => m.id === value);
+          if (foundVar) {
+            (updates as any).modele = foundVar.nom || '';
+            if (foundVar.marque) {
+              (updates as any).marque = foundVar.marque;
+            }
           }
+          break;
         }
-        break;
-      }
-      case 'nomPrenomSite': {
-        updates.nomPrenomSite = bulkFieldValue.trim();
-        break;
-      }
-      case 'telephoneSite': {
-        updates.telephoneSite = bulkFieldValue.trim();
-        break;
-      }
-      case 'emailSite': {
-        updates.emailSite = bulkFieldValue.trim();
-        break;
-      }
-      case 'prochaineMaintenance': {
-        const iso = toISODateOnly(bulkFieldValue);
-        if (!iso) {
-          alert("Veuillez renseigner une date valide pour la prochaine maintenance.");
-          return;
+        case 'nomPrenomSite': {
+          updates.nomPrenomSite = value.trim();
+          break;
         }
-        (updates as any).prochaineMaintenance = iso;
-        (updates as any).prochaine_visite = iso;
-        (updates as any).prochaine_v = iso;
-        break;
-      }
-      case 'fsmAutorise': {
-        updates.fsmAutorise = bulkFieldValue as 'Oui' | 'Non';
-        (updates as any).maintenanceAutorisee = bulkFieldValue;
-        (updates as any).maintenance_autorisee = bulkFieldValue;
-        (updates as any).fsm_autorise = bulkFieldValue;
-        break;
-      }
-      case 'commentaireAdresse': {
-        updates.commentaireAdresse = bulkFieldValue.trim();
-        break;
-      }
-      case 'commentaire': {
-        updates.commentaire = bulkFieldValue.trim();
-        break;
-      }
-      case 'lotElectrodeA': {
-        updates.lotElectrodeA = bulkFieldValue.trim();
-        (updates as any).lot_electrode_a = bulkFieldValue.trim();
-        break;
-      }
-      case 'peremptionElectrodeA': {
-        const iso = toISODateOnly(bulkFieldValue);
-        if (!iso) {
-          alert("Veuillez renseigner une date valide pour la péremption.");
-          return;
+        case 'telephoneSite': {
+          updates.telephoneSite = value.trim();
+          break;
         }
-        updates.peremptionElectrodeA = iso;
-        (updates as any).peremption_electrode_a = iso;
-        (updates as any).peremption_a = iso;
-        break;
-      }
-      case 'lotElectrodeP': {
-        updates.lotElectrodeP = bulkFieldValue.trim();
-        (updates as any).lot_electrode_p = bulkFieldValue.trim();
-        break;
-      }
-      case 'peremptionElectrodeP': {
-        const iso = toISODateOnly(bulkFieldValue);
-        if (!iso) {
-          alert("Veuillez renseigner une date valide pour la péremption.");
-          return;
+        case 'emailSite': {
+          updates.emailSite = value.trim();
+          break;
         }
-        updates.peremptionElectrodeP = iso;
-        (updates as any).peremption_electrode_p = iso;
-        (updates as any).peremption_p = iso;
-        break;
-      }
-      case 'lotBatterie': {
-        updates.lotBatterie = bulkFieldValue.trim();
-        (updates as any).lot_batterie = bulkFieldValue.trim();
-        break;
-      }
-      case 'peremptionBatterie': {
-        const iso = toISODateOnly(bulkFieldValue);
-        if (!iso) {
-          alert("Veuillez renseigner une date valide pour la péremption.");
-          return;
+        case 'prochaineMaintenance': {
+          const iso = toISODateOnly(value);
+          if (!iso) {
+            alert("Veuillez renseigner une date valide pour la prochaine maintenance.");
+            return;
+          }
+          (updates as any).prochaineMaintenance = iso;
+          (updates as any).prochaine_visite = iso;
+          (updates as any).prochaine_v = iso;
+          break;
         }
-        updates.peremptionBatterie = iso;
-        (updates as any).peremption_batterie = iso;
-        (updates as any).peremption_b = iso;
-        break;
+        case 'fsmAutorise': {
+          updates.fsmAutorise = value as 'Oui' | 'Non';
+          (updates as any).maintenanceAutorisee = value;
+          (updates as any).maintenance_autorisee = value;
+          (updates as any).fsm_autorise = value;
+          break;
+        }
+        case 'commentaireAdresse': {
+          updates.commentaireAdresse = value.trim();
+          break;
+        }
+        case 'commentaire': {
+          updates.commentaire = value.trim();
+          break;
+        }
+        case 'lotElectrodeA': {
+          updates.lotElectrodeA = value.trim();
+          (updates as any).lot_electrode_a = value.trim();
+          break;
+        }
+        case 'peremptionElectrodeA': {
+          const iso = toISODateOnly(value);
+          if (!iso) {
+            alert("Veuillez renseigner une date valide pour la péremption.");
+            return;
+          }
+          updates.peremptionElectrodeA = iso;
+          (updates as any).peremption_electrode_a = iso;
+          (updates as any).peremption_a = iso;
+          break;
+        }
+        case 'lotElectrodeP': {
+          updates.lotElectrodeP = value.trim();
+          (updates as any).lot_electrode_p = value.trim();
+          break;
+        }
+        case 'peremptionElectrodeP': {
+          const iso = toISODateOnly(value);
+          if (!iso) {
+            alert("Veuillez renseigner une date valide pour la péremption.");
+            return;
+          }
+          updates.peremptionElectrodeP = iso;
+          (updates as any).peremption_electrode_p = iso;
+          (updates as any).peremption_p = iso;
+          break;
+        }
+        case 'lotBatterie': {
+          updates.lotBatterie = value.trim();
+          (updates as any).lot_batterie = value.trim();
+          break;
+        }
+        case 'peremptionBatterie': {
+          const iso = toISODateOnly(value);
+          if (!iso) {
+            alert("Veuillez renseigner une date valide pour la péremption.");
+            return;
+          }
+          updates.peremptionBatterie = iso;
+          (updates as any).peremption_batterie = iso;
+          (updates as any).peremption_b = iso;
+          break;
+        }
+        case 'numVoie': {
+          updates.numVoie = value.trim();
+          (updates as any).num_voie = value.trim();
+          break;
+        }
+        case 'ville': {
+          updates.ville = value.trim();
+          break;
+        }
+        case 'cp': {
+          updates.cp = value.trim();
+          (updates as any).codePostal = value.trim();
+          (updates as any).code_postal = value.trim();
+          break;
+        }
+        case 'region': {
+          updates.region = value.trim();
+          break;
+        }
+        case 'pays': {
+          updates.pays = value.trim();
+          break;
+        }
+        case 'latitude': {
+          const latClean = value.trim().replace(',', '.');
+          updates.latitude = latClean;
+          (updates as any).lat = latClean;
+          break;
+        }
+        case 'longitude': {
+          const lngClean = value.trim().replace(',', '.');
+          updates.longitude = lngClean;
+          (updates as any).lng = lngClean;
+          (updates as any).lon = lngClean;
+          break;
+        }
+        default:
+          break;
       }
-      case 'numVoie': {
-        updates.numVoie = bulkFieldValue.trim();
-        (updates as any).num_voie = bulkFieldValue.trim();
-        break;
-      }
-      case 'ville': {
-        updates.ville = bulkFieldValue.trim();
-        break;
-      }
-      case 'cp': {
-        updates.cp = bulkFieldValue.trim();
-        (updates as any).codePostal = bulkFieldValue.trim();
-        (updates as any).code_postal = bulkFieldValue.trim();
-        break;
-      }
-      case 'region': {
-        updates.region = bulkFieldValue.trim();
-        break;
-      }
-      case 'pays': {
-        updates.pays = bulkFieldValue.trim();
-        break;
-      }
-      case 'latitude': {
-        const latClean = bulkFieldValue.trim().replace(',', '.');
-        updates.latitude = latClean;
-        (updates as any).lat = latClean;
-        break;
-      }
-      case 'longitude': {
-        const lngClean = bulkFieldValue.trim().replace(',', '.');
-        updates.longitude = lngClean;
-        (updates as any).lng = lngClean;
-        (updates as any).lon = lngClean;
-        break;
-      }
-      default:
-        return;
     }
 
     if (Object.keys(updates).length === 0) {
-      alert("Veuillez renseigner une valeur valide.");
+      alert("Veuillez renseigner au moins une valeur valide.");
       return;
     }
 
@@ -3178,15 +3208,13 @@ export default function DefibTab({
       ]);
       await new Promise(r => setTimeout(r, 200));
 
-      setSelectedBulkField('');
-      setBulkFieldValue('');
+      setBulkFields([{ id: Date.now().toString(), field: '', value: '' }]);
       setIsBulkEditOpen(false);
       setSelectedIds([]);
     } catch (err) {
       console.error("Erreur lors de la modification en masse :", err);
       // Close pane and clear selection so user is never locked out
-      setSelectedBulkField('');
-      setBulkFieldValue('');
+      setBulkFields([{ id: Date.now().toString(), field: '', value: '' }]);
       setIsBulkEditOpen(false);
       setSelectedIds([]);
     } finally {
@@ -3405,11 +3433,7 @@ export default function DefibTab({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedBulkField('');
-                      setBulkFieldValue('');
-                      setIsBulkEditOpen(true);
-                    }}
+                    onClick={handleOpenBulkEdit}
                     id="btn-bulk-modify"
                     style={rowActionButton18Style}
                     className="cursor-pointer select-none"
@@ -3754,28 +3778,12 @@ export default function DefibTab({
               {t("Pro.Main au plus proche")}
             </button>
 
-            {/* Filter: Indicatif postal court (System Dropdown without arrow-down icon) */}
-            <div className="relative inline-block">
-              <style>{`
-                #filter-postal-court-select {
-                  appearance: none !important;
-                  -webkit-appearance: none !important;
-                  -moz-appearance: none !important;
-                  background-image: none !important;
-                }
-                #filter-postal-court-select::-ms-expand {
-                  display: none !important;
-                }
-              `}</style>
-              <select
+            {/* Filter: Indicatif postal court */}
+            {selectedDepartment ? (
+              <button
+                type="button"
                 id="filter-postal-court-select"
-                value={selectedDepartment || ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val && val !== '__ALL__') {
-                    setSelectedDepartment(val);
-                  }
-                }}
+                onClick={() => setSelectedDepartment(null)}
                 style={{
                   borderRadius: '1000px',
                   padding: '8px 16px',
@@ -3783,35 +3791,78 @@ export default function DefibTab({
                   fontWeight: 100,
                   cursor: 'pointer',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  backgroundColor: selectedDepartment ? '#fe4eba' : '#ffffff',
-                  color: selectedDepartment ? '#ffffff' : '#000000',
-                  border: selectedDepartment ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
+                  backgroundColor: '#fe4eba',
+                  color: '#ffffff',
+                  border: '1px solid #fe4eba',
                   boxShadow: 'none',
                   outline: 'none',
-                  appearance: 'none',
-                  WebkitAppearance: 'none',
-                  MozAppearance: 'none',
-                  backgroundImage: 'none',
                   textAlign: 'center',
                   transition: 'all 0.15s ease'
                 }}
                 className="transition-all select-none"
-                title={t("Filtrer selon indicatif postal")}
+                title={`${t("Indicatif postal court")} (${selectedDepartment})`}
               >
-                <option value="" disabled style={{ backgroundColor: '#ffffff', color: '#000000' }}>
-                  {t("Filtrer selon indicatif postal")}
-                </option>
-                {FRENCH_DEPARTMENTS.map((dept) => (
-                  <option
-                    key={dept}
-                    value={dept}
-                    style={{ backgroundColor: '#ffffff', color: '#000000' }}
-                  >
-                    {selectedDepartment === dept ? `${t("Indicatif postal court")} (${dept})` : dept}
+                {`${t("Indicatif postal court")} (${selectedDepartment})`}
+              </button>
+            ) : (
+              <div className="relative inline-block">
+                <style>{`
+                  #filter-postal-court-select {
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    -moz-appearance: none !important;
+                    background-image: none !important;
+                  }
+                  #filter-postal-court-select::-ms-expand {
+                    display: none !important;
+                  }
+                `}</style>
+                <select
+                  id="filter-postal-court-select"
+                  value=""
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val && val !== '__ALL__') {
+                      setSelectedDepartment(val);
+                    }
+                  }}
+                  style={{
+                    borderRadius: '1000px',
+                    padding: '8px 16px',
+                    fontSize: '18px',
+                    fontWeight: 100,
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    backgroundColor: '#ffffff',
+                    color: '#000000',
+                    border: '1px solid rgb(218, 218, 218)',
+                    boxShadow: 'none',
+                    outline: 'none',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'none',
+                    backgroundImage: 'none',
+                    textAlign: 'center',
+                    transition: 'all 0.15s ease'
+                  }}
+                  className="transition-all select-none"
+                  title={t("Filtrer selon indicatif postal")}
+                >
+                  <option value="" disabled style={{ backgroundColor: '#ffffff', color: '#000000' }}>
+                    {t("Filtrer selon indicatif postal")}
                   </option>
-                ))}
-              </select>
-            </div>
+                  {FRENCH_DEPARTMENTS.map((dept) => (
+                    <option
+                      key={dept}
+                      value={dept}
+                      style={{ backgroundColor: '#ffffff', color: '#000000' }}
+                    >
+                      {dept}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard + Gérer la visibilité des colonnes */}
@@ -7396,609 +7447,669 @@ export default function DefibTab({
           <form onSubmit={handleBulkEditSubmit} className="flex-1 flex flex-col min-h-0" id="bulk-edit-form">
             {/* Scroll Area containing fields */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              
-              {/* Field selector system dropdown */}
-              <div>
-                <select
-                  id="bulk-field-select"
-                  value={selectedBulkField}
-                  onChange={(e) => {
-                    setSelectedBulkField(e.target.value);
-                    setBulkFieldValue("");
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "10px 14px",
-                    fontSize: "16px",
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    fontWeight: 100,
-                    backgroundColor: "#ffffff",
-                    color: "#000000",
-                    border: "1px solid #dedede",
-                    borderRadius: "10px",
-                    outline: "none",
-                    cursor: "pointer",
-                    appearance: "none",
-                    WebkitAppearance: "none",
-                    MozAppearance: "none",
-                    backgroundImage: "none"
-                  }}
-                  className="outline-none appearance-none"
-                >
-                  <option value="">-- Choisir le champ à modifier --</option>
-                  <option value="modele">Modèle. (Défibrillateur)</option>
-                  <option value="nomPrenomSite">Nom et prénom. (Section client)</option>
-                  <option value="telephoneSite">Téléphone portable. (Section client)</option>
-                  <option value="emailSite">Email. (Section client)</option>
-                  <option value="prochaineMaintenance">Prochaine maintenance. (Date)</option>
-                  <option value="fsmAutorise">Maintenance autorisée. (Catégories)</option>
-                  <option value="commentaireAdresse">Aide d’accès. (Localisation)</option>
-                  <option value="commentaire">Commentaire Général. (Défibrillateur)</option>
-                  <option value="lotElectrodeA">Lot. (Électrode Adulte ou Mixte)</option>
-                  <option value="peremptionElectrodeA">Péremption. (Électrode Adulte ou Mixte)</option>
-                  <option value="lotElectrodeP">Lot. (Électrode Pédiatrique)</option>
-                  <option value="peremptionElectrodeP">Péremption. (Électrode Pédiatrique)</option>
-                  <option value="lotBatterie">Lot. (Batterie)</option>
-                  <option value="peremptionBatterie">Péremption. (Batterie)</option>
-                  <option value="numVoie">Numéro et voie. (Localisation)</option>
-                  <option value="ville">Ville. (Localisation)</option>
-                  <option value="cp">Code postal. (Localisation)</option>
-                  <option value="region">Région. (Localisation)</option>
-                  <option value="pays">Pays. (Localisation)</option>
-                  <option value="latitude">Latitude. (Localisation)</option>
-                  <option value="longitude">Longitude. (Localisation)</option>
-                </select>
-              </div>
+              {bulkFields.map((item, index) => {
+                const bulkFieldOptions = [
+                  { value: "modele", label: "Modèle. (Défibrillateur)" },
+                  { value: "nomPrenomSite", label: "Nom et prénom. (Section client)" },
+                  { value: "telephoneSite", label: "Téléphone portable. (Section client)" },
+                  { value: "emailSite", label: "Email. (Section client)" },
+                  { value: "prochaineMaintenance", label: "Prochaine maintenance. (Date)" },
+                  { value: "fsmAutorise", label: "Maintenance autorisée. (Catégories)" },
+                  { value: "commentaireAdresse", label: "Aide d’accès. (Localisation)" },
+                  { value: "commentaire", label: "Commentaire Général. (Défibrillateur)" },
+                  { value: "lotElectrodeA", label: "Lot. (Électrode Adulte ou Mixte)" },
+                  { value: "peremptionElectrodeA", label: "Péremption. (Électrode Adulte ou Mixte)" },
+                  { value: "lotElectrodeP", label: "Lot. (Électrode Pédiatrique)" },
+                  { value: "peremptionElectrodeP", label: "Péremption. (Électrode Pédiatrique)" },
+                  { value: "lotBatterie", label: "Lot. (Batterie)" },
+                  { value: "peremptionBatterie", label: "Péremption. (Batterie)" },
+                  { value: "numVoie", label: "Numéro et voie. (Localisation)" },
+                  { value: "ville", label: "Ville. (Localisation)" },
+                  { value: "cp", label: "Code postal. (Localisation)" },
+                  { value: "region", label: "Région. (Localisation)" },
+                  { value: "pays", label: "Pays. (Localisation)" },
+                  { value: "latitude", label: "Latitude. (Localisation)" },
+                  { value: "longitude", label: "Longitude. (Localisation)" },
+                ];
 
-              {/* Dynamic input according to selected field characteristics */}
-              {selectedBulkField === "modele" && (
-                <div>
-                  <select
-                    id="bulk-input-modele"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none",
-                      cursor: "pointer",
-                      appearance: "none",
-                      WebkitAppearance: "none",
-                      MozAppearance: "none",
-                      backgroundImage: "none"
-                    }}
-                    className="outline-none appearance-none"
-                  >
-                    <option value="" disabled>-- Choisir un modèle --</option>
-                    {modelesDefib.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.nom}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+                return (
+                  <div key={item.id} className="space-y-2 pb-3 border-b border-slate-100 last:border-b-0">
+                    {/* Au dessus de chaque champ ajouté (donc pas le premier) ajouter un text-button « Supprimer » */}
+                    {index > 0 && (
+                      <div className="flex justify-end items-center mb-1">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveBulkField(index)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            padding: 0,
+                            color: "#ef4444",
+                            fontSize: "14px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            cursor: "pointer",
+                          }}
+                          className="text-red-500 hover:text-red-700 cursor-pointer font-sans select-none"
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                    )}
 
-              {selectedBulkField === "nomPrenomSite" && (
-                <div>
-                  <input
-                    type="text"
-                    id="bulk-input-nomprenom"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez nom et prénom."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "telephoneSite" && (
-                <div>
-                  <input
-                    type="tel"
-                    id="bulk-input-telephone"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez numéro de téléphone."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "emailSite" && (
-                <div>
-                  <input
-                    type="email"
-                    id="bulk-input-email"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez adresse email."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "prochaineMaintenance" && (
-                <div>
-                  <input
-                    type="date"
-                    id="bulk-input-prochainemaint"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none",
-                      cursor: "pointer"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "fsmAutorise" && (
-                <div>
-                  <div className="flex items-center gap-6 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setBulkFieldValue("Oui")}
-                      className="inline-flex items-center cursor-pointer gap-2 select-none bg-transparent border-0 p-0"
-                      style={{ fontSize: "16px", color: "#000000", fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                    >
-                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${bulkFieldValue === "Oui" ? "border-[#fe4eba]" : "border-slate-300 bg-white"}`}>
-                        {bulkFieldValue === "Oui" && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                      </span>
-                      <span>Oui</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBulkFieldValue("Non")}
-                      className="inline-flex items-center cursor-pointer gap-2 select-none bg-transparent border-0 p-0"
-                      style={{ fontSize: "16px", color: "#000000", fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                    >
-                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${bulkFieldValue === "Non" ? "border-[#fe4eba]" : "border-slate-300 bg-white"}`}>
-                        {bulkFieldValue === "Non" && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
-                      </span>
-                      <span>Non</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {selectedBulkField === "commentaireAdresse" && (
-                <div>
-                  <textarea
-                    id="bulk-input-adresse-aide"
-                    rows={4}
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez aide d'accès."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none",
-                      resize: "vertical"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "commentaire" && (
-                <div>
-                  <textarea
-                    id="bulk-input-commentaire-general"
-                    rows={4}
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez commentaire général."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none",
-                      resize: "vertical"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "lotElectrodeA" && (
-                <div>
-                  <input
-                    type="text"
-                    id="bulk-input-lot-electrode-a"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez le numéro de lot."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "peremptionElectrodeA" && (
-                <div>
-                  <input
-                    type="date"
-                    id="bulk-input-peremption-electrode-a"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none",
-                      cursor: "pointer"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "lotElectrodeP" && (
-                <div>
-                  <input
-                    type="text"
-                    id="bulk-input-lot-electrode-p"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez le numéro de lot."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "peremptionElectrodeP" && (
-                <div>
-                  <input
-                    type="date"
-                    id="bulk-input-peremption-electrode-p"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none",
-                      cursor: "pointer"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "lotBatterie" && (
-                <div>
-                  <input
-                    type="text"
-                    id="bulk-input-lot-batterie"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez le numéro de lot."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "peremptionBatterie" && (
-                <div>
-                  <input
-                    type="date"
-                    id="bulk-input-peremption-batterie"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none",
-                      cursor: "pointer"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "numVoie" && (
-                <div>
-                  <input
-                    type="text"
-                    id="bulk-input-num-voie"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez numéro et voie."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "ville" && (
-                <div>
-                  <input
-                    type="text"
-                    id="bulk-input-ville"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez la ville."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "cp" && (
-                <div>
-                  <input
-                    type="text"
-                    id="bulk-input-cp"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez le code postal."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "region" && (
-                <div>
-                  <select
-                    id="bulk-input-region"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none",
-                      cursor: "pointer",
-                      appearance: "none",
-                      WebkitAppearance: "none",
-                      MozAppearance: "none",
-                      backgroundImage: "none"
-                    }}
-                    className="outline-none appearance-none"
-                  >
-                    <option value="" disabled>-- Choisir une région --</option>
-                    {Object.entries(REGIONS_BY_COUNTRY).map(([country, regions]) => (
-                      <optgroup key={country} label={country}>
-                        {regions.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
+                    {/* Field selector system dropdown */}
+                    <div>
+                      <select
+                        id={`bulk-field-select-${index}`}
+                        value={item.field}
+                        onChange={(e) => handleUpdateBulkFieldType(index, e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "10px 14px",
+                          fontSize: "16px",
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          fontWeight: 100,
+                          backgroundColor: "#ffffff",
+                          color: "#000000",
+                          border: "1px solid #dedede",
+                          borderRadius: "10px",
+                          outline: "none",
+                          cursor: "pointer",
+                          appearance: "none",
+                          WebkitAppearance: "none",
+                          MozAppearance: "none",
+                          backgroundImage: "none"
+                        }}
+                        className="outline-none appearance-none"
+                      >
+                        <option value="">-- Choisir le champ à modifier --</option>
+                        {bulkFieldOptions.map((opt) => (
+                          <option 
+                            key={opt.value} 
+                            value={opt.value}
+                            disabled={bulkFields.some((f, i) => i !== index && f.field === opt.value)}
+                          >
+                            {opt.label}
                           </option>
                         ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
-              )}
+                      </select>
+                    </div>
 
-              {selectedBulkField === "pays" && (
-                <div>
-                  <select
-                    id="bulk-input-pays"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
+                    {/* Dynamic input according to selected field characteristics */}
+                    {item.field === "modele" && (
+                      <div>
+                        <select
+                          id={`bulk-input-modele-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none",
+                            cursor: "pointer",
+                            appearance: "none",
+                            WebkitAppearance: "none",
+                            MozAppearance: "none",
+                            backgroundImage: "none"
+                          }}
+                          className="outline-none appearance-none"
+                        >
+                          <option value="" disabled>-- Choisir un modèle --</option>
+                          {modelesDefib.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.nom}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {item.field === "nomPrenomSite" && (
+                      <div>
+                        <input
+                          type="text"
+                          id={`bulk-input-nomprenom-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez nom et prénom."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "telephoneSite" && (
+                      <div>
+                        <input
+                          type="tel"
+                          id={`bulk-input-telephone-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez numéro de téléphone."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "emailSite" && (
+                      <div>
+                        <input
+                          type="email"
+                          id={`bulk-input-email-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez adresse email."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "prochaineMaintenance" && (
+                      <div>
+                        <input
+                          type="date"
+                          id={`bulk-input-prochainemaint-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none",
+                            cursor: "pointer"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "fsmAutorise" && (
+                      <div>
+                        <div className="flex items-center gap-6 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateBulkFieldValue(index, "Oui")}
+                            className="inline-flex items-center cursor-pointer gap-2 select-none bg-transparent border-0 p-0"
+                            style={{ fontSize: "16px", color: "#000000", fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                          >
+                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${item.value === "Oui" ? "border-[#fe4eba]" : "border-slate-300 bg-white"}`}>
+                              {item.value === "Oui" && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                            </span>
+                            <span>Oui</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateBulkFieldValue(index, "Non")}
+                            className="inline-flex items-center cursor-pointer gap-2 select-none bg-transparent border-0 p-0"
+                            style={{ fontSize: "16px", color: "#000000", fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                          >
+                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${item.value === "Non" ? "border-[#fe4eba]" : "border-slate-300 bg-white"}`}>
+                              {item.value === "Non" && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                            </span>
+                            <span>Non</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {item.field === "commentaireAdresse" && (
+                      <div>
+                        <textarea
+                          id={`bulk-input-adresse-aide-${index}`}
+                          rows={4}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez aide d'accès."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none",
+                            resize: "vertical"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "commentaire" && (
+                      <div>
+                        <textarea
+                          id={`bulk-input-commentaire-general-${index}`}
+                          rows={4}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez commentaire général."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none",
+                            resize: "vertical"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "lotElectrodeA" && (
+                      <div>
+                        <input
+                          type="text"
+                          id={`bulk-input-lot-electrode-a-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez le numéro de lot."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "peremptionElectrodeA" && (
+                      <div>
+                        <input
+                          type="date"
+                          id={`bulk-input-peremption-electrode-a-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none",
+                            cursor: "pointer"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "lotElectrodeP" && (
+                      <div>
+                        <input
+                          type="text"
+                          id={`bulk-input-lot-electrode-p-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez le numéro de lot."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "peremptionElectrodeP" && (
+                      <div>
+                        <input
+                          type="date"
+                          id={`bulk-input-peremption-electrode-p-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none",
+                            cursor: "pointer"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "lotBatterie" && (
+                      <div>
+                        <input
+                          type="text"
+                          id={`bulk-input-lot-batterie-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez le numéro de lot."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "peremptionBatterie" && (
+                      <div>
+                        <input
+                          type="date"
+                          id={`bulk-input-peremption-batterie-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none",
+                            cursor: "pointer"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "numVoie" && (
+                      <div>
+                        <input
+                          type="text"
+                          id={`bulk-input-num-voie-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez numéro et voie."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "ville" && (
+                      <div>
+                        <input
+                          type="text"
+                          id={`bulk-input-ville-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez la ville."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "cp" && (
+                      <div>
+                        <input
+                          type="text"
+                          id={`bulk-input-cp-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez le code postal."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "region" && (
+                      <div>
+                        <select
+                          id={`bulk-input-region-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none",
+                            cursor: "pointer",
+                            appearance: "none",
+                            WebkitAppearance: "none",
+                            MozAppearance: "none",
+                            backgroundImage: "none"
+                          }}
+                          className="outline-none appearance-none"
+                        >
+                          <option value="" disabled>-- Choisir une région --</option>
+                          {Object.entries(REGIONS_BY_COUNTRY).map(([country, regions]) => (
+                            <optgroup key={country} label={country}>
+                              {regions.map((r) => (
+                                <option key={r} value={r}>
+                                  {r}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {item.field === "pays" && (
+                      <div>
+                        <select
+                          id={`bulk-input-pays-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none",
+                            cursor: "pointer",
+                            appearance: "none",
+                            WebkitAppearance: "none",
+                            MozAppearance: "none",
+                            backgroundImage: "none"
+                          }}
+                          className="outline-none appearance-none"
+                        >
+                          <option value="" disabled>-- Choisir un pays --</option>
+                          {["France", "Espagne", "Portugal", "Suisse", "Luxembourg", "Belgique", "Monaco", "Allemagne", "Pays-Bas", "Royaume-Uni", "Irlande", "Suède", "Pologne", "Tchéquie", "Autriche"].map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {item.field === "latitude" && (
+                      <div>
+                        <input
+                          type="text"
+                          id={`bulk-input-latitude-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez la latitude."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "longitude" && (
+                      <div>
+                        <input
+                          type="text"
+                          id={`bulk-input-longitude-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez la longitude."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "16px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #dedede",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* En dessous du field -- Choisir le champ à modifier -- ajouter un text-button bleu « Ajouter un autre ». Donner la possibilité de modifier jusqu’à 5 champs. Au 5ème champ ajouté, ce bouton disparait. */}
+              {bulkFields.length < 5 && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleAddBulkField}
+                    id="btn-bulk-add-another"
                     style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
+                      background: "none",
+                      border: "none",
+                      padding: "4px 0",
+                      color: "rgb(53, 86, 236)",
+                      fontSize: "15px",
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none",
+                      fontWeight: 500,
                       cursor: "pointer",
-                      appearance: "none",
-                      WebkitAppearance: "none",
-                      MozAppearance: "none",
-                      backgroundImage: "none"
+                      textAlign: "left"
                     }}
-                    className="outline-none appearance-none"
+                    className="text-blue-600 hover:text-blue-700 cursor-pointer font-sans select-none block"
                   >
-                    <option value="" disabled>-- Choisir un pays --</option>
-                    {["France", "Espagne", "Portugal", "Suisse", "Luxembourg", "Belgique", "Monaco", "Allemagne", "Pays-Bas", "Royaume-Uni", "Irlande", "Suède", "Pologne", "Tchéquie", "Autriche"].map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                    Ajouter un autre
+                  </button>
                 </div>
               )}
-
-              {selectedBulkField === "latitude" && (
-                <div>
-                  <input
-                    type="text"
-                    id="bulk-input-latitude"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez la latitude."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none"
-                    }}
-                  />
-                </div>
-              )}
-
-              {selectedBulkField === "longitude" && (
-                <div>
-                  <input
-                    type="text"
-                    id="bulk-input-longitude"
-                    value={bulkFieldValue}
-                    onChange={(e) => setBulkFieldValue(e.target.value)}
-                    placeholder="Entrez la longitude."
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      fontSize: "16px",
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      backgroundColor: "#ffffff",
-                      color: "#000000",
-                      border: "1px solid #dedede",
-                      borderRadius: "10px",
-                      outline: "none"
-                    }}
-                  />
-                </div>
-              )}
-
             </div>
 
             {/* Footer Actions: Annuler & Appliquer */}
@@ -8009,8 +8120,7 @@ export default function DefibTab({
                 onClick={() => {
                   if (!isBulkSubmitting) {
                     setIsBulkEditOpen(false);
-                    setSelectedBulkField("");
-                    setBulkFieldValue("");
+                    setBulkFields([{ id: Date.now().toString(), field: '', value: '' }]);
                   }
                 }}
                 id="btn-cancel-bulk-edit"
@@ -8026,7 +8136,8 @@ export default function DefibTab({
                 Annuler
               </button>
 
-              {Boolean(selectedBulkField && bulkFieldValue !== "") && (
+              {/* Le bouton Appliquer doit-être donc visible uniquement lorsque toutes les values du/des champs ajoutés sont complétées */}
+              {isAllBulkFieldsCompleted && (
                 <button
                   type="submit"
                   disabled={isBulkSubmitting}
@@ -8052,7 +8163,12 @@ export default function DefibTab({
       {/* Bulk side overlay background backdrop */}
       {isBulkEditOpen && (
         <div 
-          onClick={() => !isBulkSubmitting && setIsBulkEditOpen(false)}
+          onClick={() => {
+            if (!isBulkSubmitting) {
+              setIsBulkEditOpen(false);
+              setBulkFields([{ id: Date.now().toString(), field: '', value: '' }]);
+            }
+          }}
           className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-[85]"
         />
       )}

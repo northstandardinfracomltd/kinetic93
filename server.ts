@@ -1813,6 +1813,16 @@ function mergeServerCollectionItems(colName: string, items: any[]): any[] {
       } else if (item.name && String(item.name).trim()) {
         key = `m_name_${String(item.name).trim().toLowerCase()}`;
       }
+    } else if (colName === 'stocks' || colName === 'stock' || colName === 'stockItems') {
+      if (item.ugs) {
+        key = `ugs_${String(item.ugs).trim().toLowerCase()}`;
+      } else if (item.denominationPieceId) {
+        key = `dp_${String(item.denominationPieceId).trim()}`;
+      }
+    } else if (colName === 'distributed_stocks' || colName === 'distributedStocks') {
+      if ((item.stockId || item.denominationPieceId) && item.locationName) {
+        key = `ds_${item.stockId || item.denominationPieceId}_${String(item.locationName).trim().toLowerCase()}`;
+      }
     }
 
     if (!key) {
@@ -2562,7 +2572,14 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
       }
 
       if (itemEnv) {
-        if (itemEnv === 'demo') return false;
+        if (itemEnv === 'demo') {
+          if (colName === 'stocks' || colName === 'distributed_stocks' || colName === 'stock' || colName === 'distributedStocks') {
+            item.envId = cleanTid;
+            item.tenantId = cleanTid;
+            return true;
+          }
+          return false;
+        }
         if (validAliases.has(itemEnv)) return true;
         if (numItemEnv && (validAliases.has(numItemEnv) || validAliases.has(`d${numItemEnv}`))) return true;
         for (const va of validAliases) {
@@ -2572,7 +2589,18 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         if (colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices') {
           return true;
         }
+        if (colName === 'stocks' || colName === 'distributed_stocks' || colName === 'stock' || colName === 'distributedStocks') {
+          item.envId = cleanTid;
+          item.tenantId = cleanTid;
+          return true;
+        }
         return false; // Rejects items belonging to other tenants!
+      }
+
+      if (colName === 'stocks' || colName === 'distributed_stocks' || colName === 'stock' || colName === 'distributedStocks') {
+        item.envId = cleanTid;
+        item.tenantId = cleanTid;
+        return true;
       }
 
       if (colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices') {
@@ -2779,7 +2807,9 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   }
 
   const allKeyTiers = [tier1Keys, tier2Keys, tier3Keys];
-  const allCandidateKeys = Array.from(new Set([...tier1Keys, ...tier2Keys, ...tier3Keys, colName].filter(Boolean)));
+  const allCandidateKeys = activeTenant === 'demo'
+    ? Array.from(new Set([...tier1Keys, ...tier2Keys, ...tier3Keys, colName].filter(Boolean)))
+    : Array.from(new Set([...tier1Keys, ...tier2Keys, ...tier3Keys].filter(Boolean)));
 
   // 4. Query Firestore: check Tier 1 first. If data is found, STOP immediately!
   for (const tier of allKeyTiers) {
@@ -3273,7 +3303,19 @@ async function warmupDefibrillateursStore() {
       const collectionKey = rawTenant === 'demo' ? collectionName : `${rawTenant}_${collectionName}`;
       
       if (value !== undefined && value !== null) {
-        const finalValueToStore = value;
+        let finalValueToStore = value;
+        if (Array.isArray(value)) {
+          finalValueToStore = value.map((item: any) => {
+            if (item && typeof item === 'object') {
+              return {
+                ...item,
+                envId: rawTenant,
+                tenantId: rawTenant
+              };
+            }
+            return item;
+          });
+        }
 
         serverMemoryStore.set(collectionKey, finalValueToStore);
         serverStoreTimestamps.set(collectionKey, Date.now());
@@ -3282,19 +3324,34 @@ async function warmupDefibrillateursStore() {
           persistSingleCollectionToDisk(collectionKey, finalValueToStore);
         }
 
+        // Also sync all collection aliases (e.g. distributed_stocks <-> distributedStocks)
+        const colAliases = getCollectionNameAliases(collectionName);
+        for (const alias of colAliases) {
+          if (alias !== collectionName) {
+            const aliasKey = rawTenant === 'demo' ? alias : `${rawTenant}_${alias}`;
+            serverMemoryStore.set(aliasKey, finalValueToStore);
+            serverStoreTimestamps.set(aliasKey, Date.now());
+            if (!isDefibLarge) {
+              persistSingleCollectionToDisk(aliasKey, finalValueToStore);
+            }
+          }
+        }
+
         // Also map normalized key if D-prefixed or numeric
         if (/^d\d+$/i.test(rawTenant) || /^\d+$/.test(rawTenant)) {
           const numOnly = rawTenant.replace(/^d/i, '');
-          serverMemoryStore.set(`D${numOnly}_${collectionName}`, finalValueToStore);
-          serverStoreTimestamps.set(`D${numOnly}_${collectionName}`, Date.now());
-          if (!isDefibLarge) {
-            persistSingleCollectionToDisk(`D${numOnly}_${collectionName}`, finalValueToStore);
-          }
+          for (const cName of [collectionName, ...colAliases]) {
+            serverMemoryStore.set(`D${numOnly}_${cName}`, finalValueToStore);
+            serverStoreTimestamps.set(`D${numOnly}_${cName}`, Date.now());
+            if (!isDefibLarge) {
+              persistSingleCollectionToDisk(`D${numOnly}_${cName}`, finalValueToStore);
+            }
 
-          serverMemoryStore.set(`d${numOnly}_${collectionName}`, finalValueToStore);
-          serverStoreTimestamps.set(`d${numOnly}_${collectionName}`, Date.now());
-          serverMemoryStore.set(`${numOnly}_${collectionName}`, finalValueToStore);
-          serverStoreTimestamps.set(`${numOnly}_${collectionName}`, Date.now());
+            serverMemoryStore.set(`d${numOnly}_${cName}`, finalValueToStore);
+            serverStoreTimestamps.set(`d${numOnly}_${cName}`, Date.now());
+            serverMemoryStore.set(`${numOnly}_${cName}`, finalValueToStore);
+            serverStoreTimestamps.set(`${numOnly}_${cName}`, Date.now());
+          }
         }
         if (Array.isArray(value) && value.length > 20) {
           if (!isDefibLarge) {

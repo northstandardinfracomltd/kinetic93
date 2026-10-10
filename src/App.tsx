@@ -977,11 +977,13 @@ export default function App() {
 
   const [distributedStocks, setDistributedStocks] = useState<DistributedStockLocation[]>([]);
 
-  const saveStocks = (updated: StockRecord[]) => {
+  const saveStocks = async (updated: StockRecord[]): Promise<void> => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    const effectiveTenantId = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+
     // Check for stock transition: from >= 1 to 0 or 1
     const newNotifs: LogisticsNotification[] = [];
     const nowStr = new Date().toLocaleDateString('fr-FR', {
@@ -1013,18 +1015,27 @@ export default function App() {
 
     setStocks(updated);
     const strS = JSON.stringify(updated);
-    safeSetLocalStorage(`defib_${tenantId}_stocks`, strS);
+    safeSetLocalStorage(`defib_${effectiveTenantId}_stocks`, strS);
+    safeSetLocalStorage(`fs_cache_${effectiveTenantId}_stocks`, strS);
+    try {
+      idbSet(`defib_${effectiveTenantId}_stocks`, updated).catch(() => {});
+    } catch (_) {}
     loadedDataRef.current.stocks = strS;
-    if (tenantId) {
-      saveCollectionToFirestore('stocks', updated, tenantId);
+    if (effectiveTenantId) {
+      await saveCollectionToFirestore('stocks', updated, effectiveTenantId);
+      if (effectiveTenantId.toUpperCase().startsWith('D')) {
+        await saveCollectionToFirestore('stocks', updated, effectiveTenantId.toUpperCase()).catch(() => {});
+      }
     }
   };
 
-  const saveDistributedStocks = (updated: DistributedStockLocation[]) => {
+  const saveDistributedStocks = async (updated: DistributedStockLocation[]): Promise<void> => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    const effectiveTenantId = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+
     // Check for distributed stock transition: from >= 1 to 0 or 1
     const newNotifs: LogisticsNotification[] = [];
     const nowStr = new Date().toLocaleDateString('fr-FR', {
@@ -1057,10 +1068,17 @@ export default function App() {
 
     setDistributedStocks(updated);
     const strDS = JSON.stringify(updated);
-    safeSetLocalStorage(`defib_${tenantId}_distributed_stocks`, strDS);
+    safeSetLocalStorage(`defib_${effectiveTenantId}_distributed_stocks`, strDS);
+    safeSetLocalStorage(`fs_cache_${effectiveTenantId}_distributed_stocks`, strDS);
+    try {
+      idbSet(`defib_${effectiveTenantId}_distributed_stocks`, updated).catch(() => {});
+    } catch (_) {}
     loadedDataRef.current.distributed_stocks = strDS;
-    if (tenantId) {
-      saveCollectionToFirestore('distributed_stocks', updated, tenantId);
+    if (effectiveTenantId) {
+      await saveCollectionToFirestore('distributed_stocks', updated, effectiveTenantId);
+      if (effectiveTenantId.toUpperCase().startsWith('D')) {
+        await saveCollectionToFirestore('distributed_stocks', updated, effectiveTenantId.toUpperCase()).catch(() => {});
+      }
     }
   };
   
@@ -5343,6 +5361,8 @@ export default function App() {
           variables: JSON.stringify(baseVariables),
           defibrillateurs: getCollectionFingerprint(baseDefibrillateurs),
           stocks: JSON.stringify(baseStocks),
+          distributed_stocks: JSON.stringify(baseDistrib),
+          distributedStocks: JSON.stringify(baseDistrib),
           companyInfo: JSON.stringify(baseCompanyInfo),
           members: JSON.stringify(baseMembers),
           tickets: JSON.stringify(baseTickets),
@@ -5393,15 +5413,20 @@ export default function App() {
                 finalData = await customTransformer(data);
               }
 
-              // CRITICAL RESILIENCE: Prevent overwriting large populated datasets with empty/single placeholder
+              // CRITICAL RESILIENCE: Prevent overwriting populated datasets with empty/single placeholder
               if (Array.isArray(finalData)) {
                 let currentLen = 0;
+                let localItems: any[] = [];
                 if (collectionName === 'defibrillateurs') {
                   currentLen = defibrillateurs?.length || 0;
                   try {
                     const localCached = await idbGet<any[]>(`defib_${activeRunTenantId}_defibrillateurs`);
-                    if (Array.isArray(localCached) && localCached.length > finalData.length) {
-                      finalData = mergeCollectionItems('defibrillateurs', [...finalData, ...localCached]);
+                    if (Array.isArray(localCached) && localCached.length > 0) {
+                      localItems = localCached;
+                      currentLen = Math.max(currentLen, localCached.length);
+                      if (localCached.length > finalData.length) {
+                        finalData = mergeCollectionItems('defibrillateurs', [...finalData, ...localCached]);
+                      }
                     }
                   } catch (_) {}
                 } else {
@@ -5409,13 +5434,48 @@ export default function App() {
                   if (currentSavedStr) {
                     try {
                       const parsed = JSON.parse(currentSavedStr);
-                      if (Array.isArray(parsed)) currentLen = parsed.length;
+                      if (Array.isArray(parsed) && parsed.length > 0) {
+                        localItems = parsed;
+                        currentLen = parsed.length;
+                      }
                     } catch (_) {}
                   }
+                  if (localItems.length === 0) {
+                    try {
+                      const rawLocal = localStorage.getItem(`defib_${activeRunTenantId}_${localStorageKeySuffix}`) || localStorage.getItem(`fs_cache_${activeRunTenantId}_${localStorageKeySuffix}`);
+                      if (rawLocal) {
+                        const parsed = JSON.parse(rawLocal);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                          localItems = parsed;
+                          currentLen = parsed.length;
+                        }
+                      }
+                    } catch (_) {}
+                  }
+                  if (localItems.length === 0) {
+                    const win = window as any;
+                    if ((collectionName === 'distributed_stocks' || collectionName === 'distributedStocks') && Array.isArray(win.baseDistrib) && win.baseDistrib.length > 0) {
+                      localItems = win.baseDistrib;
+                      currentLen = win.baseDistrib.length;
+                    } else if ((collectionName === 'stocks' || collectionName === 'stock') && Array.isArray(win.baseStocks) && win.baseStocks.length > 0) {
+                      localItems = win.baseStocks;
+                      currentLen = win.baseStocks.length;
+                    }
+                  }
                 }
-                if (currentLen > 50 && finalData.length <= 1) {
+
+                // If remote returns 0 items, but local cache has items, DO NOT WIPE LOCAL DATA!
+                // Instead, preserve local items and push them to remote to heal the server!
+                if (finalData.length === 0 && currentLen > 0 && localItems.length > 0) {
+                  console.warn(`[Protection] Remote ${collectionName} returned empty array, but local cache has ${currentLen} items. Preserving local data and re-syncing to server.`);
+                  finalData = localItems;
+                  saveCollectionToFirestore(collectionName, localItems, activeRunTenantId).catch(() => {});
+                } else if (currentLen > 50 && finalData.length <= 1) {
                   console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${currentLen} items) with incomplete remote data (${finalData.length} items).`);
                   return;
+                } else if (finalData.length > 0 && localItems.length > 0) {
+                  // Merge remote with local items so newly added local items not yet in remote are not lost
+                  finalData = mergeCollectionItems(collectionName, [...finalData, ...localItems]);
                 }
               }
 
@@ -7765,6 +7825,7 @@ export default function App() {
   if (isLoggedIn && (loggedUser?.email === 'tech.ouest@defibeo.com' || localStorage.getItem('defib_logged_user_role') === 'technicien')) {
     return (
       <PublicPortal
+        tenantId={tenantId}
         companyInfo={companyInfo}
         members={members}
         onUpdateMembers={handleUpdateMembers}
@@ -7882,6 +7943,7 @@ export default function App() {
   if (isPublicPortalOpen) {
     return (
       <PublicPortal
+        tenantId={tenantId}
         companyInfo={companyInfo}
         members={members}
         onUpdateMembers={handleUpdateMembers}
