@@ -39,12 +39,12 @@ try {
 } catch (_) {}
 
 const PROD_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyBsfSHoSrPXwnwLcWtIGLPUwUd7ZYWVCvA",
-  authDomain: "defibeo.firebaseapp.com",
-  projectId: "defibeo",
-  storageBucket: "defibeo.appspot.com",
-  messagingSenderId: "627487981610",
-  appId: "1:627487981610:web:e4f496748c4ee0d1710353",
+  apiKey: (firebaseConfig as any)?.apiKey || "AIzaSyDIu55IW0GJ6hbsa7ZrIyKM89dlWpRW4L8",
+  authDomain: (firebaseConfig as any)?.authDomain || "gen-lang-client-0413990730.firebaseapp.com",
+  projectId: (firebaseConfig as any)?.projectId || "gen-lang-client-0413990730",
+  storageBucket: (firebaseConfig as any)?.storageBucket || "gen-lang-client-0413990730.firebasestorage.app",
+  messagingSenderId: (firebaseConfig as any)?.messagingSenderId || "862243466493",
+  appId: (firebaseConfig as any)?.appId || "1:862243466493:web:fc5b1fbcab864b3bba2294",
   measurementId: ""
 };
 
@@ -60,19 +60,20 @@ const firebaseConfigOverride = {
 
 const app = initializeApp(firebaseConfigOverride);
 
+const firestoreDbId = (firebaseConfig as any)?.firestoreDatabaseId;
 let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(app, {
     localCache: memoryLocalCache(),
     experimentalForceLongPolling: true,
-  });
+  }, firestoreDbId);
 } catch (err) {
   console.warn("Failed to initialize Firestore with memory local cache:", err);
   try {
-    firestoreInstance = getFirestore(app);
+    firestoreInstance = firestoreDbId ? getFirestore(app, firestoreDbId) : getFirestore(app);
   } catch (err2) {
     console.warn("Failed to initialize basic getFirestore:", err2);
-    firestoreInstance = initializeFirestore(app, {});
+    firestoreInstance = initializeFirestore(app, {}, firestoreDbId);
   }
 }
 
@@ -1123,7 +1124,10 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
         const docRef = doc(db, 'appData', wk);
         return setDoc(docRef, { value: finalCleanValue, _chunked: false });
       });
-      await Promise.all(docBatch);
+      await Promise.race([
+        Promise.all(docBatch),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 8000))
+      ]).catch(e => console.warn(`[Firestore Safe Write] Non-blocking write notice for ${primaryKey}:`, e?.message));
       console.log(`Successfully synced ${primaryKey} to Firestore.`);
     }
   } catch (error) {

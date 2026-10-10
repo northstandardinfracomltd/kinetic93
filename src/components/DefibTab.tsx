@@ -392,6 +392,8 @@ interface DefibTabProps {
     percent?: number;
     message?: string;
   };
+  isRefreshing?: boolean;
+  onRefreshData?: () => void | Promise<void>;
 }
 
 const getPostalIndicatif = (rawCp: any): number | null => {
@@ -554,8 +556,28 @@ export default function DefibTab({
   isReadOnly = false,
   isDefibLoading = false,
   defibLoadingProgress,
+  isRefreshing = false,
+  onRefreshData,
 }: DefibTabProps) {
   const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
+
+  // Manual Refresh State
+  const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
+  const effectiveRefreshing = isRefreshing || isLocalRefreshing;
+
+  const handleRefreshClick = async () => {
+    if (effectiveRefreshing) return;
+    setIsLocalRefreshing(true);
+    try {
+      if (onRefreshData) {
+        await onRefreshData();
+      }
+    } catch (err) {
+      console.warn('Manual refresh error in DefibTab:', err);
+    } finally {
+      setTimeout(() => setIsLocalRefreshing(false), 500);
+    }
+  };
 
   // Navigation, Search & Filters State
   const [search, setSearch] = useState(initialSearch || '');
@@ -669,7 +691,18 @@ export default function DefibTab({
   };
 
   // Active applied filters (1 to 10 filters)
-  const [activeFilters, setActiveFilters] = useState({
+  const [activeFilters, setActiveFilters] = useState<{
+    region: string;
+    modeleId: string;
+    clientId: string;
+    action3To6: boolean;
+    actionUnder3: boolean;
+    actionExpired: boolean;
+    categorie: string;
+    contrat: string;
+    actionRejected: boolean;
+    advancedSearchTerms: string[];
+  }>({
     region: 'Tous',
     modeleId: 'Tous',
     clientId: 'Tous',
@@ -679,10 +712,22 @@ export default function DefibTab({
     categorie: 'Tous',
     contrat: 'Tous',
     actionRejected: false,
+    advancedSearchTerms: [],
   });
 
   // Draft filters inside the sidebar/pane
-  const [draftFilters, setDraftFilters] = useState({
+  const [draftFilters, setDraftFilters] = useState<{
+    region: string;
+    modeleId: string;
+    clientId: string;
+    action3To6: boolean;
+    actionUnder3: boolean;
+    actionExpired: boolean;
+    categorie: string;
+    contrat: string;
+    actionRejected: boolean;
+    advancedSearchTerms: string[];
+  }>({
     region: 'Tous',
     modeleId: 'Tous',
     clientId: 'Tous',
@@ -692,7 +737,68 @@ export default function DefibTab({
     categorie: 'Tous',
     contrat: 'Tous',
     actionRejected: false,
+    advancedSearchTerms: [],
   });
+
+  // Advanced search input state inside Filter pane
+  const [advancedSearchInputValue, setAdvancedSearchInputValue] = useState('');
+  const [isAdvancedFocused, setIsAdvancedFocused] = useState(false);
+  const advancedInputRef = useRef<HTMLInputElement>(null);
+
+  const addAdvancedTerm = (rawTerm: string) => {
+    const cleaned = rawTerm.trim();
+    if (cleaned.length >= 3) {
+      setDraftFilters(prev => {
+        const current = prev.advancedSearchTerms || [];
+        if (!current.some(t => t.toLowerCase() === cleaned.toLowerCase())) {
+          return { ...prev, advancedSearchTerms: [...current, cleaned] };
+        }
+        return prev;
+      });
+      return true;
+    }
+    return false;
+  };
+
+  const handleAdvancedInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val.includes('/')) {
+      const parts = val.split('/');
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (parts[i].trim().length >= 3) {
+          addAdvancedTerm(parts[i]);
+        }
+      }
+      setAdvancedSearchInputValue(parts[parts.length - 1]);
+    } else {
+      setAdvancedSearchInputValue(val);
+    }
+  };
+
+  const handleAdvancedInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === '/' || e.key === 'Slash') {
+      e.preventDefault();
+      if (advancedSearchInputValue.trim().length >= 3) {
+        addAdvancedTerm(advancedSearchInputValue);
+        setAdvancedSearchInputValue('');
+      }
+    } else if (e.key === 'Backspace' && advancedSearchInputValue === '') {
+      setDraftFilters(prev => {
+        const terms = prev.advancedSearchTerms || [];
+        if (terms.length > 0) {
+          return { ...prev, advancedSearchTerms: terms.slice(0, -1) };
+        }
+        return prev;
+      });
+    }
+  };
+
+  const handleRemoveAdvancedTerm = (indexToRemove: number) => {
+    setDraftFilters(prev => ({
+      ...prev,
+      advancedSearchTerms: (prev.advancedSearchTerms || []).filter((_, i) => i !== indexToRemove)
+    }));
+  };
   
   // Selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -1555,6 +1661,8 @@ export default function DefibTab({
   const [fabrication, setFabrication] = useState('');
   const [miseEnService, setMiseEnService] = useState('');
   const [derniereMaintenance, setDerniereMaintenance] = useState('');
+  const [prochaineMaintenance, setProchaineMaintenance] = useState('');
+  const isProchaineMaintenanceCustomRef = useRef(false);
   const [sortieFabricant, setSortieFabricant] = useState('');
 
   // Section 6 - Électrode Mixte ou Adulte (A)
@@ -1837,6 +1945,90 @@ export default function DefibTab({
           (df.commentaireCampagneRappel || '').toLowerCase().includes(searchLower)
         );
         if (!isMatchSearch) return false;
+      }
+
+      // 6.5 Advanced Search Terms match (from side pane filter)
+      const advTerms = (activeFilters.advancedSearchTerms || [])
+        .map(t => t.trim().toLowerCase())
+        .filter(t => t.length >= 3);
+
+      if (advTerms.length > 0) {
+        const clientName = (clientMap.get(df.clientId)?.denomination || '').toLowerCase();
+        const modelName = (variableMap.get(df.modeleId)?.nom || '').toLowerCase();
+
+        const defibFields = {
+          identifiant: (df.identifiant || '').toLowerCase(),
+          numeroSerie: (df.numeroSerie || '').toLowerCase(),
+          numeroAtlasante: (df.numeroAtlasante || '').toLowerCase(),
+          ville: (df.ville || '').toLowerCase(),
+          nomSite: (df.nomSite || '').toLowerCase(),
+          cp: (df.cp || '').toLowerCase(),
+          numVoie: (df.numVoie || '').toLowerCase(),
+          region: (df.region || '').toLowerCase(),
+          pays: (df.pays || '').toLowerCase(),
+          client: clientName,
+          modele: modelName,
+          lotBatterie: (df.lotBatterie || '').toLowerCase(),
+          lotElectrodeA: (df.lotElectrodeA || '').toLowerCase(),
+          lotElectrodeP: (df.lotElectrodeP || '').toLowerCase(),
+          lotCoffret: (df.numeroLotCoffret || '').toLowerCase(),
+          nomPrenomSite: (df.nomPrenomSite || '').toLowerCase(),
+          telephoneSite: (df.telephoneSite || '').toLowerCase(),
+          emailSite: (df.emailSite || '').toLowerCase(),
+          versionLogiciel: (df.versionLogiciel || '').toLowerCase(),
+          categorieEtablissement: (df.categorieEtablissement || '').toLowerCase(),
+          commentaire: (df.commentaire || '').toLowerCase(),
+          commentaireInterne: (df.commentaireInterne || '').toLowerCase(),
+          commentaireCoffret: (df.commentaireCoffret || '').toLowerCase(),
+          commentaireAdresse: (df.commentaireAdresse || '').toLowerCase(),
+          commentaireElectrodeA: (df.commentaireElectrodeA || '').toLowerCase(),
+          commentaireElectrodeP: (df.commentaireElectrodeP || '').toLowerCase(),
+          commentaireBatterie: (df.commentaireBatterie || '').toLowerCase(),
+          commentaireCampagneRappel: (df.commentaireCampagneRappel || '').toLowerCase(),
+        };
+
+        const fieldValues = Object.values(defibFields);
+        const dfMatchesTerm = (term: string) => fieldValues.some(val => val.includes(term));
+
+        // Direct strict AND match (df contains term1 AND term2 AND ...)
+        if (advTerms.every(t => dfMatchesTerm(t))) {
+          // match confirmed
+        } else {
+          // Multi-item / Cross-search resolution:
+          // Terms targeting the same unique identity property (e.g. 2 serial numbers) form an alternative (OR)
+          // combined with other search terms (e.g. city) via AND.
+          const serialTerms = advTerms.filter(t =>
+            defibFields.numeroSerie.includes(t) ||
+            defibFields.identifiant.includes(t) ||
+            defibFields.numeroAtlasante.includes(t)
+          );
+          const otherTerms = advTerms.filter(t => !serialTerms.includes(t));
+
+          let matched = false;
+          if (serialTerms.length > 1) {
+            const matchesAnySerial = serialTerms.some(t => dfMatchesTerm(t));
+            const matchesAllOther = otherTerms.every(t => dfMatchesTerm(t));
+            if (matchesAnySerial && matchesAllOther) {
+              matched = true;
+            }
+          }
+
+          if (!matched) {
+            const uniqueFields = ['numeroSerie', 'identifiant', 'ville', 'client', 'modele'] as const;
+            for (const field of uniqueFields) {
+              const fieldTerms = advTerms.filter(t => defibFields[field].includes(t));
+              if (fieldTerms.length > 1) {
+                const restTerms = advTerms.filter(t => !fieldTerms.includes(t));
+                if (fieldTerms.some(t => defibFields[field].includes(t)) && restTerms.every(t => dfMatchesTerm(t))) {
+                  matched = true;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!matched) return false;
+        }
       }
 
       // 7. Dates logic (only executed if at least one date filter is active)
@@ -2542,6 +2734,8 @@ export default function DefibTab({
     setFabrication('');
     setMiseEnService('');
     setDerniereMaintenance('');
+    setProchaineMaintenance('');
+    isProchaineMaintenanceCustomRef.current = false;
     setSortieFabricant('');
 
     // Electrodes Mixed/Adult (A)
@@ -2733,6 +2927,15 @@ export default function DefibTab({
     setFabrication(toISODateOnly(df.fabrication || anyDf.date_fabrication || anyDf.fabrication_date || ''));
     setMiseEnService(toISODateOnly(df.miseEnService || anyDf.mise_en_service || anyDf.date_mise_en_service || ''));
     setDerniereMaintenance(toISODateOnly(df.derniereMaintenance || anyDf.derniere_maintenance || anyDf.date_derniere_maintenance || anyDf.dermnt || anyDf.der_maint || anyDf.lastMaintenance || anyDf.last_maintenance || anyDf.derniereVisite || anyDf.derniere_visite || ''));
+    const explicitProchaine = toISODateOnly((df as any).prochaineMaintenance || (df as any).prochaine_visite || (df as any).prochaine_v || '');
+    const computedProchaine = toISODateOnly(computeProchaineMaintenance(df.derniereMaintenance || anyDf.derniere_maintenance || ''));
+    if (explicitProchaine) {
+      setProchaineMaintenance(explicitProchaine);
+      isProchaineMaintenanceCustomRef.current = true;
+    } else {
+      setProchaineMaintenance(computedProchaine || '');
+      isProchaineMaintenanceCustomRef.current = false;
+    }
     setSortieFabricant(toISODateOnly(df.sortieFabricant || anyDf.sortie_fabricant || anyDf.date_sortie_fabricant || ''));
 
     setHasElectrodeASecours(df.hasElectrodeASecours || anyDf.has_electrode_a_secours || (df.modeleElectrodeASecoursId || anyDf.modele_secours_a || df.lotElectrodeASecours || anyDf.lot_secours_a || df.peremptionSecoursElectrodeA ? 'Oui' : 'Non'));
@@ -2934,6 +3137,7 @@ export default function DefibTab({
       fabrication,
       miseEnService,
       derniereMaintenance,
+      prochaineMaintenance: prochaineMaintenance || (derniereMaintenance ? computeProchaineMaintenance(derniereMaintenance) : ''),
       sortieFabricant,
 
       modeleElectrodeAId,
@@ -3239,14 +3443,18 @@ export default function DefibTab({
     const defaults = {
       region: 'Tous',
       modeleId: 'Tous',
+      clientId: 'Tous',
       action3To6: false,
       actionUnder3: false,
       actionExpired: false,
       categorie: 'Tous',
       contrat: 'Tous',
+      actionRejected: false,
+      advancedSearchTerms: [] as string[],
     };
     setActiveFilters(defaults);
     setDraftFilters(defaults);
+    setAdvancedSearchInputValue('');
   };
 
   return (
@@ -3265,8 +3473,8 @@ export default function DefibTab({
 
               {/* Both search and buttons are placed directly next to the title */}
               <div className="flex flex-wrap items-center gap-3">
-                {/* Field recherche (Search input) with size reduced */}
-                <div className="relative w-full sm:w-64">
+                {/* Field recherche (Search input) */}
+                <div className="relative w-full sm:w-80 md:w-96">
                   <input
                     type="text"
                     id="search-defibs-input"
@@ -3277,7 +3485,7 @@ export default function DefibTab({
                         onSearchChange(e.target.value);
                       }
                     }}
-                    placeholder={t('Recherche.')}
+                    placeholder={t('Recherche rapide.')}
                     className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
                     style={searchInputStyle}
                     onMouseEnter={() => setIsSearchHovered(true)}
@@ -3358,7 +3566,11 @@ export default function DefibTab({
 
                 <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={() => setIsFilterPaneOpen(true)}
+                  onClick={() => {
+                    setDraftFilters(activeFilters);
+                    setAdvancedSearchInputValue('');
+                    setIsFilterPaneOpen(true);
+                  }}
                   id="btn-trigger-filters"
                   style={customButtonStyle}
                 >
@@ -3374,6 +3586,7 @@ export default function DefibTab({
                       activeFilters.categorie !== 'Tous',
                       activeFilters.contrat !== 'Tous',
                       activeFilters.actionRejected === true,
+                      Boolean(activeFilters.advancedSearchTerms && activeFilters.advancedSearchTerms.length > 0),
                     ].filter(Boolean).length;
                     return count > 0 ? (
                       <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#fe4eba] rounded-full ml-1">
@@ -3953,6 +4166,33 @@ export default function DefibTab({
             >
               <Sparkles size={10} className="shrink-0 text-black" color="#000000" />
               <span style={{ color: '#000000' }}>{t("Interroger l’IA Defibeo Intelligence")}</span>
+            </button>
+
+            <button
+              type="button"
+              id="btn-refresh-data"
+              onClick={handleRefreshClick}
+              disabled={effectiveRefreshing}
+              style={{
+                fontSize: '9px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                fontWeight: 100,
+                cursor: 'pointer',
+                background: 'transparent',
+                border: 'none',
+                padding: '2px 4px',
+                color: '#000000',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                textDecoration: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="hover:opacity-80 transition-all select-none cursor-pointer"
+              title={t("Actualiser les données")}
+            >
+              <RefreshCw size={10} className={`shrink-0 text-black ${effectiveRefreshing ? 'animate-spin' : ''}`} color="#000000" />
+              <span style={{ color: '#000000' }}>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
             </button>
           </div>
 
@@ -6016,7 +6256,14 @@ export default function DefibTab({
                         <SafeDateInput
                           id="form-der-maint"
                           value={derniereMaintenance}
-                          onChange={(e) => setDerniereMaintenance(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDerniereMaintenance(val);
+                            if (!isProchaineMaintenanceCustomRef.current) {
+                              const computed = computeProchaineMaintenance(val);
+                              setProchaineMaintenance(computed ? toISODateOnly(computed) : '');
+                            }
+                          }}
                           className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs bg-white text-slate-700"
                         />
                       </div>
@@ -6033,20 +6280,35 @@ export default function DefibTab({
                         />
                       </div>
 
-                      {/* Displaying computed next maintenance date like other input fields */}
+                      {/* Prochaine maintenance field with manual forcing capability */}
                       <div className="space-y-1">
-                        <label htmlFor="form-prochaine-maint" className="block text-[10px] font-bold text-slate-400 uppercase">Prochaine maintenance.</label>
-                        <input
-                          type="text"
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="form-prochaine-maint" className="block text-[10px] font-bold text-slate-400 uppercase">Prochaine maintenance.</label>
+                          {derniereMaintenance && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const computed = computeProchaineMaintenance(derniereMaintenance);
+                                if (computed) {
+                                  setProchaineMaintenance(toISODateOnly(computed));
+                                  isProchaineMaintenanceCustomRef.current = false;
+                                }
+                              }}
+                              className="text-[10px] text-blue-600 hover:text-blue-800 cursor-pointer font-sans uppercase underline bg-transparent border-0 p-0"
+                              title="Recalculer automatiquement (+ 1 an par rapport à Dernière maintenance)"
+                            >
+                              Auto
+                            </button>
+                          )}
+                        </div>
+                        <SafeDateInput
                           id="form-prochaine-maint"
-                          value={(() => {
-                            const explicitProchaine = (editingDefib as any)?.prochaineMaintenance || (editingDefib as any)?.prochaine_visite || (editingDefib as any)?.prochaine_v;
-                            const computed = computeProchaineMaintenance(derniereMaintenance);
-                            const target = explicitProchaine || computed;
-                            return formatDateToFR(target) || '-';
-                          })()}
-                          readOnly
-                          className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs bg-slate-50 text-slate-700 font-semibold"
+                          value={prochaineMaintenance}
+                          onChange={(e) => {
+                            setProchaineMaintenance(e.target.value);
+                            isProchaineMaintenanceCustomRef.current = true;
+                          }}
+                          className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs bg-white text-slate-700"
                         />
                       </div>
                     </div>
@@ -7473,7 +7735,7 @@ export default function DefibTab({
                 ];
 
                 return (
-                  <div key={item.id} className="space-y-2 pb-3 border-b border-slate-100 last:border-b-0">
+                  <div key={item.id} className="space-y-2">
                     {/* Au dessus de chaque champ ajouté (donc pas le premier) ajouter un text-button « Supprimer » */}
                     {index > 0 && (
                       <div className="flex justify-end items-center mb-1">
@@ -7485,7 +7747,7 @@ export default function DefibTab({
                             border: "none",
                             padding: 0,
                             color: "#ef4444",
-                            fontSize: "14px",
+                            fontSize: "18px",
                             fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                             cursor: "pointer",
                           }}
@@ -8098,7 +8360,7 @@ export default function DefibTab({
                       border: "none",
                       padding: "4px 0",
                       color: "rgb(53, 86, 236)",
-                      fontSize: "15px",
+                      fontSize: "18px",
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                       fontWeight: 500,
                       cursor: "pointer",
@@ -8401,6 +8663,113 @@ export default function DefibTab({
           {/* Scroll Area containing all fields */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             
+            {/* Termes de recherche avancée */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between px-1">
+                <label 
+                  htmlFor="advanced-search-input"
+                  className="text-[16px] text-black font-sans font-semibold" 
+                  style={{ fontWeight: 100, cursor: 'pointer' }}
+                >
+                  Termes de recherche avancée.
+                </label>
+                {(draftFilters.advancedSearchTerms || []).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftFilters(prev => ({ ...prev, advancedSearchTerms: [] }));
+                      setAdvancedSearchInputValue('');
+                    }}
+                    className="text-[12px] text-slate-400 hover:text-red-500 font-sans cursor-pointer bg-transparent border-0 p-0 transition-colors"
+                    title="Effacer tous les termes"
+                  >
+                    Effacer tout
+                  </button>
+                )}
+              </div>
+              <p className="text-[12px] text-slate-500 font-sans leading-tight px-1">
+                Pour chaque terme, entrez au moins 3 lettres et saisissez une barre oblique ou entrer au clavier afin de séparer chaque terme.
+              </p>
+
+              {/* Textarea-like auto-height search container */}
+              <div
+                onClick={() => advancedInputRef.current?.focus()}
+                style={{
+                  minHeight: '80px',
+                  border: '1px solid #dedede',
+                  borderRadius: '13px',
+                  padding: '8px 12px',
+                  backgroundColor: '#ffffff',
+                  cursor: 'text',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                  alignItems: 'center',
+                  alignContent: 'flex-start',
+                  outline: isAdvancedFocused ? '2.5px solid #fa53d5' : 'none',
+                  outlineOffset: isAdvancedFocused ? '2px' : '0px',
+                  transition: 'outline 0.15s ease',
+                }}
+                className="w-full font-sans"
+              >
+                {/* Capsules / Gélules */}
+                {(draftFilters.advancedSearchTerms || []).map((term, tIdx) => (
+                  <span
+                    key={`${term}-${tIdx}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveAdvancedTerm(tIdx);
+                    }}
+                    title="Cliquer pour supprimer ce terme"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      backgroundColor: '#ffecf8',
+                      border: '1px solid #fe4eba',
+                      color: '#000000',
+                      borderRadius: '9999px',
+                      padding: '3px 10px',
+                      fontSize: '14px',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      transition: 'all 0.15s ease',
+                    }}
+                    className="hover:bg-red-50 hover:border-red-400 hover:text-red-600 group"
+                  >
+                    <span>{term}</span>
+                    <span className="text-[11px] opacity-60 group-hover:opacity-100 group-hover:text-red-600 ml-0.5 font-bold">✕</span>
+                  </span>
+                ))}
+
+                {/* Inline text input that automatically expands */}
+                <input
+                  ref={advancedInputRef}
+                  id="advanced-search-input"
+                  type="text"
+                  value={advancedSearchInputValue}
+                  onChange={handleAdvancedInputChange}
+                  onKeyDown={handleAdvancedInputKeyDown}
+                  onFocus={() => setIsAdvancedFocused(true)}
+                  onBlur={() => {
+                    setIsAdvancedFocused(false);
+                    if (advancedSearchInputValue.trim().length >= 3) {
+                      addAdvancedTerm(advancedSearchInputValue);
+                      setAdvancedSearchInputValue('');
+                    }
+                  }}
+                  placeholder={(draftFilters.advancedSearchTerms || []).length === 0 ? "Tapez un terme (ex: 12345, Lyon)..." : ""}
+                  className="flex-1 min-w-[120px] bg-transparent outline-none border-none text-[15px] text-black font-sans font-light placeholder:text-slate-400"
+                  style={{
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    padding: '2px 4px',
+                  }}
+                />
+              </div>
+            </div>
+            
             {/* Filter 1: Région */}
             <div className="space-y-1.5">
               <div className="relative">
@@ -8693,9 +9062,11 @@ export default function DefibTab({
                   categorie: 'Tous',
                   contrat: 'Tous',
                   actionRejected: false,
+                  advancedSearchTerms: [] as string[],
                 };
                 setDraftFilters(defaults);
                 setActiveFilters(defaults);
+                setAdvancedSearchInputValue('');
                 setIsFilterPaneOpen(false);
               }}
               style={{
@@ -8716,7 +9087,16 @@ export default function DefibTab({
             </button>
             <button
               onClick={() => {
-                setActiveFilters(draftFilters);
+                let finalDraft = { ...draftFilters };
+                if (advancedSearchInputValue.trim().length >= 3) {
+                  const cleaned = advancedSearchInputValue.trim();
+                  const current = finalDraft.advancedSearchTerms || [];
+                  if (!current.some(t => t.toLowerCase() === cleaned.toLowerCase())) {
+                    finalDraft.advancedSearchTerms = [...current, cleaned];
+                  }
+                  setAdvancedSearchInputValue('');
+                }
+                setActiveFilters(finalDraft);
                 setIsFilterPaneOpen(false);
               }}
               style={{
@@ -8742,7 +9122,11 @@ export default function DefibTab({
       {/* Drawer Overlay backdrop */}
       {isFilterPaneOpen && (
         <div 
-          onClick={() => setIsFilterPaneOpen(false)}
+          onClick={() => {
+            setDraftFilters(activeFilters);
+            setAdvancedSearchInputValue('');
+            setIsFilterPaneOpen(false);
+          }}
           className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-[85]"
         />
       )}

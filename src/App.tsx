@@ -1015,12 +1015,34 @@ export default function App() {
 
     setStocks(updated);
     const strS = JSON.stringify(updated);
-    safeSetLocalStorage(`defib_${effectiveTenantId}_stocks`, strS);
-    safeSetLocalStorage(`fs_cache_${effectiveTenantId}_stocks`, strS);
-    try {
-      idbSet(`defib_${effectiveTenantId}_stocks`, updated).catch(() => {});
-    } catch (_) {}
+    const sTenantAliases = [effectiveTenantId, 'demo', 'D18', 'd18', '18'];
+    if (/^d\d+$/i.test(effectiveTenantId) || /^\d+$/.test(effectiveTenantId)) {
+      const numOnly = effectiveTenantId.replace(/^d/i, '');
+      sTenantAliases.push(`D${numOnly}`, `d${numOnly}`, numOnly);
+    }
+    const uniqueSTenants = Array.from(new Set(sTenantAliases.filter(Boolean)));
+    for (const tid of uniqueSTenants) {
+      safeSetLocalStorage(`defib_${tid}_stocks`, strS);
+      safeSetLocalStorage(`fs_cache_${tid}_stocks`, strS);
+      try {
+        idbSet(`defib_${tid}_stocks`, updated).catch(() => {});
+      } catch (_) {}
+    }
     loadedDataRef.current.stocks = strS;
+    loadedDataRef.current.stock = strS;
+
+    try {
+      fetch('/api/sync-collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName: 'stocks',
+          tenantId: effectiveTenantId,
+          value: updated
+        })
+      }).catch(() => {});
+    } catch (_) {}
+
     if (effectiveTenantId) {
       await saveCollectionToFirestore('stocks', updated, effectiveTenantId);
       if (effectiveTenantId.toUpperCase().startsWith('D')) {
@@ -1068,12 +1090,34 @@ export default function App() {
 
     setDistributedStocks(updated);
     const strDS = JSON.stringify(updated);
-    safeSetLocalStorage(`defib_${effectiveTenantId}_distributed_stocks`, strDS);
-    safeSetLocalStorage(`fs_cache_${effectiveTenantId}_distributed_stocks`, strDS);
-    try {
-      idbSet(`defib_${effectiveTenantId}_distributed_stocks`, updated).catch(() => {});
-    } catch (_) {}
+    const dsTenantAliases = [effectiveTenantId, 'demo', 'D18', 'd18', '18'];
+    if (/^d\d+$/i.test(effectiveTenantId) || /^\d+$/.test(effectiveTenantId)) {
+      const numOnly = effectiveTenantId.replace(/^d/i, '');
+      dsTenantAliases.push(`D${numOnly}`, `d${numOnly}`, numOnly);
+    }
+    const uniqueDsTenants = Array.from(new Set(dsTenantAliases.filter(Boolean)));
+    for (const tid of uniqueDsTenants) {
+      safeSetLocalStorage(`defib_${tid}_distributed_stocks`, strDS);
+      safeSetLocalStorage(`fs_cache_${tid}_distributed_stocks`, strDS);
+      try {
+        idbSet(`defib_${tid}_distributed_stocks`, updated).catch(() => {});
+      } catch (_) {}
+    }
     loadedDataRef.current.distributed_stocks = strDS;
+    loadedDataRef.current.distributedStocks = strDS;
+
+    try {
+      fetch('/api/sync-collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName: 'distributed_stocks',
+          tenantId: effectiveTenantId,
+          value: updated
+        })
+      }).catch(() => {});
+    } catch (_) {}
+
     if (effectiveTenantId) {
       await saveCollectionToFirestore('distributed_stocks', updated, effectiveTenantId);
       if (effectiveTenantId.toUpperCase().startsWith('D')) {
@@ -1679,6 +1723,93 @@ export default function App() {
       if (unsubscribeFirestore) unsubscribeFirestore();
     };
   }, [tenantId]);
+
+  // Real-time synchronization of defibrillateurs across all user sessions and devices
+  useEffect(() => {
+    if (!tenantId) return;
+    let isMounted = true;
+    let unsubscribeFirestore: (() => void) | undefined;
+    try {
+      const colKey = getCollectionKey('defibrillateurs', tenantId);
+      const docRef = doc(db, 'appData', colKey);
+      unsubscribeFirestore = onSnapshot(
+        docRef,
+        (snapshot) => {
+          if (snapshot.exists() && isMounted) {
+            const data = snapshot.data();
+            let remoteList: Defibrillateur[] = [];
+            if (Array.isArray(data?.value)) {
+              remoteList = data.value;
+            } else if (Array.isArray(data)) {
+              remoteList = data;
+            }
+            if (Array.isArray(remoteList) && remoteList.length > 0) {
+              setDefibrillateurs((prev) => {
+                if (prev.length !== remoteList.length || getCollectionFingerprint(prev) !== getCollectionFingerprint(remoteList)) {
+                  try {
+                    idbSet(`defib_${tenantId}_defibrillateurs`, remoteList);
+                    if (remoteList.length <= 250) {
+                      safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, JSON.stringify(remoteList));
+                    }
+                  } catch (_) {}
+                  return remoteList;
+                }
+                return prev;
+              });
+            }
+          }
+        },
+        (error) => {
+          console.warn('Real-time listener on defibrillateurs in App:', error);
+        }
+      );
+    } catch (e) {
+      console.warn('Error setting up onSnapshot for defibrillateurs:', e);
+    }
+
+    return () => {
+      isMounted = false;
+      if (unsubscribeFirestore) unsubscribeFirestore();
+    };
+  }, [tenantId]);
+
+  const [isRefreshingDefibs, setIsRefreshingDefibs] = useState<boolean>(false);
+
+  const handleManualRefreshDefibs = async () => {
+    setIsRefreshingDefibs(true);
+    try {
+      const activeTenant = tenantId || 'demo';
+      // 1. Fetch fresh from Firestore directly, bypassing any cached states
+      const freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant);
+      if (Array.isArray(freshRemote) && freshRemote.length > 0) {
+        setDefibrillateurs(freshRemote);
+        try {
+          await idbSet(`defib_${activeTenant}_defibrillateurs`, freshRemote);
+          if (freshRemote.length <= 250) {
+            safeSetLocalStorage(`defib_${activeTenant}_defibrillateurs`, JSON.stringify(freshRemote));
+          }
+        } catch (_) {}
+      } else {
+        // Fallback to server sync endpoint with cache-busting timestamp
+        const res = await fetch(`/api/sync-collection?collectionName=defibrillateurs&tenantId=${encodeURIComponent(activeTenant)}&_=${Date.now()}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json?.value) && json.value.length > 0) {
+            setDefibrillateurs(json.value);
+            try {
+              await idbSet(`defib_${activeTenant}_defibrillateurs`, json.value);
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Manual refresh error:', err);
+    } finally {
+      setTimeout(() => {
+        setIsRefreshingDefibs(false);
+      }, 500);
+    }
+  };
 
 
 
@@ -7306,7 +7437,7 @@ export default function App() {
     }
 
     loadedDataRef.current.defibrillateurs = getCollectionFingerprint(newDefibs);
-    if (tenantId && newDefibs.length <= 250) {
+    if (tenantId) {
       try {
         await saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId);
       } catch (err) {
@@ -7574,11 +7705,14 @@ export default function App() {
       return;
     }
     const nowIso = new Date().toISOString();
+    const activeTid = tenantId || 'D58';
     const newDefib: Defibrillateur = {
       id: 'df_' + Date.now(),
       createdAt: nowIso,
       updatedAt: nowIso,
       dateDerniereModification: nowIso,
+      envId: activeTid,
+      tenantId: activeTid,
       ...defibData,
     };
     saveDefibs([...defibrillateurs, newDefib]);
@@ -7587,7 +7721,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenantId: tenantId || newDefib.envId || newDefib.tenantId || 'D27',
+          tenantId: activeTid,
           defib: newDefib
         })
       }).catch(() => {});
@@ -7600,25 +7734,26 @@ export default function App() {
       return;
     }
     const nowIso = new Date().toISOString();
+    const activeTid = tenantId || updated.envId || updated.tenantId || 'D58';
     const exists = defibrillateurs.some((df) => {
       const idMatch = !!(df.id && updated.id && df.id === updated.id);
       const identifiantMatch = !!(df.identifiant && updated.identifiant && df.identifiant.toUpperCase() === updated.identifiant.toUpperCase());
       return idMatch || identifiantMatch;
     });
 
-    let finalMerged: Defibrillateur = { ...updated, updatedAt: nowIso, dateDerniereModification: nowIso };
+    let finalMerged: Defibrillateur = { ...updated, envId: activeTid, tenantId: activeTid, updatedAt: nowIso, dateDerniereModification: nowIso };
     if (exists) {
       saveDefibs(defibrillateurs.map((df) => {
         const isMatch = !!((df.id && updated.id && df.id === updated.id) ||
                         (df.identifiant && updated.identifiant && df.identifiant.toUpperCase() === updated.identifiant.toUpperCase()));
         if (isMatch) {
-          finalMerged = { ...df, ...updated, updatedAt: nowIso, dateDerniereModification: nowIso, id: df.id };
+          finalMerged = { ...df, ...updated, envId: activeTid, tenantId: activeTid, updatedAt: nowIso, dateDerniereModification: nowIso, id: df.id };
           return finalMerged;
         }
         return df;
       }));
     } else {
-      finalMerged = { ...updated, updatedAt: nowIso, dateDerniereModification: nowIso, id: updated.id || 'df_' + Date.now() };
+      finalMerged = { ...updated, envId: activeTid, tenantId: activeTid, updatedAt: nowIso, dateDerniereModification: nowIso, id: updated.id || 'df_' + Date.now() };
       saveDefibs([...defibrillateurs, finalMerged]);
     }
 
@@ -7627,7 +7762,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenantId: tenantId || finalMerged.envId || finalMerged.tenantId || 'D27',
+          tenantId: activeTid,
           defib: finalMerged
         })
       }).catch(() => {});
@@ -8476,6 +8611,8 @@ export default function App() {
               isReadOnly={isDeveloper}
               isDefibLoading={isDefibLoading}
               defibLoadingProgress={defibLoadingProgress}
+              isRefreshing={isRefreshingDefibs}
+              onRefreshData={handleManualRefreshDefibs}
             />
           )}
 

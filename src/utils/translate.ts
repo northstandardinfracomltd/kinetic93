@@ -79,6 +79,7 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Importer": "Import",
     "Recherche...": "Search...",
     "Recherche.": "Search.",
+    "Recherche rapide.": "Quick search.",
     "Recherche": "Search",
     "Télécharger": "Download",
     "Télécharger CSV": "Download CSV",

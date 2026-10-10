@@ -205,6 +205,7 @@ export interface Defibrillateur {
   fabrication: string;
   miseEnService: string;
   derniereMaintenance: string;
+  prochaineMaintenance?: string;
   sortieFabricant: string;
 
   // Section 6 - Électrode Mixte ou Adulte (A)

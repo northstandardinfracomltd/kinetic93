@@ -13,18 +13,30 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 const currentFilename = typeof __filename !== 'undefined' ? __filename : (typeof import.meta !== 'undefined' && (import.meta as any)?.url ? fileURLToPath((import.meta as any).url) : '');
 const currentDirname = typeof __dirname !== 'undefined' ? __dirname : (currentFilename ? path.dirname(currentFilename) : process.cwd());
+
+let appletFirebaseConfig: any = null;
+try {
+  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    appletFirebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  }
+} catch (_) {}
+
 const PROD_FIREBASE_CONFIG = {
-  apiKey: process.env.FIREBASE_API_KEY || "AIzaSyBsfSHoSrPXwnwLcWtIGLPUwUd7ZYWVCvA",
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN || "defibeo.firebaseapp.com",
-  projectId: process.env.FIREBASE_PROJECT_ID || "defibeo",
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "defibeo.appspot.com",
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "627487981610",
-  appId: process.env.FIREBASE_APP_ID || "1:627487981610:web:e4f496748c4ee0d1710353",
+  apiKey: process.env.FIREBASE_API_KEY || appletFirebaseConfig?.apiKey || "AIzaSyDIu55IW0GJ6hbsa7ZrIyKM89dlWpRW4L8",
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN || appletFirebaseConfig?.authDomain || "gen-lang-client-0413990730.firebaseapp.com",
+  projectId: process.env.FIREBASE_PROJECT_ID || appletFirebaseConfig?.projectId || "gen-lang-client-0413990730",
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || appletFirebaseConfig?.storageBucket || "gen-lang-client-0413990730.firebasestorage.app",
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || appletFirebaseConfig?.messagingSenderId || "862243466493",
+  appId: process.env.FIREBASE_APP_ID || appletFirebaseConfig?.appId || "1:862243466493:web:fc5b1fbcab864b3bba2294",
   measurementId: ""
 };
 
+const serverFirestoreDbId = appletFirebaseConfig?.firestoreDatabaseId || "(default)";
 const firebaseApp = initializeApp(PROD_FIREBASE_CONFIG);
-const db = getFirestore(firebaseApp);
+const db = serverFirestoreDbId && serverFirestoreDbId !== "(default)"
+  ? getFirestore(firebaseApp, serverFirestoreDbId)
+  : getFirestore(firebaseApp);
 
 function unwrapFirestoreValue(val: any): any {
   if (!val || typeof val !== 'object') return val;
@@ -54,7 +66,7 @@ interface FirestoreRestResult {
 async function fetchFirestoreDocumentRest(key: string, timeoutMs: number = 2500): Promise<FirestoreRestResult> {
   try {
     const apiKey = PROD_FIREBASE_CONFIG.apiKey;
-    const url = `https://firestore.googleapis.com/v1/projects/defibeo/databases/(default)/documents/appData/${encodeURIComponent(key)}?key=${apiKey}`;
+    const url = `https://firestore.googleapis.com/v1/projects/${PROD_FIREBASE_CONFIG.projectId}/databases/${encodeURIComponent(serverFirestoreDbId)}/documents/appData/${encodeURIComponent(key)}?key=${apiKey}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(url, { signal: controller.signal });
@@ -396,7 +408,7 @@ async function fetchChunkRest(chunkIdx: number, prefix: string = 'D27_defibrilla
   }
   try {
     const apiKey = PROD_FIREBASE_CONFIG.apiKey;
-    const url = `https://firestore.googleapis.com/v1/projects/defibeo/databases/(default)/documents/appData/${prefix}_chunk_${chunkIdx}?key=${apiKey}`;
+    const url = `https://firestore.googleapis.com/v1/projects/${PROD_FIREBASE_CONFIG.projectId}/databases/${encodeURIComponent(serverFirestoreDbId)}/documents/appData/${prefix}_chunk_${chunkIdx}?key=${apiKey}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2500);
     const res = await fetch(url, { signal: controller.signal });
@@ -2496,7 +2508,7 @@ async function findSingleDefibrillateur(
   try {
     const docKey = (tenantId === 'demo' || tenantId === 'defibrillateurs') ? 'defibrillateurs' : `${tenantId || 'D58'}_defibrillateurs`;
     const apiKey = PROD_FIREBASE_CONFIG.apiKey;
-    const url = `https://firestore.googleapis.com/v1/projects/defibeo/databases/(default)/documents/appData/${docKey}?key=${apiKey}`;
+    const url = `https://firestore.googleapis.com/v1/projects/${PROD_FIREBASE_CONFIG.projectId}/databases/${encodeURIComponent(serverFirestoreDbId)}/documents/appData/${docKey}?key=${apiKey}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2500);
     const res = await fetch(url, { signal: controller.signal });
@@ -2640,6 +2652,31 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   const numOnly = isDNum || isNum ? activeTenant.replace(/^d/i, '') : '';
 
   // 1. FAST PATH: Check in-memory store first (authoritative backend store)
+  const candidateLookupKeys = [canonicalKey];
+  if (colName === 'distributed_stocks' || colName === 'distributedStocks' || colName === 'stocks' || colName === 'stock') {
+    candidateLookupKeys.push(
+      colName,
+      `demo_${colName}`,
+      `D18_${colName}`,
+      `d18_${colName}`,
+      colName === 'distributed_stocks' ? 'distributedStocks' : 'distributed_stocks',
+      colName === 'stocks' ? 'stock' : 'stocks'
+    );
+  }
+
+  for (const lk of candidateLookupKeys) {
+    if (serverMemoryStore.has(lk)) {
+      const memVal = serverMemoryStore.get(lk);
+      if (memVal !== undefined && memVal !== null && Array.isArray(memVal) && memVal.length > 0) {
+        if (colName === 'defibrillateurs' && memVal.length <= 1) {
+          // Fall through
+        } else {
+          return sanitizeForTenant(memVal);
+        }
+      }
+    }
+  }
+
   if (serverMemoryStore.has(canonicalKey)) {
     const memVal = serverMemoryStore.get(canonicalKey);
     if (memVal !== undefined && memVal !== null) {
@@ -2652,7 +2689,24 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     }
   }
 
-  // 1b. For defibrillateurs, check authoritative chunk files on disk first (0 network calls, ultra-fast)
+  // 1b. Dedicated collection file on disk (e.g. D58_defibrillateurs.json)
+  const colFile = path.join(COLLECTIONS_DIR, `${canonicalKey}.json`);
+  if (fs.existsSync(colFile)) {
+    try {
+      const diskVal = JSON.parse(fs.readFileSync(colFile, 'utf-8'));
+      if (diskVal !== undefined && diskVal !== null) {
+        if (colName === 'defibrillateurs' && Array.isArray(diskVal) && diskVal.length === 0) {
+          // Fall through if explicitly empty and chunks exist
+        } else {
+          serverMemoryStore.set(canonicalKey, diskVal);
+          serverStoreTimestamps.set(canonicalKey, Date.now());
+          return sanitizeForTenant(diskVal);
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 1c. For defibrillateurs, check authoritative chunk files on disk for D27/shared fallback
   if (colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices') {
     if (fs.existsSync(CHUNKS_DIR)) {
       const chunkFiles = fs.readdirSync(CHUNKS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
@@ -2681,23 +2735,6 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         }
       }
     }
-  }
-
-  // 1c. Dedicated collection file on disk
-  const colFile = path.join(COLLECTIONS_DIR, `${canonicalKey}.json`);
-  if (fs.existsSync(colFile)) {
-    try {
-      const diskVal = JSON.parse(fs.readFileSync(colFile, 'utf-8'));
-      if (diskVal !== undefined && diskVal !== null) {
-        if (colName === 'defibrillateurs' && Array.isArray(diskVal) && diskVal.length <= 1) {
-          // Fall through
-        } else {
-          serverMemoryStore.set(canonicalKey, diskVal);
-          serverStoreTimestamps.set(canonicalKey, Date.now());
-          return sanitizeForTenant(diskVal);
-        }
-      }
-    } catch (_) {}
   }
 
   // 2. Helper to load a single candidate key from Firestore safely
@@ -3094,31 +3131,56 @@ async function warmupDefibrillateursStore() {
       }
       let chunkIdx = tuple && typeof tuple[3] === 'number' ? tuple[3] : undefined;
 
-      if (typeof chunkIdx === 'number') {
-        saveSingleDefibrillateurToChunk(formatted, chunkIdx, 'D27_defibrillateurs');
-      } else {
-        chunkIdx = addNewDefibrillateurToChunk(formatted, 'D27_defibrillateurs');
+      if (rawTenant === 'D27') {
+        if (typeof chunkIdx === 'number') {
+          saveSingleDefibrillateurToChunk(formatted, chunkIdx, 'D27_defibrillateurs');
+        } else {
+          chunkIdx = addNewDefibrillateurToChunk(formatted, 'D27_defibrillateurs');
+        }
       }
 
-      // Also update in memory store if collection is loaded
-      const candidateKeys = [
-        rawTenant === 'demo' ? 'defibrillateurs' : `${rawTenant}_defibrillateurs`,
-        'D27_defibrillateurs',
-        'D58_defibrillateurs'
-      ];
-      for (const ck of candidateKeys) {
-        if (serverMemoryStore.has(ck)) {
-          const arr = serverMemoryStore.get(ck);
-          if (Array.isArray(arr)) {
-            const idx = arr.findIndex(d => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
-            if (idx >= 0) {
-              arr[idx] = { ...arr[idx], ...formatted };
-            } else {
-              arr.push(formatted);
-            }
+      // Update dedicated tenant collection in memory and on disk
+      const tenantKey = rawTenant === 'demo' ? 'defibrillateurs' : `${rawTenant}_defibrillateurs`;
+      let tenantArr: any[] = [];
+      if (serverMemoryStore.has(tenantKey)) {
+        tenantArr = serverMemoryStore.get(tenantKey);
+      } else {
+        const diskFile = path.join(COLLECTIONS_DIR, `${tenantKey}.json`);
+        if (fs.existsSync(diskFile)) {
+          try {
+            tenantArr = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
+          } catch (_) {
+            tenantArr = [];
           }
         }
       }
+      if (!Array.isArray(tenantArr)) tenantArr = [];
+
+      const matchIdx = tenantArr.findIndex((d: any) =>
+        d && ((formatted.id && d.id === formatted.id) ||
+             (formatted.identifiant && d.identifiant && d.identifiant.toUpperCase() === formatted.identifiant.toUpperCase()) ||
+             (formatted.numeroSerie && d.numeroSerie && d.numeroSerie.toUpperCase() === formatted.numeroSerie.toUpperCase()))
+      );
+
+      if (matchIdx >= 0) {
+        tenantArr[matchIdx] = { ...tenantArr[matchIdx], ...formatted, updatedAt: new Date().toISOString() };
+      } else {
+        tenantArr.push({ ...formatted, updatedAt: new Date().toISOString() });
+      }
+
+      serverMemoryStore.set(tenantKey, tenantArr);
+      serverStoreTimestamps.set(tenantKey, Date.now());
+      persistSingleCollectionToDisk(tenantKey, tenantArr);
+
+      // Write to Firestore in background
+      (async () => {
+        try {
+          const docRef = doc(db, 'appData', tenantKey);
+          await setDoc(docRef, { value: tenantArr, updatedAt: new Date().toISOString() });
+        } catch (fsErr) {
+          console.warn(`[Firestore sync-single-defib] Error syncing ${tenantKey} to Firestore:`, fsErr);
+        }
+      })().catch(() => {});
 
       return res.json({ status: "success", defib: formatted });
     } catch (err: any) {
@@ -3337,7 +3399,7 @@ async function warmupDefibrillateursStore() {
           }
         }
 
-        // Also map normalized key if D-prefixed or numeric
+        // Also map normalized key if D-prefixed or numeric, or demo/D18 crossover for stocks
         if (/^d\d+$/i.test(rawTenant) || /^\d+$/.test(rawTenant)) {
           const numOnly = rawTenant.replace(/^d/i, '');
           for (const cName of [collectionName, ...colAliases]) {
@@ -3353,7 +3415,24 @@ async function warmupDefibrillateursStore() {
             serverStoreTimestamps.set(`${numOnly}_${cName}`, Date.now());
           }
         }
-        if (Array.isArray(value) && value.length > 20) {
+
+        // Cross-tenant resilience for stocks & distributed_stocks: mirror between demo, D18, and base names
+        if (collectionName === 'distributed_stocks' || collectionName === 'distributedStocks' || collectionName === 'stocks' || collectionName === 'stock') {
+          for (const cName of colAliases) {
+            serverMemoryStore.set(cName, finalValueToStore);
+            serverStoreTimestamps.set(cName, Date.now());
+            serverMemoryStore.set(`demo_${cName}`, finalValueToStore);
+            serverStoreTimestamps.set(`demo_${cName}`, Date.now());
+            serverMemoryStore.set(`D18_${cName}`, finalValueToStore);
+            serverStoreTimestamps.set(`D18_${cName}`, Date.now());
+            serverMemoryStore.set(`d18_${cName}`, finalValueToStore);
+            serverStoreTimestamps.set(`d18_${cName}`, Date.now());
+            persistSingleCollectionToDisk(cName, finalValueToStore);
+            persistSingleCollectionToDisk(`demo_${cName}`, finalValueToStore);
+            persistSingleCollectionToDisk(`D18_${cName}`, finalValueToStore);
+          }
+          persistServerStoreToDiskNow();
+        } else if (Array.isArray(value) && value.length > 20) {
           if (!isDefibLarge) {
             persistServerStoreToDiskNow();
           }
