@@ -2455,7 +2455,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                       minHeight: '25px', 
                                       marginLeft: '10px', 
                                       fontSize: '16px', 
-                                      backgroundColor: '#8f1961' 
+                                      backgroundColor: '#8f1961',
+                                      border: 'none',
+                                      outline: 'none',
+                                      boxShadow: 'none'
                                     }}
                                     title={`Semaine ${weekNum}`}
                                   >
@@ -2566,7 +2569,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                       minHeight: '25px', 
                                       marginLeft: '10px', 
                                       fontSize: '16px', 
-                                      backgroundColor: '#8f1961' 
+                                      backgroundColor: '#8f1961',
+                                      border: 'none',
+                                      outline: 'none',
+                                      boxShadow: 'none'
                                     }}
                                     title={`Semaine ${weekNum}`}
                                   >
@@ -2779,7 +2785,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 minHeight: '25px',
                                 marginLeft: '10px',
                                 fontSize: '13px',
-                                backgroundColor: 'rgb(143, 25, 97)'
+                                backgroundColor: 'rgb(143, 25, 97)',
+                                border: 'none',
+                                outline: 'none',
+                                boxShadow: 'none'
                               }}
                               title={`Semaine ${getWeekNumberString(formOuverture)}`}
                             >
