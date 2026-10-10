@@ -791,6 +791,73 @@ export async function fetchCollectionFromFirestore<T>(
 
   // 2. Secondary Strategy: High-availability backend server relay (/api/sync-collection)
   if (typeof fetch !== 'undefined') {
+    const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
+
+    // For massive defibrillateurs collection (17,800+ items), ALWAYS use high-speed chunked static delivery
+    // to avoid Cloud Run / QUIC protocol errors caused by a single 33MB JSON payload
+    if (isDefibCol) {
+      try {
+        const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(activeTenantId)}`, {
+          signal: AbortSignal.timeout(10000)
+        });
+        if (metaRes.ok) {
+          const meta = await metaRes.json();
+          const totalChunks = meta.totalChunks || 0;
+          if (totalChunks > 0) {
+            const chunkResults: any[][] = new Array(totalChunks);
+            let loadedCount = 0;
+            const totalEst = meta.totalCount || 17814;
+            const CONCURRENCY = 6;
+
+            for (let i = 0; i < totalChunks; i += CONCURRENCY) {
+              const batchPromises = [];
+              const batchEnd = Math.min(i + CONCURRENCY, totalChunks);
+              for (let c = i; c < batchEnd; c++) {
+                batchPromises.push((async (cIdx) => {
+                  try {
+                    const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix || 'D27_defibrillateurs')}`, {
+                      signal: AbortSignal.timeout(15000)
+                    });
+                    if (chunkRes.ok) {
+                      const arr = await chunkRes.json();
+                      if (Array.isArray(arr)) {
+                        chunkResults[cIdx] = arr;
+                        loadedCount += arr.length;
+                      }
+                    }
+                  } catch (_) {}
+                })(c));
+              }
+              await Promise.all(batchPromises);
+              onProgress?.(
+                loadedCount,
+                totalEst,
+                `Chargement ${loadedCount.toLocaleString('en-US')}/${totalEst.toLocaleString('en-US')}, Veuillez patienter.`
+              );
+            }
+
+            const combined = chunkResults.filter(Boolean).flat();
+            if (combined.length > 0) {
+              const sanitizedVal = filterCollectionForTenant(combined as unknown as T, collectionName, activeTenantId);
+              idbSet(`defib_${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
+              if (activeTenantId.toUpperCase().startsWith('D')) {
+                idbSet(`defib_${activeTenantId.toUpperCase()}_${collectionName}`, sanitizedVal).catch(() => {});
+                idbSet(`defib_${activeTenantId.toLowerCase()}_${collectionName}`, sanitizedVal).catch(() => {});
+              }
+              onProgress?.(
+                combined.length,
+                combined.length,
+                `Chargement ${combined.length.toLocaleString('en-US')}/${combined.length.toLocaleString('en-US')}, Terminé.`
+              );
+              return sanitizedVal;
+            }
+          }
+        }
+      } catch (chunkFetchErr) {
+        console.warn(`[Defib Chunks Relay] Error downloading chunks:`, chunkFetchErr);
+      }
+    }
+
     try {
       const resp = await fetch(`/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(activeTenantId)}`, {
         signal: AbortSignal.timeout(60000)

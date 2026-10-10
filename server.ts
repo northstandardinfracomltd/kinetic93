@@ -3352,6 +3352,55 @@ async function warmupDefibrillateursStore() {
     }
   });
 
+  // Metadata endpoint for high-speed chunked defibrillateurs download
+  app.get("/api/defib-chunks/meta", (req, res) => {
+    try {
+      const tenantId = String(req.query.tenantId || 'D27').trim();
+      const prefix = 'D27_defibrillateurs';
+      if (!fs.existsSync(CHUNKS_DIR)) {
+        return res.json({ totalChunks: 0, totalCount: 0, prefix, tenantId });
+      }
+      const files = fs.readdirSync(CHUNKS_DIR).filter(f => f.startsWith(prefix) && f.endsWith('.json'));
+      let maxIdx = -1;
+      for (const f of files) {
+        const m = f.match(/_chunk_(\d+)\.json$/);
+        if (m) {
+          const idx = parseInt(m[1], 10);
+          if (idx > maxIdx) maxIdx = idx;
+        }
+      }
+      const totalChunks = maxIdx >= 0 ? maxIdx + 1 : 0;
+      return res.json({
+        totalChunks,
+        totalCount: 17814,
+        prefix,
+        tenantId
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // High-speed static chunk file delivery (zero-copy streaming, avoids 33MB QUIC errors)
+  app.get("/api/defib-chunks/chunk/:index", (req, res) => {
+    try {
+      const chunkIdx = parseInt(req.params.index, 10);
+      if (isNaN(chunkIdx) || chunkIdx < 0) {
+        return res.status(400).json({ error: "Index de chunk invalide." });
+      }
+      const prefix = String(req.query.prefix || 'D27_defibrillateurs').replace(/[^a-zA-Z0-9_-]/g, '');
+      const filePath = path.join(CHUNKS_DIR, `${prefix}_chunk_${chunkIdx}.json`);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "Fichier chunk non trouvé." });
+      }
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      return res.sendFile(filePath);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // Real-time synchronization endpoint from browser client to server
   app.get("/api/sync-collection", async (req, res) => {
     try {
@@ -3361,6 +3410,23 @@ async function warmupDefibrillateursStore() {
         return res.status(400).json({ error: "collectionName is required" });
       }
       const rawTenant = tenantId.trim();
+
+      // If chunkIndex is provided for defibrillateurs, serve that chunk directly
+      if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices') {
+        const chunkIndexParam = req.query.chunkIndex;
+        if (chunkIndexParam !== undefined && chunkIndexParam !== null && chunkIndexParam !== '') {
+          const chunkIdx = parseInt(String(chunkIndexParam), 10);
+          if (!isNaN(chunkIdx) && chunkIdx >= 0) {
+            const filePath = path.join(CHUNKS_DIR, `D27_defibrillateurs_chunk_${chunkIdx}.json`);
+            if (fs.existsSync(filePath)) {
+              res.setHeader('Content-Type', 'application/json');
+              res.setHeader('Cache-Control', 'public, max-age=60');
+              return res.sendFile(filePath);
+            }
+          }
+        }
+      }
+
       const items = await fetchServerCollection(collectionName, rawTenant);
       return res.json({ value: items });
     } catch (err: any) {

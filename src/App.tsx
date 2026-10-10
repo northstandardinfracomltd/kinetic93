@@ -1792,46 +1792,44 @@ export default function App() {
     setIsDefibLoading(true);
     setDefibLoadingProgress({
       current: 0,
-      total: 18207,
-      percent: 15,
+      total: 17814,
+      percent: 5,
       message: 'Actualisation des données en direct depuis le serveur...'
     });
     try {
       const activeTenant = tenantId || 'demo';
-      // 1. Fetch directly from server sync endpoint which reads all chunks (17,813+ items)
-      const res = await fetch(`/api/sync-collection?collectionName=defibrillateurs&tenantId=${encodeURIComponent(activeTenant)}&_=${Date.now()}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json?.value) && json.value.length > 0) {
-          const list = json.value;
-          setDefibrillateurs(list);
-          try {
-            await idbSet(`defib_${activeTenant}_defibrillateurs`, list);
-            const uc = activeTenant.toUpperCase();
-            if (uc.startsWith('D')) {
-              await idbSet(`defib_${uc}_defibrillateurs`, list);
-              await idbSet(`defib_${activeTenant.toLowerCase()}_defibrillateurs`, list);
-            }
-          } catch (_) {}
-          setDefibLoadingProgress({
-            current: list.length,
-            total: list.length,
-            percent: 100,
-            message: `Chargement ${list.length.toLocaleString('en-US')}/${list.length.toLocaleString('en-US')}, Terminé.`
-          });
-          setTimeout(() => {
-            setIsDefibLoading(false);
-          }, 350);
-          return;
-        }
-      }
-      // Fallback: try Firestore
-      const freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant);
-      if (Array.isArray(freshRemote) && freshRemote.length >= 5000) {
+      const onProgress = (loaded: number, total: number, msg?: string) => {
+        const effTotal = total || 17814;
+        const p = Math.min(100, Math.max(1, Math.round((loaded / effTotal) * 100)));
+        setDefibLoadingProgress({
+          current: loaded,
+          total: effTotal,
+          percent: p,
+          message: msg || `Chargement ${loaded.toLocaleString('en-US')}/${effTotal.toLocaleString('en-US')}, Veuillez patienter.`
+        });
+      };
+
+      const freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant, onProgress);
+      if (Array.isArray(freshRemote) && freshRemote.length > 0) {
         setDefibrillateurs(freshRemote);
         try {
           await idbSet(`defib_${activeTenant}_defibrillateurs`, freshRemote);
+          const uc = activeTenant.toUpperCase();
+          if (uc.startsWith('D')) {
+            await idbSet(`defib_${uc}_defibrillateurs`, freshRemote);
+            await idbSet(`defib_${activeTenant.toLowerCase()}_defibrillateurs`, freshRemote);
+          }
         } catch (_) {}
+        setDefibLoadingProgress({
+          current: freshRemote.length,
+          total: freshRemote.length,
+          percent: 100,
+          message: `Chargement ${freshRemote.length.toLocaleString('en-US')}/${freshRemote.length.toLocaleString('en-US')}, Terminé.`
+        });
+        setTimeout(() => {
+          setIsDefibLoading(false);
+        }, 350);
+        return;
       }
     } catch (err) {
       console.warn('Manual refresh error:', err);
