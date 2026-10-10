@@ -1745,6 +1745,18 @@ export default function App() {
             }
             if (Array.isArray(remoteList) && remoteList.length > 0) {
               setDefibrillateurs((prev) => {
+                if (remoteList.length < 5000) {
+                  // Guard: A small array (<5,000 items) is never the full catalog (18,000 items).
+                  // Merge new items into existing catalog without ever wiping it!
+                  if (prev.length > 0) {
+                    const merged = mergeCollectionItems('defibrillateurs', [...prev, ...remoteList]);
+                    try {
+                      idbSet(`defib_${tenantId}_defibrillateurs`, merged);
+                    } catch (_) {}
+                    return merged;
+                  }
+                  return prev;
+                }
                 if (prev.length !== remoteList.length || getCollectionFingerprint(prev) !== getCollectionFingerprint(remoteList)) {
                   try {
                     idbSet(`defib_${tenantId}_defibrillateurs`, remoteList);
@@ -1777,36 +1789,56 @@ export default function App() {
 
   const handleManualRefreshDefibs = async () => {
     setIsRefreshingDefibs(true);
+    setIsDefibLoading(true);
+    setDefibLoadingProgress({
+      current: 0,
+      total: 18207,
+      percent: 15,
+      message: 'Actualisation des données en direct depuis le serveur...'
+    });
     try {
       const activeTenant = tenantId || 'demo';
-      // 1. Fetch fresh from Firestore directly, bypassing any cached states
+      // 1. Fetch directly from server sync endpoint which reads all chunks (17,813+ items)
+      const res = await fetch(`/api/sync-collection?collectionName=defibrillateurs&tenantId=${encodeURIComponent(activeTenant)}&_=${Date.now()}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json?.value) && json.value.length > 0) {
+          const list = json.value;
+          setDefibrillateurs(list);
+          try {
+            await idbSet(`defib_${activeTenant}_defibrillateurs`, list);
+            const uc = activeTenant.toUpperCase();
+            if (uc.startsWith('D')) {
+              await idbSet(`defib_${uc}_defibrillateurs`, list);
+              await idbSet(`defib_${activeTenant.toLowerCase()}_defibrillateurs`, list);
+            }
+          } catch (_) {}
+          setDefibLoadingProgress({
+            current: list.length,
+            total: list.length,
+            percent: 100,
+            message: `Chargement ${list.length.toLocaleString('en-US')}/${list.length.toLocaleString('en-US')}, Terminé.`
+          });
+          setTimeout(() => {
+            setIsDefibLoading(false);
+          }, 350);
+          return;
+        }
+      }
+      // Fallback: try Firestore
       const freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant);
-      if (Array.isArray(freshRemote) && freshRemote.length > 0) {
+      if (Array.isArray(freshRemote) && freshRemote.length >= 5000) {
         setDefibrillateurs(freshRemote);
         try {
           await idbSet(`defib_${activeTenant}_defibrillateurs`, freshRemote);
-          if (freshRemote.length <= 250) {
-            safeSetLocalStorage(`defib_${activeTenant}_defibrillateurs`, JSON.stringify(freshRemote));
-          }
         } catch (_) {}
-      } else {
-        // Fallback to server sync endpoint with cache-busting timestamp
-        const res = await fetch(`/api/sync-collection?collectionName=defibrillateurs&tenantId=${encodeURIComponent(activeTenant)}&_=${Date.now()}`);
-        if (res.ok) {
-          const json = await res.json();
-          if (Array.isArray(json?.value) && json.value.length > 0) {
-            setDefibrillateurs(json.value);
-            try {
-              await idbSet(`defib_${activeTenant}_defibrillateurs`, json.value);
-            } catch (_) {}
-          }
-        }
       }
     } catch (err) {
       console.warn('Manual refresh error:', err);
     } finally {
       setTimeout(() => {
         setIsRefreshingDefibs(false);
+        setIsDefibLoading(false);
       }, 500);
     }
   };
@@ -5451,32 +5483,30 @@ export default function App() {
         // Check IndexedDB if localStorage was empty or couldn't store large collections
         try {
           let idbDefibs = await idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`);
-          // If empty, also check alias tenant keys in IndexedDB
-          if (!Array.isArray(idbDefibs) || idbDefibs.length <= 1) {
+          // If empty or small partial array (<5000 items), also check alias tenant keys in IndexedDB
+          if (!Array.isArray(idbDefibs) || idbDefibs.length < 5000) {
             const aliasKeys = [
               activeRunTenantId.toUpperCase().startsWith('D') ? activeRunTenantId.toLowerCase() : activeRunTenantId.toUpperCase(),
               'D27', 'D58', 'defibrillateurs'
             ];
             for (const ak of aliasKeys) {
               const alt = await idbGet<Defibrillateur[]>(`defib_${ak}_defibrillateurs`);
-              if (Array.isArray(alt) && alt.length > 1) {
+              if (Array.isArray(alt) && alt.length >= 5000) {
                 idbDefibs = alt;
                 break;
               }
             }
           }
-          if (Array.isArray(idbDefibs) && idbDefibs.length > 0) {
+          if (Array.isArray(idbDefibs) && idbDefibs.length >= 5000) {
             baseDefibrillateurs = idbDefibs;
             setDefibrillateurs(idbDefibs);
-            if (idbDefibs.length > 1) {
-              setDefibLoadingProgress({
-                current: idbDefibs.length,
-                total: idbDefibs.length,
-                percent: 100,
-                message: `Chargement ${idbDefibs.length.toLocaleString('en-US')}/${idbDefibs.length.toLocaleString('en-US')}, Terminé.`
-              });
-              setIsDefibLoading(false);
-            }
+            setDefibLoadingProgress({
+              current: idbDefibs.length,
+              total: idbDefibs.length,
+              percent: 100,
+              message: `Chargement ${idbDefibs.length.toLocaleString('en-US')}/${idbDefibs.length.toLocaleString('en-US')}, Terminé.`
+            });
+            setIsDefibLoading(false);
           }
           const idbClients = await idbGet<Client[]>(`defib_${activeRunTenantId}_clients`);
           if (Array.isArray(idbClients) && idbClients.length > 0) {
@@ -5601,6 +5631,9 @@ export default function App() {
                   console.warn(`[Protection] Remote ${collectionName} returned empty array, but local cache has ${currentLen} items. Preserving local data and re-syncing to server.`);
                   finalData = localItems;
                   saveCollectionToFirestore(collectionName, localItems, activeRunTenantId).catch(() => {});
+                } else if (currentLen > 500 && finalData.length < 100) {
+                  console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${currentLen} items) with incomplete remote data (${finalData.length} items). Merging instead.`);
+                  finalData = mergeCollectionItems(collectionName, [...localItems, ...finalData]);
                 } else if (currentLen > 50 && finalData.length <= 1) {
                   console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${currentLen} items) with incomplete remote data (${finalData.length} items).`);
                   return;

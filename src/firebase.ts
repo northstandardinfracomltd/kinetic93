@@ -758,8 +758,10 @@ export async function fetchCollectionFromFirestore<T>(
       }
     }
 
-    // 2. Check if any candidate has a populated array (>1 item)
-    const populatedCandidate = metaSnaps.find(m => m.exists && Array.isArray(m.value) && m.value.length > 1);
+    const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
+
+    // 2. Check if any candidate has a populated array (>1 item, or >=5000 items for defibrillateurs catalog)
+    const populatedCandidate = metaSnaps.find(m => m.exists && Array.isArray(m.value) && (isDefibCol ? m.value.length >= 5000 : m.value.length > 1));
     if (populatedCandidate) {
       const merged = mergeCollectionItems(collectionName, populatedCandidate.value);
       const sanitizedVal = filterCollectionForTenant(merged as unknown as T, collectionName, activeTenantId);
@@ -773,8 +775,8 @@ export async function fetchCollectionFromFirestore<T>(
       return sanitizedVal;
     }
 
-    // 3. Check if any candidate has an object or primitive
-    const otherCandidate = metaSnaps.find(m => m.exists && m.value !== undefined && m.value !== null);
+    // 3. Check if any candidate has an object or primitive (excluding defib collection which is an array catalog)
+    const otherCandidate = metaSnaps.find(m => !isDefibCol && m.exists && m.value !== undefined && m.value !== null);
     if (otherCandidate) {
       const sanitizedVal = filterCollectionForTenant(otherCandidate.value as T, collectionName, activeTenantId);
       idbSet(otherCandidate.key, sanitizedVal).catch(() => {});
@@ -1120,6 +1122,11 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
 
       console.log(`Successfully synced chunked collection ${primaryKey} (${chunksCount} chunks, ${items.length} items) to Firestore.`);
     } else {
+      const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
+      if (isDefibCol && Array.isArray(finalCleanValue) && finalCleanValue.length < 5000) {
+        console.warn(`[Protection] Refusing to write non-chunked small defibrillateurs array (${finalCleanValue.length} items) to Firestore root document to protect catalog.`);
+        return;
+      }
       const docBatch = writeKeys.map(wk => {
         const docRef = doc(db, 'appData', wk);
         return setDoc(docRef, { value: finalCleanValue, _chunked: false });

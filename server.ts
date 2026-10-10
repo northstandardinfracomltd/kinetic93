@@ -2667,9 +2667,10 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   for (const lk of candidateLookupKeys) {
     if (serverMemoryStore.has(lk)) {
       const memVal = serverMemoryStore.get(lk);
+      const isDefibCol = colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices';
       if (memVal !== undefined && memVal !== null && Array.isArray(memVal) && memVal.length > 0) {
-        if (colName === 'defibrillateurs' && memVal.length <= 1) {
-          // Fall through
+        if (isDefibCol && memVal.length < 5000) {
+          // Fall through to load full chunk catalog (17,800+ items)
         } else {
           return sanitizeForTenant(memVal);
         }
@@ -2677,11 +2678,12 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     }
   }
 
+  const isDefibCol = colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices';
+
   if (serverMemoryStore.has(canonicalKey)) {
     const memVal = serverMemoryStore.get(canonicalKey);
     if (memVal !== undefined && memVal !== null) {
-      // Don't return placeholder defibrillateurs if chunk storage has large dataset
-      if (colName === 'defibrillateurs' && Array.isArray(memVal) && memVal.length <= 1) {
+      if (isDefibCol && Array.isArray(memVal) && memVal.length < 5000) {
         // Fall through to query chunk storage
       } else {
         return sanitizeForTenant(memVal);
@@ -2695,8 +2697,8 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     try {
       const diskVal = JSON.parse(fs.readFileSync(colFile, 'utf-8'));
       if (diskVal !== undefined && diskVal !== null) {
-        if (colName === 'defibrillateurs' && Array.isArray(diskVal) && diskVal.length === 0) {
-          // Fall through if explicitly empty and chunks exist
+        if (isDefibCol && Array.isArray(diskVal) && diskVal.length < 5000) {
+          // Fall through if smaller than authoritative chunk catalog
         } else {
           serverMemoryStore.set(canonicalKey, diskVal);
           serverStoreTimestamps.set(canonicalKey, Date.now());
@@ -2707,7 +2709,7 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   }
 
   // 1c. For defibrillateurs, check authoritative chunk files on disk for D27/shared fallback
-  if (colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices') {
+  if (isDefibCol) {
     if (fs.existsSync(CHUNKS_DIR)) {
       const chunkFiles = fs.readdirSync(CHUNKS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
       if (chunkFiles.length > 0) {
@@ -2728,6 +2730,18 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
             }
           }
           if (allItems.length > 0) {
+            // Also merge any memory items that might have been newly created
+            const memVal = serverMemoryStore.get(canonicalKey);
+            if (Array.isArray(memVal) && memVal.length > 0) {
+              const knownKeys = new Set(allItems.map(d => d.id || d.identifiant || d.numeroSerie));
+              for (const item of memVal) {
+                const k = item.id || item.identifiant || item.numeroSerie;
+                if (k && !knownKeys.has(k)) {
+                  allItems.push(item);
+                  knownKeys.add(k);
+                }
+              }
+            }
             serverMemoryStore.set(canonicalKey, allItems);
             serverStoreTimestamps.set(canonicalKey, Date.now());
             return sanitizeForTenant(allItems);
