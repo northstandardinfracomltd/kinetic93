@@ -1883,8 +1883,63 @@ export default function App() {
     }
   };
 
+  const [isRefreshingCrm, setIsRefreshingCrm] = useState<boolean>(false);
+  const handleManualRefreshCrm = async () => {
+    if (!tenantId) return;
+    setIsRefreshingCrm(true);
+    try {
+      const activeTenant = tenantId || 'demo';
+      // 1. Fetch tickets from Firestore
+      const rawTickets = await fetchCollectionFromFirestore<SupportTicket[]>('tickets', activeTenant);
+      if (Array.isArray(rawTickets)) {
+        let filteredTickets = rawTickets;
+        if (activeTenant === 'demo') {
+          filteredTickets = rawTickets.filter(t => {
+            const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
+            return !tEnv || tEnv === 'demo';
+          });
+        } else {
+          const cleanTenant = activeTenant.trim().toLowerCase();
+          const numTenant = cleanTenant.replace(/^d/i, '');
+          filteredTickets = rawTickets.filter(t => {
+            const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
+            const numEnv = tEnv.replace(/^d/i, '');
+            if (tEnv === 'demo') return false;
+            if (tEnv && tEnv !== cleanTenant && numEnv !== numTenant) return false;
+            return true;
+          });
+        }
+        setTickets(filteredTickets);
+        const str = JSON.stringify(filteredTickets);
+        safeSetLocalStorage(`defib_${activeTenant}_support_tickets`, str);
+        loadedDataRef.current.tickets = str;
+      }
 
+      // 2. Fetch clients
+      const rawClients = await fetchCollectionFromFirestore<Client[]>('clients', activeTenant);
+      if (Array.isArray(rawClients) && rawClients.length > 0) {
+        setClients(rawClients);
+        const str = JSON.stringify(rawClients);
+        safeSetLocalStorage(`defib_${activeTenant}_clients`, str);
+        loadedDataRef.current.clients = str;
+      }
 
+      // 3. Fetch members
+      const rawMembers = await fetchCollectionFromFirestore<Member[]>('members', activeTenant);
+      if (Array.isArray(rawMembers) && rawMembers.length > 0) {
+        setMembers(rawMembers);
+        const str = JSON.stringify(rawMembers);
+        safeSetLocalStorage(`defib_${activeTenant}_members`, str);
+        loadedDataRef.current.members = str;
+      }
+    } catch (err) {
+      console.warn('Manual refresh error in CRM:', err);
+    } finally {
+      setTimeout(() => {
+        setIsRefreshingCrm(false);
+      }, 500);
+    }
+  };
 
   const saveReviews = (updated: any[]) => {
     setCustomerReviews(updated);
@@ -16811,6 +16866,8 @@ export default function App() {
                   saveCollectionToFirestore('tickets', stampedTickets, tenantId);
                 }
               }}
+              onRefreshData={handleManualRefreshCrm}
+              isRefreshing={isRefreshingCrm}
               t={t}
             />
           )}
