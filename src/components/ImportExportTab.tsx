@@ -1748,7 +1748,11 @@ export default function ImportExportTab({
           console.warn("Could not save importExportRecords to localStorage:", e);
         }
         if (isFirebaseLoaded) {
-          await saveCollectionToFirestore('importExportRecords', updated);
+          try {
+            await saveCollectionToFirestore('importExportRecords', updated, tenantId);
+          } catch (recErr) {
+            console.warn("Could not save importExportRecords to Firestore:", recErr);
+          }
         }
 
         const labelItem = formCategorie === 'Défibrillateurs.' 

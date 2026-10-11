@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { getRegionsForCountry } from './utils/regions';
-import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY } from './firebase';
+import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY, isFirestoreQuotaExhausted } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { idbSet, idbGet } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
@@ -7739,7 +7739,24 @@ export default function App() {
     loadedDataRef.current.defibrillateurs = getCollectionFingerprint(newDefibs);
     if (tenantId) {
       try {
-        await saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId);
+        if (newDefibs.length <= 1000) {
+          await saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId);
+        } else {
+          // For massive catalog (> 1000 items), persist to server store instantly without burning Firestore quota
+          fetch('/api/sync-collection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              collectionName: 'defibrillateurs',
+              tenantId,
+              value: newDefibs
+            })
+          }).catch(() => {});
+          // If Firestore quota is available, replicate in background without blocking
+          if (!isFirestoreQuotaExhausted()) {
+            saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId).catch(() => {});
+          }
+        }
       } catch (err) {
         console.warn('[saveDefibs] Erreur lors de la sauvegarde Firestore:', err);
       }

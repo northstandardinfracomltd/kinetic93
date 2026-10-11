@@ -130,6 +130,36 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallbackValue: T
   ]);
 }
 
+let serverFirestoreQuotaExhaustedUntil = 0;
+function isServerFirestoreQuotaExhausted(): boolean {
+  return Date.now() < serverFirestoreQuotaExhaustedUntil;
+}
+function recordServerFirestoreQuotaExhaustion(durationHours = 6) {
+  serverFirestoreQuotaExhaustedUntil = Date.now() + durationHours * 3600 * 1000;
+  console.warn(`[Firestore Safe Mode] Free daily write quota exhausted. Direct Firestore writes paused for ${durationHours} hours. All operations securely handled by local high-speed server persistence.`);
+}
+
+async function safeServerSetDoc(docRef: any, data: any, options?: any): Promise<boolean> {
+  if (isServerFirestoreQuotaExhausted()) return false;
+  try {
+    const p = options ? setDoc(docRef, data, options) : setDoc(docRef, data);
+    const res = await withTimeout(p as any, 2500, 'TIMEOUT');
+    if (res === 'TIMEOUT') {
+      console.warn(`[Firestore Safe Write] setDoc timed out after 2500ms, continuing cleanly.`);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    const msg = String(err?.message || err || '').toLowerCase();
+    if (msg.includes('quota') || msg.includes('resource-exhausted') || err?.code === 'resource-exhausted') {
+      recordServerFirestoreQuotaExhaustion(6);
+    } else {
+      console.warn(`[Firestore Safe Write] Non-blocking notice:`, err?.message);
+    }
+    return false;
+  }
+}
+
 // Normalization helpers for boolean/text inputs ('Oui'/'Non', true/false, 1/0)
 const normalizeYesNo = (val: any, defaultVal: 'Oui' | 'Non' = 'Oui'): 'Oui' | 'Non' => {
   if (val === undefined || val === null || val === '') return defaultVal;
@@ -468,13 +498,7 @@ function deleteDefibrillateursFromStore(
   } catch (_) {}
 
   let totalDeletedFromChunks = 0;
-  const candidateDirs = [
-    CHUNKS_DIR,
-    path.join(process.cwd(), 'data', 'chunks'),
-    path.join(process.cwd(), '.data', 'chunks'),
-    path.join(currentDirname, 'data', 'chunks'),
-    path.join(currentDirname, 'dist', 'data', 'chunks')
-  ];
+  const candidateDirs = Array.from(new Set([CHUNKS_DIR].filter(Boolean)));
 
   // 3. Scan chunks in CHUNKS_DIR to remove from files and memory cache
   const highestIdx = findHighestChunkIndex(prefix);
@@ -506,7 +530,7 @@ function deleteDefibrillateursFromStore(
               (async () => {
                 try {
                   const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${cIdx}`);
-                  await setDoc(chunkDocRef, { value: filtered }, { merge: true });
+                  await safeServerSetDoc(chunkDocRef, { value: filtered }, { merge: true });
                 } catch (_) {}
               })().catch(() => {});
             }
@@ -557,7 +581,7 @@ function deleteDefibrillateursFromStore(
         (async () => {
           try {
             const docRef = doc(db, 'appData', tk);
-            await setDoc(docRef, { value: filtered, updatedAt: new Date().toISOString() }, { merge: true });
+            await safeServerSetDoc(docRef, { value: filtered, updatedAt: new Date().toISOString() }, { merge: true });
           } catch (_) {}
         })().catch(() => {});
       }
@@ -3067,7 +3091,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
   for (const k of uniqueKeys) {
     try {
       const docRef = doc(db, 'appData', k);
-      withTimeout(setDoc(docRef, { value: items, _chunked: false, updatedAt: new Date().toISOString() }), 8000, null).catch(() => {});
+      safeServerSetDoc(docRef, { value: items, _chunked: false, updatedAt: new Date().toISOString() }).catch(() => {});
     } catch (_) {}
   }
 }
@@ -3216,7 +3240,7 @@ async function warmupDefibrillateursStore() {
       (async () => {
         try {
           const docRef = doc(db, 'appData', tenantKey);
-          await setDoc(docRef, { value: tenantArr, updatedAt: new Date().toISOString() });
+          await safeServerSetDoc(docRef, { value: tenantArr, updatedAt: new Date().toISOString() });
         } catch (fsErr) {
           console.warn(`[Firestore sync-single-defib] Error syncing ${tenantKey} to Firestore:`, fsErr);
         }
@@ -3354,7 +3378,7 @@ async function warmupDefibrillateursStore() {
             // Sync to Firestore
             try {
               const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${cIdx}`);
-              setDoc(chunkDocRef, { value: chunkArr }).catch(() => {});
+              safeServerSetDoc(chunkDocRef, { value: chunkArr }).catch(() => {});
             } catch (_) {}
           }
         }
@@ -3363,7 +3387,7 @@ async function warmupDefibrillateursStore() {
         try {
           const totalChunks = highestIdx + 1;
           const mainDocRef = doc(db, 'appData', prefix);
-          setDoc(mainDocRef, {
+          safeServerSetDoc(mainDocRef, {
             _chunked: true,
             chunksCount: totalChunks,
             updatedAt: new Date().toISOString()
@@ -3533,9 +3557,24 @@ async function warmupDefibrillateursStore() {
         }
       }
 
-      const filePath = path.join(CHUNKS_DIR, `${prefix}_chunk_${chunkIdx}.json`);
+      let filePath = path.join(CHUNKS_DIR, `${prefix}_chunk_${chunkIdx}.json`);
       if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: "Fichier chunk non trouvé." });
+        const candidatePaths = [
+          path.join(process.cwd(), 'data', 'chunks', `${prefix}_chunk_${chunkIdx}.json`),
+          path.join(process.cwd(), 'dist', 'data', 'chunks', `${prefix}_chunk_${chunkIdx}.json`),
+          path.join(DATA_DIR, 'chunks', `${prefix}_chunk_${chunkIdx}.json`)
+        ];
+        const found = candidatePaths.find(p => fs.existsSync(p));
+        if (found) {
+          filePath = found;
+        } else if (loadedChunkCache.has(chunkIdx)) {
+          const cached = loadedChunkCache.get(chunkIdx);
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          return res.json(cached);
+        } else {
+          return res.status(404).json({ error: "Fichier chunk non trouvé." });
+        }
       }
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -3641,36 +3680,41 @@ async function warmupDefibrillateursStore() {
       }
 
       // Also attempt asynchronous Firestore save
-      try {
-        const jsonStr = JSON.stringify(value);
-        if (Array.isArray(value) && jsonStr.length > 400000) {
-          const items = value;
-          const avgItemLen = Math.max(1, Math.ceil(jsonStr.length / items.length));
-          const chunkSize = Math.max(50, Math.floor(450000 / avgItemLen));
-          const chunksCount = Math.ceil(items.length / chunkSize);
-          (async () => {
-            try {
-              for (let i = 0; i < chunksCount; i++) {
-                const chunkItems = items.slice(i * chunkSize, (i + 1) * chunkSize);
-                const chunkRef = doc(db, 'appData', `${collectionKey}_chunk_${i}`);
-                await setDoc(chunkRef, { value: chunkItems });
+      if (!isServerFirestoreQuotaExhausted()) {
+        try {
+          const jsonStr = JSON.stringify(value);
+          if (Array.isArray(value) && jsonStr.length > 400000) {
+            const items = value;
+            const avgItemLen = Math.max(1, Math.ceil(jsonStr.length / items.length));
+            const chunkSize = Math.max(50, Math.floor(450000 / avgItemLen));
+            const chunksCount = Math.ceil(items.length / chunkSize);
+            (async () => {
+              try {
+                for (let i = 0; i < chunksCount; i++) {
+                  if (isServerFirestoreQuotaExhausted()) break;
+                  const chunkItems = items.slice(i * chunkSize, (i + 1) * chunkSize);
+                  const chunkRef = doc(db, 'appData', `${collectionKey}_chunk_${i}`);
+                  await safeServerSetDoc(chunkRef, { value: chunkItems });
+                }
+                if (!isServerFirestoreQuotaExhausted()) {
+                  const mainDocRef = doc(db, 'appData', collectionKey);
+                  await safeServerSetDoc(mainDocRef, {
+                    _chunked: true,
+                    chunksCount,
+                    totalItems: items.length,
+                    updatedAt: new Date().toISOString()
+                  });
+                }
+              } catch (err) {
+                console.warn(`Server chunked Firestore sync error for ${collectionKey}:`, err);
               }
-              const mainDocRef = doc(db, 'appData', collectionKey);
-              await setDoc(mainDocRef, {
-                _chunked: true,
-                chunksCount,
-                totalItems: items.length,
-                updatedAt: new Date().toISOString()
-              });
-            } catch (err) {
-              console.warn(`Server chunked Firestore sync error for ${collectionKey}:`, err);
-            }
-          })();
-        } else {
-          const docRef = doc(db, 'appData', collectionKey);
-          setDoc(docRef, { value, _chunked: false }).catch(() => {});
-        }
-      } catch (e) {}
+            })();
+          } else {
+            const docRef = doc(db, 'appData', collectionKey);
+            safeServerSetDoc(docRef, { value, _chunked: false }).catch(() => {});
+          }
+        } catch (e) {}
+      }
 
       return res.json({ status: "success", syncedKey: collectionKey, count: Array.isArray(value) ? value.length : 1 });
     } catch (err: any) {

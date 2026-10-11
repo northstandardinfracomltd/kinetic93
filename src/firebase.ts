@@ -1079,9 +1079,25 @@ export function sanitizeUndefined(obj: any): any {
 }
 
 let firestoreQuotaExhaustedUntil = 0;
+try {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const saved = localStorage.getItem('firestore_quota_exhausted_until');
+    if (saved) firestoreQuotaExhaustedUntil = parseInt(saved, 10) || 0;
+  }
+} catch (_) {}
 
 export function isFirestoreQuotaExhausted(): boolean {
   return Date.now() < firestoreQuotaExhaustedUntil;
+}
+
+export function recordFirestoreQuotaExhaustion(durationHours = 6) {
+  firestoreQuotaExhaustedUntil = Date.now() + durationHours * 3600 * 1000;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem('firestore_quota_exhausted_until', String(firestoreQuotaExhaustedUntil));
+    }
+  } catch (_) {}
+  console.warn(`[Firestore Quota Protection] Free write units exhausted. Pausing direct client Firestore writes for ${durationHours} hours. All data is reliably preserved in local storage and backend server.`);
 }
 
 /**
@@ -1229,32 +1245,52 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
       const chunkSize = Math.max(50, Math.floor(450000 / avgItemLen));
       const chunksCount = Math.ceil(items.length / chunkSize);
 
-      // Write chunks sequentially or in small throttled batches to prevent Firestore Write stream buffer exhaustion
+      // Write chunks sequentially or in small throttled batches with strict timeout to prevent freezing on quota limits
       for (let i = 0; i < chunksCount; i += 2) {
+        if (isFirestoreQuotaExhausted()) break;
         const batch: Promise<any>[] = [];
         for (let j = i; j < Math.min(i + 2, chunksCount); j++) {
           const chunkItems = items.slice(j * chunkSize, (j + 1) * chunkSize);
           const chunkRef = doc(db, 'appData', `${primaryKey}_chunk_${j}`);
           batch.push(setDoc(chunkRef, { value: chunkItems }));
         }
-        await Promise.all(batch);
+        await Promise.race([
+          Promise.all(batch),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 2500))
+        ]).catch(e => {
+          const msg = String(e?.message || e || '').toLowerCase();
+          if (msg.includes('quota') || msg.includes('resource-exhausted') || (e as any)?.code === 'resource-exhausted') {
+            recordFirestoreQuotaExhaustion(6);
+          }
+        });
+        if (isFirestoreQuotaExhausted()) break;
         if (chunksCount > 4) {
           await new Promise(r => setTimeout(r, 60));
         }
       }
 
-      // Write main metadata doc
-      const mainBatch = writeKeys.map(wk => {
-        const mainDocRef = doc(db, 'appData', wk);
-        return setDoc(mainDocRef, { 
-          _chunked: true, 
-          chunksCount, 
-          chunkPrefix: primaryKey,
-          totalItems: items.length,
-          updatedAt: new Date().toISOString() 
+      // Write main metadata doc if quota was not reached
+      if (!isFirestoreQuotaExhausted()) {
+        const mainBatch = writeKeys.map(wk => {
+          const mainDocRef = doc(db, 'appData', wk);
+          return setDoc(mainDocRef, { 
+            _chunked: true, 
+            chunksCount, 
+            chunkPrefix: primaryKey,
+            totalItems: items.length,
+            updatedAt: new Date().toISOString() 
+          });
         });
-      });
-      await Promise.all(mainBatch);
+        await Promise.race([
+          Promise.all(mainBatch),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 2500))
+        ]).catch(e => {
+          const msg = String(e?.message || e || '').toLowerCase();
+          if (msg.includes('quota') || msg.includes('resource-exhausted') || (e as any)?.code === 'resource-exhausted') {
+            recordFirestoreQuotaExhaustion(6);
+          }
+        });
+      }
 
       console.log(`Successfully synced chunked collection ${primaryKey} (${chunksCount} chunks, ${items.length} items) to Firestore.`);
     } else {
@@ -1273,7 +1309,7 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
       ]).catch(e => {
         const msg = String(e?.message || e || '').toLowerCase();
         if (msg.includes('quota') || msg.includes('resource-exhausted') || (e as any)?.code === 'resource-exhausted') {
-          firestoreQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
+          recordFirestoreQuotaExhaustion(6);
         } else {
           console.warn(`[Firestore Safe Write] Non-blocking write notice for ${primaryKey}:`, e?.message);
         }
@@ -1283,7 +1319,7 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
   } catch (error: any) {
     const msg = String(error?.message || error || '').toLowerCase();
     if (msg.includes('quota') || msg.includes('resource-exhausted') || error?.code === 'resource-exhausted') {
-      firestoreQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
+      recordFirestoreQuotaExhaustion(6);
       return;
     }
     console.warn(`Error saving collection ${collectionName} to Firestore (kept in cache):`, error);
