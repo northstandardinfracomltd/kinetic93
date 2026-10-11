@@ -1757,8 +1757,26 @@ export default function App() {
   }, [tenantId]);
 
   // Real-time synchronization of defibrillateurs across all user sessions and devices
+  // Helper to retrieve recently imported defibrillators to ensure they are never overwritten by background sync tasks
+  const getRecentlyImportedDefibs = (tId: string = tenantId || 'demo'): Defibrillateur[] => {
+    try {
+      const raw = localStorage.getItem(`defib_${tId}_recently_imported`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  };
+
   useEffect(() => {
     if (!tenantId) return;
+    const tAliases = getTenantAliases(tenantId);
+    const isChunkedTenant = tAliases.has('d27') || tAliases.has('d58');
+    // Massive chunked catalogs (18,000+ items) use dedicated server-chunked delivery protocol and must not attach
+    // a single-doc Firestore onSnapshot listener (which exceeds 1MB Firestore doc limit and causes QUIC protocol errors).
+    if (isChunkedTenant || isFirestoreQuotaExhausted()) return;
+
     let isMounted = true;
     let unsubscribeFirestore: (() => void) | undefined;
     try {
@@ -1777,26 +1795,27 @@ export default function App() {
             }
             if (Array.isArray(remoteList) && remoteList.length > 0) {
               setDefibrillateurs((prev) => {
+                const recents = getRecentlyImportedDefibs(tenantId);
                 if (remoteList.length < 5000) {
-                  // Guard: A small array (<5,000 items) is never the full catalog (18,000 items).
-                  // Merge new items into existing catalog without ever wiping it!
-                  if (prev.length > 0) {
-                    const merged = mergeCollectionItems('defibrillateurs', [...prev, ...remoteList]);
+                  // Guard: A small array (<5,000 items) is merged into existing catalog without ever wiping it
+                  if (prev.length > 0 || recents.length > 0) {
+                    const merged = mergeCollectionItems('defibrillateurs', [...recents, ...prev, ...remoteList]);
                     try {
                       idbSet(`defib_${tenantId}_defibrillateurs`, merged);
                     } catch (_) {}
                     return merged;
                   }
-                  return prev;
+                  return remoteList;
                 }
-                if (prev.length !== remoteList.length || getCollectionFingerprint(prev) !== getCollectionFingerprint(remoteList)) {
+                const mergedFull = recents.length > 0 ? mergeCollectionItems('defibrillateurs', [...recents, ...remoteList]) : remoteList;
+                if (prev.length !== mergedFull.length || getCollectionFingerprint(prev) !== getCollectionFingerprint(mergedFull)) {
                   try {
-                    idbSet(`defib_${tenantId}_defibrillateurs`, remoteList);
-                    if (remoteList.length <= 250) {
-                      safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, JSON.stringify(remoteList));
+                    idbSet(`defib_${tenantId}_defibrillateurs`, mergedFull);
+                    if (mergedFull.length <= 250) {
+                      safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, JSON.stringify(mergedFull));
                     }
                   } catch (_) {}
-                  return remoteList;
+                  return mergedFull;
                 }
                 return prev;
               });
@@ -1923,20 +1942,27 @@ export default function App() {
         const sanitizedRemote = filterCollectionForTenant(freshRemote, 'defibrillateurs', activeTenant);
         const delKeysSet = new Set(getDeletedDefibKeys(activeTenant));
         const filteredRemote = sanitizedRemote.filter(d => !isDefibInDeletedList(d, delKeysSet));
-        setDefibrillateurs(filteredRemote);
+        const recents = getRecentlyImportedDefibs(activeTenant);
+        const fullMerged = recents.length > 0 ? mergeCollectionItems('defibrillateurs', [...recents, ...filteredRemote]) : filteredRemote;
+        setDefibrillateurs((prev) => {
+          if (Array.isArray(prev) && prev.length > 0) {
+            return mergeCollectionItems('defibrillateurs', [...fullMerged, ...prev]);
+          }
+          return fullMerged;
+        });
         try {
-          await idbSet(`defib_${activeTenant}_defibrillateurs`, filteredRemote);
+          await idbSet(`defib_${activeTenant}_defibrillateurs`, fullMerged);
           const uc = activeTenant.toUpperCase();
           if (uc.startsWith('D')) {
-            await idbSet(`defib_${uc}_defibrillateurs`, filteredRemote);
-            await idbSet(`defib_${activeTenant.toLowerCase()}_defibrillateurs`, filteredRemote);
+            await idbSet(`defib_${uc}_defibrillateurs`, fullMerged);
+            await idbSet(`defib_${activeTenant.toLowerCase()}_defibrillateurs`, fullMerged);
           }
         } catch (_) {}
         setDefibLoadingProgress({
-          current: filteredRemote.length,
-          total: filteredRemote.length,
+          current: fullMerged.length,
+          total: fullMerged.length,
           percent: 100,
-          message: `Chargement ${filteredRemote.length.toLocaleString('en-US')}/${filteredRemote.length.toLocaleString('en-US')}, Terminé.`
+          message: `Chargement ${fullMerged.length.toLocaleString('en-US')}/${fullMerged.length.toLocaleString('en-US')}, Terminé.`
         });
         setTimeout(() => {
           setIsDefibLoading(false);
@@ -5728,8 +5754,15 @@ export default function App() {
                       const sanitizedCombined = filterCollectionForTenant(combined, 'defibrillateurs', activeRunTenantId);
                       const delKeysSet = new Set(getDeletedDefibKeys(activeRunTenantId));
                       const filteredCombined = sanitizedCombined.filter(d => !isDefibInDeletedList(d, delKeysSet));
-                      setDefibrillateurs(filteredCombined);
-                      idbSet(`defib_${activeRunTenantId}_defibrillateurs`, filteredCombined).catch(() => {});
+                      const recents = getRecentlyImportedDefibs(activeRunTenantId);
+                      const fullMerged = recents.length > 0 ? mergeCollectionItems('defibrillateurs', [...recents, ...filteredCombined]) : filteredCombined;
+                      setDefibrillateurs((prev) => {
+                        if (Array.isArray(prev) && prev.length > 0) {
+                          return mergeCollectionItems('defibrillateurs', [...fullMerged, ...prev]);
+                        }
+                        return fullMerged;
+                      });
+                      idbSet(`defib_${activeRunTenantId}_defibrillateurs`, fullMerged).catch(() => {});
                       setIsDefibLoading(false);
                     }
                   }
@@ -5961,13 +5994,22 @@ export default function App() {
           (data) => {
             const delKeysSet = new Set(getDeletedDefibKeys(activeRunTenantId));
             const filteredData = Array.isArray(data) ? data.filter(d => !isDefibInDeletedList(d, delKeysSet)) : data;
-            setDefibrillateurs(filteredData);
-            if (Array.isArray(filteredData)) {
+            const recents = getRecentlyImportedDefibs(activeRunTenantId);
+            const fullMerged = (Array.isArray(filteredData) && recents.length > 0)
+              ? mergeCollectionItems('defibrillateurs', [...recents, ...filteredData])
+              : (Array.isArray(filteredData) ? filteredData : []);
+            setDefibrillateurs((prev) => {
+              if (Array.isArray(prev) && prev.length > 0) {
+                return mergeCollectionItems('defibrillateurs', [...fullMerged, ...prev]);
+              }
+              return fullMerged;
+            });
+            if (Array.isArray(fullMerged)) {
               setDefibLoadingProgress({
-                current: filteredData.length,
-                total: filteredData.length,
+                current: fullMerged.length,
+                total: fullMerged.length,
                 percent: 100,
-                message: `Chargement ${filteredData.length.toLocaleString('en-US')}/${filteredData.length.toLocaleString('en-US')}, Terminé.`
+                message: `Chargement ${fullMerged.length.toLocaleString('en-US')}/${fullMerged.length.toLocaleString('en-US')}, Terminé.`
               });
             }
             setTimeout(() => {
@@ -7739,6 +7781,9 @@ export default function App() {
     loadedDataRef.current.defibrillateurs = getCollectionFingerprint(newDefibs);
     if (tenantId) {
       try {
+        const tAliases = getTenantAliases(tenantId);
+        const isMassiveTenant = tAliases.has('d27') || tAliases.has('d58') || newDefibs.length > 5000;
+
         // Always persist to server store instantly without blocking
         fetch('/api/sync-collection', {
           method: 'POST',
@@ -7750,12 +7795,12 @@ export default function App() {
           })
         }).catch(() => {});
 
-        // Replicate to Firestore in background without blocking if quota is available
-        if (!isFirestoreQuotaExhausted()) {
+        // Replicate to Firestore in background only for normal-sized tenant catalogs (<5,000 items)
+        if (!isMassiveTenant && !isFirestoreQuotaExhausted()) {
           saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId).catch(() => {});
         }
       } catch (err) {
-        console.warn('[saveDefibs] Erreur lors de la sauvegarde Firestore:', err);
+        console.warn('[saveDefibs] Erreur lors de la sauvegarde:', err);
       }
     }
   };

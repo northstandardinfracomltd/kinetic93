@@ -1725,8 +1725,28 @@ export default function ImportExportTab({
             } catch (_) {}
           }
 
+          if (!currentList || currentList.length === 0) {
+            try {
+              const res = await fetch(`/api/sync-collection?collectionName=defibrillateurs&tenantId=${encodeURIComponent(effectiveTenantForSync)}`);
+              if (res.ok) {
+                const json = await res.json();
+                if (Array.isArray(json?.value) && json.value.length > 0) {
+                  currentList = json.value;
+                }
+              }
+            } catch (_) {}
+          }
+
+          // Persist to recently imported storage so all sync listeners preserve them at the very top
+          try {
+            const rawRecent = localStorage.getItem(`defib_${tenantId}_recently_imported`);
+            const prevRecent = rawRecent ? JSON.parse(rawRecent) : [];
+            const mergedRecent = mergeCollectionItems('defibrillateurs', [...parsedData, ...(Array.isArray(prevRecent) ? prevRecent : [])]);
+            localStorage.setItem(`defib_${tenantId}_recently_imported`, JSON.stringify(mergedRecent.slice(0, 500)));
+          } catch (_) {}
+
           // Prepend newly imported items so they appear immediately at the top of the table
-          const combined = [...parsedData, ...(currentList || [])];
+          const combined = mergeCollectionItems('defibrillateurs', [...parsedData, ...(currentList || [])]);
           await saveDefibs(combined);
         } else if (formCategorie === 'Clients.' && saveClients) {
           setImportSuccessMessage(`Enregistrement de ${importCount} client(s)...`);

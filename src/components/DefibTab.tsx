@@ -2129,14 +2129,16 @@ export default function DefibTab({
     const isInitial = !hasSearch && !hasSortFilter && !hasDeptFilter && !hasActiveSidePaneFilter;
 
     if (isInitial) {
-      const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, idx]));
+      const totalLen = defibrillateurs.length;
+      const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));
       result = [...result].sort((a, b) => {
         const timeA = getDefibActivityTimestamp(a, indexMap.get(a.id) ?? 0);
         const timeB = getDefibActivityTimestamp(b, indexMap.get(b.id) ?? 0);
         return timeB - timeA;
       }).slice(0, 10);
     } else if (sortFilter === 'recent') {
-      const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, idx]));
+      const totalLen = defibrillateurs.length;
+      const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));
       result = [...result].sort((a, b) => {
         const timeA = getDefibActivityTimestamp(a, indexMap.get(a.id) ?? 0);
         const timeB = getDefibActivityTimestamp(b, indexMap.get(b.id) ?? 0);

@@ -3339,10 +3339,12 @@ async function warmupDefibrillateursStore() {
           }
         }
 
-        for (const ck of candidateKeys) {
-          let arr = serverMemoryStore.get(ck);
+        // Fast update in server memory store
+        if (isD27OrD58) {
+          const primaryKey = 'D27_defibrillateurs';
+          let arr = serverMemoryStore.get(primaryKey);
           if (!Array.isArray(arr)) {
-            const diskFile = path.join(COLLECTIONS_DIR, `${ck}.json`);
+            const diskFile = path.join(COLLECTIONS_DIR, `${primaryKey}.json`);
             if (fs.existsSync(diskFile)) {
               try {
                 arr = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
@@ -3354,13 +3356,40 @@ async function warmupDefibrillateursStore() {
             }
           }
           if (Array.isArray(arr)) {
-            const idx = arr.findIndex(d => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
+            const idx = arr.findIndex((d: any) => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
             if (idx >= 0) {
               arr[idx] = { ...arr[idx], ...formatted };
             } else {
               arr.push(formatted);
             }
-            serverMemoryStore.set(ck, arr);
+            serverMemoryStore.set(primaryKey, arr);
+            serverMemoryStore.set('D58_defibrillateurs', arr);
+            serverMemoryStore.set('defibrillateurs', arr);
+          }
+        } else {
+          for (const ck of candidateKeys) {
+            let arr = serverMemoryStore.get(ck);
+            if (!Array.isArray(arr)) {
+              const diskFile = path.join(COLLECTIONS_DIR, `${ck}.json`);
+              if (fs.existsSync(diskFile)) {
+                try {
+                  arr = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
+                } catch (_) {
+                  arr = [];
+                }
+              } else {
+                arr = [];
+              }
+            }
+            if (Array.isArray(arr)) {
+              const idx = arr.findIndex((d: any) => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
+              if (idx >= 0) {
+                arr[idx] = { ...arr[idx], ...formatted };
+              } else {
+                arr.push(formatted);
+              }
+              serverMemoryStore.set(ck, arr);
+            }
           }
         }
         updatedIds.push(targetId);
@@ -3378,10 +3407,12 @@ async function warmupDefibrillateursStore() {
                 fs.writeFileSync(path.join(d, `${prefix}_chunk_${cIdx}.json`), JSON.stringify(chunkArr), 'utf-8');
               } catch (_) {}
             }
-            // Sync to Firestore
+            // Sync to Firestore without blocking
             try {
-              const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${cIdx}`);
-              safeServerSetDoc(chunkDocRef, { value: chunkArr }).catch(() => {});
+              if (!isServerFirestoreQuotaExhausted()) {
+                const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${cIdx}`);
+                safeServerSetDoc(chunkDocRef, { value: chunkArr }).catch(() => {});
+              }
             } catch (_) {}
           }
         }
@@ -3390,20 +3421,28 @@ async function warmupDefibrillateursStore() {
         try {
           const totalChunks = highestIdx + 1;
           const mainDocRef = doc(db, 'appData', prefix);
-          safeServerSetDoc(mainDocRef, {
-            _chunked: true,
-            chunksCount: totalChunks,
-            updatedAt: new Date().toISOString()
-          }, { merge: true }).catch(() => {});
+          if (!isServerFirestoreQuotaExhausted()) {
+            safeServerSetDoc(mainDocRef, {
+              _chunked: true,
+              chunksCount: totalChunks,
+              updatedAt: new Date().toISOString()
+            }, { merge: true }).catch(() => {});
+          }
         } catch (_) {}
-      }
 
-      // Persist all updated collections to disk
-      for (const ck of candidateKeys) {
-        if (serverMemoryStore.has(ck)) {
-          const arr = serverMemoryStore.get(ck);
-          if (Array.isArray(arr)) {
-            persistSingleCollectionToDisk(ck, arr);
+        // Persist primary D27 collection to disk once per batch
+        const primaryArr = serverMemoryStore.get('D27_defibrillateurs');
+        if (Array.isArray(primaryArr)) {
+          persistSingleCollectionToDisk('D27_defibrillateurs', primaryArr);
+        }
+      } else {
+        // Persist updated collections to disk for non-chunked tenants
+        for (const ck of candidateKeys) {
+          if (serverMemoryStore.has(ck)) {
+            const arr = serverMemoryStore.get(ck);
+            if (Array.isArray(arr)) {
+              persistSingleCollectionToDisk(ck, arr);
+            }
           }
         }
       }
