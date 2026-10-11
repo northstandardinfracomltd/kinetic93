@@ -10159,7 +10159,7 @@ export default function PublicPortal({
                               }
 
                               // Immediate local storage & IndexedDB write across all active tenant aliases
-                              const tenantKeys = [effTenant, 'demo', 'D27', 'd27', '27', 'D58', 'd58', '58', 'D18', 'd18', '18'];
+                              const tenantKeys = [effTenant];
                               if (/^d\d+$/i.test(effTenant) || /^\d+$/.test(effTenant)) {
                                 const numOnly = effTenant.replace(/^d/i, "");
                                 tenantKeys.push(`D${numOnly}`, `d${numOnly}`, numOnly);
@@ -10176,9 +10176,9 @@ export default function PublicPortal({
                                 } catch (_) {}
                               }
 
-                              // Server background synchronization across active tenant aliases
+                              // Server background synchronization for active tenant
                               try {
-                                const syncTenants = Array.from(new Set([effTenant, 'demo', 'D27']));
+                                const syncTenants = [effTenant];
                                 const syncPromises: Promise<any>[] = [];
                                 for (const st of syncTenants) {
                                   syncPromises.push(
@@ -11199,7 +11199,7 @@ export default function PublicPortal({
                                       }
 
                                       try {
-                                        const syncTenants = Array.from(new Set([effTenant, 'demo', 'D27']));
+                                        const syncTenants = [effTenant];
                                         const syncPromises = syncTenants.map((st) =>
                                           fetch("/api/sync-collection", {
                                             method: "POST",
@@ -11218,8 +11218,7 @@ export default function PublicPortal({
 
                                       try {
                                         const fsPromises: Promise<any>[] = [
-                                          saveCollectionToFirestore("stocks", updatedStocks, effTenant),
-                                          saveCollectionToFirestore("stocks", updatedStocks, "demo")
+                                          saveCollectionToFirestore("stocks", updatedStocks, effTenant)
                                         ];
                                         if (effTenant.toUpperCase().startsWith("D")) {
                                           fsPromises.push(saveCollectionToFirestore("stocks", updatedStocks, effTenant.toUpperCase()));

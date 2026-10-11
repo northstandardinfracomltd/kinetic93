@@ -488,119 +488,88 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
 }
 
 /**
+ * Resolves all valid tenant alias identifiers for a target tenant ID.
+ * E.g., for D27 (shortEnvId D58): ['d27', '27', 'd58', '58'].
+ * E.g., for D18 (shortEnvId D83): ['d18', '18', 'd83', '83'].
+ * E.g., for demo (shortEnvId D10): ['demo', 'd10', '10'].
+ */
+export function getTenantAliases(targetTenantId: string): Set<string> {
+  const aliases = new Set<string>();
+  const clean = (targetTenantId || 'demo').trim().toLowerCase();
+  aliases.add(clean);
+  const num = clean.replace(/^d/i, '');
+  if (/^\d+$/.test(num)) {
+    aliases.add(`d${num}`);
+    aliases.add(num);
+  }
+  try {
+    const regTenants = getFromLocalCache<Tenant[]>('registered_tenants');
+    if (Array.isArray(regTenants)) {
+      const match = regTenants.find(t =>
+        t.id?.toLowerCase() === clean ||
+        t.shortEnvId?.toLowerCase() === clean ||
+        (num && (t.id?.replace(/^d/i, '') === num || t.shortEnvId?.replace(/^d/i, '') === num))
+      );
+      if (match) {
+        if (match.id) {
+          const mid = match.id.toLowerCase().trim();
+          aliases.add(mid);
+          const mnum = mid.replace(/^d/i, '');
+          if (/^\d+$/.test(mnum)) {
+            aliases.add(`d${mnum}`);
+            aliases.add(mnum);
+          }
+        }
+        if (match.shortEnvId) {
+          const sid = match.shortEnvId.toLowerCase().trim();
+          aliases.add(sid);
+          const snum = sid.replace(/^d/i, '');
+          if (/^\d+$/.test(snum)) {
+            aliases.add(`d${snum}`);
+            aliases.add(snum);
+          }
+        }
+      }
+    }
+  } catch (_) {}
+  return aliases;
+}
+
+/**
  * Strictly filters a collection array to guarantee 100% tenant isolation without cross-contamination.
+ * Each tenant sees EXCLUSIVELY items that belong to its environment.
  */
 export function filterCollectionForTenant<T>(data: T, collectionName: string, activeTenantId: string): T {
   if (!data) return data;
   if (!Array.isArray(data)) return data;
   
-  const isDemo = !activeTenantId || activeTenantId === 'demo';
   const cleanTid = (activeTenantId || 'demo').trim().toLowerCase();
-  const isDNum = /^d\d+$/i.test(cleanTid);
-  const isNum = /^\d+$/.test(cleanTid);
-  const numTid = isDNum || isNum ? cleanTid.replace(/^d/i, '') : '';
+  const isDemo = cleanTid === 'demo' || cleanTid === 'd10' || cleanTid === '10';
+  const tenantAliases = getTenantAliases(cleanTid);
 
   return (data as any[]).filter((item: any) => {
-    if (!item || typeof item !== 'object') return true;
+    if (!item || typeof item !== 'object') return false;
     const itemEnv = (item.envId || item.tenantId || '').trim().toLowerCase();
-    const isItemDNum = /^d\d+$/i.test(itemEnv);
-    const isItemNum = /^\d+$/.test(itemEnv);
-    const numItemEnv = isItemDNum || isItemNum ? itemEnv.replace(/^d/i, '') : '';
 
     if (isDemo) {
-      if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
-        return true;
-      }
-      // In demo mode: discard items explicitly created for specific customer tenants
-      if (itemEnv && itemEnv !== 'demo') {
+      // In demo mode: only items created for demo or legacy demo items
+      if (itemEnv && itemEnv !== 'demo' && !tenantAliases.has(itemEnv)) {
         return false;
       }
       return true;
     }
 
-    // In customer tenant mode (e.g. D1, D2, D19, D58, D67, etc.):
-    // If the item has an explicit envId/tenantId, it MUST match this tenant or recognized aliases
+    // In customer tenant mode (e.g. D1, D18, D27, D28, D58, etc.):
     if (itemEnv) {
-      if (itemEnv === 'demo') {
-        if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
-          item.envId = activeTenantId;
-          item.tenantId = activeTenantId;
-          return true;
-        }
-        return false;
-      }
-      if (itemEnv === cleanTid) return true;
-      if (numTid && numItemEnv && numTid === numItemEnv) return true;
-      // Recognized linked tenants sharing defibrillateurs catalog (e.g. D27 & D58)
-      if ((cleanTid === 'd58' && itemEnv === 'd27') || (cleanTid === 'd27' && itemEnv === 'd58')) return true;
-      if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices') {
-        return true;
-      }
-      // D27 & D58 share the clients catalog
-      if (collectionName === 'clients' && ((cleanTid === 'd58' && itemEnv === 'd27') || (cleanTid === 'd27' && itemEnv === 'd58'))) {
-        return true;
-      }
-      if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
-        item.envId = activeTenantId;
-        item.tenantId = activeTenantId;
-        return true;
-      }
+      if (itemEnv === 'demo') return false;
+      if (tenantAliases.has(itemEnv)) return true;
+      const numItemEnv = itemEnv.replace(/^d/i, '');
+      if (numItemEnv && tenantAliases.has(numItemEnv)) return true;
       return false; // Rejects items belonging to another tenant!
     }
 
-    if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
-      item.envId = activeTenantId;
-      item.tenantId = activeTenantId;
-      return true;
-    }
-
-    // Never leak demo-specific mock items into customer environments
-    if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices') {
-      if (!itemEnv && (item.id === 'df_1' || item.identifiant === 'SPO-D26-DAE' || item.numeroSerie === 'SN-G5-998124')) {
-        return false;
-      }
-    } else if (collectionName === 'tickets' || collectionName === 'support_tickets') {
-      if (!itemEnv) {
-        return false;
-      }
-      if (item.id === '#482910' || item.id === '#719203' || item.identifiant === 'DEF-75001' || item.identifiant === 'DEF-69002') {
-        return false;
-      }
-    } else if (collectionName === 'commercialDocs' || collectionName === 'commercial_docs') {
-      if (!itemEnv && item.clientDenomination && (item.clientDenomination.includes('Medical360') || item.clientDenomination.includes('SecoursProOuest'))) {
-        return false;
-      }
-    } else if (collectionName === 'fsmTours' || collectionName === 'fsm_tours' || collectionName === 'tours') {
-      if (item.id === 'fsm-tour-demo' || item.techName === 'Jakub Démo') {
-        return false;
-      }
-    } else if (collectionName === 'clients') {
-      // Discard items that are actually defibrillateurs accidentally saved into clients
-      if (item.numeroSerie && !item.denomination && !item.siret && !item.clientCode) {
-        return false;
-      }
-      if (item.id === 'REP-UPCOMING-fsm-m-demo') {
-        return false;
-      }
-      if (!itemEnv && (item.id === 'c1' || item.id === 'c2' || item.id === 'c3') && item.denomination === 'Secours Pro Ouest') {
-        return false;
-      }
-    } else if (collectionName === 'notifications' || collectionName === 'app_notifications') {
-      if (item.id === 'conn-2' || item.id === 'conn-3' || (item.title && item.title.includes('admin@defibeo.com vient s’est connecté'))) {
-        return false;
-      }
-      if (!itemEnv) {
-        if (item.id?.startsWith('demo') || item.title?.includes('Démo') || item.title?.includes('demo')) {
-          return false;
-        }
-      }
-    } else if (collectionName === 'members') {
-      if (!itemEnv && (item.email === 'techniciendemo1@demo.com' || item.name === 'Jakub Démo')) {
-        return false;
-      }
-    }
-
-    return true;
+    // Unassigned mock or demo item: NEVER show in a customer tenant
+    return false;
   }) as unknown as T;
 }
 
@@ -785,8 +754,8 @@ export async function fetchCollectionFromFirestore<T>(
 
     const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
 
-    // 2. Check if any candidate has a populated array (>1 item, or >=5000 items for defibrillateurs catalog)
-    const populatedCandidate = metaSnaps.find(m => m.exists && Array.isArray(m.value) && (isDefibCol ? m.value.length >= 5000 : m.value.length > 1));
+    // 2. Check if any candidate has a populated array
+    const populatedCandidate = metaSnaps.find(m => m.exists && Array.isArray(m.value) && m.value.length > 0);
     if (populatedCandidate) {
       let combinedVal = populatedCandidate.value;
       if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
@@ -832,8 +801,7 @@ export async function fetchCollectionFromFirestore<T>(
   if (typeof fetch !== 'undefined') {
     const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
 
-    // For massive defibrillateurs collection (17,800+ items), ALWAYS use high-speed chunked static delivery
-    // to avoid Cloud Run / QUIC protocol errors caused by a single 33MB JSON payload
+    // For massive defibrillateurs collection (17,800+ items), use high-speed chunked static delivery ONLY if tenant has chunks
     if (isDefibCol) {
       try {
         const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(activeTenantId)}`, {
@@ -842,7 +810,7 @@ export async function fetchCollectionFromFirestore<T>(
         if (metaRes.ok) {
           const meta = await metaRes.json();
           const totalChunks = meta.totalChunks || 0;
-          if (totalChunks > 0) {
+          if (totalChunks > 0 && meta.prefix) {
             const chunkResults: any[][] = new Array(totalChunks);
             let loadedCount = 0;
             const totalEst = meta.totalCount || 17814;
@@ -854,7 +822,7 @@ export async function fetchCollectionFromFirestore<T>(
               for (let c = i; c < batchEnd; c++) {
                 batchPromises.push((async (cIdx) => {
                   try {
-                    const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix || 'D27_defibrillateurs')}`, {
+                    const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix)}&tenantId=${encodeURIComponent(activeTenantId)}`, {
                       signal: AbortSignal.timeout(15000)
                     });
                     if (chunkRes.ok) {
@@ -879,14 +847,11 @@ export async function fetchCollectionFromFirestore<T>(
             if (combined.length > 0) {
               const sanitizedVal = filterCollectionForTenant(combined as unknown as T, collectionName, activeTenantId);
               idbSet(`defib_${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
-              if (activeTenantId.toUpperCase().startsWith('D')) {
-                idbSet(`defib_${activeTenantId.toUpperCase()}_${collectionName}`, sanitizedVal).catch(() => {});
-                idbSet(`defib_${activeTenantId.toLowerCase()}_${collectionName}`, sanitizedVal).catch(() => {});
-              }
+              const count = Array.isArray(sanitizedVal) ? (sanitizedVal as any[]).length : 0;
               onProgress?.(
-                combined.length,
-                combined.length,
-                `Chargement ${combined.length.toLocaleString('en-US')}/${combined.length.toLocaleString('en-US')}, Terminé.`
+                count,
+                count,
+                `Chargement ${count.toLocaleString('en-US')}/${count.toLocaleString('en-US')}, Terminé.`
               );
               return sanitizedVal;
             }
@@ -953,17 +918,26 @@ export async function fetchCollectionFromFirestore<T>(
             }
 
             if (Array.isArray(localExisting) && localExisting.length > 0) {
-              console.warn(`[Sync Server Relay] Remote ${collectionName} returned empty array, but local cache has ${localExisting.length} items. Preserving local data and re-syncing to server.`);
-              fetch('/api/sync-collection', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  collectionName,
-                  tenantId: activeTenantId,
-                  value: localExisting
-                })
-              }).catch(() => {});
-              return filterCollectionForTenant(localExisting as T, collectionName, activeTenantId);
+              const sanitizedLocal = filterCollectionForTenant(localExisting, collectionName, activeTenantId);
+              if (Array.isArray(sanitizedLocal) && sanitizedLocal.length > 0) {
+                console.warn(`[Sync Server Relay] Remote ${collectionName} returned empty array, but local cache has ${sanitizedLocal.length} valid items for this tenant. Preserving local data and re-syncing to server.`);
+                fetch('/api/sync-collection', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    collectionName,
+                    tenantId: activeTenantId,
+                    value: sanitizedLocal
+                  })
+                }).catch(() => {});
+                return sanitizedLocal as unknown as T;
+              } else {
+                // The local cache was contaminated with items from another tenant - clean it up
+                idbSet(primaryKey, []).catch(() => {});
+                idbSet(`defib_${activeTenantId}_${collectionName}`, []).catch(() => {});
+                saveToLocalCache(primaryKey, []);
+                return [] as unknown as T;
+              }
             }
 
             // Both remote and local are genuinely empty

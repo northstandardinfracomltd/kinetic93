@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { getRegionsForCountry } from './utils/regions';
-import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey } from './firebase';
+import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { idbSet, idbGet } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
@@ -1025,13 +1025,8 @@ export default function App() {
 
     setStocks(updated);
     const strS = JSON.stringify(updated);
-    const sTenantAliases = [effectiveTenantId, 'demo', 'D27', 'd27', '27', 'D58', 'd58', '58', 'D18', 'd18', '18'];
-    if (/^d\d+$/i.test(effectiveTenantId) || /^\d+$/.test(effectiveTenantId)) {
-      const numOnly = effectiveTenantId.replace(/^d/i, '');
-      sTenantAliases.push(`D${numOnly}`, `d${numOnly}`, numOnly);
-    }
-    const uniqueSTenants = Array.from(new Set(sTenantAliases.filter(Boolean)));
-    for (const tid of uniqueSTenants) {
+    const sTenantAliases = Array.from(getTenantAliases(effectiveTenantId));
+    for (const tid of sTenantAliases) {
       safeSetLocalStorage(`defib_${tid}_stocks`, strS);
       safeSetLocalStorage(`fs_cache_${tid}_stocks`, strS);
       try {
@@ -1042,19 +1037,15 @@ export default function App() {
     loadedDataRef.current.stock = strS;
 
     try {
-      const syncTargets = Array.from(new Set([effectiveTenantId, 'demo', 'D27']));
-      const syncPromises = syncTargets.map(targetTid =>
-        fetch('/api/sync-collection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            collectionName: 'stocks',
-            tenantId: targetTid,
-            value: updated
-          })
-        }).catch(err => console.warn('Sync stock error:', err))
-      );
-      await Promise.allSettled(syncPromises);
+      fetch('/api/sync-collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName: 'stocks',
+          tenantId: effectiveTenantId,
+          value: updated
+        })
+      }).catch(err => console.warn('Sync stock error:', err));
     } catch (_) {}
 
     if (effectiveTenantId) {
@@ -1062,9 +1053,6 @@ export default function App() {
         await saveCollectionToFirestore('stocks', updated, effectiveTenantId);
         if (effectiveTenantId.toUpperCase().startsWith('D')) {
           await saveCollectionToFirestore('stocks', updated, effectiveTenantId.toUpperCase());
-        }
-        if (effectiveTenantId !== 'demo') {
-          await saveCollectionToFirestore('stocks', updated, 'demo');
         }
       } catch (fErr) {
         console.warn('Firestore saveStocks error:', fErr);
@@ -1121,13 +1109,8 @@ export default function App() {
 
     setDistributedStocks(updated);
     const strDS = JSON.stringify(updated);
-    const dsTenantAliases = [effectiveTenantId, 'demo', 'D27', 'd27', '27', 'D58', 'd58', '58', 'D18', 'd18', '18'];
-    if (/^d\d+$/i.test(effectiveTenantId) || /^\d+$/.test(effectiveTenantId)) {
-      const numOnly = effectiveTenantId.replace(/^d/i, '');
-      dsTenantAliases.push(`D${numOnly}`, `d${numOnly}`, numOnly);
-    }
-    const uniqueDsTenants = Array.from(new Set(dsTenantAliases.filter(Boolean)));
-    for (const tid of uniqueDsTenants) {
+    const dsTenantAliases = Array.from(getTenantAliases(effectiveTenantId));
+    for (const tid of dsTenantAliases) {
       safeSetLocalStorage(`defib_${tid}_distributed_stocks`, strDS);
       safeSetLocalStorage(`fs_cache_${tid}_distributed_stocks`, strDS);
       try {
@@ -1138,19 +1121,15 @@ export default function App() {
     loadedDataRef.current.distributedStocks = strDS;
 
     try {
-      const syncTargets = Array.from(new Set([effectiveTenantId, 'demo', 'D27']));
-      const syncPromises = syncTargets.map(targetTid =>
-        fetch('/api/sync-collection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            collectionName: 'distributed_stocks',
-            tenantId: targetTid,
-            value: updated
-          })
-        }).catch(err => console.warn('Sync distrib stock error:', err))
-      );
-      await Promise.allSettled(syncPromises);
+      fetch('/api/sync-collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName: 'distributed_stocks',
+          tenantId: effectiveTenantId,
+          value: updated
+        })
+      }).catch(err => console.warn('Sync distrib stock error:', err));
     } catch (_) {}
 
     if (effectiveTenantId) {
@@ -1158,9 +1137,6 @@ export default function App() {
         await saveCollectionToFirestore('distributed_stocks', updated, effectiveTenantId);
         if (effectiveTenantId.toUpperCase().startsWith('D')) {
           await saveCollectionToFirestore('distributed_stocks', updated, effectiveTenantId.toUpperCase());
-        }
-        if (effectiveTenantId !== 'demo') {
-          await saveCollectionToFirestore('distributed_stocks', updated, 'demo');
         }
       } catch (fErr) {
         console.warn('Firestore saveDistributedStocks error:', fErr);
@@ -1901,7 +1877,7 @@ export default function App() {
               for (let c = i; c < batchEnd; c++) {
                 batchPromises.push((async (cIdx) => {
                   try {
-                    const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix || 'D27_defibrillateurs')}`);
+                    const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix)}&tenantId=${encodeURIComponent(activeTenant)}`);
                     if (chunkRes.ok) {
                       const arr = await chunkRes.json();
                       if (Array.isArray(arr)) {
@@ -1929,8 +1905,9 @@ export default function App() {
         freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant, onProgress);
       }
       if (Array.isArray(freshRemote) && freshRemote.length > 0) {
+        const sanitizedRemote = filterCollectionForTenant(freshRemote, 'defibrillateurs', activeTenant);
         const delKeysSet = new Set(getDeletedDefibKeys(activeTenant));
-        const filteredRemote = freshRemote.filter(d => !isDefibInDeletedList(d, delKeysSet));
+        const filteredRemote = sanitizedRemote.filter(d => !isDefibInDeletedList(d, delKeysSet));
         setDefibrillateurs(filteredRemote);
         try {
           await idbSet(`defib_${activeTenant}_defibrillateurs`, filteredRemote);
@@ -5480,7 +5457,8 @@ export default function App() {
       // 1. Instantly load local cache so the app is immediately usable (0ms delay!)
       try {
         const rawOfflineClients = getLocalTenantValue<Client[]>('clients', activeRunTenantId === 'demo' ? INITIAL_CLIENTS : []);
-        let offlineClients: Client[] = Array.isArray(rawOfflineClients) ? rawOfflineClients : [];
+        const filteredOfflineClients = filterCollectionForTenant(rawOfflineClients, 'clients', activeRunTenantId);
+        let offlineClients: Client[] = Array.isArray(filteredOfflineClients) ? filteredOfflineClients : [];
         let offlineChanged = false;
         let sanitizedOffline = offlineClients.map(c => {
           if (!c.signaturePin || !c.signaturePin.trim()) {
@@ -5510,7 +5488,8 @@ export default function App() {
           id_record: d.id_record || `record_${activeRunTenantId.toLowerCase()}_dae1`
         }));
         const rawOfflineDefibs = getLocalTenantValue<Defibrillateur[]>('defibrillateurs', tenantInitialDefibs);
-        let baseDefibrillateurs = (Array.isArray(rawOfflineDefibs) && rawOfflineDefibs.length > 0) ? rawOfflineDefibs : tenantInitialDefibs;
+        const filteredOfflineDefibs = Array.isArray(rawOfflineDefibs) ? filterCollectionForTenant(rawOfflineDefibs, 'defibrillateurs', activeRunTenantId) : [];
+        let baseDefibrillateurs = filteredOfflineDefibs.length > 0 ? filteredOfflineDefibs : (activeRunTenantId === 'demo' ? tenantInitialDefibs : []);
         setDefibrillateurs(baseDefibrillateurs);
 
         const defaultInfo = {
@@ -5572,10 +5551,12 @@ export default function App() {
         const baseGed = getLocalTenantValue<GedDocument[]>('ged_docs', activeRunTenantId === 'demo' ? INITIAL_GED_DOCS : []);
         setGedDocs(baseGed);
 
-        const baseStocks = getLocalTenantValue<StockRecord[]>('stocks', activeRunTenantId === 'demo' ? INITIAL_STOCKS : []);
+        const rawOfflineStocks = getLocalTenantValue<StockRecord[]>('stocks', activeRunTenantId === 'demo' ? INITIAL_STOCKS : []);
+        const baseStocks = Array.isArray(rawOfflineStocks) ? filterCollectionForTenant(rawOfflineStocks, 'stocks', activeRunTenantId) : (activeRunTenantId === 'demo' ? INITIAL_STOCKS : []);
         setStocks(baseStocks);
 
-        const baseDistrib = getLocalTenantValue<DistributedStockLocation[]>('distributed_stocks', activeRunTenantId === 'demo' ? INITIAL_DISTRIBUTED_STOCKS : []);
+        const rawOfflineDistrib = getLocalTenantValue<DistributedStockLocation[]>('distributed_stocks', activeRunTenantId === 'demo' ? INITIAL_DISTRIBUTED_STOCKS : []);
+        const baseDistrib = Array.isArray(rawOfflineDistrib) ? filterCollectionForTenant(rawOfflineDistrib, 'distributed_stocks', activeRunTenantId) : (activeRunTenantId === 'demo' ? INITIAL_DISTRIBUTED_STOCKS : []);
         setDistributedStocks(baseDistrib);
 
         const baseReviews = getLocalTenantValue<any[]>('customer_reviews', activeRunTenantId === 'demo' ? INITIAL_REVIEWS : []);
@@ -5596,7 +5577,8 @@ export default function App() {
         const baseExpenses = getLocalTenantValue<any[]>('expenses', activeRunTenantId === 'demo' ? INITIAL_EXPENSES : []);
         setExpenses(baseExpenses);
 
-        const baseOtherEquip = getLocalTenantValue<OtherEquipment[]>('other_equipments', activeRunTenantId === 'demo' ? INITIAL_OTHER_EQUIPMENTS : []);
+        const rawOfflineOtherEquip = getLocalTenantValue<OtherEquipment[]>('other_equipments', activeRunTenantId === 'demo' ? INITIAL_OTHER_EQUIPMENTS : []);
+        const baseOtherEquip = Array.isArray(rawOfflineOtherEquip) ? filterCollectionForTenant(rawOfflineOtherEquip, 'other_equipments', activeRunTenantId) : (activeRunTenantId === 'demo' ? INITIAL_OTHER_EQUIPMENTS : []);
         setOtherEquipments(baseOtherEquip);
 
         const basePointages = getLocalTenantValue<PointageLog[]>('pointages_history', []);
@@ -5656,12 +5638,21 @@ export default function App() {
         // Check IndexedDB if localStorage was empty or couldn't store large collections
         try {
           let idbDefibs = await idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`);
-          // If empty or small partial array (<5000 items), also check alias tenant keys in IndexedDB
-          if (!Array.isArray(idbDefibs) || idbDefibs.length < 5000) {
-            const aliasKeys = [
-              activeRunTenantId.toUpperCase().startsWith('D') ? activeRunTenantId.toLowerCase() : activeRunTenantId.toUpperCase(),
-              'D27', 'D58', 'defibrillateurs'
-            ];
+          // Purge any foreign tenant items that may have leaked into this tenant's IndexedDB
+          if (Array.isArray(idbDefibs) && idbDefibs.length > 0) {
+            const sanitized = filterCollectionForTenant(idbDefibs, 'defibrillateurs', activeRunTenantId);
+            if (sanitized.length !== idbDefibs.length) {
+              idbDefibs = sanitized;
+              idbSet(`defib_${activeRunTenantId}_defibrillateurs`, sanitized).catch(() => {});
+            }
+          }
+
+          const tAliases = getTenantAliases(activeRunTenantId);
+          const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
+
+          // If D27 / D58 has not loaded its chunks yet, check alias keys in IndexedDB
+          if (isD27OrD58 && (!Array.isArray(idbDefibs) || idbDefibs.length < 5000)) {
+            const aliasKeys = ['D27', 'D58'];
             for (const ak of aliasKeys) {
               const alt = await idbGet<Defibrillateur[]>(`defib_${ak}_defibrillateurs`);
               if (Array.isArray(alt) && alt.length >= 5000) {
@@ -5670,7 +5661,8 @@ export default function App() {
               }
             }
           }
-          if (Array.isArray(idbDefibs) && idbDefibs.length >= 5000) {
+
+          if (Array.isArray(idbDefibs) && idbDefibs.length > 0) {
             baseDefibrillateurs = idbDefibs;
             setDefibrillateurs(idbDefibs);
             setDefibLoadingProgress({
@@ -5680,15 +5672,15 @@ export default function App() {
               message: `Chargement ${idbDefibs.length.toLocaleString('en-US')}/${idbDefibs.length.toLocaleString('en-US')}, Terminé.`
             });
             setIsDefibLoading(false);
-          } else {
-            // Background preload chunks automatically to ensure the 18,000 catalog is populated
+          } else if (isD27OrD58) {
+            // Background preload chunks automatically ONLY for D27 / D58
             (async () => {
               try {
                 const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(activeRunTenantId)}`);
                 if (metaRes.ok) {
                   const meta = await metaRes.json();
                   const totalChunks = meta.totalChunks || 0;
-                  if (totalChunks > 0) {
+                  if (totalChunks > 0 && meta.prefix) {
                     setIsDefibLoading(true);
                     const chunkResults: any[][] = new Array(totalChunks);
                     let loadedCount = 0;
@@ -5699,7 +5691,7 @@ export default function App() {
                       for (let c = i; c < batchEnd; c++) {
                         batchPromises.push((async (cIdx) => {
                           try {
-                            const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix || 'D27_defibrillateurs')}`);
+                            const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix)}&tenantId=${encodeURIComponent(activeRunTenantId)}`);
                             if (chunkRes.ok) {
                               const arr = await chunkRes.json();
                               if (Array.isArray(arr)) {
@@ -5713,13 +5705,12 @@ export default function App() {
                       await Promise.all(batchPromises);
                     }
                     const combined = chunkResults.filter(Boolean).flat();
-                    if (combined.length > 5000) {
+                    if (combined.length > 0) {
+                      const sanitizedCombined = filterCollectionForTenant(combined, 'defibrillateurs', activeRunTenantId);
                       const delKeysSet = new Set(getDeletedDefibKeys(activeRunTenantId));
-                      const filteredCombined = combined.filter(d => !isDefibInDeletedList(d, delKeysSet));
+                      const filteredCombined = sanitizedCombined.filter(d => !isDefibInDeletedList(d, delKeysSet));
                       setDefibrillateurs(filteredCombined);
                       idbSet(`defib_${activeRunTenantId}_defibrillateurs`, filteredCombined).catch(() => {});
-                      idbSet('defib_D27_defibrillateurs', filteredCombined).catch(() => {});
-                      idbSet('defib_D58_defibrillateurs', filteredCombined).catch(() => {});
                       setIsDefibLoading(false);
                     }
                   }
@@ -5727,10 +5718,16 @@ export default function App() {
               } catch (_) {}
             })();
           }
-          const idbClients = await idbGet<Client[]>(`defib_${activeRunTenantId}_clients`);
-          if (Array.isArray(idbClients) && idbClients.length > 0) {
-            sanitizedOffline = idbClients;
-            setClients(idbClients);
+          const rawIdbClients = await idbGet<Client[]>(`defib_${activeRunTenantId}_clients`);
+          if (Array.isArray(rawIdbClients) && rawIdbClients.length > 0) {
+            const filteredIdbClients = filterCollectionForTenant(rawIdbClients, 'clients', activeRunTenantId);
+            if (filteredIdbClients.length !== rawIdbClients.length) {
+              idbSet(`defib_${activeRunTenantId}_clients`, filteredIdbClients).catch(() => {});
+            }
+            if (filteredIdbClients.length > 0) {
+              sanitizedOffline = filteredIdbClients;
+              setClients(filteredIdbClients);
+            }
           }
         } catch (_) {}
 
@@ -5845,21 +5842,35 @@ export default function App() {
                 }
 
                 // If remote returns 0 items, but local cache has items, DO NOT WIPE LOCAL DATA!
-                // Instead, preserve local items and push them to remote to heal the server!
+                // Instead, preserve local items ONLY IF they belong to this tenant, and push them to remote to heal the server!
                 if (finalData.length === 0 && currentLen > 0 && localItems.length > 0) {
-                  console.warn(`[Protection] Remote ${collectionName} returned empty array, but local cache has ${currentLen} items. Preserving local data and re-syncing to server.`);
-                  finalData = localItems;
-                  saveCollectionToFirestore(collectionName, localItems, activeRunTenantId).catch(() => {});
+                  const sanitizedLocal = filterCollectionForTenant(localItems, collectionName, activeRunTenantId);
+                  if (Array.isArray(sanitizedLocal) && sanitizedLocal.length > 0) {
+                    console.warn(`[Protection] Remote ${collectionName} returned empty array, but local cache has ${sanitizedLocal.length} valid items for this tenant. Preserving local data and re-syncing to server.`);
+                    finalData = sanitizedLocal;
+                    saveCollectionToFirestore(collectionName, sanitizedLocal, activeRunTenantId).catch(() => {});
+                  } else {
+                    finalData = [];
+                  }
                 } else if (currentLen > 500 && finalData.length < 100) {
-                  console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${currentLen} items) with incomplete remote data (${finalData.length} items). Merging instead.`);
-                  finalData = mergeCollectionItems(collectionName, [...localItems, ...finalData]);
+                  const sanitizedLocal = filterCollectionForTenant(localItems, collectionName, activeRunTenantId);
+                  if (Array.isArray(sanitizedLocal) && sanitizedLocal.length > 0) {
+                    console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${sanitizedLocal.length} items) with incomplete remote data (${finalData.length} items). Merging instead.`);
+                    finalData = mergeCollectionItems(collectionName, [...sanitizedLocal, ...finalData]);
+                  }
                 } else if (currentLen > 50 && finalData.length <= 1) {
-                  console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${currentLen} items) with incomplete remote data (${finalData.length} items).`);
-                  return;
+                  const sanitizedLocal = filterCollectionForTenant(localItems, collectionName, activeRunTenantId);
+                  if (Array.isArray(sanitizedLocal) && sanitizedLocal.length > 0) {
+                    console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${sanitizedLocal.length} items) with incomplete remote data (${finalData.length} items).`);
+                    finalData = mergeCollectionItems(collectionName, [...sanitizedLocal, ...finalData]);
+                  }
                 } else if (finalData.length > 0 && localItems.length > 0) {
-                  // Merge remote with local items so newly added local items not yet in remote are not lost
-                  finalData = mergeCollectionItems(collectionName, [...finalData, ...localItems]);
+                  const sanitizedLocal = filterCollectionForTenant(localItems, collectionName, activeRunTenantId);
+                  if (Array.isArray(sanitizedLocal) && sanitizedLocal.length > 0) {
+                    finalData = mergeCollectionItems(collectionName, [...finalData, ...sanitizedLocal]);
+                  }
                 }
+                finalData = filterCollectionForTenant(finalData, collectionName, activeRunTenantId);
               }
 
               stateSetter(finalData as T);
@@ -7964,7 +7975,7 @@ export default function App() {
       return;
     }
     const nowIso = new Date().toISOString();
-    const activeTid = tenantId || 'D58';
+    const activeTid = tenantId || 'demo';
     const newDefib: Defibrillateur = {
       id: 'df_' + Date.now(),
       createdAt: nowIso,
@@ -7993,7 +8004,7 @@ export default function App() {
       return;
     }
     const nowIso = new Date().toISOString();
-    const activeTid = tenantId || updated.envId || updated.tenantId || 'D58';
+    const activeTid = tenantId || updated.envId || updated.tenantId || 'demo';
     const exists = defibrillateurs.some((df) => {
       const idMatch = !!(df.id && updated.id && df.id === updated.id);
       const identifiantMatch = !!(df.identifiant && updated.identifiant && df.identifiant.toUpperCase() === updated.identifiant.toUpperCase());
@@ -8135,7 +8146,7 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
           body: JSON.stringify({
-            tenantId: tenantId || 'D27',
+            tenantId: tenantId || 'demo',
             defibs: updatedDefibs
           })
         }).catch(() => null);
@@ -8152,7 +8163,7 @@ export default function App() {
                 headers: { 'Content-Type': 'application/json' },
                 signal: singleCtrl.signal,
                 body: JSON.stringify({
-                  tenantId: tenantId || ud.envId || ud.tenantId || 'D27',
+                  tenantId: tenantId || ud.envId || ud.tenantId || 'demo',
                   defib: ud
                 })
               })

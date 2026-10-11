@@ -2482,11 +2482,66 @@ function formatDefibrillateurOutput(d: any): any {
   };
 }
 
-// Fast lookup for a single defibrillator across in-memory cache, disk, and Firestore chunks with early-exit
+// Helper to synchronously resolve all valid tenant aliases (IDs, shortEnvIds, numeric suffixes)
+function getTenantAliasesSync(targetTenantId: string): Set<string> {
+  const aliases = new Set<string>();
+  const clean = (targetTenantId || 'demo').trim().toLowerCase();
+  aliases.add(clean);
+  const num = clean.replace(/^d/i, '');
+  if (/^\d+$/.test(num)) {
+    aliases.add(`d${num}`);
+    aliases.add(num);
+  }
+  let regTenants: any[] = [];
+  if (serverMemoryStore.has('registered_tenants')) {
+    regTenants = serverMemoryStore.get('registered_tenants');
+  }
+  if (!Array.isArray(regTenants) || regTenants.length === 0) {
+    try {
+      const diskPath = path.join(COLLECTIONS_DIR, 'registered_tenants.json');
+      if (fs.existsSync(diskPath)) {
+        regTenants = JSON.parse(fs.readFileSync(diskPath, 'utf-8'));
+      }
+    } catch (_) {}
+  }
+  if (Array.isArray(regTenants)) {
+    const match = regTenants.find((t: any) => {
+      if (!t) return false;
+      const tid = String(t.id || '').toLowerCase().trim();
+      const tshort = String(t.shortEnvId || t.code || '').toLowerCase().trim();
+      if (tid === clean || tshort === clean) return true;
+      if (num && (tid.replace(/^d/i, '') === num || tshort.replace(/^d/i, '') === num)) return true;
+      return false;
+    });
+    if (match) {
+      if (match.id) {
+        const mid = String(match.id).toLowerCase().trim();
+        aliases.add(mid);
+        const mnum = mid.replace(/^d/i, '');
+        if (/^\d+$/.test(mnum)) {
+          aliases.add(`d${mnum}`);
+          aliases.add(mnum);
+        }
+      }
+      if (match.shortEnvId) {
+        const sid = String(match.shortEnvId).toLowerCase().trim();
+        aliases.add(sid);
+        const snum = sid.replace(/^d/i, '');
+        if (/^\d+$/.test(snum)) {
+          aliases.add(`d${snum}`);
+          aliases.add(snum);
+        }
+      }
+    }
+  }
+  return aliases;
+}
+
+// Fast lookup for a single defibrillator strictly scoped to the tenant
 async function findSingleDefibrillateur(
   rawSubId: string,
-  tenantId: string,
-  extraAliases: (string | undefined | null)[] = []
+  tenantId: string = 'demo',
+  _extraAliases?: any
 ): Promise<{ defib: any; tenant: string; chunkIdx?: number } | null> {
   const unescaped = decodeURIComponent(rawSubId).trim();
   const strippedSubId = unescaped.replace(/^[:=]+/, '').replace(/^['"]|['"]$/g, '').trim();
@@ -2494,7 +2549,11 @@ async function findSingleDefibrillateur(
   if (!cleanSubId) return null;
   const matcher = matchesDefibWith(cleanSubId);
 
-  // 0. FASTEST PATH: Check fastDefibIndex (0.001ms O(1) lookup)
+  const normTenant = tenantId ? tenantId.trim().toLowerCase() : 'demo';
+  const tAliases = getTenantAliasesSync(normTenant);
+  const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
+
+  // 0. FASTEST PATH: Check fastDefibIndex ONLY if tenant matches
   const normKey = normalizeDefibLookupKey(cleanSubId);
   const normUnescaped = normalizeDefibLookupKey(unescaped);
   const lowerKey = cleanSubId.toLowerCase();
@@ -2509,99 +2568,69 @@ async function findSingleDefibrillateur(
                   (normKey ? fastDefibIndex.get(normKey) : null) ||
                   (normUnescaped ? fastDefibIndex.get(normUnescaped) : null);
   if (indexed && indexed.defib) {
-    const lk = normKey || lowerClean || lowerKey;
-    const tuple = defibLocationIndex.get(lk) || defibLocationIndex.get(lowerKey);
-    return { ...indexed, chunkIdx: tuple ? tuple[3] : undefined };
+    const itemEnv = (indexed.defib.envId || indexed.defib.tenantId || indexed.tenant || '').trim().toLowerCase();
+    const itemNum = itemEnv.replace(/^d/i, '');
+    const isOwner = tAliases.has(itemEnv) || (itemNum && tAliases.has(itemNum));
+    if (isOwner) {
+      const lk = normKey || lowerClean || lowerKey;
+      const tuple = defibLocationIndex.get(lk) || defibLocationIndex.get(lowerKey);
+      return { ...indexed, chunkIdx: tuple ? tuple[3] : undefined };
+    }
   }
 
-  // 1. FAST PATH: Check in-memory store for tenant candidates and all cached defibrillateur collections (0.05ms)
-  const normTenant = tenantId ? tenantId.trim().toLowerCase() : 'demo';
-  const numTenant = normTenant.replace(/^d/i, '');
-  const candidateKeys = Array.from(new Set([
-    `${normTenant}_defibrillateurs`,
-    `d${numTenant}_defibrillateurs`,
-    `${numTenant}_defibrillateurs`,
-    'D58_defibrillateurs',
-    'D27_defibrillateurs',
-    'D18_defibrillateurs',
-    'defibrillateurs',
-    'demo_defibrillateurs',
-    ...extraAliases.map(a => a ? `${String(a).trim().toLowerCase()}_defibrillateurs` : '')
-  ].filter(Boolean)));
+  // 1. Check in-memory store for candidate keys of THIS TENANT ONLY
+  const candidateKeys = Array.from(tAliases).map(a => a === 'demo' ? 'defibrillateurs' : `${a}_defibrillateurs`);
+  if (normTenant === 'demo') candidateKeys.push('demo_defibrillateurs');
 
-  for (const k of candidateKeys) {
+  for (const k of Array.from(new Set(candidateKeys))) {
     if (serverMemoryStore.has(k)) {
       const items = serverMemoryStore.get(k);
       if (Array.isArray(items)) {
-        const tName = k.replace(/_defibrillateurs$/, '');
-        for (const item of items) {
-          indexDefibrillateur(item, tName);
-        }
         const found = items.find(matcher);
         if (found) {
-          return { defib: found, tenant: tName };
+          const itemEnv = (found.envId || found.tenantId || '').trim().toLowerCase();
+          const itemNum = itemEnv.replace(/^d/i, '');
+          if (!itemEnv || tAliases.has(itemEnv) || (itemNum && tAliases.has(itemNum))) {
+            return { defib: found, tenant: normTenant };
+          }
         }
       }
     }
   }
 
-  // Also check all other cached memory entries ending with _defibrillateurs
-  for (const [k, items] of serverMemoryStore.entries()) {
-    if (k.endsWith('_defibrillateurs') && Array.isArray(items)) {
-      const tName = k.replace(/_defibrillateurs$/, '');
-      for (const item of items) {
-        indexDefibrillateur(item, tName);
+  // 2. DISK CACHE: Check local disk collection for this tenant
+  const colFile = path.join(COLLECTIONS_DIR, `${normTenant === 'demo' ? 'defibrillateurs' : `${normTenant}_defibrillateurs`}.json`);
+  if (fs.existsSync(colFile)) {
+    try {
+      const content = JSON.parse(fs.readFileSync(colFile, 'utf-8'));
+      if (Array.isArray(content)) {
+        const found = content.find(matcher);
+        if (found) {
+          return { defib: found, tenant: normTenant };
+        }
       }
-      const found = items.find(matcher);
-      if (found) {
-        return { defib: found, tenant: tName };
-      }
-    }
+    } catch (_) {}
   }
 
-  // 2. DISK CACHE: Check local disk collections in COLLECTIONS_DIR (1ms)
-  try {
-    if (fs.existsSync(COLLECTIONS_DIR)) {
-      const files = fs.readdirSync(COLLECTIONS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
-      for (const f of files) {
-        try {
-          const filePath = path.join(COLLECTIONS_DIR, f);
-          const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-          if (Array.isArray(content)) {
-            const tName = f.replace(/_defibrillateurs\.json$/, '');
-            serverMemoryStore.set(`${tName}_defibrillateurs`, content);
-            serverStoreTimestamps.set(`${tName}_defibrillateurs`, Date.now());
-            for (const item of content) {
-              indexDefibrillateur(item, tName);
-            }
-            const found = content.find(matcher);
-            if (found) {
-              return { defib: found, tenant: tName };
-            }
-          }
-        } catch (_) {}
-      }
-    }
-  } catch (_) {}
-
-  // 3. INSTANT COMPACT INDEX LOOKUP (O(1) identifies exact chunk in < 1ms, loads only that chunk)
-  loadCompactIndexSync();
-  const indexLookupKeys = [
-    lowerClean,
-    lowerKey,
-    cleanSubId,
-    normKey,
-    unescaped.toLowerCase(),
-    normUnescaped
-  ].filter(Boolean);
+  // 3. Chunks check: ONLY for D27 / D58
+  if (isD27OrD58) {
+    loadCompactIndexSync();
+    const indexLookupKeys = [
+      lowerClean,
+      lowerKey,
+      cleanSubId,
+      normKey,
+      unescaped.toLowerCase(),
+      normUnescaped
+    ].filter(Boolean);
 
     for (const lk of indexLookupKeys) {
       const tuple = defibLocationIndex.get(lk);
       if (tuple) {
         const [id, identifiant, sn, chunkIdx, env] = tuple;
-        let chunkItems = loadChunkFileSync(chunkIdx);
+        let chunkItems = loadChunkFileSync(chunkIdx, 'D27_defibrillateurs');
         if (!chunkItems || chunkItems.length === 0 || !chunkItems.find(matcher)) {
-          const restItems = await fetchChunkRest(chunkIdx);
+          const restItems = await fetchChunkRest(chunkIdx, 'D27_defibrillateurs');
           if (restItems && Array.isArray(restItems)) {
             chunkItems = restItems;
           }
@@ -2609,98 +2638,20 @@ async function findSingleDefibrillateur(
         if (chunkItems && Array.isArray(chunkItems)) {
           const found = chunkItems.find(matcher);
           if (found) {
-            const fastKey = normalizeDefibLookupKey(found.numeroSerie || found.identifiant || found.id);
-            const cachedFast = fastDefibIndex.get(fastKey)?.defib;
-            const finalDefib = cachedFast ? { ...found, ...cachedFast } : found;
-            return { defib: finalDefib, tenant: env || tenantId || 'D58', chunkIdx };
+            return { defib: found, tenant: env || 'D27', chunkIdx };
           }
         }
-        // Fallback: If still not found in chunk file, synthesize guaranteed record from compact tuple
-        const synthDefib = {
-          id,
-          identifiant,
-          numeroSerie: sn,
-          envId: env || tenantId || 'D27',
-          tenantId: env || tenantId || 'D27',
-          modeleId: 'v_1786287737046_209_451',
-          conforme: 'Oui',
-          statut: 'Opérationnel',
-          situationBatterie: 'Vert',
-          situationElectrodeA: 'Vert',
-          situationElectrodeP: 'Vert',
-          pourcentageBatterie: '100',
-          nomSite: 'DEFIBEO CLIENT SITE',
-          ville: 'Paris',
-          cp: '75008',
-          pays: 'France',
-          fsmAutorise: 'Oui',
-          archive: 'Non',
-          loue: 'Non',
-          stocke: 'Non',
-          prete: 'Non',
-          contrat: 'Non',
-          updatedAt: new Date().toISOString()
-        };
-        indexDefibrillateur(synthDefib, env || tenantId || 'D27');
-        return { defib: synthDefib, tenant: env || tenantId || 'D27', chunkIdx };
       }
     }
-
-  // 4. DISK CHUNK CACHE FALLBACK (Only if compact index was empty)
-  if (defibLocationIndex.size === 0) {
-    try {
-      if (fs.existsSync(CHUNKS_DIR)) {
-        const chunkFiles = fs.readdirSync(CHUNKS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
-        for (const cf of chunkFiles) {
-          try {
-            const chunkPath = path.join(CHUNKS_DIR, cf);
-            const arr = JSON.parse(fs.readFileSync(chunkPath, 'utf-8'));
-            if (Array.isArray(arr)) {
-              for (const item of arr) {
-                indexDefibrillateur(item, tenantId || 'D58');
-              }
-              const found = arr.find(matcher);
-              if (found) {
-                return { defib: found, tenant: tenantId || 'D58' };
-              }
-            }
-          } catch (_) {}
-        }
-      }
-    } catch (_) {}
   }
 
-  // 5. REST TARGETED FALLBACK (Strict 2.5s timeout, never hangs)
+  // 4. REST targeted fallback for this tenant ONLY
   try {
-    const docKey = (tenantId === 'demo' || tenantId === 'defibrillateurs') ? 'defibrillateurs' : `${tenantId || 'D58'}_defibrillateurs`;
-    const apiKey = PROD_FIREBASE_CONFIG.apiKey;
-    const url = `https://firestore.googleapis.com/v1/projects/${PROD_FIREBASE_CONFIG.projectId}/databases/${encodeURIComponent(serverFirestoreDbId)}/documents/appData/${docKey}?key=${apiKey}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2500);
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timer);
-    if (res.ok) {
-      const json: any = await res.json();
-      if (json.fields?.value?.arrayValue?.values) {
-        const unwrap = (val: any): any => {
-          if (!val || typeof val !== 'object') return val;
-          if ('stringValue' in val) return val.stringValue;
-          if ('integerValue' in val) return parseInt(val.integerValue, 10);
-          if ('doubleValue' in val) return parseFloat(val.doubleValue);
-          if ('booleanValue' in val) return val.booleanValue;
-          if ('mapValue' in val) {
-            const o: any = {};
-            for (const [k, v] of Object.entries(val.mapValue.fields || {})) o[k] = unwrap(v);
-            return o;
-          }
-          if ('arrayValue' in val) return (val.arrayValue.values || []).map(unwrap);
-          return val;
-        };
-        const items = json.fields.value.arrayValue.values.map(unwrap);
-        for (const it of items) indexDefibrillateur(it, tenantId || 'D58');
-        const found = items.find(matcher);
-        if (found) return { defib: found, tenant: tenantId || 'D58' };
-      }
+    const docKey = normTenant === 'demo' ? 'defibrillateurs' : `${normTenant}_defibrillateurs`;
+    const restRes = await fetchFirestoreDocumentRest(docKey, 2000);
+    if (restRes.data && Array.isArray(restRes.data.value)) {
+      const found = restRes.data.value.find(matcher);
+      if (found) return { defib: found, tenant: normTenant };
     }
   } catch (_) {}
 
@@ -2709,184 +2660,85 @@ async function findSingleDefibrillateur(
 
 // Helper function to read a collection from Firestore with support for chunked documents, multiple aliases and memory caching
 async function fetchServerCollection(colName: string, tenantId: string, extraAliases: (string | undefined | null)[] = []): Promise<any[]> {
-  const sanitizeForTenant = (items: any): any => {
-    if (!Array.isArray(items)) return items;
-    const isDemo = !tenantId || tenantId === 'demo';
-    const cleanTid = (tenantId || 'demo').trim().toLowerCase();
-    const isDNum = /^d\d+$/i.test(cleanTid);
-    const isNum = /^\d+$/.test(cleanTid);
-    const numTid = isDNum || isNum ? cleanTid.replace(/^d/i, '') : '';
-
-    const validAliases = new Set<string>();
-    validAliases.add(cleanTid);
-    if (numTid) {
-      validAliases.add(`d${numTid}`);
-      validAliases.add(numTid);
-    }
-    for (const a of extraAliases) {
-      if (a && typeof a === 'string') {
-        const ca = a.trim().toLowerCase();
-        if (ca) {
-          validAliases.add(ca);
-          const aNum = ca.replace(/^d/i, '');
-          if (/^\d+$/.test(aNum)) {
-            validAliases.add(`d${aNum}`);
-            validAliases.add(aNum);
-          }
-        }
-      }
-    }
-
-    return items.filter((item: any) => {
-      if (!item || typeof item !== 'object') return true;
-      const itemEnv = (item.envId || item.tenantId || '').trim().toLowerCase();
-      const isItemDNum = /^d\d+$/i.test(itemEnv);
-      const isItemNum = /^\d+$/.test(itemEnv);
-      const numItemEnv = isItemDNum || isItemNum ? itemEnv.replace(/^d/i, '') : '';
-
-      if (isDemo) {
-        if (colName === 'stocks' || colName === 'distributed_stocks' || colName === 'stock' || colName === 'distributedStocks') {
-          return true;
-        }
-        if (itemEnv && itemEnv !== 'demo') return false;
-        return true;
-      }
-
-      if (itemEnv) {
-        if (itemEnv === 'demo') {
-          if (colName === 'stocks' || colName === 'distributed_stocks' || colName === 'stock' || colName === 'distributedStocks') {
-            item.envId = cleanTid;
-            item.tenantId = cleanTid;
-            return true;
-          }
-          return false;
-        }
-        if (validAliases.has(itemEnv)) return true;
-        if (numItemEnv && (validAliases.has(numItemEnv) || validAliases.has(`d${numItemEnv}`))) return true;
-        for (const va of validAliases) {
-          if (va.length >= 2 && (itemEnv === va || itemEnv.includes(va) || va.includes(itemEnv))) return true;
-        }
-        if ((cleanTid === 'd58' && itemEnv === 'd27') || (cleanTid === 'd27' && itemEnv === 'd58')) return true;
-        if (colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices') {
-          return true;
-        }
-        if (colName === 'stocks' || colName === 'distributed_stocks' || colName === 'stock' || colName === 'distributedStocks') {
-          item.envId = cleanTid;
-          item.tenantId = cleanTid;
-          return true;
-        }
-        return false; // Rejects items belonging to other tenants!
-      }
-
-      if (colName === 'stocks' || colName === 'distributed_stocks' || colName === 'stock' || colName === 'distributedStocks') {
-        item.envId = cleanTid;
-        item.tenantId = cleanTid;
-        return true;
-      }
-
-      if (colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices') {
-        if (!itemEnv && (item.id === 'df_1' || item.identifiant === 'SPO-D26-DAE' || item.numeroSerie === 'SN-G5-998124')) {
-          return false;
-        }
-      } else if (colName === 'tickets' || colName === 'support_tickets') {
-        if (!itemEnv) return false;
-        if (item.id === '#482910' || item.id === '#719203' || item.identifiant === 'DEF-75001' || item.identifiant === 'DEF-69002') {
-          return false;
-        }
-      } else if (colName === 'commercialDocs' || colName === 'commercial_docs') {
-        if (!itemEnv && item.clientDenomination && (item.clientDenomination.includes('Medical360') || item.clientDenomination.includes('SecoursProOuest'))) {
-          return false;
-        }
-      } else if (colName === 'fsmTours' || colName === 'fsm_tours' || colName === 'tours') {
-        if (item.id === 'fsm-tour-demo' || item.techName === 'Jakub Démo') return false;
-      } else if (colName === 'clients') {
-        if (!itemEnv && (item.id === 'c1' || item.id === 'c2' || item.id === 'c3') && item.denomination === 'Secours Pro Ouest') return false;
-      } else if (colName === 'notifications' || colName === 'app_notifications') {
-        if (item.id === 'conn-2' || item.id === 'conn-3' || (item.title && item.title.includes('admin@defibeo.com vient s’est connecté'))) return false;
-        if (!itemEnv) {
-          if (item.id?.startsWith('demo') || item.title?.includes('Démo') || item.title?.includes('demo')) return false;
-        }
-      } else if (colName === 'members') {
-        if (!itemEnv && (item.email === 'techniciendemo1@demo.com' || item.name === 'Jakub Démo')) return false;
-      }
-
-      return true;
-    });
-  };
-
   const activeTenant = (tenantId || 'demo').trim();
-  const canonicalKey = activeTenant === 'demo' ? colName : `${activeTenant}_${colName}`;
+  const cleanTid = activeTenant.toLowerCase();
+  const isDemo = cleanTid === 'demo' || cleanTid === 'd10' || cleanTid === '10';
+  const tenantAliases = getTenantAliasesSync(activeTenant);
+  const isD27OrD58 = tenantAliases.has('d27') || tenantAliases.has('d58');
+  const isDefibCol = colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices';
+  const canonicalKey = isDemo ? colName : `${activeTenant}_${colName}`;
   const isDNum = /^d\d+$/i.test(activeTenant);
   const isNum = /^\d+$/.test(activeTenant);
   const numOnly = isDNum || isNum ? activeTenant.replace(/^d/i, '') : '';
 
-  // 1. FAST PATH: Check in-memory store first (authoritative backend store)
+  const sanitizeForTenant = (items: any): any => {
+    if (!Array.isArray(items)) return items;
+
+    return items.filter((item: any) => {
+      if (!item || typeof item !== 'object') return false;
+      const itemEnv = (item.envId || item.tenantId || '').trim().toLowerCase();
+
+      if (isDemo) {
+        if (itemEnv && itemEnv !== 'demo' && !tenantAliases.has(itemEnv)) {
+          return false;
+        }
+        return true;
+      }
+
+      if (itemEnv) {
+        if (itemEnv === 'demo') return false;
+        if (tenantAliases.has(itemEnv)) return true;
+        const numItemEnv = itemEnv.replace(/^d/i, '');
+        if (numItemEnv && tenantAliases.has(numItemEnv)) return true;
+        return false;
+      }
+
+      // Customer tenant must never see untagged demo/mock items
+      return false;
+    });
+  };
+
+  // 1. FAST PATH: Check in-memory store for this tenant's keys only
   const candidateLookupKeys = [canonicalKey];
-  if (colName === 'distributed_stocks' || colName === 'distributedStocks' || colName === 'stocks' || colName === 'stock') {
-    candidateLookupKeys.push(
-      colName,
-      `demo_${colName}`,
-      `D27_${colName}`,
-      `d27_${colName}`,
-      `27_${colName}`,
-      `D58_${colName}`,
-      `d58_${colName}`,
-      `58_${colName}`,
-      `D18_${colName}`,
-      `d18_${colName}`,
-      colName === 'distributed_stocks' ? 'distributedStocks' : 'distributed_stocks',
-      colName === 'stocks' ? 'stock' : 'stocks'
-    );
+  if (numOnly) {
+    candidateLookupKeys.push(`D${numOnly}_${colName}`, `d${numOnly}_${colName}`, `${numOnly}_${colName}`);
+  }
+  for (const alias of tenantAliases) {
+    candidateLookupKeys.push(`${alias}_${colName}`);
   }
 
-  for (const lk of candidateLookupKeys) {
+  for (const lk of Array.from(new Set(candidateLookupKeys))) {
     if (serverMemoryStore.has(lk)) {
       const memVal = serverMemoryStore.get(lk);
-      const isDefibCol = colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices';
-      if (memVal !== undefined && memVal !== null && Array.isArray(memVal) && memVal.length > 0) {
-        if (isDefibCol && memVal.length < 5000) {
-          // Fall through to load full chunk catalog (17,800+ items)
-        } else {
-          return sanitizeForTenant(memVal);
+      if (memVal !== undefined && memVal !== null && Array.isArray(memVal)) {
+        const sanitized = sanitizeForTenant(memVal);
+        if (sanitized.length > 0 || !isD27OrD58) {
+          return sanitized;
         }
       }
     }
   }
 
-  const isDefibCol = colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices';
-
-  if (serverMemoryStore.has(canonicalKey)) {
-    const memVal = serverMemoryStore.get(canonicalKey);
-    if (memVal !== undefined && memVal !== null) {
-      if (isDefibCol && Array.isArray(memVal) && memVal.length < 5000) {
-        // Fall through to query chunk storage
-      } else {
-        return sanitizeForTenant(memVal);
-      }
-    }
-  }
-
-  // 1b. Dedicated collection file on disk (e.g. D58_defibrillateurs.json)
+  // 1b. Dedicated collection file on disk (e.g. D27_clients.json)
   const colFile = path.join(COLLECTIONS_DIR, `${canonicalKey}.json`);
   if (fs.existsSync(colFile)) {
     try {
       const diskVal = JSON.parse(fs.readFileSync(colFile, 'utf-8'));
-      if (diskVal !== undefined && diskVal !== null) {
-        if (isDefibCol && Array.isArray(diskVal) && diskVal.length < 5000) {
-          // Fall through if smaller than authoritative chunk catalog
-        } else {
-          serverMemoryStore.set(canonicalKey, diskVal);
-          serverStoreTimestamps.set(canonicalKey, Date.now());
-          return sanitizeForTenant(diskVal);
+      if (diskVal !== undefined && diskVal !== null && Array.isArray(diskVal)) {
+        const sanitized = sanitizeForTenant(diskVal);
+        serverMemoryStore.set(canonicalKey, sanitized);
+        serverStoreTimestamps.set(canonicalKey, Date.now());
+        if (sanitized.length > 0 || !isD27OrD58) {
+          return sanitized;
         }
       }
     } catch (_) {}
   }
 
-  // 1c. For defibrillateurs, check authoritative chunk files on disk for D27/shared fallback
-  if (isDefibCol) {
+  // 1c. For defibrillateurs, check authoritative chunk files on disk ONLY for D27 / D58
+  if (isDefibCol && isD27OrD58) {
     if (fs.existsSync(CHUNKS_DIR)) {
-      const chunkFiles = fs.readdirSync(CHUNKS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
+      const chunkFiles = fs.readdirSync(CHUNKS_DIR).filter(f => f.startsWith('D27_defibrillateurs') && f.endsWith('.json'));
       if (chunkFiles.length > 0) {
         let maxIdx = -1;
         for (const cf of chunkFiles) {
@@ -2905,21 +2757,10 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
             }
           }
           if (allItems.length > 0) {
-            // Also merge any memory items that might have been newly created
-            const memVal = serverMemoryStore.get(canonicalKey);
-            if (Array.isArray(memVal) && memVal.length > 0) {
-              const knownKeys = new Set(allItems.map(d => d.id || d.identifiant || d.numeroSerie));
-              for (const item of memVal) {
-                const k = item.id || item.identifiant || item.numeroSerie;
-                if (k && !knownKeys.has(k)) {
-                  allItems.push(item);
-                  knownKeys.add(k);
-                }
-              }
-            }
-            serverMemoryStore.set(canonicalKey, allItems);
+            const sanitized = sanitizeForTenant(allItems);
+            serverMemoryStore.set(canonicalKey, sanitized);
             serverStoreTimestamps.set(canonicalKey, Date.now());
-            return sanitizeForTenant(allItems);
+            return sanitized;
           }
         }
       }
@@ -2929,11 +2770,9 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   // 2. Helper to load a single candidate key from Firestore safely
   async function loadKeyFromFirestore(key: string): Promise<{ type: string; items?: any[]; data?: any; isChunked?: boolean } | null> {
     try {
-      // Fast path: try REST first (strict 1200ms timeout, returns 404 in <150ms without hanging)
       const restRes = await fetchFirestoreDocumentRest(key, 1200);
       let payload: any = restRes.data;
       if (!payload && !restRes.notFound) {
-        // Fallback to getDoc with 1000ms timeout only if not explicitly 404
         const docRef = doc(db, 'appData', key);
         const snap = await withTimeout(getDoc(docRef), 1000, null);
         if (snap && snap.exists()) {
@@ -2942,13 +2781,17 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
       }
       if (!payload) return null;
 
-      // Handle chunked storage for large datasets (e.g. defibrillateurs)
+      // Handle chunked storage ONLY if authorized for this tenant
       if (payload._chunked && typeof payload.chunksCount === 'number' && payload.chunksCount > 0) {
-        const count = payload.chunksCount;
         const effectivePrefix = payload.chunkPrefix || payload.chunkKeyPrefix || key;
+        if (effectivePrefix.startsWith('D27_') || effectivePrefix.startsWith('D58_')) {
+          if (!isD27OrD58) {
+            return null; // Deny chunk loading to other tenants
+          }
+        }
+        const count = payload.chunksCount;
         const chunkResults: any[][] = new Array(count);
 
-        // Check disk chunks first (instant, 0 network calls)
         let loadedAllFromDisk = true;
         for (let idx = 0; idx < count; idx++) {
           const diskItems = loadChunkFileSync(idx, effectivePrefix);
@@ -2965,7 +2808,6 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
           return { type: 'array', items: combined, isChunked: true };
         }
 
-        // If not all on disk, load only first 5 chunks for fast initial response
         const chunksToLoad = Math.min(count, 5);
         for (let idx = 0; idx < chunksToLoad; idx++) {
           let items = loadChunkFileSync(idx, effectivePrefix);
@@ -2991,53 +2833,36 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     return null;
   }
 
-  // 3. Build prioritized candidate key tiers
-  // Tier 1: Canonical primary keys (exact tenant + standard collection name)
+  // 3. Build candidate keys for this tenant ONLY
   const tier1Keys: string[] = [];
-  if (activeTenant === 'demo') {
+  if (isDemo) {
     tier1Keys.push(colName, `demo_${colName}`);
   } else {
     tier1Keys.push(`${activeTenant}_${colName}`);
     if (numOnly) {
       tier1Keys.push(`D${numOnly}_${colName}`, `d${numOnly}_${colName}`, `${numOnly}_${colName}`);
     }
-  }
-
-  // Tier 2: Extra aliases explicitly passed
-  const tier2Keys: string[] = [];
-  for (const alias of extraAliases) {
-    if (alias && typeof alias === 'string' && alias.trim() && alias !== activeTenant) {
-      const a = alias.trim();
-      tier2Keys.push(`${a}_${colName}`);
-      const isADNum = /^d\d+$/i.test(a);
-      const isANum = /^\d+$/.test(a);
-      const aNum = isADNum || isANum ? a.replace(/^d/i, '') : '';
-      if (aNum) {
-        tier2Keys.push(`D${aNum}_${colName}`, `d${aNum}_${colName}`, `${aNum}_${colName}`);
-      }
+    for (const alias of tenantAliases) {
+      tier1Keys.push(`${alias}_${colName}`);
     }
   }
 
-  // Tier 3: Alternative collection name aliases (e.g. defibs, devices)
-  const tier3Keys: string[] = [];
+  const tier2Keys: string[] = [];
   const colAliases = getCollectionNameAliases(colName).filter(c => c !== colName);
   for (const c of colAliases) {
-    if (activeTenant === 'demo') {
-      tier3Keys.push(c, `demo_${c}`);
+    if (isDemo) {
+      tier2Keys.push(c, `demo_${c}`);
     } else {
-      tier3Keys.push(`${activeTenant}_${c}`);
+      tier2Keys.push(`${activeTenant}_${c}`);
       if (numOnly) {
-        tier3Keys.push(`D${numOnly}_${c}`, `${numOnly}_${c}`);
+        tier2Keys.push(`D${numOnly}_${c}`, `${numOnly}_${c}`);
       }
     }
   }
 
-  const allKeyTiers = [tier1Keys, tier2Keys, tier3Keys];
-  const allCandidateKeys = activeTenant === 'demo'
-    ? Array.from(new Set([...tier1Keys, ...tier2Keys, ...tier3Keys, colName].filter(Boolean)))
-    : Array.from(new Set([...tier1Keys, ...tier2Keys, ...tier3Keys].filter(Boolean)));
+  const allKeyTiers = [tier1Keys, tier2Keys];
 
-  // 4. Query Firestore: check Tier 1 first. If data is found, STOP immediately!
+  // 4. Query Firestore
   for (const tier of allKeyTiers) {
     const keysToTry = Array.from(new Set(tier.filter(Boolean)));
     if (keysToTry.length === 0) continue;
@@ -3046,23 +2871,12 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     for (const res of results) {
       if (res.status === 'fulfilled' && res.value) {
         const val = res.value;
-        if (val.type === 'array' && Array.isArray(val.items) && val.items.length > 0) {
-          // If this is defibrillateurs and has only 1 placeholder item (and not chunked),
-          // continue checking subsequent candidates to see if the full chunked dataset exists!
-          if (colName === 'defibrillateurs' && !val.isChunked && val.items.length <= 1) {
-            continue;
-          }
+        if (val.type === 'array' && Array.isArray(val.items)) {
           const merged = mergeServerCollectionItems(colName, val.items);
           const sanitized = sanitizeForTenant(merged);
           
-          // Cache in memory with timestamp
           serverMemoryStore.set(canonicalKey, sanitized);
           serverStoreTimestamps.set(canonicalKey, Date.now());
-          for (const k of allCandidateKeys) {
-            serverMemoryStore.set(k, sanitized);
-            serverStoreTimestamps.set(k, Date.now());
-          }
-          // Note: NO disk write on reads to preserve CPU & avoid blocking event loop
           return sanitized;
         } else if (val.type === 'object' && val.data) {
           serverMemoryStore.set(canonicalKey, val.data);
@@ -3075,103 +2889,9 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     }
   }
 
-  // 5. Fallback: check in-memory store for candidate keys
-  for (const k of allCandidateKeys) {
-    if (serverMemoryStore.has(k)) {
-      const val = serverMemoryStore.get(k);
-      if (val !== undefined && val !== null) {
-        if (Array.isArray(val)) {
-          return sanitizeForTenant(val);
-        } else {
-          return val;
-        }
-      }
-    }
-  }
-
-  // Auto-healing & provisioning: ONLY for brand new tenants that have never been created or accessed
-  if ((colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices') && activeTenant !== 'demo') {
-    // If the tenant collection was already initialized, saved, or explicitly emptied, respect it!
-    if (serverMemoryStore.has(canonicalKey) || fs.existsSync(path.join(COLLECTIONS_DIR, `${canonicalKey}.json`))) {
-      return [];
-    }
-
-    const defaultTenantDefib = {
-      id: `df_${activeTenant.toLowerCase()}_1`,
-      identifiant: `DAE-${activeTenant.toUpperCase()}-01`,
-      numeroSerie: `SN-${activeTenant.toUpperCase()}-998101`,
-      num_serie: `SN-${activeTenant.toUpperCase()}-998101`,
-      modele: "Cardiac Science Powerheart G5",
-      modeleId: "CSPG5",
-      marque: "CARDIAC SCIENCE",
-      statut: "Conforme",
-      conforme: "Oui",
-      derniereMaintenance: "2026-06-01",
-      derniere_maintenance: "2026-06-01",
-      prochaine_v: "2027-06-01",
-      peremption_a: "2029-08-01",
-      lot_a: "LOT-A-1002",
-      modele_a: "CPR-D Padz (Adulte)",
-      peremption_p: "2029-11-15",
-      lot_p: "LOT-P-882",
-      peremption_b: "2031-05-20",
-      lot_b: "LOT-BAT-99",
-      pourcentage_constate_b: 95,
-      pourcentageBatterie: "95",
-      statut_voyant: "Vert OK",
-      etat_housse: "Conforme",
-      aide_acces: "Accueil principal",
-      commentaireAdresse: "Accueil principal",
-      numVoie: "12 Rue de la Paix",
-      adresse: "12 Rue de la Paix",
-      ville: "Paris",
-      cp: "75001",
-      code_postal: "75001",
-      region: "Île-de-France",
-      pays: "France",
-      latitude: "48.869",
-      longitude: "2.332",
-      client_nom: "Medical360",
-      client_id: "c1",
-      clientId: "c1",
-      contrat: "Oui",
-      nomContrat: "Abonnement Maintenance Premium",
-      referenceContrat: `REF-2026-${activeTenant.toUpperCase()}`,
-      debutContrat: "2026-01-01",
-      finContrat: "2029-12-31",
-      situationBatterie: "Vert",
-      situationElectrodeA: "Vert",
-      situationElectrodeP: "Vert",
-      fsmAutorise: "Oui",
-      id_record: `record_${activeTenant.toLowerCase()}_dae1`,
-      envId: activeTenant,
-      tenantId: activeTenant
-    };
-
-    const healedDefibs = [defaultTenantDefib];
-    serverMemoryStore.set(canonicalKey, healedDefibs);
-    serverStoreTimestamps.set(canonicalKey, Date.now());
-    for (const k of allCandidateKeys) {
-      serverMemoryStore.set(k, healedDefibs);
-      serverStoreTimestamps.set(k, Date.now());
-    }
-    persistServerStoreToDisk();
-    return healedDefibs;
-  }
-
-  // Cache empty collection so subsequent polling requests return in 0ms!
+  // 5. If not found in Firestore, store empty array and return []
   serverMemoryStore.set(canonicalKey, []);
   serverStoreTimestamps.set(canonicalKey, Date.now());
-  for (const k of allCandidateKeys) {
-    serverMemoryStore.set(k, []);
-    serverStoreTimestamps.set(k, Date.now());
-  }
-  try {
-    const colFile = path.join(COLLECTIONS_DIR, `${canonicalKey}.json`);
-    if (!fs.existsSync(colFile)) {
-      fs.writeFileSync(colFile, JSON.stringify([]), 'utf-8');
-    }
-  } catch (_) {}
   return [];
 }
 
@@ -3561,11 +3281,11 @@ async function warmupDefibrillateursStore() {
   app.get("/api/sync-single-defib", async (req, res) => {
     try {
       const id = String(req.query.id || req.query.identifiant || req.query.numeroSerie || '').trim();
-      const tenantId = String(req.query.tenantId || 'D27').trim();
+      const tenantId = String(req.query.tenantId || 'demo').trim();
       if (!id) {
         return res.status(400).json({ error: "id paramètre requis." });
       }
-      const found = await findSingleDefibrillateur(id, tenantId, ['D27', 'D58', 'demo']);
+      const found = await findSingleDefibrillateur(id, tenantId);
       if (found && found.defib) {
         const formatted = formatDefibrillateurOutput(found.defib);
         return res.json({ status: "success", defib: formatted });
@@ -3579,7 +3299,20 @@ async function warmupDefibrillateursStore() {
   // Metadata endpoint for high-speed chunked defibrillateurs download
   app.get("/api/defib-chunks/meta", (req, res) => {
     try {
-      const tenantId = String(req.query.tenantId || 'D27').trim();
+      const tenantId = String(req.query.tenantId || 'demo').trim();
+      const tAliases = getTenantAliasesSync(tenantId);
+      const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
+
+      // The 18,000 chunk dataset belongs exclusively to D27 / D58
+      if (!isD27OrD58) {
+        return res.json({
+          totalChunks: 0,
+          totalCount: 0,
+          prefix: '',
+          tenantId
+        });
+      }
+
       const prefix = 'D27_defibrillateurs';
       if (!fs.existsSync(CHUNKS_DIR)) {
         return res.json({ totalChunks: 0, totalCount: 0, prefix, tenantId });
@@ -3612,7 +3345,17 @@ async function warmupDefibrillateursStore() {
       if (isNaN(chunkIdx) || chunkIdx < 0) {
         return res.status(400).json({ error: "Index de chunk invalide." });
       }
-      const prefix = String(req.query.prefix || 'D27_defibrillateurs').replace(/[^a-zA-Z0-9_-]/g, '');
+      const prefix = String(req.query.prefix || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      const tenantId = String(req.query.tenantId || '').trim();
+
+      // Guard chunk access by tenant
+      if (prefix.startsWith('D27_') || prefix.startsWith('D58_')) {
+        const tAliases = getTenantAliasesSync(tenantId || 'D27');
+        if (tenantId && !tAliases.has('d27') && !tAliases.has('d58')) {
+          return res.status(403).json({ error: "Accès refusé : ces données appartiennent à un autre tenant." });
+        }
+      }
+
       const filePath = path.join(CHUNKS_DIR, `${prefix}_chunk_${chunkIdx}.json`);
       if (!fs.existsSync(filePath)) {
         return res.status(404).json({ error: "Fichier chunk non trouvé." });
@@ -3635,10 +3378,14 @@ async function warmupDefibrillateursStore() {
       }
       const rawTenant = tenantId.trim();
 
-      // If chunkIndex is provided for defibrillateurs, serve that chunk directly
+      // If chunkIndex is provided for defibrillateurs, serve that chunk directly only if authorized
       if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices') {
         const chunkIndexParam = req.query.chunkIndex;
         if (chunkIndexParam !== undefined && chunkIndexParam !== null && chunkIndexParam !== '') {
+          const tAliases = getTenantAliasesSync(rawTenant);
+          if (!tAliases.has('d27') && !tAliases.has('d58')) {
+            return res.status(403).json({ error: "Accès non autorisé aux données de ce tenant." });
+          }
           const chunkIdx = parseInt(String(chunkIndexParam), 10);
           if (!isNaN(chunkIdx) && chunkIdx >= 0) {
             const filePath = path.join(CHUNKS_DIR, `D27_defibrillateurs_chunk_${chunkIdx}.json`);
@@ -3690,7 +3437,7 @@ async function warmupDefibrillateursStore() {
           persistSingleCollectionToDisk(collectionKey, finalValueToStore);
         }
 
-        // Also sync all collection aliases (e.g. distributed_stocks <-> distributedStocks)
+        // Also sync collection aliases for this tenant only (e.g. distributed_stocks <-> distributedStocks)
         const colAliases = getCollectionNameAliases(collectionName);
         for (const alias of colAliases) {
           if (alias !== collectionName) {
@@ -3703,7 +3450,7 @@ async function warmupDefibrillateursStore() {
           }
         }
 
-        // Also map normalized key if D-prefixed or numeric, or demo/D18 crossover for stocks
+        // Also map normalized key if D-prefixed or numeric
         if (/^d\d+$/i.test(rawTenant) || /^\d+$/.test(rawTenant)) {
           const numOnly = rawTenant.replace(/^d/i, '');
           for (const cName of [collectionName, ...colAliases]) {
@@ -3720,25 +3467,7 @@ async function warmupDefibrillateursStore() {
           }
         }
 
-        // Cross-tenant resilience for stocks & distributed_stocks: mirror between demo, D27, D58, D18, and base names
-        if (collectionName === 'distributed_stocks' || collectionName === 'distributedStocks' || collectionName === 'stocks' || collectionName === 'stock') {
-          const crossTenants = ['demo', 'D27', 'd27', '27', 'D58', 'd58', '58', 'D18', 'd18', '18'];
-          for (const cName of colAliases) {
-            serverMemoryStore.set(cName, finalValueToStore);
-            serverStoreTimestamps.set(cName, Date.now());
-            persistSingleCollectionToDisk(cName, finalValueToStore);
-
-            for (const ct of crossTenants) {
-              const ctKey = ct === 'demo' ? `demo_${cName}` : `${ct}_${cName}`;
-              serverMemoryStore.set(ctKey, finalValueToStore);
-              serverStoreTimestamps.set(ctKey, Date.now());
-              if (ct.startsWith('D') || ct === 'demo') {
-                persistSingleCollectionToDisk(ctKey, finalValueToStore);
-              }
-            }
-          }
-          persistServerStoreToDiskNow();
-        } else if (Array.isArray(value) && value.length > 20) {
+        if (Array.isArray(value) && value.length > 20) {
           if (!isDefibLarge) {
             persistServerStoreToDiskNow();
           }
