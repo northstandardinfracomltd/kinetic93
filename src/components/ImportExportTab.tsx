@@ -1115,8 +1115,8 @@ const validateAndParseDefibs = (
       victimeSansSurvie: 'Non',
       ageVictime: '',
       commentaireCampagneRappel: '',
-      envId: tenantId || 'D27',
-      tenantId: tenantId || 'D27'
+      envId: (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim(),
+      tenantId: (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim()
     });
   }
 
@@ -1692,11 +1692,12 @@ export default function ImportExportTab({
             const BATCH_SIZE = 150;
             for (let i = 0; i < parsedData.length; i += BATCH_SIZE) {
               const slice = parsedData.slice(i, i + BATCH_SIZE);
+              const effectiveTenantForSync = (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim();
               await fetch('/api/sync-batch-defibs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  tenantId: tenantId || 'D27',
+                  tenantId: effectiveTenantForSync,
                   defibs: slice
                 })
               });

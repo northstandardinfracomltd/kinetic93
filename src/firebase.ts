@@ -203,6 +203,27 @@ export function getCollectionKey(collectionName: string, tenantId: string = curr
   return `${activeTenant}_${collectionName}`;
 }
 
+export const KNOWN_TENANTS_REGISTRY: Array<{ id: string; shortEnvId: string; companyName?: string }> = [
+  { id: 'D10', shortEnvId: 'D10', companyName: 'Défibeo Solutions' },
+  { id: 'D12', shortEnvId: 'D22', companyName: 'CardiacSafe' },
+  { id: 'D13', shortEnvId: 'D31', companyName: 'Urgence Secours Équipements' },
+  { id: 'D14', shortEnvId: 'D30', companyName: 'ExtraLife' },
+  { id: 'D15', shortEnvId: 'D62', companyName: 'Serenicoeur' },
+  { id: 'D16', shortEnvId: 'D85', companyName: 'Un Défi Pour La Vie' },
+  { id: 'D17', shortEnvId: 'D56', companyName: 'DLFranceDefib' },
+  { id: 'D18', shortEnvId: 'D83', companyName: 'DSECURITE GROUPE' },
+  { id: 'D19', shortEnvId: 'D66', companyName: 'LION' },
+  { id: 'D20', shortEnvId: 'D74', companyName: 'Moraira' },
+  { id: 'D21', shortEnvId: 'D86', companyName: 'Denia' },
+  { id: 'D22', shortEnvId: 'D13', companyName: 'Xabia' },
+  { id: 'D23', shortEnvId: 'D73', companyName: 'Tolede' },
+  { id: 'D24', shortEnvId: 'D20', companyName: 'Hendaye' },
+  { id: 'D25', shortEnvId: 'D24', companyName: 'Test DSG' },
+  { id: 'D26', shortEnvId: 'D67', companyName: 'DSG Test' },
+  { id: 'D27', shortEnvId: 'D58', companyName: 'UN DÉFI POUR LA VIE' },
+  { id: 'D28', shortEnvId: 'D19', companyName: 'Le Cœur d\'un Sam' }
+];
+
 export function getCollectionKeyCandidates(collectionName: string, tenantId: string = currentTenantId): string[] {
   const colAliases = getCollectionNameAliases(collectionName);
   const activeTenant = (tenantId || 'demo').trim();
@@ -228,9 +249,19 @@ export function getCollectionKeyCandidates(collectionName: string, tenantId: str
     tenantPrefixes.add(`${numOnly}`);
   }
 
-  // Also check if this tenant has an alias in registered_tenants cache
+  // Also check if this tenant has an alias in registered_tenants cache or known registry
   try {
-    const regTenants = getFromLocalCache<Tenant[]>('registered_tenants');
+    let regTenants = getFromLocalCache<Tenant[]>('registered_tenants');
+    if (!Array.isArray(regTenants) || regTenants.length === 0) {
+      regTenants = KNOWN_TENANTS_REGISTRY as any[];
+    } else {
+      const existingIds = new Set(regTenants.map(t => t.id?.toLowerCase()));
+      for (const kt of KNOWN_TENANTS_REGISTRY) {
+        if (!existingIds.has(kt.id.toLowerCase())) {
+          regTenants.push(kt as any);
+        }
+      }
+    }
     if (Array.isArray(regTenants)) {
       const match = regTenants.find(t => 
         t.id?.toLowerCase() === activeTenant.toLowerCase() ||
@@ -503,7 +534,17 @@ export function getTenantAliases(targetTenantId: string): Set<string> {
     aliases.add(num);
   }
   try {
-    const regTenants = getFromLocalCache<Tenant[]>('registered_tenants');
+    let regTenants = getFromLocalCache<Tenant[]>('registered_tenants');
+    if (!Array.isArray(regTenants) || regTenants.length === 0) {
+      regTenants = KNOWN_TENANTS_REGISTRY as any[];
+    } else {
+      const existingIds = new Set(regTenants.map(t => t.id?.toLowerCase()));
+      for (const kt of KNOWN_TENANTS_REGISTRY) {
+        if (!existingIds.has(kt.id.toLowerCase())) {
+          regTenants.push(kt as any);
+        }
+      }
+    }
     if (Array.isArray(regTenants)) {
       const match = regTenants.find(t =>
         t.id?.toLowerCase() === clean ||
@@ -587,7 +628,7 @@ export async function fetchCollectionFromFirestore<T>(
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
 
   if (collectionName === 'defibrillateurs') {
-    let initialTotal = 18207;
+    let initialTotal = 0;
     for (const ck of candidateKeys) {
       const cachedVal = getFromLocalCache<any>(ck);
       if (Array.isArray(cachedVal) && cachedVal.length > 0) {
@@ -595,7 +636,11 @@ export async function fetchCollectionFromFirestore<T>(
         break;
       }
     }
-    onProgress?.(1, initialTotal, `Chargement 1/${initialTotal.toLocaleString('en-US')}, Veuillez patienter.`);
+    if (initialTotal > 0) {
+      onProgress?.(1, initialTotal, `Chargement 1/${initialTotal.toLocaleString('fr-FR')}, Veuillez patienter.`);
+    } else {
+      onProgress?.(0, 0, `Chargement des défibrillateurs, veuillez patienter...`);
+    }
   }
 
   // If completely offline in browser, immediately check cached versions (aggregate arrays)
@@ -813,7 +858,7 @@ export async function fetchCollectionFromFirestore<T>(
           if (totalChunks > 0 && meta.prefix) {
             const chunkResults: any[][] = new Array(totalChunks);
             let loadedCount = 0;
-            const totalEst = meta.totalCount || 17814;
+            const totalEst = meta.totalCount || 18219;
             const CONCURRENCY = 6;
 
             for (let i = 0; i < totalChunks; i += CONCURRENCY) {

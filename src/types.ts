@@ -458,6 +458,7 @@ export const formatPdfHeaderText = (text?: string): string => {
 
 export interface CompanyInfo {
   name: string;
+  nomCommercial?: string;
   logo: string;
   website: string;
   email: string;

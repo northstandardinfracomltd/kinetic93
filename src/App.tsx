@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { getRegionsForCountry } from './utils/regions';
-import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant } from './firebase';
+import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { idbSet, idbGet } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
@@ -396,13 +396,27 @@ export default function App() {
     setEmargements([]);
     setLogisticsNotifications([]);
     setMembers([]);
-    setCompanyInfo({
-      name: tenantToSet === 'demo' ? "Défibeo Solutions" : "Mon Cabinet",
+    const matchedKnownTenant = KNOWN_TENANTS_REGISTRY.find(
+      t => t.id.toLowerCase() === tenantToSet.toLowerCase() || t.shortEnvId.toLowerCase() === tenantToSet.toLowerCase()
+    );
+    let initialCompanyInfo: CompanyInfo = {
+      name: tenantToSet === 'demo' ? "Défibeo Solutions" : (matchedKnownTenant?.companyName || "Mon Cabinet"),
+      nomCommercial: tenantToSet === 'demo' ? "Défibeo Solutions" : (matchedKnownTenant?.companyName || "Mon Cabinet"),
       logo: "",
-      website: "",
-      email: "",
+      website: tenantToSet === 'demo' ? "29382302.defibeo.com" : "",
+      email: email || "",
       phone: ""
-    });
+    };
+    try {
+      const savedInfo = localStorage.getItem(`defib_${tenantToSet}_company_info`);
+      if (savedInfo) {
+        const parsed = JSON.parse(savedInfo);
+        if (parsed && typeof parsed === 'object' && parsed.name) {
+          initialCompanyInfo = { ...initialCompanyInfo, ...parsed };
+        }
+      }
+    } catch (_) {}
+    setCompanyInfo(initialCompanyInfo);
     loadedDataRef.current = {};
     setIsFirebaseLoaded(false);
     setLoadedTenantIdState('');
@@ -1842,22 +1856,23 @@ export default function App() {
   const handleManualRefreshDefibs = async () => {
     setIsRefreshingDefibs(true);
     setIsDefibLoading(true);
+    const initialCount = defibrillateurs.length || 0;
     setDefibLoadingProgress({
       current: 0,
-      total: 17814,
+      total: initialCount,
       percent: 5,
       message: 'Actualisation des données en direct depuis le serveur...'
     });
     try {
       const activeTenant = tenantId || 'demo';
       const onProgress = (loaded: number, total: number, msg?: string) => {
-        const effTotal = total || 17814;
-        const p = Math.min(100, Math.max(1, Math.round((loaded / effTotal) * 100)));
+        const effTotal = total && total > 0 ? total : (loaded > 0 ? loaded : initialCount);
+        const p = effTotal > 0 ? Math.min(100, Math.max(1, Math.round((loaded / effTotal) * 100))) : 50;
         setDefibLoadingProgress({
           current: loaded,
           total: effTotal,
           percent: p,
-          message: msg || `Chargement ${loaded.toLocaleString('en-US')}/${effTotal.toLocaleString('en-US')}, Veuillez patienter.`
+          message: msg || (effTotal > 0 ? `Chargement ${loaded.toLocaleString('fr-FR')}/${effTotal.toLocaleString('fr-FR')}, Veuillez patienter.` : `Chargement en cours, veuillez patienter...`)
         });
       };
 
@@ -1889,7 +1904,7 @@ export default function App() {
                 })(c));
               }
               await Promise.all(batchPromises);
-              onProgress(loadedCount, meta.totalCount || 17814);
+              onProgress(loadedCount, meta.totalCount || loadedCount);
             }
             const combined = chunkResults.filter(Boolean).flat();
             if (combined.length > 0) {
@@ -5492,8 +5507,12 @@ export default function App() {
         let baseDefibrillateurs = filteredOfflineDefibs.length > 0 ? filteredOfflineDefibs : (activeRunTenantId === 'demo' ? tenantInitialDefibs : []);
         setDefibrillateurs(baseDefibrillateurs);
 
+        const matchedInitTenant = KNOWN_TENANTS_REGISTRY.find(
+          t => t.id.toLowerCase() === activeRunTenantId.toLowerCase() || t.shortEnvId.toLowerCase() === activeRunTenantId.toLowerCase()
+        );
         const defaultInfo = {
-          name: activeRunTenantId === 'demo' ? "Défibeo Solutions" : "Mon Cabinet",
+          name: activeRunTenantId === 'demo' ? "Défibeo Solutions" : (matchedInitTenant?.companyName || "Mon Cabinet"),
+          nomCommercial: activeRunTenantId === 'demo' ? "Défibeo Solutions" : (matchedInitTenant?.companyName || "Mon Cabinet"),
           logo: activeRunTenantId === 'demo' ? "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=80&auto=format&fit=crop" : "",
           website: activeRunTenantId === 'demo' ? "29382302.defibeo.com" : "",
           email: activeRunTenantId === 'demo' ? "contact@defibeo-solutions.com" : "",
@@ -5982,32 +6001,40 @@ export default function App() {
               localData = JSON.parse(localRaw) as CompanyInfo;
             } catch (e) {}
           }
+          const validRemote = (firestoreData && typeof firestoreData === 'object' && !Array.isArray(firestoreData))
+            ? (firestoreData as Partial<CompanyInfo>)
+            : {};
           // Firestore is the supreme source of truth for cross-device consistency
           const merged: CompanyInfo = {
+            name: validRemote.name || localData.name || (tenantId === 'demo' ? "Défibeo Solutions" : "Mon Cabinet"),
+            logo: validRemote.logo !== undefined ? validRemote.logo : (localData.logo || ""),
+            website: validRemote.website !== undefined ? validRemote.website : (localData.website || ""),
+            email: validRemote.email !== undefined ? validRemote.email : (localData.email || ""),
+            phone: validRemote.phone !== undefined ? validRemote.phone : (localData.phone || ""),
             ...localData,
-            ...firestoreData,
-            hiddenTabs: firestoreData.hiddenTabs !== undefined ? firestoreData.hiddenTabs : (localData.hiddenTabs || []),
-            customLocationNames: firestoreData.customLocationNames !== undefined ? firestoreData.customLocationNames : (localData.customLocationNames || {}),
-            enableAutoEmails: firestoreData.enableAutoEmails !== undefined ? firestoreData.enableAutoEmails : (localData.enableAutoEmails || 'Oui'),
-            enableSatisfactionAvis: firestoreData.enableSatisfactionAvis !== undefined ? firestoreData.enableSatisfactionAvis : (localData.enableSatisfactionAvis || 'Oui'),
-            enableDevisFactures: firestoreData.enableDevisFactures !== undefined ? firestoreData.enableDevisFactures : (localData.enableDevisFactures || 'Oui'),
-            disableHelpsAndTutorials: firestoreData.disableHelpsAndTutorials !== undefined ? firestoreData.disableHelpsAndTutorials : (localData.disableHelpsAndTutorials || 'Non'),
-            communicationPortailClient: firestoreData.communicationPortailClient !== undefined ? firestoreData.communicationPortailClient : (localData.communicationPortailClient || ''),
-            pdfHeaderBgColor: firestoreData.pdfHeaderBgColor !== undefined ? firestoreData.pdfHeaderBgColor : localData.pdfHeaderBgColor,
-            pdfCardBorderColor: firestoreData.pdfCardBorderColor !== undefined ? firestoreData.pdfCardBorderColor : localData.pdfCardBorderColor,
-            pdfCardBgColor: firestoreData.pdfCardBgColor !== undefined ? firestoreData.pdfCardBgColor : localData.pdfCardBgColor,
-            pdfLabelTextColor: firestoreData.pdfLabelTextColor !== undefined ? firestoreData.pdfLabelTextColor : localData.pdfLabelTextColor,
-            pdfHeaderImg: firestoreData.pdfHeaderImg !== undefined ? firestoreData.pdfHeaderImg : localData.pdfHeaderImg,
-            pdfPageHeaderText: firestoreData.pdfPageHeaderText !== undefined ? firestoreData.pdfPageHeaderText : localData.pdfPageHeaderText,
-            pdfPageFooterText: firestoreData.pdfPageFooterText !== undefined ? firestoreData.pdfPageFooterText : localData.pdfPageFooterText,
-            pdfLastPageInfoText: firestoreData.pdfLastPageInfoText !== undefined ? firestoreData.pdfLastPageInfoText : localData.pdfLastPageInfoText,
-            pdfHideElectrodeSecoursA: firestoreData.pdfHideElectrodeSecoursA !== undefined ? firestoreData.pdfHideElectrodeSecoursA : (localData.pdfHideElectrodeSecoursA || 'Non'),
-            pdfHideElectrodeSecoursP: firestoreData.pdfHideElectrodeSecoursP !== undefined ? firestoreData.pdfHideElectrodeSecoursP : (localData.pdfHideElectrodeSecoursP || 'Non'),
-            pdfHideKitSecours: firestoreData.pdfHideKitSecours !== undefined ? firestoreData.pdfHideKitSecours : (localData.pdfHideKitSecours || 'Non'),
-            pdfSimplifyCoffret: firestoreData.pdfSimplifyCoffret !== undefined ? firestoreData.pdfSimplifyCoffret : (localData.pdfSimplifyCoffret || 'Non'),
-            pdfHideVerificationsTechniques: firestoreData.pdfHideVerificationsTechniques !== undefined ? firestoreData.pdfHideVerificationsTechniques : (localData.pdfHideVerificationsTechniques || 'Non'),
-            pdfHideHorodatagesDiagnostic: firestoreData.pdfHideHorodatagesDiagnostic !== undefined ? firestoreData.pdfHideHorodatagesDiagnostic : (localData.pdfHideHorodatagesDiagnostic || 'Non'),
-            pdfShowDemandeDevisDetails: firestoreData.pdfShowDemandeDevisDetails !== undefined ? firestoreData.pdfShowDemandeDevisDetails : (localData.pdfShowDemandeDevisDetails || 'Non'),
+            ...validRemote,
+            hiddenTabs: validRemote.hiddenTabs !== undefined ? validRemote.hiddenTabs : (localData.hiddenTabs || []),
+            customLocationNames: validRemote.customLocationNames !== undefined ? validRemote.customLocationNames : (localData.customLocationNames || {}),
+            enableAutoEmails: validRemote.enableAutoEmails !== undefined ? validRemote.enableAutoEmails : (localData.enableAutoEmails || 'Oui'),
+            enableSatisfactionAvis: validRemote.enableSatisfactionAvis !== undefined ? validRemote.enableSatisfactionAvis : (localData.enableSatisfactionAvis || 'Oui'),
+            enableDevisFactures: validRemote.enableDevisFactures !== undefined ? validRemote.enableDevisFactures : (localData.enableDevisFactures || 'Oui'),
+            disableHelpsAndTutorials: validRemote.disableHelpsAndTutorials !== undefined ? validRemote.disableHelpsAndTutorials : (localData.disableHelpsAndTutorials || 'Non'),
+            communicationPortailClient: validRemote.communicationPortailClient !== undefined ? validRemote.communicationPortailClient : (localData.communicationPortailClient || ''),
+            pdfHeaderBgColor: validRemote.pdfHeaderBgColor !== undefined ? validRemote.pdfHeaderBgColor : localData.pdfHeaderBgColor,
+            pdfCardBorderColor: validRemote.pdfCardBorderColor !== undefined ? validRemote.pdfCardBorderColor : localData.pdfCardBorderColor,
+            pdfCardBgColor: validRemote.pdfCardBgColor !== undefined ? validRemote.pdfCardBgColor : localData.pdfCardBgColor,
+            pdfLabelTextColor: validRemote.pdfLabelTextColor !== undefined ? validRemote.pdfLabelTextColor : localData.pdfLabelTextColor,
+            pdfHeaderImg: validRemote.pdfHeaderImg !== undefined ? validRemote.pdfHeaderImg : localData.pdfHeaderImg,
+            pdfPageHeaderText: validRemote.pdfPageHeaderText !== undefined ? validRemote.pdfPageHeaderText : localData.pdfPageHeaderText,
+            pdfPageFooterText: validRemote.pdfPageFooterText !== undefined ? validRemote.pdfPageFooterText : localData.pdfPageFooterText,
+            pdfLastPageInfoText: validRemote.pdfLastPageInfoText !== undefined ? validRemote.pdfLastPageInfoText : localData.pdfLastPageInfoText,
+            pdfHideElectrodeSecoursA: validRemote.pdfHideElectrodeSecoursA !== undefined ? validRemote.pdfHideElectrodeSecoursA : (localData.pdfHideElectrodeSecoursA || 'Non'),
+            pdfHideElectrodeSecoursP: validRemote.pdfHideElectrodeSecoursP !== undefined ? validRemote.pdfHideElectrodeSecoursP : (localData.pdfHideElectrodeSecoursP || 'Non'),
+            pdfHideKitSecours: validRemote.pdfHideKitSecours !== undefined ? validRemote.pdfHideKitSecours : (localData.pdfHideKitSecours || 'Non'),
+            pdfSimplifyCoffret: validRemote.pdfSimplifyCoffret !== undefined ? validRemote.pdfSimplifyCoffret : (localData.pdfSimplifyCoffret || 'Non'),
+            pdfHideVerificationsTechniques: validRemote.pdfHideVerificationsTechniques !== undefined ? validRemote.pdfHideVerificationsTechniques : (localData.pdfHideVerificationsTechniques || 'Non'),
+            pdfHideHorodatagesDiagnostic: validRemote.pdfHideHorodatagesDiagnostic !== undefined ? validRemote.pdfHideHorodatagesDiagnostic : (localData.pdfHideHorodatagesDiagnostic || 'Non'),
+            pdfShowDemandeDevisDetails: validRemote.pdfShowDemandeDevisDetails !== undefined ? validRemote.pdfShowDemandeDevisDetails : (localData.pdfShowDemandeDevisDetails || 'Non'),
           };
           if (merged.customLocationNames) {
             setLocationNames(merged.customLocationNames);
@@ -6343,6 +6370,9 @@ export default function App() {
 
   useEffect(() => {
     if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
+      if (tenantId !== 'demo' && (!companyInfo?.name || companyInfo.name === 'Mon Cabinet')) {
+        return;
+      }
       const str = JSON.stringify(companyInfo);
       if (loadedDataRef.current.companyInfo === str) return;
       saveCollectionToFirestore('companyInfo', companyInfo, tenantId);

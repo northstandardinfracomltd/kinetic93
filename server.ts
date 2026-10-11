@@ -2482,6 +2482,27 @@ function formatDefibrillateurOutput(d: any): any {
   };
 }
 
+const SERVER_KNOWN_TENANTS = [
+  { id: 'D10', shortEnvId: 'D10', companyName: 'Défibeo Solutions' },
+  { id: 'D12', shortEnvId: 'D22', companyName: 'CardiacSafe' },
+  { id: 'D13', shortEnvId: 'D31', companyName: 'Urgence Secours Équipements' },
+  { id: 'D14', shortEnvId: 'D30', companyName: 'ExtraLife' },
+  { id: 'D15', shortEnvId: 'D62', companyName: 'Serenicoeur' },
+  { id: 'D16', shortEnvId: 'D85', companyName: 'Un Défi Pour La Vie' },
+  { id: 'D17', shortEnvId: 'D56', companyName: 'DLFranceDefib' },
+  { id: 'D18', shortEnvId: 'D83', companyName: 'DSECURITE GROUPE' },
+  { id: 'D19', shortEnvId: 'D66', companyName: 'LION' },
+  { id: 'D20', shortEnvId: 'D74', companyName: 'Moraira' },
+  { id: 'D21', shortEnvId: 'D86', companyName: 'Denia' },
+  { id: 'D22', shortEnvId: 'D13', companyName: 'Xabia' },
+  { id: 'D23', shortEnvId: 'D73', companyName: 'Tolede' },
+  { id: 'D24', shortEnvId: 'D20', companyName: 'Hendaye' },
+  { id: 'D25', shortEnvId: 'D24', companyName: 'Test DSG' },
+  { id: 'D26', shortEnvId: 'D67', companyName: 'DSG Test' },
+  { id: 'D27', shortEnvId: 'D58', companyName: 'UN DÉFI POUR LA VIE' },
+  { id: 'D28', shortEnvId: 'D19', companyName: "Le Cœur d'un Sam" }
+];
+
 // Helper to synchronously resolve all valid tenant aliases (IDs, shortEnvIds, numeric suffixes)
 function getTenantAliasesSync(targetTenantId: string): Set<string> {
   const aliases = new Set<string>();
@@ -2503,6 +2524,26 @@ function getTenantAliasesSync(targetTenantId: string): Set<string> {
         regTenants = JSON.parse(fs.readFileSync(diskPath, 'utf-8'));
       }
     } catch (_) {}
+  }
+  if (!Array.isArray(regTenants) || regTenants.length === 0) {
+    try {
+      if (fs.existsSync(STORE_FILE)) {
+        const s = JSON.parse(fs.readFileSync(STORE_FILE, 'utf-8'));
+        if (Array.isArray(s.registered_tenants) && s.registered_tenants.length > 0) {
+          regTenants = s.registered_tenants;
+        }
+      }
+    } catch (_) {}
+  }
+  if (!Array.isArray(regTenants) || regTenants.length === 0) {
+    regTenants = [...SERVER_KNOWN_TENANTS];
+  } else {
+    const existingIds = new Set(regTenants.map((t: any) => String(t.id || '').toLowerCase()));
+    for (const kt of SERVER_KNOWN_TENANTS) {
+      if (!existingIds.has(kt.id.toLowerCase())) {
+        regTenants.push(kt);
+      }
+    }
   }
   if (Array.isArray(regTenants)) {
     const match = regTenants.find((t: any) => {
@@ -2698,41 +2739,73 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     });
   };
 
-  // 1. FAST PATH: Check in-memory store for this tenant's keys only
-  const candidateLookupKeys = [canonicalKey];
-  if (numOnly) {
-    candidateLookupKeys.push(`D${numOnly}_${colName}`, `d${numOnly}_${colName}`, `${numOnly}_${colName}`);
-  }
-  for (const alias of tenantAliases) {
-    candidateLookupKeys.push(`${alias}_${colName}`);
+  const isObjectCol = colName === 'companyInfo' || colName === 'company_info';
+
+  // 1. FAST PATH: Check in-memory store and disk files for this tenant across all collection name aliases
+  const colAliases = getCollectionNameAliases(colName);
+  const candidateLookupKeys: string[] = [];
+  for (const c of colAliases) {
+    if (isDemo) {
+      candidateLookupKeys.push(c, `demo_${c}`);
+    } else {
+      candidateLookupKeys.push(`${activeTenant}_${c}`);
+      candidateLookupKeys.push(`${activeTenant.toUpperCase()}_${c}`);
+      candidateLookupKeys.push(`${activeTenant.toLowerCase()}_${c}`);
+      if (numOnly) {
+        candidateLookupKeys.push(`D${numOnly}_${c}`, `d${numOnly}_${c}`, `${numOnly}_${c}`);
+      }
+      for (const alias of tenantAliases) {
+        candidateLookupKeys.push(`${alias}_${c}`);
+        candidateLookupKeys.push(`${alias.toUpperCase()}_${c}`);
+        candidateLookupKeys.push(`${alias.toLowerCase()}_${c}`);
+      }
+    }
   }
 
   for (const lk of Array.from(new Set(candidateLookupKeys))) {
     if (serverMemoryStore.has(lk)) {
       const memVal = serverMemoryStore.get(lk);
-      if (memVal !== undefined && memVal !== null && Array.isArray(memVal)) {
-        const sanitized = sanitizeForTenant(memVal);
-        if (sanitized.length > 0 || !isD27OrD58) {
-          return sanitized;
+      if (memVal !== undefined && memVal !== null) {
+        if (Array.isArray(memVal)) {
+          const sanitized = sanitizeForTenant(memVal);
+          if (isDefibCol && isD27OrD58 && sanitized.length < 1000) {
+            // Partial in-memory cache, proceed to authoritative disk files
+          } else if (sanitized.length > 0 || !isD27OrD58) {
+            return sanitized;
+          }
+        } else if (typeof memVal === 'object') {
+          return memVal;
         }
       }
     }
   }
 
-  // 1b. Dedicated collection file on disk (e.g. D27_clients.json)
-  const colFile = path.join(COLLECTIONS_DIR, `${canonicalKey}.json`);
-  if (fs.existsSync(colFile)) {
-    try {
-      const diskVal = JSON.parse(fs.readFileSync(colFile, 'utf-8'));
-      if (diskVal !== undefined && diskVal !== null && Array.isArray(diskVal)) {
-        const sanitized = sanitizeForTenant(diskVal);
-        serverMemoryStore.set(canonicalKey, sanitized);
-        serverStoreTimestamps.set(canonicalKey, Date.now());
-        if (sanitized.length > 0 || !isD27OrD58) {
-          return sanitized;
+  // 1b. Dedicated collection file on disk across all candidate keys
+  for (const lk of Array.from(new Set(candidateLookupKeys))) {
+    const colFile = path.join(COLLECTIONS_DIR, `${lk}.json`);
+    if (fs.existsSync(colFile)) {
+      try {
+        const diskVal = JSON.parse(fs.readFileSync(colFile, 'utf-8'));
+        if (diskVal !== undefined && diskVal !== null) {
+          if (Array.isArray(diskVal)) {
+            const sanitized = sanitizeForTenant(diskVal);
+            serverMemoryStore.set(lk, sanitized);
+            serverMemoryStore.set(canonicalKey, sanitized);
+            serverStoreTimestamps.set(canonicalKey, Date.now());
+            if (isDefibCol && isD27OrD58 && sanitized.length < 1000) {
+              // Partial, fall through to full chunks
+            } else if (sanitized.length > 0 || !isD27OrD58) {
+              return sanitized;
+            }
+          } else if (typeof diskVal === 'object') {
+            serverMemoryStore.set(lk, diskVal);
+            serverMemoryStore.set(canonicalKey, diskVal);
+            serverStoreTimestamps.set(canonicalKey, Date.now());
+            return diskVal;
+          }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
 
   // 1c. For defibrillateurs, check authoritative chunk files on disk ONLY for D27 / D58
@@ -2848,8 +2921,8 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   }
 
   const tier2Keys: string[] = [];
-  const colAliases = getCollectionNameAliases(colName).filter(c => c !== colName);
-  for (const c of colAliases) {
+  const otherColAliases = colAliases.filter(c => c !== colName);
+  for (const c of otherColAliases) {
     if (isDemo) {
       tier2Keys.push(c, `demo_${c}`);
     } else {
@@ -2889,7 +2962,46 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     }
   }
 
-  // 5. If not found in Firestore, store empty array and return []
+  // 5. If not found in Firestore:
+  if (isObjectCol) {
+    let regTenants: any[] = [];
+    if (serverMemoryStore.has('registered_tenants')) {
+      regTenants = serverMemoryStore.get('registered_tenants');
+    }
+    if (!Array.isArray(regTenants) || regTenants.length === 0) {
+      try {
+        const diskPath = path.join(COLLECTIONS_DIR, 'registered_tenants.json');
+        if (fs.existsSync(diskPath)) {
+          regTenants = JSON.parse(fs.readFileSync(diskPath, 'utf-8'));
+        }
+      } catch (_) {}
+    }
+    const tenantMatch = Array.isArray(regTenants)
+      ? regTenants.find((t: any) => t && (tenantAliases.has(String(t.id).toLowerCase()) || tenantAliases.has(String(t.shortEnvId).toLowerCase())))
+      : null;
+    const defaultInfo = {
+      name: tenantMatch?.companyName || (isDemo ? "Défibeo Solutions" : "Mon Cabinet"),
+      nomCommercial: tenantMatch?.companyName || (isDemo ? "Défibeo Solutions" : "Mon Cabinet"),
+      logo: tenantMatch?.logo || "",
+      website: tenantMatch?.website || (isDemo ? "29382302.defibeo.com" : ""),
+      email: tenantMatch?.companyEmail || tenantMatch?.adminEmail || "",
+      phone: tenantMatch?.companyPhone || "",
+      adminName: tenantMatch?.adminName || "",
+      nomLogiciel: tenantMatch?.nomLogiciel || "",
+      lang: tenantMatch?.lang || "Français, France",
+      enableAutoEmails: "Oui",
+      enableSatisfactionAvis: "Oui",
+      enableDevisFactures: "Oui",
+      disableHelpsAndTutorials: "Non",
+      enableOtherEquipments: "Non",
+      hiddenTabs: [],
+      customLocationNames: {}
+    };
+    serverMemoryStore.set(canonicalKey, defaultInfo);
+    persistSingleCollectionToDisk(canonicalKey, defaultInfo);
+    return defaultInfo as any;
+  }
+
   serverMemoryStore.set(canonicalKey, []);
   serverStoreTimestamps.set(canonicalKey, Date.now());
   return [];
@@ -2917,6 +3029,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
     }
   }
 
+  const validTenantAliases = getTenantAliasesSync(activeTenant);
   for (const alias of extraAliases) {
     if (alias && typeof alias === 'string' && alias.trim() && alias !== activeTenant) {
       const a = alias.trim();
@@ -2924,8 +3037,8 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
       const isANum = /^\d+$/.test(a);
       const aNum = isADNum || isANum ? a.replace(/^d/i, '') : '';
 
-      // Strict safety: Never cross-write to a different tenant environment (e.g. D27 writing to D58)
-      if (numOnly && aNum && numOnly !== aNum) {
+      // Strict safety: Only write to aliases that genuinely belong to this tenant
+      if (!validTenantAliases.has(a.toLowerCase()) && (!aNum || !validTenantAliases.has(aNum))) {
         continue;
       }
 
@@ -2942,6 +3055,7 @@ async function saveServerCollection(colName: string, tenantId: string, items: an
   for (const k of uniqueKeys) {
     serverMemoryStore.set(k, items);
     serverStoreTimestamps.set(k, Date.now());
+    persistSingleCollectionToDisk(k, items);
   }
   if (colName === 'defibrillateurs' && Array.isArray(items)) {
     for (const item of items) {
@@ -2971,23 +3085,40 @@ async function warmupDefibrillateursStore() {
     const d27ColFile = path.join(COLLECTIONS_DIR, 'D27_defibrillateurs.json');
     const genericColFile = path.join(COLLECTIONS_DIR, 'defibrillateurs.json');
     
-    // 3. If full collection file already exists on disk, index it
-    const existingFile = [d58ColFile, d27ColFile, genericColFile].find(f => fs.existsSync(f));
+    // 3. Pre-load D27/D58 defibrillateurs exclusively for D27 / D58
+    const existingFile = [d58ColFile, d27ColFile].find(f => fs.existsSync(f));
     if (existingFile) {
       try {
         const content = JSON.parse(fs.readFileSync(existingFile, 'utf-8'));
         if (Array.isArray(content) && content.length > 0) {
           serverMemoryStore.set('D58_defibrillateurs', content);
           serverMemoryStore.set('D27_defibrillateurs', content);
-          serverMemoryStore.set('defibrillateurs', content);
           serverStoreTimestamps.set('D58_defibrillateurs', Date.now());
           serverStoreTimestamps.set('D27_defibrillateurs', Date.now());
-          serverStoreTimestamps.set('defibrillateurs', Date.now());
           for (const item of content) {
-            indexDefibrillateur(item, 'D58');
+            indexDefibrillateur(item, 'D27');
           }
-          console.log(`[Warmup] Pre-indexed ${content.length} defibrillateurs from disk into fastDefibIndex.`);
-          return;
+          console.log(`[Warmup] Pre-indexed ${content.length} defibrillateurs for D27/D58 into fastDefibIndex.`);
+        }
+      } catch (_) {}
+    }
+
+    // 3b. Pre-load D26/D67 defibrillateurs exclusively for D26 / D67
+    const d26ColFile = path.join(COLLECTIONS_DIR, 'D26_defibrillateurs.json');
+    const d67ColFile = path.join(COLLECTIONS_DIR, 'D67_defibrillateurs.json');
+    const existingD26File = [d26ColFile, d67ColFile].find(f => fs.existsSync(f));
+    if (existingD26File) {
+      try {
+        const d26Content = JSON.parse(fs.readFileSync(existingD26File, 'utf-8'));
+        if (Array.isArray(d26Content) && d26Content.length > 0) {
+          serverMemoryStore.set('D26_defibrillateurs', d26Content);
+          serverMemoryStore.set('D67_defibrillateurs', d26Content);
+          serverStoreTimestamps.set('D26_defibrillateurs', Date.now());
+          serverStoreTimestamps.set('D67_defibrillateurs', Date.now());
+          for (const item of d26Content) {
+            indexDefibrillateur(item, 'D26');
+          }
+          console.log(`[Warmup] Pre-indexed ${d26Content.length} defibrillateurs for D26/D67 into fastDefibIndex.`);
         }
       } catch (_) {}
     }
@@ -3105,13 +3236,18 @@ async function warmupDefibrillateursStore() {
       if (!Array.isArray(defibs) || defibs.length === 0) {
         return res.status(400).json({ error: "defibs array requis." });
       }
-      const rawTenant = String(tenantId || 'D27').trim();
-      const prefix = 'D27_defibrillateurs';
-      const candidateKeys = [
-        rawTenant === 'demo' ? 'defibrillateurs' : `${rawTenant}_defibrillateurs`,
-        'D27_defibrillateurs',
-        'D58_defibrillateurs'
-      ];
+      const rawTenant = String(tenantId || 'demo').trim();
+      const tAliases = getTenantAliasesSync(rawTenant);
+      const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
+      const prefix = isD27OrD58 ? 'D27_defibrillateurs' : `${rawTenant.toUpperCase()}_defibrillateurs`;
+      const candidateKeys: string[] = [];
+      if (rawTenant === 'demo') {
+        candidateKeys.push('defibrillateurs', 'demo_defibrillateurs');
+      } else {
+        for (const a of tAliases) {
+          candidateKeys.push(`${a.toUpperCase()}_defibrillateurs`, `${a.toLowerCase()}_defibrillateurs`);
+        }
+      }
 
       const updatedIds: string[] = [];
       const touchedChunkIndices = new Set<number>();
@@ -3126,99 +3262,124 @@ async function warmupDefibrillateursStore() {
         const formatted = formatDefibrillateurOutput(defib);
         indexDefibrillateur(formatted, rawTenant);
 
-        const locKey = normalizeDefibLookupKey(targetId);
-        let tuple = defibLocationIndex.get(locKey);
-        if (!tuple) {
-          const idLower = targetId.toLowerCase();
-          for (const [k, tup] of defibLocationIndex.entries()) {
-            if (k === idLower || (idLower.length > 5 && k.includes(idLower))) {
-              tuple = tup;
-              break;
+        if (isD27OrD58) {
+          const locKey = normalizeDefibLookupKey(targetId);
+          let tuple = defibLocationIndex.get(locKey);
+          if (!tuple) {
+            const idLower = targetId.toLowerCase();
+            for (const [k, tup] of defibLocationIndex.entries()) {
+              if (k === idLower || (idLower.length > 5 && k.includes(idLower))) {
+                tuple = tup;
+                break;
+              }
             }
           }
-        }
 
-        let chunkIdx = tuple && typeof tuple[3] === 'number' ? tuple[3] : undefined;
+          let chunkIdx = tuple && typeof tuple[3] === 'number' ? tuple[3] : undefined;
 
-        if (typeof chunkIdx === 'number') {
-          // Existing defibrillator: update in its chunk
-          let chunkArr = loadChunkFileSync(chunkIdx, prefix) || [];
-          const exIdx = chunkArr.findIndex(d => d && (d.id === formatted.id || d.identifiant === formatted.identifiant || d.numeroSerie === formatted.numeroSerie));
-          if (exIdx >= 0) {
-            chunkArr[exIdx] = { ...chunkArr[exIdx], ...formatted };
+          if (typeof chunkIdx === 'number') {
+            // Existing defibrillator: update in its chunk
+            let chunkArr = loadChunkFileSync(chunkIdx, prefix) || [];
+            const exIdx = chunkArr.findIndex(d => d && (d.id === formatted.id || d.identifiant === formatted.identifiant || d.numeroSerie === formatted.numeroSerie));
+            if (exIdx >= 0) {
+              chunkArr[exIdx] = { ...chunkArr[exIdx], ...formatted };
+            } else {
+              chunkArr.push(formatted);
+            }
+            loadedChunkCache.set(chunkIdx, chunkArr);
+            touchedChunkIndices.add(chunkIdx);
           } else {
-            chunkArr.push(formatted);
-          }
-          loadedChunkCache.set(chunkIdx, chunkArr);
-          touchedChunkIndices.add(chunkIdx);
-        } else {
-          // New defibrillator: append to highest chunk or create new one if >= 250 items
-          let targetArr = loadChunkFileSync(highestIdx, prefix) || [];
-          if (targetArr.length >= 250) {
-            highestIdx++;
-            targetArr = [];
-          }
-          const exIdx = targetArr.findIndex((d: any) => d && (d.id === formatted.id || d.identifiant === formatted.identifiant || d.numeroSerie === formatted.numeroSerie));
-          if (exIdx >= 0) {
-            targetArr[exIdx] = { ...targetArr[exIdx], ...formatted };
-          } else {
-            targetArr.push(formatted);
-          }
-          chunkIdx = highestIdx;
-          loadedChunkCache.set(chunkIdx, targetArr);
-          touchedChunkIndices.add(chunkIdx);
+            // New defibrillator: append to highest chunk or create new one if >= 250 items
+            let targetArr = loadChunkFileSync(highestIdx, prefix) || [];
+            if (targetArr.length >= 250) {
+              highestIdx++;
+              targetArr = [];
+            }
+            const exIdx = targetArr.findIndex((d: any) => d && (d.id === formatted.id || d.identifiant === formatted.identifiant || d.numeroSerie === formatted.numeroSerie));
+            if (exIdx >= 0) {
+              targetArr[exIdx] = { ...targetArr[exIdx], ...formatted };
+            } else {
+              targetArr.push(formatted);
+            }
+            chunkIdx = highestIdx;
+            loadedChunkCache.set(chunkIdx, targetArr);
+            touchedChunkIndices.add(chunkIdx);
 
-          const tupleData: CompactDefibTuple = [formatted.id || '', formatted.identifiant || '', formatted.numeroSerie || '', chunkIdx, rawTenant];
-          if (formatted.identifiant) defibLocationIndex.set(normalizeDefibLookupKey(formatted.identifiant), tupleData);
-          if (formatted.id) defibLocationIndex.set(normalizeDefibLookupKey(formatted.id), tupleData);
-          if (formatted.numeroSerie) defibLocationIndex.set(normalizeDefibLookupKey(formatted.numeroSerie), tupleData);
+            const tupleData: CompactDefibTuple = [formatted.id || '', formatted.identifiant || '', formatted.numeroSerie || '', chunkIdx, rawTenant];
+            if (formatted.identifiant) defibLocationIndex.set(normalizeDefibLookupKey(formatted.identifiant), tupleData);
+            if (formatted.id) defibLocationIndex.set(normalizeDefibLookupKey(formatted.id), tupleData);
+            if (formatted.numeroSerie) defibLocationIndex.set(normalizeDefibLookupKey(formatted.numeroSerie), tupleData);
+          }
         }
 
         for (const ck of candidateKeys) {
-          if (serverMemoryStore.has(ck)) {
-            const arr = serverMemoryStore.get(ck);
-            if (Array.isArray(arr)) {
-              const idx = arr.findIndex(d => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
-              if (idx >= 0) {
-                arr[idx] = { ...arr[idx], ...formatted };
-              } else {
-                arr.push(formatted);
+          let arr = serverMemoryStore.get(ck);
+          if (!Array.isArray(arr)) {
+            const diskFile = path.join(COLLECTIONS_DIR, `${ck}.json`);
+            if (fs.existsSync(diskFile)) {
+              try {
+                arr = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
+              } catch (_) {
+                arr = [];
               }
+            } else {
+              arr = [];
             }
+          }
+          if (Array.isArray(arr)) {
+            const idx = arr.findIndex(d => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
+            if (idx >= 0) {
+              arr[idx] = { ...arr[idx], ...formatted };
+            } else {
+              arr.push(formatted);
+            }
+            serverMemoryStore.set(ck, arr);
           }
         }
         updatedIds.push(targetId);
       }
 
-      // Persist touched chunks to disk and Firestore
-      for (const cIdx of touchedChunkIndices) {
-        const chunkArr = loadedChunkCache.get(cIdx);
-        if (chunkArr && Array.isArray(chunkArr)) {
-          const candidateDirs = [CHUNKS_DIR, path.join(process.cwd(), 'data', 'chunks')];
-          for (const d of candidateDirs) {
+      // Persist touched chunks to disk and Firestore for chunked tenants
+      if (isD27OrD58) {
+        for (const cIdx of touchedChunkIndices) {
+          const chunkArr = loadedChunkCache.get(cIdx);
+          if (chunkArr && Array.isArray(chunkArr)) {
+            const candidateDirs = [CHUNKS_DIR, path.join(process.cwd(), 'data', 'chunks')];
+            for (const d of candidateDirs) {
+              try {
+                if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+                fs.writeFileSync(path.join(d, `${prefix}_chunk_${cIdx}.json`), JSON.stringify(chunkArr), 'utf-8');
+              } catch (_) {}
+            }
+            // Sync to Firestore
             try {
-              if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-              fs.writeFileSync(path.join(d, `${prefix}_chunk_${cIdx}.json`), JSON.stringify(chunkArr), 'utf-8');
+              const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${cIdx}`);
+              setDoc(chunkDocRef, { value: chunkArr }).catch(() => {});
             } catch (_) {}
           }
-          // Sync to Firestore
-          try {
-            const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${cIdx}`);
-            setDoc(chunkDocRef, { value: chunkArr }).catch(() => {});
-          } catch (_) {}
         }
+
+        // Update main doc metadata
+        try {
+          const totalChunks = highestIdx + 1;
+          const mainDocRef = doc(db, 'appData', prefix);
+          setDoc(mainDocRef, {
+            _chunked: true,
+            chunksCount: totalChunks,
+            updatedAt: new Date().toISOString()
+          }, { merge: true }).catch(() => {});
+        } catch (_) {}
       }
 
-      // Update main doc metadata
-      try {
-        const totalChunks = highestIdx + 1;
-        const mainDocRef = doc(db, 'appData', prefix);
-        setDoc(mainDocRef, {
-          _chunked: true,
-          chunksCount: totalChunks,
-          updatedAt: new Date().toISOString()
-        }, { merge: true }).catch(() => {});
-      } catch (_) {}
+      // Persist all updated collections to disk
+      for (const ck of candidateKeys) {
+        if (serverMemoryStore.has(ck)) {
+          const arr = serverMemoryStore.get(ck);
+          if (Array.isArray(arr)) {
+            persistSingleCollectionToDisk(ck, arr);
+          }
+        }
+      }
 
       persistServerStoreToDisk();
       return res.json({ status: "success", count: updatedIds.length, updatedIds, totalChunks: highestIdx + 1 });
@@ -3327,9 +3488,25 @@ async function warmupDefibrillateursStore() {
         }
       }
       const totalChunks = maxIdx >= 0 ? maxIdx + 1 : 0;
+      let totalCount = 0;
+      if (serverMemoryStore.has('D27_defibrillateurs')) {
+        const arr = serverMemoryStore.get('D27_defibrillateurs');
+        if (Array.isArray(arr) && arr.length > 0) totalCount = arr.length;
+      }
+      if (totalCount === 0) {
+        const dFile = path.join(COLLECTIONS_DIR, 'D27_defibrillateurs.json');
+        if (fs.existsSync(dFile)) {
+          try {
+            const arr = JSON.parse(fs.readFileSync(dFile, 'utf-8'));
+            if (Array.isArray(arr) && arr.length > 0) totalCount = arr.length;
+          } catch (_) {}
+        }
+      }
+      if (totalCount === 0) totalCount = 18219;
+
       return res.json({
         totalChunks,
-        totalCount: 17814,
+        totalCount,
         prefix,
         tenantId
       });
@@ -3432,10 +3609,7 @@ async function warmupDefibrillateursStore() {
 
         serverMemoryStore.set(collectionKey, finalValueToStore);
         serverStoreTimestamps.set(collectionKey, Date.now());
-        const isDefibLarge = (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices') && Array.isArray(finalValueToStore) && finalValueToStore.length > 250;
-        if (!isDefibLarge) {
-          persistSingleCollectionToDisk(collectionKey, finalValueToStore);
-        }
+        persistSingleCollectionToDisk(collectionKey, finalValueToStore);
 
         // Also sync collection aliases for this tenant only (e.g. distributed_stocks <-> distributedStocks)
         const colAliases = getCollectionNameAliases(collectionName);
@@ -3444,33 +3618,23 @@ async function warmupDefibrillateursStore() {
             const aliasKey = rawTenant === 'demo' ? alias : `${rawTenant}_${alias}`;
             serverMemoryStore.set(aliasKey, finalValueToStore);
             serverStoreTimestamps.set(aliasKey, Date.now());
-            if (!isDefibLarge) {
-              persistSingleCollectionToDisk(aliasKey, finalValueToStore);
-            }
+            persistSingleCollectionToDisk(aliasKey, finalValueToStore);
           }
         }
 
-        // Also map normalized key if D-prefixed or numeric
-        if (/^d\d+$/i.test(rawTenant) || /^\d+$/.test(rawTenant)) {
-          const numOnly = rawTenant.replace(/^d/i, '');
+        // Also map to all valid tenant aliases for this tenant
+        const allTenantAliases = getTenantAliasesSync(rawTenant);
+        for (const tAlias of allTenantAliases) {
           for (const cName of [collectionName, ...colAliases]) {
-            serverMemoryStore.set(`D${numOnly}_${cName}`, finalValueToStore);
-            serverStoreTimestamps.set(`D${numOnly}_${cName}`, Date.now());
-            if (!isDefibLarge) {
-              persistSingleCollectionToDisk(`D${numOnly}_${cName}`, finalValueToStore);
-            }
-
-            serverMemoryStore.set(`d${numOnly}_${cName}`, finalValueToStore);
-            serverStoreTimestamps.set(`d${numOnly}_${cName}`, Date.now());
-            serverMemoryStore.set(`${numOnly}_${cName}`, finalValueToStore);
-            serverStoreTimestamps.set(`${numOnly}_${cName}`, Date.now());
+            const aliasKey = tAlias === 'demo' ? cName : `${tAlias.toUpperCase()}_${cName}`;
+            serverMemoryStore.set(aliasKey, finalValueToStore);
+            serverStoreTimestamps.set(aliasKey, Date.now());
+            persistSingleCollectionToDisk(aliasKey, finalValueToStore);
           }
         }
 
         if (Array.isArray(value) && value.length > 20) {
-          if (!isDefibLarge) {
-            persistServerStoreToDiskNow();
-          }
+          persistServerStoreToDiskNow();
         } else {
           persistServerStoreToDisk();
         }
@@ -3556,22 +3720,37 @@ async function warmupDefibrillateursStore() {
         }
         syncChunkBuffers.delete(bufferKey);
 
-        // Store to memory and disk
+        // Store to memory and disk across all tenant aliases
         serverMemoryStore.set(collectionKey, completeItems);
         serverStoreTimestamps.set(collectionKey, Date.now());
         persistSingleCollectionToDisk(collectionKey, completeItems);
 
-        if (/^d\d+$/i.test(rawTenant) || /^\d+$/.test(rawTenant)) {
-          const numOnly = rawTenant.replace(/^d/i, '');
-          serverMemoryStore.set(`D${numOnly}_${collectionName}`, completeItems);
-          serverStoreTimestamps.set(`D${numOnly}_${collectionName}`, Date.now());
-          persistSingleCollectionToDisk(`D${numOnly}_${collectionName}`, completeItems);
-
-          serverMemoryStore.set(`d${numOnly}_${collectionName}`, completeItems);
-          serverStoreTimestamps.set(`d${numOnly}_${collectionName}`, Date.now());
-          serverMemoryStore.set(`${numOnly}_${collectionName}`, completeItems);
-          serverStoreTimestamps.set(`${numOnly}_${collectionName}`, Date.now());
+        const allTenantAliases = getTenantAliasesSync(rawTenant);
+        for (const tAlias of allTenantAliases) {
+          const aliasKey = tAlias === 'demo' ? collectionName : `${tAlias.toUpperCase()}_${collectionName}`;
+          serverMemoryStore.set(aliasKey, completeItems);
+          serverStoreTimestamps.set(aliasKey, Date.now());
+          persistSingleCollectionToDisk(aliasKey, completeItems);
         }
+
+        const isD27OrD58 = allTenantAliases.has('d27') || allTenantAliases.has('d58');
+        const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
+        if (isDefibCol && isD27OrD58) {
+          const CHUNK_SIZE = 250;
+          const totalFileChunks = Math.ceil(completeItems.length / CHUNK_SIZE);
+          for (let i = 0; i < totalFileChunks; i++) {
+            const chunkData = completeItems.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+            const chunkPath = path.join(CHUNKS_DIR, `D27_defibrillateurs_chunk_${i}.json`);
+            try {
+              fs.writeFileSync(chunkPath, JSON.stringify(chunkData), 'utf-8');
+              loadedChunkCache.set(i, chunkData);
+            } catch (_) {}
+          }
+          for (const item of completeItems) {
+            indexDefibrillateur(item, 'D27');
+          }
+        }
+
         persistServerStoreToDiskNow();
 
         console.log(`[Sync Chunk Relay] Successfully assembled all ${totalChunks} chunks for ${collectionKey} (${completeItems.length} items)`);
