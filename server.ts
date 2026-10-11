@@ -3684,7 +3684,9 @@ async function warmupDefibrillateursStore() {
       
       if (value !== undefined && value !== null) {
         let finalValueToStore = value;
-        if (Array.isArray(value)) {
+        const isMassive = Array.isArray(value) && value.length > 2000;
+
+        if (Array.isArray(value) && !isMassive) {
           finalValueToStore = value.map((item: any) => {
             if (item && typeof item === 'object') {
               return {
@@ -3708,7 +3710,9 @@ async function warmupDefibrillateursStore() {
             const aliasKey = rawTenant === 'demo' ? alias : `${rawTenant}_${alias}`;
             serverMemoryStore.set(aliasKey, finalValueToStore);
             serverStoreTimestamps.set(aliasKey, Date.now());
-            persistSingleCollectionToDisk(aliasKey, finalValueToStore);
+            if (!isMassive) {
+              persistSingleCollectionToDisk(aliasKey, finalValueToStore);
+            }
           }
         }
 
@@ -3719,58 +3723,34 @@ async function warmupDefibrillateursStore() {
             const aliasKey = tAlias === 'demo' ? cName : `${tAlias.toUpperCase()}_${cName}`;
             serverMemoryStore.set(aliasKey, finalValueToStore);
             serverStoreTimestamps.set(aliasKey, Date.now());
-            persistSingleCollectionToDisk(aliasKey, finalValueToStore);
+            if (!isMassive) {
+              persistSingleCollectionToDisk(aliasKey, finalValueToStore);
+            }
           }
         }
 
-        if (Array.isArray(value) && value.length > 20) {
+        if (Array.isArray(value) && value.length > 20 && !isMassive) {
           persistServerStoreToDiskNow();
-        } else {
+        } else if (!isMassive) {
           persistServerStoreToDisk();
         }
       }
 
-      // Also attempt asynchronous Firestore save
-      if (!isServerFirestoreQuotaExhausted()) {
+      // Also attempt asynchronous Firestore save only for normal collections (< 2000 items)
+      const tAliases = getTenantAliasesSync(rawTenant);
+      const isMassiveTenant = tAliases.has('d27') || tAliases.has('d58') || (Array.isArray(value) && value.length > 2000);
+
+      if (!isMassiveTenant && !isServerFirestoreQuotaExhausted()) {
         try {
-          const jsonStr = JSON.stringify(value);
-          if (Array.isArray(value) && jsonStr.length > 400000) {
-            const items = value;
-            const avgItemLen = Math.max(1, Math.ceil(jsonStr.length / items.length));
-            const chunkSize = Math.max(50, Math.floor(450000 / avgItemLen));
-            const chunksCount = Math.ceil(items.length / chunkSize);
-            (async () => {
-              try {
-                for (let i = 0; i < chunksCount; i++) {
-                  if (isServerFirestoreQuotaExhausted()) break;
-                  const chunkItems = items.slice(i * chunkSize, (i + 1) * chunkSize);
-                  const chunkRef = doc(db, 'appData', `${collectionKey}_chunk_${i}`);
-                  await safeServerSetDoc(chunkRef, { value: chunkItems });
-                }
-                if (!isServerFirestoreQuotaExhausted()) {
-                  const mainDocRef = doc(db, 'appData', collectionKey);
-                  await safeServerSetDoc(mainDocRef, {
-                    _chunked: true,
-                    chunksCount,
-                    totalItems: items.length,
-                    updatedAt: new Date().toISOString()
-                  });
-                }
-              } catch (err) {
-                console.warn(`Server chunked Firestore sync error for ${collectionKey}:`, err);
-              }
-            })();
-          } else {
-            const docRef = doc(db, 'appData', collectionKey);
-            safeServerSetDoc(docRef, { value, _chunked: false }).catch(() => {});
-          }
+          const docRef = doc(db, 'appData', collectionKey);
+          safeServerSetDoc(docRef, { value, _chunked: false }).catch(() => {});
         } catch (e) {}
       }
 
       return res.json({ status: "success", syncedKey: collectionKey, count: Array.isArray(value) ? value.length : 1 });
     } catch (err: any) {
-      console.error("Error in /api/sync-collection:", err);
-      return res.status(500).json({ error: err.message || "Erreur interne de synchronisation." });
+      console.warn('[sync-collection] Error:', err);
+      return res.status(500).json({ error: err.message || "Erreur de synchronisation." });
     }
   });
 

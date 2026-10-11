@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Client, Defibrillateur, StockRecord, PointageLog, Variable } from '../types';
-import { saveCollectionToFirestore, fetchCollectionFromFirestore, idbGet, isFirestoreQuotaExhausted } from '../firebase';
+import { saveCollectionToFirestore, fetchCollectionFromFirestore, idbGet, isFirestoreQuotaExhausted, mergeCollectionItems } from '../firebase';
 import { generateRandomShortCode, computeProchaineMaintenance } from '../utils';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
@@ -1030,16 +1030,24 @@ const validateAndParseDefibs = (
     }
 
     const cleanIdFromCsv = (identifiant || '').trim();
-    const assignedIdentifiant = cleanIdFromCsv ? cleanIdFromCsv : generateRandomShortCode(existingIds);
+    const cleanSerie = (serie || '').trim();
+    const existingMatch = cleanSerie 
+      ? (existingDefibs || []).find(d => d.numeroSerie && d.numeroSerie.trim().toUpperCase() === cleanSerie.toUpperCase())
+      : null;
+
+    const assignedIdentifiant = cleanIdFromCsv 
+      ? cleanIdFromCsv 
+      : (existingMatch?.identifiant || generateRandomShortCode(existingIds));
     existingIds.push(assignedIdentifiant);
 
     const nowIso = new Date().toISOString();
     const nowTime = Date.now();
+    const assignedId = existingMatch?.id || ('df_' + nowTime + '_' + idx + '_' + Math.floor(Math.random() * 1000));
 
     parsedItems.push({
-      id: 'df_' + nowTime + '_' + idx + '_' + Math.floor(Math.random() * 1000),
+      id: assignedId,
       identifiant: assignedIdentifiant,
-      createdAt: nowIso,
+      createdAt: existingMatch?.createdAt || nowIso,
       updatedAt: nowIso,
       dateDerniereModification: nowIso,
       numeroSerie: serie,
@@ -1694,12 +1702,13 @@ export default function ImportExportTab({
         if (formCategorie === 'Défibrillateurs.' && saveDefibs) {
           setImportSuccessMessage(`Enregistrement de ${importCount} défibrillateur(s) sur le serveur...`);
 
+          const effectiveTenantForSync = (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim();
+
           // 1. Sync newly imported defibs to server chunk storage & fast index
           try {
             const BATCH_SIZE = 150;
             for (let i = 0; i < parsedData.length; i += BATCH_SIZE) {
               const slice = parsedData.slice(i, i + BATCH_SIZE);
-              const effectiveTenantForSync = (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim();
               await fetch('/api/sync-batch-defibs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

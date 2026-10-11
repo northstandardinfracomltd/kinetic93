@@ -323,8 +323,14 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
       } else if (item.id) {
         key = `id_${String(item.id).trim()}`;
       }
-    } else if (item.id && String(item.id).trim()) {
-      key = `id_${String(item.id).trim()}`;
+    } else if (isDefib) {
+      if (item.numeroSerie && String(item.numeroSerie).trim()) {
+        key = `sn_${String(item.numeroSerie).trim().toUpperCase()}`;
+      } else if (item.identifiant && String(item.identifiant).trim()) {
+        key = `ident_${String(item.identifiant).trim().toUpperCase()}`;
+      } else if (item.id && String(item.id).trim()) {
+        key = `id_${String(item.id).trim()}`;
+      }
     } else if (isClient) {
       if (item.clientCode && String(item.clientCode).trim()) {
         key = `code_${String(item.clientCode).trim().toLowerCase()}`;
@@ -335,30 +341,34 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
         const site = (item.site || item.nomSite || item.adresse || '').trim().toLowerCase();
         if (nom) {
           key = `name_${nom}_${site}`;
+        } else if (item.id && String(item.id).trim()) {
+          key = `id_${String(item.id).trim()}`;
         }
-      }
-    } else if (isDefib) {
-      if (item.numeroSerie && String(item.numeroSerie).trim()) {
-        key = `sn_${String(item.numeroSerie).trim().toUpperCase()}`;
-      } else if (item.identifiant && String(item.identifiant).trim()) {
-        key = `id_${String(item.identifiant).trim().toUpperCase()}`;
       }
     } else if (isVariable) {
       if (item.type && item.valeur) {
         key = `var_${String(item.type).trim()}_${String(item.valeur).trim()}`;
+      } else if (item.id && String(item.id).trim()) {
+        key = `id_${String(item.id).trim()}`;
       }
     } else if (isMember) {
       if (item.email && String(item.email).trim()) {
         key = `m_email_${String(item.email).trim().toLowerCase()}`;
       } else if (item.name && String(item.name).trim()) {
         key = `m_name_${String(item.name).trim().toLowerCase()}`;
+      } else if (item.id && String(item.id).trim()) {
+        key = `id_${String(item.id).trim()}`;
       }
     } else if (collectionName === 'stocks' || collectionName === 'stock' || collectionName === 'stockItems') {
       if (item.ugs) {
         key = `ugs_${String(item.ugs).trim().toLowerCase()}`;
       } else if (item.denominationPieceId) {
         key = `dp_${String(item.denominationPieceId).trim()}`;
+      } else if (item.id && String(item.id).trim()) {
+        key = `id_${String(item.id).trim()}`;
       }
+    } else if (item.id && String(item.id).trim()) {
+      key = `id_${String(item.id).trim()}`;
     }
 
     if (!key) {
