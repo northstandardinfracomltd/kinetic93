@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Client, Defibrillateur, StockRecord, PointageLog, Variable } from '../types';
-import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
+import { saveCollectionToFirestore, fetchCollectionFromFirestore, idbGet, isFirestoreQuotaExhausted } from '../firebase';
 import { generateRandomShortCode, computeProchaineMaintenance } from '../utils';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
@@ -1029,12 +1029,19 @@ const validateAndParseDefibs = (
       continue;
     }
 
-    const assignedIdentifiant = generateRandomShortCode(existingIds);
+    const cleanIdFromCsv = (identifiant || '').trim();
+    const assignedIdentifiant = cleanIdFromCsv ? cleanIdFromCsv : generateRandomShortCode(existingIds);
     existingIds.push(assignedIdentifiant);
 
+    const nowIso = new Date().toISOString();
+    const nowTime = Date.now();
+
     parsedItems.push({
-      id: 'df_' + Date.now() + '_' + idx + '_' + Math.floor(Math.random() * 1000),
+      id: 'df_' + nowTime + '_' + idx + '_' + Math.floor(Math.random() * 1000),
       identifiant: assignedIdentifiant,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      dateDerniereModification: nowIso,
       numeroSerie: serie,
       modeleId: finalModeleId,
       numeroAtlasante: numeroAtlasante,
@@ -1706,20 +1713,32 @@ export default function ImportExportTab({
             console.warn('[Import] Warning during server batch defib sync:', syncErr);
           }
 
-          setImportSuccessMessage(`Enregistrement de ${importCount} défibrillateur(s) dans le Cloud...`);
-          const combined = [...defibrillateurs, ...parsedData];
+          setImportSuccessMessage(`Enregistrement de ${importCount} défibrillateur(s) dans la base de données...`);
+          
+          let currentList = defibrillateurs;
+          if (!currentList || currentList.length === 0) {
+            try {
+              const fromIdb = await idbGet<Defibrillateur[]>(`defib_${tenantId}_defibrillateurs`);
+              if (Array.isArray(fromIdb) && fromIdb.length > 0) {
+                currentList = fromIdb;
+              }
+            } catch (_) {}
+          }
+
+          // Prepend newly imported items so they appear immediately at the top of the table
+          const combined = [...parsedData, ...(currentList || [])];
           await saveDefibs(combined);
         } else if (formCategorie === 'Clients.' && saveClients) {
           setImportSuccessMessage(`Enregistrement de ${importCount} client(s)...`);
-          const combined = [...clients, ...parsedData];
+          const combined = [...parsedData, ...clients];
           await saveClients(combined);
         } else if (formCategorie === 'Stocks.' && saveStocks) {
           setImportSuccessMessage(`Enregistrement de ${importCount} stock(s)...`);
-          const combined = [...stocks, ...parsedData];
+          const combined = [...parsedData, ...stocks];
           await saveStocks(combined);
         } else if (formCategorie.startsWith('Variable — ') && saveVariables) {
           setImportSuccessMessage(`Enregistrement de ${importCount} variable(s)...`);
-          const combined = [...variables, ...parsedData];
+          const combined = [...parsedData, ...variables];
           await saveVariables(combined);
         }
 
@@ -1747,7 +1766,7 @@ export default function ImportExportTab({
         } catch (e) {
           console.warn("Could not save importExportRecords to localStorage:", e);
         }
-        if (isFirebaseLoaded) {
+        if (isFirebaseLoaded && !isFirestoreQuotaExhausted()) {
           try {
             await saveCollectionToFirestore('importExportRecords', updated, tenantId);
           } catch (recErr) {

@@ -3271,6 +3271,9 @@ async function warmupDefibrillateursStore() {
         for (const a of tAliases) {
           candidateKeys.push(`${a.toUpperCase()}_defibrillateurs`, `${a.toLowerCase()}_defibrillateurs`);
         }
+        if (isD27OrD58) {
+          candidateKeys.push('defibrillateurs');
+        }
       }
 
       const updatedIds: string[] = [];
@@ -3515,14 +3518,23 @@ async function warmupDefibrillateursStore() {
       let totalCount = 0;
       if (serverMemoryStore.has('D27_defibrillateurs')) {
         const arr = serverMemoryStore.get('D27_defibrillateurs');
-        if (Array.isArray(arr) && arr.length > 0) totalCount = arr.length;
+        if (Array.isArray(arr) && arr.length >= 1000) totalCount = arr.length;
       }
       if (totalCount === 0) {
         const dFile = path.join(COLLECTIONS_DIR, 'D27_defibrillateurs.json');
         if (fs.existsSync(dFile)) {
           try {
             const arr = JSON.parse(fs.readFileSync(dFile, 'utf-8'));
-            if (Array.isArray(arr) && arr.length > 0) totalCount = arr.length;
+            if (Array.isArray(arr) && arr.length >= 1000) totalCount = arr.length;
+          } catch (_) {}
+        }
+      }
+      if (totalCount === 0) {
+        const defFile = path.join(COLLECTIONS_DIR, 'defibrillateurs.json');
+        if (fs.existsSync(defFile)) {
+          try {
+            const arr = JSON.parse(fs.readFileSync(defFile, 'utf-8'));
+            if (Array.isArray(arr) && arr.length >= 1000) totalCount = arr.length;
           } catch (_) {}
         }
       }

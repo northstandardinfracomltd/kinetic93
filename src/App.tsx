@@ -7739,23 +7739,20 @@ export default function App() {
     loadedDataRef.current.defibrillateurs = getCollectionFingerprint(newDefibs);
     if (tenantId) {
       try {
-        if (newDefibs.length <= 1000) {
-          await saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId);
-        } else {
-          // For massive catalog (> 1000 items), persist to server store instantly without burning Firestore quota
-          fetch('/api/sync-collection', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              collectionName: 'defibrillateurs',
-              tenantId,
-              value: newDefibs
-            })
-          }).catch(() => {});
-          // If Firestore quota is available, replicate in background without blocking
-          if (!isFirestoreQuotaExhausted()) {
-            saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId).catch(() => {});
-          }
+        // Always persist to server store instantly without blocking
+        fetch('/api/sync-collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            collectionName: 'defibrillateurs',
+            tenantId,
+            value: newDefibs
+          })
+        }).catch(() => {});
+
+        // Replicate to Firestore in background without blocking if quota is available
+        if (!isFirestoreQuotaExhausted()) {
+          saveCollectionToFirestore('defibrillateurs', newDefibs, tenantId).catch(() => {});
         }
       } catch (err) {
         console.warn('[saveDefibs] Erreur lors de la sauvegarde Firestore:', err);

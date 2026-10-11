@@ -3,6 +3,7 @@ import { getAuth } from 'firebase/auth';
 import { initializeFirestore, doc, getDoc, setDoc, memoryLocalCache, getDocFromServer, getFirestore, getDocFromCache } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { idbSet, idbGet } from './idb';
+export { idbSet, idbGet };
 import {
   INITIAL_VARIABLES,
   INITIAL_CLIENTS,
@@ -1301,7 +1302,13 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
       }
       const docBatch = writeKeys.map(wk => {
         const docRef = doc(db, 'appData', wk);
-        return setDoc(docRef, { value: finalCleanValue, _chunked: false });
+        return setDoc(docRef, { value: finalCleanValue, _chunked: false }).catch((err: any) => {
+          const msg = String(err?.message || err || '').toLowerCase();
+          if (msg.includes('quota') || msg.includes('resource-exhausted') || err?.code === 'resource-exhausted') {
+            recordFirestoreQuotaExhaustion(6);
+          }
+          throw err;
+        });
       });
       await Promise.race([
         Promise.all(docBatch),
