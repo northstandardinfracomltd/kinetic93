@@ -87,6 +87,9 @@ export const auth = getAuth();
  * 2. If it fails or times out, falls back to application-level local cache.
  */
 async function getDocOptimistic(docRef: any, key?: string, timeoutMs: number = 5000): Promise<any> {
+  if (isFirestoreQuotaExhausted()) {
+    return { exists: () => false, data: () => null };
+  }
   try {
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Firestore fetch timed out')), timeoutMs)
@@ -103,7 +106,11 @@ async function getDocOptimistic(docRef: any, key?: string, timeoutMs: number = 5
       }
       return serverSnap;
     }
-  } catch (err) {
+  } catch (err: any) {
+    const msg = String(err?.message || err || '').toLowerCase();
+    if (msg.includes('quota') || msg.includes('resource-exhausted') || err?.code === 'resource-exhausted') {
+      recordFirestoreQuotaExhaustion(6);
+    }
     console.log(`[Firestore Cache-First] getDoc failed or timed out for ${docRef.id}, using fallback/cache:`, err);
   }
 
@@ -115,8 +122,17 @@ async function getDocOptimistic(docRef: any, key?: string, timeoutMs: number = 5
     }
   } catch (_) {}
 
-  // Last resort: basic getDoc without timeout race
-  return await getDoc(docRef).catch(() => ({ exists: () => false, data: () => null }));
+  // Last resort: basic getDoc without timeout race only if quota is not exhausted
+  if (isFirestoreQuotaExhausted()) {
+    return { exists: () => false, data: () => null };
+  }
+  return await getDoc(docRef).catch((e: any) => {
+    const msg = String(e?.message || e || '').toLowerCase();
+    if (msg.includes('quota') || msg.includes('resource-exhausted') || e?.code === 'resource-exhausted') {
+      recordFirestoreQuotaExhaustion(6);
+    }
+    return { exists: () => false, data: () => null };
+  });
 }
 
 export interface Tenant {
@@ -679,178 +695,192 @@ export async function fetchCollectionFromFirestore<T>(
   }
 
   // 1. Primary Strategy: Try direct Firestore query with smart key discovery & batched chunking
-  try {
-    // Prioritize candidates:
-    // 1. Exact canonical key: `${activeTenantId}_${collectionName}`
-    // 2. Exact D-variants: `D${num}_${collectionName}`
-    // 3. Registered tenant alias keys
-    const prioritizedKeys = Array.from(new Set([
-      `${activeTenantId}_${collectionName}`,
-      activeTenantId.toUpperCase().startsWith('D') ? `${activeTenantId.toUpperCase()}_${collectionName}` : `D${activeTenantId}_${collectionName}`,
-      activeTenantId.toLowerCase().startsWith('d') ? `${activeTenantId.toLowerCase()}_${collectionName}` : `d${activeTenantId}_${collectionName}`,
-      ...candidateKeys
-    ])).filter(Boolean);
+  if (!isFirestoreQuotaExhausted()) {
+    try {
+      // Prioritize candidates:
+      // 1. Exact canonical key: `${activeTenantId}_${collectionName}`
+      // 2. Exact D-variants: `D${num}_${collectionName}`
+      // 3. Registered tenant alias keys
+      const prioritizedKeys = Array.from(new Set([
+        `${activeTenantId}_${collectionName}`,
+        activeTenantId.toUpperCase().startsWith('D') ? `${activeTenantId.toUpperCase()}_${collectionName}` : `D${activeTenantId}_${collectionName}`,
+        activeTenantId.toLowerCase().startsWith('d') ? `${activeTenantId.toLowerCase()}_${collectionName}` : `d${activeTenantId}_${collectionName}`,
+        ...candidateKeys
+      ])).filter(Boolean);
 
-    // Helper: fetch all chunks of a chunked document using controlled batch concurrency (8 at a time)
-    const fetchAllChunksBatched = async (
-      key: string,
-      chunksCount: number,
-      totalItemsMeta?: number | null,
-      chunkPrefixOverride?: string
-    ): Promise<any[]> => {
-      const effectiveKey = chunkPrefixOverride || key;
-      const effectiveChunks = chunksCount || 1;
-      const chunkResults: any[][] = new Array(effectiveChunks);
-      let loadedCount = 0;
-      const concurrency = 8;
+      // Helper: fetch all chunks of a chunked document using controlled batch concurrency (8 at a time)
+      const fetchAllChunksBatched = async (
+        key: string,
+        chunksCount: number,
+        totalItemsMeta?: number | null,
+        chunkPrefixOverride?: string
+      ): Promise<any[]> => {
+        const effectiveKey = chunkPrefixOverride || key;
+        const effectiveChunks = chunksCount || 1;
+        const chunkResults: any[][] = new Array(effectiveChunks);
+        let loadedCount = 0;
+        const concurrency = 8;
 
-      for (let i = 0; i < effectiveChunks; i += concurrency) {
-        const batchPromises = [];
-        const batchEnd = Math.min(i + concurrency, effectiveChunks);
+        for (let i = 0; i < effectiveChunks; i += concurrency) {
+          const batchPromises = [];
+          const batchEnd = Math.min(i + concurrency, effectiveChunks);
 
-        for (let c = i; c < batchEnd; c++) {
-          batchPromises.push((async (idx) => {
-            const chunkRef = doc(db, 'appData', `${effectiveKey}_chunk_${idx}`);
-            let snap: any = null;
-            try {
-              snap = await Promise.race([
-                getDoc(chunkRef),
-                new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000))
-              ]);
-            } catch (_) {}
-
-            if (!snap || !snap.exists || !snap.exists()) {
+          for (let c = i; c < batchEnd; c++) {
+            batchPromises.push((async (idx) => {
+              const chunkRef = doc(db, 'appData', `${effectiveKey}_chunk_${idx}`);
+              let snap: any = null;
               try {
                 snap = await Promise.race([
                   getDoc(chunkRef),
                   new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000))
                 ]);
               } catch (_) {}
-            }
 
-            if (snap && snap.exists && snap.exists()) {
-              const snapData = snap.data();
-              if (Array.isArray(snapData?.value)) {
-                chunkResults[idx] = snapData.value;
-                loadedCount += snapData.value.length;
+              if (!snap || !snap.exists || !snap.exists()) {
+                try {
+                  snap = await Promise.race([
+                    getDoc(chunkRef),
+                    new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000))
+                  ]);
+                } catch (_) {}
               }
+
+              if (snap && snap.exists && snap.exists()) {
+                const snapData = snap.data();
+                if (Array.isArray(snapData?.value)) {
+                  chunkResults[idx] = snapData.value;
+                  loadedCount += snapData.value.length;
+                }
+              }
+            })(c));
+          }
+
+          await Promise.all(batchPromises);
+
+          const currentTotal = totalItemsMeta || Math.max(loadedCount, Math.round((loadedCount / batchEnd) * effectiveChunks));
+          const dispTotal = Math.max(loadedCount, currentTotal);
+          onProgress?.(
+            loadedCount,
+            dispTotal,
+            `Chargement ${loadedCount.toLocaleString('en-US')}/${dispTotal.toLocaleString('en-US')}, Veuillez patienter.`
+          );
+        }
+
+        const combined = chunkResults.filter(Boolean).flat();
+        if (combined.length > 0) {
+          onProgress?.(
+            combined.length,
+            combined.length,
+            `Chargement ${combined.length.toLocaleString('en-US')}/${combined.length.toLocaleString('en-US')}, Terminé.`
+          );
+        }
+        return combined;
+      };
+
+      // Fast inspection of top candidate keys (with 6-second timeout)
+      const keysToCheck = prioritizedKeys.slice(0, 6);
+      const metaSnaps = await Promise.all(keysToCheck.map(async (key) => {
+        try {
+          const docRef = doc(db, 'appData', key);
+          const snap = await Promise.race([
+            getDoc(docRef),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000))
+          ]);
+          if (snap && snap.exists && snap.exists()) {
+            const d = snap.data();
+            return {
+              key,
+              exists: true,
+              isChunked: Boolean(d._chunked && typeof d.chunksCount === 'number' && d.chunksCount > 0),
+              chunksCount: d.chunksCount || 0,
+              totalItems: typeof d.totalItems === 'number' ? d.totalItems : null,
+              chunkPrefix: d.chunkPrefix || d.chunkKeyPrefix || key,
+              value: d.value
+            };
+          }
+        } catch (err: any) {
+          const msg = String(err?.message || err || '').toLowerCase();
+          if (msg.includes('quota') || msg.includes('resource-exhausted') || err?.code === 'resource-exhausted') {
+            recordFirestoreQuotaExhaustion(6);
+          }
+        }
+        return { key, exists: false, isChunked: false, chunksCount: 0, totalItems: null, chunkPrefix: key, value: undefined };
+      }));
+
+      // 1. Check if any candidate has chunked data (e.g. D27 with 78 chunks / 18,207 items)
+      const chunkedCandidate = metaSnaps.find(m => m.exists && m.isChunked && m.chunksCount > 0);
+      if (chunkedCandidate) {
+        console.log(`[Firestore] Fetching chunked dataset at ${chunkedCandidate.key} (chunk prefix: ${chunkedCandidate.chunkPrefix}, ${chunkedCandidate.chunksCount} chunks)...`);
+        const combined = await fetchAllChunksBatched(
+          chunkedCandidate.key,
+          chunkedCandidate.chunksCount,
+          chunkedCandidate.totalItems,
+          chunkedCandidate.chunkPrefix
+        );
+        if (combined.length > 0) {
+          const merged = mergeCollectionItems(collectionName, combined);
+          const sanitizedVal = filterCollectionForTenant(merged as unknown as T, collectionName, activeTenantId);
+          
+          // Cache to IndexedDB without blocking UI
+          idbSet(chunkedCandidate.key, sanitizedVal).catch(() => {});
+          idbSet(`${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
+          idbSet(`defib_${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
+          saveToLocalCache(chunkedCandidate.key, sanitizedVal);
+          saveToLocalCache(`${activeTenantId}_${collectionName}`, sanitizedVal);
+          return sanitizedVal;
+        }
+      }
+
+      const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
+
+      // 2. Check if any candidate has a populated array
+      const populatedCandidate = metaSnaps.find(m => m.exists && Array.isArray(m.value) && m.value.length > 0);
+      if (populatedCandidate) {
+        let combinedVal = populatedCandidate.value;
+        if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
+          let localExisting: any[] = [];
+          for (const ck of candidateKeys) {
+            const cv = getFromLocalCache<any>(ck);
+            if (Array.isArray(cv) && cv.length > 0) {
+              localExisting = cv;
+              break;
             }
-          })(c));
+          }
+          if (localExisting.length > 0) {
+            combinedVal = mergeCollectionItems(collectionName, [...combinedVal, ...localExisting]);
+          }
         }
-
-        await Promise.all(batchPromises);
-
-        const currentTotal = totalItemsMeta || Math.max(loadedCount, Math.round((loadedCount / batchEnd) * effectiveChunks));
-        const dispTotal = Math.max(loadedCount, currentTotal);
-        onProgress?.(
-          loadedCount,
-          dispTotal,
-          `Chargement ${loadedCount.toLocaleString('en-US')}/${dispTotal.toLocaleString('en-US')}, Veuillez patienter.`
-        );
-      }
-
-      const combined = chunkResults.filter(Boolean).flat();
-      if (combined.length > 0) {
-        onProgress?.(
-          combined.length,
-          combined.length,
-          `Chargement ${combined.length.toLocaleString('en-US')}/${combined.length.toLocaleString('en-US')}, Terminé.`
-        );
-      }
-      return combined;
-    };
-
-    // Fast inspection of top candidate keys (with 6-second timeout)
-    const keysToCheck = prioritizedKeys.slice(0, 6);
-    const metaSnaps = await Promise.all(keysToCheck.map(async (key) => {
-      try {
-        const docRef = doc(db, 'appData', key);
-        const snap = await Promise.race([
-          getDoc(docRef),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000))
-        ]);
-        if (snap && snap.exists && snap.exists()) {
-          const d = snap.data();
-          return {
-            key,
-            exists: true,
-            isChunked: Boolean(d._chunked && typeof d.chunksCount === 'number' && d.chunksCount > 0),
-            chunksCount: d.chunksCount || 0,
-            totalItems: typeof d.totalItems === 'number' ? d.totalItems : null,
-            chunkPrefix: d.chunkPrefix || d.chunkKeyPrefix || key,
-            value: d.value
-          };
-        }
-      } catch (_) {}
-      return { key, exists: false, isChunked: false, chunksCount: 0, totalItems: null, chunkPrefix: key, value: undefined };
-    }));
-
-    // 1. Check if any candidate has chunked data (e.g. D27 with 78 chunks / 18,207 items)
-    const chunkedCandidate = metaSnaps.find(m => m.exists && m.isChunked && m.chunksCount > 0);
-    if (chunkedCandidate) {
-      console.log(`[Firestore] Fetching chunked dataset at ${chunkedCandidate.key} (chunk prefix: ${chunkedCandidate.chunkPrefix}, ${chunkedCandidate.chunksCount} chunks)...`);
-      const combined = await fetchAllChunksBatched(
-        chunkedCandidate.key,
-        chunkedCandidate.chunksCount,
-        chunkedCandidate.totalItems,
-        chunkedCandidate.chunkPrefix
-      );
-      if (combined.length > 0) {
-        const merged = mergeCollectionItems(collectionName, combined);
+        const merged = mergeCollectionItems(collectionName, combinedVal);
         const sanitizedVal = filterCollectionForTenant(merged as unknown as T, collectionName, activeTenantId);
-        
-        // Cache to IndexedDB without blocking UI
-        idbSet(chunkedCandidate.key, sanitizedVal).catch(() => {});
+        idbSet(populatedCandidate.key, sanitizedVal).catch(() => {});
         idbSet(`${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
-        saveToLocalCache(chunkedCandidate.key, sanitizedVal);
+        idbSet(`defib_${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
+        saveToLocalCache(populatedCandidate.key, sanitizedVal);
+        saveToLocalCache(`${activeTenantId}_${collectionName}`, sanitizedVal);
+        if (Array.isArray(sanitizedVal) && sanitizedVal.length > 0) {
+          onProgress?.(sanitizedVal.length, sanitizedVal.length, `Chargement ${sanitizedVal.length.toLocaleString('en-US')}/${sanitizedVal.length.toLocaleString('en-US')}, Terminé.`);
+        }
+        return sanitizedVal;
+      }
+
+      // 3. Check if any candidate has an object or primitive (excluding defib collection which is an array catalog)
+      const otherCandidate = metaSnaps.find(m => !isDefibCol && m.exists && m.value !== undefined && m.value !== null);
+      if (otherCandidate) {
+        const sanitizedVal = filterCollectionForTenant(otherCandidate.value as T, collectionName, activeTenantId);
+        idbSet(otherCandidate.key, sanitizedVal).catch(() => {});
+        idbSet(`${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
+        idbSet(`defib_${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
+        saveToLocalCache(otherCandidate.key, sanitizedVal);
         saveToLocalCache(`${activeTenantId}_${collectionName}`, sanitizedVal);
         return sanitizedVal;
       }
-    }
-
-    const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
-
-    // 2. Check if any candidate has a populated array
-    const populatedCandidate = metaSnaps.find(m => m.exists && Array.isArray(m.value) && m.value.length > 0);
-    if (populatedCandidate) {
-      let combinedVal = populatedCandidate.value;
-      if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
-        let localExisting: any[] = [];
-        for (const ck of candidateKeys) {
-          const cv = getFromLocalCache<any>(ck);
-          if (Array.isArray(cv) && cv.length > 0) {
-            localExisting = cv;
-            break;
-          }
-        }
-        if (localExisting.length > 0) {
-          combinedVal = mergeCollectionItems(collectionName, [...combinedVal, ...localExisting]);
-        }
+    } catch (error: any) {
+      const msg = String(error?.message || error || '').toLowerCase();
+      if (msg.includes('quota') || msg.includes('resource-exhausted') || error?.code === 'resource-exhausted') {
+        recordFirestoreQuotaExhaustion(6);
       }
-      const merged = mergeCollectionItems(collectionName, combinedVal);
-      const sanitizedVal = filterCollectionForTenant(merged as unknown as T, collectionName, activeTenantId);
-      idbSet(populatedCandidate.key, sanitizedVal).catch(() => {});
-      idbSet(`${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
-      saveToLocalCache(populatedCandidate.key, sanitizedVal);
-      saveToLocalCache(`${activeTenantId}_${collectionName}`, sanitizedVal);
-      if (Array.isArray(sanitizedVal) && sanitizedVal.length > 0) {
-        onProgress?.(sanitizedVal.length, sanitizedVal.length, `Chargement ${sanitizedVal.length.toLocaleString('en-US')}/${sanitizedVal.length.toLocaleString('en-US')}, Terminé.`);
-      }
-      return sanitizedVal;
+      console.log(`[Firestore Server-First] Direct Firestore fetch had issue:`, error);
     }
-
-    // 3. Check if any candidate has an object or primitive (excluding defib collection which is an array catalog)
-    const otherCandidate = metaSnaps.find(m => !isDefibCol && m.exists && m.value !== undefined && m.value !== null);
-    if (otherCandidate) {
-      const sanitizedVal = filterCollectionForTenant(otherCandidate.value as T, collectionName, activeTenantId);
-      idbSet(otherCandidate.key, sanitizedVal).catch(() => {});
-      idbSet(`${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
-      saveToLocalCache(otherCandidate.key, sanitizedVal);
-      saveToLocalCache(`${activeTenantId}_${collectionName}`, sanitizedVal);
-      return sanitizedVal;
-    }
-  } catch (error) {
-    console.log(`[Firestore Server-First] Direct Firestore fetch had issue:`, error);
   }
 
   // 2. Secondary Strategy: High-availability backend server relay (/api/sync-collection)
@@ -932,7 +962,10 @@ export async function fetchCollectionFromFirestore<T>(
             onProgress?.(val.length, val.length, `Chargement ${val.length.toLocaleString('en-US')}/${val.length.toLocaleString('en-US')}, Terminé.`);
             idbSet(primaryKey, val).catch(() => {});
             idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
+            idbSet(`defib_${activeTenantId}_${collectionName}`, val).catch(() => {});
             saveToLocalCache(primaryKey, val);
+            saveToLocalCache(`${activeTenantId}_${collectionName}`, val);
+            saveToLocalCache(`defib_${activeTenantId}_${collectionName}`, val);
             return val;
           } else if (Array.isArray(val) && val.length === 0) {
             // CRITICAL PROTECTION: The server returned an empty array.
@@ -999,12 +1032,14 @@ export async function fetchCollectionFromFirestore<T>(
             // Both remote and local are genuinely empty
             idbSet(primaryKey, val).catch(() => {});
             idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
+            idbSet(`defib_${activeTenantId}_${collectionName}`, val).catch(() => {});
             saveToLocalCache(primaryKey, val);
             return val;
           } else {
             // Non-array object/primitive
             idbSet(primaryKey, val).catch(() => {});
             idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
+            idbSet(`defib_${activeTenantId}_${collectionName}`, val).catch(() => {});
             saveToLocalCache(primaryKey, val);
             return val;
           }
@@ -1016,34 +1051,49 @@ export async function fetchCollectionFromFirestore<T>(
   }
 
   // 3. Tertiary Strategy: Local storage and IndexedDB cache
-  // Check primary canonical key first to avoid resurrecting deleted items from legacy aliases
-  const primaryKey = candidateKeys[0] || `${collectionName}_${activeTenantId}`;
-  const primaryVal = getFromLocalCache<any>(primaryKey);
-  if (primaryVal !== null && primaryVal !== undefined) {
-    return filterCollectionForTenant(primaryVal as T, collectionName, activeTenantId);
-  }
-  const primaryIdb = await idbGet<any>(primaryKey);
-  if (primaryIdb !== null && primaryIdb !== undefined) {
-    return filterCollectionForTenant(primaryIdb as T, collectionName, activeTenantId);
-  }
+  const candidateCacheKeys = [
+    candidateKeys[0] || `${collectionName}_${activeTenantId}`,
+    `${activeTenantId}_${collectionName}`,
+    `defib_${activeTenantId}_${collectionName}`,
+    `fs_cache_${activeTenantId}_${collectionName}`,
+    ...candidateKeys
+  ];
 
-  // Fallback to alias keys only if primary key has no data at all
-  for (const ck of candidateKeys) {
-    if (ck === primaryKey) continue;
+  let bestCandidateData: any = null;
+  let maxCandidateCount = -1;
+
+  for (const ck of Array.from(new Set(candidateCacheKeys))) {
     const localVal = getFromLocalCache<any>(ck);
     if (localVal !== null && localVal !== undefined) {
-      return filterCollectionForTenant(localVal as T, collectionName, activeTenantId);
+      if (Array.isArray(localVal)) {
+        if (localVal.length > maxCandidateCount) {
+          maxCandidateCount = localVal.length;
+          bestCandidateData = localVal;
+        }
+      } else if (!bestCandidateData) {
+        bestCandidateData = localVal;
+      }
     }
   }
 
-  for (const ck of candidateKeys) {
-    if (ck === primaryKey) continue;
+  for (const ck of Array.from(new Set(candidateCacheKeys))) {
     try {
       const idbVal = await idbGet<any>(ck);
       if (idbVal !== null && idbVal !== undefined) {
-        return filterCollectionForTenant(idbVal as T, collectionName, activeTenantId);
+        if (Array.isArray(idbVal)) {
+          if (idbVal.length > maxCandidateCount) {
+            maxCandidateCount = idbVal.length;
+            bestCandidateData = idbVal;
+          }
+        } else if (!bestCandidateData) {
+          bestCandidateData = idbVal;
+        }
       }
     } catch (_) {}
+  }
+
+  if (bestCandidateData !== null && bestCandidateData !== undefined) {
+    return filterCollectionForTenant(bestCandidateData as T, collectionName, activeTenantId);
   }
 
   return null;

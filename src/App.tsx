@@ -1711,41 +1711,47 @@ export default function App() {
 
     const pollTimer = setInterval(pollMessages, 30000);
 
-    // 3. Listener Firestore
+    // 3. Listener Firestore only if quota is not exhausted
     let unsubscribeFirestore: (() => void) | undefined;
-    try {
-      const colKey = getCollectionKey('tenantMessages', tenantId);
-      const docRef = doc(db, 'appData', colKey);
-      unsubscribeFirestore = onSnapshot(
-        docRef,
-        (snapshot) => {
-          if (snapshot.exists() && isMounted) {
-            const data = snapshot.data();
-            let remoteList: TenantMessage[] = [];
-            if (Array.isArray(data?.value)) {
-              remoteList = data.value;
-            } else if (Array.isArray(data)) {
-              remoteList = data;
+    if (!isFirestoreQuotaExhausted()) {
+      try {
+        const colKey = getCollectionKey('tenantMessages', tenantId);
+        const docRef = doc(db, 'appData', colKey);
+        unsubscribeFirestore = onSnapshot(
+          docRef,
+          (snapshot) => {
+            if (snapshot.exists() && isMounted) {
+              const data = snapshot.data();
+              let remoteList: TenantMessage[] = [];
+              if (Array.isArray(data?.value)) {
+                remoteList = data.value;
+              } else if (Array.isArray(data)) {
+                remoteList = data;
+              }
+              if (remoteList) {
+                setTenantMessages((prev) => {
+                  if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
+                    try {
+                      localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
+                    } catch (_) {}
+                    return remoteList;
+                  }
+                  return prev;
+                });
+              }
             }
-            if (remoteList) {
-              setTenantMessages((prev) => {
-                if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
-                  try {
-                    localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
-                  } catch (_) {}
-                  return remoteList;
-                }
-                return prev;
-              });
+          },
+          (error) => {
+            const msg = String(error?.message || error || '').toLowerCase();
+            if (msg.includes('quota') || msg.includes('resource-exhausted') || (error as any)?.code === 'resource-exhausted') {
+              recordFirestoreQuotaExhaustion(6);
             }
+            console.warn('Real-time listener on tenantMessages in App:', error);
           }
-        },
-        (error) => {
-          console.warn('Real-time listener on tenantMessages in App:', error);
-        }
-      );
-    } catch (e) {
-      console.warn('Error setting up onSnapshot for tenantMessages:', e);
+        );
+      } catch (e) {
+        console.warn('Error setting up onSnapshot for tenantMessages:', e);
+      }
     }
 
     return () => {
@@ -5708,13 +5714,15 @@ export default function App() {
           }
 
           if (Array.isArray(idbDefibs) && idbDefibs.length > 0) {
-            baseDefibrillateurs = idbDefibs;
-            setDefibrillateurs(idbDefibs);
+            const recents = getRecentlyImportedDefibs(activeRunTenantId);
+            const withRecents = recents.length > 0 ? mergeCollectionItems('defibrillateurs', [...recents, ...idbDefibs]) : idbDefibs;
+            baseDefibrillateurs = withRecents;
+            setDefibrillateurs(withRecents);
             setDefibLoadingProgress({
-              current: idbDefibs.length,
-              total: idbDefibs.length,
+              current: withRecents.length,
+              total: withRecents.length,
               percent: 100,
-              message: `Chargement ${idbDefibs.length.toLocaleString('en-US')}/${idbDefibs.length.toLocaleString('en-US')}, Terminé.`
+              message: `Chargement ${withRecents.length.toLocaleString('en-US')}/${withRecents.length.toLocaleString('en-US')}, Terminé.`
             });
             setIsDefibLoading(false);
           } else if (isD27OrD58) {
@@ -5735,16 +5743,31 @@ export default function App() {
                       const batchEnd = Math.min(i + CONCURRENCY, totalChunks);
                       for (let c = i; c < batchEnd; c++) {
                         batchPromises.push((async (cIdx) => {
-                          try {
-                            const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix)}&tenantId=${encodeURIComponent(activeRunTenantId)}`);
-                            if (chunkRes.ok) {
-                              const arr = await chunkRes.json();
-                              if (Array.isArray(arr)) {
-                                chunkResults[cIdx] = arr;
-                                loadedCount += arr.length;
+                          for (let attempt = 0; attempt < 3; attempt++) {
+                            try {
+                              const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix)}&tenantId=${encodeURIComponent(activeRunTenantId)}`);
+                              if (chunkRes.ok) {
+                                const arr = await chunkRes.json();
+                                if (Array.isArray(arr)) {
+                                  chunkResults[cIdx] = arr;
+                                  loadedCount += arr.length;
+                                  break;
+                                }
+                              } else {
+                                const fbRes = await fetch(`/api/sync-collection?collectionName=defibrillateurs&chunkIndex=${cIdx}&tenantId=${encodeURIComponent(activeRunTenantId)}`);
+                                if (fbRes.ok) {
+                                  const fArr = await fbRes.json();
+                                  const resArr = Array.isArray(fArr?.value) ? fArr.value : Array.isArray(fArr) ? fArr : null;
+                                  if (resArr) {
+                                    chunkResults[cIdx] = resArr;
+                                    loadedCount += resArr.length;
+                                    break;
+                                  }
+                                }
                               }
-                            }
-                          } catch (_) {}
+                            } catch (_) {}
+                            if (attempt < 2) await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+                          }
                         })(c));
                       }
                       await Promise.all(batchPromises);
@@ -5770,16 +5793,62 @@ export default function App() {
               } catch (_) {}
             })();
           }
-          const rawIdbClients = await idbGet<Client[]>(`defib_${activeRunTenantId}_clients`);
-          if (Array.isArray(rawIdbClients) && rawIdbClients.length > 0) {
-            const filteredIdbClients = filterCollectionForTenant(rawIdbClients, 'clients', activeRunTenantId);
-            if (filteredIdbClients.length !== rawIdbClients.length) {
-              idbSet(`defib_${activeRunTenantId}_clients`, filteredIdbClients).catch(() => {});
+          const clientCandidateKeys = [
+            `defib_${activeRunTenantId}_clients`,
+            `${activeRunTenantId}_clients`,
+            `fs_cache_${activeRunTenantId}_clients`,
+            `defib_${activeRunTenantId.toLowerCase()}_clients`,
+            `${activeRunTenantId.toLowerCase()}_clients`,
+            `defib_${activeRunTenantId.toUpperCase()}_clients`,
+            `${activeRunTenantId.toUpperCase()}_clients`
+          ];
+          if (isD27OrD58) {
+            clientCandidateKeys.push(
+              'defib_D27_clients', 'D27_clients', 'fs_cache_D27_clients',
+              'defib_D58_clients', 'D58_clients', 'fs_cache_D58_clients'
+            );
+          }
+          let bestIdbClients: Client[] = [];
+          for (const ck of clientCandidateKeys) {
+            try {
+              const candidate = await idbGet<Client[]>(ck);
+              if (Array.isArray(candidate) && candidate.length > bestIdbClients.length) {
+                const sanitized = filterCollectionForTenant(candidate, 'clients', activeRunTenantId);
+                if (Array.isArray(sanitized) && sanitized.length > bestIdbClients.length) {
+                  bestIdbClients = sanitized;
+                }
+              }
+            } catch (_) {}
+          }
+          if (bestIdbClients.length > 0) {
+            sanitizedOffline = bestIdbClients;
+            setClients(bestIdbClients);
+            for (const ck of clientCandidateKeys) {
+              idbSet(ck, bestIdbClients).catch(() => {});
             }
-            if (filteredIdbClients.length > 0) {
-              sanitizedOffline = filteredIdbClients;
-              setClients(filteredIdbClients);
-            }
+          }
+
+          // Automatic background server preload of full clients catalog if count < 2000 for D27/D58
+          if (isD27OrD58 && bestIdbClients.length < 2000) {
+            (async () => {
+              try {
+                const srvRes = await fetch(`/api/sync-collection?collectionName=clients&tenantId=${encodeURIComponent(activeRunTenantId)}`);
+                if (srvRes.ok) {
+                  const srvData = await srvRes.json();
+                  const arr = Array.isArray(srvData?.value) ? srvData.value : (Array.isArray(srvData) ? srvData : null);
+                  if (arr && arr.length > bestIdbClients.length) {
+                    const sanitized = filterCollectionForTenant(arr, 'clients', activeRunTenantId);
+                    if (Array.isArray(sanitized) && sanitized.length > 0) {
+                      setClients(sanitized);
+                      for (const ck of clientCandidateKeys) {
+                        idbSet(ck, sanitized).catch(() => {});
+                      }
+                      loadedDataRef.current.clients = getCollectionFingerprint(sanitized);
+                    }
+                  }
+                }
+              } catch (_) {}
+            })();
           }
         } catch (_) {}
 
@@ -7725,6 +7794,14 @@ export default function App() {
     }
     try {
       await idbSet(`defib_${tenantId}_clients`, sanitized);
+      await idbSet(`${tenantId}_clients`, sanitized);
+      await idbSet(`fs_cache_${tenantId}_clients`, sanitized);
+      const tAliases = getTenantAliases(tenantId);
+      for (const a of tAliases) {
+        idbSet(`defib_${a}_clients`, sanitized).catch(() => {});
+        idbSet(`${a}_clients`, sanitized).catch(() => {});
+        idbSet(`fs_cache_${a}_clients`, sanitized).catch(() => {});
+      }
     } catch (_) {}
     loadedDataRef.current.clients = getCollectionFingerprint(sanitized);
     if (tenantId) {
@@ -7784,16 +7861,19 @@ export default function App() {
         const tAliases = getTenantAliases(tenantId);
         const isMassiveTenant = tAliases.has('d27') || tAliases.has('d58') || newDefibs.length > 5000;
 
-        // Always persist to server store instantly without blocking
-        fetch('/api/sync-collection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            collectionName: 'defibrillateurs',
-            tenantId,
-            value: newDefibs
-          })
-        }).catch(() => {});
+        // Only persist full collection array to /api/sync-collection for normal-sized tenant catalogs (<5,000 items)
+        // Massive chunked catalogs (18,000+ items) use dedicated /api/sync-batch-defibs to prevent 35MB HTTP payloads and 503 errors
+        if (!isMassiveTenant) {
+          fetch('/api/sync-collection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              collectionName: 'defibrillateurs',
+              tenantId,
+              value: newDefibs
+            })
+          }).catch(() => {});
+        }
 
         // Replicate to Firestore in background only for normal-sized tenant catalogs (<5,000 items)
         if (!isMassiveTenant && !isFirestoreQuotaExhausted()) {

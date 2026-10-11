@@ -3624,12 +3624,44 @@ async function warmupDefibrillateursStore() {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
           return res.json(cached);
         } else {
+          // Dynamic chunk extraction fallback: slice from the master collection
+          let allDefibs: any[] | null = serverMemoryStore.get(prefix) || serverMemoryStore.get('D27_defibrillateurs') || null;
+          if (!allDefibs || !Array.isArray(allDefibs)) {
+            const masterPaths = [
+              path.join(COLLECTIONS_DIR, `${prefix}.json`),
+              path.join(COLLECTIONS_DIR, 'D27_defibrillateurs.json'),
+              path.join(DATA_DIR, 'collections', 'D27_defibrillateurs.json'),
+              path.join(process.cwd(), 'data', 'collections', 'D27_defibrillateurs.json')
+            ];
+            for (const mp of masterPaths) {
+              if (fs.existsSync(mp)) {
+                try {
+                  allDefibs = JSON.parse(fs.readFileSync(mp, 'utf-8'));
+                  break;
+                } catch (_) {}
+              }
+            }
+          }
+          if (Array.isArray(allDefibs)) {
+            const CHUNK_SIZE = 250;
+            const sliceStart = chunkIdx * CHUNK_SIZE;
+            const sliceEnd = (chunkIdx + 1) * CHUNK_SIZE;
+            const chunkSlice = allDefibs.slice(sliceStart, sliceEnd);
+            loadedChunkCache.set(chunkIdx, chunkSlice);
+            try {
+              if (!fs.existsSync(CHUNKS_DIR)) fs.mkdirSync(CHUNKS_DIR, { recursive: true });
+              fs.writeFile(path.join(CHUNKS_DIR, `${prefix}_chunk_${chunkIdx}.json`), JSON.stringify(chunkSlice), () => {});
+            } catch (_) {}
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            return res.json(chunkSlice);
+          }
           return res.status(404).json({ error: "Fichier chunk non trouvé." });
         }
       }
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      return res.sendFile(filePath);
+      return res.sendFile(path.resolve(filePath));
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -3665,10 +3697,35 @@ async function warmupDefibrillateursStore() {
         }
       }
 
-      const items = await fetchServerCollection(collectionName, rawTenant);
-      return res.json({ value: items });
+      let items: any = null;
+      try {
+        items = await fetchServerCollection(collectionName, rawTenant);
+      } catch (fetchErr) {
+        console.warn(`[Sync Collection GET] Fallback to direct disk inspection for ${collectionName}:`, fetchErr);
+      }
+
+      // Robust disk fallback if items is empty or null
+      if (!items || (Array.isArray(items) && items.length === 0)) {
+        const tAliases = getTenantAliasesSync(rawTenant);
+        const candidateKeys = [rawTenant, rawTenant.toUpperCase(), rawTenant.toLowerCase(), ...Array.from(tAliases)];
+        for (const cand of candidateKeys) {
+          const directFile = path.join(COLLECTIONS_DIR, `${cand}_${collectionName}.json`);
+          if (fs.existsSync(directFile)) {
+            try {
+              const fileContent = JSON.parse(fs.readFileSync(directFile, 'utf-8'));
+              if (fileContent !== undefined && fileContent !== null) {
+                items = fileContent;
+                break;
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      return res.json({ value: items || [] });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      console.warn('[Sync Collection GET] Unexpected error, returning empty fallback:', err);
+      return res.json({ value: [] });
     }
   });
 
@@ -3684,7 +3741,7 @@ async function warmupDefibrillateursStore() {
       
       if (value !== undefined && value !== null) {
         let finalValueToStore = value;
-        const isMassive = Array.isArray(value) && value.length > 2000;
+        const isMassive = Array.isArray(value) && value.length > 500;
 
         if (Array.isArray(value) && !isMassive) {
           finalValueToStore = value.map((item: any) => {
@@ -3701,30 +3758,32 @@ async function warmupDefibrillateursStore() {
 
         serverMemoryStore.set(collectionKey, finalValueToStore);
         serverStoreTimestamps.set(collectionKey, Date.now());
-        persistSingleCollectionToDisk(collectionKey, finalValueToStore);
+        
+        try {
+          persistSingleCollectionToDisk(collectionKey, finalValueToStore);
+        } catch (_) {}
 
-        // Also sync collection aliases for this tenant only (e.g. distributed_stocks <-> distributedStocks)
+        // Map collection aliases in memory and conditionally on disk
         const colAliases = getCollectionNameAliases(collectionName);
         for (const alias of colAliases) {
           if (alias !== collectionName) {
             const aliasKey = rawTenant === 'demo' ? alias : `${rawTenant}_${alias}`;
             serverMemoryStore.set(aliasKey, finalValueToStore);
             serverStoreTimestamps.set(aliasKey, Date.now());
-            if (!isMassive) {
-              persistSingleCollectionToDisk(aliasKey, finalValueToStore);
-            }
           }
         }
 
-        // Also map to all valid tenant aliases for this tenant
+        // Map to valid tenant aliases (e.g. D27 <-> D58)
         const allTenantAliases = getTenantAliasesSync(rawTenant);
         for (const tAlias of allTenantAliases) {
           for (const cName of [collectionName, ...colAliases]) {
             const aliasKey = tAlias === 'demo' ? cName : `${tAlias.toUpperCase()}_${cName}`;
             serverMemoryStore.set(aliasKey, finalValueToStore);
             serverStoreTimestamps.set(aliasKey, Date.now());
-            if (!isMassive) {
-              persistSingleCollectionToDisk(aliasKey, finalValueToStore);
+            if (tAlias.toLowerCase() === 'd27' || tAlias.toLowerCase() === 'd58') {
+              try {
+                persistSingleCollectionToDisk(aliasKey, finalValueToStore);
+              } catch (_) {}
             }
           }
         }
@@ -3736,7 +3795,7 @@ async function warmupDefibrillateursStore() {
         }
       }
 
-      // Also attempt asynchronous Firestore save only for normal collections (< 2000 items)
+      // Safe Firestore write attempt without throwing if quota exhausted
       const tAliases = getTenantAliasesSync(rawTenant);
       const isMassiveTenant = tAliases.has('d27') || tAliases.has('d58') || (Array.isArray(value) && value.length > 2000);
 
@@ -3750,7 +3809,7 @@ async function warmupDefibrillateursStore() {
       return res.json({ status: "success", syncedKey: collectionKey, count: Array.isArray(value) ? value.length : 1 });
     } catch (err: any) {
       console.warn('[sync-collection] Error:', err);
-      return res.status(500).json({ error: err.message || "Erreur de synchronisation." });
+      return res.json({ status: "warning", error: err.message || "Erreur non-bloquante de synchronisation." });
     }
   });
 

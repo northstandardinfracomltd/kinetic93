@@ -6,7 +6,7 @@ import MapModal from './MapModal';
 import HelpBubble from './HelpBubble';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
 import { runMonthlyVigilanceCampaign } from '../utils/emailService';
-import { checkIfDefibIdentifiantExistsAnywhere, fetchCollectionFromFirestore } from '../firebase';
+import { checkIfDefibIdentifiantExistsAnywhere, fetchCollectionFromFirestore, getTenantAliases } from '../firebase';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { DefibTablePreloader } from './DefibTablePreloader';
 import { SafeDateInput } from './SafeDateInput';
@@ -1780,7 +1780,50 @@ export default function DefibTab({
   }, [defibrillateurs]);
 
   // --- LOOKUP INDEXES ---
-  const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+  const clientMap = useMemo(() => {
+    const map = new Map<string, Client>();
+    for (const c of (clients || [])) {
+      if (!c) continue;
+      if (c.id) map.set(c.id, c);
+      if (c.clientIdField && c.clientIdField.trim()) {
+        map.set(c.clientIdField.trim(), c);
+        map.set(c.clientIdField.trim().toLowerCase(), c);
+      }
+      if (c.denomination && c.denomination.trim()) {
+        const denomKey = c.denomination.trim().toLowerCase();
+        if (!map.has(denomKey)) {
+          map.set(denomKey, c);
+        }
+      }
+      if ((c as any).nomSite && (c as any).nomSite.trim()) {
+        const siteKey = (c as any).nomSite.trim().toLowerCase();
+        if (!map.has(siteKey)) {
+          map.set(siteKey, c);
+        }
+      }
+    }
+    return map;
+  }, [clients]);
+
+  const getLinkedClientForDefib = (df: any): Client | undefined => {
+    if (!df) return undefined;
+    if (df.clientId && clientMap.has(df.clientId)) {
+      return clientMap.get(df.clientId);
+    }
+    if (df.clientIdField && clientMap.has(df.clientIdField)) {
+      return clientMap.get(df.clientIdField);
+    }
+    if (df.nomSite) {
+      const bySite = clientMap.get(String(df.nomSite).trim().toLowerCase());
+      if (bySite) return bySite;
+    }
+    if (df.clientNom) {
+      const byNom = clientMap.get(String(df.clientNom).trim().toLowerCase());
+      if (byNom) return byNom;
+    }
+    return undefined;
+  };
+
   const variableMap = useMemo(() => new Map(variables.map(v => [v.id, v])), [variables]);
 
   // Variables categorized lists for fast lookup selects
@@ -1798,7 +1841,7 @@ export default function DefibTab({
     if (selectedDefibs.length === 0) return true;
 
     return selectedDefibs.some(df => {
-      const cl = clientMap.get(df.clientId);
+      const cl = getLinkedClientForDefib(df);
       const lat = (df.latitude || '').trim();
       const lng = (df.longitude || '').trim();
       const tel = (df.telephoneSite || cl?.telephoneSite || cl?.phone || '').trim();
@@ -1816,7 +1859,7 @@ export default function DefibTab({
     }
     const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
     const hasMissingFields = selectedDefibs.some(df => {
-      const cl = clientMap.get(df.clientId);
+      const cl = getLinkedClientForDefib(df);
       const lat = (df.latitude || '').trim();
       const lng = (df.longitude || '').trim();
       const tel = (df.telephoneSite || cl?.telephoneSite || cl?.phone || '').trim();
@@ -1938,14 +1981,14 @@ export default function DefibTab({
 
       // 5. Contrat Match
       if (activeFilters.contrat !== 'Tous') {
-        const clientObj = clientMap.get(df.clientId);
+        const clientObj = getLinkedClientForDefib(df);
         const activeContrat = clientObj ? (clientObj.contrat || 'Non') : (df.contrat || 'Non');
         if (activeContrat !== activeFilters.contrat) return false;
       }
 
       // 6. Search query match
       if (searchLower) {
-        const clientName = clientMap.get(df.clientId)?.denomination || '';
+        const clientName = getLinkedClientForDefib(df)?.denomination || df.clientNom || df.nomSite || '';
         const modelName = variableMap.get(df.modeleId)?.nom || '';
         const isMatchSearch = (
           (df.identifiant || '').toLowerCase().includes(searchLower) ||
@@ -1976,7 +2019,7 @@ export default function DefibTab({
         .filter(t => t.length >= 3);
 
       if (advTerms.length > 0) {
-        const clientName = (clientMap.get(df.clientId)?.denomination || '').toLowerCase();
+        const clientName = (getLinkedClientForDefib(df)?.denomination || df.clientNom || df.nomSite || '').toLowerCase();
         const modelName = (variableMap.get(df.modeleId)?.nom || '').toLowerCase();
 
         const defibFields = {
@@ -2129,13 +2172,55 @@ export default function DefibTab({
     const isInitial = !hasSearch && !hasSortFilter && !hasDeptFilter && !hasActiveSidePaneFilter;
 
     if (isInitial) {
+      let recentMatches: any[] = [];
+      try {
+        const candidateRecentKeys = [
+          `defib_${activeTenantId}_recently_imported`,
+          `defib_${activeTenantId.toLowerCase()}_recently_imported`,
+          `defib_${activeTenantId.toUpperCase()}_recently_imported`
+        ];
+        const tAliases = getTenantAliases(activeTenantId);
+        for (const a of tAliases) {
+          candidateRecentKeys.push(`defib_${a}_recently_imported`, `defib_${a.toUpperCase()}_recently_imported`);
+        }
+        for (const rk of Array.from(new Set(candidateRecentKeys))) {
+          const rawRecent = localStorage.getItem(rk);
+          if (rawRecent) {
+            const recentArr = JSON.parse(rawRecent);
+            if (Array.isArray(recentArr) && recentArr.length > 0) {
+              const recentKeySet = new Set<string>();
+              for (const r of recentArr) {
+                if (r.id) recentKeySet.add(String(r.id).trim().toLowerCase());
+                if (r.identifiant) recentKeySet.add(String(r.identifiant).trim().toLowerCase());
+                if (r.numeroSerie) recentKeySet.add(String(r.numeroSerie).trim().toUpperCase());
+              }
+              const matches = result.filter(d => {
+                const idL = d.id ? String(d.id).trim().toLowerCase() : '';
+                const idfL = d.identifiant ? String(d.identifiant).trim().toLowerCase() : '';
+                const snU = d.numeroSerie ? String(d.numeroSerie).trim().toUpperCase() : '';
+                return (idL && recentKeySet.has(idL)) || (idfL && recentKeySet.has(idfL)) || (snU && recentKeySet.has(snU));
+              });
+              if (matches.length > 0) {
+                recentMatches = matches;
+                break;
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
       const totalLen = defibrillateurs.length;
       const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));
-      result = [...result].sort((a, b) => {
+      const sorted = [...result].sort((a, b) => {
         const timeA = getDefibActivityTimestamp(a, indexMap.get(a.id) ?? 0);
         const timeB = getDefibActivityTimestamp(b, indexMap.get(b.id) ?? 0);
         return timeB - timeA;
-      }).slice(0, 10);
+      });
+
+      const recentIdSet = new Set(recentMatches.map(m => m.id));
+      const rest = sorted.filter(d => !recentIdSet.has(d.id));
+      const targetCount = Math.max(10, recentMatches.length);
+      result = [...recentMatches, ...rest].slice(0, targetCount);
     } else if (sortFilter === 'recent') {
       const totalLen = defibrillateurs.length;
       const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));
@@ -2160,6 +2245,33 @@ export default function DefibTab({
         }
         return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
       });
+    }
+
+    // Prioritize recently imported defibrillators to the top in non-initial filtered views as well
+    if (!isInitial) {
+      try {
+        const rawRecent = localStorage.getItem(`defib_${activeTenantId}_recently_imported`);
+        if (rawRecent) {
+          const recentArr = JSON.parse(rawRecent);
+          if (Array.isArray(recentArr) && recentArr.length > 0) {
+            const recentKeySet = new Set<string>();
+            for (const r of recentArr) {
+              if (r.id) recentKeySet.add(String(r.id).trim().toLowerCase());
+              if (r.identifiant) recentKeySet.add(String(r.identifiant).trim().toLowerCase());
+              if (r.numeroSerie) recentKeySet.add(String(r.numeroSerie).trim().toUpperCase());
+            }
+            const isRecentMatch = (d: any) => {
+              const idL = d.id ? String(d.id).trim().toLowerCase() : '';
+              const idfL = d.identifiant ? String(d.identifiant).trim().toLowerCase() : '';
+              const snU = d.numeroSerie ? String(d.numeroSerie).trim().toUpperCase() : '';
+              return (idL && recentKeySet.has(idL)) || (idfL && recentKeySet.has(idfL)) || (snU && recentKeySet.has(snU));
+            };
+            const recInResult = result.filter(isRecentMatch);
+            const othInResult = result.filter(d => !isRecentMatch(d));
+            result = [...recInResult, ...othInResult];
+          }
+        }
+      } catch (_) {}
     }
 
     if (pinnedDefibIds.length > 0) {
@@ -2875,21 +2987,22 @@ export default function DefibTab({
     setNumeroAtlasante(df.numeroAtlasante || anyDf.numero_atlasante || '');
     setVersionLogiciel(df.versionLogiciel || anyDf.version_logiciel || '');
 
-    setClientId(df.clientId || anyDf.client_id || '');
-    const linkedClient = clients.find(c => c.id === (df.clientId || anyDf.client_id));
-    setClientSearchQuery(linkedClient ? `${linkedClient.denomination} (${linkedClient.siret || ''})` : '');
-    setNomSite(df.nomSite || anyDf.nom_site || (linkedClient as any)?.nomSite || linkedClient?.denomination || '');
+    const resolvedLinkedClient = getLinkedClientForDefib(df);
+    const effClientId = df.clientId || anyDf.client_id || resolvedLinkedClient?.id || '';
+    setClientId(effClientId);
+    setClientSearchQuery(resolvedLinkedClient ? `${resolvedLinkedClient.denomination} (${resolvedLinkedClient.siret || ''})` : (df.clientNom || df.nomSite || ''));
+    setNomSite(df.nomSite || anyDf.nom_site || (resolvedLinkedClient as any)?.nomSite || resolvedLinkedClient?.denomination || '');
     setCategorieEtablissement(df.categorieEtablissement || anyDf.categorie_etablissement || '');
-    setNomPrenomSite(df.nomPrenomSite || anyDf.nom_prenom || anyDf.contact || anyDf.nom_prenom_site || anyDf.contact_site || linkedClient?.nomPrenomSite || (linkedClient as any)?.responsable || (linkedClient as any)?.contact || '');
-    setTelephoneSite(df.telephoneSite || anyDf.telephone_portable || anyDf.telephone_site || anyDf.phone || anyDf.telephone || anyDf.tel || linkedClient?.telephoneSite || (linkedClient as any)?.telephone || (linkedClient as any)?.phone || '');
-    setEmailSite(df.emailSite || anyDf.email || anyDf.email_site || linkedClient?.emailSite || (linkedClient as any)?.email || '');
-    setContrat(df.contrat || anyDf.nomContrat || anyDf.nom_contrat || linkedClient?.contrat || 'Non');
-    setNomContrat(df.nomContrat || anyDf.nom_contrat || linkedClient?.nomContrat || '');
-    setReferenceContrat(df.referenceContrat || anyDf.reference_contrat || linkedClient?.referenceContrat || '');
-    setDebutContrat(toISODateOnly(df.debutContrat || anyDf.debut_contrat || linkedClient?.debutContrat || ''));
-    setFinContrat(toISODateOnly(df.finContrat || anyDf.fin_contrat || linkedClient?.finContrat || ''));
-    setPayeurId(df.payeurId || anyDf.payeur_id || linkedClient?.payeurId || '');
-    setClientIdField(df.clientIdField || anyDf.client_id_field || linkedClient?.clientIdField || '');
+    setNomPrenomSite(df.nomPrenomSite || anyDf.nom_prenom || anyDf.contact || anyDf.nom_prenom_site || anyDf.contact_site || resolvedLinkedClient?.nomPrenomSite || (resolvedLinkedClient as any)?.responsable || (resolvedLinkedClient as any)?.contact || '');
+    setTelephoneSite(df.telephoneSite || anyDf.telephone_portable || anyDf.telephone_site || anyDf.phone || anyDf.telephone || anyDf.tel || resolvedLinkedClient?.telephoneSite || (resolvedLinkedClient as any)?.telephone || (resolvedLinkedClient as any)?.phone || '');
+    setEmailSite(df.emailSite || anyDf.email || anyDf.email_site || resolvedLinkedClient?.emailSite || (resolvedLinkedClient as any)?.email || '');
+    setContrat(df.contrat || anyDf.nomContrat || anyDf.nom_contrat || resolvedLinkedClient?.contrat || 'Non');
+    setNomContrat(df.nomContrat || anyDf.nom_contrat || resolvedLinkedClient?.nomContrat || '');
+    setReferenceContrat(df.referenceContrat || anyDf.reference_contrat || resolvedLinkedClient?.referenceContrat || '');
+    setDebutContrat(toISODateOnly(df.debutContrat || anyDf.debut_contrat || resolvedLinkedClient?.debutContrat || ''));
+    setFinContrat(toISODateOnly(df.finContrat || anyDf.fin_contrat || resolvedLinkedClient?.finContrat || ''));
+    setPayeurId(df.payeurId || anyDf.payeur_id || resolvedLinkedClient?.payeurId || '');
+    setClientIdField(df.clientIdField || anyDf.client_id_field || resolvedLinkedClient?.clientIdField || '');
 
     setModeleCoffretId(resolveModelSelectValue(df.modeleCoffretId || anyDf.modeleCoffret || anyDf.boitier_modele || anyDf.modele_coffret || anyDf.coffret_modele, modelesCoffret));
     setNumeroLotCoffret(df.numeroLotCoffret || anyDf.boitier_lot || anyDf.lot_coffret || anyDf.lotCoffret || '');
@@ -4337,7 +4450,7 @@ export default function DefibTab({
               </thead>
               <tbody className="text-slate-700 text-xs">
                 {paginatedDefibs.map(df => {
-                  const linkedClient = clientMap.get(df.clientId);
+                  const linkedClient = getLinkedClientForDefib(df);
                   const linkedModel = variableMap.get(df.modeleId);
                   const isChecked = selectedIds.includes(df.id);
                   const isPinned = pinnedDefibIds.includes(df.id);
@@ -4510,8 +4623,8 @@ export default function DefibTab({
 
                       {/* Client */}
                       {!hiddenColumns.has('client') && (
-                        <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={linkedClient?.denomination}>
-                          {linkedClient?.denomination || ''}
+                        <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={linkedClient?.denomination || df.clientNom || df.nomSite || ''}>
+                          {linkedClient?.denomination || df.clientNom || df.nomSite || ''}
                         </td>
                       )}
 

@@ -1751,7 +1751,14 @@ export default function ImportExportTab({
             const rawRecent = localStorage.getItem(`defib_${tenantId}_recently_imported`);
             const prevRecent = rawRecent ? JSON.parse(rawRecent) : [];
             const mergedRecent = mergeCollectionItems('defibrillateurs', [...parsedData, ...(Array.isArray(prevRecent) ? prevRecent : [])]);
-            localStorage.setItem(`defib_${tenantId}_recently_imported`, JSON.stringify(mergedRecent.slice(0, 500)));
+            const recentJson = JSON.stringify(mergedRecent.slice(0, 500));
+            localStorage.setItem(`defib_${tenantId}_recently_imported`, recentJson);
+            if (tenantId === 'D27' || tenantId === 'D58' || tenantId === '27' || tenantId === '58') {
+              localStorage.setItem('defib_D27_recently_imported', recentJson);
+              localStorage.setItem('defib_D58_recently_imported', recentJson);
+              localStorage.setItem('defib_d27_recently_imported', recentJson);
+              localStorage.setItem('defib_d58_recently_imported', recentJson);
+            }
           } catch (_) {}
 
           // Prepend newly imported items so they appear immediately at the top of the table
