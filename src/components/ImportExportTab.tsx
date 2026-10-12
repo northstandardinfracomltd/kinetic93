@@ -33,6 +33,8 @@ export interface ImportExportRecord {
   csvData?: string;
   expiresAt?: number;
   expirationDate?: string;
+  envId?: string;
+  tenantId?: string;
 }
 
 const INITIAL_RECORDS: ImportExportRecord[] = [
@@ -1761,6 +1763,22 @@ export default function ImportExportTab({
             }
           } catch (_) {}
 
+          // Un-blacklist newly imported items from local deleted keys so they are instantly visible
+          try {
+            const importedKeys = new Set(parsedData.map(d => [d.id, d.identifiant, d.numeroSerie]).flat().filter(Boolean).map(s => String(s).trim().toLowerCase()));
+            const targetTenants = [tenantId, 'D27', 'D58', 'd27', 'd58', '27', '58'];
+            for (const t of targetTenants) {
+              const rawDel = localStorage.getItem(`defib_${t}_deleted_defib_keys`);
+              if (rawDel) {
+                const parsed = JSON.parse(rawDel);
+                if (Array.isArray(parsed)) {
+                  const remaining = parsed.filter(k => !importedKeys.has(String(k).trim().toLowerCase()));
+                  localStorage.setItem(`defib_${t}_deleted_defib_keys`, JSON.stringify(remaining));
+                }
+              }
+            }
+          } catch (_) {}
+
           // Prepend newly imported items so they appear immediately at the top of the table
           const combined = mergeCollectionItems('defibrillateurs', [...parsedData, ...(currentList || [])]);
           await saveDefibs(combined);
@@ -1782,8 +1800,9 @@ export default function ImportExportTab({
         dExp.setHours(dExp.getHours() + 48);
         const expiresTime = dExp.getTime();
         const expDateStr = dExp.toISOString().split('T')[0];
+        const effectiveRecordTenant = (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || localStorage.getItem('defib_auth_tenant_id')) : '') || 'demo').trim();
 
-        // Add transaction list record
+        // Add transaction list record with explicit tenant stamp
         const newRecord: ImportExportRecord = {
           id: 'rec_' + Date.now(),
           date: formDate,
@@ -1791,7 +1810,9 @@ export default function ImportExportTab({
           categorie: formCategorie,
           format: 'CSV.',
           expiresAt: expiresTime,
-          expirationDate: expDateStr
+          expirationDate: expDateStr,
+          envId: effectiveRecordTenant,
+          tenantId: effectiveRecordTenant
         };
 
         const updated = [newRecord, ...records];
@@ -1808,7 +1829,7 @@ export default function ImportExportTab({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             collectionName: 'importExportRecords',
-            tenantId,
+            tenantId: effectiveRecordTenant,
             value: updated
           })
         }).catch(() => {});

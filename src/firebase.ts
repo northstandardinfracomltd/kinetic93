@@ -340,12 +340,12 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
         key = `id_${String(item.id).trim()}`;
       }
     } else if (isDefib) {
-      if (item.numeroSerie && String(item.numeroSerie).trim()) {
-        key = `sn_${String(item.numeroSerie).trim().toUpperCase()}`;
+      if (item.id && String(item.id).trim()) {
+        key = `id_${String(item.id).trim()}`;
       } else if (item.identifiant && String(item.identifiant).trim()) {
         key = `ident_${String(item.identifiant).trim().toUpperCase()}`;
-      } else if (item.id && String(item.id).trim()) {
-        key = `id_${String(item.id).trim()}`;
+      } else if (item.numeroSerie && String(item.numeroSerie).trim()) {
+        key = `sn_${String(item.numeroSerie).trim().toUpperCase()}`;
       }
     } else if (isClient) {
       if (item.id && String(item.id).trim()) {
@@ -625,6 +625,13 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
         return false;
       }
       return true;
+    }
+
+    // For operational history records such as import/export transactions
+    if (collectionName === 'importExportRecords' || collectionName === 'import_export_records') {
+      if (!itemEnv) return true;
+      if (itemEnv === 'demo') return isDemo;
+      return tenantAliases.has(itemEnv) || tenantAliases.has(itemEnv.replace(/^d/i, ''));
     }
 
     // In customer tenant mode (e.g. D1, D18, D27, D28, D58, etc.):

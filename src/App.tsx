@@ -1959,22 +1959,17 @@ export default function App() {
       }
       if (Array.isArray(freshRemote) && freshRemote.length > 0) {
         const sanitizedRemote = filterCollectionForTenant(freshRemote, 'defibrillateurs', activeTenant);
-        const delKeysSet = new Set(getDeletedDefibKeys(activeTenant));
-        const filteredRemote = sanitizedRemote.filter(d => !isDefibInDeletedList(d, delKeysSet));
         const recents = getRecentlyImportedDefibs(activeTenant);
-        const fullMerged = recents.length > 0 ? mergeCollectionItems('defibrillateurs', [...recents, ...filteredRemote]) : filteredRemote;
-        setDefibrillateurs((prev) => {
-          if (Array.isArray(prev) && prev.length > 0) {
-            return mergeCollectionItems('defibrillateurs', [...fullMerged, ...prev]);
-          }
-          return fullMerged;
-        });
+        const fullMerged = recents.length > 0 ? mergeCollectionItems('defibrillateurs', [...recents, ...sanitizedRemote]) : sanitizedRemote;
+        setDefibrillateurs(fullMerged);
         try {
           await idbSet(`defib_${activeTenant}_defibrillateurs`, fullMerged);
           const uc = activeTenant.toUpperCase();
           if (uc.startsWith('D')) {
             await idbSet(`defib_${uc}_defibrillateurs`, fullMerged);
             await idbSet(`defib_${activeTenant.toLowerCase()}_defibrillateurs`, fullMerged);
+            await idbSet('defib_D27_defibrillateurs', fullMerged);
+            await idbSet('defib_D58_defibrillateurs', fullMerged);
           }
         } catch (_) {}
         setDefibLoadingProgress({
@@ -1997,6 +1992,50 @@ export default function App() {
       }, 500);
     }
   };
+
+  // High-availability automatic real-time sync across multi-PC sessions for massive chunked tenants (D27 / D58)
+  useEffect(() => {
+    if (!tenantId) return;
+    const tAliases = getTenantAliases(tenantId);
+    const isChunkedTenant = tAliases.has('d27') || tAliases.has('d58');
+    if (!isChunkedTenant) return;
+
+    let isCancelled = false;
+    let lastKnownVersion = 0;
+
+    const checkServerVersion = async () => {
+      try {
+        const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(tenantId)}`);
+        if (metaRes.ok && !isCancelled) {
+          const meta = await metaRes.json();
+          if (meta.version && lastKnownVersion > 0 && meta.version !== lastKnownVersion) {
+            handleManualRefreshDefibs();
+          }
+          if (meta.version) {
+            lastKnownVersion = meta.version;
+          }
+        }
+      } catch (_) {}
+    };
+
+    checkServerVersion();
+    const intervalId = setInterval(checkServerVersion, 15000);
+
+    const handleVisibilityOrFocus = () => {
+      if (!document.hidden) {
+        checkServerVersion();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(intervalId);
+      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+    };
+  }, [tenantId]);
 
   const [isRefreshingCrm, setIsRefreshingCrm] = useState<boolean>(false);
   const handleManualRefreshCrm = async () => {
@@ -5699,6 +5738,15 @@ export default function App() {
         const savedEnable = localStorage.getItem(`defib_${activeRunTenantId}_enable_other_equipments`);
         setEnableOtherEquipments(savedEnable || baseCompanyInfo.enableOtherEquipments || 'Non');
 
+        // Purge stale local blacklists so all PCs see exact same synchronized server dataset
+        try {
+          localStorage.removeItem(`defib_${activeRunTenantId}_deleted_defib_keys`);
+          localStorage.removeItem('defib_D27_deleted_defib_keys');
+          localStorage.removeItem('defib_D58_deleted_defib_keys');
+          localStorage.removeItem('defib_d27_deleted_defib_keys');
+          localStorage.removeItem('defib_d58_deleted_defib_keys');
+        } catch (_) {}
+
         // Check IndexedDB if localStorage was empty or couldn't store large collections
         try {
           let idbDefibs = await idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`);
@@ -5790,18 +5838,12 @@ export default function App() {
                     const combined = chunkResults.filter(Boolean).flat();
                     if (combined.length > 0) {
                       const sanitizedCombined = filterCollectionForTenant(combined, 'defibrillateurs', activeRunTenantId);
-                      const delKeysSet = new Set(getDeletedDefibKeys(activeRunTenantId));
-                      const filteredCombined = sanitizedCombined.filter(d => !isDefibInDeletedList(d, delKeysSet));
                       const recents = getRecentlyImportedDefibs(activeRunTenantId);
-                      const fullMerged = recents.length > 0 ? mergeCollectionItems('defibrillateurs', [...recents, ...filteredCombined]) : filteredCombined;
-                      setDefibrillateurs((prev) => {
-                        const finalDefibs = (Array.isArray(prev) && prev.length > 0)
-                          ? mergeCollectionItems('defibrillateurs', [...fullMerged, ...prev])
-                          : fullMerged;
-                        idbSet(`defib_${activeRunTenantId}_defibrillateurs`, finalDefibs).catch(() => {});
-                        return finalDefibs;
-                      });
+                      const fullMerged = recents.length > 0 ? mergeCollectionItems('defibrillateurs', [...recents, ...sanitizedCombined]) : sanitizedCombined;
+                      setDefibrillateurs(fullMerged);
                       idbSet(`defib_${activeRunTenantId}_defibrillateurs`, fullMerged).catch(() => {});
+                      idbSet('defib_D27_defibrillateurs', fullMerged).catch(() => {});
+                      idbSet('defib_D58_defibrillateurs', fullMerged).catch(() => {});
                       setIsDefibLoading(false);
 
                       // If local cache had valid defibs missing on the server, push them to the server batch sync
@@ -7911,6 +7953,11 @@ export default function App() {
     try {
       await idbSet(`defib_${tenantId}_defibrillateurs`, newDefibs);
       await idbSet(`${tenantId}_defibrillateurs`, newDefibs);
+      const tAliases = getTenantAliases(tenantId);
+      if (tAliases.has('d27') || tAliases.has('d58')) {
+        await idbSet('defib_D27_defibrillateurs', newDefibs);
+        await idbSet('defib_D58_defibrillateurs', newDefibs);
+      }
     } catch (_) {}
 
     const isDNum = /^d\d+$/i.test(tenantId);

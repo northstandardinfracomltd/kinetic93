@@ -1921,10 +1921,10 @@ export default function DefibTab({
     return set;
   }, [fsmTours, activeFilters.actionRejected]);
 
-  // Set of deleted defib keys to prevent resurrection
+  // Set of deleted defib keys to prevent resurrection during optimistic deletions
   const deletedDefibSet = useMemo(() => {
     try {
-      const raw = localStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
+      const raw = sessionStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
       if (raw) {
         const arr = JSON.parse(raw);
         if (Array.isArray(arr)) {
@@ -4836,11 +4836,11 @@ export default function DefibTab({
                               }
                               if (window.confirm(t("Êtes-vous sûr de vouloir supprimer ce défibrillateur ?"))) {
                                 try {
-                                  const raw = localStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
+                                  const raw = sessionStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
                                   const parsed = raw ? JSON.parse(raw) : [];
                                   const keysToAdd = [df.id, df.identifiant, df.numeroSerie, (df as any).num_serie].filter(Boolean).map(s => String(s).trim().toLowerCase());
                                   const combined = Array.from(new Set([...parsed, ...keysToAdd]));
-                                  localStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
+                                  sessionStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
                                   fetch('/api/delete-single-defib', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },

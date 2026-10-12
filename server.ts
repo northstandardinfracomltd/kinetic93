@@ -2754,6 +2754,12 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         return true;
       }
 
+      if (colName === 'importExportRecords' || colName === 'import_export_records') {
+        if (!itemEnv) return true;
+        if (itemEnv === 'demo') return isDemo;
+        return tenantAliases.has(itemEnv) || tenantAliases.has(itemEnv.replace(/^d/i, ''));
+      }
+
       if (itemEnv) {
         if (itemEnv === 'demo') return false;
         if (tenantAliases.has(itemEnv)) return true;
@@ -3257,6 +3263,8 @@ async function warmupDefibrillateursStore() {
     }
   });
 
+  let serverDefibVersion = Date.now();
+
   // Fast batch defibrillators sync endpoint for mass modifications and CSV import
   app.post("/api/sync-batch-defibs", async (req, res) => {
     try {
@@ -3454,8 +3462,23 @@ async function warmupDefibrillateursStore() {
         }
       }
 
+      serverDefibVersion = Date.now();
+
+      // Un-blacklist any imported/updated defibs from deleted_defib_keys.json
+      try {
+        const deletedLogFile = path.join(DATA_DIR, 'deleted_defib_keys.json');
+        if (fs.existsSync(deletedLogFile)) {
+          const currentDeleted: string[] = JSON.parse(fs.readFileSync(deletedLogFile, 'utf-8'));
+          const newlyAddedKeys = new Set(defibs.map((d: any) => [d.id, d.identifiant, d.numeroSerie]).flat().filter(Boolean).map((s: any) => String(s).trim().toLowerCase()));
+          const cleaned = currentDeleted.filter(k => !newlyAddedKeys.has(String(k).trim().toLowerCase()));
+          if (cleaned.length !== currentDeleted.length) {
+            fs.writeFileSync(deletedLogFile, JSON.stringify(cleaned), 'utf-8');
+          }
+        }
+      } catch (_) {}
+
       persistServerStoreToDisk();
-      return res.json({ status: "success", count: updatedIds.length, updatedIds, totalChunks: highestIdx + 1 });
+      return res.json({ status: "success", count: updatedIds.length, updatedIds, totalChunks: highestIdx + 1, version: serverDefibVersion });
     } catch (err: any) {
       console.error("Error in /api/sync-batch-defibs:", err);
       return res.status(500).json({ error: err.message || "Erreur de synchronisation en masse." });
@@ -3475,8 +3498,9 @@ async function warmupDefibrillateursStore() {
         { id: String(id || ''), identifiant: String(identifiant || ''), numeroSerie: String(numeroSerie || '') }
       ], rawTenant);
 
+      serverDefibVersion = Date.now();
       persistServerStoreToDisk();
-      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys });
+      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys, version: serverDefibVersion });
     } catch (err: any) {
       console.error("Error in /api/delete-single-defib:", err);
       return res.status(500).json({ error: err.message || "Erreur lors de la suppression du défibrillateur." });
@@ -3503,11 +3527,26 @@ async function warmupDefibrillateursStore() {
       });
 
       const result = deleteDefibrillateursFromStore(targets, rawTenant);
+      serverDefibVersion = Date.now();
       persistServerStoreToDisk();
-      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys });
+      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys, version: serverDefibVersion });
     } catch (err: any) {
       console.error("Error in /api/delete-batch-defibs:", err);
       return res.status(500).json({ error: err.message || "Erreur lors de la suppression en masse." });
+    }
+  });
+
+  // Endpoint to fetch unified deleted defib keys across sessions
+  app.get("/api/deleted-defib-keys", (req, res) => {
+    try {
+      const deletedLogFile = path.join(DATA_DIR, 'deleted_defib_keys.json');
+      let deletedKeys: string[] = [];
+      if (fs.existsSync(deletedLogFile)) {
+        deletedKeys = JSON.parse(fs.readFileSync(deletedLogFile, 'utf-8'));
+      }
+      return res.json({ deletedKeys });
+    } catch (_) {
+      return res.json({ deletedKeys: [] });
     }
   });
 
@@ -3590,7 +3629,8 @@ async function warmupDefibrillateursStore() {
         totalChunks,
         totalCount,
         prefix,
-        tenantId
+        tenantId,
+        version: serverDefibVersion
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
