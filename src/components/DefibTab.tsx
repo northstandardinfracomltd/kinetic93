@@ -1988,7 +1988,7 @@ export default function DefibTab({
 
       // 6. Search query match
       if (searchLower) {
-        const clientName = getLinkedClientForDefib(df)?.denomination || df.clientNom || df.nomSite || '';
+        const clientName = getLinkedClientForDefib(df)?.denomination || (df as any).clientNom || df.nomSite || '';
         const modelName = variableMap.get(df.modeleId)?.nom || '';
         const isMatchSearch = (
           (df.identifiant || '').toLowerCase().includes(searchLower) ||
@@ -2019,7 +2019,7 @@ export default function DefibTab({
         .filter(t => t.length >= 3);
 
       if (advTerms.length > 0) {
-        const clientName = (getLinkedClientForDefib(df)?.denomination || df.clientNom || df.nomSite || '').toLowerCase();
+        const clientName = (getLinkedClientForDefib(df)?.denomination || (df as any).clientNom || df.nomSite || '').toLowerCase();
         const modelName = (variableMap.get(df.modeleId)?.nom || '').toLowerCase();
 
         const defibFields = {
@@ -2219,8 +2219,7 @@ export default function DefibTab({
 
       const recentIdSet = new Set(recentMatches.map(m => m.id));
       const rest = sorted.filter(d => !recentIdSet.has(d.id));
-      const targetCount = Math.max(10, recentMatches.length);
-      result = [...recentMatches, ...rest].slice(0, targetCount);
+      result = [...recentMatches, ...rest];
     } else if (sortFilter === 'recent') {
       const totalLen = defibrillateurs.length;
       const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));
@@ -2990,7 +2989,7 @@ export default function DefibTab({
     const resolvedLinkedClient = getLinkedClientForDefib(df);
     const effClientId = df.clientId || anyDf.client_id || resolvedLinkedClient?.id || '';
     setClientId(effClientId);
-    setClientSearchQuery(resolvedLinkedClient ? `${resolvedLinkedClient.denomination} (${resolvedLinkedClient.siret || ''})` : (df.clientNom || df.nomSite || ''));
+    setClientSearchQuery(resolvedLinkedClient ? `${resolvedLinkedClient.denomination} (${resolvedLinkedClient.siret || ''})` : ((df as any).clientNom || df.nomSite || ''));
     setNomSite(df.nomSite || anyDf.nom_site || (resolvedLinkedClient as any)?.nomSite || resolvedLinkedClient?.denomination || '');
     setCategorieEtablissement(df.categorieEtablissement || anyDf.categorie_etablissement || '');
     setNomPrenomSite(df.nomPrenomSite || anyDf.nom_prenom || anyDf.contact || anyDf.nom_prenom_site || anyDf.contact_site || resolvedLinkedClient?.nomPrenomSite || (resolvedLinkedClient as any)?.responsable || (resolvedLinkedClient as any)?.contact || '');
@@ -4884,7 +4883,7 @@ export default function DefibTab({
             </span>
           ) : isInitialView ? (
             <span>
-              {t("Affichage initial")} : {filteredDefibs.length} {t("derniers ajoutés ou modifiés")} ({defibrillateurs.length.toLocaleString('en-US')} {t("au total")}).
+              {t("Total défibrillateurs")} : {filteredDefibs.length.toLocaleString('fr-FR')} ({paginatedDefibs.length} {t("sur cette page")}).
             </span>
           ) : (
             (search && search.trim().length > 0) ||

@@ -348,17 +348,17 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
         key = `id_${String(item.id).trim()}`;
       }
     } else if (isClient) {
-      if (item.clientCode && String(item.clientCode).trim()) {
+      if (item.id && String(item.id).trim()) {
+        key = `id_${String(item.id).trim()}`;
+      } else if (item.clientCode && String(item.clientCode).trim()) {
         key = `code_${String(item.clientCode).trim().toLowerCase()}`;
-      } else if (item.email && String(item.email).trim()) {
-        key = `email_${String(item.email).trim().toLowerCase()}`;
       } else {
         const nom = (item.nomEtablissement || item.denomination || item.nomPrenomSite || '').trim().toLowerCase();
         const site = (item.site || item.nomSite || item.adresse || '').trim().toLowerCase();
         if (nom) {
           key = `name_${nom}_${site}`;
-        } else if (item.id && String(item.id).trim()) {
-          key = `id_${String(item.id).trim()}`;
+        } else if (item.email && String(item.email).trim()) {
+          key = `email_${String(item.email).trim().toLowerCase()}`;
         }
       }
     } else if (isVariable) {
@@ -1370,10 +1370,12 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
           throw err;
         });
       });
+      let writeSuccess = true;
       await Promise.race([
         Promise.all(docBatch),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 2000))
       ]).catch(e => {
+        writeSuccess = false;
         const msg = String(e?.message || e || '').toLowerCase();
         if (msg.includes('quota') || msg.includes('resource-exhausted') || (e as any)?.code === 'resource-exhausted') {
           recordFirestoreQuotaExhaustion(6);
@@ -1381,7 +1383,9 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
           console.warn(`[Firestore Safe Write] Non-blocking write notice for ${primaryKey}:`, e?.message);
         }
       });
-      console.log(`Successfully synced ${primaryKey} to Firestore.`);
+      if (writeSuccess) {
+        console.log(`Successfully synced ${primaryKey} to Firestore.`);
+      }
     }
   } catch (error: any) {
     const msg = String(error?.message || error || '').toLowerCase();

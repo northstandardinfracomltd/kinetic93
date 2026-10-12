@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { getRegionsForCountry } from './utils/regions';
-import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY, isFirestoreQuotaExhausted } from './firebase';
+import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { idbSet, idbGet } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
@@ -1745,6 +1745,10 @@ export default function App() {
             const msg = String(error?.message || error || '').toLowerCase();
             if (msg.includes('quota') || msg.includes('resource-exhausted') || (error as any)?.code === 'resource-exhausted') {
               recordFirestoreQuotaExhaustion(6);
+              try {
+                if (unsubscribeFirestore) unsubscribeFirestore();
+                unsubscribeFirestore = undefined;
+              } catch (_) {}
             }
             console.warn('Real-time listener on tenantMessages in App:', error);
           }
@@ -1829,6 +1833,14 @@ export default function App() {
           }
         },
         (error) => {
+          const msg = String(error?.message || error || '').toLowerCase();
+          if (msg.includes('quota') || msg.includes('resource-exhausted') || (error as any)?.code === 'resource-exhausted') {
+            recordFirestoreQuotaExhaustion(6);
+            try {
+              if (unsubscribeFirestore) unsubscribeFirestore();
+              unsubscribeFirestore = undefined;
+            } catch (_) {}
+          }
           console.warn('Real-time listener on defibrillateurs in App:', error);
         }
       );
@@ -5724,9 +5736,9 @@ export default function App() {
               percent: 100,
               message: `Chargement ${withRecents.length.toLocaleString('en-US')}/${withRecents.length.toLocaleString('en-US')}, Terminé.`
             });
-            setIsDefibLoading(false);
-          } else if (isD27OrD58) {
-            // Background preload chunks automatically ONLY for D27 / D58
+          }
+          if (isD27OrD58) {
+            // Background preload chunks automatically for D27 / D58
             (async () => {
               try {
                 const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(activeRunTenantId)}`);
@@ -5734,7 +5746,9 @@ export default function App() {
                   const meta = await metaRes.json();
                   const totalChunks = meta.totalChunks || 0;
                   if (totalChunks > 0 && meta.prefix) {
-                    setIsDefibLoading(true);
+                    if (!idbDefibs || idbDefibs.length === 0) {
+                      setIsDefibLoading(true);
+                    }
                     const chunkResults: any[][] = new Array(totalChunks);
                     let loadedCount = 0;
                     const CONCURRENCY = 6;
@@ -5828,8 +5842,8 @@ export default function App() {
             }
           }
 
-          // Automatic background server preload of full clients catalog if count < 2000 for D27/D58
-          if (isD27OrD58 && bestIdbClients.length < 2000) {
+          // Automatic background server preload of full clients catalog if count < 2900 for D27/D58
+          if (isD27OrD58 && bestIdbClients.length < 2900) {
             (async () => {
               try {
                 const srvRes = await fetch(`/api/sync-collection?collectionName=clients&tenantId=${encodeURIComponent(activeRunTenantId)}`);
@@ -6040,8 +6054,8 @@ export default function App() {
               }
               return fixed;
             });
-          if (changed) {
-            saveCollectionToFirestore('clients', sanitized, activeRunTenantId);
+          if (changed && !isFirestoreQuotaExhausted()) {
+            saveCollectionToFirestore('clients', sanitized, activeRunTenantId).catch(() => {});
           }
           return sanitized;
         }));
@@ -6052,7 +6066,9 @@ export default function App() {
           const missingVars = INITIAL_VARIABLES.filter(iv => !remoteCatSet.has(iv.category));
           if (missingVars.length > 0) {
             const merged = [...remoteVariables, ...missingVars];
-            saveCollectionToFirestore('variables', merged, activeRunTenantId).catch(() => {});
+            if (!isFirestoreQuotaExhausted()) {
+              saveCollectionToFirestore('variables', merged, activeRunTenantId).catch(() => {});
+            }
             return merged;
           }
           return remoteVariables;
@@ -6427,7 +6443,9 @@ export default function App() {
       if (loadedDataRef.current.clients === fp) return;
       loadedDataRef.current.clients = fp;
       if (clients.length <= 250) {
-        saveCollectionToFirestore('clients', clients, tenantId);
+        if (!isFirestoreQuotaExhausted()) {
+          saveCollectionToFirestore('clients', clients, tenantId).catch(() => {});
+        }
         safeSetLocalStorage(`defib_${tenantId}_clients`, JSON.stringify(clients));
       } else {
         try {
@@ -6442,7 +6460,9 @@ export default function App() {
     if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
       const str = JSON.stringify(variables);
       if (loadedDataRef.current.variables === str) return;
-      saveCollectionToFirestore('variables', variables, tenantId);
+      if (!isFirestoreQuotaExhausted()) {
+        saveCollectionToFirestore('variables', variables, tenantId).catch(() => {});
+      }
       safeSetLocalStorage(`defib_${tenantId}_variables`, str);
       loadedDataRef.current.variables = str;
     }

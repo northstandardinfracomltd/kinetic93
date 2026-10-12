@@ -3401,10 +3401,13 @@ async function warmupDefibrillateursStore() {
           const chunkArr = loadedChunkCache.get(cIdx);
           if (chunkArr && Array.isArray(chunkArr)) {
             const candidateDirs = [CHUNKS_DIR, path.join(process.cwd(), 'data', 'chunks')];
+            const prefixesToWrite = isD27OrD58 ? ['D27_defibrillateurs', 'D58_defibrillateurs'] : [prefix];
             for (const d of candidateDirs) {
               try {
                 if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-                fs.writeFileSync(path.join(d, `${prefix}_chunk_${cIdx}.json`), JSON.stringify(chunkArr), 'utf-8');
+                for (const pfx of prefixesToWrite) {
+                  fs.writeFileSync(path.join(d, `${pfx}_chunk_${cIdx}.json`), JSON.stringify(chunkArr), 'utf-8');
+                }
               } catch (_) {}
             }
             // Sync to Firestore without blocking
@@ -3610,10 +3613,14 @@ async function warmupDefibrillateursStore() {
 
       let filePath = path.join(CHUNKS_DIR, `${prefix}_chunk_${chunkIdx}.json`);
       if (!fs.existsSync(filePath)) {
+        const altPrefix = prefix.startsWith('D27_') ? prefix.replace(/^D27_/, 'D58_') : (prefix.startsWith('D58_') ? prefix.replace(/^D58_/, 'D27_') : prefix);
         const candidatePaths = [
           path.join(process.cwd(), 'data', 'chunks', `${prefix}_chunk_${chunkIdx}.json`),
           path.join(process.cwd(), 'dist', 'data', 'chunks', `${prefix}_chunk_${chunkIdx}.json`),
-          path.join(DATA_DIR, 'chunks', `${prefix}_chunk_${chunkIdx}.json`)
+          path.join(DATA_DIR, 'chunks', `${prefix}_chunk_${chunkIdx}.json`),
+          path.join(CHUNKS_DIR, `${altPrefix}_chunk_${chunkIdx}.json`),
+          path.join(process.cwd(), 'data', 'chunks', `${altPrefix}_chunk_${chunkIdx}.json`),
+          path.join(DATA_DIR, 'chunks', `${altPrefix}_chunk_${chunkIdx}.json`)
         ];
         const found = candidatePaths.find(p => fs.existsSync(p));
         if (found) {

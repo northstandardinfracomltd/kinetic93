@@ -1130,8 +1130,8 @@ const validateAndParseDefibs = (
       victimeSansSurvie: 'Non',
       ageVictime: '',
       commentaireCampagneRappel: '',
-      envId: (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim(),
-      tenantId: (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim()
+      envId: (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim(),
+      tenantId: (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim()
     });
   }
 
