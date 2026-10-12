@@ -1985,26 +1985,30 @@ function mergeServerCollectionItems(colName: string, items: any[]): any[] {
     if (!item || typeof item !== 'object') continue;
 
     let key = '';
-    if (item.id && String(item.id).trim()) {
-      key = `id_${String(item.id).trim()}`;
+    if (isDefib) {
+      if (item.numeroSerie && String(item.numeroSerie).trim()) {
+        key = `sn_${String(item.numeroSerie).trim().toUpperCase()}`;
+      } else if (item.identifiant && String(item.identifiant).trim()) {
+        key = `ident_${String(item.identifiant).trim().toUpperCase()}`;
+      } else if (item.id && String(item.id).trim()) {
+        key = `id_${String(item.id).trim()}`;
+      }
     } else if (isClient) {
-      if (item.clientCode && String(item.clientCode).trim()) {
+      if (item.id && String(item.id).trim()) {
+        key = `id_${String(item.id).trim()}`;
+      } else if (item.clientCode && String(item.clientCode).trim()) {
         key = `code_${String(item.clientCode).trim().toLowerCase()}`;
-      } else if (item.email && String(item.email).trim()) {
-        key = `email_${String(item.email).trim().toLowerCase()}`;
       } else {
         const nom = (item.nomEtablissement || item.denomination || item.nomPrenomSite || '').trim().toLowerCase();
         const site = (item.site || item.nomSite || item.adresse || '').trim().toLowerCase();
         if (nom) {
           key = `name_${nom}_${site}`;
+        } else if (item.email && String(item.email).trim()) {
+          key = `email_${String(item.email).trim().toLowerCase()}`;
         }
       }
-    } else if (isDefib) {
-      if (item.numeroSerie && String(item.numeroSerie).trim()) {
-        key = `sn_${String(item.numeroSerie).trim().toUpperCase()}`;
-      } else if (item.identifiant && String(item.identifiant).trim()) {
-        key = `id_${String(item.identifiant).trim().toUpperCase()}`;
-      }
+    } else if (item.id && String(item.id).trim()) {
+      key = `id_${String(item.id).trim()}`;
     } else if (isVariable) {
       if (item.type && item.valeur) {
         key = `var_${String(item.type).trim()}_${String(item.valeur).trim()}`;

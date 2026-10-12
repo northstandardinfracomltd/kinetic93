@@ -2219,8 +2219,8 @@ export default function DefibTab({
 
       const recentIdSet = new Set(recentMatches.map(m => m.id));
       const rest = sorted.filter(d => !recentIdSet.has(d.id));
-      const targetCount = Math.max(10, recentMatches.length);
-      result = [...recentMatches, ...rest].slice(0, targetCount);
+      // Display strictly the 10 most recently added or modified defibrillators in initial view
+      result = [...recentMatches, ...rest].slice(0, 10);
     } else if (sortFilter === 'recent') {
       const totalLen = defibrillateurs.length;
       const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));

@@ -1751,7 +1751,7 @@ export default function ImportExportTab({
             const rawRecent = localStorage.getItem(`defib_${tenantId}_recently_imported`);
             const prevRecent = rawRecent ? JSON.parse(rawRecent) : [];
             const mergedRecent = mergeCollectionItems('defibrillateurs', [...parsedData, ...(Array.isArray(prevRecent) ? prevRecent : [])]);
-            const recentJson = JSON.stringify(mergedRecent.slice(0, 500));
+            const recentJson = JSON.stringify(mergedRecent.slice(0, 50));
             localStorage.setItem(`defib_${tenantId}_recently_imported`, recentJson);
             if (tenantId === 'D27' || tenantId === 'D58' || tenantId === '27' || tenantId === '58') {
               localStorage.setItem('defib_D27_recently_imported', recentJson);
@@ -1766,7 +1766,7 @@ export default function ImportExportTab({
           await saveDefibs(combined);
         } else if (formCategorie === 'Clients.' && saveClients) {
           setImportSuccessMessage(`Enregistrement de ${importCount} client(s)...`);
-          const combined = [...parsedData, ...clients];
+          const combined = mergeCollectionItems('clients', [...parsedData, ...clients]);
           await saveClients(combined);
         } else if (formCategorie === 'Stocks.' && saveStocks) {
           setImportSuccessMessage(`Enregistrement de ${importCount} stock(s)...`);
@@ -1802,6 +1802,16 @@ export default function ImportExportTab({
         } catch (e) {
           console.warn("Could not save importExportRecords to localStorage:", e);
         }
+        // Sync importExportRecords to server so both PCs/sessions share exact transaction history
+        fetch('/api/sync-collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            collectionName: 'importExportRecords',
+            tenantId,
+            value: updated
+          })
+        }).catch(() => {});
         if (isFirebaseLoaded && !isFirestoreQuotaExhausted()) {
           try {
             await saveCollectionToFirestore('importExportRecords', updated, tenantId);

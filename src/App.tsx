@@ -30,6 +30,7 @@ import {
   getLocationCustomName,
   getCapsuleBgColor,
   safeSetLocalStorage,
+  getDefibActivityTimestamp,
 } from './utils';
 import {
   triggerEmail4Signalement,
@@ -5794,13 +5795,36 @@ export default function App() {
                       const recents = getRecentlyImportedDefibs(activeRunTenantId);
                       const fullMerged = recents.length > 0 ? mergeCollectionItems('defibrillateurs', [...recents, ...filteredCombined]) : filteredCombined;
                       setDefibrillateurs((prev) => {
-                        if (Array.isArray(prev) && prev.length > 0) {
-                          return mergeCollectionItems('defibrillateurs', [...fullMerged, ...prev]);
-                        }
-                        return fullMerged;
+                        const finalDefibs = (Array.isArray(prev) && prev.length > 0)
+                          ? mergeCollectionItems('defibrillateurs', [...fullMerged, ...prev])
+                          : fullMerged;
+                        idbSet(`defib_${activeRunTenantId}_defibrillateurs`, finalDefibs).catch(() => {});
+                        return finalDefibs;
                       });
                       idbSet(`defib_${activeRunTenantId}_defibrillateurs`, fullMerged).catch(() => {});
                       setIsDefibLoading(false);
+
+                      // If local cache had valid defibs missing on the server, push them to the server batch sync
+                      try {
+                        const localCached = await idbGet<any[]>(`defib_${activeRunTenantId}_defibrillateurs`);
+                        if (Array.isArray(localCached) && localCached.length > fullMerged.length) {
+                          const serverSnSet = new Set(fullMerged.map(d => (d.numeroSerie || '').trim().toUpperCase()).filter(Boolean));
+                          const missingOnServer = localCached.filter(d => {
+                            const sn = (d.numeroSerie || '').trim().toUpperCase();
+                            return sn && !serverSnSet.has(sn);
+                          });
+                          if (missingOnServer.length > 0) {
+                            fetch('/api/sync-batch-defibs', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                tenantId: activeRunTenantId,
+                                defibs: missingOnServer
+                              })
+                            }).catch(() => {});
+                          }
+                        }
+                      } catch (_) {}
                     }
                   }
                 }
@@ -5842,28 +5866,42 @@ export default function App() {
             }
           }
 
-          // Automatic background server preload of full clients catalog if count < 2900 for D27/D58
-          if (isD27OrD58 && bestIdbClients.length < 2900) {
-            (async () => {
-              try {
-                const srvRes = await fetch(`/api/sync-collection?collectionName=clients&tenantId=${encodeURIComponent(activeRunTenantId)}`);
-                if (srvRes.ok) {
-                  const srvData = await srvRes.json();
-                  const arr = Array.isArray(srvData?.value) ? srvData.value : (Array.isArray(srvData) ? srvData : null);
-                  if (arr && arr.length > bestIdbClients.length) {
-                    const sanitized = filterCollectionForTenant(arr, 'clients', activeRunTenantId);
-                    if (Array.isArray(sanitized) && sanitized.length > 0) {
-                      setClients(sanitized);
-                      for (const ck of clientCandidateKeys) {
-                        idbSet(ck, sanitized).catch(() => {});
-                      }
-                      loadedDataRef.current.clients = getCollectionFingerprint(sanitized);
+          // Automatic background server sync of full clients catalog
+          (async () => {
+            try {
+              const srvRes = await fetch(`/api/sync-collection?collectionName=clients&tenantId=${encodeURIComponent(activeRunTenantId)}`);
+              if (srvRes.ok) {
+                const srvData = await srvRes.json();
+                const arr = Array.isArray(srvData?.value) ? srvData.value : (Array.isArray(srvData) ? srvData : null);
+                if (Array.isArray(arr) && arr.length > 0) {
+                  const sanitizedRemote = filterCollectionForTenant(arr, 'clients', activeRunTenantId);
+                  if (Array.isArray(sanitizedRemote) && sanitizedRemote.length > 0) {
+                    const fullMerged = bestIdbClients.length > 0
+                      ? mergeCollectionItems('clients', [...sanitizedRemote, ...bestIdbClients])
+                      : sanitizedRemote;
+                    setClients(fullMerged);
+                    for (const ck of clientCandidateKeys) {
+                      idbSet(ck, fullMerged).catch(() => {});
+                    }
+                    loadedDataRef.current.clients = getCollectionFingerprint(fullMerged);
+
+                    // If local cache had valid clients not yet on the server, push to server so all PCs get them!
+                    if (bestIdbClients.length > 0 && fullMerged.length > sanitizedRemote.length) {
+                      fetch('/api/sync-collection', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          collectionName: 'clients',
+                          tenantId: activeRunTenantId,
+                          value: fullMerged
+                        })
+                      }).catch(() => {});
                     }
                   }
                 }
-              } catch (_) {}
-            })();
-          }
+              }
+            } catch (_) {}
+          })();
         } catch (_) {}
 
         // Prime the loadedDataRef instantly with the loaded offline cached data
@@ -7825,7 +7863,20 @@ export default function App() {
     } catch (_) {}
     loadedDataRef.current.clients = getCollectionFingerprint(sanitized);
     if (tenantId) {
-      await saveCollectionToFirestore('clients', sanitized, tenantId);
+      // 1. Direct server sync to guarantee immediate consistency across all PCs and sessions
+      fetch('/api/sync-collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName: 'clients',
+          tenantId,
+          value: sanitized
+        })
+      }).catch(() => {});
+
+      if (!isFirestoreQuotaExhausted()) {
+        saveCollectionToFirestore('clients', sanitized, tenantId).catch(() => {});
+      }
     }
   };
 
@@ -7893,6 +7944,25 @@ export default function App() {
               value: newDefibs
             })
           }).catch(() => {});
+        } else {
+          // For massive tenants: ensure recently imported or modified items are synced to server chunks
+          const recentItems = getRecentlyImportedDefibs(tenantId);
+          const now = Date.now();
+          const itemsToSync = (recentItems.length > 0 ? recentItems : newDefibs.filter(d => {
+            const t = getDefibActivityTimestamp(d);
+            return (now - t) < 24 * 3600 * 1000;
+          })).slice(0, 500);
+
+          if (itemsToSync.length > 0) {
+            fetch('/api/sync-batch-defibs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tenantId,
+                defibs: itemsToSync
+              })
+            }).catch(() => {});
+          }
         }
 
         // Replicate to Firestore in background only for normal-sized tenant catalogs (<5,000 items)
