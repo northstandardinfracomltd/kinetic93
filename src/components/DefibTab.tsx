@@ -1768,7 +1768,7 @@ export default function DefibTab({
   }, [bulkFields]);
   const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
-  const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('oui');
+  const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('all');
 
   // Défibrillateurs avec Maintenance Autorisée = Oui ("Avec.Main") pour l'affichage Plan
   const planDefibrillateurs = useMemo(() => {
@@ -2219,7 +2219,8 @@ export default function DefibTab({
 
       const recentIdSet = new Set(recentMatches.map(m => m.id));
       const rest = sorted.filter(d => !recentIdSet.has(d.id));
-      result = [...recentMatches, ...rest];
+      const targetCount = Math.max(10, recentMatches.length);
+      result = [...recentMatches, ...rest].slice(0, targetCount);
     } else if (sortFilter === 'recent') {
       const totalLen = defibrillateurs.length;
       const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));
@@ -4883,7 +4884,7 @@ export default function DefibTab({
             </span>
           ) : isInitialView ? (
             <span>
-              {t("Total défibrillateurs")} : {filteredDefibs.length.toLocaleString('fr-FR')} ({paginatedDefibs.length} {t("sur cette page")}).
+              {t("Affichage initial")} : {filteredDefibs.length} {t("derniers ajoutés ou modifiés")} ({defibrillateurs.length.toLocaleString('fr-FR')} {t("au total")}).
             </span>
           ) : (
             (search && search.trim().length > 0) ||
