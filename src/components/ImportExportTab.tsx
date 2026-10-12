@@ -1748,19 +1748,13 @@ export default function ImportExportTab({
             } catch (_) {}
           }
 
-          // Persist to recently imported storage so all sync listeners preserve them at the very top
+          // Purge any legacy local recently imported memory so all devices strictly mirror server state
           try {
-            const rawRecent = localStorage.getItem(`defib_${tenantId}_recently_imported`);
-            const prevRecent = rawRecent ? JSON.parse(rawRecent) : [];
-            const mergedRecent = mergeCollectionItems('defibrillateurs', [...parsedData, ...(Array.isArray(prevRecent) ? prevRecent : [])]);
-            const recentJson = JSON.stringify(mergedRecent.slice(0, 50));
-            localStorage.setItem(`defib_${tenantId}_recently_imported`, recentJson);
-            if (tenantId === 'D27' || tenantId === 'D58' || tenantId === '27' || tenantId === '58') {
-              localStorage.setItem('defib_D27_recently_imported', recentJson);
-              localStorage.setItem('defib_D58_recently_imported', recentJson);
-              localStorage.setItem('defib_d27_recently_imported', recentJson);
-              localStorage.setItem('defib_d58_recently_imported', recentJson);
-            }
+            localStorage.removeItem(`defib_${tenantId}_recently_imported`);
+            localStorage.removeItem('defib_D27_recently_imported');
+            localStorage.removeItem('defib_D58_recently_imported');
+            localStorage.removeItem('defib_d27_recently_imported');
+            localStorage.removeItem('defib_d58_recently_imported');
           } catch (_) {}
 
           // Un-blacklist newly imported items from local deleted keys so they are instantly visible

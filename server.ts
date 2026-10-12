@@ -3623,7 +3623,7 @@ async function warmupDefibrillateursStore() {
           } catch (_) {}
         }
       }
-      if (totalCount === 0) totalCount = 18219;
+      if (totalCount === 0) totalCount = 18199;
 
       return res.json({
         totalChunks,

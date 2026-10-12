@@ -2172,43 +2172,6 @@ export default function DefibTab({
     const isInitial = !hasSearch && !hasSortFilter && !hasDeptFilter && !hasActiveSidePaneFilter;
 
     if (isInitial) {
-      let recentMatches: any[] = [];
-      try {
-        const candidateRecentKeys = [
-          `defib_${activeTenantId}_recently_imported`,
-          `defib_${activeTenantId.toLowerCase()}_recently_imported`,
-          `defib_${activeTenantId.toUpperCase()}_recently_imported`
-        ];
-        const tAliases = getTenantAliases(activeTenantId);
-        for (const a of tAliases) {
-          candidateRecentKeys.push(`defib_${a}_recently_imported`, `defib_${a.toUpperCase()}_recently_imported`);
-        }
-        for (const rk of Array.from(new Set(candidateRecentKeys))) {
-          const rawRecent = localStorage.getItem(rk);
-          if (rawRecent) {
-            const recentArr = JSON.parse(rawRecent);
-            if (Array.isArray(recentArr) && recentArr.length > 0) {
-              const recentKeySet = new Set<string>();
-              for (const r of recentArr) {
-                if (r.id) recentKeySet.add(String(r.id).trim().toLowerCase());
-                if (r.identifiant) recentKeySet.add(String(r.identifiant).trim().toLowerCase());
-                if (r.numeroSerie) recentKeySet.add(String(r.numeroSerie).trim().toUpperCase());
-              }
-              const matches = result.filter(d => {
-                const idL = d.id ? String(d.id).trim().toLowerCase() : '';
-                const idfL = d.identifiant ? String(d.identifiant).trim().toLowerCase() : '';
-                const snU = d.numeroSerie ? String(d.numeroSerie).trim().toUpperCase() : '';
-                return (idL && recentKeySet.has(idL)) || (idfL && recentKeySet.has(idfL)) || (snU && recentKeySet.has(snU));
-              });
-              if (matches.length > 0) {
-                recentMatches = matches;
-                break;
-              }
-            }
-          }
-        }
-      } catch (_) {}
-
       const totalLen = defibrillateurs.length;
       const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));
       const sorted = [...result].sort((a, b) => {
@@ -2216,11 +2179,8 @@ export default function DefibTab({
         const timeB = getDefibActivityTimestamp(b, indexMap.get(b.id) ?? 0);
         return timeB - timeA;
       });
-
-      const recentIdSet = new Set(recentMatches.map(m => m.id));
-      const rest = sorted.filter(d => !recentIdSet.has(d.id));
       // Display strictly the 10 most recently added or modified defibrillators in initial view
-      result = [...recentMatches, ...rest].slice(0, 10);
+      result = sorted.slice(0, 10);
     } else if (sortFilter === 'recent') {
       const totalLen = defibrillateurs.length;
       const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));
@@ -2247,32 +2207,6 @@ export default function DefibTab({
       });
     }
 
-    // Prioritize recently imported defibrillators to the top in non-initial filtered views as well
-    if (!isInitial) {
-      try {
-        const rawRecent = localStorage.getItem(`defib_${activeTenantId}_recently_imported`);
-        if (rawRecent) {
-          const recentArr = JSON.parse(rawRecent);
-          if (Array.isArray(recentArr) && recentArr.length > 0) {
-            const recentKeySet = new Set<string>();
-            for (const r of recentArr) {
-              if (r.id) recentKeySet.add(String(r.id).trim().toLowerCase());
-              if (r.identifiant) recentKeySet.add(String(r.identifiant).trim().toLowerCase());
-              if (r.numeroSerie) recentKeySet.add(String(r.numeroSerie).trim().toUpperCase());
-            }
-            const isRecentMatch = (d: any) => {
-              const idL = d.id ? String(d.id).trim().toLowerCase() : '';
-              const idfL = d.identifiant ? String(d.identifiant).trim().toLowerCase() : '';
-              const snU = d.numeroSerie ? String(d.numeroSerie).trim().toUpperCase() : '';
-              return (idL && recentKeySet.has(idL)) || (idfL && recentKeySet.has(idfL)) || (snU && recentKeySet.has(snU));
-            };
-            const recInResult = result.filter(isRecentMatch);
-            const othInResult = result.filter(d => !isRecentMatch(d));
-            result = [...recInResult, ...othInResult];
-          }
-        }
-      } catch (_) {}
-    }
 
     if (pinnedDefibIds.length > 0) {
       const pinnedSet = new Set(pinnedDefibIds);
