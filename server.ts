@@ -1845,6 +1845,10 @@ function getCollectionNameAliases(collectionName: string): string[] {
     aliases.push('notifications', 'app_notifications');
   } else if (collectionName === 'tenantMessages' || collectionName === 'tenant_messages' || collectionName === 'canal_messages') {
     aliases.push('tenantMessages', 'tenant_messages', 'canal_messages');
+  } else if (collectionName === 'fsmCo2History' || collectionName === 'fsm_co2_history' || collectionName === 'co2History') {
+    aliases.push('fsmCo2History', 'fsm_co2_history', 'co2History');
+  } else if (collectionName === 'fsmMissionCounts' || collectionName === 'fsm_mission_counts') {
+    aliases.push('fsmMissionCounts', 'fsm_mission_counts');
   }
   return Array.from(new Set(aliases));
 }
@@ -2200,8 +2204,18 @@ function formatDefibrillateurOutput(d: any): any {
   const finContrat = d.finContrat || d.fin_contrat || '';
   const payeurId = d.payeurId || d.payeur_id || '';
   const clientId = d.clientId || d.client_id || '';
-  const clientNom = d.clientNom || d.client_nom || d.client || '';
+  let clientNom = d.clientNom || d.client_nom || d.client || '';
   const clientIdField = d.clientIdField || d.client_id_field || '';
+
+  if (!clientNom && clientId) {
+    const clientsData = serverMemoryStore.get('D27_clients') || serverMemoryStore.get('D58_clients') || serverMemoryStore.get('clients');
+    if (Array.isArray(clientsData)) {
+      const matchCli = clientsData.find((c: any) => c && (c.id === clientId || c.clientIdField === clientId));
+      if (matchCli && matchCli.denomination) {
+        clientNom = matchCli.denomination;
+      }
+    }
+  }
 
   // Accès & Flags
   const acces247 = toBoolean(d.acces247 ?? d.acces_247, false);
@@ -3350,6 +3364,25 @@ async function warmupDefibrillateursStore() {
       const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
 
       if (isD27OrD58) {
+        // Fallback: If tuple not in index, scan chunks to avoid creating duplicates
+        if (chunkIdx === undefined) {
+          const highest = findHighestChunkIndex('D27_defibrillateurs');
+          for (let c = 0; c <= highest; c++) {
+            const chunkArr = loadChunkFileSync(c, 'D27_defibrillateurs');
+            if (Array.isArray(chunkArr)) {
+              const foundIdx = chunkArr.findIndex((d: any) =>
+                d && ((formatted.id && d.id === formatted.id) ||
+                     (formatted.identifiant && d.identifiant && d.identifiant.toUpperCase() === formatted.identifiant.toUpperCase()) ||
+                     (formatted.numeroSerie && d.numeroSerie && d.numeroSerie.toUpperCase() === formatted.numeroSerie.toUpperCase()))
+              );
+              if (foundIdx >= 0) {
+                chunkIdx = c;
+                break;
+              }
+            }
+          }
+        }
+
         if (typeof chunkIdx === 'number') {
           saveSingleDefibrillateurToChunk(formatted, chunkIdx, 'D27_defibrillateurs');
           saveSingleDefibrillateurToChunk(formatted, chunkIdx, 'D58_defibrillateurs');
@@ -3357,6 +3390,14 @@ async function warmupDefibrillateursStore() {
           chunkIdx = addNewDefibrillateurToChunk(formatted, 'D27_defibrillateurs');
           addNewDefibrillateurToChunk(formatted, 'D58_defibrillateurs');
         }
+
+        if (typeof chunkIdx === 'number') {
+          const tupleData: CompactDefibTuple = [formatted.id || '', formatted.identifiant || '', formatted.numeroSerie || '', chunkIdx, rawTenant];
+          if (formatted.identifiant) defibLocationIndex.set(normalizeDefibLookupKey(formatted.identifiant), tupleData);
+          if (formatted.id) defibLocationIndex.set(normalizeDefibLookupKey(formatted.id), tupleData);
+          if (formatted.numeroSerie) defibLocationIndex.set(normalizeDefibLookupKey(formatted.numeroSerie), tupleData);
+        }
+
         cachedDefibTotalCounts.clear();
         invalidateAllDefibsCache();
         serverDefibVersion = Date.now();
@@ -3871,7 +3912,9 @@ async function warmupDefibrillateursStore() {
       if (cachedBundleMap.has(cacheKey)) {
         const cached = cachedBundleMap.get(cacheKey)!;
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Cache-Control', 'public, max-age=60');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         return res.json({
           status: "success",
           batch: batchIdx,
@@ -3895,7 +3938,9 @@ async function warmupDefibrillateursStore() {
       cachedBundleMap.set(cacheKey, { items: bundleItems, version: serverDefibVersion });
 
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Cache-Control', 'public, max-age=60');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       return res.json({
         status: "success",
         batch: batchIdx,
@@ -4044,6 +4089,11 @@ async function warmupDefibrillateursStore() {
         }
       }
 
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
       let items: any = null;
       try {
         items = await fetchServerCollection(collectionName, rawTenant);
@@ -4072,7 +4122,11 @@ async function warmupDefibrillateursStore() {
       return res.json({ value: items || [] });
     } catch (err: any) {
       console.warn('[Sync Collection GET] Unexpected error, returning empty fallback:', err);
-      return res.json({ value: [] });
+      if (!res.headersSent) {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return res.json({ value: [] });
+      }
     }
   });
 

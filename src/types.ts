@@ -158,6 +158,7 @@ export interface Defibrillateur {
   
   // Section 2 - Client
   clientId: string; // Lookup Client
+  clientNom?: string; // Denomination du client
   nomSite?: string; // Nom du site
   categorieEtablissement?: string; // Catégorie d'établissement
   nomPrenomSite: string;

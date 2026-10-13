@@ -8145,13 +8145,22 @@ export default function App() {
   };
 
   // DEFIBRILLATEUR CRUD HANDLERS
-  const handleAddDefib = (defibData: Omit<Defibrillateur, 'id'>) => {
+  // DEFIBRILLATEUR CRUD HANDLERS
+  const handleAddDefib = async (defibData: Omit<Defibrillateur, 'id'>): Promise<boolean> => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
-      return;
+      return false;
     }
     const nowIso = new Date().toISOString();
     const activeTid = tenantId || 'demo';
+    let effectiveClientNom = (defibData as any).clientNom || '';
+    if ((defibData as any).clientId) {
+      const matchCli = (clients || []).find(c => c && (c.id === (defibData as any).clientId || c.clientIdField === (defibData as any).clientId));
+      if (matchCli?.denomination) {
+        effectiveClientNom = matchCli.denomination;
+      }
+    }
+
     const newDefib: Defibrillateur = {
       id: 'df_' + Date.now(),
       createdAt: nowIso,
@@ -8160,59 +8169,112 @@ export default function App() {
       envId: activeTid,
       tenantId: activeTid,
       ...defibData,
+      clientNom: effectiveClientNom || (defibData as any).clientNom || ''
     };
-    saveDefibs([...defibrillateurs, newDefib]);
+    await saveDefibs([...defibrillateurs, newDefib]);
     try {
-      fetch('/api/sync-single-defib', {
+      const resp = await fetch('/api/sync-single-defib', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantId: activeTid,
           defib: newDefib
         })
-      }).catch(() => {});
-    } catch (_) {}
+      });
+      if (!resp.ok) {
+        console.warn('[Sync Defib] Warning: server returned status', resp.status);
+      }
+    } catch (e) {
+      console.warn('[Sync Defib] Warning saving defib to server:', e);
+    }
+    return true;
   };
 
-  const handleUpdateDefib = (updated: Defibrillateur) => {
+  const handleUpdateDefib = async (updated: Defibrillateur): Promise<boolean> => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
-      return;
+      return false;
     }
     const nowIso = new Date().toISOString();
     const activeTid = tenantId || updated.envId || updated.tenantId || 'demo';
+
+    let effectiveClientNom = updated.clientNom || '';
+    if (updated.clientId) {
+      const matchCli = (clients || []).find(c => c && (c.id === updated.clientId || c.clientIdField === updated.clientId));
+      if (matchCli?.denomination) {
+        effectiveClientNom = matchCli.denomination;
+      }
+    }
+
     const exists = defibrillateurs.some((df) => {
       const idMatch = !!(df.id && updated.id && df.id === updated.id);
       const identifiantMatch = !!(df.identifiant && updated.identifiant && df.identifiant.toUpperCase() === updated.identifiant.toUpperCase());
       return idMatch || identifiantMatch;
     });
 
-    let finalMerged: Defibrillateur = { ...updated, envId: activeTid, tenantId: activeTid, updatedAt: nowIso, dateDerniereModification: nowIso };
+    let finalMerged: Defibrillateur = {
+      ...updated,
+      clientNom: effectiveClientNom || updated.clientNom || '',
+      envId: activeTid,
+      tenantId: activeTid,
+      updatedAt: nowIso,
+      dateDerniereModification: nowIso
+    };
+
     if (exists) {
-      saveDefibs(defibrillateurs.map((df) => {
+      const nextList = defibrillateurs.map((df) => {
         const isMatch = !!((df.id && updated.id && df.id === updated.id) ||
                         (df.identifiant && updated.identifiant && df.identifiant.toUpperCase() === updated.identifiant.toUpperCase()));
         if (isMatch) {
-          finalMerged = { ...df, ...updated, envId: activeTid, tenantId: activeTid, updatedAt: nowIso, dateDerniereModification: nowIso, id: df.id };
+          finalMerged = {
+            ...df,
+            ...updated,
+            clientNom: effectiveClientNom || updated.clientNom || (df as any).clientNom || '',
+            envId: activeTid,
+            tenantId: activeTid,
+            updatedAt: nowIso,
+            dateDerniereModification: nowIso,
+            id: df.id
+          };
           return finalMerged;
         }
         return df;
-      }));
+      });
+      await saveDefibs(nextList);
     } else {
-      finalMerged = { ...updated, envId: activeTid, tenantId: activeTid, updatedAt: nowIso, dateDerniereModification: nowIso, id: updated.id || 'df_' + Date.now() };
-      saveDefibs([...defibrillateurs, finalMerged]);
+      finalMerged = {
+        ...updated,
+        clientNom: effectiveClientNom || updated.clientNom || '',
+        envId: activeTid,
+        tenantId: activeTid,
+        updatedAt: nowIso,
+        dateDerniereModification: nowIso,
+        id: updated.id || 'df_' + Date.now()
+      };
+      await saveDefibs([...defibrillateurs, finalMerged]);
     }
 
     try {
-      fetch('/api/sync-single-defib', {
+      const resp = await fetch('/api/sync-single-defib', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantId: activeTid,
           defib: finalMerged
         })
-      }).catch(() => {});
-    } catch (_) {}
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data.defib) {
+          finalMerged = { ...finalMerged, ...data.defib };
+        }
+      } else {
+        console.warn('[Sync Defib] Warning: server returned', resp.status);
+      }
+    } catch (e) {
+      console.warn('[Sync Defib] Network warning:', e);
+    }
+    return true;
   };
 
   const handleDeleteDefib = (id: string) => {

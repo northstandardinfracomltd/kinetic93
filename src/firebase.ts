@@ -930,7 +930,8 @@ export async function fetchCollectionFromFirestore<T>(
             let batchSuccess = false;
             for (let attempt = 0; attempt < 5; attempt++) {
               try {
-                const bRes = await fetch(`/api/defib-chunks/bundle?batch=${currentBatch}&tenantId=${encodeURIComponent(activeTenantId)}`, {
+                const bRes = await fetch(`/api/defib-chunks/bundle?batch=${currentBatch}&tenantId=${encodeURIComponent(activeTenantId)}&_t=${Date.now()}`, {
+                  cache: 'no-store',
                   signal: AbortSignal.timeout(15000)
                 });
                 if (bRes.ok) {
@@ -1078,7 +1079,8 @@ export async function fetchCollectionFromFirestore<T>(
     }
 
     try {
-      const resp = await fetch(`/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(activeTenantId)}`, {
+      const resp = await fetch(`/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(activeTenantId)}&_t=${Date.now()}`, {
+        cache: 'no-store',
         signal: AbortSignal.timeout(60000)
       });
       if (resp.ok) {
