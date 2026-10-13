@@ -146,7 +146,35 @@ export default function SettingsModal({
   }, []);
 
   // Local states for form editing without auto-saving until save clicked ("pas d'auto-save")
-  const [localCompany, setLocalCompany] = React.useState<CompanyInfo>(companyInfo);
+  const [localCompany, setLocalCompany] = React.useState<CompanyInfo>(() => {
+    const activeTid = (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+    let base: CompanyInfo = companyInfo ? { ...companyInfo } : ({} as CompanyInfo);
+    // If companyInfo is missing or empty placeholder, try reading from tenant localStorage cache immediately
+    const isBaseEmpty = !base.name || base.name === 'Mon Cabinet' || (!base.email && activeTid !== 'demo');
+    if (isBaseEmpty && typeof window !== 'undefined') {
+      try {
+        const candidateKeys = [
+          `defib_${activeTid}_company_info`,
+          `defib_${activeTid.toUpperCase()}_company_info`,
+          `defib_${activeTid.toLowerCase()}_company_info`,
+          `fs_cache_${activeTid}_company_info`,
+          `fs_cache_${activeTid}_companyInfo`,
+          `defib_company_info`
+        ];
+        for (const k of candidateKeys) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && parsed.name) {
+              base = { ...base, ...parsed };
+              break;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    return base;
+  });
   const envIdDisplay = shortEnvId || (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || 'D18';
   const [localMembers, setLocalMembers] = React.useState<Member[]>(members);
 
@@ -184,6 +212,11 @@ export default function SettingsModal({
   const isCurrentUserSuperAdmin = React.useMemo(() => {
     if (isReadOnly || isDeveloper) return false;
 
+    const loggedUserRole = (localStorage.getItem('defib_logged_user_role') || '').toLowerCase();
+    if (loggedUserRole === 'technicien' || loggedUserRole === 'client') return false;
+
+    const isAdminLoggedIn = localStorage.getItem('defib_admin_logged_in') === 'true';
+
     let userEmail = '';
     if (currentUser && currentUser.email) {
       userEmail = currentUser.email.toLowerCase().trim();
@@ -197,9 +230,6 @@ export default function SettingsModal({
       } catch (e) {}
     }
 
-    const loggedUserRole = (localStorage.getItem('defib_logged_user_role') || '').toLowerCase();
-    if (loggedUserRole === 'megaadmin') return true;
-
     const listToCheck = localMembers && localMembers.length > 0 ? localMembers : (members || []);
     const loggedInMember = userEmail 
       ? listToCheck.find((lm: Member) => lm.email?.toLowerCase().trim() === userEmail) 
@@ -207,19 +237,32 @@ export default function SettingsModal({
 
     if (loggedInMember) {
       const roleStr = (loggedInMember.role || '').toLowerCase();
-      return (
+      const subRole = (loggedInMember.adminSubRole || '').toLowerCase();
+      if (subRole === 'développeur' || subRole === 'developpeur') return false;
+      if (roleStr === 'technicien' || roleStr === 'client') return false;
+      if (
         roleStr === 'super-administrateur' ||
         roleStr === 'propriétaire / admin' ||
+        roleStr === 'administrateur' ||
+        roleStr === 'admin' ||
         roleStr.includes('super') ||
-        roleStr.includes('propriétaire')
-      );
-    }
-
-    if (loggedUserRole === 'admin') {
-      const firstMember = listToCheck[0];
-      if (!userEmail || (firstMember && firstMember.email?.toLowerCase().trim() === userEmail)) {
+        roleStr.includes('propriétaire') ||
+        roleStr.includes('admin')
+      ) {
         return true;
       }
+    }
+
+    // Any tenant admin session or primary admin is authorized
+    if (
+      loggedUserRole === 'admin' ||
+      loggedUserRole === 'megaadmin' ||
+      loggedUserRole.includes('admin') ||
+      loggedUserRole.includes('super') ||
+      loggedUserRole.includes('propriétaire') ||
+      isAdminLoggedIn
+    ) {
+      return true;
     }
 
     return false;
@@ -717,7 +760,16 @@ export default function SettingsModal({
 
   React.useEffect(() => {
     if (JSON.stringify(companyInfo) !== JSON.stringify(lastPropsCompanyRef.current)) {
-      setLocalCompany(companyInfo);
+      setLocalCompany(prev => {
+        if (!companyInfo) return prev;
+        // Do not overwrite non-empty tenant details with empty/placeholder values
+        const activeTid = (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+        const isNewPlaceholder = (!companyInfo.name || companyInfo.name === 'Mon Cabinet') && (!companyInfo.email || companyInfo.email === '');
+        if (isNewPlaceholder && prev.name && prev.name !== 'Mon Cabinet') {
+          return { ...companyInfo, ...prev };
+        }
+        return { ...prev, ...companyInfo };
+      });
       if (companyInfo?.customLocationNames) setLocalLocationNames(companyInfo.customLocationNames);
       if (companyInfo?.enableAutoEmails) setEnableAutoEmails(companyInfo.enableAutoEmails);
       if (companyInfo?.enableSatisfactionAvis) setEnableSatisfactionAvis(companyInfo.enableSatisfactionAvis);
@@ -731,21 +783,105 @@ export default function SettingsModal({
 
   React.useEffect(() => {
     if (isOpen || isPage) {
-      setLocalCompany(companyInfo);
-      setLocalMembers(members);
-      if (companyInfo?.customLocationNames) setLocalLocationNames(companyInfo.customLocationNames);
-      if (companyInfo?.enableAutoEmails) setEnableAutoEmails(companyInfo.enableAutoEmails);
-      if (companyInfo?.enableSatisfactionAvis) setEnableSatisfactionAvis(companyInfo.enableSatisfactionAvis);
-      if (companyInfo?.enableDevisFactures) setEnableDevisFactures(companyInfo.enableDevisFactures);
-      if (companyInfo?.communicationPortailClient !== undefined) setCommunicationPortailClient(companyInfo.communicationPortailClient);
-      if (companyInfo?.disableHelpsAndTutorials) setDisableHelpsAndTutorials(companyInfo.disableHelpsAndTutorials);
-      if (companyInfo?.enableOtherEquipments) setEnableOtherEquipments(companyInfo.enableOtherEquipments);
-
       const activeTid = localStorage.getItem('defib_tenant_id') || 'demo';
+
+      // 1. Sync companyInfo from props or localStorage cache
+      let comp = companyInfo ? { ...companyInfo } : ({} as CompanyInfo);
+      const isCompEmpty = !comp.name || comp.name === 'Mon Cabinet' || (!comp.email && activeTid !== 'demo');
+      if (isCompEmpty) {
+        const candidateKeys = [
+          `defib_${activeTid}_company_info`,
+          `defib_${activeTid.toUpperCase()}_company_info`,
+          `defib_${activeTid.toLowerCase()}_company_info`,
+          `fs_cache_${activeTid}_company_info`,
+          `fs_cache_${activeTid}_companyInfo`,
+          `defib_company_info`
+        ];
+        for (const k of candidateKeys) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              if (parsed && typeof parsed === 'object' && parsed.name) {
+                comp = { ...comp, ...parsed };
+                break;
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
+      setLocalCompany(prev => ({
+        ...prev,
+        ...comp,
+        name: comp.name || prev.name,
+        email: comp.email || prev.email,
+        phone: comp.phone || prev.phone,
+      }));
+
+      // 2. Members sync
+      if (members && members.length > 0) {
+        setLocalMembers(members);
+      } else {
+        const memRaw = localStorage.getItem(`defib_${activeTid}_members`) || localStorage.getItem('defib_members');
+        if (memRaw) {
+          try {
+            const parsed = JSON.parse(memRaw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setLocalMembers(parsed);
+            }
+          } catch (e) {}
+        }
+        if (activeTid && activeTid !== 'demo') {
+          fetchCollectionFromFirestore<Member[]>('members', activeTid).then(remoteMembers => {
+            if (Array.isArray(remoteMembers) && remoteMembers.length > 0) {
+              setLocalMembers(remoteMembers);
+              onUpdateMembers(remoteMembers);
+            }
+          }).catch(() => {});
+        }
+      }
+
+      if (comp?.customLocationNames) setLocalLocationNames(comp.customLocationNames);
+      if (comp?.enableAutoEmails) setEnableAutoEmails(comp.enableAutoEmails);
+      if (comp?.enableSatisfactionAvis) setEnableSatisfactionAvis(comp.enableSatisfactionAvis);
+      if (comp?.enableDevisFactures) setEnableDevisFactures(comp.enableDevisFactures);
+      if (comp?.communicationPortailClient !== undefined) setCommunicationPortailClient(comp.communicationPortailClient);
+      if (comp?.disableHelpsAndTutorials) setDisableHelpsAndTutorials(comp.disableHelpsAndTutorials);
+      if (comp?.enableOtherEquipments) setEnableOtherEquipments(comp.enableOtherEquipments);
+
+      // 3. Fallback to registered tenants registry if company info fields still missing
+      getRegisteredTenants().then(tenants => {
+        const found = tenants.find(t => 
+          t.id.toLowerCase() === activeTid.toLowerCase() || 
+          (t.shortEnvId && t.shortEnvId.toLowerCase() === activeTid.toLowerCase())
+        );
+        if (found) {
+          setLocalCompany(prev => {
+            const isPlaceholderName = !prev.name || prev.name === 'Mon Cabinet' || (activeTid !== 'demo' && prev.name === 'Défibeo Solutions');
+            const isPlaceholderEmail = !prev.email || (activeTid !== 'demo' && prev.email === 'contact@defibeo-solutions.com');
+            const isPlaceholderPhone = !prev.phone || (activeTid !== 'demo' && prev.phone === '+33 1 47 20 00 01');
+            if (isPlaceholderName || isPlaceholderEmail || isPlaceholderPhone) {
+              const enriched = {
+                ...prev,
+                name: isPlaceholderName && found.companyName ? found.companyName : prev.name,
+                nomCommercial: isPlaceholderName && found.companyName ? found.companyName : (prev.nomCommercial || prev.name),
+                email: isPlaceholderEmail && (found.companyEmail || found.adminEmail) ? (found.companyEmail || found.adminEmail) : prev.email,
+                phone: isPlaceholderPhone && found.companyPhone ? found.companyPhone : prev.phone,
+              };
+              onUpdateCompanyInfo(enriched);
+              return enriched;
+            }
+            return prev;
+          });
+        }
+      }).catch(() => {});
+
+      // 4. Spreadsheets URLs & Database settings fallback
       const cachedDefib = localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) || '';
       const cachedAutres = localStorage.getItem(`defib_${activeTid}_spreadsheet_autres_materiels`) || '';
       const cachedClients = localStorage.getItem(`defib_${activeTid}_spreadsheet_clients`) || '';
-      if (!companyInfo?.spreadsheetDefibrillateurs && (cachedDefib || cachedAutres || cachedClients)) {
+      if (cachedDefib || cachedAutres || cachedClients) {
         setLocalCompany(prev => ({
           ...prev,
           spreadsheetDefibrillateurs: prev.spreadsheetDefibrillateurs || cachedDefib,
@@ -753,7 +889,16 @@ export default function SettingsModal({
           spreadsheetClients: prev.spreadsheetClients || cachedClients,
         }));
       }
+
+      // 5. Remote fetch from Firestore for both companyInfo and tenantDatabases
       if (activeTid && activeTid !== 'demo') {
+        fetchCollectionFromFirestore<CompanyInfo>('companyInfo', activeTid).then(remoteCompany => {
+          if (remoteCompany && typeof remoteCompany === 'object') {
+            setLocalCompany(prev => ({ ...prev, ...remoteCompany }));
+            onUpdateCompanyInfo(remoteCompany);
+          }
+        }).catch(() => {});
+
         fetchCollectionFromFirestore<any>('tenantDatabases', activeTid).then(dbData => {
           if (dbData) {
             setLocalCompany(prev => ({
@@ -1401,7 +1546,7 @@ export default function SettingsModal({
     field: 'spreadsheetDefibrillateurs' | 'spreadsheetAutresMateriels' | 'spreadsheetClients',
     value: string
   ) => {
-    if (isReadOnly || isDeveloper) return;
+    if (!isCurrentUserSuperAdmin) return;
     setLocalCompany(prev => ({
       ...prev,
       [field]: value,
@@ -4988,7 +5133,7 @@ export default function SettingsModal({
               </label>
               <input
                 type="url"
-                disabled={isReadOnly || isDeveloper}
+                disabled={!isCurrentUserSuperAdmin}
                 value={localCompany.spreadsheetDefibrillateurs ?? ''}
                 onChange={(e) => handleDbSpreadsheetChange('spreadsheetDefibrillateurs', e.target.value)}
                 className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
@@ -5003,7 +5148,7 @@ export default function SettingsModal({
               </label>
               <input
                 type="url"
-                disabled={isReadOnly || isDeveloper}
+                disabled={!isCurrentUserSuperAdmin}
                 value={localCompany.spreadsheetAutresMateriels ?? ''}
                 onChange={(e) => handleDbSpreadsheetChange('spreadsheetAutresMateriels', e.target.value)}
                 className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
@@ -5018,7 +5163,7 @@ export default function SettingsModal({
               </label>
               <input
                 type="url"
-                disabled={isReadOnly || isDeveloper}
+                disabled={!isCurrentUserSuperAdmin}
                 value={localCompany.spreadsheetClients ?? ''}
                 onChange={(e) => handleDbSpreadsheetChange('spreadsheetClients', e.target.value)}
                 className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"

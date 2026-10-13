@@ -973,6 +973,12 @@ export default function DefibTab({
   const [editingDefib, setEditingDefib] = useState<Defibrillateur | null>(null);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (selectedIds.length > 25 && isBulkEditOpen) {
+      setIsBulkEditOpen(false);
+    }
+  }, [selectedIds.length, isBulkEditOpen]);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isLotScannerOpen, setIsLotScannerOpen] = useState(false);
   const [isSerieScannerOpen, setIsSerieScannerOpen] = useState(false);
@@ -2002,6 +2008,22 @@ export default function DefibTab({
       );
     });
   }, [defibrillateurs, deletedDefibSet]);
+
+  // Sum-counts pour Maintenance autorisée (Oui / Non) sur les défibrillateurs actifs
+  const { totalMainOui, totalMainNon } = useMemo(() => {
+    let oui = 0;
+    let non = 0;
+    for (const df of activeDefibrillateurs) {
+      const anyDf = df as any;
+      const raw = (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
+      if (raw === 'non' || raw === 'false' || raw === '0') {
+        non++;
+      } else {
+        oui++;
+      }
+    }
+    return { totalMainOui: oui, totalMainNon: non };
+  }, [activeDefibrillateurs]);
 
   // List search & filters computation - highly optimized for datasets of 18,000+ items across all browsers
   const filteredDefibs = useMemo(() => {
@@ -3362,7 +3384,7 @@ export default function DefibTab({
 
   // Open Bulk Edit pane with clean empty fields for mass correction
   const handleOpenBulkEdit = () => {
-    if (selectedIds.length === 0) return;
+    if (selectedIds.length === 0 || selectedIds.length > 25) return;
     setBulkFields([{ id: Date.now().toString(), field: '', value: '' }]);
     setIsBulkEditOpen(true);
   };
@@ -3370,7 +3392,7 @@ export default function DefibTab({
   // Bulk Edit submission (Enregistrement propre de chaque valeur de champ modifié un par un)
   const handleBulkEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isBulkSubmitting) return;
+    if (isBulkSubmitting || selectedIds.length === 0 || selectedIds.length > 25) return;
 
     if (!isAllBulkFieldsCompleted || bulkFields.length === 0) {
       alert("Veuillez renseigner tous les champs sélectionnés.");
@@ -3601,7 +3623,7 @@ export default function DefibTab({
               {/* Both search and buttons are placed directly next to the title */}
               <div className="flex flex-wrap items-center gap-3">
                 {/* Field recherche (Search input) */}
-                <div className="relative w-full sm:w-60 md:w-64">
+                <div className="relative w-full sm:w-48 md:w-52">
                   <input
                     type="text"
                     id="search-defibs-input"
@@ -3768,16 +3790,29 @@ export default function DefibTab({
                   >
                     Sélectionné(s)
                   </span>
+                  {selectedIds.length > 25 && (
+                    <span 
+                      className="text-xs font-semibold font-sans px-2.5 py-1 rounded-full text-rose-600 bg-rose-50 border border-rose-200"
+                      title="Maximum 25 lignes pour la correction en masse"
+                    >
+                      Max. 25 pour corriger
+                    </span>
+                  )}
                 </div>
                 
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    disabled={selectedIds.length > 25}
                     onClick={handleOpenBulkEdit}
                     id="btn-bulk-modify"
-                    style={rowActionButton18Style}
-                    className="cursor-pointer select-none"
-                    title="Corriger en masse la sélection"
+                    style={{
+                      ...rowActionButton18Style,
+                      opacity: selectedIds.length > 25 ? 0.45 : 1,
+                      cursor: selectedIds.length > 25 ? 'not-allowed' : 'pointer'
+                    }}
+                    className={selectedIds.length > 25 ? 'cursor-not-allowed select-none' : 'cursor-pointer select-none'}
+                    title={selectedIds.length > 25 ? "Maximum 25 lignes pour la correction en masse (sélectionnez au maximum 25 lignes pour corriger)" : "Corriger en masse la sélection"}
                   >
                     Corriger
                   </button>
@@ -4876,7 +4911,7 @@ export default function DefibTab({
             </span>
           ) : isInitialView ? (
             <span>
-              {t("Affichage initial")} : {filteredDefibs.length} {t("derniers ajoutés ou modifiés")} ({activeDefibrillateurs.length.toLocaleString('fr-FR')} {t("au total")}).
+              {t("Affichage initial")} : {filteredDefibs.length} {t("derniers ajoutés ou modifiés")} ({activeDefibrillateurs.length.toLocaleString('fr-FR')} {t("au total")}, {totalMainOui.toLocaleString('fr-FR')} {t("Main. Oui")} et {totalMainNon.toLocaleString('fr-FR')} {t("Main. Non")}).
             </span>
           ) : (
             (search && search.trim().length > 0) ||

@@ -219,8 +219,8 @@ function loadCompactIndexSync() {
 loadCompactIndexSync();
 
 // In-memory cache for loaded chunk arrays to avoid repeated disk reads
-const loadedChunkCache = new Map<string, any[]>();
-const loadedChunkMtime = new Map<string, number>();
+const loadedChunkCache = new Map<string | number, any[]>();
+const loadedChunkMtime = new Map<string | number, number>();
 
 function getChunkCacheKey(prefix: string, chunkIdx: number): string {
   return `${prefix}_${chunkIdx}`;
@@ -291,8 +291,9 @@ function findHighestChunkIndex(prefix: string = 'D27_defibrillateurs'): number {
     }
   }
   for (const k of loadedChunkCache.keys()) {
-    if (k.startsWith(`${prefix}_`)) {
-      const idx = parseInt(k.replace(`${prefix}_`, ''), 10);
+    const strK = String(k);
+    if (strK.startsWith(`${prefix}_`)) {
+      const idx = parseInt(strK.replace(`${prefix}_`, ''), 10);
       if (!isNaN(idx) && idx > highest) highest = idx;
     }
   }
@@ -326,7 +327,8 @@ function invalidateAllDefibsCache(prefix?: string, clearChunkCache = false) {
     cachedAllDefibsByPrefix.delete(prefix);
     if (clearChunkCache) {
       for (const k of Array.from(loadedChunkCache.keys())) {
-        if (k.startsWith(`${prefix}_`)) {
+        const strK = String(k);
+        if (strK.startsWith(`${prefix}_`)) {
           loadedChunkCache.delete(k);
           loadedChunkMtime.delete(k);
         }

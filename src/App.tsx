@@ -255,6 +255,24 @@ export default function App() {
           setIsBlockedByPrez(!!found.blockedForPrez && loggedRole !== 'megaadmin');
           setIsSubscriptionInactive(found.subscriptionActive === false);
           setPaymentUrl(found.paymentUrl || '');
+
+          setCompanyInfo(prev => {
+            const isPlaceholderName = !prev.name || prev.name === 'Mon Cabinet' || prev.name === 'Défibeo Solutions';
+            const isPlaceholderEmail = !prev.email || prev.email === 'contact@defibeo-solutions.com';
+            const isPlaceholderPhone = !prev.phone || prev.phone === '+33 1 47 20 00 01';
+            if (isPlaceholderName || isPlaceholderEmail || isPlaceholderPhone) {
+              const enriched: CompanyInfo = {
+                ...prev,
+                name: isPlaceholderName && found.companyName ? found.companyName : prev.name,
+                nomCommercial: isPlaceholderName && found.companyName ? found.companyName : (prev.nomCommercial || prev.name),
+                email: isPlaceholderEmail && (found.companyEmail || found.adminEmail) ? (found.companyEmail || found.adminEmail) : prev.email,
+                phone: isPlaceholderPhone && found.companyPhone ? found.companyPhone : prev.phone,
+              };
+              localStorage.setItem(`defib_${tenantId}_company_info`, JSON.stringify(enriched));
+              return enriched;
+            }
+            return prev;
+          });
         } else {
           localStorage.setItem('defib_short_env_id', 'D18');
           setIsBlockedByPrez(false);
@@ -6113,6 +6131,12 @@ export default function App() {
             pdfHideVerificationsTechniques: validRemote.pdfHideVerificationsTechniques !== undefined ? validRemote.pdfHideVerificationsTechniques : (localData.pdfHideVerificationsTechniques || 'Non'),
             pdfHideHorodatagesDiagnostic: validRemote.pdfHideHorodatagesDiagnostic !== undefined ? validRemote.pdfHideHorodatagesDiagnostic : (localData.pdfHideHorodatagesDiagnostic || 'Non'),
             pdfShowDemandeDevisDetails: validRemote.pdfShowDemandeDevisDetails !== undefined ? validRemote.pdfShowDemandeDevisDetails : (localData.pdfShowDemandeDevisDetails || 'Non'),
+            spreadsheetDefibrillateurs: validRemote.spreadsheetDefibrillateurs !== undefined ? validRemote.spreadsheetDefibrillateurs : (localData.spreadsheetDefibrillateurs || ''),
+            spreadsheetAutresMateriels: validRemote.spreadsheetAutresMateriels !== undefined ? validRemote.spreadsheetAutresMateriels : (localData.spreadsheetAutresMateriels || ''),
+            spreadsheetClients: validRemote.spreadsheetClients !== undefined ? validRemote.spreadsheetClients : (localData.spreadsheetClients || ''),
+            spreadsheetDefibrillateursUrl: validRemote.spreadsheetDefibrillateursUrl !== undefined ? validRemote.spreadsheetDefibrillateursUrl : (localData.spreadsheetDefibrillateursUrl || ''),
+            spreadsheetAutresMaterielsUrl: validRemote.spreadsheetAutresMaterielsUrl !== undefined ? validRemote.spreadsheetAutresMaterielsUrl : (localData.spreadsheetAutresMaterielsUrl || ''),
+            spreadsheetClientsUrl: validRemote.spreadsheetClientsUrl !== undefined ? validRemote.spreadsheetClientsUrl : (localData.spreadsheetClientsUrl || ''),
           };
           if (merged.customLocationNames) {
             setLocationNames(merged.customLocationNames);
