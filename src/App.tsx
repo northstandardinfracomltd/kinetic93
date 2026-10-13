@@ -1991,6 +1991,32 @@ export default function App() {
         }
       } catch (_) {}
 
+      // 1b. If tenant has a Google Spreadsheet configured for Défibrillateurs, fetch directly from /api/sheets/data
+      const defibSheetUrl =
+        companyInfo?.spreadsheetDefibrillateurs ||
+        localStorage.getItem(`defib_${activeTenant}_spreadsheet_defibrillateurs`) ||
+        '';
+      if (defibSheetUrl && defibSheetUrl.includes('/spreadsheets/')) {
+        const sheetRes = await fetch(
+          `/api/sheets/data?tenantId=${encodeURIComponent(activeTenant)}&type=defibrillateurs&forceRefresh=true&spreadsheetUrl=${encodeURIComponent(defibSheetUrl)}`
+        );
+        if (sheetRes.ok) {
+          const sheetJson = await sheetRes.json();
+          if (sheetJson.fromSpreadsheet && Array.isArray(sheetJson.items)) {
+            setDefibrillateurs(sheetJson.items);
+            idbSet(`defib_${activeTenant}_defibrillateurs`, sheetJson.items).catch(() => {});
+            setDefibLoadingProgress({
+              current: sheetJson.items.length,
+              total: sheetJson.items.length,
+              percent: 100,
+              message: `Chargement ${sheetJson.items.length.toLocaleString('en-US')}/${sheetJson.items.length.toLocaleString('en-US')}, Terminé.`,
+            });
+            setTimeout(() => setIsDefibLoading(false), 200);
+            return;
+          }
+        }
+      }
+
       // 2. Fetch fresh defibrillateurs using robust retry-backed loader (protected against 503 errors)
       const freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant, onProgress);
       if (Array.isArray(freshRemote) && freshRemote.length > 0) {
@@ -2029,6 +2055,94 @@ export default function App() {
       }, 500);
     }
   };
+
+  // Automatic Google Spreadsheets sync for Défibrillateurs, Autres Matériels, and Clients whenever URLs are configured or updated
+  useEffect(() => {
+    if (!tenantId) return;
+    let isCancelled = false;
+
+    const loadSpreadsheetsForTenant = async (customInfo?: Partial<CompanyInfo>, force = false) => {
+      const activeTid = tenantId || 'demo';
+      const urlDefibs =
+        customInfo?.spreadsheetDefibrillateurs ??
+        companyInfo?.spreadsheetDefibrillateurs ??
+        localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ??
+        '';
+      const urlAutres =
+        customInfo?.spreadsheetAutresMateriels ??
+        companyInfo?.spreadsheetAutresMateriels ??
+        localStorage.getItem(`defib_${activeTid}_spreadsheet_autres_materiels`) ??
+        '';
+      const urlClients =
+        customInfo?.spreadsheetClients ??
+        companyInfo?.spreadsheetClients ??
+        localStorage.getItem(`defib_${activeTid}_spreadsheet_clients`) ??
+        '';
+
+      if (urlDefibs && urlDefibs.includes('/spreadsheets/')) {
+        try {
+          const res = await fetch(
+            `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=defibrillateurs&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlDefibs)}`
+          );
+          if (res.ok && !isCancelled) {
+            const json = await res.json();
+            if (json.fromSpreadsheet && Array.isArray(json.items)) {
+              setDefibrillateurs(json.items);
+              setIsDefibLoading(false);
+              idbSet(`defib_${activeTid}_defibrillateurs`, json.items).catch(() => {});
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (urlAutres && urlAutres.includes('/spreadsheets/')) {
+        try {
+          const res = await fetch(
+            `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=autresMateriels&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlAutres)}`
+          );
+          if (res.ok && !isCancelled) {
+            const json = await res.json();
+            if (json.fromSpreadsheet && Array.isArray(json.items)) {
+              setOtherEquipments(json.items);
+              idbSet(`defib_${activeTid}_other_equipments`, json.items).catch(() => {});
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (urlClients && urlClients.includes('/spreadsheets/')) {
+        try {
+          const res = await fetch(
+            `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=clients&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlClients)}`
+          );
+          if (res.ok && !isCancelled) {
+            const json = await res.json();
+            if (json.fromSpreadsheet && Array.isArray(json.items)) {
+              setClients(json.items);
+              idbSet(`defib_${activeTid}_clients`, json.items).catch(() => {});
+            }
+          }
+        } catch (_) {}
+      }
+    };
+
+    loadSpreadsheetsForTenant(undefined, false);
+
+    const handleUpdatedEvent = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      loadSpreadsheetsForTenant(detail, true);
+    };
+    window.addEventListener('defib-tenant-spreadsheets-updated', handleUpdatedEvent);
+    return () => {
+      isCancelled = true;
+      window.removeEventListener('defib-tenant-spreadsheets-updated', handleUpdatedEvent);
+    };
+  }, [
+    tenantId,
+    companyInfo?.spreadsheetDefibrillateurs,
+    companyInfo?.spreadsheetAutresMateriels,
+    companyInfo?.spreadsheetClients,
+  ]);
 
   // High-availability automatic real-time sync across multi-PC sessions for massive chunked tenants (D27 / D58)
   useEffect(() => {
@@ -7924,6 +8038,9 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    const prevIds = new Set(otherEquipments.map(x => x.id));
+    const currentIds = new Set(newItems.map(x => x.id));
+    const deletedIds = otherEquipments.filter(x => !currentIds.has(x.id)).map(x => x.id);
     setOtherEquipments(newItems);
     const str = JSON.stringify(newItems);
     safeSetLocalStorage(`defib_${tenantId}_other_equipments`, str);
@@ -7932,6 +8049,43 @@ export default function App() {
     } catch (_) {}
     loadedDataRef.current.otherEquipments = str;
     if (tenantId) {
+      const urlAutres =
+        companyInfo?.spreadsheetAutresMateriels ||
+        localStorage.getItem(`defib_${tenantId}_spreadsheet_autres_materiels`) ||
+        '';
+      if (deletedIds.length > 0) {
+        fetch('/api/sheets/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId,
+            type: 'autresMateriels',
+            keys: deletedIds,
+            spreadsheetUrl: urlAutres,
+          }),
+        }).catch(() => {});
+      }
+      if (newItems.length >= prevIds.size) {
+        fetch('/api/sheets/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId,
+            type: 'autresMateriels',
+            records: newItems,
+            spreadsheetUrl: urlAutres,
+          }),
+        }).catch(() => {});
+      }
+      fetch('/api/sync-collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName: 'otherEquipments',
+          tenantId,
+          value: newItems,
+        }),
+      }).catch(() => {});
       await saveCollectionToFirestore('otherEquipments', newItems, tenantId);
     }
   };
@@ -8090,6 +8244,20 @@ export default function App() {
       updatedAt: nowIso,
     };
     saveClients([...clients, newClient]);
+    const urlClients =
+      companyInfo?.spreadsheetClients ||
+      localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`) ||
+      '';
+    fetch('/api/sheets/upsert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenantId: tenantId || 'demo',
+        type: 'clients',
+        record: newClient,
+        spreadsheetUrl: urlClients,
+      }),
+    }).catch(() => {});
   };
 
   const handleUpdateClient = (updated: Client) => {
@@ -8102,6 +8270,20 @@ export default function App() {
       updatedAt: new Date().toISOString()
     };
     saveClients(clients.map((c) => (c.id === updated.id ? withUpdated : c)));
+    const urlClients =
+      companyInfo?.spreadsheetClients ||
+      localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`) ||
+      '';
+    fetch('/api/sheets/upsert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenantId: tenantId || 'demo',
+        type: 'clients',
+        record: withUpdated,
+        spreadsheetUrl: urlClients,
+      }),
+    }).catch(() => {});
   };
 
   const handleDeleteClient = (id: string) => {
@@ -8124,6 +8306,21 @@ export default function App() {
       const compName = target.denomination || target.siret || 'Client';
       logDeleteClient(tenantId, compName, loggedUser?.name).catch(() => {});
     }
+
+    const urlClients =
+      companyInfo?.spreadsheetClients ||
+      localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`) ||
+      '';
+    fetch('/api/sheets/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenantId: tenantId || 'demo',
+        type: 'clients',
+        keys: [id, target?.clientIdField, target?.siret].filter(Boolean),
+        spreadsheetUrl: urlClients,
+      }),
+    }).catch(() => {});
 
     saveClients(clients.filter((c) => c.id !== id));
   };

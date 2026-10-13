@@ -447,6 +447,31 @@ export default function AutresMaterielsTab({
   // Moved clientMap lookup declaration up or we already have it.
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
 
+  const getLinkedClientForItem = (item: OtherEquipment) => {
+    if (!item) return undefined;
+    if (item.clientId) {
+      const direct = clientMap.get(item.clientId);
+      if (direct) return direct;
+      const lowerRef = String(item.clientId).trim().toLowerCase();
+      const byNameOrCode = clients.find(
+        c =>
+          (c.denomination && c.denomination.trim().toLowerCase() === lowerRef) ||
+          (c.clientIdField && c.clientIdField.trim().toLowerCase() === lowerRef)
+      );
+      if (byNameOrCode) return byNameOrCode;
+    }
+    if (item.clientIdField) {
+      const lowerCode = String(item.clientIdField).trim().toLowerCase();
+      const byCode = clients.find(
+        c =>
+          (c.clientIdField && c.clientIdField.trim().toLowerCase() === lowerCode) ||
+          (c.id && c.id.trim().toLowerCase() === lowerCode)
+      );
+      if (byCode) return byCode;
+    }
+    return undefined;
+  };
+
   // Filter clients for dropdown
   const filteredClientsForDropdown = useMemo(() => {
     if (!clientSearchText) return clients;
@@ -637,8 +662,11 @@ export default function AutresMaterielsTab({
     setTournee(item.tournee || 'Centre');
     setSpecifiques(item.specifiques || {});
     
-    const cl = clientMap.get(item.clientId);
-    const clientLabel = cl ? `${cl.denomination} (${cl.siret || cl.id})` : '';
+    const cl = getLinkedClientForItem(item);
+    if (cl) {
+      setClientId(cl.id);
+    }
+    const clientLabel = cl ? `${cl.denomination} (${cl.siret || cl.id})` : (item.clientId || item.nomPrenomSite || '');
     setClientSearchText(clientLabel);
     setIsFormOpen(true);
   };
@@ -886,7 +914,8 @@ export default function AutresMaterielsTab({
       // 2. Search Query Filter
       if (!searchQuery) return true;
       const lower = searchQuery.toLowerCase().trim();
-      const clName = clientMap.get(item.clientId)?.denomination || '';
+      const resolvedCl = getLinkedClientForItem(item);
+      const clName = resolvedCl?.denomination || item.clientId || '';
       const matchesSpecifiques = item.specifiques && Object.values(item.specifiques).some(val => 
         typeof val === 'string' && val.toLowerCase().includes(lower)
       );
@@ -1332,7 +1361,7 @@ export default function AutresMaterielsTab({
                     </tr>
                   ) : (
                     filteredList.map((item) => {
-                      const clientData = clientMap.get(item.clientId);
+                      const clientData = getLinkedClientForItem(item);
                       const isRowChecked = selectedIds.includes(item.id);
                       const isPinned = pinnedOtherIds.includes(item.id);
                       return (
@@ -1397,7 +1426,7 @@ export default function AutresMaterielsTab({
                             {item.identifiant || '—'}
                           </td>
                           <td className="px-5 py-4 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
-                            {clientData ? clientData.denomination : ''}
+                            {clientData ? clientData.denomination : (item.clientId || item.nomPrenomSite || '')}
                           </td>
                           <td className="px-5 py-4 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             {item.ville}{item.codePostal ? ` (${item.codePostal})` : ''}

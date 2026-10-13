@@ -1861,13 +1861,116 @@ export default function DefibTab({
     return undefined;
   };
 
-  const variableMap = useMemo(() => new Map(variables.map(v => [v.id, v])), [variables]);
+  // Variables categorized lists for fast lookup selects (including any custom model names from Google Spreadsheet)
+  const modelesDefib = useMemo(() => {
+    const base = variables.filter(v => v.category === 'Modèle Défibrillateur');
+    const knownKeys = new Set(base.flatMap(v => [v.id.toLowerCase(), (v.nom || '').trim().toLowerCase(), `${v.marque || ''} ${v.nom || ''}`.trim().toLowerCase()]));
+    const extras: Variable[] = [];
+    for (const df of defibrillateurs) {
+      const raw = String(df.modeleId || (df as any).modele || '').trim();
+      if (raw && !knownKeys.has(raw.toLowerCase())) {
+        knownKeys.add(raw.toLowerCase());
+        extras.push({ id: raw, category: 'Modèle Défibrillateur', nom: raw, marque: '' });
+      }
+    }
+    return [...base, ...extras];
+  }, [variables, defibrillateurs]);
 
-  // Variables categorized lists for fast lookup selects
-  const modelesDefib = useMemo(() => variables.filter(v => v.category === 'Modèle Défibrillateur'), [variables]);
-  const modelesCoffret = useMemo(() => variables.filter(v => v.category === 'Modèle Coffret'), [variables]);
-  const modelesElectrode = useMemo(() => variables.filter(v => v.category === 'Modèle Électrode'), [variables]);
-  const modelesBatterie = useMemo(() => variables.filter(v => v.category === 'Modèle Batterie'), [variables]);
+  const modelesCoffret = useMemo(() => {
+    const base = variables.filter(v => v.category === 'Modèle Coffret');
+    const knownKeys = new Set(base.flatMap(v => [v.id.toLowerCase(), (v.nom || '').trim().toLowerCase()]));
+    const extras: Variable[] = [];
+    for (const df of defibrillateurs) {
+      const raw = String(df.modeleCoffretId || (df as any).modeleCoffret || '').trim();
+      if (raw && !knownKeys.has(raw.toLowerCase())) {
+        knownKeys.add(raw.toLowerCase());
+        extras.push({ id: raw, category: 'Modèle Coffret', nom: raw, marque: '' });
+      }
+    }
+    return [...base, ...extras];
+  }, [variables, defibrillateurs]);
+
+  const modelesElectrode = useMemo(() => {
+    const base = variables.filter(v => v.category === 'Modèle Électrode');
+    const knownKeys = new Set(base.flatMap(v => [v.id.toLowerCase(), (v.nom || '').trim().toLowerCase()]));
+    const extras: Variable[] = [];
+    for (const df of defibrillateurs) {
+      for (const rawVal of [df.modeleElectrodeAId, df.modeleElectrodeASecoursId, df.modeleElectrodePId, df.modeleElectrodePSecoursId]) {
+        const raw = String(rawVal || '').trim();
+        if (raw && !knownKeys.has(raw.toLowerCase())) {
+          knownKeys.add(raw.toLowerCase());
+          extras.push({ id: raw, category: 'Modèle Électrode', nom: raw, marque: '' });
+        }
+      }
+    }
+    return [...base, ...extras];
+  }, [variables, defibrillateurs]);
+
+  const modelesBatterie = useMemo(() => {
+    const base = variables.filter(v => v.category === 'Modèle Batterie');
+    const knownKeys = new Set(base.flatMap(v => [v.id.toLowerCase(), (v.nom || '').trim().toLowerCase()]));
+    const extras: Variable[] = [];
+    for (const df of defibrillateurs) {
+      for (const rawVal of [df.modeleBatterieId, df.modeleBatterieSecoursId]) {
+        const raw = String(rawVal || '').trim();
+        if (raw && !knownKeys.has(raw.toLowerCase())) {
+          knownKeys.add(raw.toLowerCase());
+          extras.push({ id: raw, category: 'Modèle Batterie', nom: raw, marque: '' });
+        }
+      }
+    }
+    return [...base, ...extras];
+  }, [variables, defibrillateurs]);
+
+  const variableMap = useMemo(() => {
+    const map = new Map<string, Variable>();
+    for (const v of [...variables, ...modelesDefib, ...modelesCoffret, ...modelesElectrode, ...modelesBatterie]) {
+      if (!v) continue;
+      map.set(v.id, v);
+      if (v.nom) map.set(v.nom.trim(), v);
+    }
+    return map;
+  }, [variables, modelesDefib, modelesCoffret, modelesElectrode, modelesBatterie]);
+
+  // Cache trace for the 3 most recently added or modified defibrillators (expires after 30 minutes of inactivity)
+  const RECENT_DEFIB_TTL_MS = 30 * 60 * 1000;
+  const [recentDefibTimestamps, setRecentDefibTimestamps] = useState<Record<string, number>>(() => {
+    try {
+      const saved =
+        sessionStorage.getItem(`defib_${activeTenantId}_recent_defib_timestamps`) ||
+        localStorage.getItem(`defib_${activeTenantId}_recent_defib_timestamps`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const now = Date.now();
+        const valid: Record<string, number> = {};
+        for (const [k, ts] of Object.entries(parsed)) {
+          if (typeof ts === 'number' && now - ts < RECENT_DEFIB_TTL_MS) {
+            valid[k.toLowerCase()] = ts;
+          }
+        }
+        return valid;
+      }
+    } catch (_) {}
+    return {};
+  });
+
+  const recordRecentDefibChange = (keys: (string | undefined | null)[]) => {
+    const cleanKeys = keys.filter(Boolean).map(k => String(k).trim().toLowerCase());
+    if (cleanKeys.length === 0) return;
+    const now = Date.now();
+    setRecentDefibTimestamps(prev => {
+      const updated = { ...prev };
+      cleanKeys.forEach((k, idx) => {
+        updated[k] = now - idx;
+      });
+      try {
+        const str = JSON.stringify(updated);
+        sessionStorage.setItem(`defib_${activeTenantId}_recent_defib_timestamps`, str);
+        localStorage.setItem(`defib_${activeTenantId}_recent_defib_timestamps`, str);
+      } catch (_) {}
+      return updated;
+    });
+  };
 
   // Validation state for Atlasanté GeoDAE bulk synchronization
   const isSyncAtlasanteDisabled = useMemo(() => {
@@ -2043,10 +2146,21 @@ export default function DefibTab({
           return false;
         }
       }
-      // 1. Fast equality checks first (inexpensive)
+      // 1. Fast equality checks first (inexpensive, supports both IDs and Spreadsheet names)
       if (activeFilters.region !== 'Tous' && df.region !== activeFilters.region) return false;
-      if (activeFilters.modeleId !== 'Tous' && df.modeleId !== activeFilters.modeleId) return false;
-      if (activeFilters.clientId && activeFilters.clientId !== 'Tous' && df.clientId !== activeFilters.clientId) return false;
+      if (activeFilters.modeleId !== 'Tous') {
+        const targetVar = variableMap.get(activeFilters.modeleId);
+        const dfMod = String(df.modeleId || (df as any).modele || '').trim().toLowerCase();
+        const isModelMatch =
+          df.modeleId === activeFilters.modeleId ||
+          dfMod === activeFilters.modeleId.trim().toLowerCase() ||
+          (targetVar && targetVar.nom && (dfMod === targetVar.nom.trim().toLowerCase() || dfMod === `${targetVar.marque || ''} ${targetVar.nom || ''}`.trim().toLowerCase()));
+        if (!isModelMatch) return false;
+      }
+      if (activeFilters.clientId && activeFilters.clientId !== 'Tous') {
+        const linkedCli = getLinkedClientForDefib(df);
+        if (df.clientId !== activeFilters.clientId && linkedCli?.id !== activeFilters.clientId) return false;
+      }
 
       // 2. Catégorie match
       if (activeFilters.categorie !== 'Tous') {
@@ -2236,15 +2350,23 @@ export default function DefibTab({
     const isInitial = !hasSearch && !hasSortFilter && !hasDeptFilter && !hasActiveSidePaneFilter;
 
     if (isInitial) {
-      const totalLen = defibrillateurs.length;
-      const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));
-      const sorted = [...result].sort((a, b) => {
-        const timeA = getDefibActivityTimestamp(a, indexMap.get(a.id) ?? 0);
-        const timeB = getDefibActivityTimestamp(b, indexMap.get(b.id) ?? 0);
-        return timeB - timeA;
-      });
-      // Display strictly the 10 most recently added or modified defibrillators in initial view
-      result = sorted.slice(0, 10);
+      const now = Date.now();
+      const getCacheTs = (df: Defibrillateur): number => {
+        const k1 = df.id ? df.id.trim().toLowerCase() : '';
+        const k2 = df.identifiant ? df.identifiant.trim().toLowerCase() : '';
+        const k3 = df.numeroSerie ? df.numeroSerie.trim().toLowerCase() : '';
+        const ts =
+          (k1 && recentDefibTimestamps[k1]) ||
+          (k2 && recentDefibTimestamps[k2]) ||
+          (k3 && recentDefibTimestamps[k3]) ||
+          0;
+        return ts && now - ts < RECENT_DEFIB_TTL_MS ? ts : 0;
+      };
+
+      const cachedRecent = result.filter(df => getCacheTs(df) > 0);
+      cachedRecent.sort((a, b) => getCacheTs(b) - getCacheTs(a));
+      // Display strictly up to the 3 most recently added or modified defibrillators remembered by the cache
+      result = cachedRecent.slice(0, 3);
     } else if (sortFilter === 'recent') {
       const totalLen = defibrillateurs.length;
       const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));
@@ -2272,7 +2394,7 @@ export default function DefibTab({
     }
 
 
-    if (pinnedDefibIds.length > 0) {
+    if (pinnedDefibIds.length > 0 && (!isInitial || result.length > 0)) {
       const pinnedSet = new Set(pinnedDefibIds);
       const pinnedItems = result.filter(df => pinnedSet.has(df.id));
       const unpinnedItems = result.filter(df => !pinnedSet.has(df.id));
@@ -2280,7 +2402,7 @@ export default function DefibTab({
     }
 
     return result;
-  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, rejectedDefibSet, sortFilter, maintenanceFilter, pinnedDefibIds, selectedDepartment]);
+  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, rejectedDefibSet, sortFilter, maintenanceFilter, pinnedDefibIds, selectedDepartment, recentDefibTimestamps]);
 
   // Derived state to know if we are in the initial lightweight 10-line view
   const isInitialView = useMemo(() => {
@@ -3351,6 +3473,7 @@ export default function DefibTab({
           updatedAt: nowIso,
           dateDerniereModification: nowIso,
         });
+        recordRecentDefibChange([editingDefib.id, payload.identifiant, payload.numeroSerie]);
       } else {
         await onAddDefib({
           ...payload,
@@ -3358,6 +3481,7 @@ export default function DefibTab({
           updatedAt: nowIso,
           dateDerniereModification: nowIso,
         });
+        recordRecentDefibChange([payload.identifiant, payload.numeroSerie]);
       }
 
       setIsFormOpen(false);
@@ -3558,6 +3682,7 @@ export default function DefibTab({
         onBulkEdit(selectedIds, updates),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout de l’opération")), 8000))
       ]);
+      recordRecentDefibChange(selectedIds.slice(0, 3));
       await new Promise(r => setTimeout(r, 200));
 
       setBulkFields([{ id: Date.now().toString(), field: '', value: '' }]);
@@ -4386,7 +4511,18 @@ export default function DefibTab({
               message={defibLoadingProgress?.message}
             />
           ) : filteredDefibs.length === 0 ? (
-            <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
+            isInitialView ? (
+              <div className="p-16 text-center font-sans lg:py-24">
+                <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
+                  {t("Recherchez un/des défibrillateur(s) pour le/les afficher.")}
+                </p>
+                <p style={{ color: '#000000', fontSize: '14px', fontWeight: 100, marginTop: '6px' }}>
+                  {`Vous avez ${activeDefibrillateurs.length} défibrillateur(s) sur Defibeo.`}
+                </p>
+              </div>
+            ) : (
+              <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
+            )
           ) : (
             <table 
               ref={tableRef}

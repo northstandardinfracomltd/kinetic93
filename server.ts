@@ -8,6 +8,15 @@ import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 import dotenv from "dotenv";
+import {
+  SheetTabType,
+  getGlobalGoogleConfig,
+  saveGlobalGoogleConfig,
+  fetchTenantSheetCollection,
+  upsertRecordsToTenantSheet,
+  deleteRecordsFromTenantSheet,
+  extractSpreadsheetIdAndGid,
+} from "./src/server/googleSheetsEngine";
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -2973,6 +2982,33 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
 
   const isObjectCol = colName === 'companyInfo' || colName === 'company_info';
 
+  // 0. GOOGLE SHEETS DATABASE OVERRIDE (for defibrillateurs, otherEquipments, clients)
+  const sheetTabMap: Record<string, SheetTabType> = {
+    defibrillateurs: 'defibrillateurs',
+    defibs: 'defibrillateurs',
+    devices: 'defibrillateurs',
+    otherEquipments: 'autresMateriels',
+    other_equipments: 'autresMateriels',
+    autresMateriels: 'autresMateriels',
+    clients: 'clients',
+  };
+  const mappedSheetTab = sheetTabMap[colName];
+  if (mappedSheetTab) {
+    const sheetUrl = getTenantSpreadsheetUrlSync(activeTenant, mappedSheetTab);
+    if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
+      try {
+        const sheetData = await fetchTenantSheetCollection(sheetUrl, activeTenant, mappedSheetTab, false);
+        if (sheetData.fromSpreadsheet) {
+          serverMemoryStore.set(canonicalKey, sheetData.items);
+          serverStoreTimestamps.set(canonicalKey, Date.now());
+          return sheetData.items;
+        }
+      } catch (sheetErr) {
+        console.warn(`[GoogleSheetsDB] Warning reading ${mappedSheetTab} for tenant ${activeTenant}:`, sheetErr);
+      }
+    }
+  }
+
   // 1. FAST PATH: Check in-memory store and disk files for this tenant across all collection name aliases
   const colAliases = getCollectionNameAliases(colName);
   const candidateLookupKeys: string[] = [];
@@ -3390,6 +3426,14 @@ async function warmupDefibrillateursStore() {
       const formatted = formatDefibrillateurOutput(defib);
       indexDefibrillateur(formatted, rawTenant);
 
+      // Sync directly to tenant's Google Spreadsheet if configured
+      const defibSheetUrl = getTenantSpreadsheetUrlSync(rawTenant, 'defibrillateurs');
+      if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
+        await upsertRecordsToTenantSheet(defibSheetUrl, rawTenant, 'defibrillateurs', [formatted]).catch(err =>
+          console.warn('[GoogleSheetsDB] single defib upsert warning:', err)
+        );
+      }
+
       const candidateKeysToFind = [
         formatted.numeroSerie,
         formatted.identifiant,
@@ -3548,6 +3592,14 @@ async function warmupDefibrillateursStore() {
       const tAliases = getTenantAliasesSync(rawTenant);
       const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
       const prefix = isD27OrD58 ? 'D27_defibrillateurs' : `${rawTenant.toUpperCase()}_defibrillateurs`;
+
+      const defibSheetUrl = getTenantSpreadsheetUrlSync(rawTenant, 'defibrillateurs');
+      if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
+        const formattedBatch = defibs.filter(Boolean).map((d: any) => formatDefibrillateurOutput(d));
+        await upsertRecordsToTenantSheet(defibSheetUrl, rawTenant, 'defibrillateurs', formattedBatch).catch(err =>
+          console.warn('[GoogleSheetsDB] batch defib upsert warning:', err)
+        );
+      }
       const candidateKeys: string[] = [];
       if (rawTenant === 'demo') {
         candidateKeys.push('defibrillateurs', 'demo_defibrillateurs');
@@ -3759,6 +3811,16 @@ async function warmupDefibrillateursStore() {
         { id: String(id || ''), identifiant: String(identifiant || ''), numeroSerie: String(numeroSerie || '') }
       ], rawTenant, prefix);
 
+      const defibSheetUrl = getTenantSpreadsheetUrlSync(rawTenant, 'defibrillateurs');
+      if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
+        await deleteRecordsFromTenantSheet(
+          defibSheetUrl,
+          rawTenant,
+          'defibrillateurs',
+          [String(id || ''), String(identifiant || ''), String(numeroSerie || '')].filter(Boolean)
+        ).catch(() => {});
+      }
+
       serverDefibVersion = Date.now();
       persistServerStoreToDisk();
       const liveTotal = getCachedDefibCount(prefix);
@@ -3793,6 +3855,11 @@ async function warmupDefibrillateursStore() {
       });
 
       const result = deleteDefibrillateursFromStore(targets, rawTenant, prefix);
+      const defibSheetUrl = getTenantSpreadsheetUrlSync(rawTenant, 'defibrillateurs');
+      if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
+        const flatKeys = targets.flatMap(t => [t.id, t.identifiant, t.numeroSerie]).filter(Boolean);
+        await deleteRecordsFromTenantSheet(defibSheetUrl, rawTenant, 'defibrillateurs', flatKeys).catch(() => {});
+      }
       serverDefibVersion = Date.now();
       persistServerStoreToDisk();
       const liveTotal = getCachedDefibCount(prefix);
@@ -3877,10 +3944,184 @@ async function warmupDefibrillateursStore() {
     }
   });
 
-  // Metadata endpoint for high-speed chunked defibrillateurs download
-  app.get("/api/defib-chunks/meta", (req, res) => {
+  // Helper to resolve tenant spreadsheet URL synchronously from memory or disk
+  function getTenantSpreadsheetUrlSync(tenantId: string, tabType: SheetTabType): string {
+    const activeTenant = (tenantId || 'demo').trim();
+    const tAliases = getTenantAliasesSync(activeTenant);
+    const numOnly = activeTenant.replace(/^d/i, '');
+    const candidateTenants = Array.from(new Set([
+      activeTenant,
+      activeTenant.toUpperCase(),
+      activeTenant.toLowerCase(),
+      ...(numOnly ? [`D${numOnly}`, `d${numOnly}`, numOnly] : []),
+      ...Array.from(tAliases),
+    ]));
+
+    const fieldMap: Record<SheetTabType, string[]> = {
+      defibrillateurs: ['spreadsheetDefibrillateurs', 'spreadsheetDefibrillateursUrl'],
+      autresMateriels: ['spreadsheetAutresMateriels', 'spreadsheetAutresMaterielsUrl'],
+      clients: ['spreadsheetClients', 'spreadsheetClientsUrl'],
+    };
+    const fields = fieldMap[tabType];
+
+    for (const cand of candidateTenants) {
+      for (const suffix of ['companyInfo', 'company_info', 'tenantDatabases']) {
+        const key = cand === 'demo' ? suffix : `${cand}_${suffix}`;
+        if (serverMemoryStore.has(key)) {
+          const obj = serverMemoryStore.get(key);
+          if (obj && typeof obj === 'object') {
+            for (const f of fields) {
+              if (obj[f] && typeof obj[f] === 'string' && obj[f].trim()) {
+                return obj[f].trim();
+              }
+            }
+          }
+        }
+        const diskFile = path.join(COLLECTIONS_DIR, `${key}.json`);
+        if (fs.existsSync(diskFile)) {
+          try {
+            const obj = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
+            if (obj && typeof obj === 'object') {
+              for (const f of fields) {
+                if (obj[f] && typeof obj[f] === 'string' && obj[f].trim()) {
+                  return obj[f].trim();
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    }
+    return '';
+  }
+
+  // Dedicated Google Sheets Database Endpoints
+  app.get("/api/sheets/global-config", (_req, res) => {
+    try {
+      const cfg = getGlobalGoogleConfig();
+      let clientEmail = '';
+      if (cfg.serviceAccountJson) {
+        try {
+          const parsed = JSON.parse(cfg.serviceAccountJson);
+          clientEmail = parsed.client_email || '';
+        } catch (_) {}
+      }
+      return res.json({
+        hasApiKey: Boolean(cfg.apiKey),
+        apiKey: cfg.apiKey || '',
+        hasServiceAccount: Boolean(cfg.serviceAccountJson),
+        serviceAccountJson: cfg.serviceAccountJson || '',
+        serviceAccountEmail: clientEmail,
+        appsScriptBridgeUrl: cfg.appsScriptBridgeUrl || '',
+        updatedAt: cfg.updatedAt || '',
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/sheets/global-config", (req, res) => {
+    try {
+      const saved = saveGlobalGoogleConfig(req.body || {});
+      let clientEmail = '';
+      if (saved.serviceAccountJson) {
+        try {
+          const parsed = JSON.parse(saved.serviceAccountJson);
+          clientEmail = parsed.client_email || '';
+        } catch (_) {}
+      }
+      return res.json({
+        status: 'success',
+        hasApiKey: Boolean(saved.apiKey),
+        hasServiceAccount: Boolean(saved.serviceAccountJson),
+        serviceAccountEmail: clientEmail,
+        appsScriptBridgeUrl: saved.appsScriptBridgeUrl || '',
+        updatedAt: saved.updatedAt,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/sheets/data", async (req, res) => {
     try {
       const tenantId = String(req.query.tenantId || 'demo').trim();
+      const tabType = String(req.query.type || 'defibrillateurs').trim() as SheetTabType;
+      const forceRefresh = req.query.forceRefresh === 'true';
+      const explicitUrl = String(req.query.spreadsheetUrl || '').trim();
+      const sheetUrl = explicitUrl || getTenantSpreadsheetUrlSync(tenantId, tabType);
+
+      if (!sheetUrl || !extractSpreadsheetIdAndGid(sheetUrl)) {
+        return res.json({ status: 'no_spreadsheet', fromSpreadsheet: false, items: [], totalCount: 0 });
+      }
+
+      const data = await fetchTenantSheetCollection(sheetUrl, tenantId, tabType, forceRefresh);
+      return res.json({
+        status: 'success',
+        fromSpreadsheet: data.fromSpreadsheet,
+        items: data.items,
+        headers: data.headers,
+        totalCount: data.totalCount,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/sheets/upsert", async (req, res) => {
+    try {
+      const { tenantId, type, record, records, spreadsheetUrl: explicitUrl } = req.body || {};
+      const rawTenant = String(tenantId || 'demo').trim();
+      const tabType = (type || 'defibrillateurs') as SheetTabType;
+      const sheetUrl = explicitUrl || getTenantSpreadsheetUrlSync(rawTenant, tabType);
+      if (!sheetUrl || !extractSpreadsheetIdAndGid(sheetUrl)) {
+        return res.json({ status: 'no_spreadsheet', synced: false });
+      }
+      const list = Array.isArray(records) ? records : (record ? [record] : []);
+      const result = await upsertRecordsToTenantSheet(sheetUrl, rawTenant, tabType, list);
+      serverDefibVersion = Date.now();
+      return res.json({ status: 'success', ...result });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/sheets/delete", async (req, res) => {
+    try {
+      const { tenantId, type, keys, spreadsheetUrl: explicitUrl } = req.body || {};
+      const rawTenant = String(tenantId || 'demo').trim();
+      const tabType = (type || 'defibrillateurs') as SheetTabType;
+      const sheetUrl = explicitUrl || getTenantSpreadsheetUrlSync(rawTenant, tabType);
+      if (!sheetUrl || !extractSpreadsheetIdAndGid(sheetUrl)) {
+        return res.json({ status: 'no_spreadsheet', deletedCount: 0 });
+      }
+      const keyList = Array.isArray(keys) ? keys : [keys].filter(Boolean);
+      const result = await deleteRecordsFromTenantSheet(sheetUrl, rawTenant, tabType, keyList);
+      serverDefibVersion = Date.now();
+      return res.json({ status: 'success', ...result });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Metadata endpoint for high-speed chunked defibrillateurs download
+  app.get("/api/defib-chunks/meta", async (req, res) => {
+    try {
+      const tenantId = String(req.query.tenantId || 'demo').trim();
+      const defibSheetUrl = getTenantSpreadsheetUrlSync(tenantId, 'defibrillateurs');
+      if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
+        const sheetData = await fetchTenantSheetCollection(defibSheetUrl, tenantId, 'defibrillateurs', false);
+        if (sheetData.fromSpreadsheet) {
+          return res.json({
+            totalChunks: 1,
+            totalCount: sheetData.totalCount,
+            prefix: `${tenantId.toUpperCase()}_defibrillateurs`,
+            tenantId,
+            fromSpreadsheet: true,
+            version: serverDefibVersion,
+          });
+        }
+      }
       const tAliases = getTenantAliasesSync(tenantId);
       const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
 
@@ -3949,10 +4190,32 @@ async function warmupDefibrillateursStore() {
 
   // Bundled chunks endpoint (returns batches of 10 chunks per request, reducing 78 requests to only 8)
   // Each batch is ~2.3k items (~350KB compressed), guaranteeing zero proxy buffer overflow, zero decoding errors, and zero 503s
-  app.get("/api/defib-chunks/bundle", (req, res) => {
+  app.get("/api/defib-chunks/bundle", async (req, res) => {
     try {
       const tenantId = String(req.query.tenantId || 'demo').trim();
       const batchIdx = parseInt(String(req.query.batch || '0'), 10);
+      const defibSheetUrl = getTenantSpreadsheetUrlSync(tenantId, 'defibrillateurs');
+      if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
+        const sheetData = await fetchTenantSheetCollection(defibSheetUrl, tenantId, 'defibrillateurs', false);
+        if (sheetData.fromSpreadsheet) {
+          const BATCH_ITEMS = 2500;
+          const startItem = batchIdx * BATCH_ITEMS;
+          const endItem = startItem + BATCH_ITEMS;
+          const slice = sheetData.items.slice(startItem, endItem);
+          const isLastBatch = endItem >= sheetData.items.length;
+          return res.json({
+            status: "success",
+            batch: batchIdx,
+            startChunk: batchIdx,
+            endChunk: batchIdx,
+            totalChunks: Math.max(1, Math.ceil(sheetData.items.length / BATCH_ITEMS)),
+            isLastBatch,
+            fromSpreadsheet: true,
+            version: serverDefibVersion,
+            value: slice
+          });
+        }
+      }
       const BATCH_CHUNK_COUNT = 10;
       const tAliases = getTenantAliasesSync(tenantId);
       const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');

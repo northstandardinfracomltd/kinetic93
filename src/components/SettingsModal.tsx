@@ -1626,20 +1626,52 @@ export default function SettingsModal({
     localStorage.setItem('defib_company_info', JSON.stringify(updatedCompany));
 
     try {
-      if (effectiveTenantId && effectiveTenantId !== 'demo') {
-        await Promise.all([
-          saveCollectionToFirestore('companyInfo', updatedCompany, effectiveTenantId),
-          saveCollectionToFirestore('tenantDatabases', {
-            spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
-            spreadsheetAutresMateriels: localCompany.spreadsheetAutresMateriels || '',
-            spreadsheetClients: localCompany.spreadsheetClients || '',
-            updatedAt: new Date().toISOString()
-          }, effectiveTenantId)
-        ]);
+      await Promise.all([
+        fetch('/api/sync-collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            collectionName: 'companyInfo',
+            tenantId: effectiveTenantId,
+            value: updatedCompany,
+          }),
+        }).catch(() => {}),
+        fetch('/api/sync-collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            collectionName: 'tenantDatabases',
+            tenantId: effectiveTenantId,
+            value: {
+              spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
+              spreadsheetAutresMateriels: localCompany.spreadsheetAutresMateriels || '',
+              spreadsheetClients: localCompany.spreadsheetClients || '',
+              updatedAt: new Date().toISOString(),
+            },
+          }),
+        }).catch(() => {}),
+        ...(effectiveTenantId && effectiveTenantId !== 'demo'
+          ? [
+              saveCollectionToFirestore('companyInfo', updatedCompany, effectiveTenantId).catch(() => {}),
+              saveCollectionToFirestore(
+                'tenantDatabases',
+                {
+                  spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
+                  spreadsheetAutresMateriels: localCompany.spreadsheetAutresMateriels || '',
+                  spreadsheetClients: localCompany.spreadsheetClients || '',
+                  updatedAt: new Date().toISOString(),
+                },
+                effectiveTenantId
+              ).catch(() => {}),
+            ]
+          : []),
+      ]);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('defib-tenant-spreadsheets-updated', { detail: updatedCompany }));
       }
       setDatabasesSaveStatus('saved');
     } catch (err) {
-      console.error('Error saving databases to Firestore:', err);
+      console.error('Error saving databases:', err);
       setDatabasesSaveStatus('idle');
     }
     setTimeout(() => {

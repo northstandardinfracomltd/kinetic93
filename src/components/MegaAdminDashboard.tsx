@@ -44,6 +44,55 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [paymentUrlDrafts, setPaymentUrlDrafts] = useState<Record<string, string>>({});
 
+  // Global Google Sheets API Configuration (All Tenants)
+  const [googleApiKey, setGoogleApiKey] = useState('');
+  const [googleServiceAccountJson, setGoogleServiceAccountJson] = useState('');
+  const [googleAppsScriptUrl, setGoogleAppsScriptUrl] = useState('');
+  const [googleServiceAccountEmail, setGoogleServiceAccountEmail] = useState<string | null>(null);
+  const [isSavingGoogleConfig, setIsSavingGoogleConfig] = useState(false);
+  const [googleConfigSavedToast, setGoogleConfigSavedToast] = useState(false);
+  const [showGoogleConfigPanel, setShowGoogleConfigPanel] = useState(false);
+
+  const fetchGoogleConfig = async () => {
+    try {
+      const res = await fetch('/api/sheets/global-config');
+      if (res.ok) {
+        const data = await res.json();
+        setGoogleApiKey(data.apiKey || '');
+        setGoogleServiceAccountJson(data.serviceAccountJson || '');
+        setGoogleAppsScriptUrl(data.appsScriptUrl || '');
+        setGoogleServiceAccountEmail(data.serviceAccountEmail || null);
+      }
+    } catch (err) {
+      console.error('Failed to load global Google Sheets config:', err);
+    }
+  };
+
+  const handleSaveGoogleConfig = async () => {
+    setIsSavingGoogleConfig(true);
+    try {
+      const res = await fetch('/api/sheets/global-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: googleApiKey.trim(),
+          serviceAccountJson: googleServiceAccountJson.trim(),
+          appsScriptUrl: googleAppsScriptUrl.trim(),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGoogleServiceAccountEmail(data.serviceAccountEmail || null);
+        setGoogleConfigSavedToast(true);
+        setTimeout(() => setGoogleConfigSavedToast(false), 4000);
+      }
+    } catch (err) {
+      console.error('Error saving global Google Sheets config:', err);
+    } finally {
+      setIsSavingGoogleConfig(false);
+    }
+  };
+
   const handleSavePassword = async () => {
     if (!selectedTenantForPassword) return;
     if (!newPasswordValue.trim()) {
@@ -96,6 +145,7 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
 
   useEffect(() => {
     fetchTenants();
+    fetchGoogleConfig();
   }, []);
 
   const handleToggleStatus = async (tenantId: string, currentDisabledStatus: boolean) => {
@@ -329,6 +379,14 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
           <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
+              onClick={() => setShowGoogleConfigPanel(prev => !prev)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-pink-600/20 hover:bg-pink-600/30 text-pink-300 font-bold text-sm rounded-xl border border-pink-500/30 transition-all cursor-pointer"
+            >
+              <Key className="w-4 h-4 text-pink-400" />
+              API Google Sheets Globale
+            </button>
+            <button
+              type="button"
               onClick={fetchTenants}
               disabled={isLoading}
               className="flex items-center gap-2 px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-sm rounded-xl border border-neutral-700 transition-all cursor-pointer disabled:opacity-50"
@@ -338,6 +396,85 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
             </button>
           </div>
         </div>
+
+        {/* Global Google Sheets API Configuration Panel */}
+        {showGoogleConfigPanel && (
+          <div className="bg-neutral-900 border border-pink-500/30 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <Key className="w-5 h-5 text-pink-500" />
+                  Connecteur Google Sheets API Global (Tous les Tenants)
+                </h3>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Permet de lire et modifier en direct (GET / POST / Modification en masse) les Google Spreadsheets de tous les tenants sans leur demander d'activer un connecteur.
+                </p>
+              </div>
+              {googleServiceAccountEmail && (
+                <div className="bg-emerald-950/50 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs text-emerald-300 font-mono">
+                  Compte de service actif : {googleServiceAccountEmail}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-neutral-300">
+                  Clé API Google Cloud (API Key - Lecture Google Sheets API v4)
+                </label>
+                <input
+                  type="text"
+                  value={googleApiKey}
+                  onChange={(e) => setGoogleApiKey(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2.5 px-3.5 text-sm text-white placeholder-neutral-600 focus:outline-hidden focus:border-pink-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-neutral-300">
+                  Webhook Apps Script Global (Optionnel - Écriture sans Service Account)
+                </label>
+                <input
+                  type="text"
+                  value={googleAppsScriptUrl}
+                  onChange={(e) => setGoogleAppsScriptUrl(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2.5 px-3.5 text-sm text-white placeholder-neutral-600 focus:outline-hidden focus:border-pink-500"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-neutral-300">
+                JSON du Compte de Service Google (Service Account JSON - Lecture & Écriture API v4 directe)
+              </label>
+              <textarea
+                rows={4}
+                value={googleServiceAccountJson}
+                onChange={(e) => setGoogleServiceAccountJson(e.target.value)}
+                placeholder='{"type": "service_account", "project_id": "...", "private_key": "-----BEGIN PRIVATE KEY-----\n...", "client_email": "...@...iam.gserviceaccount.com"}'
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2.5 px-3.5 text-xs font-mono text-white placeholder-neutral-600 focus:outline-hidden focus:border-pink-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              {googleConfigSavedToast && (
+                <span className="text-xs font-bold text-emerald-400">
+                  Configuration Google Sheets enregistrée !
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveGoogleConfig}
+                disabled={isSavingGoogleConfig}
+                className="px-5 py-2.5 bg-pink-600 hover:bg-pink-500 text-white font-bold text-sm rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isSavingGoogleConfig ? 'Enregistrement...' : 'Enregistrer la configuration Google'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Informative banners about suspension logic */}
         <div className="bg-pink-950/20 border border-pink-500/20 rounded-2xl p-5 flex gap-4 items-start" id="mega-admin-info-banner">
