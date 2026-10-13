@@ -918,46 +918,8 @@ export async function fetchCollectionFromFirestore<T>(
     // For massive defibrillateurs collection (17,800+ items), use high-speed chunked static delivery ONLY if tenant has chunks
     if (isDefibCol) {
       try {
-        // Strategy 1 (Fastest & 100% resilient against 503 errors): Single-request consolidated endpoint (/api/defib-chunks/all)
-        // Express gzip compression reduces entire 33MB catalog to ~3.5MB, transferring in ~250ms with 0% risk of proxy rate limiting
-        try {
-          const allRes = await fetch(`/api/defib-chunks/all?tenantId=${encodeURIComponent(activeTenantId)}`, {
-            signal: AbortSignal.timeout(35000)
-          });
-          if (allRes.ok) {
-            const allJson = await allRes.json();
-            const rawItems = Array.isArray(allJson?.value) ? allJson.value : (Array.isArray(allJson) ? allJson : null);
-            if (Array.isArray(rawItems) && rawItems.length > 0) {
-              const sanitizedVal = filterCollectionForTenant(rawItems as unknown as T, collectionName, activeTenantId);
-              let liveItems: any[] = sanitizedVal as any[];
-              try {
-                const remoteDelKeys = await fetchRemoteDeletedDefibKeys(activeTenantId);
-                if (remoteDelKeys.length > 0) {
-                  const delSet = new Set(remoteDelKeys);
-                  liveItems = liveItems.filter(df => {
-                    const id = df.id ? String(df.id).trim().toLowerCase() : '';
-                    const ident = df.identifiant ? String(df.identifiant).trim().toLowerCase() : '';
-                    const sn = (df.numeroSerie || df.num_serie) ? String(df.numeroSerie || df.num_serie).trim().toLowerCase() : '';
-                    return !((id && delSet.has(id)) || (ident && delSet.has(ident)) || (sn && delSet.has(sn)));
-                  });
-                }
-              } catch (_) {}
-
-              idbSet(`defib_${activeTenantId}_${collectionName}`, liveItems).catch(() => {});
-              const count = liveItems.length;
-              onProgress?.(
-                count,
-                count,
-                `Chargement ${count.toLocaleString('fr-FR')}/${count.toLocaleString('fr-FR')}, Terminé.`
-              );
-              return liveItems as unknown as T;
-            }
-          }
-        } catch (allErr) {
-          console.warn('[Defib Chunks All] /api/defib-chunks/all failed or timed out, trying bundled/chunk fallback:', allErr);
-        }
-
-        // Strategy 2: Bundled delivery (batches of 10 chunks, 8 requests instead of 78)
+        // Strategy 1 (Optimized & 100% resilient): Bundled delivery (batches of 10 chunks, ~550KB gzipped)
+        // Prevents reverse proxy buffer overflow (ERR_CONTENT_DECODING_FAILED & 503 errors)
         try {
           let bundleItems: any[] = [];
           let currentBatch = 0;

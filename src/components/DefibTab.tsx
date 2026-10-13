@@ -4850,7 +4850,7 @@ export default function DefibTab({
         <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
           {isDefibLoading && filteredDefibs.length <= 1 ? (
             <span className="text-slate-500 text-sm font-medium">
-              {defibLoadingProgress?.message || 'Chargement en cours, Veuillez patienter.'}
+              Chargement et vérification de vos données, veuillez patienter.
             </span>
           ) : isInitialView ? (
             <span>

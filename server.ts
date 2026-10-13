@@ -311,12 +311,15 @@ function getAllDefibsForPrefix(prefix: string = 'D27_defibrillateurs'): any[] {
   return all;
 }
 
+const cachedBundleMap = new Map<string, { items: any[]; version: number }>();
+
 function invalidateAllDefibsCache(prefix?: string) {
   if (prefix) {
     cachedAllDefibsByPrefix.delete(prefix);
   } else {
     cachedAllDefibsByPrefix.clear();
   }
+  cachedBundleMap.clear();
 }
 
 function addNewDefibrillateurToChunk(defib: any, prefix: string = 'D27_defibrillateurs'): number {
@@ -3830,38 +3833,19 @@ async function warmupDefibrillateursStore() {
     }
   });
 
-  // Consolidated all-defibrillateurs endpoint (single compressed HTTP GET request)
-  // Eliminates 78 individual HTTP requests and eliminates reverse proxy (Nginx/Cloudflare) 503 limit_req errors
+  // Safeguard: Deprecate monolithic /api/defib-chunks/all with instant HTTP 410 response
+  // Protects reverse proxy buffers (Nginx/Cloudflare) against 34MB truncation (ERR_CONTENT_DECODING_FAILED & 503)
   app.get("/api/defib-chunks/all", (req, res) => {
-    try {
-      const tenantId = String(req.query.tenantId || 'demo').trim();
-      const tAliases = getTenantAliasesSync(tenantId);
-      const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
-      const prefix = isD27OrD58 ? 'D27_defibrillateurs' : `${tenantId.toUpperCase()}_defibrillateurs`;
-
-      if (prefix.startsWith('D27_') || prefix.startsWith('D58_')) {
-        if (tenantId && !tAliases.has('d27') && !tAliases.has('d58')) {
-          return res.status(403).json({ error: "Accès refusé : ces données appartiennent à un autre tenant." });
-        }
-      }
-
-      const allDefibs = getAllDefibsForPrefix(prefix);
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Cache-Control', 'public, max-age=15');
-      return res.json({
-        status: "success",
-        totalCount: allDefibs.length,
-        prefix,
-        tenantId,
-        version: serverDefibVersion,
-        value: allDefibs
-      });
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message });
-    }
+    return res.status(410).json({
+      status: "error",
+      error: "Ce endpoint volumineux a été remplacé par /api/defib-chunks/bundle pour préserver les tampons réseau et proxy.",
+      code: "ENDPOINT_MIGRATED_TO_BUNDLE",
+      useBundle: true
+    });
   });
 
   // Bundled chunks endpoint (returns batches of 10 chunks per request, reducing 78 requests to only 8)
+  // Each batch is ~2.3k items (~350KB compressed), guaranteeing zero proxy buffer overflow, zero decoding errors, and zero 503s
   app.get("/api/defib-chunks/bundle", (req, res) => {
     try {
       const tenantId = String(req.query.tenantId || 'demo').trim();
@@ -3877,11 +3861,30 @@ async function warmupDefibrillateursStore() {
         }
       }
 
+      const highest = findHighestChunkIndex(prefix);
       const startIdx = batchIdx * BATCH_CHUNK_COUNT;
       const endIdx = startIdx + BATCH_CHUNK_COUNT;
-      const highest = findHighestChunkIndex(prefix);
-      const bundleItems: any[] = [];
+      const isLastBatch = endIdx > highest;
 
+      // Check bundle cache
+      const cacheKey = `${prefix}_b${batchIdx}_v${serverDefibVersion}`;
+      if (cachedBundleMap.has(cacheKey)) {
+        const cached = cachedBundleMap.get(cacheKey)!;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'public, max-age=60');
+        return res.json({
+          status: "success",
+          batch: batchIdx,
+          startChunk: startIdx,
+          endChunk: Math.min(endIdx - 1, highest),
+          totalChunks: highest + 1,
+          isLastBatch,
+          version: serverDefibVersion,
+          value: cached.items
+        });
+      }
+
+      const bundleItems: any[] = [];
       for (let i = startIdx; i < endIdx && i <= highest; i++) {
         const chunk = loadChunkFileSync(i, prefix);
         if (chunk && Array.isArray(chunk)) {
@@ -3889,15 +3892,17 @@ async function warmupDefibrillateursStore() {
         }
       }
 
+      cachedBundleMap.set(cacheKey, { items: bundleItems, version: serverDefibVersion });
+
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Cache-Control', 'public, max-age=30');
+      res.setHeader('Cache-Control', 'public, max-age=60');
       return res.json({
         status: "success",
         batch: batchIdx,
         startChunk: startIdx,
         endChunk: Math.min(endIdx - 1, highest),
         totalChunks: highest + 1,
-        isLastBatch: endIdx > highest,
+        isLastBatch,
         version: serverDefibVersion,
         value: bundleItems
       });

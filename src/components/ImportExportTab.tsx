@@ -1738,12 +1738,9 @@ export default function ImportExportTab({
 
           if (!currentList || currentList.length === 0) {
             try {
-              const res = await fetch(`/api/defib-chunks/all?tenantId=${encodeURIComponent(effectiveTenantForSync)}`);
-              if (res.ok) {
-                const json = await res.json();
-                if (Array.isArray(json?.value) && json.value.length > 0) {
-                  currentList = json.value;
-                }
+              const fetched = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', effectiveTenantForSync);
+              if (Array.isArray(fetched) && fetched.length > 0) {
+                currentList = fetched;
               }
             } catch (_) {}
           }
