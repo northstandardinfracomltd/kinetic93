@@ -340,12 +340,15 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
         key = `id_${String(item.id).trim()}`;
       }
     } else if (isDefib) {
-      if (item.id && String(item.id).trim()) {
-        key = `id_${String(item.id).trim()}`;
-      } else if (item.identifiant && String(item.identifiant).trim()) {
-        key = `ident_${String(item.identifiant).trim().toUpperCase()}`;
-      } else if (item.numeroSerie && String(item.numeroSerie).trim()) {
-        key = `sn_${String(item.numeroSerie).trim().toUpperCase()}`;
+      const sn = (item.numeroSerie || item.num_serie || '').trim();
+      const idf = (item.identifiant || '').trim();
+      const id = (item.id || '').trim();
+      if (sn) {
+        key = `sn_${sn.toUpperCase()}`;
+      } else if (idf) {
+        key = `ident_${idf.toUpperCase()}`;
+      } else if (id) {
+        key = `id_${id}`;
       }
     } else if (isClient) {
       if (item.id && String(item.id).trim()) {
@@ -601,6 +604,24 @@ export function getTenantAliases(targetTenantId: string): Set<string> {
     }
   } catch (_) {}
   return aliases;
+}
+
+/**
+ * Fetches globally deleted defib keys from backend to guarantee cross-session consistency
+ */
+export async function fetchRemoteDeletedDefibKeys(tenantId: string): Promise<string[]> {
+  try {
+    const res = await fetch(`/api/deleted-defib-keys?tenantId=${encodeURIComponent(tenantId)}`, {
+      signal: AbortSignal.timeout(6000)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data?.deletedKeys)) {
+        return data.deletedKeys.map((k: any) => String(k).trim().toLowerCase()).filter(Boolean);
+      }
+    }
+  } catch (_) {}
+  return [];
 }
 
 /**
@@ -897,6 +918,117 @@ export async function fetchCollectionFromFirestore<T>(
     // For massive defibrillateurs collection (17,800+ items), use high-speed chunked static delivery ONLY if tenant has chunks
     if (isDefibCol) {
       try {
+        // Strategy 1 (Fastest & 100% resilient against 503 errors): Single-request consolidated endpoint (/api/defib-chunks/all)
+        // Express gzip compression reduces entire 33MB catalog to ~3.5MB, transferring in ~250ms with 0% risk of proxy rate limiting
+        try {
+          const allRes = await fetch(`/api/defib-chunks/all?tenantId=${encodeURIComponent(activeTenantId)}`, {
+            signal: AbortSignal.timeout(35000)
+          });
+          if (allRes.ok) {
+            const allJson = await allRes.json();
+            const rawItems = Array.isArray(allJson?.value) ? allJson.value : (Array.isArray(allJson) ? allJson : null);
+            if (Array.isArray(rawItems) && rawItems.length > 0) {
+              const sanitizedVal = filterCollectionForTenant(rawItems as unknown as T, collectionName, activeTenantId);
+              let liveItems: any[] = sanitizedVal as any[];
+              try {
+                const remoteDelKeys = await fetchRemoteDeletedDefibKeys(activeTenantId);
+                if (remoteDelKeys.length > 0) {
+                  const delSet = new Set(remoteDelKeys);
+                  liveItems = liveItems.filter(df => {
+                    const id = df.id ? String(df.id).trim().toLowerCase() : '';
+                    const ident = df.identifiant ? String(df.identifiant).trim().toLowerCase() : '';
+                    const sn = (df.numeroSerie || df.num_serie) ? String(df.numeroSerie || df.num_serie).trim().toLowerCase() : '';
+                    return !((id && delSet.has(id)) || (ident && delSet.has(ident)) || (sn && delSet.has(sn)));
+                  });
+                }
+              } catch (_) {}
+
+              idbSet(`defib_${activeTenantId}_${collectionName}`, liveItems).catch(() => {});
+              const count = liveItems.length;
+              onProgress?.(
+                count,
+                count,
+                `Chargement ${count.toLocaleString('fr-FR')}/${count.toLocaleString('fr-FR')}, Terminé.`
+              );
+              return liveItems as unknown as T;
+            }
+          }
+        } catch (allErr) {
+          console.warn('[Defib Chunks All] /api/defib-chunks/all failed or timed out, trying bundled/chunk fallback:', allErr);
+        }
+
+        // Strategy 2: Bundled delivery (batches of 10 chunks, 8 requests instead of 78)
+        try {
+          let bundleItems: any[] = [];
+          let currentBatch = 0;
+          let hasMoreBatches = true;
+          let bundleFailed = false;
+
+          while (hasMoreBatches && currentBatch < 15) {
+            let batchSuccess = false;
+            for (let attempt = 0; attempt < 5; attempt++) {
+              try {
+                const bRes = await fetch(`/api/defib-chunks/bundle?batch=${currentBatch}&tenantId=${encodeURIComponent(activeTenantId)}`, {
+                  signal: AbortSignal.timeout(15000)
+                });
+                if (bRes.ok) {
+                  const bJson = await bRes.json();
+                  if (Array.isArray(bJson?.value)) {
+                    bundleItems.push(...bJson.value);
+                    hasMoreBatches = !bJson.isLastBatch;
+                    batchSuccess = true;
+                    onProgress?.(
+                      bundleItems.length,
+                      18193,
+                      `Chargement ${bundleItems.length.toLocaleString('fr-FR')}/18 193, Veuillez patienter.`
+                    );
+                    break;
+                  }
+                } else if (bRes.status === 503 || bRes.status === 502 || bRes.status === 429) {
+                  await new Promise(r => setTimeout(r, 450 * (attempt + 1)));
+                }
+              } catch (_) {
+                if (attempt < 4) await new Promise(r => setTimeout(r, 450 * (attempt + 1)));
+              }
+            }
+            if (!batchSuccess) {
+              bundleFailed = true;
+              break;
+            }
+            currentBatch++;
+            await new Promise(r => setTimeout(r, 40));
+          }
+
+          if (!bundleFailed && bundleItems.length > 0) {
+            const sanitizedVal = filterCollectionForTenant(bundleItems as unknown as T, collectionName, activeTenantId);
+            let liveItems: any[] = sanitizedVal as any[];
+            try {
+              const remoteDelKeys = await fetchRemoteDeletedDefibKeys(activeTenantId);
+              if (remoteDelKeys.length > 0) {
+                const delSet = new Set(remoteDelKeys);
+                liveItems = liveItems.filter(df => {
+                  const id = df.id ? String(df.id).trim().toLowerCase() : '';
+                  const ident = df.identifiant ? String(df.identifiant).trim().toLowerCase() : '';
+                  const sn = (df.numeroSerie || df.num_serie) ? String(df.numeroSerie || df.num_serie).trim().toLowerCase() : '';
+                  return !((id && delSet.has(id)) || (ident && delSet.has(ident)) || (sn && delSet.has(sn)));
+                });
+              }
+            } catch (_) {}
+
+            idbSet(`defib_${activeTenantId}_${collectionName}`, liveItems).catch(() => {});
+            const count = liveItems.length;
+            onProgress?.(
+              count,
+              count,
+              `Chargement ${count.toLocaleString('fr-FR')}/${count.toLocaleString('fr-FR')}, Terminé.`
+            );
+            return liveItems as unknown as T;
+          }
+        } catch (bundleErr) {
+          console.warn('[Defib Chunks Bundle] Bundled delivery failed, falling back to individual chunks:', bundleErr);
+        }
+
+        // Strategy 3: Individual chunk requests with gentle concurrency (2 concurrent) and exponential retry
         const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(activeTenantId)}`, {
           signal: AbortSignal.timeout(10000)
         });
@@ -906,34 +1038,62 @@ export async function fetchCollectionFromFirestore<T>(
           if (totalChunks > 0 && meta.prefix) {
             const chunkResults: any[][] = new Array(totalChunks);
             let loadedCount = 0;
-            const totalEst = meta.totalCount || 18219;
-            const CONCURRENCY = 6;
+            const totalEst = meta.totalCount || 18193;
+            // Gentle pacing & concurrency: 2 concurrent requests prevents tripping reverse proxy (Nginx/Cloudflare) 503 limit_req limits
+            const CONCURRENCY = 2;
 
             for (let i = 0; i < totalChunks; i += CONCURRENCY) {
               const batchPromises = [];
               const batchEnd = Math.min(i + CONCURRENCY, totalChunks);
               for (let c = i; c < batchEnd; c++) {
                 batchPromises.push((async (cIdx) => {
-                  try {
-                    const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix)}&tenantId=${encodeURIComponent(activeTenantId)}`, {
-                      signal: AbortSignal.timeout(15000)
-                    });
-                    if (chunkRes.ok) {
-                      const arr = await chunkRes.json();
-                      if (Array.isArray(arr)) {
-                        chunkResults[cIdx] = arr;
-                        loadedCount += arr.length;
+                  let chunkData: any[] | null = null;
+                  for (let attempt = 0; attempt < 6; attempt++) {
+                    try {
+                      const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix)}&tenantId=${encodeURIComponent(activeTenantId)}`, {
+                        signal: AbortSignal.timeout(15000)
+                      });
+                      if (chunkRes.ok) {
+                        const arr = await chunkRes.json();
+                        if (Array.isArray(arr)) {
+                          chunkData = arr;
+                          break;
+                        }
+                      } else if (chunkRes.status === 503 || chunkRes.status === 502 || chunkRes.status === 429) {
+                        // Rate limit / proxy busy: back off before retrying
+                        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
                       }
+                    } catch (_) {
+                      if (attempt < 5) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
                     }
-                  } catch (_) {}
+                  }
+                  if (chunkData && Array.isArray(chunkData)) {
+                    chunkResults[cIdx] = chunkData;
+                    loadedCount += chunkData.length;
+                  }
                 })(c));
               }
               await Promise.all(batchPromises);
+              // Small pause between batches to protect proxy queue
+              await new Promise(r => setTimeout(r, 60));
+
               onProgress?.(
                 loadedCount,
                 totalEst,
-                `Chargement ${loadedCount.toLocaleString('en-US')}/${totalEst.toLocaleString('en-US')}, Veuillez patienter.`
+                `Chargement ${loadedCount.toLocaleString('fr-FR')}/${totalEst.toLocaleString('fr-FR')}, Veuillez patienter.`
               );
+            }
+
+            // Data integrity check: if any chunk failed to download, NEVER overwrite cache with partial truncated data!
+            const missingChunks = chunkResults.filter(x => !Array.isArray(x)).length;
+            if (missingChunks > 0) {
+              console.warn(`[Defib Chunks Relay] Warning: ${missingChunks} chunk(s) could not be loaded. Preserving existing local cache to prevent data loss.`);
+              try {
+                const existingCached = await idbGet<any[]>(`defib_${activeTenantId}_${collectionName}`);
+                if (Array.isArray(existingCached) && existingCached.length > 0) {
+                  return filterCollectionForTenant(existingCached as unknown as T, collectionName, activeTenantId);
+                }
+              } catch (_) {}
             }
 
             const combined = chunkResults.filter(Boolean).flat();

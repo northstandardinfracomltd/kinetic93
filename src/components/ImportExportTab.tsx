@@ -837,13 +837,7 @@ const validateAndParseDefibs = (
     const sousTraitance = row[72] ? row[72].trim() : "";
     const fsmAutorise = row[73] ? row[73].trim() : "";
 
-    // Erreur A : Identifiant must be empty on import
-    if (identifiant !== "") {
-      hasInvalidIdentifiers = true;
-      detailedErrors.push(`Ligne ${rowNum}, Col 1 (« Section 1 — Identification : Identifiant. ») : l'identifiant doit être vide lors de l'import (il est généré automatiquement). Valeur reçue : « ${identifiant} »`);
-    }
-
-    // Erreur B : Série is mandatory
+    // Série is mandatory
     if (serie === "") {
       hasInvalidValues = true;
       detailedErrors.push(`Ligne ${rowNum}, Col 2 (« Section 1 — Identification : Série. ») : le numéro de série est obligatoire (champ vide).`);
@@ -1033,8 +1027,11 @@ const validateAndParseDefibs = (
 
     const cleanIdFromCsv = (identifiant || '').trim();
     const cleanSerie = (serie || '').trim();
-    const existingMatch = cleanSerie 
-      ? (existingDefibs || []).find(d => d.numeroSerie && d.numeroSerie.trim().toUpperCase() === cleanSerie.toUpperCase())
+    const existingMatch = (cleanSerie || cleanIdFromCsv)
+      ? (existingDefibs || []).find(d =>
+          (cleanSerie && d.numeroSerie && d.numeroSerie.trim().toUpperCase() === cleanSerie.toUpperCase()) ||
+          (cleanIdFromCsv && d.identifiant && d.identifiant.trim().toUpperCase() === cleanIdFromCsv.toUpperCase())
+        )
       : null;
 
     const assignedIdentifiant = cleanIdFromCsv 
@@ -1704,7 +1701,7 @@ export default function ImportExportTab({
         if (formCategorie === 'Défibrillateurs.' && saveDefibs) {
           setImportSuccessMessage(`Enregistrement de ${importCount} défibrillateur(s) sur le serveur...`);
 
-          const effectiveTenantForSync = (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim();
+          const effectiveTenantForSync = (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim();
 
           // 1. Sync newly imported defibs to server chunk storage & fast index
           try {
@@ -1719,6 +1716,9 @@ export default function ImportExportTab({
                   defibs: slice
                 })
               });
+              if (i + BATCH_SIZE < parsedData.length) {
+                await new Promise(r => setTimeout(r, 40));
+              }
             }
           } catch (syncErr) {
             console.warn('[Import] Warning during server batch defib sync:', syncErr);
@@ -1738,7 +1738,7 @@ export default function ImportExportTab({
 
           if (!currentList || currentList.length === 0) {
             try {
-              const res = await fetch(`/api/sync-collection?collectionName=defibrillateurs&tenantId=${encodeURIComponent(effectiveTenantForSync)}`);
+              const res = await fetch(`/api/defib-chunks/all?tenantId=${encodeURIComponent(effectiveTenantForSync)}`);
               if (res.ok) {
                 const json = await res.json();
                 if (Array.isArray(json?.value) && json.value.length > 0) {
@@ -1768,6 +1768,14 @@ export default function ImportExportTab({
                 if (Array.isArray(parsed)) {
                   const remaining = parsed.filter(k => !importedKeys.has(String(k).trim().toLowerCase()));
                   localStorage.setItem(`defib_${t}_deleted_defib_keys`, JSON.stringify(remaining));
+                }
+              }
+              const rawSess = sessionStorage.getItem(`defib_${t}_deleted_defib_keys`);
+              if (rawSess) {
+                const parsed = JSON.parse(rawSess);
+                if (Array.isArray(parsed)) {
+                  const remaining = parsed.filter(k => !importedKeys.has(String(k).trim().toLowerCase()));
+                  sessionStorage.setItem(`defib_${t}_deleted_defib_keys`, JSON.stringify(remaining));
                 }
               }
             }

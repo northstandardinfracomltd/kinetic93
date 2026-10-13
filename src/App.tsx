@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { getRegionsForCountry } from './utils/regions';
-import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion } from './firebase';
+import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion, fetchRemoteDeletedDefibKeys } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { idbSet, idbGet } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
@@ -1890,16 +1890,45 @@ export default function App() {
   };
 
   useEffect(() => {
-    try {
-      const activeKeys = getDeletedDefibKeys(tenantId);
-      if (activeKeys.length > 0) {
-        fetch('/api/sync-deleted-defib-keys', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenantId: tenantId || 'demo', keys: activeKeys })
-        }).catch(() => {});
-      }
-    } catch (_) {}
+    (async () => {
+      try {
+        const tId = tenantId || 'demo';
+        const remoteKeys = await fetchRemoteDeletedDefibKeys(tId);
+        if (remoteKeys.length > 0) {
+          const localKeys = getDeletedDefibKeys(tId);
+          const combined = Array.from(new Set([...localKeys, ...remoteKeys]));
+          localStorage.setItem(`defib_${tId}_deleted_defib_keys`, JSON.stringify(combined));
+          const numOnly = tId.replace(/^d/i, '');
+          if (/^\d+$/.test(numOnly)) {
+            localStorage.setItem(`defib_D${numOnly}_deleted_defib_keys`, JSON.stringify(combined));
+            localStorage.setItem(`defib_d${numOnly}_deleted_defib_keys`, JSON.stringify(combined));
+          }
+
+          // Immediately prune deleted items from active React state and local IndexedDB
+          const delSet = new Set(combined);
+          setDefibrillateurs(prev => {
+            if (!Array.isArray(prev) || prev.length === 0) return prev;
+            const filtered = prev.filter(df => !isDefibInDeletedList(df, delSet));
+            if (filtered.length !== prev.length) {
+              idbSet(`defib_${tId}_defibrillateurs`, filtered).catch(() => {});
+              if (/^\d+$/.test(numOnly)) {
+                idbSet(`defib_D${numOnly}_defibrillateurs`, filtered).catch(() => {});
+                idbSet(`defib_d${numOnly}_defibrillateurs`, filtered).catch(() => {});
+              }
+            }
+            return filtered;
+          });
+        }
+        const activeKeys = getDeletedDefibKeys(tId);
+        if (activeKeys.length > 0) {
+          fetch('/api/sync-deleted-defib-keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tenantId: tId, keys: activeKeys })
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    })();
   }, [tenantId]);
 
   const isDefibInDeletedList = (df: any, deletedKeys: Set<string>): boolean => {
@@ -1933,51 +1962,19 @@ export default function App() {
         });
       };
 
-      let freshRemote: Defibrillateur[] | null = null;
+      // 1. Fetch persistent deleted keys from backend first to ensure deleted defibs stay deleted across all sessions
+      let remoteDeletedKeys: string[] = [];
       try {
-        const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(activeTenant)}`);
-        if (metaRes.ok) {
-          const meta = await metaRes.json();
-          const totalChunks = meta.totalChunks || 0;
-          if (totalChunks > 0) {
-            const chunkResults: any[][] = new Array(totalChunks);
-            let loadedCount = 0;
-            const CONCURRENCY = 6;
-            for (let i = 0; i < totalChunks; i += CONCURRENCY) {
-              const batchPromises = [];
-              const batchEnd = Math.min(i + CONCURRENCY, totalChunks);
-              for (let c = i; c < batchEnd; c++) {
-                batchPromises.push((async (cIdx) => {
-                  try {
-                    const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix)}&tenantId=${encodeURIComponent(activeTenant)}`, {
-                      cache: 'no-store'
-                    });
-                    if (chunkRes.ok) {
-                      const arr = await chunkRes.json();
-                      if (Array.isArray(arr)) {
-                        chunkResults[cIdx] = arr;
-                        loadedCount += arr.length;
-                      }
-                    }
-                  } catch (_) {}
-                })(c));
-              }
-              await Promise.all(batchPromises);
-              onProgress(loadedCount, meta.totalCount || loadedCount);
-            }
-            const combined = chunkResults.filter(Boolean).flat();
-            if (combined.length > 0) {
-              freshRemote = combined;
-            }
-          }
+        remoteDeletedKeys = await fetchRemoteDeletedDefibKeys(activeTenant);
+        if (remoteDeletedKeys.length > 0) {
+          const localKeys = getDeletedDefibKeys(activeTenant);
+          const combined = Array.from(new Set([...localKeys, ...remoteDeletedKeys]));
+          localStorage.setItem(`defib_${activeTenant}_deleted_defib_keys`, JSON.stringify(combined));
         }
-      } catch (chunkErr) {
-        console.warn('Chunk download error, falling back to standard sync:', chunkErr);
-      }
+      } catch (_) {}
 
-      if (!freshRemote || freshRemote.length === 0) {
-        freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant, onProgress);
-      }
+      // 2. Fetch fresh defibrillateurs using robust retry-backed loader (protected against 503 errors)
+      const freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant, onProgress);
       if (Array.isArray(freshRemote) && freshRemote.length > 0) {
         const sanitizedRemote = filterCollectionForTenant(freshRemote, 'defibrillateurs', activeTenant);
         const fullMerged = mergeCollectionItems('defibrillateurs', sanitizedRemote);
@@ -2030,6 +2027,26 @@ export default function App() {
         const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(tenantId)}`);
         if (metaRes.ok && !isCancelled) {
           const meta = await metaRes.json();
+
+          // Immediately sync remote deleted keys to keep PC counts in perfect lockstep
+          try {
+            const remoteKeys = await fetchRemoteDeletedDefibKeys(tenantId);
+            if (remoteKeys.length > 0) {
+              const localKeys = getDeletedDefibKeys(tenantId);
+              const combined = Array.from(new Set([...localKeys, ...remoteKeys]));
+              localStorage.setItem(`defib_${tenantId}_deleted_defib_keys`, JSON.stringify(combined));
+              const delSet = new Set(combined);
+              setDefibrillateurs(prev => {
+                if (!Array.isArray(prev) || prev.length === 0) return prev;
+                const filtered = prev.filter(df => !isDefibInDeletedList(df, delSet));
+                if (filtered.length !== prev.length) {
+                  idbSet(`defib_${tenantId}_defibrillateurs`, filtered).catch(() => {});
+                }
+                return filtered;
+              });
+            }
+          } catch (_) {}
+
           if (meta.version && lastKnownVersion > 0 && meta.version !== lastKnownVersion) {
             handleManualRefreshDefibs();
           }
@@ -5760,18 +5777,16 @@ export default function App() {
         const savedEnable = localStorage.getItem(`defib_${activeRunTenantId}_enable_other_equipments`);
         setEnableOtherEquipments(savedEnable || baseCompanyInfo.enableOtherEquipments || 'Non');
 
-        // Purge stale local blacklists and shadow memories so all PCs strictly mirror the server SSOT
+        // Synchronize remote deleted keys so deletions on other sessions/PCs are respected immediately
         try {
-          localStorage.removeItem(`defib_${activeRunTenantId}_deleted_defib_keys`);
-          localStorage.removeItem('defib_D27_deleted_defib_keys');
-          localStorage.removeItem('defib_D58_deleted_defib_keys');
-          localStorage.removeItem('defib_d27_deleted_defib_keys');
-          localStorage.removeItem('defib_d58_deleted_defib_keys');
-          localStorage.removeItem(`defib_${activeRunTenantId}_recently_imported`);
-          localStorage.removeItem('defib_D27_recently_imported');
-          localStorage.removeItem('defib_D58_recently_imported');
-          localStorage.removeItem('defib_d27_recently_imported');
-          localStorage.removeItem('defib_d58_recently_imported');
+          const remoteDelKeys = await fetchRemoteDeletedDefibKeys(activeRunTenantId);
+          if (remoteDelKeys.length > 0) {
+            const curDel = getDeletedDefibKeys(activeRunTenantId);
+            const combined = Array.from(new Set([...curDel, ...remoteDelKeys]));
+            localStorage.setItem(`defib_${activeRunTenantId}_deleted_defib_keys`, JSON.stringify(combined));
+            localStorage.setItem('defib_D27_deleted_defib_keys', JSON.stringify(combined));
+            localStorage.setItem('defib_D58_deleted_defib_keys', JSON.stringify(combined));
+          }
         } catch (_) {}
 
         // Check IndexedDB if localStorage was empty or couldn't store large collections
@@ -5803,80 +5818,16 @@ export default function App() {
 
           if (Array.isArray(idbDefibs) && idbDefibs.length > 0) {
             const dedupedIdb = mergeCollectionItems('defibrillateurs', idbDefibs);
-            baseDefibrillateurs = dedupedIdb;
-            setDefibrillateurs(dedupedIdb);
+            const deletedKeys = new Set(getDeletedDefibKeys(activeRunTenantId));
+            const liveIdb = deletedKeys.size > 0 ? dedupedIdb.filter(df => !isDefibInDeletedList(df, deletedKeys)) : dedupedIdb;
+            baseDefibrillateurs = liveIdb;
+            setDefibrillateurs(liveIdb);
             setDefibLoadingProgress({
-              current: dedupedIdb.length,
-              total: dedupedIdb.length,
+              current: liveIdb.length,
+              total: liveIdb.length,
               percent: 100,
-              message: `Chargement ${dedupedIdb.length.toLocaleString('en-US')}/${dedupedIdb.length.toLocaleString('en-US')}, Terminé.`
+              message: `Chargement ${liveIdb.length.toLocaleString('en-US')}/${liveIdb.length.toLocaleString('en-US')}, Terminé.`
             });
-          }
-          if (isD27OrD58) {
-            // Background preload chunks automatically for D27 / D58
-            (async () => {
-              try {
-                const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(activeRunTenantId)}`);
-                if (metaRes.ok) {
-                  const meta = await metaRes.json();
-                  const totalChunks = meta.totalChunks || 0;
-                  if (totalChunks > 0 && meta.prefix) {
-                    if (!idbDefibs || idbDefibs.length === 0) {
-                      setIsDefibLoading(true);
-                    }
-                    const chunkResults: any[][] = new Array(totalChunks);
-                    let loadedCount = 0;
-                    const CONCURRENCY = 6;
-                    for (let i = 0; i < totalChunks; i += CONCURRENCY) {
-                      const batchPromises = [];
-                      const batchEnd = Math.min(i + CONCURRENCY, totalChunks);
-                      for (let c = i; c < batchEnd; c++) {
-                        batchPromises.push((async (cIdx) => {
-                          for (let attempt = 0; attempt < 3; attempt++) {
-                            try {
-                              const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix)}&tenantId=${encodeURIComponent(activeRunTenantId)}`);
-                              if (chunkRes.ok) {
-                                const arr = await chunkRes.json();
-                                if (Array.isArray(arr)) {
-                                  chunkResults[cIdx] = arr;
-                                  loadedCount += arr.length;
-                                  break;
-                                }
-                              } else {
-                                const fbRes = await fetch(`/api/sync-collection?collectionName=defibrillateurs&chunkIndex=${cIdx}&tenantId=${encodeURIComponent(activeRunTenantId)}`);
-                                if (fbRes.ok) {
-                                  const fArr = await fbRes.json();
-                                  const resArr = Array.isArray(fArr?.value) ? fArr.value : Array.isArray(fArr) ? fArr : null;
-                                  if (resArr) {
-                                    chunkResults[cIdx] = resArr;
-                                    loadedCount += resArr.length;
-                                    break;
-                                  }
-                                }
-                              }
-                            } catch (_) {}
-                            if (attempt < 2) await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
-                          }
-                        })(c));
-                      }
-                      await Promise.all(batchPromises);
-                    }
-                    const combined = chunkResults.filter(Boolean).flat();
-                    if (combined.length > 0) {
-                      const sanitizedCombined = filterCollectionForTenant(combined, 'defibrillateurs', activeRunTenantId);
-                      const fullMerged = mergeCollectionItems('defibrillateurs', sanitizedCombined);
-                      const deletedKeys = new Set(getDeletedDefibKeys(activeRunTenantId));
-                      const liveList = deletedKeys.size > 0 ? fullMerged.filter(df => !isDefibInDeletedList(df, deletedKeys)) : fullMerged;
-                      setDefibrillateurs(liveList);
-                      idbSet(`defib_${activeRunTenantId}_defibrillateurs`, liveList).catch(() => {});
-                      idbSet('defib_D27_defibrillateurs', liveList).catch(() => {});
-                      idbSet('defib_D58_defibrillateurs', liveList).catch(() => {});
-                      setIsDefibLoading(false);
-                    }
-                  }
-                }
-              } catch (_) {}
-            })();
           }
           const clientCandidateKeys = [
             `defib_${activeRunTenantId}_clients`,
@@ -6086,13 +6037,15 @@ export default function App() {
           (data) => {
             const sanitized = filterCollectionForTenant(data, 'defibrillateurs', activeRunTenantId);
             const fullMerged = Array.isArray(sanitized) ? mergeCollectionItems('defibrillateurs', sanitized) : [];
-            setDefibrillateurs(fullMerged);
-            if (Array.isArray(fullMerged)) {
+            const deletedKeys = new Set(getDeletedDefibKeys(activeRunTenantId));
+            const liveList = deletedKeys.size > 0 ? fullMerged.filter(df => !isDefibInDeletedList(df, deletedKeys)) : fullMerged;
+            setDefibrillateurs(liveList);
+            if (Array.isArray(liveList)) {
               setDefibLoadingProgress({
-                current: fullMerged.length,
-                total: fullMerged.length,
+                current: liveList.length,
+                total: liveList.length,
                 percent: 100,
-                message: `Chargement ${fullMerged.length.toLocaleString('en-US')}/${fullMerged.length.toLocaleString('en-US')}, Terminé.`
+                message: `Chargement ${liveList.length.toLocaleString('en-US')}/${liveList.length.toLocaleString('en-US')}, Terminé.`
               });
             }
             setTimeout(() => {

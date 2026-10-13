@@ -1924,20 +1924,32 @@ export default function DefibTab({
   // Set of deleted defib keys to prevent resurrection during optimistic deletions
   const deletedDefibSet = useMemo(() => {
     const set = new Set<string>();
-    try {
-      const rawSession = sessionStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
-      if (rawSession) {
-        const arr = JSON.parse(rawSession);
-        if (Array.isArray(arr)) arr.forEach((s: any) => s && set.add(String(s).trim().toLowerCase()));
-      }
-    } catch (_) {}
-    try {
-      const rawLocal = localStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
-      if (rawLocal) {
-        const arr = JSON.parse(rawLocal);
-        if (Array.isArray(arr)) arr.forEach((s: any) => s && set.add(String(s).trim().toLowerCase()));
-      }
-    } catch (_) {}
+    const tenantKeysToCheck = Array.from(new Set([
+      activeTenantId,
+      activeTenantId.toLowerCase(),
+      activeTenantId.toUpperCase(),
+      'D27',
+      'D58',
+      'd27',
+      'd58'
+    ].filter(Boolean)));
+
+    for (const t of tenantKeysToCheck) {
+      try {
+        const rawSession = sessionStorage.getItem(`defib_${t}_deleted_defib_keys`);
+        if (rawSession) {
+          const arr = JSON.parse(rawSession);
+          if (Array.isArray(arr)) arr.forEach((s: any) => s && set.add(String(s).trim().toLowerCase()));
+        }
+      } catch (_) {}
+      try {
+        const rawLocal = localStorage.getItem(`defib_${t}_deleted_defib_keys`);
+        if (rawLocal) {
+          const arr = JSON.parse(rawLocal);
+          if (Array.isArray(arr)) arr.forEach((s: any) => s && set.add(String(s).trim().toLowerCase()));
+        }
+      } catch (_) {}
+    }
     return set;
   }, [activeTenantId, defibrillateurs]);
 
@@ -4796,6 +4808,9 @@ export default function DefibTab({
                                   const keysToAdd = [df.id, df.identifiant, df.numeroSerie, (df as any).num_serie].filter(Boolean).map(s => String(s).trim().toLowerCase());
                                   const combined = Array.from(new Set([...parsed, ...keysToAdd]));
                                   sessionStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
+                                  localStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
+                                  localStorage.setItem('defib_D27_deleted_defib_keys', JSON.stringify(combined));
+                                  localStorage.setItem('defib_D58_deleted_defib_keys', JSON.stringify(combined));
                                   fetch('/api/delete-single-defib', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
