@@ -348,6 +348,8 @@ export interface SupportTicket {
   situationDevis?: 'Gagné' | 'Perdu' | 'Non renseigné';
   scorePotentielConversion?: number | null;
   referenceDevis?: string;
+  categorieDevis?: 'Défibrillateur' | 'Maintenance' | 'Consommable(s)' | 'Formation' | 'Grand compte' | 'Revendeur' | 'Autres' | string;
+  indicateurTempsDevis?: 'Validation de budget' | 'Vente via revendeur' | 'Plateforme d’achat' | 'Autre' | string;
   totalAffaireHT?: number | string;
   famille?: string;
   indicatifPostal?: string;

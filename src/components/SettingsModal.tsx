@@ -43,6 +43,7 @@ import {
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  tenantId?: string;
   companyInfo: CompanyInfo;
   onUpdateCompanyInfo: (info: CompanyInfo) => void;
   members: Member[];
@@ -66,6 +67,7 @@ interface SettingsModalProps {
 export default function SettingsModal({
   isOpen,
   onClose,
+  tenantId: propTenantId,
   companyInfo,
   onUpdateCompanyInfo,
   members,
@@ -147,7 +149,7 @@ export default function SettingsModal({
 
   // Local states for form editing without auto-saving until save clicked ("pas d'auto-save")
   const [localCompany, setLocalCompany] = React.useState<CompanyInfo>(() => {
-    const activeTid = (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+    const activeTid = propTenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
     let base: CompanyInfo = companyInfo ? { ...companyInfo } : ({} as CompanyInfo);
     // If companyInfo is missing or empty placeholder, try reading from tenant localStorage cache immediately
     const isBaseEmpty = !base.name || base.name === 'Mon Cabinet' || (!base.email && activeTid !== 'demo');
@@ -172,6 +174,21 @@ export default function SettingsModal({
           }
         }
       } catch (e) {}
+    }
+    // Also read the 3 spreadsheet URLs if present in individual tenant keys
+    if (typeof window !== 'undefined') {
+      const cachedDefib = localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) || 
+                          localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_defibrillateurs`) || 
+                          localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_defibrillateurs`);
+      const cachedAutres = localStorage.getItem(`defib_${activeTid}_spreadsheet_autres_materiels`) || 
+                           localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_autres_materiels`) || 
+                           localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_autres_materiels`);
+      const cachedClients = localStorage.getItem(`defib_${activeTid}_spreadsheet_clients`) || 
+                            localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_clients`) || 
+                            localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_clients`);
+      if (cachedDefib && !base.spreadsheetDefibrillateurs) base.spreadsheetDefibrillateurs = cachedDefib;
+      if (cachedAutres && !base.spreadsheetAutresMateriels) base.spreadsheetAutresMateriels = cachedAutres;
+      if (cachedClients && !base.spreadsheetClients) base.spreadsheetClients = cachedClients;
     }
     return base;
   });
@@ -783,7 +800,7 @@ export default function SettingsModal({
 
   React.useEffect(() => {
     if (isOpen || isPage) {
-      const activeTid = localStorage.getItem('defib_tenant_id') || 'demo';
+      const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
 
       // 1. Sync companyInfo from props or localStorage cache
       let comp = companyInfo ? { ...companyInfo } : ({} as CompanyInfo);
@@ -877,10 +894,16 @@ export default function SettingsModal({
         }
       }).catch(() => {});
 
-      // 4. Spreadsheets URLs & Database settings fallback
-      const cachedDefib = localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) || '';
-      const cachedAutres = localStorage.getItem(`defib_${activeTid}_spreadsheet_autres_materiels`) || '';
-      const cachedClients = localStorage.getItem(`defib_${activeTid}_spreadsheet_clients`) || '';
+      // 4. Spreadsheets URLs & Database settings fallback from tenant cache
+      const cachedDefib = localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) || 
+                          localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_defibrillateurs`) || 
+                          localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_defibrillateurs`) || '';
+      const cachedAutres = localStorage.getItem(`defib_${activeTid}_spreadsheet_autres_materiels`) || 
+                           localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_autres_materiels`) || 
+                           localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_autres_materiels`) || '';
+      const cachedClients = localStorage.getItem(`defib_${activeTid}_spreadsheet_clients`) || 
+                            localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_clients`) || 
+                            localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_clients`) || '';
       if (cachedDefib || cachedAutres || cachedClients) {
         setLocalCompany(prev => ({
           ...prev,
@@ -894,18 +917,24 @@ export default function SettingsModal({
       if (activeTid && activeTid !== 'demo') {
         fetchCollectionFromFirestore<CompanyInfo>('companyInfo', activeTid).then(remoteCompany => {
           if (remoteCompany && typeof remoteCompany === 'object') {
-            setLocalCompany(prev => ({ ...prev, ...remoteCompany }));
+            setLocalCompany(prev => ({ 
+              ...prev, 
+              ...remoteCompany,
+              spreadsheetDefibrillateurs: remoteCompany.spreadsheetDefibrillateurs !== undefined ? remoteCompany.spreadsheetDefibrillateurs : prev.spreadsheetDefibrillateurs,
+              spreadsheetAutresMateriels: remoteCompany.spreadsheetAutresMateriels !== undefined ? remoteCompany.spreadsheetAutresMateriels : prev.spreadsheetAutresMateriels,
+              spreadsheetClients: remoteCompany.spreadsheetClients !== undefined ? remoteCompany.spreadsheetClients : prev.spreadsheetClients,
+            }));
             onUpdateCompanyInfo(remoteCompany);
           }
         }).catch(() => {});
 
         fetchCollectionFromFirestore<any>('tenantDatabases', activeTid).then(dbData => {
-          if (dbData) {
+          if (dbData && typeof dbData === 'object') {
             setLocalCompany(prev => ({
               ...prev,
-              spreadsheetDefibrillateurs: prev.spreadsheetDefibrillateurs || dbData.spreadsheetDefibrillateurs || '',
-              spreadsheetAutresMateriels: prev.spreadsheetAutresMateriels || dbData.spreadsheetAutresMateriels || '',
-              spreadsheetClients: prev.spreadsheetClients || dbData.spreadsheetClients || '',
+              spreadsheetDefibrillateurs: dbData.spreadsheetDefibrillateurs !== undefined ? dbData.spreadsheetDefibrillateurs : prev.spreadsheetDefibrillateurs,
+              spreadsheetAutresMateriels: dbData.spreadsheetAutresMateriels !== undefined ? dbData.spreadsheetAutresMateriels : prev.spreadsheetAutresMateriels,
+              spreadsheetClients: dbData.spreadsheetClients !== undefined ? dbData.spreadsheetClients : prev.spreadsheetClients,
             }));
           }
         }).catch(() => {});
@@ -914,7 +943,7 @@ export default function SettingsModal({
       lastPropsMembersRef.current = members;
       lastPropsCompanyRef.current = companyInfo;
     }
-  }, [isOpen, isPage]);
+  }, [isOpen, isPage, propTenantId]);
 
   // States for the member addition form inside the local state
   const [newMemberName, setNewMemberName] = React.useState('');
@@ -1531,6 +1560,8 @@ export default function SettingsModal({
     }, 2500);
   };
 
+  const [databasesSaveStatus, setDatabasesSaveStatus] = React.useState<'idle' | 'saving' | 'saved'>('idle');
+
   if (!isPage && !isOpen) return null;
 
   // Local state change handlers
@@ -1552,6 +1583,68 @@ export default function SettingsModal({
       [field]: value,
       [`${field}Url`]: value
     }));
+    try {
+      const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      const tKeys = [activeTid, activeTid.toLowerCase(), activeTid.toUpperCase()];
+      for (const tid of tKeys) {
+        if (field === 'spreadsheetDefibrillateurs') localStorage.setItem(`defib_${tid}_spreadsheet_defibrillateurs`, value);
+        if (field === 'spreadsheetAutresMateriels') localStorage.setItem(`defib_${tid}_spreadsheet_autres_materiels`, value);
+        if (field === 'spreadsheetClients') localStorage.setItem(`defib_${tid}_spreadsheet_clients`, value);
+      }
+    } catch (_) {}
+  };
+
+  const handleSaveDatabases = async () => {
+    if (isDeveloper || isReadOnly) {
+      alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
+      return;
+    }
+    setDatabasesSaveStatus('saving');
+    const effectiveTenantId = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+
+    const updatedCompany: CompanyInfo = {
+      ...localCompany,
+      spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
+      spreadsheetAutresMateriels: localCompany.spreadsheetAutresMateriels || '',
+      spreadsheetClients: localCompany.spreadsheetClients || '',
+      spreadsheetDefibrillateursUrl: localCompany.spreadsheetDefibrillateurs || '',
+      spreadsheetAutresMaterielsUrl: localCompany.spreadsheetAutresMateriels || '',
+      spreadsheetClientsUrl: localCompany.spreadsheetClients || '',
+    };
+
+    setLocalCompany(updatedCompany);
+    onUpdateCompanyInfo(updatedCompany);
+
+    const tKeys = [effectiveTenantId, effectiveTenantId.toLowerCase(), effectiveTenantId.toUpperCase()];
+    for (const tid of tKeys) {
+      localStorage.setItem(`defib_${tid}_spreadsheet_defibrillateurs`, localCompany.spreadsheetDefibrillateurs || '');
+      localStorage.setItem(`defib_${tid}_spreadsheet_autres_materiels`, localCompany.spreadsheetAutresMateriels || '');
+      localStorage.setItem(`defib_${tid}_spreadsheet_clients`, localCompany.spreadsheetClients || '');
+      localStorage.setItem(`defib_${tid}_company_info`, JSON.stringify(updatedCompany));
+      localStorage.setItem(`fs_cache_${tid}_company_info`, JSON.stringify(updatedCompany));
+    }
+    localStorage.setItem('defib_company_info', JSON.stringify(updatedCompany));
+
+    try {
+      if (effectiveTenantId && effectiveTenantId !== 'demo') {
+        await Promise.all([
+          saveCollectionToFirestore('companyInfo', updatedCompany, effectiveTenantId),
+          saveCollectionToFirestore('tenantDatabases', {
+            spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
+            spreadsheetAutresMateriels: localCompany.spreadsheetAutresMateriels || '',
+            spreadsheetClients: localCompany.spreadsheetClients || '',
+            updatedAt: new Date().toISOString()
+          }, effectiveTenantId)
+        ]);
+      }
+      setDatabasesSaveStatus('saved');
+    } catch (err) {
+      console.error('Error saving databases to Firestore:', err);
+      setDatabasesSaveStatus('idle');
+    }
+    setTimeout(() => {
+      setDatabasesSaveStatus('idle');
+    }, 2500);
   };
 
   const handleToggleTabVisibility = (tabLabel: string) => {
@@ -5126,6 +5219,59 @@ export default function SettingsModal({
         {/* SECTION: BASES DE DONNÉES */}
         {activeSection === 'bases_de_donnees' && (
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left animate-fadeIn" id="settings-section-databases">
+            <div className="flex items-center justify-between w-full mb-3 select-none bg-transparent">
+              <span 
+                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                style={{
+                  backgroundColor: 'oklch(0.44 0.16 324.65)',
+                  borderRadius: '1000px',
+                  cursor: 'default',
+                  fontWeight: 100,
+                  textTransform: 'none',
+                }}
+              >
+                {t("Bases de données")}
+              </span>
+              <button
+                type="button"
+                disabled={databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin}
+                onClick={handleSaveDatabases}
+                style={{
+                  backgroundColor: 'rgb(53, 86, 236)',
+                  color: '#ffffff',
+                  boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                  borderRadius: '0.75rem',
+                  fontSize: '18px',
+                  padding: '11px 22px',
+                  fontWeight: '100',
+                  transition: 'all 0s ease-in-out',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  cursor: databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin ? 'not-allowed' : 'pointer',
+                  opacity: databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin ? 0.6 : 1,
+                  border: 'none',
+                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
+                }}
+                className="transition-all"
+              >
+                {databasesSaveStatus === 'saving' ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    {t("Enregistrement...")}
+                  </>
+                ) : databasesSaveStatus === 'saved' ? (
+                  <>
+                    <span className="text-emerald-200 mr-1.5">✓</span>
+                    {t("Enregistré !")}
+                  </>
+                ) : (
+                  t("Enregistrer")
+                )}
+              </button>
+            </div>
+
             {/* Div 1: Spreadsheet Défibrillateurs. */}
             <div className="space-y-1.5" id="settings-db-spreadsheet-defibrillateurs">
               <label className="block text-[16px] font-bold text-black font-sans">

@@ -508,6 +508,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formSituationDevis, setFormSituationDevis] = useState<'Gagné' | 'Perdu' | 'Non renseigné'>('Non renseigné');
   const [formScoreConversion, setFormScoreConversion] = useState<number | null>(null);
   const [formReferenceDevis, setFormReferenceDevis] = useState('');
+  const [formCategorieDevis, setFormCategorieDevis] = useState<'Défibrillateur' | 'Maintenance' | 'Consommable(s)' | 'Formation' | 'Grand compte' | 'Revendeur' | 'Autres' | string>('Défibrillateur');
+  const [formIndicateurTempsDevis, setFormIndicateurTempsDevis] = useState<'Validation de budget' | 'Vente via revendeur' | 'Plateforme d’achat' | 'Autre' | string>('Validation de budget');
   const [formTotalAffaireHT, setFormTotalAffaireHT] = useState('');
   const [formFamille, setFormFamille] = useState('');
   const [formIndicatifPostal, setFormIndicatifPostal] = useState('');
@@ -638,6 +640,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormSituationDevis('Non renseigné');
     setFormScoreConversion(null);
     setFormReferenceDevis('');
+    setFormCategorieDevis('Défibrillateur');
+    setFormIndicateurTempsDevis('Validation de budget');
     setFormTotalAffaireHT('');
     setFormFamille('');
     setFormIndicatifPostal('');
@@ -705,8 +709,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     // Commercial fields
     setFormMarchePublic(ticket.marchePublic || 'Non');
     setFormSituationDevis(ticket.situationDevis || 'Non renseigné');
-    setFormScoreConversion(typeof ticket.scorePotentielConversion === 'number' ? ticket.scorePotentielConversion : null);
+    setFormScoreConversion(typeof ticket.scorePotentielConversion === 'number' && ticket.scorePotentielConversion >= 1 && ticket.scorePotentielConversion <= 5 ? ticket.scorePotentielConversion : null);
     setFormReferenceDevis(ticket.referenceDevis || '');
+    setFormCategorieDevis(ticket.categorieDevis || 'Défibrillateur');
+    setFormIndicateurTempsDevis(ticket.indicateurTempsDevis || 'Validation de budget');
     setFormTotalAffaireHT(ticket.totalAffaireHT !== undefined && ticket.totalAffaireHT !== null ? String(ticket.totalAffaireHT) : '');
     setFormFamille(ticket.famille || '');
     setFormIndicatifPostal(ticket.indicatifPostal || '');
@@ -934,6 +940,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       situationDevis: formSituationDevis,
       scorePotentielConversion: formScoreConversion,
       referenceDevis: formReferenceDevis.trim(),
+      categorieDevis: formCategorieDevis,
+      indicateurTempsDevis: formIndicateurTempsDevis,
       totalAffaireHT: formTotalAffaireHT.trim() ? parseFloat(formTotalAffaireHT.trim()) : undefined,
       famille: formFamille.trim().toUpperCase(),
       indicatifPostal: formIndicatifPostal.trim(),
@@ -1151,6 +1159,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       'Marché Public',
       'Score Potentiel Conversion',
       'Référence Devis',
+      'Catégorie Devis',
+      'Indicateur Temps Devis',
       'Famille',
       'Origine Lead',
       'Description Offre Devis',
@@ -1194,7 +1204,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         : '';
 
       const scoreStr = t.scorePotentielConversion !== undefined && t.scorePotentielConversion !== null
-        ? `${t.scorePotentielConversion}/8`
+        ? `${t.scorePotentielConversion}/5`
         : '';
 
       const row = [
@@ -1220,6 +1230,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         escapeCsv(t.marchePublic || ''),
         escapeCsv(scoreStr),
         escapeCsv(t.referenceDevis || ''),
+        escapeCsv(t.categorieDevis || ''),
+        escapeCsv(t.indicateurTempsDevis || ''),
         escapeCsv(t.famille || ''),
         escapeCsv(t.origineLead || ''),
         escapeCsv(t.descriptionOffreDevis || ''),
@@ -1497,7 +1509,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     csvContent += ';;;;;;;;;;;;;;;\n';
 
     // Detailed table header
-    csvContent += 'Référence;Date Ouverture;Dernière Actualisation;Collaborateur;Client ou Prospect;Email;Situation Interlocuteur;Type Structure;Prénom Nom;Fonction;Téléphone;Catégorie;Situation;Criticité;Objet;Total Affaire HT;Situation Devis;Marché Public;Score Potentiel Conversion;Référence Devis;Famille;Indicatif Postal;Origine Lead;Description Offre Devis;Date Devis;Date Prochaine Relance;Date Commande;Lien Stockage Partagé Devis;Description\n';
+    csvContent += 'Référence;Date Ouverture;Dernière Actualisation;Collaborateur;Client ou Prospect;Email;Situation Interlocuteur;Type Structure;Prénom Nom;Fonction;Téléphone;Catégorie;Situation;Criticité;Objet;Total Affaire HT;Situation Devis;Marché Public;Score Potentiel Conversion;Référence Devis;Catégorie Devis;Indicateur Temps Devis;Famille;Indicatif Postal;Origine Lead;Description Offre Devis;Date Devis;Date Prochaine Relance;Date Commande;Lien Stockage Partagé Devis;Description\n';
 
     // Rows
     filteredPerfTickets.forEach(t => {
@@ -1521,8 +1533,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         escapeCsv(t.totalAffaireHT !== undefined && t.totalAffaireHT !== null && t.totalAffaireHT !== '' ? `${t.totalAffaireHT} €` : ''),
         escapeCsv(t.situationDevis || ''),
         escapeCsv(t.marchePublic || ''),
-        escapeCsv(t.scorePotentielConversion !== undefined && t.scorePotentielConversion !== null ? `${t.scorePotentielConversion}/8` : ''),
+        escapeCsv(t.scorePotentielConversion !== undefined && t.scorePotentielConversion !== null ? `${t.scorePotentielConversion}/5` : ''),
         escapeCsv(t.referenceDevis || ''),
+        escapeCsv(t.categorieDevis || ''),
+        escapeCsv(t.indicateurTempsDevis || ''),
         escapeCsv(t.famille || ''),
         escapeCsv(t.indicatifPostal || ''),
         escapeCsv(t.origineLead || ''),
@@ -2703,7 +2717,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               {/* Form */}
               <form onSubmit={handleSaveForm} className="space-y-6 flex-1 flex flex-col justify-between pt-2">
                 <div className="space-y-6">
-                  {/* 1. Situation: Toggle glissant de 3 items avec un background white commun, un border commun #dadada et le bouton de la Situation active en button color rose avec un text color rose */}
+                  {/* 1. Situation: Toggle glissant de 3 items */}
                   <div 
                     className="flex p-1 rounded-xl bg-white select-none transition-all"
                     style={{
@@ -2719,18 +2733,30 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           type="button"
                           onClick={() => setFormSituation(sit)}
                           id={`crm-situation-${sit.toLowerCase().replace(/\s+/g, '-')}`}
-                          className={`flex-1 py-2.5 px-3 rounded-lg font-bold font-sans transition-all cursor-pointer flex items-center justify-center text-center ${
+                          className={`flex-1 py-2.5 px-3 font-bold transition-all cursor-pointer flex items-center justify-center text-center ${
                             isSelected 
-                              ? 'shadow-xs' 
-                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                              ? '' 
+                              : 'text-black hover:bg-slate-50'
                           }`}
-                          style={{
-                            fontSize: '18px',
-                            backgroundColor: isSelected ? '#ffecf8' : 'transparent',
-                            color: isSelected ? '#fe4eba' : '#475569',
-                            border: isSelected ? '1px solid #fbcfe8' : '1px solid transparent',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          }}
+                          style={
+                            isSelected
+                              ? {
+                                  fontSize: '18px',
+                                  backgroundColor: 'rgb(143 25 97)',
+                                  color: 'rgb(255 255 255)',
+                                  border: 'none',
+                                  borderRadius: '13px',
+                                  fontFamily: 'DefibeoMain, Civilprom, sans-serif',
+                                }
+                              : {
+                                  fontSize: '18px',
+                                  backgroundColor: 'transparent',
+                                  color: '#000000',
+                                  border: 'none',
+                                  borderRadius: '13px',
+                                  fontFamily: 'DefibeoMain, Civilprom, sans-serif',
+                                }
+                          }
                         >
                           {sit}
                         </button>
@@ -2897,15 +2923,15 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </div>
                   </div>
 
-                  {/* 4. Encart: Client ou Prospect, Email, Situation/Structure, Contact, Objet, Description */}
+                  {/* 4. Section: Client ou Prospect, Email, Situation/Structure, Contact, Objet, Description (sans padding, border, ni shadow) */}
                   <div 
                     className="space-y-4"
                     style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
-                      borderRadius: '14px',
-                      padding: '20px',
-                      backgroundColor: '#ffffff'
+                      border: 'none',
+                      boxShadow: 'none',
+                      borderRadius: '0px',
+                      padding: '0px',
+                      backgroundColor: 'transparent'
                     }}
                   >
                     {/* Client ou Prospect */}
@@ -3209,11 +3235,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
                       {/* Score Potentiel Conversion à gauche & Référence Devis à droite */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 items-end">
-                        {/* Score Potentiel Conversion (8 ronds 1 à 8 avec toggle select/deselect) */}
+                        {/* Score Potentiel Conversion (5 ronds 1 à 5 avec toggle select/deselect) */}
                         <div>
                           <label>Score Potentiel Conversion.</label>
                           <div className="flex items-center gap-2 flex-wrap pt-1">
-                            {[1, 2, 3, 4, 5, 6, 7, 8].map((scoreNum) => {
+                            {[1, 2, 3, 4, 5].map((scoreNum) => {
                               const isSelected = formScoreConversion === scoreNum;
                               return (
                                 <button
@@ -3259,6 +3285,39 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </div>
                       </div>
 
+                      {/* Catégorie Devis. */}
+                      <div>
+                        <label>Catégorie Devis.</label>
+                        <select
+                          value={formCategorieDevis}
+                          onChange={(e) => setFormCategorieDevis(e.target.value)}
+                          style={selectStyle}
+                        >
+                          <option value="Défibrillateur">Défibrillateur</option>
+                          <option value="Maintenance">Maintenance</option>
+                          <option value="Consommable(s)">Consommable(s)</option>
+                          <option value="Formation">Formation</option>
+                          <option value="Grand compte">Grand compte</option>
+                          <option value="Revendeur">Revendeur</option>
+                          <option value="Autres">Autres</option>
+                        </select>
+                      </div>
+
+                      {/* Indicateur Temps Devis. */}
+                      <div>
+                        <label>Indicateur Temps Devis.</label>
+                        <select
+                          value={formIndicateurTempsDevis}
+                          onChange={(e) => setFormIndicateurTempsDevis(e.target.value)}
+                          style={selectStyle}
+                        >
+                          <option value="Validation de budget">Validation de budget</option>
+                          <option value="Vente via revendeur">Vente via revendeur</option>
+                          <option value="Plateforme d’achat">Plateforme d’achat</option>
+                          <option value="Autre">Autre</option>
+                        </select>
+                      </div>
+
                       {/* Full width en dessous : Bouton Télécharger un fichier + sub-divs */}
                       <div className="space-y-2">
                         <div className="flex items-center gap-3">
@@ -3283,7 +3342,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             className={!googleDriveActive ? 'opacity-60 select-none' : 'hover:opacity-90 active:scale-95 transition-all cursor-pointer'}
                             title={!googleDriveActive ? "Connecteur Google Drive inactif dans les réglages" : undefined}
                           >
-                            <Upload className="w-5 h-5" />
                             {isUploadingFile ? "Téléchargement en cours..." : "Télécharger un fichier"}
                           </button>
                           <input

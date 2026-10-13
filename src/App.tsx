@@ -18510,6 +18510,7 @@ export default function App() {
 
           {activeTab === 'parametres' && (
             <SettingsModal
+              tenantId={tenantId}
               isPage={true}
               isOpen={true}
               onClose={() => {}}
@@ -18562,6 +18563,7 @@ export default function App() {
 
       {/* Global popups block settings / membres */}
       <SettingsModal
+        tenantId={tenantId}
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         companyInfo={companyInfo}
