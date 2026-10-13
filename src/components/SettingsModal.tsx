@@ -156,6 +156,7 @@ export default function SettingsModal({
     | 'apparence'
     | 'emplacements'
     | 'connecteurs'
+    | 'bases_de_donnees'
     | 'boutique'
     | 'assistance'
     | 'parrainage'
@@ -171,6 +172,7 @@ export default function SettingsModal({
     { key: 'apparence', label: 'Apparence du logiciel pour votre session' },
     { key: 'emplacements', label: 'Intitulés des emplacements' },
     { key: 'connecteurs', label: 'Connecteurs' },
+    { key: 'bases_de_donnees', label: 'Bases de données' },
     { key: 'boutique', label: 'Boutique' },
     { key: 'assistance', label: 'Assistance Defibeo' },
     { key: 'parrainage', label: 'Parrainage' },
@@ -738,6 +740,32 @@ export default function SettingsModal({
       if (companyInfo?.communicationPortailClient !== undefined) setCommunicationPortailClient(companyInfo.communicationPortailClient);
       if (companyInfo?.disableHelpsAndTutorials) setDisableHelpsAndTutorials(companyInfo.disableHelpsAndTutorials);
       if (companyInfo?.enableOtherEquipments) setEnableOtherEquipments(companyInfo.enableOtherEquipments);
+
+      const activeTid = localStorage.getItem('defib_tenant_id') || 'demo';
+      const cachedDefib = localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) || '';
+      const cachedAutres = localStorage.getItem(`defib_${activeTid}_spreadsheet_autres_materiels`) || '';
+      const cachedClients = localStorage.getItem(`defib_${activeTid}_spreadsheet_clients`) || '';
+      if (!companyInfo?.spreadsheetDefibrillateurs && (cachedDefib || cachedAutres || cachedClients)) {
+        setLocalCompany(prev => ({
+          ...prev,
+          spreadsheetDefibrillateurs: prev.spreadsheetDefibrillateurs || cachedDefib,
+          spreadsheetAutresMateriels: prev.spreadsheetAutresMateriels || cachedAutres,
+          spreadsheetClients: prev.spreadsheetClients || cachedClients,
+        }));
+      }
+      if (activeTid && activeTid !== 'demo') {
+        fetchCollectionFromFirestore<any>('tenantDatabases', activeTid).then(dbData => {
+          if (dbData) {
+            setLocalCompany(prev => ({
+              ...prev,
+              spreadsheetDefibrillateurs: prev.spreadsheetDefibrillateurs || dbData.spreadsheetDefibrillateurs || '',
+              spreadsheetAutresMateriels: prev.spreadsheetAutresMateriels || dbData.spreadsheetAutresMateriels || '',
+              spreadsheetClients: prev.spreadsheetClients || dbData.spreadsheetClients || '',
+            }));
+          }
+        }).catch(() => {});
+      }
+
       lastPropsMembersRef.current = members;
       lastPropsCompanyRef.current = companyInfo;
     }
@@ -1369,6 +1397,18 @@ export default function SettingsModal({
     }));
   };
 
+  const handleDbSpreadsheetChange = (
+    field: 'spreadsheetDefibrillateurs' | 'spreadsheetAutresMateriels' | 'spreadsheetClients',
+    value: string
+  ) => {
+    if (isReadOnly || isDeveloper) return;
+    setLocalCompany(prev => ({
+      ...prev,
+      [field]: value,
+      [`${field}Url`]: value
+    }));
+  };
+
   const handleToggleTabVisibility = (tabLabel: string) => {
     if (!isCurrentUserSuperAdmin) return;
     const currentHidden = localCompany.hiddenTabs || [];
@@ -1886,7 +1926,13 @@ export default function SettingsModal({
       enableSatisfactionAvis: enableSatisfactionAvis,
       enableDevisFactures: enableDevisFactures,
       communicationPortailClient: communicationPortailClient,
-      disableHelpsAndTutorials: disableHelpsAndTutorials
+      disableHelpsAndTutorials: disableHelpsAndTutorials,
+      spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
+      spreadsheetAutresMateriels: localCompany.spreadsheetAutresMateriels || '',
+      spreadsheetClients: localCompany.spreadsheetClients || '',
+      spreadsheetDefibrillateursUrl: localCompany.spreadsheetDefibrillateurs || '',
+      spreadsheetAutresMaterielsUrl: localCompany.spreadsheetAutresMateriels || '',
+      spreadsheetClientsUrl: localCompany.spreadsheetClients || '',
     };
 
     // Log suspicious activity event K for modified fields in Réglages
@@ -1915,6 +1961,9 @@ export default function SettingsModal({
         { key: 'pdfHideVerificationsTechniques', label: 'Rapports PDF : Masquer Vérifications techniques' },
         { key: 'pdfHideHorodatagesDiagnostic', label: 'Rapports PDF : Masquer Horodatages' },
         { key: 'pdfShowDemandeDevisDetails', label: 'Rapports PDF : Afficher Demande de devis' },
+        { key: 'spreadsheetDefibrillateurs', label: 'Spreadsheet Défibrillateurs' },
+        { key: 'spreadsheetAutresMateriels', label: 'Spreadsheet Autres Matériels' },
+        { key: 'spreadsheetClients', label: 'Spreadsheet Clients' },
       ];
 
       for (const f of checkFields) {
@@ -2056,6 +2105,22 @@ export default function SettingsModal({
     localStorage.setItem(`defib_${myTenantId}_enable_auto_emails`, enableAutoEmails);
     localStorage.setItem(`defib_${myTenantId}_enable_satisfaction_avis`, enableSatisfactionAvis);
     localStorage.setItem(`defib_${myTenantId}_enable_devis_factures`, enableDevisFactures);
+    localStorage.setItem(`defib_${myTenantId}_spreadsheet_defibrillateurs`, localCompany.spreadsheetDefibrillateurs || '');
+    localStorage.setItem(`defib_${myTenantId}_spreadsheet_autres_materiels`, localCompany.spreadsheetAutresMateriels || '');
+    localStorage.setItem(`defib_${myTenantId}_spreadsheet_clients`, localCompany.spreadsheetClients || '');
+
+    if (effectiveTenantId && effectiveTenantId !== 'demo') {
+      promises.push(
+        saveCollectionToFirestore('tenantDatabases', {
+          spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
+          spreadsheetAutresMateriels: localCompany.spreadsheetAutresMateriels || '',
+          spreadsheetClients: localCompany.spreadsheetClients || '',
+          updatedAt: new Date().toISOString()
+        }, effectiveTenantId).catch(err =>
+          console.error('Error saving tenantDatabases directly to Firestore:', err)
+        )
+      );
+    }
     
     let userEmail = '';
     if (currentUser && currentUser.email) {
@@ -4909,6 +4974,56 @@ export default function SettingsModal({
                 </div>
               </div>
 
+            </div>
+          </div>
+        )}
+
+        {/* SECTION: BASES DE DONNÉES */}
+        {activeSection === 'bases_de_donnees' && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left animate-fadeIn" id="settings-section-databases">
+            {/* Div 1: Spreadsheet Défibrillateurs. */}
+            <div className="space-y-1.5" id="settings-db-spreadsheet-defibrillateurs">
+              <label className="block text-[16px] font-bold text-black font-sans">
+                {t("Spreadsheet Défibrillateurs.")}
+              </label>
+              <input
+                type="url"
+                disabled={isReadOnly || isDeveloper}
+                value={localCompany.spreadsheetDefibrillateurs ?? ''}
+                onChange={(e) => handleDbSpreadsheetChange('spreadsheetDefibrillateurs', e.target.value)}
+                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                placeholder={t("https://docs.google.com/spreadsheets/d/...")}
+              />
+            </div>
+
+            {/* Div 2: Spreadsheet Autres Matériels. */}
+            <div className="space-y-1.5" id="settings-db-spreadsheet-autres-materiels">
+              <label className="block text-[16px] font-bold text-black font-sans">
+                {t("Spreadsheet Autres Matériels.")}
+              </label>
+              <input
+                type="url"
+                disabled={isReadOnly || isDeveloper}
+                value={localCompany.spreadsheetAutresMateriels ?? ''}
+                onChange={(e) => handleDbSpreadsheetChange('spreadsheetAutresMateriels', e.target.value)}
+                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                placeholder={t("https://docs.google.com/spreadsheets/d/...")}
+              />
+            </div>
+
+            {/* Div 3: Spreadsheet Clients. */}
+            <div className="space-y-1.5" id="settings-db-spreadsheet-clients">
+              <label className="block text-[16px] font-bold text-black font-sans">
+                {t("Spreadsheet Clients.")}
+              </label>
+              <input
+                type="url"
+                disabled={isReadOnly || isDeveloper}
+                value={localCompany.spreadsheetClients ?? ''}
+                onChange={(e) => handleDbSpreadsheetChange('spreadsheetClients', e.target.value)}
+                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                placeholder={t("https://docs.google.com/spreadsheets/d/...")}
+              />
             </div>
           </div>
         )}

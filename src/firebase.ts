@@ -403,11 +403,23 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
       const isItemFromApi = item._lastSource === 'api';
       const isExistingFromApi = existing._lastSource === 'api';
       
-      const itemTime = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
-      const existingTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+      const itemModStr = item.dateDerniereModification || item.updatedAt || item.dateModification || item.modifiedAt;
+      const existingModStr = existing.dateDerniereModification || existing.updatedAt || existing.dateModification || existing.modifiedAt;
+      const itemTime = itemModStr ? new Date(itemModStr).getTime() : 0;
+      const existingTime = existingModStr ? new Date(existingModStr).getTime() : 0;
 
-      // When merging, if incoming item is from API or has newer/equal timestamp, it takes precedence
-      const incomingTakesPrecedence = isItemFromApi || (itemTime > 0 && itemTime >= existingTime) || (!isExistingFromApi && !existingTime);
+      // When merging, if both items have timestamps, the newer one takes precedence.
+      // Older chunk items from API must NEVER overwrite newer modifications.
+      let incomingTakesPrecedence: boolean;
+      if (itemTime > 0 && existingTime > 0) {
+        incomingTakesPrecedence = itemTime >= existingTime;
+      } else if (itemTime > 0) {
+        incomingTakesPrecedence = true;
+      } else if (existingTime > 0) {
+        incomingTakesPrecedence = false;
+      } else {
+        incomingTakesPrecedence = isItemFromApi || !isExistingFromApi;
+      }
 
       const merged = incomingTakesPrecedence ? { ...existing, ...item } : { ...item, ...existing };
       for (const [prop, val] of Object.entries(item)) {
@@ -447,7 +459,9 @@ export function mergeCollectionItems<T>(collectionName: string, items: any[]): a
         merged._lastSource = 'api';
       }
       if (itemTime > 0 || existingTime > 0) {
+        const newerDate = itemTime >= existingTime ? (item.dateDerniereModification || item.updatedAt) : (existing.dateDerniereModification || existing.updatedAt);
         merged.updatedAt = (itemTime >= existingTime ? item.updatedAt : existing.updatedAt) || new Date().toISOString();
+        merged.dateDerniereModification = newerDate || merged.updatedAt;
       }
 
       map.set(key, merged);
@@ -965,6 +979,15 @@ export async function fetchCollectionFromFirestore<T>(
           if (!bundleFailed && bundleItems.length > 0) {
             const sanitizedVal = filterCollectionForTenant(bundleItems as unknown as T, collectionName, activeTenantId);
             let liveItems: any[] = sanitizedVal as any[];
+
+            // Ensure any recent modifications saved in local IndexedDB with newer timestamps are preserved
+            try {
+              const localExisting = await idbGet<any[]>(`defib_${activeTenantId}_${collectionName}`);
+              if (Array.isArray(localExisting) && localExisting.length > 0) {
+                liveItems = mergeCollectionItems(collectionName, [...liveItems, ...localExisting]);
+              }
+            } catch (_) {}
+
             try {
               const remoteDelKeys = await fetchRemoteDeletedDefibKeys(activeTenantId);
               if (remoteDelKeys.length > 0) {

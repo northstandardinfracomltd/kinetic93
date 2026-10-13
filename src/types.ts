@@ -502,6 +502,12 @@ export interface CompanyInfo {
   villeSiege?: string;
   paysSiege?: string;
   langue?: string;
+  spreadsheetDefibrillateurs?: string;
+  spreadsheetAutresMateriels?: string;
+  spreadsheetClients?: string;
+  spreadsheetDefibrillateursUrl?: string;
+  spreadsheetAutresMaterielsUrl?: string;
+  spreadsheetClientsUrl?: string;
 }
 
 export interface PointageLog {

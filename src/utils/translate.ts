@@ -254,6 +254,10 @@ const dictionaries: Record<string, Record<string, string>> = {
     "Informations de l'entreprise": "Company Information",
     "Configuration de l'environnement": "Environment Configuration",
     "Sauvegarder les modifications": "Save Changes",
+    "Bases de données": "Databases",
+    "Spreadsheet Défibrillateurs.": "Spreadsheet Defibrillators.",
+    "Spreadsheet Autres Matériels.": "Spreadsheet Other Equipment.",
+    "Spreadsheet Clients.": "Spreadsheet Clients.",
 
     // Client Portal
     "Matériels": "Equipment",

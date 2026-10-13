@@ -6332,6 +6332,9 @@ export default function App() {
                 pdfHideVerificationsTechniques: data.pdfHideVerificationsTechniques !== undefined ? data.pdfHideVerificationsTechniques : prev?.pdfHideVerificationsTechniques,
                 pdfHideHorodatagesDiagnostic: data.pdfHideHorodatagesDiagnostic !== undefined ? data.pdfHideHorodatagesDiagnostic : prev?.pdfHideHorodatagesDiagnostic,
                 pdfShowDemandeDevisDetails: data.pdfShowDemandeDevisDetails !== undefined ? data.pdfShowDemandeDevisDetails : prev?.pdfShowDemandeDevisDetails,
+                spreadsheetDefibrillateurs: data.spreadsheetDefibrillateurs !== undefined ? data.spreadsheetDefibrillateurs : prev?.spreadsheetDefibrillateurs,
+                spreadsheetAutresMateriels: data.spreadsheetAutresMateriels !== undefined ? data.spreadsheetAutresMateriels : prev?.spreadsheetAutresMateriels,
+                spreadsheetClients: data.spreadsheetClients !== undefined ? data.spreadsheetClients : prev?.spreadsheetClients,
               };
               const strVal = JSON.stringify(merged);
               localStorage.setItem(`defib_${tenantId}_company_info`, strVal);

@@ -379,19 +379,23 @@ export default function AutresMaterielsTab({
   };
 
   const handleAddSchedule = () => {
-    setSchedules(prev => [
-      ...prev,
-      {
-        days: [],
-        fermetureMidi: false,
-        openMorning: '09:00',
-        closeMorning: '12:00',
-        openAfternoon: '14:00',
-        closeAfternoon: '18:00',
-        openContinuous: '09:00',
-        closeContinuous: '17:00'
-      }
-    ]);
+    if (schedules.length >= 2) return;
+    setSchedules(prev => {
+      if (prev.length >= 2) return prev;
+      return [
+        ...prev,
+        {
+          days: [],
+          fermetureMidi: false,
+          openMorning: '09:00',
+          closeMorning: '12:00',
+          openAfternoon: '14:00',
+          closeAfternoon: '18:00',
+          openContinuous: '09:00',
+          closeContinuous: '17:00'
+        }
+      ];
+    });
   };
 
   const handleRemoveSchedule = (idx: number) => {
@@ -2058,14 +2062,16 @@ export default function AutresMaterielsTab({
                     <span className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider font-sans">
                       Horaires d'ouverture
                     </span>
-                    <button
-                      type="button"
-                      onClick={handleAddSchedule}
-                      style={{ ...rowActionButton18Style, textTransform: 'none' }}
-                      className="font-sans"
-                    >
-                      Nouvelle plage
-                    </button>
+                    {schedules.length < 2 && (
+                      <button
+                        type="button"
+                        onClick={handleAddSchedule}
+                        style={{ ...rowActionButton18Style, textTransform: 'none' }}
+                        className="font-sans"
+                      >
+                        Nouvelle plage
+                      </button>
+                    )}
                   </div>
 
                   {schedules.map((sch, schIdx) => (

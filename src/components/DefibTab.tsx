@@ -751,8 +751,8 @@ export default function DefibTab({
 
   const addAdvancedTerms = (rawInput: string | string[]) => {
     const rawTokens = Array.isArray(rawInput)
-      ? rawInput
-      : String(rawInput || '').split(/[,;\n\r\t/]+/).map(s => s.trim());
+      ? rawInput.flatMap(s => String(s || '').split(/[,;\n\r\t\s/]+/))
+      : String(rawInput || '').split(/[,;\n\r\t\s/]+/).map(s => s.trim());
 
     setDraftFilters(prev => {
       const current = prev.advancedSearchTerms || [];
@@ -774,7 +774,7 @@ export default function DefibTab({
   const handleAdvancedInputPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     const pasteData = e.clipboardData.getData('text');
     if (pasteData) {
-      const tokens = pasteData.split(/[,;\n\r\t/]+/).map(s => s.trim()).filter(s => s.length >= 2);
+      const tokens = pasteData.split(/[,;\n\r\t\s/]+/).map(s => s.trim()).filter(s => s.length >= 2);
       if (tokens.length > 0) {
         e.preventDefault();
         addAdvancedTerms(tokens);
@@ -785,8 +785,8 @@ export default function DefibTab({
 
   const handleAdvancedInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    if (val.includes('/') || val.includes(',') || val.includes(';')) {
-      const parts = val.split(/[/,;]+/);
+    if (val.includes('/') || val.includes(',') || val.includes(';') || val.includes('\n')) {
+      const parts = val.split(/[/,;\n\r\t]+/);
       for (let i = 0; i < parts.length - 1; i++) {
         if (parts[i].trim().length >= 2) {
           addAdvancedTerms(parts[i]);
@@ -805,6 +805,10 @@ export default function DefibTab({
         addAdvancedTerms(advancedSearchInputValue);
         setAdvancedSearchInputValue('');
       }
+    } else if (e.key === ' ' && advancedSearchInputValue.trim().length >= 3) {
+      e.preventDefault();
+      addAdvancedTerms(advancedSearchInputValue);
+      setAdvancedSearchInputValue('');
     } else if (e.key === 'Backspace' && advancedSearchInputValue === '') {
       setDraftFilters(prev => {
         const terms = prev.advancedSearchTerms || [];
@@ -1555,19 +1559,23 @@ export default function DefibTab({
   };
 
   const handleAddSchedule = () => {
-    setSchedules(prev => [
-      ...prev,
-      {
-        days: [],
-        fermetureMidi: false,
-        openMorning: '09:00',
-        closeMorning: '12:00',
-        openAfternoon: '14:00',
-        closeAfternoon: '18:00',
-        openContinuous: '09:00',
-        closeContinuous: '17:00'
-      }
-    ]);
+    if (schedules.length >= 2) return;
+    setSchedules(prev => {
+      if (prev.length >= 2) return prev;
+      return [
+        ...prev,
+        {
+          days: [],
+          fermetureMidi: false,
+          openMorning: '09:00',
+          closeMorning: '12:00',
+          openAfternoon: '14:00',
+          closeAfternoon: '18:00',
+          openContinuous: '09:00',
+          closeContinuous: '17:00'
+        }
+      ];
+    });
   };
 
   const handleRemoveSchedule = (idx: number) => {
@@ -2046,8 +2054,13 @@ export default function DefibTab({
         if (activeContrat !== activeFilters.contrat) return false;
       }
 
+      // 6.5 Advanced Search Terms match (from side pane filter)
+      const advTerms = (activeFilters.advancedSearchTerms || [])
+        .map(t => t.trim().toLowerCase())
+        .filter(t => t.length >= 2);
+
       // 6. Search query match
-      if (searchLower) {
+      if (searchLower && advTerms.length === 0) {
         const clientName = getLinkedClientForDefib(df)?.denomination || (df as any).clientNom || df.nomSite || '';
         const modelName = variableMap.get(df.modeleId)?.nom || '';
         const isMatchSearch = (
@@ -2072,11 +2085,6 @@ export default function DefibTab({
         );
         if (!isMatchSearch) return false;
       }
-
-      // 6.5 Advanced Search Terms match (from side pane filter)
-      const advTerms = (activeFilters.advancedSearchTerms || [])
-        .map(t => t.trim().toLowerCase())
-        .filter(t => t.length >= 2);
 
       if (advTerms.length > 0) {
         const clientName = (getLinkedClientForDefib(df)?.denomination || (df as any).clientNom || df.nomSite || '').toLowerCase();
@@ -2266,7 +2274,8 @@ export default function DefibTab({
       activeFilters.action3To6 ||
       activeFilters.actionUnder3 ||
       activeFilters.actionExpired ||
-      activeFilters.actionRejected
+      activeFilters.actionRejected ||
+      (activeFilters.advancedSearchTerms && activeFilters.advancedSearchTerms.length > 0)
     );
     return !hasSearch && !hasSortFilter && !hasDeptFilter && !hasActiveSidePaneFilter;
   }, [search, sortFilter, selectedDepartment, activeFilters]);
@@ -4880,7 +4889,8 @@ export default function DefibTab({
             activeFilters.action3To6 ||
             activeFilters.actionUnder3 ||
             activeFilters.actionExpired ||
-            activeFilters.actionRejected ? (
+            activeFilters.actionRejected ||
+            (activeFilters.advancedSearchTerms && activeFilters.advancedSearchTerms.length > 0) ? (
               `${t('Total défibrillateurs')} (${selectedDepartment && selectedDepartment !== '__ALL__' ? selectedDepartment : t('Filtre')}) : ${filteredDefibs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
             ) : (
               `${t('Total défibrillateurs (Tous)')} : ${activeDefibrillateurs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
@@ -6155,14 +6165,16 @@ export default function DefibTab({
                         <span className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider font-sans">
                           {t("Horaires d'ouverture")}
                         </span>
-                        <button
-                          type="button"
-                          onClick={handleAddSchedule}
-                          style={{ ...rowActionButton18Style, textTransform: 'none' }}
-                          className="font-sans"
-                        >
-                          {t("Nouvelle plage")}
-                        </button>
+                        {schedules.length < 2 && (
+                          <button
+                            type="button"
+                            onClick={handleAddSchedule}
+                            style={{ ...rowActionButton18Style, textTransform: 'none' }}
+                            className="font-sans"
+                          >
+                            {t("Nouvelle plage")}
+                          </button>
+                        )}
                       </div>
 
                       {schedules.map((sch, schIdx) => (
@@ -8858,16 +8870,22 @@ export default function DefibTab({
                 Pour chaque terme, entrez au moins 2 lettres et saisissez ‘Entrée’, une virgule ou collez une liste.
               </p>
 
-              <div className="flex items-center justify-between pt-0.5 px-1">
-                <span className="text-[12px] text-slate-500 font-sans">Opérateur :</span>
-                <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-100">
+              <div className="w-full pt-0.5">
+                <div 
+                  className="w-full grid grid-cols-2 rounded-lg border p-0.5 bg-transparent"
+                  style={{ borderColor: '#dadada', backgroundColor: 'transparent' }}
+                >
                   <button
                     type="button"
                     onClick={() => setDraftFilters(prev => ({ ...prev, advancedSearchOperator: 'OR' }))}
-                    className={`px-2.5 py-0.5 text-[11px] font-sans rounded-md transition-all cursor-pointer ${
+                    style={{
+                      backgroundColor: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '#fa53d5' : 'transparent',
+                      color: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '#ffffff' : '#475569',
+                    }}
+                    className={`py-1 text-[11px] font-sans rounded-md text-center transition-all cursor-pointer ${
                       (draftFilters.advancedSearchOperator || 'OR') === 'OR'
-                        ? 'bg-white text-black shadow-xs font-semibold'
-                        : 'text-slate-600 hover:text-black'
+                        ? 'font-semibold shadow-xs'
+                        : 'hover:text-black hover:bg-slate-50/50'
                     }`}
                   >
                     OU (au moins 1 terme)
@@ -8875,10 +8893,14 @@ export default function DefibTab({
                   <button
                     type="button"
                     onClick={() => setDraftFilters(prev => ({ ...prev, advancedSearchOperator: 'AND' }))}
-                    className={`px-2.5 py-0.5 text-[11px] font-sans rounded-md transition-all cursor-pointer ${
+                    style={{
+                      backgroundColor: draftFilters.advancedSearchOperator === 'AND' ? '#fa53d5' : 'transparent',
+                      color: draftFilters.advancedSearchOperator === 'AND' ? '#ffffff' : '#475569',
+                    }}
+                    className={`py-1 text-[11px] font-sans rounded-md text-center transition-all cursor-pointer ${
                       draftFilters.advancedSearchOperator === 'AND'
-                        ? 'bg-white text-black shadow-xs font-semibold'
-                        : 'text-slate-600 hover:text-black'
+                        ? 'font-semibold shadow-xs'
+                        : 'hover:text-black hover:bg-slate-50/50'
                     }`}
                   >
                     ET (tous les termes)
