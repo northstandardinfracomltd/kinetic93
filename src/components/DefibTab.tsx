@@ -702,6 +702,7 @@ export default function DefibTab({
     contrat: string;
     actionRejected: boolean;
     advancedSearchTerms: string[];
+    advancedSearchOperator?: 'OR' | 'AND';
   }>({
     region: 'Tous',
     modeleId: 'Tous',
@@ -713,6 +714,7 @@ export default function DefibTab({
     contrat: 'Tous',
     actionRejected: false,
     advancedSearchTerms: [],
+    advancedSearchOperator: 'OR',
   });
 
   // Draft filters inside the sidebar/pane
@@ -727,6 +729,7 @@ export default function DefibTab({
     contrat: string;
     actionRejected: boolean;
     advancedSearchTerms: string[];
+    advancedSearchOperator?: 'OR' | 'AND';
   }>({
     region: 'Tous',
     modeleId: 'Tous',
@@ -738,6 +741,7 @@ export default function DefibTab({
     contrat: 'Tous',
     actionRejected: false,
     advancedSearchTerms: [],
+    advancedSearchOperator: 'OR',
   });
 
   // Advanced search input state inside Filter pane
@@ -745,41 +749,60 @@ export default function DefibTab({
   const [isAdvancedFocused, setIsAdvancedFocused] = useState(false);
   const advancedInputRef = useRef<HTMLInputElement>(null);
 
-  const addAdvancedTerm = (rawTerm: string) => {
-    const cleaned = rawTerm.trim();
-    if (cleaned.length >= 3) {
-      setDraftFilters(prev => {
-        const current = prev.advancedSearchTerms || [];
-        if (!current.some(t => t.toLowerCase() === cleaned.toLowerCase())) {
-          return { ...prev, advancedSearchTerms: [...current, cleaned] };
+  const addAdvancedTerms = (rawInput: string | string[]) => {
+    const rawTokens = Array.isArray(rawInput)
+      ? rawInput
+      : String(rawInput || '').split(/[,;\n\r\t/]+/).map(s => s.trim());
+
+    setDraftFilters(prev => {
+      const current = prev.advancedSearchTerms || [];
+      const updated = [...current];
+      for (const tok of rawTokens) {
+        const cleaned = tok.trim();
+        if (cleaned.length >= 2 && !updated.some(t => t.toLowerCase() === cleaned.toLowerCase())) {
+          updated.push(cleaned);
         }
-        return prev;
-      });
-      return true;
+      }
+      return { ...prev, advancedSearchTerms: updated };
+    });
+  };
+
+  const addAdvancedTerm = (rawTerm: string) => {
+    addAdvancedTerms(rawTerm);
+  };
+
+  const handleAdvancedInputPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasteData = e.clipboardData.getData('text');
+    if (pasteData) {
+      const tokens = pasteData.split(/[,;\n\r\t/]+/).map(s => s.trim()).filter(s => s.length >= 2);
+      if (tokens.length > 0) {
+        e.preventDefault();
+        addAdvancedTerms(tokens);
+        setAdvancedSearchInputValue('');
+      }
     }
-    return false;
   };
 
   const handleAdvancedInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    if (val.includes('/')) {
-      const parts = val.split('/');
+    if (val.includes('/') || val.includes(',') || val.includes(';')) {
+      const parts = val.split(/[/,;]+/);
       for (let i = 0; i < parts.length - 1; i++) {
-        if (parts[i].trim().length >= 3) {
-          addAdvancedTerm(parts[i]);
+        if (parts[i].trim().length >= 2) {
+          addAdvancedTerms(parts[i]);
         }
       }
-      setAdvancedSearchInputValue(parts[parts.length - 1]);
+      setAdvancedSearchInputValue(parts[parts.length - 1] || '');
     } else {
       setAdvancedSearchInputValue(val);
     }
   };
 
   const handleAdvancedInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === '/' || e.key === 'Slash') {
+    if (e.key === 'Enter' || e.key === ',' || e.key === ';' || e.key === '/' || e.key === 'Tab') {
       e.preventDefault();
-      if (advancedSearchInputValue.trim().length >= 3) {
-        addAdvancedTerm(advancedSearchInputValue);
+      if (advancedSearchInputValue.trim().length >= 2) {
+        addAdvancedTerms(advancedSearchInputValue);
         setAdvancedSearchInputValue('');
       }
     } else if (e.key === 'Backspace' && advancedSearchInputValue === '') {
@@ -2049,84 +2072,58 @@ export default function DefibTab({
       // 6.5 Advanced Search Terms match (from side pane filter)
       const advTerms = (activeFilters.advancedSearchTerms || [])
         .map(t => t.trim().toLowerCase())
-        .filter(t => t.length >= 3);
+        .filter(t => t.length >= 2);
 
       if (advTerms.length > 0) {
         const clientName = (getLinkedClientForDefib(df)?.denomination || (df as any).clientNom || df.nomSite || '').toLowerCase();
         const modelName = (variableMap.get(df.modeleId)?.nom || '').toLowerCase();
 
-        const defibFields = {
-          identifiant: (df.identifiant || '').toLowerCase(),
-          numeroSerie: (df.numeroSerie || '').toLowerCase(),
-          numeroAtlasante: (df.numeroAtlasante || '').toLowerCase(),
-          ville: (df.ville || '').toLowerCase(),
-          nomSite: (df.nomSite || '').toLowerCase(),
-          cp: (df.cp || '').toLowerCase(),
-          numVoie: (df.numVoie || '').toLowerCase(),
-          region: (df.region || '').toLowerCase(),
-          pays: (df.pays || '').toLowerCase(),
-          client: clientName,
-          modele: modelName,
-          lotBatterie: (df.lotBatterie || '').toLowerCase(),
-          lotElectrodeA: (df.lotElectrodeA || '').toLowerCase(),
-          lotElectrodeP: (df.lotElectrodeP || '').toLowerCase(),
-          lotCoffret: (df.numeroLotCoffret || '').toLowerCase(),
-          nomPrenomSite: (df.nomPrenomSite || '').toLowerCase(),
-          telephoneSite: (df.telephoneSite || '').toLowerCase(),
-          emailSite: (df.emailSite || '').toLowerCase(),
-          versionLogiciel: (df.versionLogiciel || '').toLowerCase(),
-          categorieEtablissement: (df.categorieEtablissement || '').toLowerCase(),
-          commentaire: (df.commentaire || '').toLowerCase(),
-          commentaireInterne: (df.commentaireInterne || '').toLowerCase(),
-          commentaireCoffret: (df.commentaireCoffret || '').toLowerCase(),
-          commentaireAdresse: (df.commentaireAdresse || '').toLowerCase(),
-          commentaireElectrodeA: (df.commentaireElectrodeA || '').toLowerCase(),
-          commentaireElectrodeP: (df.commentaireElectrodeP || '').toLowerCase(),
-          commentaireBatterie: (df.commentaireBatterie || '').toLowerCase(),
-          commentaireCampagneRappel: (df.commentaireCampagneRappel || '').toLowerCase(),
-        };
+        const defibValues: string[] = [
+          df.identifiant,
+          df.numeroSerie,
+          (df as any).num_serie,
+          (df as any).serial,
+          df.numeroAtlasante,
+          df.ville,
+          df.nomSite,
+          df.cp,
+          df.numVoie,
+          df.region,
+          df.pays,
+          clientName,
+          modelName,
+          df.lotBatterie,
+          df.lotElectrodeA,
+          df.lotElectrodeP,
+          df.numeroLotCoffret,
+          df.nomPrenomSite,
+          df.telephoneSite,
+          df.emailSite,
+          df.versionLogiciel,
+          df.categorieEtablissement,
+          df.commentaire,
+          df.commentaireInterne,
+          df.commentaireCoffret,
+          df.commentaireAdresse,
+          df.commentaireElectrodeA,
+          df.commentaireElectrodeP,
+          df.commentaireBatterie,
+          df.commentaireCampagneRappel,
+        ].filter(Boolean).map(val => String(val).toLowerCase());
 
-        const fieldValues = Object.values(defibFields);
-        const dfMatchesTerm = (term: string) => fieldValues.some(val => val.includes(term));
+        const dfMatchesTerm = (term: string) => defibValues.some(val => val.includes(term));
 
-        // Direct strict AND match (df contains term1 AND term2 AND ...)
-        if (advTerms.every(t => dfMatchesTerm(t))) {
-          // match confirmed
+        const operator = activeFilters.advancedSearchOperator || 'OR';
+        if (operator === 'AND') {
+          // Strict AND mode: this defibrillator must match all terms
+          if (!advTerms.every(t => dfMatchesTerm(t))) {
+            return false;
+          }
         } else {
-          // Multi-item / Cross-search resolution:
-          // Terms targeting the same unique identity property (e.g. 2 serial numbers) form an alternative (OR)
-          // combined with other search terms (e.g. city) via AND.
-          const serialTerms = advTerms.filter(t =>
-            defibFields.numeroSerie.includes(t) ||
-            defibFields.identifiant.includes(t) ||
-            defibFields.numeroAtlasante.includes(t)
-          );
-          const otherTerms = advTerms.filter(t => !serialTerms.includes(t));
-
-          let matched = false;
-          if (serialTerms.length > 1) {
-            const matchesAnySerial = serialTerms.some(t => dfMatchesTerm(t));
-            const matchesAllOther = otherTerms.every(t => dfMatchesTerm(t));
-            if (matchesAnySerial && matchesAllOther) {
-              matched = true;
-            }
+          // Multi-filter OR mode (default): matches any of the specified terms (e.g. multiple serial numbers)
+          if (!advTerms.some(t => dfMatchesTerm(t))) {
+            return false;
           }
-
-          if (!matched) {
-            const uniqueFields = ['numeroSerie', 'identifiant', 'ville', 'client', 'modele'] as const;
-            for (const field of uniqueFields) {
-              const fieldTerms = advTerms.filter(t => defibFields[field].includes(t));
-              if (fieldTerms.length > 1) {
-                const restTerms = advTerms.filter(t => !fieldTerms.includes(t));
-                if (fieldTerms.some(t => defibFields[field].includes(t)) && restTerms.every(t => dfMatchesTerm(t))) {
-                  matched = true;
-                  break;
-                }
-              }
-            }
-          }
-
-          if (!matched) return false;
         }
       }
 
@@ -3556,6 +3553,7 @@ export default function DefibTab({
       contrat: 'Tous',
       actionRejected: false,
       advancedSearchTerms: [] as string[],
+      advancedSearchOperator: 'OR' as const,
     };
     setActiveFilters(defaults);
     setDraftFilters(defaults);
@@ -8832,8 +8830,36 @@ export default function DefibTab({
                 )}
               </div>
               <p className="text-[12px] text-black font-sans leading-tight px-1" style={{ color: '#000000' }}>
-                Pour chaque terme, entrez au moins 3 lettres et saisissez ‘entrer’ au clavier afin de séparer chaque terme.
+                Pour chaque terme, entrez au moins 2 lettres et saisissez ‘Entrée’, une virgule ou collez une liste.
               </p>
+
+              <div className="flex items-center justify-between pt-0.5 px-1">
+                <span className="text-[12px] text-slate-500 font-sans">Opérateur :</span>
+                <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setDraftFilters(prev => ({ ...prev, advancedSearchOperator: 'OR' }))}
+                    className={`px-2.5 py-0.5 text-[11px] font-sans rounded-md transition-all cursor-pointer ${
+                      (draftFilters.advancedSearchOperator || 'OR') === 'OR'
+                        ? 'bg-white text-black shadow-xs font-semibold'
+                        : 'text-slate-600 hover:text-black'
+                    }`}
+                  >
+                    OU (au moins 1 terme)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraftFilters(prev => ({ ...prev, advancedSearchOperator: 'AND' }))}
+                    className={`px-2.5 py-0.5 text-[11px] font-sans rounded-md transition-all cursor-pointer ${
+                      draftFilters.advancedSearchOperator === 'AND'
+                        ? 'bg-white text-black shadow-xs font-semibold'
+                        : 'text-slate-600 hover:text-black'
+                    }`}
+                  >
+                    ET (tous les termes)
+                  </button>
+                </div>
+              </div>
 
               {/* Textarea-like auto-height search container */}
               <div
@@ -8900,11 +8926,12 @@ export default function DefibTab({
                   value={advancedSearchInputValue}
                   onChange={handleAdvancedInputChange}
                   onKeyDown={handleAdvancedInputKeyDown}
+                  onPaste={handleAdvancedInputPaste}
                   onFocus={() => setIsAdvancedFocused(true)}
                   onBlur={() => {
                     setIsAdvancedFocused(false);
-                    if (advancedSearchInputValue.trim().length >= 3) {
-                      addAdvancedTerm(advancedSearchInputValue);
+                    if (advancedSearchInputValue.trim().length >= 2) {
+                      addAdvancedTerms(advancedSearchInputValue);
                       setAdvancedSearchInputValue('');
                     }
                   }}
@@ -9215,6 +9242,7 @@ export default function DefibTab({
                   contrat: 'Tous',
                   actionRejected: false,
                   advancedSearchTerms: [] as string[],
+                  advancedSearchOperator: 'OR' as const,
                 };
                 setDraftFilters(defaults);
                 setActiveFilters(defaults);
@@ -9240,12 +9268,19 @@ export default function DefibTab({
             <button
               onClick={() => {
                 let finalDraft = { ...draftFilters };
-                if (advancedSearchInputValue.trim().length >= 3) {
-                  const cleaned = advancedSearchInputValue.trim();
+                if (advancedSearchInputValue.trim().length >= 2) {
+                  const rawTokens = advancedSearchInputValue
+                    .split(/[,;\n\r\t/]+/)
+                    .map(s => s.trim())
+                    .filter(s => s.length >= 2);
                   const current = finalDraft.advancedSearchTerms || [];
-                  if (!current.some(t => t.toLowerCase() === cleaned.toLowerCase())) {
-                    finalDraft.advancedSearchTerms = [...current, cleaned];
+                  const updated = [...current];
+                  for (const tok of rawTokens) {
+                    if (!updated.some(t => t.toLowerCase() === tok.toLowerCase())) {
+                      updated.push(tok);
+                    }
                   }
+                  finalDraft.advancedSearchTerms = updated;
                   setAdvancedSearchInputValue('');
                 }
                 setActiveFilters(finalDraft);
