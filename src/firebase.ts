@@ -627,8 +627,8 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
       return true;
     }
 
-    // For operational history records such as import/export transactions
-    if (collectionName === 'importExportRecords' || collectionName === 'import_export_records') {
+    // For tenant-partitioned operational collections (members, notifications, pointages, tickets, reports, docs, logs, etc.)
+    if (collectionName !== 'defibrillateurs' && collectionName !== 'clients') {
       if (!itemEnv) return true;
       if (itemEnv === 'demo') return isDemo;
       return tenantAliases.has(itemEnv) || tenantAliases.has(itemEnv.replace(/^d/i, ''));
@@ -965,8 +965,11 @@ export async function fetchCollectionFromFirestore<T>(
           const val = filterCollectionForTenant(json.value as T, collectionName, activeTenantId);
           const primaryKey = candidateKeys[0] || `${collectionName}_${activeTenantId}`;
 
-          if (Array.isArray(val) && val.length > 0) {
-            onProgress?.(val.length, val.length, `Chargement ${val.length.toLocaleString('en-US')}/${val.length.toLocaleString('en-US')}, Terminé.`);
+          if (Array.isArray(val)) {
+            if (val.length > 0) {
+              onProgress?.(val.length, val.length, `Chargement ${val.length.toLocaleString('en-US')}/${val.length.toLocaleString('en-US')}, Terminé.`);
+            }
+            // Always update local cache and IndexedDB to mirror the authoritative server truth
             idbSet(primaryKey, val).catch(() => {});
             idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
             idbSet(`defib_${activeTenantId}_${collectionName}`, val).catch(() => {});
@@ -974,76 +977,8 @@ export async function fetchCollectionFromFirestore<T>(
             saveToLocalCache(`${activeTenantId}_${collectionName}`, val);
             saveToLocalCache(`defib_${activeTenantId}_${collectionName}`, val);
             return val;
-          } else if (Array.isArray(val) && val.length === 0) {
-            // CRITICAL PROTECTION: The server returned an empty array.
-            // Check if local cache or IndexedDB already has items before wiping out!
-            let localExisting: any = getFromLocalCache<any>(primaryKey);
-            if (!localExisting || (Array.isArray(localExisting) && localExisting.length === 0)) {
-              for (const ck of candidateKeys) {
-                const cv = getFromLocalCache<any>(ck);
-                if (Array.isArray(cv) && cv.length > 0) {
-                  localExisting = cv;
-                  break;
-                }
-              }
-            }
-            if (!localExisting || (Array.isArray(localExisting) && localExisting.length === 0)) {
-              try {
-                const rawDefib = localStorage.getItem(`defib_${activeTenantId}_${collectionName}`) ||
-                  localStorage.getItem(`fs_cache_${activeTenantId}_${collectionName}`);
-                if (rawDefib) {
-                  const parsed = JSON.parse(rawDefib);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    localExisting = parsed;
-                  }
-                }
-              } catch (_) {}
-            }
-            if (!localExisting || (Array.isArray(localExisting) && localExisting.length === 0)) {
-              try {
-                const idbCached = await idbGet<any>(primaryKey);
-                if (Array.isArray(idbCached) && idbCached.length > 0) {
-                  localExisting = idbCached;
-                } else {
-                  const altIdb = await idbGet<any>(`defib_${activeTenantId}_${collectionName}`);
-                  if (Array.isArray(altIdb) && altIdb.length > 0) {
-                    localExisting = altIdb;
-                  }
-                }
-              } catch (_) {}
-            }
-
-            if (Array.isArray(localExisting) && localExisting.length > 0) {
-              const sanitizedLocal = filterCollectionForTenant(localExisting, collectionName, activeTenantId);
-              if (Array.isArray(sanitizedLocal) && sanitizedLocal.length > 0) {
-                console.warn(`[Sync Server Relay] Remote ${collectionName} returned empty array, but local cache has ${sanitizedLocal.length} valid items for this tenant. Preserving local data and re-syncing to server.`);
-                fetch('/api/sync-collection', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    collectionName,
-                    tenantId: activeTenantId,
-                    value: sanitizedLocal
-                  })
-                }).catch(() => {});
-                return sanitizedLocal as unknown as T;
-              } else {
-                // The local cache was contaminated with items from another tenant - clean it up
-                idbSet(primaryKey, []).catch(() => {});
-                idbSet(`defib_${activeTenantId}_${collectionName}`, []).catch(() => {});
-                saveToLocalCache(primaryKey, []);
-                return [] as unknown as T;
-              }
-            }
-
-            // Both remote and local are genuinely empty
-            idbSet(primaryKey, val).catch(() => {});
-            idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
-            idbSet(`defib_${activeTenantId}_${collectionName}`, val).catch(() => {});
-            saveToLocalCache(primaryKey, val);
-            return val;
           } else {
-            // Non-array object/primitive
+            // Non-array object/primitive (e.g. companyInfo)
             idbSet(primaryKey, val).catch(() => {});
             idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
             idbSet(`defib_${activeTenantId}_${collectionName}`, val).catch(() => {});

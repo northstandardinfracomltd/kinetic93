@@ -1923,17 +1923,38 @@ export default function DefibTab({
 
   // Set of deleted defib keys to prevent resurrection during optimistic deletions
   const deletedDefibSet = useMemo(() => {
+    const set = new Set<string>();
     try {
-      const raw = sessionStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) {
-          return new Set<string>(arr.map((s: any) => String(s).trim().toLowerCase()).filter(Boolean));
-        }
+      const rawSession = sessionStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
+      if (rawSession) {
+        const arr = JSON.parse(rawSession);
+        if (Array.isArray(arr)) arr.forEach((s: any) => s && set.add(String(s).trim().toLowerCase()));
       }
     } catch (_) {}
-    return new Set<string>();
+    try {
+      const rawLocal = localStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
+      if (rawLocal) {
+        const arr = JSON.parse(rawLocal);
+        if (Array.isArray(arr)) arr.forEach((s: any) => s && set.add(String(s).trim().toLowerCase()));
+      }
+    } catch (_) {}
+    return set;
   }, [activeTenantId, defibrillateurs]);
+
+  // Total active defibs excluding deleted records
+  const activeDefibrillateurs = useMemo(() => {
+    if (deletedDefibSet.size === 0) return defibrillateurs;
+    return defibrillateurs.filter(df => {
+      const idLower = df.id ? df.id.trim().toLowerCase() : '';
+      const idfLower = df.identifiant ? df.identifiant.trim().toLowerCase() : '';
+      const numLower = df.numeroSerie ? df.numeroSerie.trim().toLowerCase() : (df as any).num_serie ? String((df as any).num_serie).trim().toLowerCase() : '';
+      return !(
+        (idLower && deletedDefibSet.has(idLower)) ||
+        (idfLower && deletedDefibSet.has(idfLower)) ||
+        (numLower && deletedDefibSet.has(numLower))
+      );
+    });
+  }, [defibrillateurs, deletedDefibSet]);
 
   // List search & filters computation - highly optimized for datasets of 18,000+ items across all browsers
   const filteredDefibs = useMemo(() => {
@@ -4818,7 +4839,7 @@ export default function DefibTab({
             </span>
           ) : isInitialView ? (
             <span>
-              {t("Affichage initial")} : {filteredDefibs.length} {t("derniers ajoutés ou modifiés")} ({defibrillateurs.length.toLocaleString('fr-FR')} {t("au total")}).
+              {t("Affichage initial")} : {filteredDefibs.length} {t("derniers ajoutés ou modifiés")} ({activeDefibrillateurs.length.toLocaleString('fr-FR')} {t("au total")}).
             </span>
           ) : (
             (search && search.trim().length > 0) ||
@@ -4834,7 +4855,7 @@ export default function DefibTab({
             activeFilters.actionRejected ? (
               `${t('Total défibrillateurs')} (${selectedDepartment && selectedDepartment !== '__ALL__' ? selectedDepartment : t('Filtre')}) : ${filteredDefibs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
             ) : (
-              `${t('Total défibrillateurs (Tous)')} : ${defibrillateurs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
+              `${t('Total défibrillateurs (Tous)')} : ${activeDefibrillateurs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
             )
           )}
         </div>

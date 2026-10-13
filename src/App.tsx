@@ -1879,8 +1879,28 @@ export default function App() {
         localStorage.setItem(`defib_D${numOnly}_deleted_defib_keys`, JSON.stringify(combined));
         localStorage.setItem(`defib_d${numOnly}_deleted_defib_keys`, JSON.stringify(combined));
       }
+      if (toAdd.length > 0) {
+        fetch('/api/sync-deleted-defib-keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenantId: tId, keys: toAdd })
+        }).catch(() => {});
+      }
     } catch (_) {}
   };
+
+  useEffect(() => {
+    try {
+      const activeKeys = getDeletedDefibKeys(tenantId);
+      if (activeKeys.length > 0) {
+        fetch('/api/sync-deleted-defib-keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenantId: tenantId || 'demo', keys: activeKeys })
+        }).catch(() => {});
+      }
+    } catch (_) {}
+  }, [tenantId]);
 
   const isDefibInDeletedList = (df: any, deletedKeys: Set<string>): boolean => {
     if (!df || !deletedKeys || deletedKeys.size === 0) return false;
@@ -1929,7 +1949,9 @@ export default function App() {
               for (let c = i; c < batchEnd; c++) {
                 batchPromises.push((async (cIdx) => {
                   try {
-                    const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix)}&tenantId=${encodeURIComponent(activeTenant)}`);
+                    const chunkRes = await fetch(`/api/defib-chunks/chunk/${cIdx}?prefix=${encodeURIComponent(meta.prefix)}&tenantId=${encodeURIComponent(activeTenant)}`, {
+                      cache: 'no-store'
+                    });
                     if (chunkRes.ok) {
                       const arr = await chunkRes.json();
                       if (Array.isArray(arr)) {
@@ -1959,22 +1981,24 @@ export default function App() {
       if (Array.isArray(freshRemote) && freshRemote.length > 0) {
         const sanitizedRemote = filterCollectionForTenant(freshRemote, 'defibrillateurs', activeTenant);
         const fullMerged = mergeCollectionItems('defibrillateurs', sanitizedRemote);
-        setDefibrillateurs(fullMerged);
+        const deletedKeys = new Set(getDeletedDefibKeys(activeTenant));
+        const liveList = deletedKeys.size > 0 ? fullMerged.filter(df => !isDefibInDeletedList(df, deletedKeys)) : fullMerged;
+        setDefibrillateurs(liveList);
         try {
-          await idbSet(`defib_${activeTenant}_defibrillateurs`, fullMerged);
+          await idbSet(`defib_${activeTenant}_defibrillateurs`, liveList);
           const uc = activeTenant.toUpperCase();
           if (uc.startsWith('D')) {
-            await idbSet(`defib_${uc}_defibrillateurs`, fullMerged);
-            await idbSet(`defib_${activeTenant.toLowerCase()}_defibrillateurs`, fullMerged);
-            await idbSet('defib_D27_defibrillateurs', fullMerged);
-            await idbSet('defib_D58_defibrillateurs', fullMerged);
+            await idbSet(`defib_${uc}_defibrillateurs`, liveList);
+            await idbSet(`defib_${activeTenant.toLowerCase()}_defibrillateurs`, liveList);
+            await idbSet('defib_D27_defibrillateurs', liveList);
+            await idbSet('defib_D58_defibrillateurs', liveList);
           }
         } catch (_) {}
         setDefibLoadingProgress({
-          current: fullMerged.length,
-          total: fullMerged.length,
+          current: liveList.length,
+          total: liveList.length,
           percent: 100,
-          message: `Chargement ${fullMerged.length.toLocaleString('en-US')}/${fullMerged.length.toLocaleString('en-US')}, Terminé.`
+          message: `Chargement ${liveList.length.toLocaleString('en-US')}/${liveList.length.toLocaleString('en-US')}, Terminé.`
         });
         setTimeout(() => {
           setIsDefibLoading(false);
@@ -5841,33 +5865,13 @@ export default function App() {
                     if (combined.length > 0) {
                       const sanitizedCombined = filterCollectionForTenant(combined, 'defibrillateurs', activeRunTenantId);
                       const fullMerged = mergeCollectionItems('defibrillateurs', sanitizedCombined);
-                      setDefibrillateurs(fullMerged);
-                      idbSet(`defib_${activeRunTenantId}_defibrillateurs`, fullMerged).catch(() => {});
-                      idbSet('defib_D27_defibrillateurs', fullMerged).catch(() => {});
-                      idbSet('defib_D58_defibrillateurs', fullMerged).catch(() => {});
+                      const deletedKeys = new Set(getDeletedDefibKeys(activeRunTenantId));
+                      const liveList = deletedKeys.size > 0 ? fullMerged.filter(df => !isDefibInDeletedList(df, deletedKeys)) : fullMerged;
+                      setDefibrillateurs(liveList);
+                      idbSet(`defib_${activeRunTenantId}_defibrillateurs`, liveList).catch(() => {});
+                      idbSet('defib_D27_defibrillateurs', liveList).catch(() => {});
+                      idbSet('defib_D58_defibrillateurs', liveList).catch(() => {});
                       setIsDefibLoading(false);
-
-                      // If local cache had valid defibs missing on the server, push them to the server batch sync
-                      try {
-                        const localCached = await idbGet<any[]>(`defib_${activeRunTenantId}_defibrillateurs`);
-                        if (Array.isArray(localCached) && localCached.length > fullMerged.length) {
-                          const serverSnSet = new Set(fullMerged.map(d => (d.numeroSerie || '').trim().toUpperCase()).filter(Boolean));
-                          const missingOnServer = localCached.filter(d => {
-                            const sn = (d.numeroSerie || '').trim().toUpperCase();
-                            return sn && !serverSnSet.has(sn);
-                          });
-                          if (missingOnServer.length > 0) {
-                            fetch('/api/sync-batch-defibs', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                tenantId: activeRunTenantId,
-                                defibs: missingOnServer
-                              })
-                            }).catch(() => {});
-                          }
-                        }
-                      } catch (_) {}
                     }
                   }
                 }
@@ -6006,86 +6010,8 @@ export default function App() {
                 finalData = await customTransformer(data);
               }
 
-              // CRITICAL RESILIENCE: Prevent overwriting populated datasets with empty/single placeholder
+              // The server relay provides the single authoritative source of truth for this tenant
               if (Array.isArray(finalData)) {
-                let currentLen = 0;
-                let localItems: any[] = [];
-                if (collectionName === 'defibrillateurs') {
-                  currentLen = defibrillateurs?.length || 0;
-                  try {
-                    const localCached = await idbGet<any[]>(`defib_${activeRunTenantId}_defibrillateurs`);
-                    if (Array.isArray(localCached) && localCached.length > 0) {
-                      localItems = localCached;
-                      currentLen = Math.max(currentLen, localCached.length);
-                      if (localCached.length > finalData.length) {
-                        finalData = mergeCollectionItems('defibrillateurs', [...finalData, ...localCached]);
-                      }
-                    }
-                  } catch (_) {}
-                } else {
-                  const currentSavedStr = loadedDataRef.current[localStorageKeySuffix] || loadedDataRef.current[collectionName];
-                  if (currentSavedStr) {
-                    try {
-                      const parsed = JSON.parse(currentSavedStr);
-                      if (Array.isArray(parsed) && parsed.length > 0) {
-                        localItems = parsed;
-                        currentLen = parsed.length;
-                      }
-                    } catch (_) {}
-                  }
-                  if (localItems.length === 0) {
-                    try {
-                      const rawLocal = localStorage.getItem(`defib_${activeRunTenantId}_${localStorageKeySuffix}`) || localStorage.getItem(`fs_cache_${activeRunTenantId}_${localStorageKeySuffix}`);
-                      if (rawLocal) {
-                        const parsed = JSON.parse(rawLocal);
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                          localItems = parsed;
-                          currentLen = parsed.length;
-                        }
-                      }
-                    } catch (_) {}
-                  }
-                  if (localItems.length === 0) {
-                    const win = window as any;
-                    if ((collectionName === 'distributed_stocks' || collectionName === 'distributedStocks') && Array.isArray(win.baseDistrib) && win.baseDistrib.length > 0) {
-                      localItems = win.baseDistrib;
-                      currentLen = win.baseDistrib.length;
-                    } else if ((collectionName === 'stocks' || collectionName === 'stock') && Array.isArray(win.baseStocks) && win.baseStocks.length > 0) {
-                      localItems = win.baseStocks;
-                      currentLen = win.baseStocks.length;
-                    }
-                  }
-                }
-
-                // If remote returns 0 items, but local cache has items, DO NOT WIPE LOCAL DATA!
-                // Instead, preserve local items ONLY IF they belong to this tenant, and push them to remote to heal the server!
-                if (finalData.length === 0 && currentLen > 0 && localItems.length > 0) {
-                  const sanitizedLocal = filterCollectionForTenant(localItems, collectionName, activeRunTenantId);
-                  if (Array.isArray(sanitizedLocal) && sanitizedLocal.length > 0) {
-                    console.warn(`[Protection] Remote ${collectionName} returned empty array, but local cache has ${sanitizedLocal.length} valid items for this tenant. Preserving local data and re-syncing to server.`);
-                    finalData = sanitizedLocal;
-                    saveCollectionToFirestore(collectionName, sanitizedLocal, activeRunTenantId).catch(() => {});
-                  } else {
-                    finalData = [];
-                  }
-                } else if (currentLen > 500 && finalData.length < 100) {
-                  const sanitizedLocal = filterCollectionForTenant(localItems, collectionName, activeRunTenantId);
-                  if (Array.isArray(sanitizedLocal) && sanitizedLocal.length > 0) {
-                    console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${sanitizedLocal.length} items) with incomplete remote data (${finalData.length} items). Merging instead.`);
-                    finalData = mergeCollectionItems(collectionName, [...sanitizedLocal, ...finalData]);
-                  }
-                } else if (currentLen > 50 && finalData.length <= 1) {
-                  const sanitizedLocal = filterCollectionForTenant(localItems, collectionName, activeRunTenantId);
-                  if (Array.isArray(sanitizedLocal) && sanitizedLocal.length > 0) {
-                    console.warn(`[Protection] Refusing to overwrite populated ${collectionName} (${sanitizedLocal.length} items) with incomplete remote data (${finalData.length} items).`);
-                    finalData = mergeCollectionItems(collectionName, [...sanitizedLocal, ...finalData]);
-                  }
-                } else if (finalData.length > 0 && localItems.length > 0) {
-                  const sanitizedLocal = filterCollectionForTenant(localItems, collectionName, activeRunTenantId);
-                  if (Array.isArray(sanitizedLocal) && sanitizedLocal.length > 0) {
-                    finalData = mergeCollectionItems(collectionName, [...finalData, ...sanitizedLocal]);
-                  }
-                }
                 finalData = filterCollectionForTenant(finalData, collectionName, activeRunTenantId);
               }
 

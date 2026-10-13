@@ -433,163 +433,7 @@ function saveSingleDefibrillateurToChunk(defib: any, chunkIdx: number, prefix: s
   }
 }
 
-function deleteDefibrillateursFromStore(
-  targets: Array<{ id?: string; identifiant?: string; numeroSerie?: string }>,
-  tenantId?: string,
-  prefix: string = 'D27_defibrillateurs'
-): { deletedCount: number; deletedKeys: string[] } {
-  if (!Array.isArray(targets) || targets.length === 0) {
-    return { deletedCount: 0, deletedKeys: [] };
-  }
 
-  const normalizedKeysToMatch = new Set<string>();
-  const deletedKeysList: string[] = [];
-
-  for (const t of targets) {
-    if (!t) continue;
-    if (t.id) {
-      const s = String(t.id).trim().toLowerCase();
-      normalizedKeysToMatch.add(s);
-      deletedKeysList.push(String(t.id).trim());
-    }
-    if (t.identifiant) {
-      const s = String(t.identifiant).trim().toLowerCase();
-      normalizedKeysToMatch.add(s);
-      deletedKeysList.push(String(t.identifiant).trim());
-    }
-    if (t.numeroSerie) {
-      const s = String(t.numeroSerie).trim().toLowerCase();
-      normalizedKeysToMatch.add(s);
-      deletedKeysList.push(String(t.numeroSerie).trim());
-    }
-  }
-
-  if (normalizedKeysToMatch.size === 0) {
-    return { deletedCount: 0, deletedKeys: [] };
-  }
-
-  const isMatchingItem = (item: any): boolean => {
-    if (!item || typeof item !== 'object') return false;
-    const id = item.id ? String(item.id).trim().toLowerCase() : '';
-    const identifiant = item.identifiant ? String(item.identifiant).trim().toLowerCase() : '';
-    const numSerie = item.numeroSerie || item.num_serie ? String(item.numeroSerie || item.num_serie).trim().toLowerCase() : '';
-    return (id && normalizedKeysToMatch.has(id)) ||
-           (identifiant && normalizedKeysToMatch.has(identifiant)) ||
-           (numSerie && normalizedKeysToMatch.has(numSerie));
-  };
-
-  // 1. Remove from fastDefibIndex & defibLocationIndex
-  for (const k of normalizedKeysToMatch) {
-    fastDefibIndex.delete(k);
-    defibLocationIndex.delete(k);
-  }
-
-  // 2. Persist deleted keys to disk
-  try {
-    const deletedLogFile = path.join(DATA_DIR, 'deleted_defib_keys.json');
-    let existingDeleted: string[] = [];
-    if (fs.existsSync(deletedLogFile)) {
-      try {
-        existingDeleted = JSON.parse(fs.readFileSync(deletedLogFile, 'utf-8'));
-      } catch (_) {}
-    }
-    const combinedDeleted = Array.from(new Set([...existingDeleted, ...deletedKeysList]));
-    fs.writeFileSync(deletedLogFile, JSON.stringify(combinedDeleted), 'utf-8');
-  } catch (_) {}
-
-  let totalDeletedFromChunks = 0;
-  const candidateDirs = Array.from(new Set([CHUNKS_DIR].filter(Boolean)));
-
-  // 3. Scan chunks in CHUNKS_DIR to remove from files and memory cache
-  const highestIdx = findHighestChunkIndex(prefix);
-  const maxIdxToScan = highestIdx >= 0 ? highestIdx : 50;
-
-  for (let cIdx = 0; cIdx <= maxIdxToScan; cIdx++) {
-    let modified = false;
-    let chunkItems = loadedChunkCache.get(cIdx);
-
-    for (const dir of candidateDirs) {
-      const p = path.join(dir, `${prefix}_chunk_${cIdx}.json`);
-      if (fs.existsSync(p)) {
-        try {
-          const fileItems = JSON.parse(fs.readFileSync(p, 'utf-8'));
-          if (Array.isArray(fileItems)) {
-            const beforeLen = fileItems.length;
-            const filtered = fileItems.filter(item => !isMatchingItem(item));
-            if (filtered.length !== beforeLen) {
-              totalDeletedFromChunks += (beforeLen - filtered.length);
-              fs.writeFileSync(p, JSON.stringify(filtered), 'utf-8');
-              chunkItems = filtered;
-              modified = true;
-              try {
-                const stat = fs.statSync(p);
-                loadedChunkMtime.set(cIdx, stat.mtimeMs);
-              } catch (_) {}
-
-              // Also update Firestore in background for that chunk
-              (async () => {
-                try {
-                  const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${cIdx}`);
-                  await safeServerSetDoc(chunkDocRef, { value: filtered }, { merge: true });
-                } catch (_) {}
-              })().catch(() => {});
-            }
-          }
-        } catch (_) {}
-      }
-    }
-
-    if (modified && chunkItems) {
-      loadedChunkCache.set(cIdx, chunkItems);
-    } else if (chunkItems && Array.isArray(chunkItems)) {
-      const filtered = chunkItems.filter(item => !isMatchingItem(item));
-      if (filtered.length !== chunkItems.length) {
-        loadedChunkCache.set(cIdx, filtered);
-      }
-    }
-  }
-
-  // 4. Remove from serverMemoryStore & collections files
-  const rawTenant = String(tenantId || 'D27').trim();
-  const tenantCandidateKeys = [
-    rawTenant === 'demo' ? 'defibrillateurs' : `${rawTenant}_defibrillateurs`,
-    'D27_defibrillateurs',
-    'D58_defibrillateurs',
-    'defibrillateurs'
-  ];
-
-  for (const tk of tenantCandidateKeys) {
-    let items: any[] = [];
-    if (serverMemoryStore.has(tk)) {
-      items = serverMemoryStore.get(tk);
-    } else {
-      const diskFile = path.join(COLLECTIONS_DIR, `${tk}.json`);
-      if (fs.existsSync(diskFile)) {
-        try {
-          items = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
-        } catch (_) {
-          items = [];
-        }
-      }
-    }
-    if (Array.isArray(items) && items.length > 0) {
-      const before = items.length;
-      const filtered = items.filter(item => !isMatchingItem(item));
-      if (filtered.length !== before) {
-        serverMemoryStore.set(tk, filtered);
-        persistSingleCollectionToDisk(tk, filtered);
-        (async () => {
-          try {
-            const docRef = doc(db, 'appData', tk);
-            await safeServerSetDoc(docRef, { value: filtered, updatedAt: new Date().toISOString() }, { merge: true });
-          } catch (_) {}
-        })().catch(() => {});
-      }
-    }
-  }
-
-  return { deletedCount: totalDeletedFromChunks, deletedKeys: deletedKeysList };
-}
 
 async function fetchChunkRest(chunkIdx: number, prefix: string = 'D27_defibrillateurs'): Promise<any[] | null> {
   if (loadedChunkCache.has(chunkIdx)) {
@@ -2606,6 +2450,250 @@ function getTenantAliasesSync(targetTenantId: string): Set<string> {
   return aliases;
 }
 
+const cachedDefibTotalCounts = new Map<string, number>();
+
+function getCachedDefibCount(prefix: string = 'D27_defibrillateurs', totalChunks?: number): number {
+  if (cachedDefibTotalCounts.has(prefix)) {
+    return cachedDefibTotalCounts.get(prefix)!;
+  }
+  const highest = typeof totalChunks === 'number' && totalChunks > 0 ? (totalChunks - 1) : findHighestChunkIndex(prefix);
+  if (highest < 0) return 0;
+  let count = 0;
+  for (let i = 0; i <= highest; i++) {
+    if (loadedChunkCache.has(i)) {
+      count += (loadedChunkCache.get(i) || []).length;
+    } else {
+      const p = path.join(CHUNKS_DIR, `${prefix}_chunk_${i}.json`);
+      if (fs.existsSync(p)) {
+        try {
+          const arr = JSON.parse(fs.readFileSync(p, 'utf-8'));
+          if (Array.isArray(arr)) count += arr.length;
+        } catch (_) {}
+      }
+    }
+  }
+  cachedDefibTotalCounts.set(prefix, count);
+  return count;
+}
+
+function deleteDefibrillateursFromStore(
+  targets: Array<{ id?: string; identifiant?: string; numeroSerie?: string }>,
+  tenantId?: string,
+  prefix?: string
+): { deletedCount: number; deletedKeys: string[] } {
+  if (!Array.isArray(targets) || targets.length === 0) {
+    return { deletedCount: 0, deletedKeys: [] };
+  }
+
+  const rawTenant = String(tenantId || 'D27').trim();
+  const tAliases = getTenantAliasesSync(rawTenant);
+  const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
+  const targetPrefix = prefix || (isD27OrD58 ? 'D27_defibrillateurs' : `${rawTenant.toUpperCase()}_defibrillateurs`);
+
+  const normalizedKeysToMatch = new Set<string>();
+  const deletedKeysList: string[] = [];
+
+  for (const t of targets) {
+    if (!t) continue;
+    if (t.id) {
+      const s = String(t.id).trim().toLowerCase();
+      normalizedKeysToMatch.add(s);
+      deletedKeysList.push(String(t.id).trim());
+    }
+    if (t.identifiant) {
+      const s = String(t.identifiant).trim().toLowerCase();
+      normalizedKeysToMatch.add(s);
+      deletedKeysList.push(String(t.identifiant).trim());
+    }
+    if (t.numeroSerie) {
+      const s = String(t.numeroSerie).trim().toLowerCase();
+      normalizedKeysToMatch.add(s);
+      deletedKeysList.push(String(t.numeroSerie).trim());
+    }
+  }
+
+  if (normalizedKeysToMatch.size === 0) {
+    return { deletedCount: 0, deletedKeys: [] };
+  }
+
+  const isMatchingItem = (item: any): boolean => {
+    if (!item || typeof item !== 'object') return false;
+    const id = item.id ? String(item.id).trim().toLowerCase() : '';
+    const identifiant = item.identifiant ? String(item.identifiant).trim().toLowerCase() : '';
+    const numSerie = item.numeroSerie || item.num_serie ? String(item.numeroSerie || item.num_serie).trim().toLowerCase() : '';
+    return (id && normalizedKeysToMatch.has(id)) ||
+           (identifiant && normalizedKeysToMatch.has(identifiant)) ||
+           (numSerie && normalizedKeysToMatch.has(numSerie));
+  };
+
+  // 1. Remove from fastDefibIndex & defibLocationIndex in memory
+  for (const k of normalizedKeysToMatch) {
+    fastDefibIndex.delete(k);
+    defibLocationIndex.delete(k);
+  }
+
+  // 2. Remove matching keys from defib_compact_index.json files on disk
+  const candidateIndexFiles = [
+    COMPACT_INDEX_FILE,
+    path.join(process.cwd(), 'data', 'defib_compact_index.json'),
+    path.join(process.cwd(), 'dist', 'data', 'defib_compact_index.json')
+  ].filter(Boolean);
+  for (const idxFile of candidateIndexFiles) {
+    if (idxFile && fs.existsSync(idxFile)) {
+      try {
+        const rawIdx = JSON.parse(fs.readFileSync(idxFile, 'utf-8'));
+        if (rawIdx && typeof rawIdx === 'object') {
+          let idxModified = false;
+          for (const k of normalizedKeysToMatch) {
+            if (rawIdx[k] !== undefined) {
+              delete rawIdx[k];
+              idxModified = true;
+            }
+          }
+          if (idxModified) {
+            fs.writeFileSync(idxFile, JSON.stringify(rawIdx), 'utf-8');
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  // 3. Persist deleted keys to disk in all candidate data locations
+  try {
+    const candidateDeletedFiles = [
+      path.join(DATA_DIR, 'deleted_defib_keys.json'),
+      path.join(process.cwd(), 'data', 'deleted_defib_keys.json'),
+      path.join(process.cwd(), 'dist', 'data', 'deleted_defib_keys.json')
+    ].filter(Boolean);
+    let existingDeleted: string[] = [];
+    for (const f of candidateDeletedFiles) {
+      if (fs.existsSync(f)) {
+        try {
+          const arr = JSON.parse(fs.readFileSync(f, 'utf-8'));
+          if (Array.isArray(arr)) existingDeleted.push(...arr);
+        } catch (_) {}
+      }
+    }
+    const combinedDeleted = Array.from(new Set([...existingDeleted, ...deletedKeysList]));
+    for (const f of candidateDeletedFiles) {
+      try {
+        const dir = path.dirname(f);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(f, JSON.stringify(combinedDeleted), 'utf-8');
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  // 4. Scan chunks in all candidate chunk directories to permanently remove from files and memory cache
+  let totalDeletedFromChunks = 0;
+  const candidateDirs = Array.from(new Set([
+    CHUNKS_DIR,
+    path.join(process.cwd(), 'data', 'chunks'),
+    path.join(process.cwd(), 'dist', 'data', 'chunks'),
+    path.join(DATA_DIR, 'chunks')
+  ].filter(Boolean)));
+
+  const prefixesToScan = isD27OrD58 ? ['D27_defibrillateurs', 'D58_defibrillateurs'] : [targetPrefix];
+  let highestIdx = 0;
+  for (const pfx of prefixesToScan) {
+    const h = findHighestChunkIndex(pfx);
+    if (h > highestIdx) highestIdx = h;
+  }
+  const maxIdxToScan = highestIdx >= 0 ? highestIdx : 50;
+
+  for (let cIdx = 0; cIdx <= maxIdxToScan; cIdx++) {
+    let modified = false;
+    let chunkItems = loadedChunkCache.get(cIdx);
+
+    for (const pfx of prefixesToScan) {
+      for (const dir of candidateDirs) {
+        const p = path.join(dir, `${pfx}_chunk_${cIdx}.json`);
+        if (fs.existsSync(p)) {
+          try {
+            const fileItems = JSON.parse(fs.readFileSync(p, 'utf-8'));
+            if (Array.isArray(fileItems)) {
+              const beforeLen = fileItems.length;
+              const filtered = fileItems.filter(item => !isMatchingItem(item));
+              if (filtered.length !== beforeLen) {
+                if (pfx === prefixesToScan[0]) {
+                  totalDeletedFromChunks += (beforeLen - filtered.length);
+                }
+                fs.writeFileSync(p, JSON.stringify(filtered), 'utf-8');
+                chunkItems = filtered;
+                modified = true;
+                try {
+                  const stat = fs.statSync(p);
+                  loadedChunkMtime.set(cIdx, stat.mtimeMs);
+                } catch (_) {}
+
+                // Also update Firestore in background for that chunk
+                (async () => {
+                  try {
+                    const chunkDocRef = doc(db, 'appData', `${pfx}_chunk_${cIdx}`);
+                    await safeServerSetDoc(chunkDocRef, { value: filtered }, { merge: true });
+                  } catch (_) {}
+                })().catch(() => {});
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (modified && chunkItems) {
+      loadedChunkCache.set(cIdx, chunkItems);
+    } else if (chunkItems && Array.isArray(chunkItems)) {
+      const filtered = chunkItems.filter(item => !isMatchingItem(item));
+      if (filtered.length !== chunkItems.length) {
+        loadedChunkCache.set(cIdx, filtered);
+      }
+    }
+  }
+
+  // 5. Update cached total count
+  cachedDefibTotalCounts.clear();
+
+  // 6. Remove from serverMemoryStore & collections files
+  const tenantCandidateKeys = [
+    rawTenant === 'demo' ? 'defibrillateurs' : `${rawTenant}_defibrillateurs`,
+    'D27_defibrillateurs',
+    'D58_defibrillateurs',
+    'defibrillateurs'
+  ];
+
+  for (const tk of tenantCandidateKeys) {
+    let items: any[] = [];
+    if (serverMemoryStore.has(tk)) {
+      items = serverMemoryStore.get(tk);
+    } else {
+      const diskFile = path.join(COLLECTIONS_DIR, `${tk}.json`);
+      if (fs.existsSync(diskFile)) {
+        try {
+          items = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
+        } catch (_) {
+          items = [];
+        }
+      }
+    }
+    if (Array.isArray(items) && items.length > 0) {
+      const before = items.length;
+      const filtered = items.filter(item => !isMatchingItem(item));
+      if (filtered.length !== before) {
+        serverMemoryStore.set(tk, filtered);
+        persistSingleCollectionToDisk(tk, filtered);
+        (async () => {
+          try {
+            const docRef = doc(db, 'appData', tk);
+            await safeServerSetDoc(docRef, { value: filtered, updatedAt: new Date().toISOString() }, { merge: true });
+          } catch (_) {}
+        })().catch(() => {});
+      }
+    }
+  }
+
+  return { deletedCount: totalDeletedFromChunks, deletedKeys: deletedKeysList };
+}
+
 // Fast lookup for a single defibrillator strictly scoped to the tenant
 async function findSingleDefibrillateur(
   rawSubId: string,
@@ -2754,8 +2842,13 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         return true;
       }
 
-      if (colName === 'importExportRecords' || colName === 'import_export_records') {
-        if (!itemEnv) return true;
+      // For tenant-partitioned operational collections (members, notifications, pointages, tickets, reports, docs, logs, etc.)
+      if (!isDefibCol && colName !== 'clients') {
+        if (!itemEnv) {
+          item.envId = activeTenant;
+          item.tenantId = activeTenant;
+          return true;
+        }
         if (itemEnv === 'demo') return isDemo;
         return tenantAliases.has(itemEnv) || tenantAliases.has(itemEnv.replace(/^d/i, ''));
       }
@@ -3494,13 +3587,18 @@ async function warmupDefibrillateursStore() {
         return res.status(400).json({ error: "id, identifiant ou numeroSerie requis pour la suppression." });
       }
       const rawTenant = String(tenantId || 'D27').trim();
+      const tAliases = getTenantAliasesSync(rawTenant);
+      const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
+      const prefix = isD27OrD58 ? 'D27_defibrillateurs' : `${rawTenant.toUpperCase()}_defibrillateurs`;
+
       const result = deleteDefibrillateursFromStore([
         { id: String(id || ''), identifiant: String(identifiant || ''), numeroSerie: String(numeroSerie || '') }
-      ], rawTenant);
+      ], rawTenant, prefix);
 
       serverDefibVersion = Date.now();
       persistServerStoreToDisk();
-      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys, version: serverDefibVersion });
+      const liveTotal = getCachedDefibCount(prefix);
+      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys, totalCount: liveTotal, version: serverDefibVersion });
     } catch (err: any) {
       console.error("Error in /api/delete-single-defib:", err);
       return res.status(500).json({ error: err.message || "Erreur lors de la suppression du défibrillateur." });
@@ -3515,6 +3613,10 @@ async function warmupDefibrillateursStore() {
         return res.status(400).json({ error: "ids array requis pour la suppression en masse." });
       }
       const rawTenant = String(tenantId || 'D27').trim();
+      const tAliases = getTenantAliasesSync(rawTenant);
+      const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
+      const prefix = isD27OrD58 ? 'D27_defibrillateurs' : `${rawTenant.toUpperCase()}_defibrillateurs`;
+
       const targets = ids.map((item: any) => {
         if (typeof item === 'string') {
           return { id: item, identifiant: item, numeroSerie: item };
@@ -3526,25 +3628,67 @@ async function warmupDefibrillateursStore() {
         };
       });
 
-      const result = deleteDefibrillateursFromStore(targets, rawTenant);
+      const result = deleteDefibrillateursFromStore(targets, rawTenant, prefix);
       serverDefibVersion = Date.now();
       persistServerStoreToDisk();
-      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys, version: serverDefibVersion });
+      const liveTotal = getCachedDefibCount(prefix);
+      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys, totalCount: liveTotal, version: serverDefibVersion });
     } catch (err: any) {
       console.error("Error in /api/delete-batch-defibs:", err);
       return res.status(500).json({ error: err.message || "Erreur lors de la suppression en masse." });
     }
   });
 
+  // Synchronize deleted keys from client sessions to ensure permanent deletion across DB & disk
+  app.post("/api/sync-deleted-defib-keys", async (req, res) => {
+    try {
+      const { tenantId, keys } = req.body;
+      if (!Array.isArray(keys) || keys.length === 0) {
+        return res.json({ status: "success", deletedCount: 0 });
+      }
+      const rawTenant = String(tenantId || 'D27').trim();
+      const tAliases = getTenantAliasesSync(rawTenant);
+      const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
+      const prefix = isD27OrD58 ? 'D27_defibrillateurs' : `${rawTenant.toUpperCase()}_defibrillateurs`;
+
+      const targets = keys.map((k: any) => {
+        if (typeof k === 'string') return { id: k, identifiant: k, numeroSerie: k };
+        return {
+          id: String(k.id || ''),
+          identifiant: String(k.identifiant || ''),
+          numeroSerie: String(k.numeroSerie || k.num_serie || '')
+        };
+      });
+
+      const result = deleteDefibrillateursFromStore(targets, rawTenant, prefix);
+      serverDefibVersion = Date.now();
+      persistServerStoreToDisk();
+      const liveTotal = getCachedDefibCount(prefix);
+      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys, totalCount: liveTotal, version: serverDefibVersion });
+    } catch (err: any) {
+      console.error("Error in /api/sync-deleted-defib-keys:", err);
+      return res.status(500).json({ error: err.message || "Erreur lors de la synchronisation des suppressions." });
+    }
+  });
+
   // Endpoint to fetch unified deleted defib keys across sessions
   app.get("/api/deleted-defib-keys", (req, res) => {
     try {
-      const deletedLogFile = path.join(DATA_DIR, 'deleted_defib_keys.json');
+      const candidateDeletedFiles = [
+        path.join(DATA_DIR, 'deleted_defib_keys.json'),
+        path.join(process.cwd(), 'data', 'deleted_defib_keys.json'),
+        path.join(process.cwd(), 'dist', 'data', 'deleted_defib_keys.json')
+      ].filter(Boolean);
       let deletedKeys: string[] = [];
-      if (fs.existsSync(deletedLogFile)) {
-        deletedKeys = JSON.parse(fs.readFileSync(deletedLogFile, 'utf-8'));
+      for (const f of candidateDeletedFiles) {
+        if (fs.existsSync(f)) {
+          try {
+            const arr = JSON.parse(fs.readFileSync(f, 'utf-8'));
+            if (Array.isArray(arr)) deletedKeys.push(...arr);
+          } catch (_) {}
+        }
       }
-      return res.json({ deletedKeys });
+      return res.json({ deletedKeys: Array.from(new Set(deletedKeys)) });
     } catch (_) {
       return res.json({ deletedKeys: [] });
     }
@@ -3576,54 +3720,45 @@ async function warmupDefibrillateursStore() {
       const tAliases = getTenantAliasesSync(tenantId);
       const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
 
-      // The 18,000 chunk dataset belongs exclusively to D27 / D58
-      if (!isD27OrD58) {
-        return res.json({
-          totalChunks: 0,
-          totalCount: 0,
-          prefix: '',
-          tenantId
-        });
+      const prefix = isD27OrD58 ? 'D27_defibrillateurs' : `${tenantId.toUpperCase()}_defibrillateurs`;
+      let totalChunks = 0;
+      if (fs.existsSync(CHUNKS_DIR)) {
+        const files = fs.readdirSync(CHUNKS_DIR).filter(f => f.startsWith(prefix) && f.endsWith('.json'));
+        let maxIdx = -1;
+        for (const f of files) {
+          const m = f.match(/_chunk_(\d+)\.json$/);
+          if (m) {
+            const idx = parseInt(m[1], 10);
+            if (idx > maxIdx) maxIdx = idx;
+          }
+        }
+        totalChunks = maxIdx >= 0 ? maxIdx + 1 : 0;
       }
 
-      const prefix = 'D27_defibrillateurs';
-      if (!fs.existsSync(CHUNKS_DIR)) {
-        return res.json({ totalChunks: 0, totalCount: 0, prefix, tenantId });
-      }
-      const files = fs.readdirSync(CHUNKS_DIR).filter(f => f.startsWith(prefix) && f.endsWith('.json'));
-      let maxIdx = -1;
-      for (const f of files) {
-        const m = f.match(/_chunk_(\d+)\.json$/);
-        if (m) {
-          const idx = parseInt(m[1], 10);
-          if (idx > maxIdx) maxIdx = idx;
-        }
-      }
-      const totalChunks = maxIdx >= 0 ? maxIdx + 1 : 0;
       let totalCount = 0;
-      if (serverMemoryStore.has('D27_defibrillateurs')) {
-        const arr = serverMemoryStore.get('D27_defibrillateurs');
-        if (Array.isArray(arr) && arr.length >= 1000) totalCount = arr.length;
-      }
-      if (totalCount === 0) {
-        const dFile = path.join(COLLECTIONS_DIR, 'D27_defibrillateurs.json');
-        if (fs.existsSync(dFile)) {
-          try {
-            const arr = JSON.parse(fs.readFileSync(dFile, 'utf-8'));
-            if (Array.isArray(arr) && arr.length >= 1000) totalCount = arr.length;
-          } catch (_) {}
+      if (totalChunks > 0) {
+        totalCount = getCachedDefibCount(prefix, totalChunks);
+      } else {
+        for (const k of [prefix, `${tenantId}_defibrillateurs`, 'defibrillateurs']) {
+          if (serverMemoryStore.has(k)) {
+            const arr = serverMemoryStore.get(k);
+            if (Array.isArray(arr) && arr.length > 0) {
+              totalCount = arr.length;
+              break;
+            }
+          }
+          const dFile = path.join(COLLECTIONS_DIR, `${k}.json`);
+          if (fs.existsSync(dFile)) {
+            try {
+              const arr = JSON.parse(fs.readFileSync(dFile, 'utf-8'));
+              if (Array.isArray(arr) && arr.length > 0) {
+                totalCount = arr.length;
+                break;
+              }
+            } catch (_) {}
+          }
         }
       }
-      if (totalCount === 0) {
-        const defFile = path.join(COLLECTIONS_DIR, 'defibrillateurs.json');
-        if (fs.existsSync(defFile)) {
-          try {
-            const arr = JSON.parse(fs.readFileSync(defFile, 'utf-8'));
-            if (Array.isArray(arr) && arr.length >= 1000) totalCount = arr.length;
-          } catch (_) {}
-        }
-      }
-      if (totalCount === 0) totalCount = 18199;
 
       return res.json({
         totalChunks,
