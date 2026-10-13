@@ -129,3 +129,25 @@ export async function idbDelete(key: string): Promise<void> {
     console.warn(`[IndexedDB] Error deleting key ${key}:`, err);
   }
 }
+
+export async function idbClear(): Promise<void> {
+  inMemoryStore.clear();
+
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.clear();
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      } catch (txErr) {
+        reject(txErr);
+      }
+    });
+  } catch (err) {
+    console.warn('[IndexedDB] Error clearing store:', err);
+  }
+}
+

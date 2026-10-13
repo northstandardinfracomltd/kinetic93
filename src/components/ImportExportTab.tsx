@@ -1703,7 +1703,13 @@ export default function ImportExportTab({
 
           const effectiveTenantForSync = (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim();
 
-          // 1. Sync newly imported defibs to server chunk storage & fast index
+          const urlDefibs =
+            (typeof window !== 'undefined'
+              ? localStorage.getItem(`defib_${effectiveTenantForSync}_spreadsheet_defibrillateurs`) ||
+                localStorage.getItem(`defib_${tenantId}_spreadsheet_defibrillateurs`)
+              : '') || '';
+
+          // 1. Sync newly imported defibs to server chunk storage, fast index, and Google Sheet
           try {
             const BATCH_SIZE = 150;
             for (let i = 0; i < parsedData.length; i += BATCH_SIZE) {
@@ -1713,6 +1719,7 @@ export default function ImportExportTab({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   tenantId: effectiveTenantForSync,
+                  spreadsheetUrl: urlDefibs,
                   defibs: slice
                 })
               });
@@ -1783,6 +1790,24 @@ export default function ImportExportTab({
           await saveDefibs(combined);
         } else if (formCategorie === 'Clients.' && saveClients) {
           setImportSuccessMessage(`Enregistrement de ${importCount} client(s)...`);
+          const effectiveTenantForSync = (tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || localStorage.getItem('defib_auth_tenant_id') || localStorage.getItem('defib_current_tenant_id')) : '') || 'demo').trim();
+          const urlClients =
+            (typeof window !== 'undefined'
+              ? localStorage.getItem(`defib_${effectiveTenantForSync}_spreadsheet_clients`) ||
+                localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`)
+              : '') || '';
+          try {
+            await fetch('/api/sheets/upsert', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tenantId: effectiveTenantForSync,
+                type: 'clients',
+                records: parsedData,
+                spreadsheetUrl: urlClients,
+              }),
+            });
+          } catch (_) {}
           const combined = mergeCollectionItems('clients', [...parsedData, ...clients]);
           await saveClients(combined);
         } else if (formCategorie === 'Stocks.' && saveStocks) {

@@ -2,8 +2,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore, doc, getDoc, setDoc, memoryLocalCache, getDocFromServer, getFirestore, getDocFromCache } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import { idbSet, idbGet } from './idb';
-export { idbSet, idbGet };
+import { idbSet, idbGet, idbClear } from './idb';
+export { idbSet, idbGet, idbClear };
 import {
   INITIAL_VARIABLES,
   INITIAL_CLIENTS,
@@ -36,6 +36,43 @@ try {
     for (const k of staleKeys) {
       localStorage.removeItem(k);
     }
+    // Force one-time & session purge of legacy Firebase defibrillateurs, clients, and other_equipments caches
+    const purgeLegacyFirebaseTabCaches = () => {
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k) continue;
+        // Preserve spreadsheet URL keys, company_info, registered_tenants, login state
+        if (
+          k.includes('spreadsheet_') ||
+          k.includes('company_info') ||
+          k.includes('companyInfo') ||
+          k === 'fs_cache_registered_tenants' ||
+          k.startsWith('defib_admin_') ||
+          k === 'defib_tenant_id' ||
+          k === 'defib_logged_user_role'
+        ) {
+          continue;
+        }
+        const lower = k.toLowerCase();
+        if (
+          lower.includes('defibrillateur') ||
+          lower.includes('_defibs') ||
+          lower.includes('_clients') ||
+          lower.includes('other_equipment') ||
+          lower.includes('otherequipment') ||
+          lower.includes('deleted_defib_keys') ||
+          lower.startsWith('fs_cache_')
+        ) {
+          toRemove.push(k);
+        }
+      }
+      for (const k of toRemove) {
+        localStorage.removeItem(k);
+      }
+      idbClear().catch(() => {});
+    };
+    purgeLegacyFirebaseTabCaches();
   }
 } catch (_) {}
 
@@ -540,10 +577,28 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
       const k = localStorage.key(i);
       if (!k) continue;
 
-      // Clear ONLY temporary UI flags and volatile markers, never persistent tenant datasets
+      if (
+        k.includes('spreadsheet_') ||
+        k.includes('company_info') ||
+        k.includes('companyInfo') ||
+        k === 'fs_cache_registered_tenants'
+      ) {
+        continue;
+      }
+
+      const lower = k.toLowerCase();
       if (
         k.startsWith('help_dismissed') ||
-        k.startsWith('defib_temp_')
+        k.startsWith('defib_temp_') ||
+        lower.includes('defibrillateur') ||
+        lower.includes('_defibs') ||
+        lower.includes('_clients') ||
+        lower.includes('other_equipment') ||
+        lower.includes('otherequipment') ||
+        lower.includes('recent_defib_activity') ||
+        lower.includes('recent_client_activity') ||
+        lower.includes('deleted_defib_keys') ||
+        lower.startsWith('fs_cache_')
       ) {
         keysToRemove.push(k);
       }
@@ -552,6 +607,9 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
     for (const k of keysToRemove) {
       localStorage.removeItem(k);
     }
+
+    // Completely clear IndexedDB cache on login/logout so no stale Firebase items remain
+    idbClear().catch(() => {});
 
     // Also clear session storage
     if (window.sessionStorage) {
@@ -694,23 +752,61 @@ export async function fetchCollectionFromFirestore<T>(
   onProgress?: (current: number, total: number, message?: string) => void
 ): Promise<T | null> {
   const activeTenantId = tenantId || getTenantId();
-  const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
 
-  if (collectionName === 'defibrillateurs') {
-    let initialTotal = 0;
-    for (const ck of candidateKeys) {
-      const cachedVal = getFromLocalCache<any>(ck);
-      if (Array.isArray(cachedVal) && cachedVal.length > 0) {
-        initialTotal = cachedVal.length;
-        break;
+  // GOOGLE SHEETS EXCLUSIVE MODE for Défibrillateurs, Autres Matériels, and Clients:
+  // Never fetch from Firebase / Firestore / IndexedDB / localStorage for these 3 tabs!
+  const sheetTabMap: Record<string, { type: string; localKey: string; infoKey: string }> = {
+    defibrillateurs: { type: 'defibrillateurs', localKey: 'spreadsheet_defibrillateurs', infoKey: 'spreadsheetDefibrillateurs' },
+    defibs: { type: 'defibrillateurs', localKey: 'spreadsheet_defibrillateurs', infoKey: 'spreadsheetDefibrillateurs' },
+    devices: { type: 'defibrillateurs', localKey: 'spreadsheet_defibrillateurs', infoKey: 'spreadsheetDefibrillateurs' },
+    otherEquipments: { type: 'autresMateriels', localKey: 'spreadsheet_autres_materiels', infoKey: 'spreadsheetAutresMateriels' },
+    other_equipments: { type: 'autresMateriels', localKey: 'spreadsheet_autres_materiels', infoKey: 'spreadsheetAutresMateriels' },
+    autresMateriels: { type: 'autresMateriels', localKey: 'spreadsheet_autres_materiels', infoKey: 'spreadsheetAutresMateriels' },
+    clients: { type: 'clients', localKey: 'spreadsheet_clients', infoKey: 'spreadsheetClients' },
+  };
+  const sheetInfo = sheetTabMap[collectionName];
+  if (sheetInfo) {
+    try {
+      let localSheetUrl = '';
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localSheetUrl =
+          localStorage.getItem(`defib_${activeTenantId}_${sheetInfo.localKey}`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_${sheetInfo.localKey}`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_${sheetInfo.localKey}`) ||
+          '';
+        if (!localSheetUrl) {
+          try {
+            const rawInfo =
+              localStorage.getItem(`defib_${activeTenantId}_company_info`) ||
+              localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_company_info`) ||
+              localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_company_info`);
+            if (rawInfo) {
+              const parsed = JSON.parse(rawInfo);
+              if (parsed && parsed[sheetInfo.infoKey]) {
+                localSheetUrl = String(parsed[sheetInfo.infoKey]).trim();
+              }
+            }
+          } catch (_) {}
+        }
       }
+      const res = await fetch(
+        `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=${encodeURIComponent(sheetInfo.type)}&spreadsheetUrl=${encodeURIComponent(localSheetUrl)}&_t=${Date.now()}`,
+        { cache: 'no-store' }
+      );
+      if (res.ok) {
+        const json = await res.json();
+        const items = Array.isArray(json?.items) ? json.items : [];
+        onProgress?.(items.length, items.length, `Chargement ${items.length}/${items.length}, Terminé.`);
+        return items as unknown as T;
+      }
+    } catch (err) {
+      console.warn(`[GoogleSheets] Error fetching ${collectionName} for ${activeTenantId}:`, err);
     }
-    if (initialTotal > 0) {
-      onProgress?.(1, initialTotal, `Chargement 1/${initialTotal.toLocaleString('fr-FR')}, Veuillez patienter.`);
-    } else {
-      onProgress?.(0, 0, `Chargement des défibrillateurs, veuillez patienter...`);
-    }
+    onProgress?.(0, 0, 'Terminé.');
+    return [] as unknown as T;
   }
+
+  const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
 
   // If completely offline in browser, immediately check cached versions (aggregate arrays)
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -1254,6 +1350,18 @@ export function recordFirestoreQuotaExhaustion(durationHours = 6) {
  * Saves a collection array or object to Firestore (auto-chunking if needed).
  */
 export async function saveCollectionToFirestore<T>(collectionName: string, value: T, tenantIdOverride?: string): Promise<void> {
+  if (
+    collectionName === 'defibrillateurs' ||
+    collectionName === 'defibs' ||
+    collectionName === 'devices' ||
+    collectionName === 'otherEquipments' ||
+    collectionName === 'other_equipments' ||
+    collectionName === 'autresMateriels' ||
+    collectionName === 'clients'
+  ) {
+    // Handled exclusively by Google Sheets API (/api/sheets/upsert & /api/sheets/delete)
+    return;
+  }
   const activeTenantId = tenantIdOverride || getTenantId();
   const key = getCollectionKey(collectionName, activeTenantId);
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
@@ -2198,52 +2306,12 @@ export async function loginTenantAdmin(email: string, passwordPlain: string): Pr
  */
 export async function checkIfDefibIdentifiantExistsAnywhere(
   identifiant: string,
-  excludeDefibId?: string
+  _excludeDefibId?: string
 ): Promise<{ exists: boolean; tenantName?: string }> {
   const checkIdent = identifiant.trim().toUpperCase();
   if (!checkIdent) {
     return { exists: false };
   }
-
-  try {
-    const tenants = await getRegisteredTenants();
-    const tenantIds = ['demo', ...tenants.map(t => t.id)];
-
-    const results = await Promise.all(
-      tenantIds.map(async (tid) => {
-        try {
-          const key = tid === 'demo' ? 'defibrillateurs' : `${tid}_defibrillateurs`;
-          const defibList = await fetchRawCollectionFromFirestore<any[]>(key, 3000) || [];
-          if (Array.isArray(defibList)) {
-            for (const df of defibList) {
-              if (excludeDefibId && df.id === excludeDefibId) {
-                continue;
-              }
-              if (df.identifiant && df.identifiant.trim().toUpperCase() === checkIdent) {
-                let tenantLabel = 'Démonstration';
-                if (tid !== 'demo') {
-                  const matchingTenant = tenants.find(t => t.id === tid);
-                  tenantLabel = matchingTenant ? matchingTenant.companyName : tid;
-                }
-                return { exists: true, tenantName: tenantLabel };
-              }
-            }
-          }
-        } catch (err) {
-          console.warn(`Error scanning defib in tenant list for ${tid}:`, err);
-        }
-        return null;
-      })
-    );
-
-    const found = results.find(r => r !== null);
-    if (found) {
-      return found;
-    }
-  } catch (error) {
-    console.warn('Error checking global defibrillator uniqueness:', error);
-  }
-
   return { exists: false };
 }
 

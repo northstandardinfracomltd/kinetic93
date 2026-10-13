@@ -2276,8 +2276,6 @@ function formatDefibrillateurOutput(d: any): any {
         clientNom = matchCli.denomination;
       }
     }
-  } else if (d.clientId === '' || d.clientId === null) {
-    clientNom = '';
   }
 
   // Accès & Flags
@@ -2462,7 +2460,9 @@ function formatDefibrillateurOutput(d: any): any {
     updatedAt: d.updatedAt || new Date().toISOString(),
     dateDerniereModification: d.dateDerniereModification || d.updatedAt || new Date().toISOString(),
     dateModification: d.dateModification || d.dateDerniereModification || d.updatedAt || new Date().toISOString(),
-    _lastSource: d._lastSource || 'api'
+    _lastSource: d._lastSource || 'api',
+    ...(typeof d._sheetRowNumber === 'number' ? { _sheetRowNumber: d._sheetRowNumber } : {}),
+    ...(d._rawSheetRow && typeof d._rawSheetRow === 'object' ? { _rawSheetRow: d._rawSheetRow } : {}),
   };
 }
 
@@ -2994,19 +2994,19 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   };
   const mappedSheetTab = sheetTabMap[colName];
   if (mappedSheetTab) {
-    const sheetUrl = getTenantSpreadsheetUrlSync(activeTenant, mappedSheetTab);
+    const sheetUrl = await resolveTenantSpreadsheetUrl(activeTenant, mappedSheetTab);
     if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
       try {
         const sheetData = await fetchTenantSheetCollection(sheetUrl, activeTenant, mappedSheetTab, false);
         if (sheetData.fromSpreadsheet) {
-          serverMemoryStore.set(canonicalKey, sheetData.items);
-          serverStoreTimestamps.set(canonicalKey, Date.now());
           return sheetData.items;
         }
       } catch (sheetErr) {
         console.warn(`[GoogleSheetsDB] Warning reading ${mappedSheetTab} for tenant ${activeTenant}:`, sheetErr);
       }
     }
+    // Strictly return empty array if no Google Spreadsheet is configured for this tenant/tab (never fall back to Firebase/chunks)
+    return [];
   }
 
   // 1. FAST PATH: Check in-memory store and disk files for this tenant across all collection name aliases
@@ -3423,15 +3423,34 @@ async function warmupDefibrillateursStore() {
         return res.status(400).json({ error: "Identifiant ou numéro de série requis." });
       }
 
-      const formatted = formatDefibrillateurOutput(defib);
+      let formatted: any = { ...defib, ...formatDefibrillateurOutput(defib) };
       indexDefibrillateur(formatted, rawTenant);
 
       // Sync directly to tenant's Google Spreadsheet if configured
-      const defibSheetUrl = getTenantSpreadsheetUrlSync(rawTenant, 'defibrillateurs');
+      let remoteSheetSynced = false;
+      let remoteSheetError: string | undefined;
+      const defibSheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, 'defibrillateurs', req.body?.spreadsheetUrl);
       if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
-        await upsertRecordsToTenantSheet(defibSheetUrl, rawTenant, 'defibrillateurs', [formatted]).catch(err =>
-          console.warn('[GoogleSheetsDB] single defib upsert warning:', err)
-        );
+        try {
+          const upsertRes = await upsertRecordsToTenantSheet(defibSheetUrl, rawTenant, 'defibrillateurs', [formatted]);
+          remoteSheetSynced = upsertRes.remoteSynced;
+          remoteSheetError = upsertRes.remoteWriteError;
+          if (Array.isArray(upsertRes.items) && upsertRes.items.length > 0) {
+            const matchedInSheet = upsertRes.items.find((it: any) =>
+              it && (
+                (formatted.id && it.id === formatted.id) ||
+                (formatted.identifiant && it.identifiant && String(it.identifiant).toUpperCase() === String(formatted.identifiant).toUpperCase()) ||
+                (formatted.numeroSerie && it.numeroSerie && String(it.numeroSerie).toUpperCase() === String(formatted.numeroSerie).toUpperCase())
+              )
+            );
+            if (matchedInSheet) {
+              formatted = { ...formatted, ...matchedInSheet };
+            }
+          }
+        } catch (err: any) {
+          console.warn('[GoogleSheetsDB] single defib upsert warning:', err);
+          remoteSheetError = err?.message || String(err);
+        }
       }
 
       const candidateKeysToFind = [
@@ -3572,7 +3591,7 @@ async function warmupDefibrillateursStore() {
         })().catch(() => {});
       }
 
-      return res.json({ status: "success", defib: formatted });
+      return res.json({ status: "success", defib: formatted, remoteSynced: remoteSheetSynced, remoteWriteError: remoteSheetError });
     } catch (err: any) {
       console.error("Error in /api/sync-single-defib:", err);
       return res.status(500).json({ error: err.message || "Erreur de synchronisation du défibrillateur." });
@@ -3593,9 +3612,9 @@ async function warmupDefibrillateursStore() {
       const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
       const prefix = isD27OrD58 ? 'D27_defibrillateurs' : `${rawTenant.toUpperCase()}_defibrillateurs`;
 
-      const defibSheetUrl = getTenantSpreadsheetUrlSync(rawTenant, 'defibrillateurs');
+      const defibSheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, 'defibrillateurs', req.body?.spreadsheetUrl);
       if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
-        const formattedBatch = defibs.filter(Boolean).map((d: any) => formatDefibrillateurOutput(d));
+        const formattedBatch = defibs.filter(Boolean).map((d: any) => ({ ...d, ...formatDefibrillateurOutput(d) }));
         await upsertRecordsToTenantSheet(defibSheetUrl, rawTenant, 'defibrillateurs', formattedBatch).catch(err =>
           console.warn('[GoogleSheetsDB] batch defib upsert warning:', err)
         );
@@ -3811,7 +3830,7 @@ async function warmupDefibrillateursStore() {
         { id: String(id || ''), identifiant: String(identifiant || ''), numeroSerie: String(numeroSerie || '') }
       ], rawTenant, prefix);
 
-      const defibSheetUrl = getTenantSpreadsheetUrlSync(rawTenant, 'defibrillateurs');
+      const defibSheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, 'defibrillateurs', req.body?.spreadsheetUrl);
       if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
         await deleteRecordsFromTenantSheet(
           defibSheetUrl,
@@ -3855,7 +3874,7 @@ async function warmupDefibrillateursStore() {
       });
 
       const result = deleteDefibrillateursFromStore(targets, rawTenant, prefix);
-      const defibSheetUrl = getTenantSpreadsheetUrlSync(rawTenant, 'defibrillateurs');
+      const defibSheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, 'defibrillateurs', req.body?.spreadsheetUrl);
       if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
         const flatKeys = targets.flatMap(t => [t.id, t.identifiant, t.numeroSerie]).filter(Boolean);
         await deleteRecordsFromTenantSheet(defibSheetUrl, rawTenant, 'defibrillateurs', flatKeys).catch(() => {});
@@ -3995,6 +4014,71 @@ async function warmupDefibrillateursStore() {
     return '';
   }
 
+  function rememberTenantSpreadsheetUrl(tenantId: string, tabType: SheetTabType, url: string) {
+    if (!url || !url.trim()) return;
+    const activeTenant = (tenantId || 'demo').trim();
+    const fieldMap: Record<SheetTabType, string> = {
+      defibrillateurs: 'spreadsheetDefibrillateurs',
+      autresMateriels: 'spreadsheetAutresMateriels',
+      clients: 'spreadsheetClients',
+    };
+    const field = fieldMap[tabType];
+    const key = activeTenant === 'demo' ? 'tenantDatabases' : `${activeTenant}_tenantDatabases`;
+    const existing = (serverMemoryStore.get(key) && typeof serverMemoryStore.get(key) === 'object')
+      ? serverMemoryStore.get(key)
+      : {};
+    if (existing[field] !== url.trim()) {
+      const updated = { ...existing, [field]: url.trim(), [`${field}Url`]: url.trim() };
+      serverMemoryStore.set(key, updated);
+      persistSingleCollectionToDisk(key, updated);
+    }
+  }
+
+  async function resolveTenantSpreadsheetUrl(tenantId: string, tabType: SheetTabType, explicitUrl?: string): Promise<string> {
+    if (explicitUrl && explicitUrl.trim() && extractSpreadsheetIdAndGid(explicitUrl.trim())) {
+      rememberTenantSpreadsheetUrl(tenantId, tabType, explicitUrl.trim());
+      return explicitUrl.trim();
+    }
+    const syncUrl = getTenantSpreadsheetUrlSync(tenantId, tabType);
+    if (syncUrl && extractSpreadsheetIdAndGid(syncUrl)) {
+      return syncUrl;
+    }
+    // Check if companyInfo or tenantDatabases exists in Firestore REST (in case saved before server sync was added)
+    try {
+      const activeTenant = (tenantId || 'demo').trim();
+      const fieldMap: Record<SheetTabType, string[]> = {
+        defibrillateurs: ['spreadsheetDefibrillateurs', 'spreadsheetDefibrillateursUrl'],
+        autresMateriels: ['spreadsheetAutresMateriels', 'spreadsheetAutresMaterielsUrl'],
+        clients: ['spreadsheetClients', 'spreadsheetClientsUrl'],
+      };
+      const fields = fieldMap[tabType];
+      const numOnly = activeTenant.replace(/^d/i, '');
+      const candidates = Array.from(new Set([
+        activeTenant,
+        activeTenant.toUpperCase(),
+        activeTenant.toLowerCase(),
+        ...(numOnly ? [`D${numOnly}`, `d${numOnly}`] : []),
+      ]));
+      for (const cand of candidates) {
+        for (const suffix of ['tenantDatabases', 'companyInfo', 'company_info']) {
+          const docKey = cand === 'demo' ? suffix : `${cand}_${suffix}`;
+          const restRes = await fetchFirestoreDocumentRest(docKey, 1200);
+          const obj = restRes.data?.value || restRes.data;
+          if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+            serverMemoryStore.set(docKey, obj);
+            persistSingleCollectionToDisk(docKey, obj);
+            for (const f of fields) {
+              if (obj[f] && typeof obj[f] === 'string' && extractSpreadsheetIdAndGid(obj[f].trim())) {
+                return obj[f].trim();
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return '';
+  }
+
   // Dedicated Google Sheets Database Endpoints
   app.get("/api/sheets/global-config", (_req, res) => {
     try {
@@ -4049,7 +4133,7 @@ async function warmupDefibrillateursStore() {
       const tabType = String(req.query.type || 'defibrillateurs').trim() as SheetTabType;
       const forceRefresh = req.query.forceRefresh === 'true';
       const explicitUrl = String(req.query.spreadsheetUrl || '').trim();
-      const sheetUrl = explicitUrl || getTenantSpreadsheetUrlSync(tenantId, tabType);
+      const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, tabType, explicitUrl);
 
       if (!sheetUrl || !extractSpreadsheetIdAndGid(sheetUrl)) {
         return res.json({ status: 'no_spreadsheet', fromSpreadsheet: false, items: [], totalCount: 0 });
@@ -4073,7 +4157,7 @@ async function warmupDefibrillateursStore() {
       const { tenantId, type, record, records, spreadsheetUrl: explicitUrl } = req.body || {};
       const rawTenant = String(tenantId || 'demo').trim();
       const tabType = (type || 'defibrillateurs') as SheetTabType;
-      const sheetUrl = explicitUrl || getTenantSpreadsheetUrlSync(rawTenant, tabType);
+      const sheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, tabType, explicitUrl);
       if (!sheetUrl || !extractSpreadsheetIdAndGid(sheetUrl)) {
         return res.json({ status: 'no_spreadsheet', synced: false });
       }
@@ -4091,7 +4175,7 @@ async function warmupDefibrillateursStore() {
       const { tenantId, type, keys, spreadsheetUrl: explicitUrl } = req.body || {};
       const rawTenant = String(tenantId || 'demo').trim();
       const tabType = (type || 'defibrillateurs') as SheetTabType;
-      const sheetUrl = explicitUrl || getTenantSpreadsheetUrlSync(rawTenant, tabType);
+      const sheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, tabType, explicitUrl);
       if (!sheetUrl || !extractSpreadsheetIdAndGid(sheetUrl)) {
         return res.json({ status: 'no_spreadsheet', deletedCount: 0 });
       }
@@ -4104,16 +4188,16 @@ async function warmupDefibrillateursStore() {
     }
   });
 
-  // Metadata endpoint for high-speed chunked defibrillateurs download
+  // Metadata endpoint for high-speed chunked defibrillateurs download (strictly Google Sheets backed)
   app.get("/api/defib-chunks/meta", async (req, res) => {
     try {
       const tenantId = String(req.query.tenantId || 'demo').trim();
-      const defibSheetUrl = getTenantSpreadsheetUrlSync(tenantId, 'defibrillateurs');
+      const defibSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'defibrillateurs');
       if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
         const sheetData = await fetchTenantSheetCollection(defibSheetUrl, tenantId, 'defibrillateurs', false);
         if (sheetData.fromSpreadsheet) {
           return res.json({
-            totalChunks: 1,
+            totalChunks: sheetData.totalCount > 0 ? 1 : 0,
             totalCount: sheetData.totalCount,
             prefix: `${tenantId.toUpperCase()}_defibrillateurs`,
             tenantId,
@@ -4122,55 +4206,13 @@ async function warmupDefibrillateursStore() {
           });
         }
       }
-      const tAliases = getTenantAliasesSync(tenantId);
-      const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
-
-      const prefix = isD27OrD58 ? 'D27_defibrillateurs' : `${tenantId.toUpperCase()}_defibrillateurs`;
-      let totalChunks = 0;
-      if (fs.existsSync(CHUNKS_DIR)) {
-        const files = fs.readdirSync(CHUNKS_DIR).filter(f => f.startsWith(prefix) && f.endsWith('.json'));
-        let maxIdx = -1;
-        for (const f of files) {
-          const m = f.match(/_chunk_(\d+)\.json$/);
-          if (m) {
-            const idx = parseInt(m[1], 10);
-            if (idx > maxIdx) maxIdx = idx;
-          }
-        }
-        totalChunks = maxIdx >= 0 ? maxIdx + 1 : 0;
-      }
-
-      let totalCount = 0;
-      if (totalChunks > 0) {
-        totalCount = getCachedDefibCount(prefix, totalChunks);
-      } else {
-        for (const k of [prefix, `${tenantId}_defibrillateurs`, 'defibrillateurs']) {
-          if (serverMemoryStore.has(k)) {
-            const arr = serverMemoryStore.get(k);
-            if (Array.isArray(arr) && arr.length > 0) {
-              totalCount = arr.length;
-              break;
-            }
-          }
-          const dFile = path.join(COLLECTIONS_DIR, `${k}.json`);
-          if (fs.existsSync(dFile)) {
-            try {
-              const arr = JSON.parse(fs.readFileSync(dFile, 'utf-8'));
-              if (Array.isArray(arr) && arr.length > 0) {
-                totalCount = arr.length;
-                break;
-              }
-            } catch (_) {}
-          }
-        }
-      }
-
       return res.json({
-        totalChunks,
-        totalCount,
-        prefix,
+        totalChunks: 0,
+        totalCount: 0,
+        prefix: `${tenantId.toUpperCase()}_defibrillateurs`,
         tenantId,
-        version: serverDefibVersion
+        fromSpreadsheet: true,
+        version: serverDefibVersion,
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
@@ -4178,7 +4220,6 @@ async function warmupDefibrillateursStore() {
   });
 
   // Safeguard: Deprecate monolithic /api/defib-chunks/all with instant HTTP 410 response
-  // Protects reverse proxy buffers (Nginx/Cloudflare) against 34MB truncation (ERR_CONTENT_DECODING_FAILED & 503)
   app.get("/api/defib-chunks/all", (req, res) => {
     return res.status(410).json({
       status: "error",
@@ -4188,13 +4229,12 @@ async function warmupDefibrillateursStore() {
     });
   });
 
-  // Bundled chunks endpoint (returns batches of 10 chunks per request, reducing 78 requests to only 8)
-  // Each batch is ~2.3k items (~350KB compressed), guaranteeing zero proxy buffer overflow, zero decoding errors, and zero 503s
+  // Bundled chunks endpoint (strictly Google Sheets backed)
   app.get("/api/defib-chunks/bundle", async (req, res) => {
     try {
       const tenantId = String(req.query.tenantId || 'demo').trim();
       const batchIdx = parseInt(String(req.query.batch || '0'), 10);
-      const defibSheetUrl = getTenantSpreadsheetUrlSync(tenantId, 'defibrillateurs');
+      const defibSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'defibrillateurs');
       if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
         const sheetData = await fetchTenantSheetCollection(defibSheetUrl, tenantId, 'defibrillateurs', false);
         if (sheetData.fromSpreadsheet) {
@@ -4216,65 +4256,16 @@ async function warmupDefibrillateursStore() {
           });
         }
       }
-      const BATCH_CHUNK_COUNT = 10;
-      const tAliases = getTenantAliasesSync(tenantId);
-      const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
-      const prefix = isD27OrD58 ? 'D27_defibrillateurs' : `${tenantId.toUpperCase()}_defibrillateurs`;
-
-      if (prefix.startsWith('D27_') || prefix.startsWith('D58_')) {
-        if (tenantId && !tAliases.has('d27') && !tAliases.has('d58')) {
-          return res.status(403).json({ error: "Accès refusé : ces données appartiennent à un autre tenant." });
-        }
-      }
-
-      const highest = findHighestChunkIndex(prefix);
-      const startIdx = batchIdx * BATCH_CHUNK_COUNT;
-      const endIdx = startIdx + BATCH_CHUNK_COUNT;
-      const isLastBatch = endIdx > highest;
-
-      // Check bundle cache
-      const cacheKey = `${prefix}_b${batchIdx}_v${serverDefibVersion}`;
-      if (cachedBundleMap.has(cacheKey)) {
-        const cached = cachedBundleMap.get(cacheKey)!;
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-        return res.json({
-          status: "success",
-          batch: batchIdx,
-          startChunk: startIdx,
-          endChunk: Math.min(endIdx - 1, highest),
-          totalChunks: highest + 1,
-          isLastBatch,
-          version: serverDefibVersion,
-          value: cached.items
-        });
-      }
-
-      const bundleItems: any[] = [];
-      for (let i = startIdx; i < endIdx && i <= highest; i++) {
-        const chunk = loadChunkFileSync(i, prefix);
-        if (chunk && Array.isArray(chunk)) {
-          bundleItems.push(...chunk);
-        }
-      }
-
-      cachedBundleMap.set(cacheKey, { items: bundleItems, version: serverDefibVersion });
-
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
       return res.json({
         status: "success",
         batch: batchIdx,
-        startChunk: startIdx,
-        endChunk: Math.min(endIdx - 1, highest),
-        totalChunks: highest + 1,
-        isLastBatch,
+        startChunk: 0,
+        endChunk: 0,
+        totalChunks: 0,
+        isLastBatch: true,
+        fromSpreadsheet: true,
         version: serverDefibVersion,
-        value: bundleItems
+        value: []
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });

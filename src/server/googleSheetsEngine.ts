@@ -51,6 +51,24 @@ function getGlobalConfigPaths(): string[] {
   ];
 }
 
+const DEFAULT_GOOGLE_API_KEY = 'AIzaSyBEUUSg6itOAUue7IAKUB1pI_udx1XEW0w';
+
+const DEFAULT_SERVICE_ACCOUNT_JSON = JSON.stringify({
+  type: 'service_account',
+  project_id: 'gen-lang-client-0441699702',
+  private_key_id: 'cad3f3b7a5e751bf3625428346dd9f0a085772e8',
+  private_key:
+    '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDfDpShF+3NSKN9\ngj9hn5QXGQOz4Umu6uCDZbAZ68PMGBJpCzVqymVEX5HpsUuNlu/GzST1coJrAM9h\nG/kO74FkZUlYvklHiwoHLJtc1xfDbg131aM6j1lmWsWBJ5as6VMEq52NTrmY1mbz\nh9E1m/EYRQi0OjFleGUDzaWshhZgaq1V5Gft+vmdJ+TzrY3e1vhpIqx3JSD8rplq\n1sgasNe6qRT87CtRTYairQpGa1WoFKLCdrjtBJ0ckLsS55TlCdsD3Ij6xOibSnld\n+2GT9VZdcfyO/Rivot4vOBFttMuvEXmSTfhj84LkWU1/J+rj3wL+8QaejRSAiyBc\n/a3nBE4RAgMBAAECggEAD7XvMgmFblgXa9eory+WNqpEYH8VuYRBm/+lj63TdKSd\nZ1iqwoLO7ynsFRGvyKFA8jewyrjuBqtf7+8Qc8Ta0D9yExYUAz3/ztGNf9SGj/VI\nbZBWluFR4quyDY7ERhmJB2MvDazl1aYESlLeoXACYzs5ibgvkn4QX1w0txoaqV+4\neOE1fhlv4M1GF3baLYx8GRP7C1jm2kbc8HhGnaT+23ylPYa5F+XN1KYk7Ih/CAV1\n8MhTUdZZ/T9l1BgzoWOXHm8PixGkY3QpMosvLnzdTCZQaAnplhQML1y9pYCcQHmB\nlbEe/8r/qu2wEBhBJVTycsUEDc6V/5jpDMVpi06XgQKBgQD1rMm0hqbEQCBpyWrq\n8hK9m3k9QJHAOBpGdYG5xtEgEgN/6ppTjw6Yd2n0eJhbVGmXVo7pN8jSjNI93dv/\ncWHQNQTmpZHvseZliTSKRRFiKWIcC4jzk+NEH4xunGPShJUCPw3ZW9nbInukr7bt\noejk+FJ2qL0pgwZJqpF5zUz01QKBgQDobnIx4534dLOwJKl6TnLyLQwlKCjGMWgA\nBzvRN0dJmc+w5xBBbgJF4WRGBBhv3y0neGyvpLmVHvlTwHfbBTmKB7vLefVU6c3b\njm7l20+Oi7WO+ALq/NKN5JUsrQgdCxwTGWw6fR6QzRq4dj7JCbh1cgSsMuSPQCFr\ndNZVx6ECTQKBgQCvndSSN67+mtiQxmqniGPdJkaEgqOtxG0D8PvK0VSsmDPoPMwU\n7y5/ztzu5UYEA1N322hNTpM/72pazz10XJiPPVdDiRfJQGJyMqJcNQM4KFz5r0U2\n2YCcMfExIJo64ouiD3DW79HL09qO3wzk0dip1Nkd+YE/K2pTPpq/dwKMAQKBgDu8\nHtcZg4DWJVQQqAnJ3ZrF3wgxoQEGs47GTSZAya5tvEXfrHrUVfs1qPqhlNIzjjxF\no9EkSZm8gyF2JpeAaUBDKo1pw5ZWHFTf7zpdub2NxFSBAub3oPlclMYNljc4ord5\n4inJ/DAEtmhP42TxfZmZev/yeHEkbzJZrbgP/R5FAoGAGluFz0DV91wW6nAcOmqB\nj/HIo6Mzs9Y3xs5zGqaNfECW3J+32YyITvNBh4pve4utl8fTggZd/NX6k9I39Lqd\njiiLgZJQCNqtfVQHinDQ7YRpyS/Ru7LlFShrfOGvGlNkOPw09vlqqW5l6kE8Lels\nUPdUXCJIMa9pb8d2LiHtFlk=\n-----END PRIVATE KEY-----\n',
+  client_email: 'sheets-service-account@gen-lang-client-0441699702.iam.gserviceaccount.com',
+  client_id: '104741580698453576808',
+  auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+  token_uri: 'https://oauth2.googleapis.com/token',
+  auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
+  client_x509_cert_url:
+    'https://www.googleapis.com/robot/v1/metadata/x509/sheets-service-account%40gen-lang-client-0441699702.iam.gserviceaccount.com',
+  universe_domain: 'googleapis.com',
+});
+
 export function getGlobalGoogleConfig(): GlobalGoogleSheetsConfig {
   for (const p of getGlobalConfigPaths()) {
     if (fs.existsSync(p)) {
@@ -58,8 +76,9 @@ export function getGlobalGoogleConfig(): GlobalGoogleSheetsConfig {
         const parsed = JSON.parse(fs.readFileSync(p, 'utf-8'));
         if (parsed && typeof parsed === 'object') {
           return {
-            apiKey: parsed.apiKey || process.env.GOOGLE_SHEETS_API_KEY || '',
-            serviceAccountJson: parsed.serviceAccountJson || process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '',
+            apiKey: parsed.apiKey || process.env.GOOGLE_SHEETS_API_KEY || DEFAULT_GOOGLE_API_KEY,
+            serviceAccountJson:
+              parsed.serviceAccountJson || process.env.GOOGLE_SERVICE_ACCOUNT_JSON || DEFAULT_SERVICE_ACCOUNT_JSON,
             appsScriptBridgeUrl: parsed.appsScriptBridgeUrl || process.env.GOOGLE_APPS_SCRIPT_BRIDGE_URL || '',
             updatedAt: parsed.updatedAt || '',
           };
@@ -68,8 +87,8 @@ export function getGlobalGoogleConfig(): GlobalGoogleSheetsConfig {
     }
   }
   return {
-    apiKey: process.env.GOOGLE_SHEETS_API_KEY || '',
-    serviceAccountJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '',
+    apiKey: process.env.GOOGLE_SHEETS_API_KEY || DEFAULT_GOOGLE_API_KEY,
+    serviceAccountJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON || DEFAULT_SERVICE_ACCOUNT_JSON,
     appsScriptBridgeUrl: process.env.GOOGLE_APPS_SCRIPT_BRIDGE_URL || '',
   };
 }
@@ -278,31 +297,31 @@ function normalizeDateStr(val: any): string {
 // 1. DEFIBRILLATEURS MAPPING (GET & POST)
 // ==========================================
 export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; aliases: string[]; type?: 'yesno' | 'bool' | 'date' }> = [
-  { header: 'Identifiant', field: 'identifiant', aliases: ['identifiant', 'id', 'identifiantdae', 'code', 'identifiantunique'] },
-  { header: 'Numéro Atlasanté', field: 'numeroAtlasante', aliases: ['numeroatlasante', 'atlasante', 'idatlasante', 'geodae'] },
-  { header: 'Version logiciel', field: 'versionLogiciel', aliases: ['versionlogiciel', 'firmware', 'version'] },
-  { header: 'Numéro de série', field: 'numeroSerie', aliases: ['numerodeserie', 'numeroserie', 'numserie', 'serie', 'sn', 'serial'] },
-  { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentairedae', 'notes', 'note', 'observation'] },
-  { header: 'Modèle', field: 'modeleId', aliases: ['modele', 'modeledae', 'modeledefibrillateur', 'modeleid', 'model'] },
+  { header: 'Identifiant', field: 'identifiant', aliases: ['identifiant', 'id', 'identifiantdae', 'code', 'identifiantunique', 'identificationidentifiant'] },
+  { header: 'Numéro Atlasanté', field: 'numeroAtlasante', aliases: ['numeroatlasante', 'atlasante', 'idatlasante', 'geodae', 'identificationnumeroatlasante'] },
+  { header: 'Version logiciel', field: 'versionLogiciel', aliases: ['versionlogiciel', 'firmware', 'version', 'identificationversionlogiciel'] },
+  { header: 'Numéro de série', field: 'numeroSerie', aliases: ['numerodeserie', 'numeroserie', 'numserie', 'serie', 'sn', 'serial', 'identificationserie', 'identificationnumerodeserie'] },
+  { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentairedae', 'notes', 'note', 'observation', 'identificationcommentaire'] },
+  { header: 'Modèle', field: 'modeleId', aliases: ['modele', 'modeledae', 'modeledefibrillateur', 'modeleid', 'model', 'identificationmodele', 'identificationmodeleidentifiantunique', 'modeleidentifiantunique'] },
 
-  { header: 'Client lié', field: 'clientNom', aliases: ['clientlie', 'client', 'clientnom', 'entreprise', 'denominationclient'] },
-  { header: 'Nom du site', field: 'nomSite', aliases: ['nomdusite', 'nomsite', 'site', 'etablissement'] },
-  { header: "Catégorie d'établissement", field: 'categorieEtablissement', aliases: ['categoriedetablissement', 'categorieetablissement', 'typeetablissement'] },
-  { header: 'Nom et prénom sur site', field: 'nomPrenomSite', aliases: ['nometprenomsursite', 'nomprenomsite', 'contactsursite', 'contactsite', 'responsablesite'] },
-  { header: 'Téléphone portable sur site', field: 'telephoneSite', aliases: ['telephoneportablesursite', 'telephonesursite', 'telephonesite', 'telsite', 'portablesite'] },
-  { header: 'Email sur site', field: 'emailSite', aliases: ['emailsursite', 'emailsite', 'mailsite', 'courrielsite'] },
-  { header: 'Contrat', field: 'contrat', aliases: ['contrat', ' aveccontrat', 'souscontrat'], type: 'yesno' },
-  { header: 'Nom du contrat', field: 'nomContrat', aliases: ['nomducontrat', 'nomcontrat', 'typecontrat'] },
-  { header: 'Référence contrat', field: 'referenceContrat', aliases: ['referencecontrat', 'refcontrat', 'numerocontrat'] },
-  { header: 'Début du contrat', field: 'debutContrat', aliases: ['debutducontrat', 'debutcontrat', 'datedebutcontrat'], type: 'date' },
-  { header: 'Fin du contrat', field: 'finContrat', aliases: ['finducontrat', 'fincontrat', 'datefincontrat', 'echeancecontrat'], type: 'date' },
-  { header: 'Payeur ID', field: 'payeurId', aliases: ['payeurid', 'idpayeur', 'codepayeur'] },
-  { header: 'Client ID', field: 'clientIdField', aliases: ['clientid', 'idclient', 'codeclient', 'clientidfield'] },
+  { header: 'Client lié', field: 'clientNom', aliases: ['clientlie', 'client', 'clientnom', 'entreprise', 'denominationclient', 'clientclient', 'clientclientidentifiantunique', 'clientidentifiantunique'] },
+  { header: 'Nom du site', field: 'nomSite', aliases: ['nomdusite', 'nomsite', 'site', 'etablissement', 'clientsite', 'clientnomdusite'] },
+  { header: "Catégorie d'établissement", field: 'categorieEtablissement', aliases: ['categoriedetablissement', 'categorieetablissement', 'typeetablissement', 'clientcategorieetablissement'] },
+  { header: 'Nom et prénom sur site', field: 'nomPrenomSite', aliases: ['nometprenomsursite', 'nomprenomsite', 'contactsursite', 'contactsite', 'responsablesite', 'nometprenom', 'nomprenom', 'clientnometprenom', 'contact'] },
+  { header: 'Téléphone portable sur site', field: 'telephoneSite', aliases: ['telephoneportablesursite', 'telephonesursite', 'telephonesite', 'telsite', 'portablesite', 'telephoneportable', 'clienttelephoneportable', 'telephone', 'tel'] },
+  { header: 'Email sur site', field: 'emailSite', aliases: ['emailsursite', 'emailsite', 'mailsite', 'courrielsite', 'email', 'clientemail', 'mail', 'courriel'] },
+  { header: 'Contrat', field: 'contrat', aliases: ['contrat', 'aveccontrat', 'souscontrat', 'contratencours', 'clientcontratencours', 'clientcontrat'], type: 'yesno' },
+  { header: 'Nom du contrat', field: 'nomContrat', aliases: ['nomducontrat', 'nomcontrat', 'typecontrat', 'titreducontrat', 'titrecontrat', 'clienttitreducontrat', 'clientnomducontrat'] },
+  { header: 'Référence contrat', field: 'referenceContrat', aliases: ['referencecontrat', 'refcontrat', 'numerocontrat', 'referenceducontrat', 'clientreferenceducontrat'] },
+  { header: 'Début du contrat', field: 'debutContrat', aliases: ['debutducontrat', 'debutcontrat', 'datedebutcontrat', 'clientdebutducontrat'], type: 'date' },
+  { header: 'Fin du contrat', field: 'finContrat', aliases: ['finducontrat', 'fincontrat', 'datefincontrat', 'echeancecontrat', 'expirationducontrat', 'clientexpirationducontrat', 'clientfinducontrat'], type: 'date' },
+  { header: 'Payeur ID', field: 'payeurId', aliases: ['payeurid', 'idpayeur', 'codepayeur', 'clientpayeurid'] },
+  { header: 'Client ID', field: 'clientIdField', aliases: ['clientid', 'idclient', 'codeclient', 'clientidfield', 'clientclientid'] },
 
-  { header: 'Modèle coffret', field: 'modeleCoffretId', aliases: ['modelecoffret', 'coffret', 'modeleboitier', 'boitiermodele', 'modelecoffretid'] },
+  { header: 'Modèle coffret', field: 'modeleCoffretId', aliases: ['modelecoffret', 'coffret', 'modeleboitier', 'boitiermodele', 'modelecoffretid', 'boitier', 'boitiermodeleidentifiantunique'] },
   { header: 'Numéro de lot coffret', field: 'numeroLotCoffret', aliases: ['numerodelotcoffret', 'numerolotcoffret', 'lotcoffret', 'boitierlot'] },
-  { header: 'Commentaire coffret', field: 'commentaireCoffret', aliases: ['commentairecoffret', 'notecoffret'] },
-  { header: 'Date péremption trousse', field: 'peremptionTrousse', aliases: ['dateperemptiontrousse', 'peremptiontrousse', 'peremptionkit', 'dateperemptionkit'], type: 'date' },
+  { header: 'Commentaire coffret', field: 'commentaireCoffret', aliases: ['commentairecoffret', 'notecoffret', 'boitiercommentaire'] },
+  { header: 'Date péremption trousse', field: 'peremptionTrousse', aliases: ['dateperemptiontrousse', 'peremptiontrousse', 'peremptionkit', 'dateperemptionkit', 'boitierperemptiontrousse'], type: 'date' },
   { header: 'Ciseaux présents', field: 'kitCiseauxPresents', aliases: ['ciseauxpresents', 'kitciseauxpresents', 'ciseaux'], type: 'yesno' },
   { header: 'Masque présent', field: 'kitMasquePresent', aliases: ['masquepresent', 'kitmasquepresent', 'masque'], type: 'yesno' },
   { header: 'Péremption masque', field: 'kitPeremptionMasque', aliases: ['peremptionmasque', 'kitperemptionmasque', 'dateperemptionmasque'], type: 'date' },
@@ -311,81 +330,82 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
   { header: 'Gants présents', field: 'kitGantsPresents', aliases: ['gantspresents', 'kitgantspresents', 'gants'], type: 'yesno' },
   { header: 'Rasoir présent', field: 'kitRasoirPresent', aliases: ['rasoirpresent', 'kitrasoirpresent', 'rasoir'], type: 'yesno' },
 
-  { header: 'Numéro et voie', field: 'numVoie', aliases: ['numeroetvoie', 'numvoie', 'adresse', 'rue', 'voie'] },
-  { header: 'Ville', field: 'ville', aliases: ['ville', 'commune', 'localite', 'city'] },
-  { header: 'Code postal', field: 'cp', aliases: ['codepostal', 'cp', 'zip', 'postalcode'] },
-  { header: 'Région', field: 'region', aliases: ['region', 'departementregion'] },
-  { header: 'Pays', field: 'pays', aliases: ['pays', 'country'] },
-  { header: 'Latitude', field: 'latitude', aliases: ['latitude', 'lat', 'coordlat'] },
-  { header: 'Longitude', field: 'longitude', aliases: ['longitude', 'lng', 'lon', 'long', 'coordlng'] },
-  { header: "Aide à l'accès", field: 'commentaireAdresse', aliases: ['aidealacces', 'aideacces', 'commentaireadresse', 'emplacement', 'localisationprecise'] },
-  { header: 'Accès 24/7', field: 'acces247', aliases: ['acces247', 'acces24h24', '247'], type: 'bool' },
-  { header: 'Accès semaine', field: 'accesSemaine', aliases: ['accessemaine', 'semaine'], type: 'bool' },
-  { header: 'Accès week-end', field: 'accesWeekend', aliases: ['accesweekend', 'weekend'], type: 'bool' },
-  { header: 'Extérieur', field: 'exterieur', aliases: ['exterieur', 'ext'], type: 'bool' },
-  { header: "Horaires d'ouverture", field: 'horaires', aliases: ['horairesdouverture', 'horaires', 'heuresouverture'] },
+  { header: 'Numéro et voie', field: 'numVoie', aliases: ['numeroetvoie', 'numvoie', 'adresse', 'rue', 'voie', 'localisationnumeroetvoie', 'localisationrue'] },
+  { header: 'Ville', field: 'ville', aliases: ['ville', 'commune', 'localite', 'city', 'localisationville'] },
+  { header: 'Code postal', field: 'cp', aliases: ['codepostal', 'cp', 'zip', 'postalcode', 'localisationcodepostal'] },
+  { header: 'Région', field: 'region', aliases: ['region', 'departementregion', 'localisationregion'] },
+  { header: 'Pays', field: 'pays', aliases: ['pays', 'country', 'localisationpays'] },
+  { header: 'Latitude', field: 'latitude', aliases: ['latitude', 'lat', 'coordlat', 'localisationlatitude'] },
+  { header: 'Longitude', field: 'longitude', aliases: ['longitude', 'lng', 'lon', 'long', 'coordlng', 'localisationlongitude'] },
+  { header: "Aide à l'accès", field: 'commentaireAdresse', aliases: ['aidealacces', 'aideacces', 'aidedacces', 'commentaireadresse', 'emplacement', 'localisationprecise', 'localisationaidedacces', 'localisation'] },
+  { header: 'Accès 24/7', field: 'acces247', aliases: ['acces247', 'acces24h24', '247', 'localisationacces247'], type: 'bool' },
+  { header: 'Accès semaine', field: 'accesSemaine', aliases: ['accessemaine', 'semaine', 'localisationaccessemaine'], type: 'bool' },
+  { header: 'Accès week-end', field: 'accesWeekend', aliases: ['accesweekend', 'weekend', 'localisationaccesweekend'], type: 'bool' },
+  { header: 'Extérieur', field: 'exterieur', aliases: ['exterieur', 'ext', 'localisationexterieur'], type: 'bool' },
+  { header: "Horaires d'ouverture", field: 'horaires', aliases: ['horairesdouverture', 'horaires', 'heuresouverture', 'localisationhoraires'] },
 
-  { header: 'Expiration garantie', field: 'finGarantie', aliases: ['expirationgarantie', 'fingarantie', 'garantie', 'datefingarantie'], type: 'date' },
-  { header: 'Date de fabrication', field: 'fabrication', aliases: ['datedefabrication', 'fabrication', 'datefabrication'], type: 'date' },
-  { header: 'Mise en service', field: 'miseEnService', aliases: ['miseenservice', 'datemiseenservice', 'installation'], type: 'date' },
-  { header: 'Dernière maintenance', field: 'derniereMaintenance', aliases: ['dernieremaintenance', 'datedernieremaintenance', 'dernierevisite', 'dermnt'], type: 'date' },
-  { header: 'Prochaine maintenance', field: 'prochaineMaintenance', aliases: ['prochainemaintenance', 'prochainevisite', 'dateprochainemaintenance', 'prochainev'], type: 'date' },
-  { header: 'Sortie fabricant', field: 'sortieFabricant', aliases: ['sortiefabricant', 'datesortiefabricant'], type: 'date' },
+  { header: 'Expiration garantie', field: 'finGarantie', aliases: ['expirationgarantie', 'expirationdegarantie', 'expirgarantie', 'fingarantie', 'garantie', 'datefingarantie', 'datesexpirationdegarantie'], type: 'date' },
+  { header: 'Date de fabrication', field: 'fabrication', aliases: ['datedefabrication', 'fabrication', 'datefabrication', 'datesfabrication'], type: 'date' },
+  { header: 'Mise en service', field: 'miseEnService', aliases: ['miseenservice', 'datemiseenservice', 'installation', 'datesmiseenservice'], type: 'date' },
+  { header: 'Dernière maintenance', field: 'derniereMaintenance', aliases: ['dernieremaintenance', 'datedernieremaintenance', 'dernierevisite', 'dermnt', 'datesdernieremaintenance'], type: 'date' },
+  { header: 'Prochaine maintenance', field: 'prochaineMaintenance', aliases: ['prochainemaintenance', 'prochainevisite', 'dateprochainemaintenance', 'prochainev', 'provisite', 'datesprochainemaintenance'], type: 'date' },
+  { header: 'Sortie fabricant', field: 'sortieFabricant', aliases: ['sortiefabricant', 'datesortiefabricant', 'sortiedusine', 'datessortiedusine'], type: 'date' },
 
-  { header: 'Modèle électrode A', field: 'modeleElectrodeAId', aliases: ['modeleelectrodea', 'modelea', 'electrodeamodele', 'modeleelectrodeaid'] },
-  { header: 'Lot électrode A', field: 'lotElectrodeA', aliases: ['lotelectrodea', 'lota', 'electrodealot'] },
-  { header: 'Insertion électrode A', field: 'insertionElectrodeA', aliases: ['insertionelectrodea', 'insertiona', 'dateinsertionelectrodea'], type: 'date' },
-  { header: 'Péremption électrode A', field: 'peremptionElectrodeA', aliases: ['peremptionelectrodea', 'peremptiona', 'dateperemptionelectrodea', 'dateperemptiona'], type: 'date' },
-  { header: 'Livraison électrode A', field: 'livraisonElectrodeA', aliases: ['livraisonelectrodea', 'livraisona', 'datelivraisonelectrodea'], type: 'date' },
-  { header: 'Situation électrode A', field: 'situationElectrodeA', aliases: ['situationelectrodea', 'situationa', 'etatelectrodea'] },
-  { header: 'Commentaire électrode A', field: 'commentaireElectrodeA', aliases: ['commentaireelectrodea', 'commentairea', 'noteelectrodea'] },
+  { header: 'Modèle électrode A', field: 'modeleElectrodeAId', aliases: ['modeleelectrodea', 'modelea', 'electrodeamodele', 'modeleelectrodeaid', 'electrodeadulteoumixtemodele'] },
+  { header: 'Lot électrode A', field: 'lotElectrodeA', aliases: ['lotelectrodea', 'lota', 'electrodealot', 'electrodeadulteoumixtelot'] },
+  { header: 'Insertion électrode A', field: 'insertionElectrodeA', aliases: ['insertionelectrodea', 'insertiona', 'dateinsertionelectrodea', 'electrodeadulteoumixteinsertion'], type: 'date' },
+  { header: 'Péremption électrode A', field: 'peremptionElectrodeA', aliases: ['peremptionelectrodea', 'peremptiona', 'dateperemptionelectrodea', 'dateperemptiona', 'electrodeadulteoumixteperemption'], type: 'date' },
+  { header: 'Livraison électrode A', field: 'livraisonElectrodeA', aliases: ['livraisonelectrodea', 'livraisona', 'datelivraisonelectrodea', 'electrodeadulteoumixtelivraison'], type: 'date' },
+  { header: 'Situation électrode A', field: 'situationElectrodeA', aliases: ['situationelectrodea', 'situationa', 'etatelectrodea', 'electrodeadulteoumixtestatut', 'statutelectrodea'] },
+  { header: 'Commentaire électrode A', field: 'commentaireElectrodeA', aliases: ['commentaireelectrodea', 'commentairea', 'noteelectrodea', 'electrodeadulteoumixtecommentaire'] },
   { header: 'Électrode secours A', field: 'hasElectrodeASecours', aliases: ['electrodesecoursa', 'haselectrodeasecours', 'secoursa'], type: 'yesno' },
-  { header: 'Modèle secours A', field: 'modeleElectrodeASecoursId', aliases: ['modelesecoursa', 'modeleelectrodeasecours', 'modeleelectrodeasecoursid'] },
-  { header: 'Lot secours A', field: 'lotElectrodeASecours', aliases: ['lotsecoursa', 'lotelectrodeasecours'] },
-  { header: 'Péremption secours A', field: 'peremptionSecoursElectrodeA', aliases: ['peremptionsecoursa', 'peremptionsecourselectrodea', 'dateperemptionsecoursa'], type: 'date' },
+  { header: 'Modèle secours A', field: 'modeleElectrodeASecoursId', aliases: ['modelesecoursa', 'modeleelectrodeasecours', 'modeleelectrodeasecoursid', 'electrodeadulteoumixtemodeledelectrodedesecours', 'modeledelectrodedesecours'] },
+  { header: 'Lot secours A', field: 'lotElectrodeASecours', aliases: ['lotsecoursa', 'lotelectrodeasecours', 'electrodeadulteoumixtelotdelelectrodedesecours', 'lotdelelectrodedesecours'] },
+  { header: 'Péremption secours A', field: 'peremptionSecoursElectrodeA', aliases: ['peremptionsecoursa', 'peremptionsecourselectrodea', 'dateperemptionsecoursa', 'electrodeadulteoumixteperemptiondelelectrodedesecours', 'peremptiondelelectrodedesecours'], type: 'date' },
   { header: 'Pad-Pak Adulte', field: 'hasPadpakA', aliases: ['padpakadulte', 'haspadpaka', 'padpaka'], type: 'yesno' },
-  { header: 'Lot Pad-Pak A', field: 'lotPadpakA', aliases: ['lotpadpaka', 'lotpadpakadulte'] },
-  { header: 'Péremption Pad-Pak A', field: 'peremptionPadpakA', aliases: ['peremptionpadpaka', 'peremptionpadpakadulte', 'dateperemptionpadpaka'], type: 'date' },
+  { header: 'Lot Pad-Pak A', field: 'lotPadpakA', aliases: ['lotpadpaka', 'lotpadpakadulte', 'electrodeadulteoumixtelotpadpaka'] },
+  { header: 'Péremption Pad-Pak A', field: 'peremptionPadpakA', aliases: ['peremptionpadpaka', 'peremptionpadpakadulte', 'dateperemptionpadpaka', 'electrodeadulteoumixteperemptionpadpaka'], type: 'date' },
 
-  { header: 'Modèle électrode P', field: 'modeleElectrodePId', aliases: ['modeleelectrodep', 'modelep', 'electrodepModele', 'modeleelectrodepid'] },
-  { header: 'Lot électrode P', field: 'lotElectrodeP', aliases: ['lotelectrodep', 'lotp', 'electrodeplot'] },
-  { header: 'Insertion électrode P', field: 'insertionElectrodeP', aliases: ['insertionelectrodep', 'insertionp', 'dateinsertionelectrodep'], type: 'date' },
-  { header: 'Péremption électrode P', field: 'peremptionElectrodeP', aliases: ['peremptionelectrodep', 'peremptionp', 'dateperemptionelectrodep', 'dateperemptionp'], type: 'date' },
-  { header: 'Livraison électrode P', field: 'livraisonElectrodeP', aliases: ['livraisonelectrodep', 'livraisonp', 'datelivraisonelectrodep'], type: 'date' },
-  { header: 'Situation électrode P', field: 'situationElectrodeP', aliases: ['situationelectrodep', 'situationp', 'etatelectrodep'] },
-  { header: 'Commentaire électrode P', field: 'commentaireElectrodeP', aliases: ['commentaireelectrodep', 'commentairep', 'noteelectrodep'] },
+  { header: 'Modèle électrode P', field: 'modeleElectrodePId', aliases: ['modeleelectrodep', 'modelep', 'electrodepModele', 'modeleelectrodepid', 'electrodepediatriquemodele'] },
+  { header: 'Lot électrode P', field: 'lotElectrodeP', aliases: ['lotelectrodep', 'lotp', 'electrodeplot', 'electrodepediatriquelot'] },
+  { header: 'Insertion électrode P', field: 'insertionElectrodeP', aliases: ['insertionelectrodep', 'insertionp', 'dateinsertionelectrodep', 'electrodepediatriqueinsertion'], type: 'date' },
+  { header: 'Péremption électrode P', field: 'peremptionElectrodeP', aliases: ['peremptionelectrodep', 'peremptionp', 'dateperemptionelectrodep', 'dateperemptionp', 'electrodepediatriqueperemption'], type: 'date' },
+  { header: 'Livraison électrode P', field: 'livraisonElectrodeP', aliases: ['livraisonelectrodep', 'livraisonp', 'datelivraisonelectrodep', 'electrodepediatriquelivraison'], type: 'date' },
+  { header: 'Situation électrode P', field: 'situationElectrodeP', aliases: ['situationelectrodep', 'situationp', 'etatelectrodep', 'electrodepediatriquestatut', 'statutelectrodep'] },
+  { header: 'Commentaire électrode P', field: 'commentaireElectrodeP', aliases: ['commentaireelectrodep', 'commentairep', 'noteelectrodep', 'electrodepediatriquecommentaire'] },
   { header: 'Électrode secours P', field: 'hasElectrodePSecours', aliases: ['electrodesecoursp', 'haselectrodepsecours', 'secoursp'], type: 'yesno' },
-  { header: 'Modèle secours P', field: 'modeleElectrodePSecoursId', aliases: ['modelesecoursp', 'modeleelectrodepsecours', 'modeleelectrodepsecoursid'] },
-  { header: 'Lot secours P', field: 'lotElectrodePSecours', aliases: ['lotsecoursp', 'lotelectrodepsecours'] },
-  { header: 'Péremption secours P', field: 'peremptionSecoursElectrodeP', aliases: ['peremptionsecoursp', 'peremptionsecourselectrodep', 'dateperemptionsecoursp'], type: 'date' },
+  { header: 'Modèle secours P', field: 'modeleElectrodePSecoursId', aliases: ['modelesecoursp', 'modeleelectrodepsecours', 'modeleelectrodepsecoursid', 'electrodepediatriquemodeledelectrodedesecours'] },
+  { header: 'Lot secours P', field: 'lotElectrodePSecours', aliases: ['lotsecoursp', 'lotelectrodepsecours', 'electrodepediatriquelotdelelectrodedesecours'] },
+  { header: 'Péremption secours P', field: 'peremptionSecoursElectrodeP', aliases: ['peremptionsecoursp', 'peremptionsecourselectrodep', 'dateperemptionsecoursp', 'electrodepediatriqueperemptiondelelectrodedesecours'], type: 'date' },
   { header: 'Pad-Pak Pédiatrique', field: 'hasPadpakP', aliases: ['padpakpediatrique', 'haspadpakp', 'padpakp'], type: 'yesno' },
-  { header: 'Lot Pad-Pak P', field: 'lotPadpakP', aliases: ['lotpadpakp', 'lotpadpakpediatrique'] },
-  { header: 'Péremption Pad-Pak P', field: 'peremptionPadpakP', aliases: ['peremptionpadpakp', 'peremptionpadpakpediatrique', 'dateperemptionpadpakp'], type: 'date' },
+  { header: 'Lot Pad-Pak P', field: 'lotPadpakP', aliases: ['lotpadpakp', 'lotpadpakpediatrique', 'electrodepediatriquelotpadpakp'] },
+  { header: 'Péremption Pad-Pak P', field: 'peremptionPadpakP', aliases: ['peremptionpadpakp', 'peremptionpadpakpediatrique', 'dateperemptionpadpakp', 'electrodepediatriqueperemptionpadpakp'], type: 'date' },
 
   { header: 'Modèle batterie B', field: 'modeleBatterieId', aliases: ['modelebatterieb', 'modelebatterie', 'modeleb', 'batteriemodele', 'modelebatterieid'] },
   { header: 'Lot batterie B', field: 'lotBatterie', aliases: ['lotbatterieb', 'lotbatterie', 'lotb', 'batterielot'] },
-  { header: 'Insertion batterie B', field: 'insertionBatterie', aliases: ['insertionbatterieb', 'insertionbatterie', 'insertionb', 'dateinsertionbatterie'], type: 'date' },
-  { header: 'Fabrication batterie B', field: 'fabricationBatterie', aliases: ['fabricationbatterieb', 'fabricationbatterie', 'fabricationb', 'datefabricationbatterie'], type: 'date' },
-  { header: 'Péremption batterie B', field: 'peremptionBatterie', aliases: ['peremptionbatterieb', 'peremptionbatterie', 'peremptionb', 'dateperemptionbatterie', 'dateperemptionb'], type: 'date' },
-  { header: 'Livraison batterie B', field: 'livraisonBatterie', aliases: ['livraisonbatterieb', 'livraisonbatterie', 'livraisonb', 'datelivraisonbatterie'], type: 'date' },
-  { header: 'Situation batterie B', field: 'situationBatterie', aliases: ['situationbatterieb', 'situationbatterie', 'situationb', 'etatbatterie'] },
-  { header: 'Pourcentage batterie B', field: 'pourcentageBatterie', aliases: ['pourcentagebatterieb', 'pourcentagebatterie', 'pourcentageb', 'pourcentageconstateb', 'batteriepourcentage'] },
-  { header: 'Commentaire batterie B', field: 'commentaireBatterie', aliases: ['commentairebatterieb', 'commentairebatterie', 'commentaireb', 'notebatterie'] },
+  { header: 'Insertion batterie B', field: 'insertionBatterie', aliases: ['insertionbatterieb', 'insertionbatterie', 'insertionb', 'dateinsertionbatterie', 'batterieinsertion'], type: 'date' },
+  { header: 'Fabrication batterie B', field: 'fabricationBatterie', aliases: ['fabricationbatterieb', 'fabricationbatterie', 'fabricationb', 'datefabricationbatterie', 'batteriefabrication'], type: 'date' },
+  { header: 'Péremption batterie B', field: 'peremptionBatterie', aliases: ['peremptionbatterieb', 'peremptionbatterie', 'peremptionb', 'dateperemptionbatterie', 'dateperemptionb', 'batterieperemption'], type: 'date' },
+  { header: 'Livraison batterie B', field: 'livraisonBatterie', aliases: ['livraisonbatterieb', 'livraisonbatterie', 'livraisonb', 'datelivraisonbatterie', 'batterielivraison'], type: 'date' },
+  { header: 'Situation batterie B', field: 'situationBatterie', aliases: ['situationbatterieb', 'situationbatterie', 'situationb', 'etatbatterie', 'batteriestatut', 'statutbatterie'] },
+  { header: 'Pourcentage batterie B', field: 'pourcentageBatterie', aliases: ['pourcentagebatterieb', 'pourcentagebatterie', 'pourcentageb', 'pourcentageconstateb', 'batteriepourcentage', 'batteriepourcentageconstate', 'pourcentageconstate'] },
+  { header: 'Commentaire batterie B', field: 'commentaireBatterie', aliases: ['commentairebatterieb', 'commentairebatterie', 'commentaireb', 'notebatterie', 'batteriecommentaire'] },
   { header: 'Batterie secours B', field: 'hasBatterieSecours', aliases: ['batteriesecoursb', 'hasbatteriesecours', 'secoursb', 'batteriesecours'], type: 'yesno' },
-  { header: 'Modèle secours B', field: 'modeleBatterieSecoursId', aliases: ['modelesecoursb', 'modelebatteriesecours', 'modelebatteriesecoursid'] },
-  { header: 'Lot secours B', field: 'lotBatterieSecours', aliases: ['lotsecoursb', 'lotbatteriesecours'] },
-  { header: 'Péremption secours B', field: 'peremptionBatterieSecours', aliases: ['peremptionsecoursb', 'peremptionbatteriesecours', 'dateperemptionsecoursb'], type: 'date' },
+  { header: 'Modèle secours B', field: 'modeleBatterieSecoursId', aliases: ['modelesecoursb', 'modelebatteriesecours', 'modelebatteriesecoursid', 'batteriemodelesecours'] },
+  { header: 'Lot secours B', field: 'lotBatterieSecours', aliases: ['lotsecoursb', 'lotbatteriesecours', 'batterielotsecours'] },
+  { header: 'Péremption secours B', field: 'peremptionBatterieSecours', aliases: ['peremptionsecoursb', 'peremptionbatteriesecours', 'dateperemptionsecoursb', 'batterieperemptionsecours'], type: 'date' },
 
-  { header: 'Loué', field: 'loue', aliases: ['loue', 'location', 'enlocation'], type: 'yesno' },
-  { header: 'Prêté', field: 'prete', aliases: ['prete', 'pret', 'enpret'], type: 'yesno' },
-  { header: 'Stocké', field: 'stocke', aliases: ['stocke', 'enstock'], type: 'yesno' },
-  { header: 'Archivé', field: 'archive', aliases: ['archive', 'inactif'], type: 'yesno' },
-  { header: 'Conforme', field: 'conforme', aliases: ['conforme', 'conformite'], type: 'yesno' },
-  { header: 'Sous-traitance', field: 'sousTraitance', aliases: ['soustraitance', 'soustraitant'], type: 'yesno' },
-  { header: 'Maintenance autorisée', field: 'fsmAutorise', aliases: ['maintenanceautorisee', 'fsmautorise', 'maintenance', 'autorisationmaintenance'], type: 'yesno' },
-  { header: 'Victime avec survie', field: 'victimeSurvie', aliases: ['victimeavecsurvie', 'victimesurvie'], type: 'yesno' },
-  { header: 'Victime sans survie', field: 'victimeSansSurvie', aliases: ['victimesanssurvie'], type: 'yesno' },
-  { header: 'Âge victime', field: 'ageVictime', aliases: ['agevictime', 'age'] },
+  { header: 'Tournée', field: 'tournee', aliases: ['tournee', 'secteur', 'categoriestournee'] },
+  { header: 'Loué', field: 'loue', aliases: ['loue', 'location', 'enlocation', 'categoriesloue'], type: 'yesno' },
+  { header: 'Prêté', field: 'prete', aliases: ['prete', 'pret', 'enpret', 'categoriesprete'], type: 'yesno' },
+  { header: 'Stocké', field: 'stocke', aliases: ['stocke', 'enstock', 'categoriesstocke'], type: 'yesno' },
+  { header: 'Archivé', field: 'archive', aliases: ['archive', 'inactif', 'categoriesarchive'], type: 'yesno' },
+  { header: 'Conforme', field: 'conforme', aliases: ['conforme', 'conformite', 'categoriesconforme'], type: 'yesno' },
+  { header: 'Sous-traitance', field: 'sousTraitance', aliases: ['soustraitance', 'soustraitant', 'opereensoustraitance', 'categoriesopereensoustraitance', 'categoriessoustraitance'], type: 'yesno' },
+  { header: 'Maintenance autorisée', field: 'fsmAutorise', aliases: ['maintenanceautorisee', 'fsmautorise', 'maintenance', 'autorisationmaintenance', 'categoriesmaintenanceautorisee'], type: 'yesno' },
+  { header: 'Victime avec survie', field: 'victimeSurvie', aliases: ['victimeavecsurvie', 'victimesurvie', 'categoriesvictimeavecsurvie'], type: 'yesno' },
+  { header: 'Victime sans survie', field: 'victimeSansSurvie', aliases: ['victimesanssurvie', 'categoriesvictimesanssurvie'], type: 'yesno' },
+  { header: 'Âge victime', field: 'ageVictime', aliases: ['agevictime', 'age', 'categoriesagevictime'] },
   { header: 'Commentaire campagne rappel', field: 'commentaireCampagneRappel', aliases: ['commentairecampagnerappel', 'campagnerappel'] },
   { header: 'Rappel mensuel auto', field: 'rappelMensuelAuto', aliases: ['rappelmensuelauto', 'rappelmensuel'], type: 'yesno' },
   { header: 'Rappel hebdo auto', field: 'rappelHebdoAuto', aliases: ['rappelhebdoauto', 'rappelhebdo', 'rappelhebdomadaire'], type: 'yesno' },
@@ -396,62 +416,62 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
 // 2. AUTRES MATERIELS MAPPING (GET & POST)
 // ==========================================
 export const AUTRES_CANONICAL_HEADERS: Array<{ header: string; field: string; aliases: string[]; isSpecifique?: boolean; type?: 'yesno' | 'bool' | 'date' }> = [
-  { header: 'Identifiant', field: 'identifiant', aliases: ['identifiant', 'id', 'code', 'identifiantmateriel'] },
-  { header: 'Catégorie', field: 'categorie', aliases: ['categorie', 'categoriedemateriel', 'categoriemateriel', 'type', 'typemateriel'] },
-  { header: 'Client lié', field: 'clientNom', aliases: ['clientlie', 'client', 'clientnom', 'entreprise', 'denomination'] },
-  { header: 'Nom et prénom sur site', field: 'nomPrenomSite', aliases: ['nometprenomsursite', 'nomprenomsite', 'contactsite', 'contactsursite'] },
-  { header: 'Téléphone portable sur site', field: 'telephoneSite', aliases: ['telephoneportablesursite', 'telephonesite', 'telsite'] },
-  { header: 'Email sur site', field: 'emailSite', aliases: ['emailsursite', 'emailsite', 'mailsite'] },
-  { header: 'Contrat', field: 'contrat', aliases: ['contrat', 'aveccontrat'], type: 'yesno' },
-  { header: 'Nom du contrat', field: 'nomContrat', aliases: ['nomducontrat', 'nomcontrat'] },
-  { header: 'Référence contrat', field: 'referenceContrat', aliases: ['referencecontrat', 'refcontrat'] },
-  { header: 'Début du contrat', field: 'debutContrat', aliases: ['debutducontrat', 'debutcontrat'], type: 'date' },
-  { header: 'Fin du contrat', field: 'finContrat', aliases: ['finducontrat', 'fincontrat'], type: 'date' },
-  { header: 'Payeur ID', field: 'payeurId', aliases: ['payeurid', 'idpayeur'] },
-  { header: 'Client ID', field: 'clientIdField', aliases: ['clientid', 'idclient', 'clientidfield'] },
+  { header: 'Identifiant', field: 'identifiant', aliases: ['identifiant', 'id', 'code', 'identifiantmateriel', 'identificationidentifiant'] },
+  { header: 'Catégorie', field: 'categorie', aliases: ['categorie', 'categoriedemateriel', 'categoriemateriel', 'type', 'typemateriel', 'identificationcategorie'] },
+  { header: 'Client lié', field: 'clientNom', aliases: ['clientlie', 'client', 'clientnom', 'entreprise', 'denomination', 'clientclient'] },
+  { header: 'Nom et prénom sur site', field: 'nomPrenomSite', aliases: ['nometprenomsursite', 'nomprenomsite', 'contactsite', 'contactsursite', 'nometprenom', 'clientnometprenom'] },
+  { header: 'Téléphone portable sur site', field: 'telephoneSite', aliases: ['telephoneportablesursite', 'telephonesite', 'telsite', 'telephoneportable', 'clienttelephoneportable', 'telephone'] },
+  { header: 'Email sur site', field: 'emailSite', aliases: ['emailsursite', 'emailsite', 'mailsite', 'email', 'clientemail'] },
+  { header: 'Contrat', field: 'contrat', aliases: ['contrat', 'aveccontrat', 'contratencours', 'clientcontratencours'], type: 'yesno' },
+  { header: 'Nom du contrat', field: 'nomContrat', aliases: ['nomducontrat', 'nomcontrat', 'titreducontrat', 'clienttitreducontrat'] },
+  { header: 'Référence contrat', field: 'referenceContrat', aliases: ['referencecontrat', 'refcontrat', 'referenceducontrat', 'clientreferenceducontrat'] },
+  { header: 'Début du contrat', field: 'debutContrat', aliases: ['debutducontrat', 'debutcontrat', 'clientdebutducontrat'], type: 'date' },
+  { header: 'Fin du contrat', field: 'finContrat', aliases: ['finducontrat', 'fincontrat', 'expirationducontrat', 'clientexpirationducontrat'], type: 'date' },
+  { header: 'Payeur ID', field: 'payeurId', aliases: ['payeurid', 'idpayeur', 'clientpayeurid'] },
+  { header: 'Client ID', field: 'clientIdField', aliases: ['clientid', 'idclient', 'clientidfield', 'clientclientid'] },
 
-  { header: 'Numéro et voie', field: 'numeroVoie', aliases: ['numeroetvoie', 'numerovoie', 'numvoie', 'adresse', 'rue'] },
-  { header: 'Ville', field: 'ville', aliases: ['ville', 'commune', 'city'] },
-  { header: 'Code postal', field: 'codePostal', aliases: ['codepostal', 'cp', 'zip'] },
-  { header: 'Région', field: 'region', aliases: ['region'] },
-  { header: 'Pays', field: 'pays', aliases: ['pays', 'country'] },
-  { header: 'Latitude', field: 'latitude', aliases: ['latitude', 'lat'] },
-  { header: 'Longitude', field: 'longitude', aliases: ['longitude', 'lng', 'lon'] },
-  { header: "Aide à l'accès", field: 'aideAcces', aliases: ['aidealacces', 'aideacces', 'commentaireadresse', 'emplacement'] },
-  { header: 'Accès 24/7', field: 'acces247', aliases: ['acces247', '247'], type: 'bool' },
-  { header: 'Accès semaine', field: 'accesSemaine', aliases: ['accessemaine'], type: 'bool' },
-  { header: 'Accès week-end', field: 'accesWeekend', aliases: ['accesweekend'], type: 'bool' },
-  { header: 'Extérieur', field: 'exterieur', aliases: ['exterieur'], type: 'bool' },
-  { header: "Horaires d'ouverture", field: 'horaires', aliases: ['horairesdouverture', 'horaires'] },
+  { header: 'Numéro et voie', field: 'numeroVoie', aliases: ['numeroetvoie', 'numerovoie', 'numvoie', 'adresse', 'rue', 'localisationnumeroetvoie'] },
+  { header: 'Ville', field: 'ville', aliases: ['ville', 'commune', 'city', 'localisationville'] },
+  { header: 'Code postal', field: 'codePostal', aliases: ['codepostal', 'cp', 'zip', 'localisationcodepostal'] },
+  { header: 'Région', field: 'region', aliases: ['region', 'localisationregion'] },
+  { header: 'Pays', field: 'pays', aliases: ['pays', 'country', 'localisationpays'] },
+  { header: 'Latitude', field: 'latitude', aliases: ['latitude', 'lat', 'localisationlatitude'] },
+  { header: 'Longitude', field: 'longitude', aliases: ['longitude', 'lng', 'lon', 'localisationlongitude'] },
+  { header: "Aide à l'accès", field: 'aideAcces', aliases: ['aidealacces', 'aideacces', 'aidedacces', 'commentaireadresse', 'emplacement', 'localisationaidedacces', 'localisation'] },
+  { header: 'Accès 24/7', field: 'acces247', aliases: ['acces247', '247', 'localisationacces247'], type: 'bool' },
+  { header: 'Accès semaine', field: 'accesSemaine', aliases: ['accessemaine', 'localisationaccessemaine'], type: 'bool' },
+  { header: 'Accès week-end', field: 'accesWeekend', aliases: ['accesweekend', 'localisationaccesweekend'], type: 'bool' },
+  { header: 'Extérieur', field: 'exterieur', aliases: ['exterieur', 'localisationexterieur'], type: 'bool' },
+  { header: "Horaires d'ouverture", field: 'horaires', aliases: ['horairesdouverture', 'horaires', 'localisationhoraires'] },
 
-  { header: 'Expiration garantie', field: 'expirationGarantie', aliases: ['expirationgarantie', 'fingarantie', 'garantie'], type: 'date' },
-  { header: 'Date de fabrication', field: 'dateFabrication', aliases: ['datedefabrication', 'datefabrication', 'fabrication'], type: 'date' },
-  { header: 'Mise en service', field: 'miseEnService', aliases: ['miseenservice', 'datemiseenservice'], type: 'date' },
-  { header: 'Dernière maintenance', field: 'derniereMaintenance', aliases: ['dernieremaintenance', 'dernierevisite'], type: 'date' },
-  { header: 'Prochaine maintenance', field: 'prochaineMaintenance', aliases: ['prochainemaintenance', 'prochainevisite'], type: 'date' },
-  { header: 'Tournée', field: 'tournee', aliases: ['tournee', 'secteur'] },
+  { header: 'Expiration garantie', field: 'expirationGarantie', aliases: ['expirationgarantie', 'fingarantie', 'garantie', 'expirgarantie', 'datesexpirationdegarantie'], type: 'date' },
+  { header: 'Date de fabrication', field: 'dateFabrication', aliases: ['datedefabrication', 'datefabrication', 'fabrication', 'datesfabrication'], type: 'date' },
+  { header: 'Mise en service', field: 'miseEnService', aliases: ['miseenservice', 'datemiseenservice', 'datesmiseenservice'], type: 'date' },
+  { header: 'Dernière maintenance', field: 'derniereMaintenance', aliases: ['dernieremaintenance', 'dernierevisite', 'datesdernieremaintenance'], type: 'date' },
+  { header: 'Prochaine maintenance', field: 'prochaineMaintenance', aliases: ['prochainemaintenance', 'prochainevisite', 'provisite', 'datesprochainemaintenance'], type: 'date' },
+  { header: 'Tournée', field: 'tournee', aliases: ['tournee', 'secteur', 'categoriestournee'] },
 
-  { header: 'Loué', field: 'loue', aliases: ['loue'], type: 'yesno' },
-  { header: 'Prêté', field: 'prete', aliases: ['prete'], type: 'yesno' },
-  { header: 'Stocké', field: 'stocke', aliases: ['stocke'], type: 'yesno' },
-  { header: 'Archivé', field: 'archive', aliases: ['archive'], type: 'yesno' },
-  { header: 'Conforme', field: 'conforme', aliases: ['conforme'], type: 'yesno' },
-  { header: 'Sous-traitance', field: 'sousTraitance', aliases: ['soustraitance'], type: 'yesno' },
-  { header: 'Maintenance autorisée', field: 'fsmAutorise', aliases: ['maintenanceautorisee', 'fsmautorise'], type: 'yesno' },
+  { header: 'Loué', field: 'loue', aliases: ['loue', 'categoriesloue'], type: 'yesno' },
+  { header: 'Prêté', field: 'prete', aliases: ['prete', 'categoriesprete'], type: 'yesno' },
+  { header: 'Stocké', field: 'stocke', aliases: ['stocke', 'categoriesstocke'], type: 'yesno' },
+  { header: 'Archivé', field: 'archive', aliases: ['archive', 'categoriesarchive'], type: 'yesno' },
+  { header: 'Conforme', field: 'conforme', aliases: ['conforme', 'categoriesconforme'], type: 'yesno' },
+  { header: 'Sous-traitance', field: 'sousTraitance', aliases: ['soustraitance', 'opereensoustraitance', 'categoriesopereensoustraitance'], type: 'yesno' },
+  { header: 'Maintenance autorisée', field: 'fsmAutorise', aliases: ['maintenanceautorisee', 'fsmautorise', 'categoriesmaintenanceautorisee'], type: 'yesno' },
   { header: 'Rappel mensuel auto', field: 'rappelMensuelAuto', aliases: ['rappelmensuelauto'], type: 'yesno' },
   { header: 'Rappel hebdo auto', field: 'rappelHebdoAuto', aliases: ['rappelhebdoauto'], type: 'yesno' },
   { header: 'Rappel journalier auto', field: 'rappelJournalierAuto', aliases: ['rappeljournalierauto'], type: 'yesno' },
 
   // Specifiques fields
-  { header: 'Numéro de série', field: 'numSerie', aliases: ['numerodeserie', 'numeroserie', 'numserie', 'serie'], isSpecifique: true },
-  { header: 'Marque / Modèle', field: 'marqueModele', aliases: ['marquemodele', 'modele', 'marque'], isSpecifique: true },
+  { header: 'Numéro de série', field: 'numSerie', aliases: ['numerodeserie', 'numeroserie', 'numserie', 'serie', 'identificationserie'], isSpecifique: true },
+  { header: 'Marque / Modèle', field: 'marqueModele', aliases: ['marquemodele', 'modele', 'marque', 'identificationmodele'], isSpecifique: true },
   { header: 'Agent extincteur', field: 'agentExtincteur', aliases: ['agentextincteur', 'typeextincteur', 'agent'], isSpecifique: true },
   { header: 'Capacité / Poids', field: 'capacite', aliases: ['capacitepoids', 'capacite', 'poids', 'volume'], isSpecifique: true },
   { header: 'Pression', field: 'pression', aliases: ['pression', 'typepression'], isSpecifique: true },
   { header: "Date d'épreuve", field: 'dateEpreuve', aliases: ['datedepreuve', 'dateepreuve', 'epreuve'], isSpecifique: true, type: 'date' },
   { header: 'Date de recharge', field: 'dateRecharge', aliases: ['datederecharge', 'daterecharge', 'recharge'], isSpecifique: true, type: 'date' },
   { header: 'Emplacements', field: 'emplacements', aliases: ['emplacements', 'emplacement'], isSpecifique: true },
-  { header: 'Commentaire spécifique', field: 'commentaireSpecifique', aliases: ['commentairespecifique', 'commentaire', 'observationspecifique'], isSpecifique: true },
+  { header: 'Commentaire spécifique', field: 'commentaireSpecifique', aliases: ['commentairespecifique', 'commentaire', 'observationspecifique', 'identificationcommentaire'], isSpecifique: true },
 ];
 
 // ==========================================
@@ -471,19 +491,26 @@ export const CLIENTS_CANONICAL_HEADERS: Array<{ header: string; field: string; a
   { header: 'Nom et prénom sur site', field: 'nomPrenomSite', aliases: ['nometprenomsursite', 'nomprenomsite', 'contactsursite', 'contactsite'] },
   { header: 'Téléphone portable sur site', field: 'telephoneSite', aliases: ['telephoneportablesursite', 'telephonesursite', 'telephonesite', 'telsite'] },
   { header: 'Email sur site', field: 'emailSite', aliases: ['emailsursite', 'emailsite', 'mailsite'] },
-  { header: 'Contrat', field: 'contrat', aliases: ['contrat', 'aveccontrat', 'souscontrat'], type: 'yesno' },
-  { header: 'Nom du contrat', field: 'nomContrat', aliases: ['nomducontrat', 'nomcontrat', 'typecontrat'] },
-  { header: 'Référence contrat', field: 'referenceContrat', aliases: ['referencecontrat', 'refcontrat', 'numerocontrat'] },
+  { header: 'Contrat', field: 'contrat', aliases: ['contrat', 'aveccontrat', 'souscontrat', 'contratactif', 'contratencours'], type: 'yesno' },
+  { header: 'Nom du contrat', field: 'nomContrat', aliases: ['nomducontrat', 'nomcontrat', 'typecontrat', 'titreducontrat'] },
+  { header: 'Référence contrat', field: 'referenceContrat', aliases: ['referencecontrat', 'refcontrat', 'numerocontrat', 'referenceducontrat'] },
   { header: 'Début du contrat', field: 'debutContrat', aliases: ['debutducontrat', 'debutcontrat', 'datedebutcontrat'], type: 'date' },
-  { header: 'Fin du contrat', field: 'finContrat', aliases: ['finducontrat', 'fincontrat', 'datefincontrat'], type: 'date' },
+  { header: 'Fin du contrat', field: 'finContrat', aliases: ['finducontrat', 'fincontrat', 'datefincontrat', 'expirationducontrat'], type: 'date' },
   { header: 'Payeur ID', field: 'payeurId', aliases: ['payeurid', 'idpayeur', 'codepayeur'] },
   { header: 'Client ID', field: 'clientIdField', aliases: ['clientid', 'idclient', 'codeclient', 'clientidfield'] },
-  { header: 'Code PIN Signature', field: 'signaturePin', aliases: ['codepinsignature', 'signaturepin', 'pin', 'codepin'] },
+  { header: 'Code PIN Signature', field: 'signaturePin', aliases: ['codepinsignature', 'signaturepin', 'pin', 'codepin', 'cledacces', 'accesskey'] },
   { header: 'Accès Portail Client', field: 'accesPortail', aliases: ['accesportailclient', 'accesportail', 'portailclient'], type: 'yesno' },
   { header: 'Identifiant Portail', field: 'identifiantPortail', aliases: ['identifiantportail', 'loginportail'] },
   { header: 'Mot de passe Portail', field: 'motDePassePortail', aliases: ['motdepasseportail', 'passwordportail'] },
   { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'notes', 'observation'] },
 ];
+
+function normalizeSituationFromSheet(val: string): 'Vert' | 'Orange' | 'Rouge' {
+  const s = String(val || '').trim().toLowerCase();
+  if (s === 'orange' || s === 'attention') return 'Orange';
+  if (s === 'rouge' || s === 'alerte') return 'Rouge';
+  return 'Vert';
+}
 
 export function mapRowToDefib(headers: string[], row: string[], rowIndex: number, tenantId: string): any {
   const normHeaders = headers.map(normalizeHeaderKey);
@@ -544,10 +571,29 @@ export function mapRowToDefib(headers: string[], row: string[], rowIndex: number
         obj[def.field] = normalizeBool(rawVal, false);
       } else if (def.type === 'date') {
         obj[def.field] = normalizeDateStr(rawVal);
+      } else if (def.field === 'situationElectrodeA' || def.field === 'situationElectrodeP' || def.field === 'situationBatterie') {
+        obj[def.field] = normalizeSituationFromSheet(rawVal);
       } else {
         obj[def.field] = rawVal;
       }
     }
+  }
+
+  // Auto-detect secours / PadPak presence if model, lot, or expiry is populated in the sheet
+  if (obj.modeleElectrodeASecoursId || obj.lotElectrodeASecours || obj.peremptionSecoursElectrodeA) {
+    obj.hasElectrodeASecours = 'Oui';
+  }
+  if (obj.lotPadpakA || obj.peremptionPadpakA) {
+    obj.hasPadpakA = 'Oui';
+  }
+  if (obj.modeleElectrodePSecoursId || obj.lotElectrodePSecours || obj.peremptionSecoursElectrodeP) {
+    obj.hasElectrodePSecours = 'Oui';
+  }
+  if (obj.lotPadpakP || obj.peremptionPadpakP) {
+    obj.hasPadpakP = 'Oui';
+  }
+  if (obj.modeleBatterieSecoursId || obj.lotBatterieSecours || obj.peremptionBatterieSecours) {
+    obj.hasBatterieSecours = 'Oui';
   }
 
   // Keep convenient aliases so both table and form work seamlessly
@@ -574,26 +620,42 @@ export function mapDefibToRow(headers: string[], defib: any, existingRow?: strin
   });
 
   for (const def of DEFIB_CANONICAL_HEADERS) {
-    let matchedIdx = -1;
     for (let i = 0; i < normHeaders.length; i++) {
-      if (def.aliases.includes(normHeaders[i])) {
-        matchedIdx = i;
-        break;
-      }
-    }
-    if (matchedIdx >= 0) {
+      if (!def.aliases.includes(normHeaders[i])) continue;
       let val = defib[def.field];
+
+      // Prefer human-readable model names over internal v_... variable IDs when writing to Google Sheets
       if (def.field === 'modeleId' && defib.modele && !String(defib.modele).startsWith('v_')) {
         val = defib.modele;
-      }
-      if (def.field === 'clientNom') {
+      } else if (def.field === 'modeleCoffretId' && defib.modeleCoffret && !String(defib.modeleCoffret).startsWith('v_')) {
+        val = defib.modeleCoffret;
+      } else if (def.field === 'modeleElectrodeAId' && defib.modeleElectrodeA && !String(defib.modeleElectrodeA).startsWith('v_')) {
+        val = defib.modeleElectrodeA;
+      } else if (def.field === 'modeleElectrodeASecoursId' && defib.modeleElectrodeASecours && !String(defib.modeleElectrodeASecours).startsWith('v_')) {
+        val = defib.modeleElectrodeASecours;
+      } else if (def.field === 'modeleElectrodePId' && defib.modeleElectrodeP && !String(defib.modeleElectrodeP).startsWith('v_')) {
+        val = defib.modeleElectrodeP;
+      } else if (def.field === 'modeleElectrodePSecoursId' && defib.modeleElectrodePSecours && !String(defib.modeleElectrodePSecours).startsWith('v_')) {
+        val = defib.modeleElectrodePSecours;
+      } else if (def.field === 'modeleBatterieId' && defib.modeleBatterie && !String(defib.modeleBatterie).startsWith('v_')) {
+        val = defib.modeleBatterie;
+      } else if (def.field === 'modeleBatterieSecoursId' && defib.modeleBatterieSecours && !String(defib.modeleBatterieSecours).startsWith('v_')) {
+        val = defib.modeleBatterieSecours;
+      } else if (def.field === 'clientNom') {
         val = defib.clientNom || defib.nomSite || '';
       }
+
       if (val !== undefined && val !== null) {
         if (def.type === 'bool') {
-          outRow[matchedIdx] = val ? 'Oui' : 'Non';
+          outRow[i] = val ? 'Oui' : 'Non';
+        } else if (
+          (def.field === 'situationElectrodeA' || def.field === 'situationElectrodeP' || def.field === 'situationBatterie') &&
+          normHeaders[i].includes('statut')
+        ) {
+          const sVal = String(val).trim();
+          outRow[i] = sVal === 'Vert' ? 'Conforme' : sVal === 'Orange' ? 'Attention' : sVal === 'Rouge' ? 'Alerte' : sVal;
         } else {
-          outRow[matchedIdx] = String(val);
+          outRow[i] = String(val);
         }
       }
     }
@@ -686,20 +748,14 @@ export function mapAutreMaterielToRow(headers: string[], item: any, existingRow?
   });
 
   for (const def of AUTRES_CANONICAL_HEADERS) {
-    let matchedIdx = -1;
     for (let i = 0; i < normHeaders.length; i++) {
-      if (def.aliases.includes(normHeaders[i])) {
-        matchedIdx = i;
-        break;
-      }
-    }
-    if (matchedIdx >= 0) {
+      if (!def.aliases.includes(normHeaders[i])) continue;
       const val = def.isSpecifique ? item.specifiques?.[def.field] : item[def.field];
       if (val !== undefined && val !== null) {
         if (def.type === 'bool') {
-          outRow[matchedIdx] = val ? 'Oui' : 'Non';
+          outRow[i] = val ? 'Oui' : 'Non';
         } else {
-          outRow[matchedIdx] = String(val);
+          outRow[i] = String(val);
         }
       }
     }
@@ -763,17 +819,11 @@ export function mapClientToRow(headers: string[], client: any, existingRow?: str
   });
 
   for (const def of CLIENTS_CANONICAL_HEADERS) {
-    let matchedIdx = -1;
     for (let i = 0; i < normHeaders.length; i++) {
-      if (def.aliases.includes(normHeaders[i])) {
-        matchedIdx = i;
-        break;
-      }
-    }
-    if (matchedIdx >= 0) {
+      if (!def.aliases.includes(normHeaders[i])) continue;
       const val = client[def.field];
       if (val !== undefined && val !== null) {
-        outRow[matchedIdx] = String(val);
+        outRow[i] = String(val);
       }
     }
   }
@@ -831,21 +881,78 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
 // ==========================================
 // 5. LIVE GOOGLE SHEET FETCHING & WRITING
 // ==========================================
+const sheetTabTitleCache = new Map<string, string>();
+
+async function resolveSheetTabTitle(spreadsheetId: string, gid?: string | null): Promise<string | null> {
+  const cacheKey = `${spreadsheetId}_${gid || '0'}`;
+  if (sheetTabTitleCache.has(cacheKey)) {
+    return sheetTabTitleCache.get(cacheKey)!;
+  }
+
+  const cfg = getGlobalGoogleConfig();
+  const accessToken = await getServiceAccountAccessToken();
+
+  const tryFetchMeta = async (useBearer: boolean): Promise<string | null> => {
+    try {
+      const headersInit: Record<string, string> = useBearer && accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const queryKey = !useBearer && cfg.apiKey ? `&key=${encodeURIComponent(cfg.apiKey)}` : '';
+      const res = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties(sheetId,title)${queryKey}`,
+        { headers: headersInit, signal: AbortSignal.timeout(10000) }
+      );
+      if (!res.ok) return null;
+      const json = await res.json();
+      const sheets = Array.isArray(json?.sheets) ? json.sheets : [];
+      if (sheets.length === 0) return null;
+      if (gid !== undefined && gid !== null && gid !== '') {
+        const matched = sheets.find((s: any) => String(s?.properties?.sheetId) === String(gid));
+        if (matched?.properties?.title) {
+          sheetTabTitleCache.set(cacheKey, matched.properties.title);
+          return matched.properties.title;
+        }
+      }
+      const firstTitle = sheets[0]?.properties?.title;
+      if (firstTitle) {
+        sheetTabTitleCache.set(cacheKey, firstTitle);
+        return firstTitle;
+      }
+    } catch (_) {}
+    return null;
+  };
+
+  if (accessToken) {
+    const title = await tryFetchMeta(true);
+    if (title) return title;
+  }
+  if (cfg.apiKey) {
+    const title = await tryFetchMeta(false);
+    if (title) return title;
+  }
+  return null;
+}
+
+function buildSheetRangePrefix(sheetTitle: string | null): string {
+  if (!sheetTitle) return '';
+  return `'${sheetTitle.replace(/'/g, "''")}'!`;
+}
+
 async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: string[]; rows: string[][] } | null> {
   const extracted = extractSpreadsheetIdAndGid(spreadsheetUrl);
   if (!extracted) return null;
   const { spreadsheetId, gid } = extracted;
   const cfg = getGlobalGoogleConfig();
 
-  // Strategy 1: Google Sheets API v4 (if Service Account or API Key is configured)
+  // Strategy 1: Google Sheets API v4 (Service Account first, then API Key fallback)
   const accessToken = await getServiceAccountAccessToken();
-  if (accessToken || cfg.apiKey) {
+  const sheetTitle = await resolveSheetTabTitle(spreadsheetId, gid);
+  const rangePrefix = buildSheetRangePrefix(sheetTitle);
+  const targetRange = encodeURIComponent(`${rangePrefix}A1:ZZ50000`);
+
+  if (accessToken) {
     try {
-      const authQuery = !accessToken && cfg.apiKey ? `?key=${encodeURIComponent(cfg.apiKey)}` : '';
-      const headersInit: Record<string, string> = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
       const apiRes = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/A1:ZZ50000${authQuery}`,
-        { headers: headersInit, signal: AbortSignal.timeout(15000) }
+        `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${targetRange}`,
+        { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15000) }
       );
       if (apiRes.ok) {
         const json = await apiRes.json();
@@ -854,6 +961,25 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
           const rows = json.values.slice(1).map((r: any[]) => r.map(c => String(c ?? '').trim()));
           return { headers, rows };
         }
+        return { headers: [], rows: [] };
+      }
+    } catch (_) {}
+  }
+
+  if (cfg.apiKey) {
+    try {
+      const apiRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${targetRange}?key=${encodeURIComponent(cfg.apiKey)}`,
+        { signal: AbortSignal.timeout(15000) }
+      );
+      if (apiRes.ok) {
+        const json = await apiRes.json();
+        if (Array.isArray(json?.values) && json.values.length > 0) {
+          const headers = (json.values[0] || []).map((c: any) => String(c || '').trim());
+          const rows = json.values.slice(1).map((r: any[]) => r.map(c => String(c ?? '').trim()));
+          return { headers, rows };
+        }
+        return { headers: [], rows: [] };
       }
     } catch (_) {}
   }
@@ -885,6 +1011,7 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
               rows: parsed.slice(1),
             };
           }
+          return { headers: [], rows: [] };
         }
       }
     } catch (_) {}
@@ -922,10 +1049,10 @@ export async function fetchTenantSheetCollection(
   tenantId: string,
   tabType: SheetTabType,
   forceRefresh = false
-): Promise<{ items: any[]; headers: string[]; totalCount: number; fromSpreadsheet: boolean }> {
+): Promise<{ items: any[]; headers: string[]; totalCount: number; fromSpreadsheet: boolean; hasRemoteHeaders?: boolean }> {
   const extracted = extractSpreadsheetIdAndGid(spreadsheetUrl);
   if (!extracted) {
-    return { items: [], headers: [], totalCount: 0, fromSpreadsheet: false };
+    return { items: [], headers: [], totalCount: 0, fromSpreadsheet: false, hasRemoteHeaders: false };
   }
 
   const cacheKey = `${tenantId}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
@@ -937,12 +1064,14 @@ export async function fetchTenantSheetCollection(
         headers: cached.headers,
         totalCount: cached.items.length,
         fromSpreadsheet: true,
+        hasRemoteHeaders: cached.headers.length > 0,
       };
     }
   }
 
   const overlay = loadMirrorOverlay(tenantId, tabType, extracted.spreadsheetId);
   const rawMatrix = await fetchRawSheetMatrix(spreadsheetUrl);
+  const hasRemoteHeaders = Boolean(rawMatrix && rawMatrix.headers && rawMatrix.headers.length > 0);
 
   const defaultHeaders =
     tabType === 'defibrillateurs'
@@ -951,12 +1080,12 @@ export async function fetchTenantSheetCollection(
       ? AUTRES_CANONICAL_HEADERS.map(d => d.header)
       : CLIENTS_CANONICAL_HEADERS.map(d => d.header);
 
-  const headers = rawMatrix && rawMatrix.headers.length > 0
-    ? rawMatrix.headers
+  const headers = hasRemoteHeaders
+    ? rawMatrix!.headers
     : (overlay.headers.length > 0 ? overlay.headers : defaultHeaders);
 
-  if (rawMatrix && rawMatrix.headers.length > 0 && overlay.headers.length === 0) {
-    overlay.headers = rawMatrix.headers;
+  if (hasRemoteHeaders && JSON.stringify(overlay.headers) !== JSON.stringify(rawMatrix!.headers)) {
+    overlay.headers = rawMatrix!.headers;
     saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
   }
 
@@ -982,7 +1111,7 @@ export async function fetchTenantSheetCollection(
     }
   }
 
-  // Merge upserted records from overlay (matching by ID / Identifiant / SIRET)
+  // Merge upserted records from overlay (matching by ID / Identifiant / SIRET / _sheetRowNumber)
   const upsertedEntries = Object.values(overlay.upsertedById || {});
   if (upsertedEntries.length > 0) {
     for (const upItem of upsertedEntries) {
@@ -990,6 +1119,9 @@ export async function fetchTenantSheetCollection(
       if (upKeys.some(k => deletedSet.has(k))) continue;
 
       const existingIdx = baseItems.findIndex(b => {
+        if (upItem._sheetRowNumber && b._sheetRowNumber && upItem._sheetRowNumber === b._sheetRowNumber) {
+          return true;
+        }
         const bKeys = getRecordLookupKeys(b, tabType);
         return bKeys.some(bk => upKeys.includes(bk));
       });
@@ -1022,6 +1154,7 @@ export async function fetchTenantSheetCollection(
     headers,
     totalCount: baseItems.length,
     fromSpreadsheet: true,
+    hasRemoteHeaders,
   };
 }
 
@@ -1041,7 +1174,7 @@ export async function upsertRecordsToTenantSheet(
   tenantId: string,
   tabType: SheetTabType,
   records: any[]
-): Promise<{ success: boolean; count: number; syncedToRemoteSheet: boolean }> {
+): Promise<{ success: boolean; count: number; syncedToRemoteSheet: boolean; records?: any[]; remoteError?: string }> {
   const extracted = extractSpreadsheetIdAndGid(spreadsheetUrl);
   if (!extracted || !Array.isArray(records) || records.length === 0) {
     return { success: false, count: 0, syncedToRemoteSheet: false };
@@ -1060,8 +1193,9 @@ export async function upsertRecordsToTenantSheet(
   overlay.headers = headers;
 
   const deletedSet = new Set((overlay.deletedIds || []).map(k => String(k).trim().toLowerCase()));
-  const rowsToUpdateRemote: Array<{ rowNumber: number; values: string[] }> = [];
+  const rowsToUpdateRemote: Array<{ rowNumber: number; values: string[]; key: string }> = [];
   const rowsToAppendRemote: Array<{ values: string[]; key: string }> = [];
+  const upsertedList: any[] = [];
 
   for (const rec of records) {
     if (!rec || typeof rec !== 'object') continue;
@@ -1069,14 +1203,25 @@ export async function upsertRecordsToTenantSheet(
     const primaryKey = recKeys[0] || `item_${Date.now()}_${Math.random()}`;
     recKeys.forEach(k => deletedSet.delete(k));
 
-    // Find if record already exists in currentData.items
+    // Find if record already exists in currentData.items (by rowNumber first, then by lookup keys)
     const existingItem = currentData.items.find(b => {
+      if (rec._sheetRowNumber && b._sheetRowNumber && rec._sheetRowNumber === b._sheetRowNumber) {
+        return true;
+      }
       const bKeys = getRecordLookupKeys(b, tabType);
       return bKeys.some(bk => recKeys.includes(bk));
     });
 
     const mergedItem = existingItem
-      ? { ...existingItem, ...rec, _sheetRowNumber: existingItem._sheetRowNumber }
+      ? {
+          ...existingItem,
+          ...rec,
+          _sheetRowNumber: rec._sheetRowNumber || existingItem._sheetRowNumber,
+          _rawSheetRow: {
+            ...(existingItem._rawSheetRow || {}),
+            ...(rec._rawSheetRow || {}),
+          },
+        }
       : { ...rec };
 
     const rowValues =
@@ -1092,10 +1237,21 @@ export async function upsertRecordsToTenantSheet(
     });
     mergedItem._rawSheetRow = rawByHeader;
 
+    // If user changed identifier on an existing row, remove old overlay entry so no duplicate ghost stays
+    if (existingItem) {
+      const oldKeys = getRecordLookupKeys(existingItem, tabType);
+      for (const ok of oldKeys) {
+        if (ok !== primaryKey && overlay.upsertedById[ok]) {
+          delete overlay.upsertedById[ok];
+        }
+      }
+    }
+
     overlay.upsertedById[primaryKey] = mergedItem;
+    upsertedList.push(mergedItem);
 
     if (mergedItem._sheetRowNumber && typeof mergedItem._sheetRowNumber === 'number' && mergedItem._sheetRowNumber >= 2) {
-      rowsToUpdateRemote.push({ rowNumber: mergedItem._sheetRowNumber, values: rowValues });
+      rowsToUpdateRemote.push({ rowNumber: mergedItem._sheetRowNumber, values: rowValues, key: primaryKey });
     } else {
       rowsToAppendRemote.push({ values: rowValues, key: primaryKey });
     }
@@ -1109,17 +1265,44 @@ export async function upsertRecordsToTenantSheet(
   const cacheKey = `${tenantId}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
   sheetMemoryCache.delete(cacheKey);
 
-  // Push to live Google Sheet if Service Account or Apps Script Bridge is configured
+  // Push to live Google Sheet via Service Account or Apps Script Bridge
   let syncedToRemoteSheet = false;
+  let remoteError = '';
   const accessToken = await getServiceAccountAccessToken();
   const cfg = getGlobalGoogleConfig();
 
   if (accessToken) {
     try {
+      const sheetTitle = await resolveSheetTabTitle(extracted.spreadsheetId, extracted.gid);
+      const rangePrefix = buildSheetRangePrefix(sheetTitle);
       const lastColLetter = columnIndexToLetter(headers.length - 1);
+
+      // If remote sheet was completely blank (no header row), write the canonical header row first
+      if (!currentData.hasRemoteHeaders && currentData.items.length === 0) {
+        await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchUpdate`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              valueInputOption: 'USER_ENTERED',
+              data: [
+                {
+                  range: `${rangePrefix}A1:${lastColLetter}1`,
+                  values: [headers],
+                },
+              ],
+            }),
+          }
+        ).catch(() => {});
+      }
+
       if (rowsToUpdateRemote.length > 0) {
         const dataPayload = rowsToUpdateRemote.map(u => ({
-          range: `A${u.rowNumber}:${lastColLetter}${u.rowNumber}`,
+          range: `${rangePrefix}A${u.rowNumber}:${lastColLetter}${u.rowNumber}`,
           values: [u.values],
         }));
         const batchRes = await fetch(
@@ -1136,12 +1319,19 @@ export async function upsertRecordsToTenantSheet(
             }),
           }
         );
-        if (batchRes.ok) syncedToRemoteSheet = true;
+        if (batchRes.ok) {
+          syncedToRemoteSheet = true;
+        } else {
+          const errText = await batchRes.text().catch(() => '');
+          remoteError = `HTTP ${batchRes.status}: ${errText.slice(0, 300)}`;
+          console.warn('[GoogleSheetsEngine] Remote Sheets API batchUpdate error:', remoteError);
+        }
       }
 
       if (rowsToAppendRemote.length > 0) {
+        const appendTarget = encodeURIComponent(`${rangePrefix}A1`);
         const appendRes = await fetch(
-          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values/A1:${lastColLetter}1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values/${appendTarget}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
           {
             method: 'POST',
             headers: {
@@ -1153,12 +1343,38 @@ export async function upsertRecordsToTenantSheet(
             }),
           }
         );
-        if (appendRes.ok) syncedToRemoteSheet = true;
+        if (appendRes.ok) {
+          syncedToRemoteSheet = true;
+          try {
+            const appendJson = await appendRes.json();
+            const updatedRange: string = appendJson?.updates?.updatedRange || '';
+            const rowMatch = updatedRange.match(/![A-Z]+(\d+)/i) || updatedRange.match(/^[A-Z]+(\d+)/i);
+            if (rowMatch && rowMatch[1]) {
+              const startRowNum = parseInt(rowMatch[1], 10);
+              if (!isNaN(startRowNum) && startRowNum >= 2) {
+                rowsToAppendRemote.forEach((appItem, idx) => {
+                  const targetObj = overlay.upsertedById[appItem.key];
+                  if (targetObj) {
+                    targetObj._sheetRowNumber = startRowNum + idx;
+                  }
+                });
+                saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
+              }
+            }
+          } catch (_) {}
+        } else {
+          const errText = await appendRes.text().catch(() => '');
+          remoteError = `HTTP ${appendRes.status}: ${errText.slice(0, 300)}`;
+          console.warn('[GoogleSheetsEngine] Remote Sheets API append error:', remoteError);
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
+      remoteError = err?.message || String(err);
       console.warn('[GoogleSheetsEngine] Remote Sheets API write warning:', err);
     }
-  } else if (cfg.appsScriptBridgeUrl) {
+  }
+
+  if (!syncedToRemoteSheet && cfg.appsScriptBridgeUrl) {
     try {
       const bridgeRes = await fetch(cfg.appsScriptBridgeUrl, {
         method: 'POST',
@@ -1174,13 +1390,22 @@ export async function upsertRecordsToTenantSheet(
         }),
         redirect: 'follow',
       });
-      if (bridgeRes.ok) syncedToRemoteSheet = true;
+      if (bridgeRes.ok) {
+        syncedToRemoteSheet = true;
+        remoteError = '';
+      }
     } catch (err) {
       console.warn('[GoogleSheetsEngine] Apps Script Bridge write warning:', err);
     }
   }
 
-  return { success: true, count: records.length, syncedToRemoteSheet };
+  return {
+    success: true,
+    count: records.length,
+    syncedToRemoteSheet,
+    records: upsertedList,
+    ...(remoteError ? { remoteError } : {}),
+  };
 }
 
 export async function deleteRecordsFromTenantSheet(
@@ -1229,8 +1454,10 @@ export async function deleteRecordsFromTenantSheet(
 
   if (accessToken && rowNumbersToClear.length > 0) {
     try {
+      const sheetTitle = await resolveSheetTabTitle(extracted.spreadsheetId, extracted.gid);
+      const rangePrefix = buildSheetRangePrefix(sheetTitle);
       const lastColLetter = columnIndexToLetter((currentData.headers.length || 90) - 1);
-      const ranges = rowNumbersToClear.map(rn => `A${rn}:${lastColLetter}${rn}`);
+      const ranges = rowNumbersToClear.map(rn => `${rangePrefix}A${rn}:${lastColLetter}${rn}`);
       const clearRes = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchClear`,
         {
@@ -1244,7 +1471,9 @@ export async function deleteRecordsFromTenantSheet(
       );
       if (clearRes.ok) syncedToRemoteSheet = true;
     } catch (_) {}
-  } else if (cfg.appsScriptBridgeUrl && rowNumbersToClear.length > 0) {
+  }
+
+  if (!syncedToRemoteSheet && cfg.appsScriptBridgeUrl && rowNumbersToClear.length > 0) {
     try {
       const bridgeRes = await fetch(cfg.appsScriptBridgeUrl, {
         method: 'POST',

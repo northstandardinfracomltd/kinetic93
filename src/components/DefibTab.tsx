@@ -3347,13 +3347,41 @@ export default function DefibTab({
       const resolvedClient = clientMap.get(clientId) || clients.find(c => c && (c.id === clientId || c.clientIdField === clientId));
       const resolvedClientNom = resolvedClient?.denomination || (editingDefib as any)?.clientNom || '';
 
-      const payload = {
+      const resolveModelLabel = (valId: string, list: Variable[], fallback?: string) => {
+        if (!valId) return '';
+        const found = list.find(v => v && v.id === valId) || (variables || []).find(v => v && v.id === valId);
+        if (found) {
+          return found.nom || '';
+        }
+        return fallback && !fallback.startsWith('v_') && !fallback.startsWith('m_') ? fallback : valId;
+      };
+
+      const foundDaeVar = modelesDefib.find(v => v && v.id === modeleId) || (variables || []).find(v => v && v.id === modeleId);
+      const resolvedModeleLabel = resolveModelLabel(modeleId, modelesDefib, (editingDefib as any)?.modele);
+      const resolvedMarqueLabel = foundDaeVar?.marque || (editingDefib as any)?.marque || '';
+      const resolvedCoffretLabel = resolveModelLabel(modeleCoffretId, modelesCoffret, (editingDefib as any)?.modeleCoffret);
+      const resolvedElecALabel = resolveModelLabel(modeleElectrodeAId, modelesElectrode, (editingDefib as any)?.modeleElectrodeA);
+      const resolvedElecASecLabel = hasElectrodeASecours === 'Oui'
+        ? resolveModelLabel(modeleElectrodeASecoursId, modelesElectrode, (editingDefib as any)?.modeleElectrodeASecours)
+        : '';
+      const resolvedElecPLabel = resolveModelLabel(modeleElectrodePId, modelesElectrode, (editingDefib as any)?.modeleElectrodeP);
+      const resolvedElecPSecLabel = hasElectrodePSecours === 'Oui'
+        ? resolveModelLabel(modeleElectrodePSecoursId, modelesElectrode, (editingDefib as any)?.modeleElectrodePSecours)
+        : '';
+      const resolvedBatLabel = resolveModelLabel(modeleBatterieId, modelesBatterie, (editingDefib as any)?.modeleBatterie);
+      const resolvedBatSecLabel = hasBatterieSecours === 'Oui'
+        ? resolveModelLabel(modeleBatterieSecoursId, modelesBatterie, (editingDefib as any)?.modeleBatterieSecours)
+        : '';
+
+      const payload: any = {
       identifiant: identifiant.trim().toUpperCase(),
       numeroAtlasante: numeroAtlasante.trim(),
       versionLogiciel: versionLogiciel.trim(),
       numeroSerie: numeroSerie.trim(),
       commentaire: commentaire.trim(),
       modeleId,
+      modele: resolvedModeleLabel,
+      marque: resolvedMarqueLabel,
 
       clientId,
       clientNom: resolvedClientNom,
@@ -3371,6 +3399,7 @@ export default function DefibTab({
       clientIdField: clientIdField.trim(),
 
       modeleCoffretId,
+      modeleCoffret: resolvedCoffretLabel,
       numeroLotCoffret: numeroLotCoffret.trim(),
       commentaireCoffret: commentaireCoffret.trim(),
       peremptionTrousse,
@@ -3404,6 +3433,7 @@ export default function DefibTab({
       sortieFabricant,
 
       modeleElectrodeAId,
+      modeleElectrodeA: resolvedElecALabel,
       lotElectrodeA: lotElectrodeA.trim(),
       insertionElectrodeA,
       peremptionElectrodeA,
@@ -3413,12 +3443,14 @@ export default function DefibTab({
       hasElectrodeASecours,
       peremptionSecoursElectrodeA: hasElectrodeASecours === 'Oui' ? peremptionSecoursElectrodeA : '',
       modeleElectrodeASecoursId: hasElectrodeASecours === 'Oui' ? modeleElectrodeASecoursId : '',
+      modeleElectrodeASecours: resolvedElecASecLabel,
       lotElectrodeASecours: hasElectrodeASecours === 'Oui' ? lotElectrodeASecours.trim() : '',
       hasPadpakA,
       lotPadpakA: hasPadpakA === 'Oui' ? lotPadpakA.trim() : '',
       peremptionPadpakA: hasPadpakA === 'Oui' ? peremptionPadpakA : '',
 
       modeleElectrodePId,
+      modeleElectrodeP: resolvedElecPLabel,
       lotElectrodeP: lotElectrodeP.trim(),
       insertionElectrodeP,
       peremptionElectrodeP,
@@ -3428,12 +3460,14 @@ export default function DefibTab({
       hasElectrodePSecours,
       peremptionSecoursElectrodeP: hasElectrodePSecours === 'Oui' ? peremptionSecoursElectrodeP : '',
       modeleElectrodePSecoursId: hasElectrodePSecours === 'Oui' ? modeleElectrodePSecoursId : '',
+      modeleElectrodePSecours: resolvedElecPSecLabel,
       lotElectrodePSecours: hasElectrodePSecours === 'Oui' ? lotElectrodePSecours.trim() : '',
       hasPadpakP,
       lotPadpakP: hasPadpakP === 'Oui' ? lotPadpakP.trim() : '',
       peremptionPadpakP: hasPadpakP === 'Oui' ? peremptionPadpakP : '',
 
       modeleBatterieId,
+      modeleBatterie: resolvedBatLabel,
       lotBatterie: lotBatterie.trim(),
       insertionBatterie,
       fabricationBatterie,
@@ -3444,6 +3478,7 @@ export default function DefibTab({
       commentaireBatterie: commentaireBatterie.trim(),
       hasBatterieSecours,
       modeleBatterieSecoursId: hasBatterieSecours === 'Oui' ? modeleBatterieSecoursId : '',
+      modeleBatterieSecours: resolvedBatSecLabel,
       lotBatterieSecours: hasBatterieSecours === 'Oui' ? lotBatterieSecours.trim() : '',
       peremptionBatterieSecours: hasBatterieSecours === 'Oui' ? peremptionBatterieSecours : '',
 

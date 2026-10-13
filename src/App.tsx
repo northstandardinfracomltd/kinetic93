@@ -1797,80 +1797,7 @@ export default function App() {
     return [];
   };
 
-  useEffect(() => {
-    if (!tenantId) return;
-    const tAliases = getTenantAliases(tenantId);
-    const isChunkedTenant = tAliases.has('d27') || tAliases.has('d58');
-    // Massive chunked catalogs (18,000+ items) use dedicated server-chunked delivery protocol and must not attach
-    // a single-doc Firestore onSnapshot listener (which exceeds 1MB Firestore doc limit and causes QUIC protocol errors).
-    if (isChunkedTenant || isFirestoreQuotaExhausted()) return;
-
-    let isMounted = true;
-    let unsubscribeFirestore: (() => void) | undefined;
-    try {
-      const colKey = getCollectionKey('defibrillateurs', tenantId);
-      const docRef = doc(db, 'appData', colKey);
-      unsubscribeFirestore = onSnapshot(
-        docRef,
-        (snapshot) => {
-          if (snapshot.exists() && isMounted) {
-            const data = snapshot.data();
-            let remoteList: Defibrillateur[] = [];
-            if (Array.isArray(data?.value)) {
-              remoteList = data.value;
-            } else if (Array.isArray(data)) {
-              remoteList = data;
-            }
-            if (Array.isArray(remoteList) && remoteList.length > 0) {
-              setDefibrillateurs((prev) => {
-                const recents = getRecentlyImportedDefibs(tenantId);
-                if (remoteList.length < 5000) {
-                  // Guard: A small array (<5,000 items) is merged into existing catalog without ever wiping it
-                  if (prev.length > 0 || recents.length > 0) {
-                    const merged = mergeCollectionItems('defibrillateurs', [...recents, ...prev, ...remoteList]);
-                    try {
-                      idbSet(`defib_${tenantId}_defibrillateurs`, merged);
-                    } catch (_) {}
-                    return merged;
-                  }
-                  return remoteList;
-                }
-                const mergedFull = recents.length > 0 ? mergeCollectionItems('defibrillateurs', [...recents, ...remoteList]) : remoteList;
-                if (prev.length !== mergedFull.length || getCollectionFingerprint(prev) !== getCollectionFingerprint(mergedFull)) {
-                  try {
-                    idbSet(`defib_${tenantId}_defibrillateurs`, mergedFull);
-                    if (mergedFull.length <= 250) {
-                      safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, JSON.stringify(mergedFull));
-                    }
-                  } catch (_) {}
-                  return mergedFull;
-                }
-                return prev;
-              });
-            }
-          }
-        },
-        (error) => {
-          const msg = String(error?.message || error || '').toLowerCase();
-          if (msg.includes('quota') || msg.includes('resource-exhausted') || (error as any)?.code === 'resource-exhausted') {
-            recordFirestoreQuotaExhaustion(6);
-            try {
-              if (unsubscribeFirestore) unsubscribeFirestore();
-              unsubscribeFirestore = undefined;
-            } catch (_) {}
-          }
-          console.warn('Real-time listener on defibrillateurs in App:', error);
-        }
-      );
-    } catch (e) {
-      console.warn('Error setting up onSnapshot for defibrillateurs:', e);
-    }
-
-    return () => {
-      isMounted = false;
-      if (unsubscribeFirestore) unsubscribeFirestore();
-    };
-  }, [tenantId]);
+  // Défibrillateurs are now loaded exclusively from the tenant's Google Spreadsheet (no Firestore onSnapshot listener)
 
   const [isRefreshingDefibs, setIsRefreshingDefibs] = useState<boolean>(false);
 
@@ -1991,61 +1918,29 @@ export default function App() {
         }
       } catch (_) {}
 
-      // 1b. If tenant has a Google Spreadsheet configured for Défibrillateurs, fetch directly from /api/sheets/data
+      // 1b. Fetch exclusively from the tenant's Google Spreadsheet for Défibrillateurs
       const defibSheetUrl =
         companyInfo?.spreadsheetDefibrillateurs ||
         localStorage.getItem(`defib_${activeTenant}_spreadsheet_defibrillateurs`) ||
         '';
-      if (defibSheetUrl && defibSheetUrl.includes('/spreadsheets/')) {
-        const sheetRes = await fetch(
-          `/api/sheets/data?tenantId=${encodeURIComponent(activeTenant)}&type=defibrillateurs&forceRefresh=true&spreadsheetUrl=${encodeURIComponent(defibSheetUrl)}`
-        );
-        if (sheetRes.ok) {
-          const sheetJson = await sheetRes.json();
-          if (sheetJson.fromSpreadsheet && Array.isArray(sheetJson.items)) {
-            setDefibrillateurs(sheetJson.items);
-            idbSet(`defib_${activeTenant}_defibrillateurs`, sheetJson.items).catch(() => {});
-            setDefibLoadingProgress({
-              current: sheetJson.items.length,
-              total: sheetJson.items.length,
-              percent: 100,
-              message: `Chargement ${sheetJson.items.length.toLocaleString('en-US')}/${sheetJson.items.length.toLocaleString('en-US')}, Terminé.`,
-            });
-            setTimeout(() => setIsDefibLoading(false), 200);
-            return;
-          }
-        }
-      }
-
-      // 2. Fetch fresh defibrillateurs using robust retry-backed loader (protected against 503 errors)
-      const freshRemote = await fetchCollectionFromFirestore<Defibrillateur[]>('defibrillateurs', activeTenant, onProgress);
-      if (Array.isArray(freshRemote) && freshRemote.length > 0) {
-        const sanitizedRemote = filterCollectionForTenant(freshRemote, 'defibrillateurs', activeTenant);
-        const fullMerged = mergeCollectionItems('defibrillateurs', sanitizedRemote);
-        const deletedKeys = new Set(getDeletedDefibKeys(activeTenant));
-        const liveList = deletedKeys.size > 0 ? fullMerged.filter(df => !isDefibInDeletedList(df, deletedKeys)) : fullMerged;
-        setDefibrillateurs(liveList);
-        try {
-          await idbSet(`defib_${activeTenant}_defibrillateurs`, liveList);
-          const uc = activeTenant.toUpperCase();
-          if (uc.startsWith('D')) {
-            await idbSet(`defib_${uc}_defibrillateurs`, liveList);
-            await idbSet(`defib_${activeTenant.toLowerCase()}_defibrillateurs`, liveList);
-            await idbSet('defib_D27_defibrillateurs', liveList);
-            await idbSet('defib_D58_defibrillateurs', liveList);
-          }
-        } catch (_) {}
+      const sheetRes = await fetch(
+        `/api/sheets/data?tenantId=${encodeURIComponent(activeTenant)}&type=defibrillateurs&forceRefresh=true&spreadsheetUrl=${encodeURIComponent(defibSheetUrl)}`
+      );
+      if (sheetRes.ok) {
+        const sheetJson = await sheetRes.json();
+        const items = Array.isArray(sheetJson.items) ? sheetJson.items : [];
+        setDefibrillateurs(items);
         setDefibLoadingProgress({
-          current: liveList.length,
-          total: liveList.length,
+          current: items.length,
+          total: items.length,
           percent: 100,
-          message: `Chargement ${liveList.length.toLocaleString('en-US')}/${liveList.length.toLocaleString('en-US')}, Terminé.`
+          message: `Chargement ${items.length.toLocaleString('en-US')}/${items.length.toLocaleString('en-US')}, Terminé.`,
         });
-        setTimeout(() => {
-          setIsDefibLoading(false);
-        }, 350);
-        return;
+      } else {
+        setDefibrillateurs([]);
       }
+      setTimeout(() => setIsDefibLoading(false), 200);
+      return;
     } catch (err) {
       console.warn('Manual refresh error:', err);
     } finally {
@@ -2079,51 +1974,36 @@ export default function App() {
         localStorage.getItem(`defib_${activeTid}_spreadsheet_clients`) ??
         '';
 
-      if (urlDefibs && urlDefibs.includes('/spreadsheets/')) {
-        try {
-          const res = await fetch(
-            `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=defibrillateurs&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlDefibs)}`
-          );
-          if (res.ok && !isCancelled) {
-            const json = await res.json();
-            if (json.fromSpreadsheet && Array.isArray(json.items)) {
-              setDefibrillateurs(json.items);
-              setIsDefibLoading(false);
-              idbSet(`defib_${activeTid}_defibrillateurs`, json.items).catch(() => {});
-            }
-          }
-        } catch (_) {}
-      }
+      try {
+        const res = await fetch(
+          `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=defibrillateurs&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlDefibs)}`
+        );
+        if (res.ok && !isCancelled) {
+          const json = await res.json();
+          setDefibrillateurs(Array.isArray(json.items) ? json.items : []);
+          setIsDefibLoading(false);
+        }
+      } catch (_) {}
 
-      if (urlAutres && urlAutres.includes('/spreadsheets/')) {
-        try {
-          const res = await fetch(
-            `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=autresMateriels&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlAutres)}`
-          );
-          if (res.ok && !isCancelled) {
-            const json = await res.json();
-            if (json.fromSpreadsheet && Array.isArray(json.items)) {
-              setOtherEquipments(json.items);
-              idbSet(`defib_${activeTid}_other_equipments`, json.items).catch(() => {});
-            }
-          }
-        } catch (_) {}
-      }
+      try {
+        const res = await fetch(
+          `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=autresMateriels&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlAutres)}`
+        );
+        if (res.ok && !isCancelled) {
+          const json = await res.json();
+          setOtherEquipments(Array.isArray(json.items) ? json.items : []);
+        }
+      } catch (_) {}
 
-      if (urlClients && urlClients.includes('/spreadsheets/')) {
-        try {
-          const res = await fetch(
-            `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=clients&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlClients)}`
-          );
-          if (res.ok && !isCancelled) {
-            const json = await res.json();
-            if (json.fromSpreadsheet && Array.isArray(json.items)) {
-              setClients(json.items);
-              idbSet(`defib_${activeTid}_clients`, json.items).catch(() => {});
-            }
-          }
-        } catch (_) {}
-      }
+      try {
+        const res = await fetch(
+          `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=clients&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlClients)}`
+        );
+        if (res.ok && !isCancelled) {
+          const json = await res.json();
+          setClients(Array.isArray(json.items) ? json.items : []);
+        }
+      } catch (_) {}
     };
 
     loadSpreadsheetsForTenant(undefined, false);
@@ -5724,23 +5604,10 @@ export default function App() {
         return fallback;
       };
 
-      // 1. Instantly load local cache so the app is immediately usable (0ms delay!)
+      // 1. Initialize empty arrays for Google Sheets-backed collections (Clients, Défibrillateurs, Autres Matériels)
       try {
-        const rawOfflineClients = getLocalTenantValue<Client[]>('clients', activeRunTenantId === 'demo' ? INITIAL_CLIENTS : []);
-        const filteredOfflineClients = filterCollectionForTenant(rawOfflineClients, 'clients', activeRunTenantId);
-        let offlineClients: Client[] = Array.isArray(filteredOfflineClients) ? filteredOfflineClients : [];
-        let offlineChanged = false;
-        let sanitizedOffline = offlineClients.map(c => {
-          if (!c.signaturePin || !c.signaturePin.trim()) {
-            offlineChanged = true;
-            return { ...c, signaturePin: generateRandomPin() };
-          }
-          return c;
-        });
-        setClients(sanitizedOffline);
-        if (offlineChanged) {
-          localStorage.setItem(`defib_${activeRunTenantId}_clients`, JSON.stringify(sanitizedOffline));
-        }
+        let sanitizedOffline: Client[] = [];
+        setClients([]);
 
         const rawOfflineVariables = getLocalTenantValue<Variable[]>('variables', INITIAL_VARIABLES);
         const existingCategorySet = new Set((rawOfflineVariables || []).map(v => v.category));
@@ -5748,19 +5615,8 @@ export default function App() {
         const baseVariables = missingInitialVars.length > 0 ? [...rawOfflineVariables, ...missingInitialVars] : rawOfflineVariables;
         setVariables(baseVariables);
 
-        const tenantInitialDefibs: Defibrillateur[] = INITIAL_DEFIBRILLATEURS.map(d => ({
-          ...d,
-          id: activeRunTenantId === 'demo' ? d.id : `df_${activeRunTenantId.toLowerCase()}_1`,
-          identifiant: activeRunTenantId === 'demo' ? d.identifiant : (d.identifiant ? d.identifiant.replace('D26', activeRunTenantId.toUpperCase()) : `DAE-${activeRunTenantId.toUpperCase()}-01`),
-          numeroSerie: activeRunTenantId === 'demo' ? d.numeroSerie : (d.numeroSerie ? d.numeroSerie.replace('SN-G5', `SN-${activeRunTenantId.toUpperCase()}`) : `SN-${activeRunTenantId.toUpperCase()}-998124`),
-          envId: activeRunTenantId,
-          tenantId: activeRunTenantId,
-          id_record: d.id_record || `record_${activeRunTenantId.toLowerCase()}_dae1`
-        }));
-        const rawOfflineDefibs = getLocalTenantValue<Defibrillateur[]>('defibrillateurs', tenantInitialDefibs);
-        const filteredOfflineDefibs = Array.isArray(rawOfflineDefibs) ? filterCollectionForTenant(rawOfflineDefibs, 'defibrillateurs', activeRunTenantId) : [];
-        let baseDefibrillateurs = filteredOfflineDefibs.length > 0 ? filteredOfflineDefibs : (activeRunTenantId === 'demo' ? tenantInitialDefibs : []);
-        setDefibrillateurs(baseDefibrillateurs);
+        let baseDefibrillateurs: Defibrillateur[] = [];
+        setDefibrillateurs([]);
 
         const matchedInitTenant = KNOWN_TENANTS_REGISTRY.find(
           t => t.id.toLowerCase() === activeRunTenantId.toLowerCase() || t.shortEnvId.toLowerCase() === activeRunTenantId.toLowerCase()
@@ -5851,9 +5707,8 @@ export default function App() {
         const baseExpenses = getLocalTenantValue<any[]>('expenses', activeRunTenantId === 'demo' ? INITIAL_EXPENSES : []);
         setExpenses(baseExpenses);
 
-        const rawOfflineOtherEquip = getLocalTenantValue<OtherEquipment[]>('other_equipments', activeRunTenantId === 'demo' ? INITIAL_OTHER_EQUIPMENTS : []);
-        const baseOtherEquip = Array.isArray(rawOfflineOtherEquip) ? filterCollectionForTenant(rawOfflineOtherEquip, 'other_equipments', activeRunTenantId) : (activeRunTenantId === 'demo' ? INITIAL_OTHER_EQUIPMENTS : []);
-        setOtherEquipments(baseOtherEquip);
+        const baseOtherEquip: OtherEquipment[] = [];
+        setOtherEquipments([]);
 
         const basePointages = getLocalTenantValue<PointageLog[]>('pointages_history', []);
         setPointages(basePointages);
@@ -5921,118 +5776,7 @@ export default function App() {
           }
         } catch (_) {}
 
-        // Check IndexedDB if localStorage was empty or couldn't store large collections
-        try {
-          let idbDefibs = await idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`);
-          // Purge any foreign tenant items that may have leaked into this tenant's IndexedDB
-          if (Array.isArray(idbDefibs) && idbDefibs.length > 0) {
-            const sanitized = filterCollectionForTenant(idbDefibs, 'defibrillateurs', activeRunTenantId);
-            if (sanitized.length !== idbDefibs.length) {
-              idbDefibs = sanitized;
-              idbSet(`defib_${activeRunTenantId}_defibrillateurs`, sanitized).catch(() => {});
-            }
-          }
-
-          const tAliases = getTenantAliases(activeRunTenantId);
-          const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
-
-          // If D27 / D58 has not loaded its chunks yet, check alias keys in IndexedDB
-          if (isD27OrD58 && (!Array.isArray(idbDefibs) || idbDefibs.length < 5000)) {
-            const aliasKeys = ['D27', 'D58'];
-            for (const ak of aliasKeys) {
-              const alt = await idbGet<Defibrillateur[]>(`defib_${ak}_defibrillateurs`);
-              if (Array.isArray(alt) && alt.length >= 5000) {
-                idbDefibs = alt;
-                break;
-              }
-            }
-          }
-
-          if (Array.isArray(idbDefibs) && idbDefibs.length > 0) {
-            const dedupedIdb = mergeCollectionItems('defibrillateurs', idbDefibs);
-            const deletedKeys = new Set(getDeletedDefibKeys(activeRunTenantId));
-            const liveIdb = deletedKeys.size > 0 ? dedupedIdb.filter(df => !isDefibInDeletedList(df, deletedKeys)) : dedupedIdb;
-            baseDefibrillateurs = liveIdb;
-            setDefibrillateurs(liveIdb);
-            setDefibLoadingProgress({
-              current: liveIdb.length,
-              total: liveIdb.length,
-              percent: 100,
-              message: `Chargement ${liveIdb.length.toLocaleString('en-US')}/${liveIdb.length.toLocaleString('en-US')}, Terminé.`
-            });
-          }
-          const clientCandidateKeys = [
-            `defib_${activeRunTenantId}_clients`,
-            `${activeRunTenantId}_clients`,
-            `fs_cache_${activeRunTenantId}_clients`,
-            `defib_${activeRunTenantId.toLowerCase()}_clients`,
-            `${activeRunTenantId.toLowerCase()}_clients`,
-            `defib_${activeRunTenantId.toUpperCase()}_clients`,
-            `${activeRunTenantId.toUpperCase()}_clients`
-          ];
-          if (isD27OrD58) {
-            clientCandidateKeys.push(
-              'defib_D27_clients', 'D27_clients', 'fs_cache_D27_clients',
-              'defib_D58_clients', 'D58_clients', 'fs_cache_D58_clients'
-            );
-          }
-          let bestIdbClients: Client[] = [];
-          for (const ck of clientCandidateKeys) {
-            try {
-              const candidate = await idbGet<Client[]>(ck);
-              if (Array.isArray(candidate) && candidate.length > bestIdbClients.length) {
-                const sanitized = filterCollectionForTenant(candidate, 'clients', activeRunTenantId);
-                if (Array.isArray(sanitized) && sanitized.length > bestIdbClients.length) {
-                  bestIdbClients = sanitized;
-                }
-              }
-            } catch (_) {}
-          }
-          if (bestIdbClients.length > 0) {
-            sanitizedOffline = bestIdbClients;
-            setClients(bestIdbClients);
-            for (const ck of clientCandidateKeys) {
-              idbSet(ck, bestIdbClients).catch(() => {});
-            }
-          }
-
-          // Automatic background server sync of full clients catalog
-          (async () => {
-            try {
-              const srvRes = await fetch(`/api/sync-collection?collectionName=clients&tenantId=${encodeURIComponent(activeRunTenantId)}`);
-              if (srvRes.ok) {
-                const srvData = await srvRes.json();
-                const arr = Array.isArray(srvData?.value) ? srvData.value : (Array.isArray(srvData) ? srvData : null);
-                if (Array.isArray(arr) && arr.length > 0) {
-                  const sanitizedRemote = filterCollectionForTenant(arr, 'clients', activeRunTenantId);
-                  if (Array.isArray(sanitizedRemote) && sanitizedRemote.length > 0) {
-                    const fullMerged = bestIdbClients.length > 0
-                      ? mergeCollectionItems('clients', [...sanitizedRemote, ...bestIdbClients])
-                      : sanitizedRemote;
-                    setClients(fullMerged);
-                    for (const ck of clientCandidateKeys) {
-                      idbSet(ck, fullMerged).catch(() => {});
-                    }
-                    loadedDataRef.current.clients = getCollectionFingerprint(fullMerged);
-
-                    // If local cache had valid clients not yet on the server, push to server so all PCs get them!
-                    if (bestIdbClients.length > 0 && fullMerged.length > sanitizedRemote.length) {
-                      fetch('/api/sync-collection', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          collectionName: 'clients',
-                          tenantId: activeRunTenantId,
-                          value: fullMerged
-                        })
-                      }).catch(() => {});
-                    }
-                  }
-                }
-              }
-            } catch (_) {}
-          })();
-        } catch (_) {}
+        // IndexedDB hydration for defibrillateurs and clients is disabled: data comes exclusively from Google Sheets API
 
         // Prime the loadedDataRef instantly with the loaded offline cached data
         // to prevent any race condition auto-saves from triggering on startup
@@ -6129,27 +5873,7 @@ export default function App() {
         };
 
         // Fire all sync tasks completely concurrently and collect promises
-        syncTasks.push(syncBackground<Client[]>('clients', 'clients', setClients, (data) => {
-          let changed = false;
-          const sanitized = (data || [])
-            .filter(c => c && typeof c === 'object' && !(c as any).numeroSerie)
-            .map(c => {
-              const fixed = { ...c };
-              if (!fixed.denomination) {
-                fixed.denomination = (c as any).nomSite || (c as any).nomEtablissement || (c as any).nom || 'Client sans nom';
-              }
-              if (!fixed.signaturePin || !fixed.signaturePin.trim()) {
-                changed = true;
-                fixed.signaturePin = generateRandomPin();
-              }
-              return fixed;
-            });
-          if (changed && !isFirestoreQuotaExhausted()) {
-            saveCollectionToFirestore('clients', sanitized, activeRunTenantId).catch(() => {});
-          }
-          return sanitized;
-        }));
-
+        // Note: clients, defibrillateurs, and otherEquipments are loaded exclusively from Google Spreadsheets via loadSpreadsheetsForTenant
         syncTasks.push(syncBackground<Variable[]>('variables', 'variables', setVariables, (remoteVariables) => {
           if (!Array.isArray(remoteVariables) || remoteVariables.length === 0) return INITIAL_VARIABLES;
           const remoteCatSet = new Set(remoteVariables.map(v => v.category));
@@ -6163,46 +5887,6 @@ export default function App() {
           }
           return remoteVariables;
         }));
-        syncTasks.push(syncBackground<Defibrillateur[]>(
-          'defibrillateurs',
-          'defibrillateurs',
-          (data) => {
-            const sanitized = filterCollectionForTenant(data, 'defibrillateurs', activeRunTenantId);
-            const fullMerged = Array.isArray(sanitized) ? mergeCollectionItems('defibrillateurs', sanitized) : [];
-            const deletedKeys = new Set(getDeletedDefibKeys(activeRunTenantId));
-            const liveList = deletedKeys.size > 0 ? fullMerged.filter(df => !isDefibInDeletedList(df, deletedKeys)) : fullMerged;
-            setDefibrillateurs(liveList);
-            if (Array.isArray(liveList)) {
-              setDefibLoadingProgress({
-                current: liveList.length,
-                total: liveList.length,
-                percent: 100,
-                message: `Chargement ${liveList.length.toLocaleString('en-US')}/${liveList.length.toLocaleString('en-US')}, Terminé.`
-              });
-            }
-            setTimeout(() => {
-              setIsDefibLoading(false);
-            }, 250);
-          },
-          undefined,
-          (loaded, total, msg) => {
-            const effectiveTotal = total || loaded || 1;
-            const p = loaded >= effectiveTotal 
-              ? 100 
-              : Math.min(99, Math.max(1, Math.round((loaded / effectiveTotal) * 100)));
-            if (p >= 100) {
-              setIsDefibLoading(false);
-            } else {
-              setIsDefibLoading(true);
-            }
-            setDefibLoadingProgress({
-              current: loaded,
-              total: effectiveTotal,
-              percent: p,
-              message: msg || `Chargement ${loaded.toLocaleString('en-US')}/${effectiveTotal.toLocaleString('en-US')}, Veuillez patienter.`
-            });
-          }
-        ));
         syncTasks.push(syncBackground<CompanyInfo>('companyInfo', 'company_info', setCompanyInfo, (firestoreData) => {
           const localRaw = localStorage.getItem(`defib_${tenantId}_company_info`);
           let localData: Partial<CompanyInfo> = {};
@@ -6214,6 +5898,27 @@ export default function App() {
           const validRemote = (firestoreData && typeof firestoreData === 'object' && !Array.isArray(firestoreData))
             ? (firestoreData as Partial<CompanyInfo>)
             : {};
+          const effSheetDefibs =
+            validRemote.spreadsheetDefibrillateurs ||
+            validRemote.spreadsheetDefibrillateursUrl ||
+            localData.spreadsheetDefibrillateurs ||
+            localData.spreadsheetDefibrillateursUrl ||
+            localStorage.getItem(`defib_${tenantId}_spreadsheet_defibrillateurs`) ||
+            '';
+          const effSheetAutres =
+            validRemote.spreadsheetAutresMateriels ||
+            validRemote.spreadsheetAutresMaterielsUrl ||
+            localData.spreadsheetAutresMateriels ||
+            localData.spreadsheetAutresMaterielsUrl ||
+            localStorage.getItem(`defib_${tenantId}_spreadsheet_autres_materiels`) ||
+            '';
+          const effSheetClients =
+            validRemote.spreadsheetClients ||
+            validRemote.spreadsheetClientsUrl ||
+            localData.spreadsheetClients ||
+            localData.spreadsheetClientsUrl ||
+            localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`) ||
+            '';
           // Firestore is the supreme source of truth for cross-device consistency
           const merged: CompanyInfo = {
             name: validRemote.name || localData.name || (tenantId === 'demo' ? "Défibeo Solutions" : "Mon Cabinet"),
@@ -6245,12 +5950,12 @@ export default function App() {
             pdfHideVerificationsTechniques: validRemote.pdfHideVerificationsTechniques !== undefined ? validRemote.pdfHideVerificationsTechniques : (localData.pdfHideVerificationsTechniques || 'Non'),
             pdfHideHorodatagesDiagnostic: validRemote.pdfHideHorodatagesDiagnostic !== undefined ? validRemote.pdfHideHorodatagesDiagnostic : (localData.pdfHideHorodatagesDiagnostic || 'Non'),
             pdfShowDemandeDevisDetails: validRemote.pdfShowDemandeDevisDetails !== undefined ? validRemote.pdfShowDemandeDevisDetails : (localData.pdfShowDemandeDevisDetails || 'Non'),
-            spreadsheetDefibrillateurs: validRemote.spreadsheetDefibrillateurs !== undefined ? validRemote.spreadsheetDefibrillateurs : (localData.spreadsheetDefibrillateurs || ''),
-            spreadsheetAutresMateriels: validRemote.spreadsheetAutresMateriels !== undefined ? validRemote.spreadsheetAutresMateriels : (localData.spreadsheetAutresMateriels || ''),
-            spreadsheetClients: validRemote.spreadsheetClients !== undefined ? validRemote.spreadsheetClients : (localData.spreadsheetClients || ''),
-            spreadsheetDefibrillateursUrl: validRemote.spreadsheetDefibrillateursUrl !== undefined ? validRemote.spreadsheetDefibrillateursUrl : (localData.spreadsheetDefibrillateursUrl || ''),
-            spreadsheetAutresMaterielsUrl: validRemote.spreadsheetAutresMaterielsUrl !== undefined ? validRemote.spreadsheetAutresMaterielsUrl : (localData.spreadsheetAutresMaterielsUrl || ''),
-            spreadsheetClientsUrl: validRemote.spreadsheetClientsUrl !== undefined ? validRemote.spreadsheetClientsUrl : (localData.spreadsheetClientsUrl || ''),
+            spreadsheetDefibrillateurs: effSheetDefibs,
+            spreadsheetAutresMateriels: effSheetAutres,
+            spreadsheetClients: effSheetClients,
+            spreadsheetDefibrillateursUrl: effSheetDefibs,
+            spreadsheetAutresMaterielsUrl: effSheetAutres,
+            spreadsheetClientsUrl: effSheetClients,
           };
           if (merged.customLocationNames) {
             setLocationNames(merged.customLocationNames);
@@ -6262,6 +5967,15 @@ export default function App() {
           if (merged.enableOtherEquipments) {
             setEnableOtherEquipments(merged.enableOtherEquipments);
             safeSetLocalStorage(`defib_${tenantId}_enable_other_equipments`, merged.enableOtherEquipments);
+          }
+          if (merged.spreadsheetDefibrillateurs) {
+            safeSetLocalStorage(`defib_${tenantId}_spreadsheet_defibrillateurs`, merged.spreadsheetDefibrillateurs);
+          }
+          if (merged.spreadsheetAutresMateriels) {
+            safeSetLocalStorage(`defib_${tenantId}_spreadsheet_autres_materiels`, merged.spreadsheetAutresMateriels);
+          }
+          if (merged.spreadsheetClients) {
+            safeSetLocalStorage(`defib_${tenantId}_spreadsheet_clients`, merged.spreadsheetClients);
           }
           return merged;
         }));
@@ -6334,7 +6048,6 @@ export default function App() {
         syncTasks.push(syncBackground<any[]>('fsmCo2History', 'fsm_co2_history', setFsmCo2History));
         syncTasks.push(syncBackground<any[]>('fsmMissionCounts', 'fsm_mission_counts', setFsmMissionCounts));
         syncTasks.push(syncBackground<Memo[]>('memos', 'memos', setMemos));
-        syncTasks.push(syncBackground<OtherEquipment[]>('otherEquipments', 'other_equipments', setOtherEquipments));
         syncTasks.push(syncBackground<PointageAutoVigilance[]>('pointagesAutoVigilance', 'pointages_auto_vigilance', setPointagesAutoVigilance));
         syncTasks.push(syncBackground<AchatFournisseur[]>('achats_fournisseurs', 'achats_fournisseurs', setAchatsFournisseurs));
         syncTasks.push(syncBackground<LogisticsNotification[]>('logistics_notifications', 'logistics_notifications', setLogisticsNotifications));
@@ -6470,9 +6183,24 @@ export default function App() {
                 pdfHideVerificationsTechniques: data.pdfHideVerificationsTechniques !== undefined ? data.pdfHideVerificationsTechniques : prev?.pdfHideVerificationsTechniques,
                 pdfHideHorodatagesDiagnostic: data.pdfHideHorodatagesDiagnostic !== undefined ? data.pdfHideHorodatagesDiagnostic : prev?.pdfHideHorodatagesDiagnostic,
                 pdfShowDemandeDevisDetails: data.pdfShowDemandeDevisDetails !== undefined ? data.pdfShowDemandeDevisDetails : prev?.pdfShowDemandeDevisDetails,
-                spreadsheetDefibrillateurs: data.spreadsheetDefibrillateurs !== undefined ? data.spreadsheetDefibrillateurs : prev?.spreadsheetDefibrillateurs,
-                spreadsheetAutresMateriels: data.spreadsheetAutresMateriels !== undefined ? data.spreadsheetAutresMateriels : prev?.spreadsheetAutresMateriels,
-                spreadsheetClients: data.spreadsheetClients !== undefined ? data.spreadsheetClients : prev?.spreadsheetClients,
+                spreadsheetDefibrillateurs:
+                  data.spreadsheetDefibrillateurs ||
+                  data.spreadsheetDefibrillateursUrl ||
+                  prev?.spreadsheetDefibrillateurs ||
+                  localStorage.getItem(`defib_${tenantId}_spreadsheet_defibrillateurs`) ||
+                  '',
+                spreadsheetAutresMateriels:
+                  data.spreadsheetAutresMateriels ||
+                  data.spreadsheetAutresMaterielsUrl ||
+                  prev?.spreadsheetAutresMateriels ||
+                  localStorage.getItem(`defib_${tenantId}_spreadsheet_autres_materiels`) ||
+                  '',
+                spreadsheetClients:
+                  data.spreadsheetClients ||
+                  data.spreadsheetClientsUrl ||
+                  prev?.spreadsheetClients ||
+                  localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`) ||
+                  '',
               };
               const strVal = JSON.stringify(merged);
               localStorage.setItem(`defib_${tenantId}_company_info`, strVal);
@@ -8075,7 +7803,14 @@ export default function App() {
             records: newItems,
             spreadsheetUrl: urlAutres,
           }),
-        }).catch(() => {});
+        })
+          .then(res => (res.ok ? res.json() : null))
+          .then(json => {
+            if (json && Array.isArray(json.items) && json.items.length > 0) {
+              setOtherEquipments(json.items);
+            }
+          })
+          .catch(() => {});
       }
       fetch('/api/sync-collection', {
         method: 'POST',
@@ -8257,7 +7992,14 @@ export default function App() {
         record: newClient,
         spreadsheetUrl: urlClients,
       }),
-    }).catch(() => {});
+    })
+      .then(res => (res.ok ? res.json() : null))
+      .then(json => {
+        if (json && Array.isArray(json.items) && json.items.length > 0) {
+          setClients(json.items);
+        }
+      })
+      .catch(() => {});
   };
 
   const handleUpdateClient = (updated: Client) => {
@@ -8283,7 +8025,14 @@ export default function App() {
         record: withUpdated,
         spreadsheetUrl: urlClients,
       }),
-    }).catch(() => {});
+    })
+      .then(res => (res.ok ? res.json() : null))
+      .then(json => {
+        if (json && Array.isArray(json.items) && json.items.length > 0) {
+          setClients(json.items);
+        }
+      })
+      .catch(() => {});
   };
 
   const handleDeleteClient = (id: string) => {
@@ -8385,7 +8134,13 @@ export default function App() {
       }
     }
 
-    const newDefib: Defibrillateur = {
+    const urlDefibs =
+      companyInfo?.spreadsheetDefibrillateurs ||
+      companyInfo?.spreadsheetDefibrillateursUrl ||
+      localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
+      '';
+
+    let newDefib: Defibrillateur = {
       id: 'df_' + Date.now(),
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -8395,17 +8150,25 @@ export default function App() {
       ...defibData,
       clientNom: effectiveClientNom || (defibData as any).clientNom || ''
     };
-    await saveDefibs([...defibrillateurs, newDefib]);
+    const nextList = [...defibrillateurs, newDefib];
+    await saveDefibs(nextList);
     try {
       const resp = await fetch('/api/sync-single-defib', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantId: activeTid,
+          spreadsheetUrl: urlDefibs,
           defib: newDefib
         })
       });
-      if (!resp.ok) {
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data.defib) {
+          newDefib = { ...newDefib, ...data.defib };
+          setDefibrillateurs(prev => prev.map(df => (df.id === newDefib.id || (df.identifiant && df.identifiant === newDefib.identifiant)) ? newDefib : df));
+        }
+      } else {
         console.warn('[Sync Defib] Warning: server returned status', resp.status);
       }
     } catch (e) {
@@ -8421,6 +8184,11 @@ export default function App() {
     }
     const nowIso = new Date().toISOString();
     const activeTid = tenantId || updated.envId || updated.tenantId || 'demo';
+    const urlDefibs =
+      companyInfo?.spreadsheetDefibrillateurs ||
+      companyInfo?.spreadsheetDefibrillateursUrl ||
+      localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
+      '';
 
     let effectiveClientNom = updated.clientNom || '';
     if (updated.clientId) {
@@ -8484,6 +8252,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantId: activeTid,
+          spreadsheetUrl: urlDefibs,
           defib: finalMerged
         })
       });
@@ -8491,6 +8260,7 @@ export default function App() {
         const data = await resp.json();
         if (data && data.defib) {
           finalMerged = { ...finalMerged, ...data.defib };
+          setDefibrillateurs(prev => prev.map(df => (df.id === finalMerged.id || (df.identifiant && df.identifiant === finalMerged.identifiant)) ? finalMerged : df));
         }
       } else {
         console.warn('[Sync Defib] Warning: server returned', resp.status);
@@ -8506,6 +8276,12 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    const activeTid = tenantId || 'demo';
+    const urlDefibs =
+      companyInfo?.spreadsheetDefibrillateurs ||
+      companyInfo?.spreadsheetDefibrillateursUrl ||
+      localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
+      '';
     // Log suspicious activity Event D: delete defibrillator
     const target = defibrillateurs.find((df) => df.id === id);
     if (target) {
@@ -8522,7 +8298,8 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenantId: tenantId || 'demo',
+          tenantId: activeTid,
+          spreadsheetUrl: urlDefibs,
           id,
           identifiant: target?.identifiant,
           numeroSerie: target?.numeroSerie || (target as any)?.num_serie
@@ -8538,6 +8315,12 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    const activeTid = tenantId || 'demo';
+    const urlDefibs =
+      companyInfo?.spreadsheetDefibrillateurs ||
+      companyInfo?.spreadsheetDefibrillateursUrl ||
+      localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
+      '';
     // Log suspicious activity Event D for bulk delete
     const keysToRecord: string[] = [];
     const targetsToDelete: any[] = [];
@@ -8560,7 +8343,8 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenantId: tenantId || 'demo',
+          tenantId: activeTid,
+          spreadsheetUrl: urlDefibs,
           ids: targetsToDelete
         })
       }).catch(() => {});
@@ -8574,6 +8358,12 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    const activeTid = tenantId || 'demo';
+    const urlDefibs =
+      companyInfo?.spreadsheetDefibrillateurs ||
+      companyInfo?.spreadsheetDefibrillateursUrl ||
+      localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
+      '';
     // Log suspicious activity Event B: bulk edit defibs
     logBulkEditDefib(tenantId, loggedUser?.name, undefined, ids.length).catch(() => {});
 
@@ -8598,17 +8388,18 @@ export default function App() {
     setDefibrillateurs(updatedList);
     await saveDefibs(updatedList);
 
-    // Sync only the modified defibs to server store & index (fast batch sync)
+    // Sync only the modified defibs to server store, index & Google Sheet (fast batch sync)
     if (updatedDefibs.length > 0) {
       try {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 4000);
+        const timer = setTimeout(() => controller.abort(), 8000);
         const res = await fetch('/api/sync-batch-defibs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
           body: JSON.stringify({
-            tenantId: tenantId || 'demo',
+            tenantId: activeTid,
+            spreadsheetUrl: urlDefibs,
             defibs: updatedDefibs
           })
         }).catch(() => null);
@@ -8619,13 +8410,14 @@ export default function App() {
           await Promise.all(
             updatedDefibs.slice(0, 50).map((ud) => {
               const singleCtrl = new AbortController();
-              const singleTimer = setTimeout(() => singleCtrl.abort(), 3000);
+              const singleTimer = setTimeout(() => singleCtrl.abort(), 5000);
               return fetch('/api/sync-single-defib', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 signal: singleCtrl.signal,
                 body: JSON.stringify({
-                  tenantId: tenantId || ud.envId || ud.tenantId || 'demo',
+                  tenantId: activeTid,
+                  spreadsheetUrl: urlDefibs,
                   defib: ud
                 })
               })
@@ -8790,7 +8582,7 @@ export default function App() {
         fsmTours={fsmTours}
         onUpdateFsmTours={saveFsmTours}
         onUpdateClient={(updated) => {
-          saveClients(clients.map(c => c.id === updated.id ? updated : c));
+          handleUpdateClient(updated);
           if (activePortalClient && activePortalClient.id === updated.id) {
             setActivePortalClient(updated);
           }
@@ -8829,7 +8621,7 @@ export default function App() {
         fsmTours={fsmTours}
         onUpdateFsmTours={saveFsmTours}
         onUpdateClient={(updated) => {
-          saveClients(clients.map(c => c.id === updated.id ? updated : c));
+          handleUpdateClient(updated);
           if (activePortalClient && activePortalClient.id === updated.id) {
             setActivePortalClient(updated);
           }
