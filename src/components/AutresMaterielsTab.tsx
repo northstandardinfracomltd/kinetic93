@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { OtherEquipment, Client, Variable } from '../types';
-import { Plus, Search, Trash2, Edit } from 'lucide-react';
+import { OtherEquipment, Client, Variable, CompanyInfo } from '../types';
+import { Plus, Search, Trash2, Edit, RefreshCw, FileSpreadsheet } from 'lucide-react';
 import { generateRandomShortCode } from '../utils';
+import { t } from '../utils/translate';
 import { getRegionsForCountry } from '../utils/regions';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -190,8 +191,11 @@ interface AutresMaterielsTabProps {
   members?: any[];
   defibrillateurs?: any[];
   variables?: Variable[];
+  companyInfo?: CompanyInfo;
   isDeveloper?: boolean;
   isReadOnly?: boolean;
+  isRefreshing?: boolean;
+  onRefreshData?: () => Promise<void> | void;
 }
 
 // Custom Pink Radio Component
@@ -250,9 +254,54 @@ export default function AutresMaterielsTab({
   members = [],
   defibrillateurs = [],
   variables = [],
+  companyInfo,
   isDeveloper = false,
   isReadOnly = false,
+  isRefreshing = false,
+  onRefreshData,
 }: AutresMaterielsTabProps) {
+  const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
+  const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
+  const effectiveRefreshing = isRefreshing || isLocalRefreshing;
+
+  const resolvedSpreadsheetUrl = useMemo(() => {
+    const raw =
+      companyInfo?.spreadsheetAutresMateriels ||
+      companyInfo?.spreadsheetAutresMaterielsUrl ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_autres_materiels`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_autres_materiels`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_autres_materiels`)
+        : '') ||
+      '';
+    return String(raw).trim();
+  }, [companyInfo?.spreadsheetAutresMateriels, companyInfo?.spreadsheetAutresMaterielsUrl, activeTenantId]);
+
+  const handleRefreshClick = async () => {
+    if (effectiveRefreshing) return;
+    setIsLocalRefreshing(true);
+    try {
+      if (onRefreshData) {
+        await onRefreshData();
+      }
+    } catch (err) {
+      console.warn('Manual refresh error in AutresMaterielsTab:', err);
+    } finally {
+      setTimeout(() => setIsLocalRefreshing(false), 500);
+    }
+  };
+
+  const handleOpenSpreadsheetEditor = () => {
+    if (!resolvedSpreadsheetUrl) return;
+    const link = document.createElement('a');
+    link.href = resolvedSpreadsheetUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Pinned items state (persisted in localStorage)
@@ -1089,13 +1138,6 @@ export default function AutresMaterielsTab({
                     Plan
                   </button>
                   <button
-                    onClick={() => window.location.reload()}
-                    id="btn-refresh-page"
-                    style={customButtonStyle}
-                  >
-                    Actualiser
-                  </button>
-                  <button
                     onClick={handleOpenNewForm}
                     id="btn-add-materiel"
                     style={{
@@ -1309,6 +1351,67 @@ export default function AutresMaterielsTab({
             cacheKey="help_dismissed_autres_materiels_colors" 
             text="Bon à savoir concernant le code des couleurs des valeurs dans le tableau : Le rouge correspond à une action requise expirée (critique), l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois." 
           />
+
+          {/* Sub-filter text buttons: Actualiser les données + Ouvrir l'éditeur SpreadSheets */}
+          <div 
+            className="flex items-center justify-start gap-4 flex-wrap"
+            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
+          >
+            <button
+              type="button"
+              id="btn-refresh-data-autres-materiels"
+              onClick={handleRefreshClick}
+              disabled={effectiveRefreshing}
+              style={{
+                fontSize: '9px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                fontWeight: 100,
+                cursor: 'pointer',
+                background: 'transparent',
+                border: 'none',
+                padding: '2px 4px',
+                color: '#000000',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                textDecoration: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="hover:opacity-80 transition-all select-none cursor-pointer"
+              title={t("Actualiser les données")}
+            >
+              <RefreshCw size={10} className={`shrink-0 text-black ${effectiveRefreshing ? 'animate-spin' : ''}`} color="#000000" />
+              <span style={{ color: '#000000' }}>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
+            </button>
+
+            <button
+              type="button"
+              id="btn-open-spreadsheet-editor-autres-materiels"
+              onClick={handleOpenSpreadsheetEditor}
+              disabled={!resolvedSpreadsheetUrl}
+              style={{
+                fontSize: '9px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                fontWeight: 100,
+                cursor: resolvedSpreadsheetUrl ? 'pointer' : 'not-allowed',
+                opacity: resolvedSpreadsheetUrl ? 1 : 0.4,
+                background: 'transparent',
+                border: 'none',
+                padding: '2px 4px',
+                color: '#000000',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                textDecoration: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className={resolvedSpreadsheetUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
+              title={t("Ouvrir l'éditeur SpreadSheets")}
+            >
+              <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
+              <span style={{ color: '#000000' }}>{t("Ouvrir l'éditeur SpreadSheets")}</span>
+            </button>
+          </div>
 
           {/* Main Table Records Sheet */}
           <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

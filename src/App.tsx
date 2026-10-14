@@ -1800,6 +1800,8 @@ export default function App() {
   // Défibrillateurs are now loaded exclusively from the tenant's Google Spreadsheet (no Firestore onSnapshot listener)
 
   const [isRefreshingDefibs, setIsRefreshingDefibs] = useState<boolean>(false);
+  const [isRefreshingAutresMateriels, setIsRefreshingAutresMateriels] = useState<boolean>(false);
+  const [isRefreshingClients, setIsRefreshingClients] = useState<boolean>(false);
 
   const getDeletedDefibKeys = (tId: string = tenantId || 'demo'): string[] => {
     try {
@@ -1888,10 +1890,53 @@ export default function App() {
     return (id && deletedKeys.has(id)) || (identifiant && deletedKeys.has(identifiant)) || (numSerie && deletedKeys.has(numSerie));
   };
 
+  const [defibSheetStats, setDefibSheetStats] = useState<any>(null);
+
+  const fetchSheetCollectionInBatches = async (
+    activeTid: string,
+    tabType: 'defibrillateurs' | 'autresMateriels' | 'clients',
+    spreadsheetUrl: string,
+    forceRefresh: boolean,
+    onFirstBatch: (json: any, firstItems: any[]) => void,
+    onBatchAppended: (allAccumulatedItems: any[], loadedCount: number, totalCount: number) => void,
+    isCancelledFn?: () => boolean
+  ) => {
+    const CHUNK_SIZE = 2500;
+    let offset = 0;
+    let hasMore = true;
+    const accumulated: any[] = [];
+
+    while (hasMore) {
+      if (isCancelledFn && isCancelledFn()) return;
+      const isFirst = offset === 0;
+      const res = await fetch(
+        `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=${encodeURIComponent(tabType)}&forceRefresh=${isFirst && forceRefresh}&offset=${offset}&limit=${CHUNK_SIZE}&spreadsheetUrl=${encodeURIComponent(spreadsheetUrl)}`
+      );
+      if (!res.ok) break;
+      const json = await res.json();
+      if (isCancelledFn && isCancelledFn()) return;
+
+      const batchItems = Array.isArray(json.items) ? json.items : [];
+      accumulated.push(...batchItems);
+
+      if (isFirst) {
+        onFirstBatch(json, [...accumulated]);
+      } else {
+        onBatchAppended([...accumulated], accumulated.length, json.totalCount || accumulated.length);
+      }
+
+      if (json.hasMore && batchItems.length > 0 && typeof json.nextOffset === 'number' && json.nextOffset > offset) {
+        offset = json.nextOffset;
+      } else {
+        hasMore = false;
+      }
+    }
+  };
+
   const handleManualRefreshDefibs = async () => {
     setIsRefreshingDefibs(true);
     setIsDefibLoading(true);
-    const initialCount = defibrillateurs.length || 0;
+    const initialCount = defibSheetStats?.totalCount || defibrillateurs.length || 0;
     setDefibLoadingProgress({
       current: 0,
       total: initialCount,
@@ -1900,16 +1945,6 @@ export default function App() {
     });
     try {
       const activeTenant = tenantId || 'demo';
-      const onProgress = (loaded: number, total: number, msg?: string) => {
-        const effTotal = total && total > 0 ? total : (loaded > 0 ? loaded : initialCount);
-        const p = effTotal > 0 ? Math.min(100, Math.max(1, Math.round((loaded / effTotal) * 100))) : 50;
-        setDefibLoadingProgress({
-          current: loaded,
-          total: effTotal,
-          percent: p,
-          message: msg || (effTotal > 0 ? `Chargement ${loaded.toLocaleString('fr-FR')}/${effTotal.toLocaleString('fr-FR')}, Veuillez patienter.` : `Chargement en cours, veuillez patienter...`)
-        });
-      };
 
       // 1. Fetch persistent deleted keys from backend first to ensure deleted defibs stay deleted across all sessions
       let remoteDeletedKeys: string[] = [];
@@ -1924,28 +1959,41 @@ export default function App() {
 
       const delSet = new Set(getDeletedDefibKeys(activeTenant));
 
-      // 1b. Fetch exclusively from the tenant's Google Spreadsheet for Défibrillateurs
+      // 1b. Fetch exclusively from the tenant's Google Spreadsheet for Défibrillateurs in 2,500-row chunks
       const defibSheetUrl =
         companyInfo?.spreadsheetDefibrillateurs ||
         localStorage.getItem(`defib_${activeTenant}_spreadsheet_defibrillateurs`) ||
         '';
-      const sheetRes = await fetch(
-        `/api/sheets/data?tenantId=${encodeURIComponent(activeTenant)}&type=defibrillateurs&forceRefresh=true&spreadsheetUrl=${encodeURIComponent(defibSheetUrl)}`
+
+      await fetchSheetCollectionInBatches(
+        activeTenant,
+        'defibrillateurs',
+        defibSheetUrl,
+        true,
+        (json, firstItems) => {
+          if (json.stats) setDefibSheetStats(json.stats);
+          const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
+          setDefibrillateurs(filtered);
+          const tot = json.totalCount || filtered.length;
+          setDefibLoadingProgress({
+            current: filtered.length,
+            total: tot,
+            percent: tot > 0 ? Math.min(100, Math.round((filtered.length / tot) * 100)) : 100,
+            message: `Chargement ${filtered.length.toLocaleString('en-US')}/${tot.toLocaleString('en-US')}...`,
+          });
+          setIsDefibLoading(false);
+        },
+        (allItems, _loadedCount, totalCount) => {
+          const filtered = allItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
+          setDefibrillateurs(filtered);
+          setDefibLoadingProgress({
+            current: filtered.length,
+            total: totalCount || filtered.length,
+            percent: totalCount > 0 ? Math.min(100, Math.round((filtered.length / totalCount) * 100)) : 100,
+            message: `Chargement ${filtered.length.toLocaleString('en-US')}/${(totalCount || filtered.length).toLocaleString('en-US')}, Terminé.`,
+          });
+        }
       );
-      if (sheetRes.ok) {
-        const sheetJson = await sheetRes.json();
-        const rawItems = Array.isArray(sheetJson.items) ? sheetJson.items : [];
-        const items = rawItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
-        setDefibrillateurs(items);
-        setDefibLoadingProgress({
-          current: items.length,
-          total: items.length,
-          percent: 100,
-          message: `Chargement ${items.length.toLocaleString('en-US')}/${items.length.toLocaleString('en-US')}, Terminé.`,
-        });
-      } else {
-        setDefibrillateurs([]);
-      }
       setTimeout(() => setIsDefibLoading(false), 200);
       return;
     } catch (err) {
@@ -1954,6 +2002,158 @@ export default function App() {
       setTimeout(() => {
         setIsRefreshingDefibs(false);
         setIsDefibLoading(false);
+      }, 500);
+    }
+  };
+
+  const handleManualRefreshAutresMateriels = async () => {
+    setIsRefreshingAutresMateriels(true);
+    try {
+      const activeTenant = tenantId || 'demo';
+      const urlAutres =
+        companyInfo?.spreadsheetAutresMateriels ||
+        companyInfo?.spreadsheetAutresMaterielsUrl ||
+        localStorage.getItem(`defib_${activeTenant}_spreadsheet_autres_materiels`) ||
+        localStorage.getItem(`defib_${activeTenant.toUpperCase()}_spreadsheet_autres_materiels`) ||
+        localStorage.getItem(`defib_${activeTenant.toLowerCase()}_spreadsheet_autres_materiels`) ||
+        '';
+
+      let loadedFromSheet = false;
+      await fetchSheetCollectionInBatches(
+        activeTenant,
+        'autresMateriels',
+        urlAutres,
+        true,
+        (json, firstItems) => {
+          loadedFromSheet = true;
+          if (json.spreadsheetUrl && json.spreadsheetUrl.trim()) {
+            const clean = json.spreadsheetUrl.trim();
+            try {
+              for (const k of [activeTenant, activeTenant.toUpperCase(), activeTenant.toLowerCase()]) {
+                localStorage.setItem(`defib_${k}_spreadsheet_autres_materiels`, clean);
+              }
+            } catch (_) {}
+            setCompanyInfo(prev => ({
+              ...prev,
+              spreadsheetAutresMateriels: clean,
+              spreadsheetAutresMaterielsUrl: clean,
+            }));
+          }
+          setOtherEquipments(
+            firstItems.filter(
+              (eq: any) =>
+                eq &&
+                !String(eq.id || '').startsWith('sheet_am_') &&
+                !String(eq.identifiant || '').startsWith('sheet_am_')
+            )
+          );
+        },
+        (allItems) => {
+          setOtherEquipments(
+            allItems.filter(
+              (eq: any) =>
+                eq &&
+                !String(eq.id || '').startsWith('sheet_am_') &&
+                !String(eq.identifiant || '').startsWith('sheet_am_')
+            )
+          );
+        }
+      );
+
+      if (!loadedFromSheet) {
+        const remoteItems = await fetchCollectionFromFirestore('otherEquipments', activeTenant);
+        if (Array.isArray(remoteItems)) {
+          setOtherEquipments(
+            remoteItems.filter(
+              (eq: any) =>
+                eq &&
+                !String(eq.id || '').startsWith('sheet_am_') &&
+                !String(eq.identifiant || '').startsWith('sheet_am_')
+            )
+          );
+        }
+      }
+    } catch (err) {
+      console.warn('Manual refresh Autres Matériels error:', err);
+    } finally {
+      setTimeout(() => {
+        setIsRefreshingAutresMateriels(false);
+      }, 500);
+    }
+  };
+
+  const handleManualRefreshClients = async () => {
+    setIsRefreshingClients(true);
+    try {
+      const activeTenant = tenantId || 'demo';
+      const urlClients =
+        companyInfo?.spreadsheetClients ||
+        companyInfo?.spreadsheetClientsUrl ||
+        localStorage.getItem(`defib_${activeTenant}_spreadsheet_clients`) ||
+        localStorage.getItem(`defib_${activeTenant.toUpperCase()}_spreadsheet_clients`) ||
+        localStorage.getItem(`defib_${activeTenant.toLowerCase()}_spreadsheet_clients`) ||
+        '';
+
+      let loadedFromSheet = false;
+      await fetchSheetCollectionInBatches(
+        activeTenant,
+        'clients',
+        urlClients,
+        true,
+        (json, firstItems) => {
+          loadedFromSheet = true;
+          if (json.spreadsheetUrl && json.spreadsheetUrl.trim()) {
+            const clean = json.spreadsheetUrl.trim();
+            try {
+              for (const k of [activeTenant, activeTenant.toUpperCase(), activeTenant.toLowerCase()]) {
+                localStorage.setItem(`defib_${k}_spreadsheet_clients`, clean);
+              }
+            } catch (_) {}
+            setCompanyInfo(prev => ({
+              ...prev,
+              spreadsheetClients: clean,
+              spreadsheetClientsUrl: clean,
+            }));
+          }
+          setClients(
+            firstItems.filter(
+              (cl: any) =>
+                cl &&
+                !String(cl.id || '').startsWith('sheet_cli_') &&
+                !String(cl.clientIdField || '').startsWith('sheet_cli_')
+            )
+          );
+        },
+        (allItems) => {
+          setClients(
+            allItems.filter(
+              (cl: any) =>
+                cl &&
+                !String(cl.id || '').startsWith('sheet_cli_') &&
+                !String(cl.clientIdField || '').startsWith('sheet_cli_')
+            )
+          );
+        }
+      );
+
+      if (!loadedFromSheet) {
+        const remoteClients = await fetchCollectionFromFirestore('clients', activeTenant);
+        if (Array.isArray(remoteClients)) {
+          setClients(
+            remoteClients.filter(
+              (cl: any) =>
+                cl &&
+                !String(cl.id || '').startsWith('sheet_cli_') &&
+                !String(cl.clientIdField || '').startsWith('sheet_cli_')
+            )
+          );
+        }
+      }
+    } catch (err) {
+      console.warn('Manual refresh Clients error:', err);
+    } finally {
+      setTimeout(() => {
+        setIsRefreshingClients(false);
       }, 500);
     }
   };
@@ -2047,64 +2247,96 @@ export default function App() {
       await Promise.all([
         (async () => {
           try {
-            const res = await fetch(
-              `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=defibrillateurs&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlDefibs)}`
+            await fetchSheetCollectionInBatches(
+              activeTid,
+              'defibrillateurs',
+              urlDefibs,
+              force,
+              (json, firstItems) => {
+                if (json.spreadsheetUrl) {
+                  persistResolvedUrl('spreadsheetDefibrillateurs', 'spreadsheet_defibrillateurs', json.spreadsheetUrl);
+                }
+                if (json.stats) {
+                  setDefibSheetStats(json.stats);
+                }
+                setDefibrillateurs(firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
+                setIsDefibLoading(false);
+              },
+              (allItems) => {
+                setDefibrillateurs(allItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
+              },
+              () => isCancelled
             );
-            if (res.ok && !isCancelled) {
-              const json = await res.json();
-              if (json.spreadsheetUrl) {
-                persistResolvedUrl('spreadsheetDefibrillateurs', 'spreadsheet_defibrillateurs', json.spreadsheetUrl);
-              }
-              const rawItems = Array.isArray(json.items) ? json.items : [];
-              setDefibrillateurs(rawItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
-              setIsDefibLoading(false);
-            }
           } catch (_) {
             if (!isCancelled) setIsDefibLoading(false);
           }
         })(),
         (async () => {
           try {
-            const res = await fetch(
-              `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=autresMateriels&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlAutres)}`
+            await fetchSheetCollectionInBatches(
+              activeTid,
+              'autresMateriels',
+              urlAutres,
+              force,
+              (json, firstItems) => {
+                if (json.spreadsheetUrl) {
+                  persistResolvedUrl('spreadsheetAutresMateriels', 'spreadsheet_autres_materiels', json.spreadsheetUrl);
+                }
+                setOtherEquipments(
+                  firstItems.filter(
+                    (eq: any) =>
+                      eq &&
+                      !String(eq.id || '').startsWith('sheet_am_') &&
+                      !String(eq.identifiant || '').startsWith('sheet_am_')
+                  )
+                );
+              },
+              (allItems) => {
+                setOtherEquipments(
+                  allItems.filter(
+                    (eq: any) =>
+                      eq &&
+                      !String(eq.id || '').startsWith('sheet_am_') &&
+                      !String(eq.identifiant || '').startsWith('sheet_am_')
+                  )
+                );
+              },
+              () => isCancelled
             );
-            if (res.ok && !isCancelled) {
-              const json = await res.json();
-              if (json.spreadsheetUrl) {
-                persistResolvedUrl('spreadsheetAutresMateriels', 'spreadsheet_autres_materiels', json.spreadsheetUrl);
-              }
-              const rawItems = Array.isArray(json.items) ? json.items : [];
-              setOtherEquipments(
-                rawItems.filter(
-                  (eq: any) =>
-                    eq &&
-                    !String(eq.id || '').startsWith('sheet_am_') &&
-                    !String(eq.identifiant || '').startsWith('sheet_am_')
-                )
-              );
-            }
           } catch (_) {}
         })(),
         (async () => {
           try {
-            const res = await fetch(
-              `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=clients&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(urlClients)}`
+            await fetchSheetCollectionInBatches(
+              activeTid,
+              'clients',
+              urlClients,
+              force,
+              (json, firstItems) => {
+                if (json.spreadsheetUrl) {
+                  persistResolvedUrl('spreadsheetClients', 'spreadsheet_clients', json.spreadsheetUrl);
+                }
+                setClients(
+                  firstItems.filter(
+                    (cl: any) =>
+                      cl &&
+                      !String(cl.id || '').startsWith('sheet_cli_') &&
+                      !String(cl.clientIdField || '').startsWith('sheet_cli_')
+                  )
+                );
+              },
+              (allItems) => {
+                setClients(
+                  allItems.filter(
+                    (cl: any) =>
+                      cl &&
+                      !String(cl.id || '').startsWith('sheet_cli_') &&
+                      !String(cl.clientIdField || '').startsWith('sheet_cli_')
+                  )
+                );
+              },
+              () => isCancelled
             );
-            if (res.ok && !isCancelled) {
-              const json = await res.json();
-              if (json.spreadsheetUrl) {
-                persistResolvedUrl('spreadsheetClients', 'spreadsheet_clients', json.spreadsheetUrl);
-              }
-              const rawItems = Array.isArray(json.items) ? json.items : [];
-              setClients(
-                rawItems.filter(
-                  (cl: any) =>
-                    cl &&
-                    !String(cl.id || '').startsWith('sheet_cli_') &&
-                    !String(cl.clientIdField || '').startsWith('sheet_cli_')
-                )
-              );
-            }
           } catch (_) {}
         })(),
       ]);
@@ -6412,19 +6644,9 @@ export default function App() {
       const fp = getCollectionFingerprint(defibrillateurs);
       if (loadedDataRef.current.defibrillateurs === fp) return;
       loadedDataRef.current.defibrillateurs = fp;
-      if (defibrillateurs.length > 5000) {
-        // Only update local cache and IndexedDB; do NOT overwrite Firestore catalog with partial array
-        try {
-          idbSet(`defib_${tenantId}_defibrillateurs`, defibrillateurs);
-          idbSet(`fs_cache_${tenantId}_defibrillateurs`, defibrillateurs);
-        } catch (_) {}
-      } else if (defibrillateurs.length > 0) {
+      if (defibrillateurs.length > 0 && defibrillateurs.length <= 2500) {
         safeSetLocalStorage(`defib_${tenantId}_defibrillateurs`, JSON.stringify(defibrillateurs));
       }
-      try {
-        idbSet(`defib_${tenantId}_defibrillateurs`, defibrillateurs);
-        idbSet(`fs_cache_${tenantId}_defibrillateurs`, defibrillateurs);
-      } catch (_) {}
     }
   }, [defibrillateurs, isFirebaseLoaded, tenantId, loadedTenantIdState]);
 
@@ -9308,6 +9530,7 @@ export default function App() {
               defibLoadingProgress={defibLoadingProgress}
               isRefreshing={isRefreshingDefibs}
               onRefreshData={handleManualRefreshDefibs}
+              sheetStats={defibSheetStats}
             />
           )}
 
@@ -9322,8 +9545,11 @@ export default function App() {
               members={members}
               defibrillateurs={defibrillateurs}
               variables={variables}
+              companyInfo={companyInfo}
               isDeveloper={isDeveloper}
               isReadOnly={isDeveloper}
+              isRefreshing={isRefreshingAutresMateriels}
+              onRefreshData={handleManualRefreshAutresMateriels}
             />
           )}
 
@@ -9343,6 +9569,8 @@ export default function App() {
               }}
               isDeveloper={isDeveloper}
               isReadOnly={isDeveloper}
+              isRefreshing={isRefreshingClients}
+              onRefreshData={handleManualRefreshClients}
             />
           )}
 
@@ -10823,13 +11051,13 @@ export default function App() {
                 </datalist>
 
                 <datalist id="fsm-clients-list">
-                  {clients.map(c => c.denomination || c.id).filter(Boolean).map((name, idx) => (
+                  {clients.slice(0, 300).map(c => c.denomination || c.id).filter(Boolean).map((name, idx) => (
                     <option key={idx} value={name} />
                   ))}
                 </datalist>
 
                 <datalist id="fsm-defibs-list">
-                  {defibrillateurs.map(d => d.identifiant).map((ident, idx) => (
+                  {defibrillateurs.slice(0, 300).map(d => d.identifiant).map((ident, idx) => (
                     <option key={idx} value={ident} />
                   ))}
                 </datalist>

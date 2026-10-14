@@ -237,7 +237,8 @@ import {
   Filter,
   Map as MapIcon,
   Minimize2,
-  Maximize2
+  Maximize2,
+  FileSpreadsheet
 } from 'lucide-react';
 
 function parseDateHelper(dStr: string | undefined | null): Date | null {
@@ -394,6 +395,18 @@ interface DefibTabProps {
   };
   isRefreshing?: boolean;
   onRefreshData?: () => void | Promise<void>;
+  sheetStats?: {
+    totalCount?: number;
+    totalMainOui?: number;
+    totalMainNon?: number;
+    conformeEtAJourCount?: number;
+    eligibleMainOuiCount?: number;
+    compliancePercent?: number;
+    distinctModels?: string[];
+    distinctCoffrets?: string[];
+    distinctElectrodes?: string[];
+    distinctBatteries?: string[];
+  } | null;
 }
 
 const getPostalIndicatif = (rawCp: any): number | null => {
@@ -558,16 +571,45 @@ export default function DefibTab({
   defibLoadingProgress,
   isRefreshing = false,
   onRefreshData,
+  sheetStats,
 }: DefibTabProps) {
   const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
+  const [remoteQueriedDefibs, setRemoteQueriedDefibs] = useState<Defibrillateur[]>([]);
+  const [remoteFilteredTotal, setRemoteFilteredTotal] = useState<number | null>(null);
 
   // Manual Refresh State
   const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const effectiveRefreshing = isRefreshing || isLocalRefreshing;
+
+  const resolvedSpreadsheetUrl = useMemo(() => {
+    const raw =
+      companyInfo?.spreadsheetDefibrillateurs ||
+      companyInfo?.spreadsheetDefibrillateursUrl ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_defibrillateurs`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_defibrillateurs`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_defibrillateurs`)
+        : '') ||
+      '';
+    return String(raw).trim();
+  }, [companyInfo?.spreadsheetDefibrillateurs, companyInfo?.spreadsheetDefibrillateursUrl, activeTenantId]);
+
+  const handleOpenSpreadsheetEditor = () => {
+    if (!resolvedSpreadsheetUrl) return;
+    const link = document.createElement('a');
+    link.href = resolvedSpreadsheetUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleRefreshClick = async () => {
     if (effectiveRefreshing) return;
     setIsLocalRefreshing(true);
+    setRefreshTrigger(prev => prev + 1);
     try {
       if (onRefreshData) {
         await onRefreshData();
@@ -1866,6 +1908,13 @@ export default function DefibTab({
     const base = variables.filter(v => v.category === 'Modèle Défibrillateur');
     const knownKeys = new Set(base.flatMap(v => [v.id.toLowerCase(), (v.nom || '').trim().toLowerCase(), `${v.marque || ''} ${v.nom || ''}`.trim().toLowerCase()]));
     const extras: Variable[] = [];
+    for (const rawMod of (sheetStats?.distinctModels || [])) {
+      const raw = String(rawMod || '').trim();
+      if (raw && !knownKeys.has(raw.toLowerCase())) {
+        knownKeys.add(raw.toLowerCase());
+        extras.push({ id: raw, category: 'Modèle Défibrillateur', nom: raw, marque: '' });
+      }
+    }
     for (const df of defibrillateurs) {
       const raw = String(df.modeleId || (df as any).modele || '').trim();
       if (raw && !knownKeys.has(raw.toLowerCase())) {
@@ -1874,12 +1923,19 @@ export default function DefibTab({
       }
     }
     return [...base, ...extras];
-  }, [variables, defibrillateurs]);
+  }, [variables, defibrillateurs, sheetStats]);
 
   const modelesCoffret = useMemo(() => {
     const base = variables.filter(v => v.category === 'Modèle Coffret');
     const knownKeys = new Set(base.flatMap(v => [v.id.toLowerCase(), (v.nom || '').trim().toLowerCase()]));
     const extras: Variable[] = [];
+    for (const rawCof of (sheetStats?.distinctCoffrets || [])) {
+      const raw = String(rawCof || '').trim();
+      if (raw && !knownKeys.has(raw.toLowerCase())) {
+        knownKeys.add(raw.toLowerCase());
+        extras.push({ id: raw, category: 'Modèle Coffret', nom: raw, marque: '' });
+      }
+    }
     for (const df of defibrillateurs) {
       const raw = String(df.modeleCoffretId || (df as any).modeleCoffret || '').trim();
       if (raw && !knownKeys.has(raw.toLowerCase())) {
@@ -1888,12 +1944,19 @@ export default function DefibTab({
       }
     }
     return [...base, ...extras];
-  }, [variables, defibrillateurs]);
+  }, [variables, defibrillateurs, sheetStats]);
 
   const modelesElectrode = useMemo(() => {
     const base = variables.filter(v => v.category === 'Modèle Électrode');
     const knownKeys = new Set(base.flatMap(v => [v.id.toLowerCase(), (v.nom || '').trim().toLowerCase()]));
     const extras: Variable[] = [];
+    for (const rawElec of (sheetStats?.distinctElectrodes || [])) {
+      const raw = String(rawElec || '').trim();
+      if (raw && !knownKeys.has(raw.toLowerCase())) {
+        knownKeys.add(raw.toLowerCase());
+        extras.push({ id: raw, category: 'Modèle Électrode', nom: raw, marque: '' });
+      }
+    }
     for (const df of defibrillateurs) {
       for (const rawVal of [df.modeleElectrodeAId, df.modeleElectrodeASecoursId, df.modeleElectrodePId, df.modeleElectrodePSecoursId]) {
         const raw = String(rawVal || '').trim();
@@ -1904,12 +1967,19 @@ export default function DefibTab({
       }
     }
     return [...base, ...extras];
-  }, [variables, defibrillateurs]);
+  }, [variables, defibrillateurs, sheetStats]);
 
   const modelesBatterie = useMemo(() => {
     const base = variables.filter(v => v.category === 'Modèle Batterie');
     const knownKeys = new Set(base.flatMap(v => [v.id.toLowerCase(), (v.nom || '').trim().toLowerCase()]));
     const extras: Variable[] = [];
+    for (const rawBat of (sheetStats?.distinctBatteries || [])) {
+      const raw = String(rawBat || '').trim();
+      if (raw && !knownKeys.has(raw.toLowerCase())) {
+        knownKeys.add(raw.toLowerCase());
+        extras.push({ id: raw, category: 'Modèle Batterie', nom: raw, marque: '' });
+      }
+    }
     for (const df of defibrillateurs) {
       for (const rawVal of [df.modeleBatterieId, df.modeleBatterieSecoursId]) {
         const raw = String(rawVal || '').trim();
@@ -1920,7 +1990,7 @@ export default function DefibTab({
       }
     }
     return [...base, ...extras];
-  }, [variables, defibrillateurs]);
+  }, [variables, defibrillateurs, sheetStats]);
 
   const variableMap = useMemo(() => {
     const map = new Map<string, Variable>();
@@ -2097,10 +2167,32 @@ export default function DefibTab({
     return set;
   }, [activeTenantId, defibrillateurs]);
 
+  // Merge local loaded defibrillateurs with any on-demand rows returned from /api/sheets/query
+  const mergedDefibrillateurs = useMemo(() => {
+    if (remoteQueriedDefibs.length === 0) return defibrillateurs;
+    const seen = new Set<string>();
+    const out: Defibrillateur[] = [];
+    for (const df of defibrillateurs) {
+      if (!df) continue;
+      const k = String(df.id || df.identifiant || '').trim().toLowerCase();
+      if (k) seen.add(k);
+      out.push(df);
+    }
+    for (const df of remoteQueriedDefibs) {
+      if (!df) continue;
+      const k = String(df.id || df.identifiant || '').trim().toLowerCase();
+      if (k && !seen.has(k)) {
+        seen.add(k);
+        out.push(df);
+      }
+    }
+    return out;
+  }, [defibrillateurs, remoteQueriedDefibs]);
+
   // Total active defibs excluding deleted records
   const activeDefibrillateurs = useMemo(() => {
-    if (deletedDefibSet.size === 0) return defibrillateurs;
-    return defibrillateurs.filter(df => {
+    if (deletedDefibSet.size === 0) return mergedDefibrillateurs;
+    return mergedDefibrillateurs.filter(df => {
       const idLower = df.id ? df.id.trim().toLowerCase() : '';
       const idfLower = df.identifiant ? df.identifiant.trim().toLowerCase() : '';
       const numLower = df.numeroSerie ? df.numeroSerie.trim().toLowerCase() : (df as any).num_serie ? String((df as any).num_serie).trim().toLowerCase() : '';
@@ -2110,10 +2202,22 @@ export default function DefibTab({
         (numLower && deletedDefibSet.has(numLower))
       );
     });
-  }, [defibrillateurs, deletedDefibSet]);
+  }, [mergedDefibrillateurs, deletedDefibSet]);
+
+  const effectiveTotalDefibsCount = useMemo(() => {
+    const localLen = activeDefibrillateurs.length;
+    const remoteLen = sheetStats?.totalCount || 0;
+    return Math.max(localLen, remoteLen);
+  }, [activeDefibrillateurs.length, sheetStats?.totalCount]);
 
   // Sum-counts pour Maintenance autorisée (Oui / Non) sur les défibrillateurs actifs
   const { totalMainOui, totalMainNon } = useMemo(() => {
+    if (sheetStats && (sheetStats.totalCount || 0) > activeDefibrillateurs.length) {
+      return {
+        totalMainOui: sheetStats.totalMainOui ?? 0,
+        totalMainNon: sheetStats.totalMainNon ?? 0,
+      };
+    }
     let oui = 0;
     let non = 0;
     for (const df of activeDefibrillateurs) {
@@ -2126,7 +2230,7 @@ export default function DefibTab({
       }
     }
     return { totalMainOui: oui, totalMainNon: non };
-  }, [activeDefibrillateurs]);
+  }, [activeDefibrillateurs, sheetStats]);
 
   // List search & filters computation - highly optimized for datasets of 18,000+ items across all browsers
   const filteredDefibs = useMemo(() => {
@@ -2136,7 +2240,7 @@ export default function DefibTab({
     today.setHours(0, 0, 0, 0);
     const todayTime = today.getTime();
 
-    let result = defibrillateurs.filter(df => {
+    let result = mergedDefibrillateurs.filter(df => {
       // 0. Exclude deleted defibs
       if (deletedDefibSet.size > 0) {
         const idLower = df.id ? df.id.trim().toLowerCase() : '';
@@ -2402,7 +2506,7 @@ export default function DefibTab({
     }
 
     return result;
-  }, [defibrillateurs, search, activeFilters, clientMap, variableMap, rejectedDefibSet, sortFilter, maintenanceFilter, pinnedDefibIds, selectedDepartment, recentDefibTimestamps]);
+  }, [mergedDefibrillateurs, search, activeFilters, clientMap, variableMap, rejectedDefibSet, sortFilter, maintenanceFilter, pinnedDefibIds, selectedDepartment, recentDefibTimestamps]);
 
   // Derived state to know if we are in the initial lightweight 10-line view
   const isInitialView = useMemo(() => {
@@ -2423,6 +2527,79 @@ export default function DefibTab({
     );
     return !hasSearch && !hasSortFilter && !hasDeptFilter && !hasActiveSidePaneFilter;
   }, [search, sortFilter, selectedDepartment, activeFilters]);
+
+  // Direct server-side Google Spreadsheet interrogation on Search & Filters
+  useEffect(() => {
+    if (isInitialView && maintenanceFilter === 'all') {
+      setRemoteFilteredTotal(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const targetVar = activeFilters.modeleId !== 'Tous' ? variableMap.get(activeFilters.modeleId) : undefined;
+        const modeleAliases = targetVar
+          ? [targetVar.id, targetVar.nom, `${targetVar.marque || ''} ${targetVar.nom || ''}`.trim()].filter(Boolean)
+          : [];
+        const linkedCli = activeFilters.clientId && activeFilters.clientId !== 'Tous' ? clientMap.get(activeFilters.clientId) : undefined;
+        const clientMatchTerms = linkedCli
+          ? [linkedCli.id, linkedCli.clientIdField, linkedCli.denomination, (linkedCli as any).nomSite].filter(Boolean)
+          : [];
+
+        const res = await fetch('/api/sheets/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: activeTenantId,
+            type: 'defibrillateurs',
+            search,
+            advancedSearchTerms: activeFilters.advancedSearchTerms,
+            advancedSearchOperator: activeFilters.advancedSearchOperator,
+            region: activeFilters.region,
+            modeleId: activeFilters.modeleId,
+            modeleAliases,
+            clientId: activeFilters.clientId,
+            clientMatchTerms,
+            categorie: activeFilters.categorie,
+            contrat: activeFilters.contrat,
+            maintenanceFilter,
+            selectedDepartment,
+            actionExpired: activeFilters.actionExpired,
+            actionUnder3: activeFilters.actionUnder3,
+            action3To6: activeFilters.action3To6,
+            sortFilter,
+            limit: 2500,
+            forceRefresh: refreshTrigger > 0,
+          }),
+        });
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (!cancelled && Array.isArray(json.items)) {
+          setRemoteQueriedDefibs(json.items);
+          if (typeof json.totalFilteredCount === 'number') {
+            setRemoteFilteredTotal(json.totalFilteredCount);
+          }
+        }
+      } catch (_) {}
+    }, 150);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    isInitialView,
+    search,
+    activeFilters,
+    sortFilter,
+    selectedDepartment,
+    maintenanceFilter,
+    activeTenantId,
+    variableMap,
+    clientMap,
+    refreshTrigger,
+  ]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -2447,11 +2624,23 @@ export default function DefibTab({
 
   // Indicateur "Conforme et à jour"
   const { conformeEtAJourCount, compliancePercent, projectedCompliancePercent, totalDefibsCount } = useMemo(() => {
+    if (sheetStats && (sheetStats.totalCount || 0) > activeDefibrillateurs.length) {
+      const total = sheetStats.eligibleMainOuiCount || sheetStats.totalMainOui || 0;
+      const compliant = sheetStats.conformeEtAJourCount || 0;
+      const pct = sheetStats.compliancePercent ?? (total > 0 ? Math.round((compliant / total) * 100) : 0);
+      return {
+        conformeEtAJourCount: compliant,
+        compliancePercent: pct,
+        projectedCompliancePercent: pct,
+        totalDefibsCount: total,
+      };
+    }
+
     // Ne prendre en considération que les défibrillateurs "Maintenance Autorisée = Oui"
-    const eligibleDefibs = defibrillateurs.filter(df => {
+    const eligibleDefibs = activeDefibrillateurs.filter(df => {
       const anyDf = df as any;
       const rawFsm = (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
-      return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1';
+      return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || (!rawFsm && (df.fsmAutorise || 'Oui') === 'Oui');
     });
 
     const total = eligibleDefibs.length;
@@ -2527,7 +2716,7 @@ export default function DefibTab({
       projectedCompliancePercent: safeProjected,
       totalDefibsCount: total
     };
-  }, [defibrillateurs, fsmTours]);
+  }, [activeDefibrillateurs, fsmTours, sheetStats]);
 
   // Synchronization components for top and bottom horizontal scrollbars
   const topScrollRef = React.useRef<HTMLDivElement>(null);
@@ -3144,7 +3333,7 @@ export default function DefibTab({
     setPays(df.pays || anyDf.country || 'France');
     setLatitude(df.latitude || anyDf.lat || '48.8566');
     setLongitude(df.longitude || anyDf.lon || anyDf.lng || '2.3522');
-    setCommentaireAdresse(df.commentaireAdresse || anyDf.aide_acces || '');
+    setCommentaireAdresse(df.commentaireAdresse || anyDf.aideAcces || anyDf.aide_acces || '');
     setAcces247(!!(df.acces247 ?? anyDf.acces_247));
     setAccesSemaine(!!(df.accesSemaine ?? anyDf.acces_semaine));
     setAccesWeekend(!!(df.accesWeekend ?? anyDf.acces_weekend));
@@ -3270,6 +3459,11 @@ export default function DefibTab({
             if (json && json.defib) {
               const fresh = json.defib;
               if (fresh.commentaire?.trim()) setCommentaire(prev => prev || fresh.commentaire);
+              if (fresh.commentaireInterne?.trim()) setCommentaireInterne(prev => prev || fresh.commentaireInterne);
+              if (fresh.commentaireAdresse?.trim() || fresh.aideAcces?.trim() || fresh.aide_acces?.trim()) {
+                const freshAide = (fresh.commentaireAdresse || fresh.aideAcces || fresh.aide_acces || '').trim();
+                if (freshAide) setCommentaireAdresse(prev => prev || freshAide);
+              }
               if (fresh.commentaireCoffret?.trim()) setCommentaireCoffret(prev => prev || fresh.commentaireCoffret);
               if (fresh.numeroLotCoffret?.trim()) setNumeroLotCoffret(prev => prev || fresh.numeroLotCoffret);
               if (fresh.lotBatterie?.trim()) setLotBatterie(prev => prev || fresh.lotBatterie);
@@ -4516,6 +4710,34 @@ export default function DefibTab({
               <RefreshCw size={10} className={`shrink-0 text-black ${effectiveRefreshing ? 'animate-spin' : ''}`} color="#000000" />
               <span style={{ color: '#000000' }}>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
             </button>
+
+            <button
+              type="button"
+              id="btn-open-spreadsheet-editor-defibs"
+              onClick={handleOpenSpreadsheetEditor}
+              disabled={!resolvedSpreadsheetUrl}
+              style={{
+                fontSize: '9px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                fontWeight: 100,
+                cursor: resolvedSpreadsheetUrl ? 'pointer' : 'not-allowed',
+                opacity: resolvedSpreadsheetUrl ? 1 : 0.4,
+                background: 'transparent',
+                border: 'none',
+                padding: '2px 4px',
+                color: '#000000',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                textDecoration: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className={resolvedSpreadsheetUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
+              title={t("Ouvrir l'éditeur SpreadSheets")}
+            >
+              <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
+              <span style={{ color: '#000000' }}>{t("Ouvrir l'éditeur SpreadSheets")}</span>
+            </button>
           </div>
 
       {/* Main Table Records Sheet */}
@@ -4552,7 +4774,7 @@ export default function DefibTab({
                   {t("Recherchez un/des défibrillateur(s) pour le/les afficher.")}
                 </p>
                 <p style={{ color: '#000000', fontSize: '14px', fontWeight: 100, marginTop: '6px' }}>
-                  {`Vous avez ${activeDefibrillateurs.length} défibrillateur(s) sur Defibeo.`}
+                  {`Vous avez ${effectiveTotalDefibsCount} défibrillateur(s) sur Defibeo.`}
                 </p>
               </div>
             ) : (
@@ -5072,7 +5294,7 @@ export default function DefibTab({
             </span>
           ) : isInitialView ? (
             <span>
-              {t("Affichage initial")} : {filteredDefibs.length} {t("derniers ajoutés ou modifiés")} ({activeDefibrillateurs.length.toLocaleString('fr-FR')} {t("au total")}, {totalMainOui.toLocaleString('fr-FR')} {t("Main. Oui")} et {totalMainNon.toLocaleString('fr-FR')} {t("Main. Non")}).
+              {t("Affichage initial")} : {filteredDefibs.length} {t("derniers ajoutés ou modifiés")} ({effectiveTotalDefibsCount.toLocaleString('fr-FR')} {t("au total")}, {totalMainOui.toLocaleString('fr-FR')} {t("Main. Oui")} et {totalMainNon.toLocaleString('fr-FR')} {t("Main. Non")}).
             </span>
           ) : (
             (search && search.trim().length > 0) ||
@@ -5087,9 +5309,9 @@ export default function DefibTab({
             activeFilters.actionExpired ||
             activeFilters.actionRejected ||
             (activeFilters.advancedSearchTerms && activeFilters.advancedSearchTerms.length > 0) ? (
-              `${t('Total défibrillateurs')} (${selectedDepartment && selectedDepartment !== '__ALL__' ? selectedDepartment : t('Filtre')}) : ${filteredDefibs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
+              `${t('Total défibrillateurs')} (${selectedDepartment && selectedDepartment !== '__ALL__' ? selectedDepartment : t('Filtre')}) : ${(remoteFilteredTotal !== null && remoteFilteredTotal > filteredDefibs.length ? remoteFilteredTotal : filteredDefibs.length).toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
             ) : (
-              `${t('Total défibrillateurs (Tous)')} : ${activeDefibrillateurs.length.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
+              `${t('Total défibrillateurs (Tous)')} : ${effectiveTotalDefibsCount.toLocaleString('en-US')} (${paginatedDefibs.length} sur cette page).`
             )
           )}
         </div>

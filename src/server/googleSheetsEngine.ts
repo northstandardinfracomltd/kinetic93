@@ -18,9 +18,44 @@ interface MirrorOverlay {
   lastSyncedAt: number;
 }
 
+export interface SheetCollectionStats {
+  totalCount: number;
+  totalMainOui: number;
+  totalMainNon: number;
+  conformeEtAJourCount: number;
+  eligibleMainOuiCount: number;
+  compliancePercent: number;
+  distinctModels: string[];
+  distinctCoffrets: string[];
+  distinctElectrodes: string[];
+  distinctBatteries: string[];
+}
+
+export interface SheetQueryFilterParams {
+  search?: string;
+  advancedSearchTerms?: string[];
+  advancedSearchOperator?: 'OR' | 'AND';
+  region?: string;
+  modeleId?: string;
+  modeleAliases?: string[];
+  clientId?: string;
+  clientMatchTerms?: string[];
+  categorie?: string;
+  contrat?: string;
+  maintenanceFilter?: 'all' | 'oui' | 'non';
+  selectedDepartment?: string | null;
+  actionExpired?: boolean;
+  actionUnder3?: boolean;
+  action3To6?: boolean;
+  sortFilter?: 'recent' | 'closest_maintenance' | null;
+  offset?: number;
+  limit?: number;
+}
+
 interface CachedSheetResult {
   headers: string[];
   items: any[];
+  stats: SheetCollectionStats;
   fetchedAt: number;
   spreadsheetUrl: string;
 }
@@ -257,7 +292,7 @@ export function parseCsvText(csvText: string): string[][] {
 
 function normalizeHeaderKey(rawHeader: string): string {
   return String(rawHeader || '')
-    .replace(/^Section\s*\d+\s*[—–-]\s*/i, '')
+    .replace(/^Section\s*\d+\s*[—–\-:]?\s*/i, '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
@@ -299,14 +334,14 @@ function normalizeDateStr(val: any): string {
 export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; aliases: string[]; type?: 'yesno' | 'bool' | 'date' }> = [
   { header: 'Identifiant', field: 'identifiant', aliases: ['identifiant', 'id', 'identifiantdae', 'code', 'identifiantunique', 'identificationidentifiant'] },
   { header: 'Numéro Atlasanté', field: 'numeroAtlasante', aliases: ['numeroatlasante', 'atlasante', 'idatlasante', 'geodae', 'identificationnumeroatlasante'] },
-  { header: 'Version logiciel', field: 'versionLogiciel', aliases: ['versionlogiciel', 'firmware', 'version', 'identificationversionlogiciel'] },
+  { header: 'Version logiciel', field: 'versionLogiciel', aliases: ['versionlogiciel', 'versiondulogiciel', 'firmware', 'version', 'identificationversionlogiciel', 'identificationversiondulogiciel'] },
   { header: 'Numéro de série', field: 'numeroSerie', aliases: ['numerodeserie', 'numeroserie', 'numserie', 'serie', 'sn', 'serial', 'identificationserie', 'identificationnumerodeserie'] },
-  { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentairedae', 'notes', 'note', 'observation', 'identificationcommentaire'] },
+  { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentairegeneral', 'commentairedae', 'notes', 'note', 'observation', 'identificationcommentaire', 'identificationcommentairegeneral'] },
   { header: 'Modèle', field: 'modeleId', aliases: ['modele', 'modeledae', 'modeledefibrillateur', 'modeleid', 'model', 'identificationmodele', 'identificationmodeleidentifiantunique', 'modeleidentifiantunique'] },
 
   { header: 'Client lié', field: 'clientNom', aliases: ['clientlie', 'client', 'clientnom', 'entreprise', 'denominationclient', 'clientclient', 'clientclientidentifiantunique', 'clientidentifiantunique'] },
   { header: 'Nom du site', field: 'nomSite', aliases: ['nomdusite', 'nomsite', 'site', 'etablissement', 'clientsite', 'clientnomdusite'] },
-  { header: "Catégorie d'établissement", field: 'categorieEtablissement', aliases: ['categoriedetablissement', 'categorieetablissement', 'typeetablissement', 'clientcategorieetablissement'] },
+  { header: "Catégorie d'établissement", field: 'categorieEtablissement', aliases: ['categoriedetablissement', 'categorieetablissement', 'typeetablissement', 'clientcategorieetablissement', 'clientcategoriedetablissement'] },
   { header: 'Nom et prénom sur site', field: 'nomPrenomSite', aliases: ['nometprenomsursite', 'nomprenomsite', 'contactsursite', 'contactsite', 'responsablesite', 'nometprenom', 'nomprenom', 'clientnometprenom', 'contact'] },
   { header: 'Téléphone portable sur site', field: 'telephoneSite', aliases: ['telephoneportablesursite', 'telephonesursite', 'telephonesite', 'telsite', 'portablesite', 'telephoneportable', 'clienttelephoneportable', 'telephone', 'tel'] },
   { header: 'Email sur site', field: 'emailSite', aliases: ['emailsursite', 'emailsite', 'mailsite', 'courrielsite', 'email', 'clientemail', 'mail', 'courriel'] },
@@ -319,16 +354,16 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
   { header: 'Client ID', field: 'clientIdField', aliases: ['clientid', 'idclient', 'codeclient', 'clientidfield', 'clientclientid'] },
 
   { header: 'Modèle coffret', field: 'modeleCoffretId', aliases: ['modelecoffret', 'coffret', 'modeleboitier', 'boitiermodele', 'modelecoffretid', 'boitier', 'boitiermodeleidentifiantunique'] },
-  { header: 'Numéro de lot coffret', field: 'numeroLotCoffret', aliases: ['numerodelotcoffret', 'numerolotcoffret', 'lotcoffret', 'boitierlot'] },
-  { header: 'Commentaire coffret', field: 'commentaireCoffret', aliases: ['commentairecoffret', 'notecoffret', 'boitiercommentaire'] },
-  { header: 'Date péremption trousse', field: 'peremptionTrousse', aliases: ['dateperemptiontrousse', 'peremptiontrousse', 'peremptionkit', 'dateperemptionkit', 'boitierperemptiontrousse'], type: 'date' },
-  { header: 'Ciseaux présents', field: 'kitCiseauxPresents', aliases: ['ciseauxpresents', 'kitciseauxpresents', 'ciseaux'], type: 'yesno' },
-  { header: 'Masque présent', field: 'kitMasquePresent', aliases: ['masquepresent', 'kitmasquepresent', 'masque'], type: 'yesno' },
-  { header: 'Péremption masque', field: 'kitPeremptionMasque', aliases: ['peremptionmasque', 'kitperemptionmasque', 'dateperemptionmasque'], type: 'date' },
-  { header: 'Serviettes présentes', field: 'kitServiettesPresentes', aliases: ['serviettespresentes', 'kitserviettespresentes', 'serviettes'], type: 'yesno' },
-  { header: 'Péremption serviettes', field: 'kitPeremptionServiettes', aliases: ['peremptionserviettes', 'kitperemptionserviettes', 'dateperemptionserviettes'], type: 'date' },
-  { header: 'Gants présents', field: 'kitGantsPresents', aliases: ['gantspresents', 'kitgantspresents', 'gants'], type: 'yesno' },
-  { header: 'Rasoir présent', field: 'kitRasoirPresent', aliases: ['rasoirpresent', 'kitrasoirpresent', 'rasoir'], type: 'yesno' },
+  { header: 'Numéro de lot coffret', field: 'numeroLotCoffret', aliases: ['numerodelotcoffret', 'numerolotcoffret', 'lotcoffret', 'lotboitier', 'boitierlot'] },
+  { header: 'Commentaire coffret', field: 'commentaireCoffret', aliases: ['commentairecoffret', 'commentaireboitier', 'notecoffret', 'boitiercommentaire', 'section3commentaireboitier'] },
+  { header: 'Date péremption trousse', field: 'peremptionTrousse', aliases: ['dateperemptiontrousse', 'peremptiontrousse', 'peremptiondelatrousse', 'peremptionkit', 'dateperemptionkit', 'boitierperemptiontrousse', 'boitierperemptiondelatrousse'], type: 'date' },
+  { header: 'Ciseaux présents', field: 'kitCiseauxPresents', aliases: ['ciseauxpresents', 'kitciseauxpresents', 'ciseaux', 'boitierciseauxpresents'], type: 'yesno' },
+  { header: 'Masque présent', field: 'kitMasquePresent', aliases: ['masquepresent', 'kitmasquepresent', 'masque', 'boitiermasquepresent'], type: 'yesno' },
+  { header: 'Péremption masque', field: 'kitPeremptionMasque', aliases: ['peremptionmasque', 'peremptiondumasque', 'kitperemptionmasque', 'dateperemptionmasque', 'boitierperemptiondumasque'], type: 'date' },
+  { header: 'Serviettes présentes', field: 'kitServiettesPresentes', aliases: ['serviettespresentes', 'kitserviettespresentes', 'serviettes', 'boitierserviettespresentes'], type: 'yesno' },
+  { header: 'Péremption serviettes', field: 'kitPeremptionServiettes', aliases: ['peremptionserviettes', 'peremptiondesserviettes', 'kitperemptionserviettes', 'dateperemptionserviettes', 'boitierperemptiondesserviettes'], type: 'date' },
+  { header: 'Gants présents', field: 'kitGantsPresents', aliases: ['gantspresents', 'pairedegantspresents', 'pairedegantspresente', 'kitgantspresents', 'gants', 'boitierpairedegantspresents'], type: 'yesno' },
+  { header: 'Rasoir présent', field: 'kitRasoirPresent', aliases: ['rasoirpresent', 'kitrasoirpresent', 'rasoir', 'boitierrasoir'], type: 'yesno' },
 
   { header: 'Numéro et voie', field: 'numVoie', aliases: ['numeroetvoie', 'numvoie', 'adresse', 'rue', 'voie', 'localisationnumeroetvoie', 'localisationrue'] },
   { header: 'Ville', field: 'ville', aliases: ['ville', 'commune', 'localite', 'city', 'localisationville'] },
@@ -337,12 +372,48 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
   { header: 'Pays', field: 'pays', aliases: ['pays', 'country', 'localisationpays'] },
   { header: 'Latitude', field: 'latitude', aliases: ['latitude', 'lat', 'coordlat', 'localisationlatitude'] },
   { header: 'Longitude', field: 'longitude', aliases: ['longitude', 'lng', 'lon', 'long', 'coordlng', 'localisationlongitude'] },
-  { header: "Aide à l'accès", field: 'commentaireAdresse', aliases: ['aidealacces', 'aideacces', 'aidedacces', 'commentaireadresse', 'emplacement', 'localisationprecise', 'localisationaidedacces', 'localisation'] },
+  {
+    header: 'Section 4 — Localisation : Aide d’accès.',
+    field: 'commentaireAdresse',
+    aliases: [
+      'localisationaidedacces',
+      'localisationaideacces',
+      'localisationaidealacces',
+      'aidedacces',
+      'aideacces',
+      'aidealacces',
+      'commentaireadresse',
+      'localisationcommentaireadresse',
+      'section4localisationaidedacces',
+      'section4aidedacces',
+      'emplacement',
+      'localisationprecise',
+      'localisation',
+    ],
+  },
   { header: 'Accès 24/7', field: 'acces247', aliases: ['acces247', 'acces24h24', '247', 'localisationacces247'], type: 'bool' },
   { header: 'Accès semaine', field: 'accesSemaine', aliases: ['accessemaine', 'semaine', 'localisationaccessemaine'], type: 'bool' },
   { header: 'Accès week-end', field: 'accesWeekend', aliases: ['accesweekend', 'weekend', 'localisationaccesweekend'], type: 'bool' },
   { header: 'Extérieur', field: 'exterieur', aliases: ['exterieur', 'ext', 'localisationexterieur'], type: 'bool' },
   { header: "Horaires d'ouverture", field: 'horaires', aliases: ['horairesdouverture', 'horaires', 'heuresouverture', 'localisationhoraires'] },
+
+  // Plage 1 & Plage 2 schedule columns (Section 4)
+  { header: 'Section 4 - Plage 1 - Fermeture le midi', field: '_plage1_fermetureMidi', aliases: ['plage1fermeturelemidi', 'localisationplage1fermeturelemidi'], type: 'bool' },
+  { header: 'Section 4 - Plage 1 - Ouv. Matin', field: '_plage1_openMorning', aliases: ['plage1ouvmatin', 'localisationplage1ouvmatin'] },
+  { header: 'Section 4 - Plage 1 - Ferm. Midi', field: '_plage1_closeMorning', aliases: ['plage1fermmidi', 'localisationplage1fermmidi'] },
+  { header: 'Section 4 - Plage 1 - RéOuv. Midi', field: '_plage1_openAfternoon', aliases: ['plage1reouvmidi', 'localisationplage1reouvmidi'] },
+  { header: 'Section 4 - Plage 1 - Ferm. Soir', field: '_plage1_closeAfternoon', aliases: ['plage1fermsoir', 'localisationplage1fermsoir'] },
+  { header: 'Section 4 - Plage 1 - Jours de la semaine', field: '_plage1_days', aliases: ['plage1joursdelasemaine', 'localisationplage1joursdelasemaine'] },
+  { header: 'Section 4 - Plage 1 - Ouv. Général', field: '_plage1_openContinuous', aliases: ['plage1ouvgeneral', 'localisationplage1ouvgeneral'] },
+  { header: 'Section 4 - Plage 1 - Ferm. Général', field: '_plage1_closeContinuous', aliases: ['plage1fermgeneral', 'localisationplage1fermgeneral'] },
+  { header: 'Section 4 - Plage 2 - Fermeture le midi', field: '_plage2_fermetureMidi', aliases: ['plage2fermeturelemidi', 'localisationplage2fermeturelemidi'], type: 'bool' },
+  { header: 'Section 4 - Plage 2 - Ouv. Matin', field: '_plage2_openMorning', aliases: ['plage2ouvmatin', 'localisationplage2ouvmatin'] },
+  { header: 'Section 4 - Plage 2 - Ferm. Midi', field: '_plage2_closeMorning', aliases: ['plage2fermmidi', 'localisationplage2fermmidi'] },
+  { header: 'Section 4 - Plage 2 - RéOuv. Midi', field: '_plage2_openAfternoon', aliases: ['plage2reouvmidi', 'localisationplage2reouvmidi'] },
+  { header: 'Section 4 - Plage 2 - Ferm. Soir', field: '_plage2_closeAfternoon', aliases: ['plage2fermsoir', 'localisationplage2fermsoir'] },
+  { header: 'Section 4 - Plage 2 - Jours de la semaine', field: '_plage2_days', aliases: ['plage2joursdelasemaine', 'localisationplage2joursdelasemaine'] },
+  { header: 'Section 4 - Plage 2 - Ouv. Général', field: '_plage2_openContinuous', aliases: ['plage2ouvgeneral', 'localisationplage2ouvgeneral'] },
+  { header: 'Section 4 - Plage 2 - Ferm. Général', field: '_plage2_closeContinuous', aliases: ['plage2fermgeneral', 'localisationplage2fermgeneral'] },
 
   { header: 'Expiration garantie', field: 'finGarantie', aliases: ['expirationgarantie', 'expirationdegarantie', 'expirgarantie', 'fingarantie', 'garantie', 'datefingarantie', 'datesexpirationdegarantie'], type: 'date' },
   { header: 'Date de fabrication', field: 'fabrication', aliases: ['datedefabrication', 'fabrication', 'datefabrication', 'datesfabrication'], type: 'date' },
@@ -356,12 +427,12 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
   { header: 'Insertion électrode A', field: 'insertionElectrodeA', aliases: ['insertionelectrodea', 'insertiona', 'dateinsertionelectrodea', 'electrodeadulteoumixteinsertion'], type: 'date' },
   { header: 'Péremption électrode A', field: 'peremptionElectrodeA', aliases: ['peremptionelectrodea', 'peremptiona', 'dateperemptionelectrodea', 'dateperemptiona', 'electrodeadulteoumixteperemption'], type: 'date' },
   { header: 'Livraison électrode A', field: 'livraisonElectrodeA', aliases: ['livraisonelectrodea', 'livraisona', 'datelivraisonelectrodea', 'electrodeadulteoumixtelivraison'], type: 'date' },
-  { header: 'Situation électrode A', field: 'situationElectrodeA', aliases: ['situationelectrodea', 'situationa', 'etatelectrodea', 'electrodeadulteoumixtestatut', 'statutelectrodea'] },
+  { header: 'Situation électrode A', field: 'situationElectrodeA', aliases: ['situationelectrodea', 'situationa', 'statuta', 'etatelectrodea', 'electrodeadulteoumixtestatut', 'statutelectrodea'] },
   { header: 'Commentaire électrode A', field: 'commentaireElectrodeA', aliases: ['commentaireelectrodea', 'commentairea', 'noteelectrodea', 'electrodeadulteoumixtecommentaire'] },
-  { header: 'Électrode secours A', field: 'hasElectrodeASecours', aliases: ['electrodesecoursa', 'haselectrodeasecours', 'secoursa'], type: 'yesno' },
-  { header: 'Modèle secours A', field: 'modeleElectrodeASecoursId', aliases: ['modelesecoursa', 'modeleelectrodeasecours', 'modeleelectrodeasecoursid', 'electrodeadulteoumixtemodeledelectrodedesecours', 'modeledelectrodedesecours'] },
-  { header: 'Lot secours A', field: 'lotElectrodeASecours', aliases: ['lotsecoursa', 'lotelectrodeasecours', 'electrodeadulteoumixtelotdelelectrodedesecours', 'lotdelelectrodedesecours'] },
-  { header: 'Péremption secours A', field: 'peremptionSecoursElectrodeA', aliases: ['peremptionsecoursa', 'peremptionsecourselectrodea', 'dateperemptionsecoursa', 'electrodeadulteoumixteperemptiondelelectrodedesecours', 'peremptiondelelectrodedesecours'], type: 'date' },
+  { header: 'Électrode secours A', field: 'hasElectrodeASecours', aliases: ['electrodesecoursa', 'electrodedesecoursa', 'haselectrodeasecours', 'secoursa'], type: 'yesno' },
+  { header: 'Modèle secours A', field: 'modeleElectrodeASecoursId', aliases: ['modelesecoursa', 'modeleelectrodeasecours', 'modeleelectrodeasecoursid', 'modeledelectrodedesecoursa', 'modeldelectrodedesecoursa', 'electrodeadulteoumixtemodeledelectrodedesecours', 'modeledelectrodedesecours'] },
+  { header: 'Lot secours A', field: 'lotElectrodeASecours', aliases: ['lotsecoursa', 'lotelectrodeasecours', 'lotdelelectrodedesecoursa', 'electrodeadulteoumixtelotdelelectrodedesecours', 'lotdelelectrodedesecours'] },
+  { header: 'Péremption secours A', field: 'peremptionSecoursElectrodeA', aliases: ['peremptionsecoursa', 'peremptionsecourselectrodea', 'peremptiondelelectrodedesecoursa', 'dateperemptionsecoursa', 'electrodeadulteoumixteperemptiondelelectrodedesecours', 'peremptiondelelectrodedesecours'], type: 'date' },
   { header: 'Pad-Pak Adulte', field: 'hasPadpakA', aliases: ['padpakadulte', 'haspadpaka', 'padpaka'], type: 'yesno' },
   { header: 'Lot Pad-Pak A', field: 'lotPadpakA', aliases: ['lotpadpaka', 'lotpadpakadulte', 'electrodeadulteoumixtelotpadpaka'] },
   { header: 'Péremption Pad-Pak A', field: 'peremptionPadpakA', aliases: ['peremptionpadpaka', 'peremptionpadpakadulte', 'dateperemptionpadpaka', 'electrodeadulteoumixteperemptionpadpaka'], type: 'date' },
@@ -371,12 +442,12 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
   { header: 'Insertion électrode P', field: 'insertionElectrodeP', aliases: ['insertionelectrodep', 'insertionp', 'dateinsertionelectrodep', 'electrodepediatriqueinsertion'], type: 'date' },
   { header: 'Péremption électrode P', field: 'peremptionElectrodeP', aliases: ['peremptionelectrodep', 'peremptionp', 'dateperemptionelectrodep', 'dateperemptionp', 'electrodepediatriqueperemption'], type: 'date' },
   { header: 'Livraison électrode P', field: 'livraisonElectrodeP', aliases: ['livraisonelectrodep', 'livraisonp', 'datelivraisonelectrodep', 'electrodepediatriquelivraison'], type: 'date' },
-  { header: 'Situation électrode P', field: 'situationElectrodeP', aliases: ['situationelectrodep', 'situationp', 'etatelectrodep', 'electrodepediatriquestatut', 'statutelectrodep'] },
+  { header: 'Situation électrode P', field: 'situationElectrodeP', aliases: ['situationelectrodep', 'situationp', 'statutp', 'etatelectrodep', 'electrodepediatriquestatut', 'statutelectrodep'] },
   { header: 'Commentaire électrode P', field: 'commentaireElectrodeP', aliases: ['commentaireelectrodep', 'commentairep', 'noteelectrodep', 'electrodepediatriquecommentaire'] },
-  { header: 'Électrode secours P', field: 'hasElectrodePSecours', aliases: ['electrodesecoursp', 'haselectrodepsecours', 'secoursp'], type: 'yesno' },
-  { header: 'Modèle secours P', field: 'modeleElectrodePSecoursId', aliases: ['modelesecoursp', 'modeleelectrodepsecours', 'modeleelectrodepsecoursid', 'electrodepediatriquemodeledelectrodedesecours'] },
-  { header: 'Lot secours P', field: 'lotElectrodePSecours', aliases: ['lotsecoursp', 'lotelectrodepsecours', 'electrodepediatriquelotdelelectrodedesecours'] },
-  { header: 'Péremption secours P', field: 'peremptionSecoursElectrodeP', aliases: ['peremptionsecoursp', 'peremptionsecourselectrodep', 'dateperemptionsecoursp', 'electrodepediatriqueperemptiondelelectrodedesecours'], type: 'date' },
+  { header: 'Électrode secours P', field: 'hasElectrodePSecours', aliases: ['electrodesecoursp', 'electrodedesecoursp', 'haselectrodepsecours', 'secoursp'], type: 'yesno' },
+  { header: 'Modèle secours P', field: 'modeleElectrodePSecoursId', aliases: ['modelesecoursp', 'modeleelectrodepsecours', 'modeleelectrodepsecoursid', 'modeledelectrodedesecoursp', 'modeldelectrodedesecoursp', 'electrodepediatriquemodeledelectrodedesecours'] },
+  { header: 'Lot secours P', field: 'lotElectrodePSecours', aliases: ['lotsecoursp', 'lotelectrodepsecours', 'lotdelelectrodedesecoursp', 'electrodepediatriquelotdelelectrodedesecours'] },
+  { header: 'Péremption secours P', field: 'peremptionSecoursElectrodeP', aliases: ['peremptionsecoursp', 'peremptionsecourselectrodep', 'peremptiondelelectrodedesecoursp', 'dateperemptionsecoursp', 'electrodepediatriqueperemptiondelelectrodedesecours'], type: 'date' },
   { header: 'Pad-Pak Pédiatrique', field: 'hasPadpakP', aliases: ['padpakpediatrique', 'haspadpakp', 'padpakp'], type: 'yesno' },
   { header: 'Lot Pad-Pak P', field: 'lotPadpakP', aliases: ['lotpadpakp', 'lotpadpakpediatrique', 'electrodepediatriquelotpadpakp'] },
   { header: 'Péremption Pad-Pak P', field: 'peremptionPadpakP', aliases: ['peremptionpadpakp', 'peremptionpadpakpediatrique', 'dateperemptionpadpakp', 'electrodepediatriqueperemptionpadpakp'], type: 'date' },
@@ -387,13 +458,13 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
   { header: 'Fabrication batterie B', field: 'fabricationBatterie', aliases: ['fabricationbatterieb', 'fabricationbatterie', 'fabricationb', 'datefabricationbatterie', 'batteriefabrication'], type: 'date' },
   { header: 'Péremption batterie B', field: 'peremptionBatterie', aliases: ['peremptionbatterieb', 'peremptionbatterie', 'peremptionb', 'dateperemptionbatterie', 'dateperemptionb', 'batterieperemption'], type: 'date' },
   { header: 'Livraison batterie B', field: 'livraisonBatterie', aliases: ['livraisonbatterieb', 'livraisonbatterie', 'livraisonb', 'datelivraisonbatterie', 'batterielivraison'], type: 'date' },
-  { header: 'Situation batterie B', field: 'situationBatterie', aliases: ['situationbatterieb', 'situationbatterie', 'situationb', 'etatbatterie', 'batteriestatut', 'statutbatterie'] },
+  { header: 'Situation batterie B', field: 'situationBatterie', aliases: ['situationbatterieb', 'situationbatterie', 'situationb', 'statutb', 'etatbatterie', 'batteriestatut', 'statutbatterie'] },
   { header: 'Pourcentage batterie B', field: 'pourcentageBatterie', aliases: ['pourcentagebatterieb', 'pourcentagebatterie', 'pourcentageb', 'pourcentageconstateb', 'batteriepourcentage', 'batteriepourcentageconstate', 'pourcentageconstate'] },
   { header: 'Commentaire batterie B', field: 'commentaireBatterie', aliases: ['commentairebatterieb', 'commentairebatterie', 'commentaireb', 'notebatterie', 'batteriecommentaire'] },
-  { header: 'Batterie secours B', field: 'hasBatterieSecours', aliases: ['batteriesecoursb', 'hasbatteriesecours', 'secoursb', 'batteriesecours'], type: 'yesno' },
-  { header: 'Modèle secours B', field: 'modeleBatterieSecoursId', aliases: ['modelesecoursb', 'modelebatteriesecours', 'modelebatteriesecoursid', 'batteriemodelesecours'] },
-  { header: 'Lot secours B', field: 'lotBatterieSecours', aliases: ['lotsecoursb', 'lotbatteriesecours', 'batterielotsecours'] },
-  { header: 'Péremption secours B', field: 'peremptionBatterieSecours', aliases: ['peremptionsecoursb', 'peremptionbatteriesecours', 'dateperemptionsecoursb', 'batterieperemptionsecours'], type: 'date' },
+  { header: 'Batterie secours B', field: 'hasBatterieSecours', aliases: ['batteriesecoursb', 'batteriedesecoursb', 'hasbatteriesecours', 'secoursb', 'batteriesecours'], type: 'yesno' },
+  { header: 'Modèle secours B', field: 'modeleBatterieSecoursId', aliases: ['modelesecoursb', 'modelebatteriesecours', 'modelebatteriesecoursid', 'modeledebatteriedesecoursb', 'batteriemodelesecours'] },
+  { header: 'Lot secours B', field: 'lotBatterieSecours', aliases: ['lotsecoursb', 'lotbatteriesecours', 'lotdelabatteriedesecoursb', 'batterielotsecours'] },
+  { header: 'Péremption secours B', field: 'peremptionBatterieSecours', aliases: ['peremptionsecoursb', 'peremptionbatteriesecours', 'peremptiondelabatteriedesecoursb', 'dateperemptionsecoursb', 'batterieperemptionsecours'], type: 'date' },
 
   { header: 'Tournée', field: 'tournee', aliases: ['tournee', 'secteur', 'categoriestournee'] },
   { header: 'Loué', field: 'loue', aliases: ['loue', 'location', 'enlocation', 'categoriesloue'], type: 'yesno' },
@@ -403,13 +474,13 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
   { header: 'Conforme', field: 'conforme', aliases: ['conforme', 'conformite', 'categoriesconforme'], type: 'yesno' },
   { header: 'Sous-traitance', field: 'sousTraitance', aliases: ['soustraitance', 'soustraitant', 'opereensoustraitance', 'categoriesopereensoustraitance', 'categoriessoustraitance'], type: 'yesno' },
   { header: 'Maintenance autorisée', field: 'fsmAutorise', aliases: ['maintenanceautorisee', 'fsmautorise', 'maintenance', 'autorisationmaintenance', 'categoriesmaintenanceautorisee'], type: 'yesno' },
-  { header: 'Victime avec survie', field: 'victimeSurvie', aliases: ['victimeavecsurvie', 'victimesurvie', 'categoriesvictimeavecsurvie'], type: 'yesno' },
+  { header: 'Victime avec survie', field: 'victimeSurvie', aliases: ['victimeavecsurvie', 'victimesurvie', 'utiliseparunevictime', 'categoriesvictimeavecsurvie', 'categoriesutiliseparunevictime'], type: 'yesno' },
   { header: 'Victime sans survie', field: 'victimeSansSurvie', aliases: ['victimesanssurvie', 'categoriesvictimesanssurvie'], type: 'yesno' },
-  { header: 'Âge victime', field: 'ageVictime', aliases: ['agevictime', 'age', 'categoriesagevictime'] },
+  { header: 'Âge victime', field: 'ageVictime', aliases: ['agevictime', 'agedelavictime', 'age', 'categoriesagevictime', 'categoriesagedelavictime'] },
   { header: 'Commentaire campagne rappel', field: 'commentaireCampagneRappel', aliases: ['commentairecampagnerappel', 'campagnerappel'] },
-  { header: 'Rappel mensuel auto', field: 'rappelMensuelAuto', aliases: ['rappelmensuelauto', 'rappelmensuel'], type: 'yesno' },
-  { header: 'Rappel hebdo auto', field: 'rappelHebdoAuto', aliases: ['rappelhebdoauto', 'rappelhebdo', 'rappelhebdomadaire'], type: 'yesno' },
-  { header: 'Rappel journalier auto', field: 'rappelJournalierAuto', aliases: ['rappeljournalierauto', 'rappeljournalier'], type: 'yesno' },
+  { header: 'Rappel mensuel auto', field: 'rappelMensuelAuto', aliases: ['rappelmensuelauto', 'rappelmensuel', 'emailmensueldautovigilance', 'categoriesemailmensueldautovigilance'], type: 'yesno' },
+  { header: 'Rappel hebdo auto', field: 'rappelHebdoAuto', aliases: ['rappelhebdoauto', 'rappelhebdo', 'rappelhebdomadaire', 'emailhebdomadairedautovigilance', 'categoriesemailhebdomadairedautovigilance'], type: 'yesno' },
+  { header: 'Rappel journalier auto', field: 'rappelJournalierAuto', aliases: ['rappeljournalierauto', 'rappeljournalier', 'emailjournalierdautovigilance', 'categoriesemailjournalierdautovigilance'], type: 'yesno' },
 ];
 
 // ==========================================
@@ -437,7 +508,7 @@ export const AUTRES_CANONICAL_HEADERS: Array<{ header: string; field: string; al
   { header: 'Pays', field: 'pays', aliases: ['pays', 'country', 'localisationpays'] },
   { header: 'Latitude', field: 'latitude', aliases: ['latitude', 'lat', 'localisationlatitude'] },
   { header: 'Longitude', field: 'longitude', aliases: ['longitude', 'lng', 'lon', 'localisationlongitude'] },
-  { header: "Aide à l'accès", field: 'aideAcces', aliases: ['aidealacces', 'aideacces', 'aidedacces', 'commentaireadresse', 'emplacement', 'localisationaidedacces', 'localisation'] },
+  { header: 'Section 4 — Localisation : Aide d’accès.', field: 'aideAcces', aliases: ['localisationaidedacces', 'localisationaideacces', 'localisationaidealacces', 'aidealacces', 'aideacces', 'aidedacces', 'commentaireadresse', 'emplacement', 'localisation'] },
   { header: 'Accès 24/7', field: 'acces247', aliases: ['acces247', '247', 'localisationacces247'], type: 'bool' },
   { header: 'Accès semaine', field: 'accesSemaine', aliases: ['accessemaine', 'localisationaccessemaine'], type: 'bool' },
   { header: 'Accès week-end', field: 'accesWeekend', aliases: ['accesweekend', 'localisationaccesweekend'], type: 'bool' },
@@ -458,9 +529,9 @@ export const AUTRES_CANONICAL_HEADERS: Array<{ header: string; field: string; al
   { header: 'Conforme', field: 'conforme', aliases: ['conforme', 'categoriesconforme'], type: 'yesno' },
   { header: 'Sous-traitance', field: 'sousTraitance', aliases: ['soustraitance', 'opereensoustraitance', 'categoriesopereensoustraitance'], type: 'yesno' },
   { header: 'Maintenance autorisée', field: 'fsmAutorise', aliases: ['maintenanceautorisee', 'fsmautorise', 'categoriesmaintenanceautorisee'], type: 'yesno' },
-  { header: 'Rappel mensuel auto', field: 'rappelMensuelAuto', aliases: ['rappelmensuelauto'], type: 'yesno' },
-  { header: 'Rappel hebdo auto', field: 'rappelHebdoAuto', aliases: ['rappelhebdoauto'], type: 'yesno' },
-  { header: 'Rappel journalier auto', field: 'rappelJournalierAuto', aliases: ['rappeljournalierauto'], type: 'yesno' },
+  { header: 'Rappel mensuel auto', field: 'rappelMensuelAuto', aliases: ['rappelmensuelauto', 'emailmensueldautovigilance'], type: 'yesno' },
+  { header: 'Rappel hebdo auto', field: 'rappelHebdoAuto', aliases: ['rappelhebdoauto', 'emailhebdomadairedautovigilance'], type: 'yesno' },
+  { header: 'Rappel journalier auto', field: 'rappelJournalierAuto', aliases: ['rappeljournalierauto', 'emailjournalierdautovigilance'], type: 'yesno' },
 
   // Specifiques fields
   { header: 'Numéro de série', field: 'numSerie', aliases: ['numerodeserie', 'numeroserie', 'numserie', 'serie', 'identificationserie'], isSpecifique: true },
@@ -488,20 +559,20 @@ export const CLIENTS_CANONICAL_HEADERS: Array<{ header: string; field: string; a
   { header: 'Nom et prénom', field: 'nomPrenom', aliases: ['nometprenom', 'nomprenom', 'contact', 'interlocuteur', 'responsable'] },
   { header: 'Téléphone', field: 'phone', aliases: ['telephone', 'phone', 'tel', 'telephoneprincipal'] },
   { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'emailprincipal'] },
-  { header: 'Nom et prénom sur site', field: 'nomPrenomSite', aliases: ['nometprenomsursite', 'nomprenomsite', 'contactsursite', 'contactsite'] },
-  { header: 'Téléphone portable sur site', field: 'telephoneSite', aliases: ['telephoneportablesursite', 'telephonesursite', 'telephonesite', 'telsite'] },
-  { header: 'Email sur site', field: 'emailSite', aliases: ['emailsursite', 'emailsite', 'mailsite'] },
+  { header: 'Nom et prénom sur site', field: 'nomPrenomSite', aliases: ['nometprenomsursite', 'nomprenomsite', 'contactsursite', 'contactsite', 'contact1contact1'] },
+  { header: 'Téléphone portable sur site', field: 'telephoneSite', aliases: ['telephoneportablesursite', 'telephonesursite', 'telephonesite', 'telsite', 'contact1telephoneducontact1'] },
+  { header: 'Email sur site', field: 'emailSite', aliases: ['emailsursite', 'emailsite', 'mailsite', 'contact1emailducontact1'] },
   { header: 'Contrat', field: 'contrat', aliases: ['contrat', 'aveccontrat', 'souscontrat', 'contratactif', 'contratencours'], type: 'yesno' },
-  { header: 'Nom du contrat', field: 'nomContrat', aliases: ['nomducontrat', 'nomcontrat', 'typecontrat', 'titreducontrat'] },
+  { header: 'Nom du contrat', field: 'nomContrat', aliases: ['nomducontrat', 'nomcontrat', 'typecontrat', 'titreducontrat', 'categorieducontact', 'categorieducontrat'] },
   { header: 'Référence contrat', field: 'referenceContrat', aliases: ['referencecontrat', 'refcontrat', 'numerocontrat', 'referenceducontrat'] },
-  { header: 'Début du contrat', field: 'debutContrat', aliases: ['debutducontrat', 'debutcontrat', 'datedebutcontrat'], type: 'date' },
-  { header: 'Fin du contrat', field: 'finContrat', aliases: ['finducontrat', 'fincontrat', 'datefincontrat', 'expirationducontrat'], type: 'date' },
+  { header: 'Début du contrat', field: 'debutContrat', aliases: ['debutducontrat', 'debutcontrat', 'datedebutcontrat', 'debut'], type: 'date' },
+  { header: 'Fin du contrat', field: 'finContrat', aliases: ['finducontrat', 'fincontrat', 'datefincontrat', 'expirationducontrat', 'expiration'], type: 'date' },
   { header: 'Payeur ID', field: 'payeurId', aliases: ['payeurid', 'idpayeur', 'codepayeur'] },
   { header: 'Client ID', field: 'clientIdField', aliases: ['clientid', 'idclient', 'codeclient', 'clientidfield'] },
-  { header: 'Code PIN Signature', field: 'signaturePin', aliases: ['codepinsignature', 'signaturepin', 'pin', 'codepin', 'cledacces', 'accesskey'] },
+  { header: 'Code PIN Signature', field: 'signaturePin', aliases: ['codepinsignature', 'codepindesignatureunique', 'signaturepin', 'pin', 'codepin', 'cledacces', 'accesskey'] },
   { header: 'Accès Portail Client', field: 'accesPortail', aliases: ['accesportailclient', 'accesportail', 'portailclient'], type: 'yesno' },
-  { header: 'Identifiant Portail', field: 'identifiantPortail', aliases: ['identifiantportail', 'loginportail'] },
-  { header: 'Mot de passe Portail', field: 'motDePassePortail', aliases: ['motdepasseportail', 'passwordportail'] },
+  { header: 'Identifiant Portail', field: 'identifiantPortail', aliases: ['identifiantportail', 'loginportail', 'identifiantunique'] },
+  { header: 'Mot de passe Portail', field: 'motDePassePortail', aliases: ['motdepasseportail', 'passwordportail', 'motdepasse'] },
   { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'notes', 'observation'] },
 ];
 
@@ -550,6 +621,7 @@ export function mapRowToDefib(
     _sheetRowNumber: rowIndex + 2, // 1-based header = row 1, first data row = row 2
     pays: 'France',
     contrat: 'Non',
+    commentaireAdresse: '',
     kitCiseauxPresents: 'Oui',
     kitMasquePresent: 'Oui',
     kitServiettesPresentes: 'Oui',
@@ -597,6 +669,72 @@ export function mapRowToDefib(
     }
   }
 
+  // Reconstruct horaires JSON if Plage 1 or Plage 2 columns were populated in the sheet
+  const hasPlage1 = Boolean(
+    obj._plage1_days ||
+      obj._plage1_openMorning ||
+      obj._plage1_closeMorning ||
+      obj._plage1_openAfternoon ||
+      obj._plage1_closeAfternoon ||
+      obj._plage1_openContinuous ||
+      obj._plage1_closeContinuous
+  );
+  const hasPlage2 = Boolean(
+    obj._plage2_days ||
+      obj._plage2_openMorning ||
+      obj._plage2_closeMorning ||
+      obj._plage2_openAfternoon ||
+      obj._plage2_closeAfternoon ||
+      obj._plage2_openContinuous ||
+      obj._plage2_closeContinuous
+  );
+  if (!obj.horaires && (hasPlage1 || hasPlage2)) {
+    const schedules: any[] = [];
+    if (hasPlage1) {
+      schedules.push({
+        days: String(obj._plage1_days || '')
+          .split(/[,;/]+/)
+          .map(s => s.trim())
+          .filter(Boolean),
+        fermetureMidi: Boolean(obj._plage1_fermetureMidi),
+        openMorning: obj._plage1_openMorning || '09:00',
+        closeMorning: obj._plage1_closeMorning || '12:00',
+        openAfternoon: obj._plage1_openAfternoon || '14:00',
+        closeAfternoon: obj._plage1_closeAfternoon || '18:00',
+        openContinuous: obj._plage1_openContinuous || '09:00',
+        closeContinuous: obj._plage1_closeContinuous || '17:00',
+      });
+    }
+    if (hasPlage2) {
+      schedules.push({
+        days: String(obj._plage2_days || '')
+          .split(/[,;/]+/)
+          .map(s => s.trim())
+          .filter(Boolean),
+        fermetureMidi: Boolean(obj._plage2_fermetureMidi),
+        openMorning: obj._plage2_openMorning || '09:00',
+        closeMorning: obj._plage2_closeMorning || '12:00',
+        openAfternoon: obj._plage2_openAfternoon || '14:00',
+        closeAfternoon: obj._plage2_closeAfternoon || '18:00',
+        openContinuous: obj._plage2_openContinuous || '09:00',
+        closeContinuous: obj._plage2_closeContinuous || '17:00',
+      });
+    }
+    if (schedules.length > 0) {
+      obj.horaires = JSON.stringify(schedules);
+    }
+  }
+  for (const k of Object.keys(obj)) {
+    if (k.startsWith('_plage1_') || k.startsWith('_plage2_')) {
+      delete obj[k];
+    }
+  }
+
+  // If main battery expiry column is empty and backup battery expiry column holds the primary expiry date
+  if (!obj.peremptionBatterie && obj.peremptionBatterieSecours && !obj.modeleBatterieSecoursId && !obj.lotBatterieSecours) {
+    obj.peremptionBatterie = obj.peremptionBatterieSecours;
+  }
+
   // Auto-detect secours / PadPak presence if model, lot, or expiry is populated in the sheet
   if (obj.modeleElectrodeASecoursId || obj.lotElectrodeASecours || obj.peremptionSecoursElectrodeA) {
     obj.hasElectrodeASecours = 'Oui';
@@ -610,11 +748,15 @@ export function mapRowToDefib(
   if (obj.lotPadpakP || obj.peremptionPadpakP) {
     obj.hasPadpakP = 'Oui';
   }
-  if (obj.modeleBatterieSecoursId || obj.lotBatterieSecours || obj.peremptionBatterieSecours) {
+  if (obj.modeleBatterieSecoursId || obj.lotBatterieSecours) {
     obj.hasBatterieSecours = 'Oui';
   }
 
-  // Keep convenient aliases so both table and form work seamlessly
+  // Keep convenient aliases so both table, form, and API work seamlessly
+  if (obj.commentaireAdresse) {
+    obj.aideAcces = obj.commentaireAdresse;
+    obj.aide_acces = obj.commentaireAdresse;
+  }
   if (obj.modeleId && !obj.modele) obj.modele = obj.modeleId;
   if (obj.clientNom && !obj.nomSite) obj.nomSite = obj.clientNom;
   if (obj.nomSite && !obj.clientNom) obj.clientNom = obj.nomSite;
@@ -638,13 +780,33 @@ export function mapDefibToRow(headers: string[], defib: any, existingRow?: strin
     return '';
   });
 
+  let parsedSchedules: any[] = [];
+  if (defib.horaires) {
+    try {
+      const parsed = typeof defib.horaires === 'string' ? JSON.parse(defib.horaires) : defib.horaires;
+      if (Array.isArray(parsed)) parsedSchedules = parsed;
+    } catch (_) {}
+  }
+
   for (const def of DEFIB_CANONICAL_HEADERS) {
     for (let i = 0; i < normHeaders.length; i++) {
       if (!def.aliases.includes(normHeaders[i])) continue;
       let val = defib[def.field];
 
-      // Prefer human-readable model names over internal v_... variable IDs when writing to Google Sheets
-      if (def.field === 'modeleId' && defib.modele && !String(defib.modele).startsWith('v_')) {
+      if (def.field === 'commentaireAdresse') {
+        val = defib.commentaireAdresse ?? defib.aideAcces ?? defib.aide_acces ?? '';
+      } else if (def.field.startsWith('_plage1_') || def.field.startsWith('_plage2_')) {
+        const idx = def.field.startsWith('_plage1_') ? 0 : 1;
+        const prop = def.field.replace(/^_plage[12]_/, '');
+        const sched = parsedSchedules[idx];
+        if (sched) {
+          if (prop === 'days') {
+            val = Array.isArray(sched.days) ? sched.days.join(', ') : String(sched.days || '');
+          } else {
+            val = sched[prop];
+          }
+        }
+      } else if (def.field === 'modeleId' && defib.modele && !String(defib.modele).startsWith('v_')) {
         val = defib.modele;
       } else if (def.field === 'modeleCoffretId' && defib.modeleCoffret && !String(defib.modeleCoffret).startsWith('v_')) {
         val = defib.modeleCoffret;
@@ -980,8 +1142,156 @@ function buildSheetRangePrefix(sheetTitle: string | null): string {
 
 const inFlightSheetFetches = new Map<
   string,
-  Promise<{ items: any[]; headers: string[]; totalCount: number; fromSpreadsheet: boolean; hasRemoteHeaders?: boolean }>
+  Promise<{
+    items: any[];
+    headers: string[];
+    totalCount: number;
+    stats: SheetCollectionStats;
+    fromSpreadsheet: boolean;
+    hasRemoteHeaders?: boolean;
+  }>
 >();
+
+function parseSheetDateHelper(dStr: string | undefined | null): Date | null {
+  if (!dStr) return null;
+  const s = String(dStr).trim();
+  if (!s) return null;
+  if (s.includes('/')) {
+    const parts = s.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+        return new Date(year, month, day);
+      }
+    }
+  }
+  if (s.includes('-')) {
+    const parts = s.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+        return new Date(year, month, day);
+      }
+    }
+  }
+  const fallback = Date.parse(s);
+  if (!isNaN(fallback)) {
+    return new Date(fallback);
+  }
+  return null;
+}
+
+function computeNextMaintFromLast(lastStr: string | undefined | null): string {
+  const d = parseSheetDateHelper(lastStr);
+  if (!d) return '';
+  const next = new Date(d.getFullYear() + 1, d.getMonth(), d.getDate());
+  const y = next.getFullYear();
+  const m = String(next.getMonth() + 1).padStart(2, '0');
+  const day = String(next.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function computeSheetCollectionStats(items: any[], tabType: SheetTabType): SheetCollectionStats {
+  if (tabType !== 'defibrillateurs') {
+    return {
+      totalCount: items.length,
+      totalMainOui: items.length,
+      totalMainNon: 0,
+      conformeEtAJourCount: items.length,
+      eligibleMainOuiCount: items.length,
+      compliancePercent: 100,
+      distinctModels: [],
+      distinctCoffrets: [],
+      distinctElectrodes: [],
+      distinctBatteries: [],
+    };
+  }
+
+  let totalMainOui = 0;
+  let totalMainNon = 0;
+  let eligibleMainOuiCount = 0;
+  let conformeEtAJourCount = 0;
+  const modelsSet = new Set<string>();
+  const coffretsSet = new Set<string>();
+  const electrodesSet = new Set<string>();
+  const batteriesSet = new Set<string>();
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayTime = today.getTime();
+
+  for (let i = 0; i < items.length; i++) {
+    const df = items[i];
+    if (!df) continue;
+
+    if (df.modeleId) modelsSet.add(String(df.modeleId).trim());
+    if (df.modeleCoffretId) coffretsSet.add(String(df.modeleCoffretId).trim());
+    if (df.modeleElectrodeAId) electrodesSet.add(String(df.modeleElectrodeAId).trim());
+    if (df.modeleElectrodeASecoursId) electrodesSet.add(String(df.modeleElectrodeASecoursId).trim());
+    if (df.modeleElectrodePId) electrodesSet.add(String(df.modeleElectrodePId).trim());
+    if (df.modeleElectrodePSecoursId) electrodesSet.add(String(df.modeleElectrodePSecoursId).trim());
+    if (df.modeleBatterieId) batteriesSet.add(String(df.modeleBatterieId).trim());
+    if (df.modeleBatterieSecoursId) batteriesSet.add(String(df.modeleBatterieSecoursId).trim());
+
+    const rawFsm = String(
+      df.fsmAutorise ?? df.maintenanceAutorisee ?? df.maintenance_autorisee ?? df.fsm_autorise ?? 'Oui'
+    )
+      .trim()
+      .toLowerCase();
+
+    if (rawFsm === 'non' || rawFsm === 'false' || rawFsm === '0') {
+      totalMainNon++;
+    } else {
+      totalMainOui++;
+      eligibleMainOuiCount++;
+
+      let isCompliant = df.conforme !== 'Non';
+      if (isCompliant) {
+        const nextMaintStr = df.prochaineMaintenance || computeNextMaintFromLast(df.derniereMaintenance);
+        const datesToCheck = [
+          parseSheetDateHelper(nextMaintStr),
+          parseSheetDateHelper(df.peremptionElectrodeA),
+          parseSheetDateHelper(df.peremptionElectrodeP),
+          parseSheetDateHelper(df.peremptionBatterie),
+        ];
+        for (const d of datesToCheck) {
+          if (d) {
+            d.setHours(0, 0, 0, 0);
+            if (d.getTime() < todayTime) {
+              isCompliant = false;
+              break;
+            }
+          }
+        }
+      }
+      if (isCompliant) {
+        conformeEtAJourCount++;
+      }
+    }
+  }
+
+  const compliancePercent =
+    eligibleMainOuiCount > 0
+      ? Math.max(0, Math.min(100, Math.round((conformeEtAJourCount / eligibleMainOuiCount) * 100)))
+      : 0;
+
+  return {
+    totalCount: items.length,
+    totalMainOui,
+    totalMainNon,
+    conformeEtAJourCount,
+    eligibleMainOuiCount,
+    compliancePercent,
+    distinctModels: Array.from(modelsSet).filter(Boolean),
+    distinctCoffrets: Array.from(coffretsSet).filter(Boolean),
+    distinctElectrodes: Array.from(electrodesSet).filter(Boolean),
+    distinctBatteries: Array.from(batteriesSet).filter(Boolean),
+  };
+}
 
 async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: string[]; rows: string[][] } | null> {
   const extracted = extractSpreadsheetIdAndGid(spreadsheetUrl);
@@ -992,14 +1302,14 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
   // Strategy 1: Google Sheets API v4 (Service Account first, then API Key fallback)
   const accessToken = await getServiceAccountAccessToken();
   const sheetTitle = await resolveSheetTabTitle(spreadsheetId, gid);
-  const rangeStr = sheetTitle ? `'${sheetTitle.replace(/'/g, "''")}'` : 'A1:ZZ50000';
+  const rangeStr = sheetTitle ? `'${sheetTitle.replace(/'/g, "''")}'` : 'A1:ZZ100000';
   const targetRange = encodeURIComponent(rangeStr);
 
   if (accessToken) {
     try {
       const apiRes = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${targetRange}`,
-        { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(45000) }
+        { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(90000) }
       );
       if (apiRes.ok) {
         const json = await apiRes.json();
@@ -1096,20 +1406,35 @@ export async function fetchTenantSheetCollection(
   tenantId: string,
   tabType: SheetTabType,
   forceRefresh = false
-): Promise<{ items: any[]; headers: string[]; totalCount: number; fromSpreadsheet: boolean; hasRemoteHeaders?: boolean }> {
+): Promise<{
+  items: any[];
+  headers: string[];
+  totalCount: number;
+  stats: SheetCollectionStats;
+  fromSpreadsheet: boolean;
+  hasRemoteHeaders?: boolean;
+}> {
   const extracted = extractSpreadsheetIdAndGid(spreadsheetUrl);
   if (!extracted) {
-    return { items: [], headers: [], totalCount: 0, fromSpreadsheet: false, hasRemoteHeaders: false };
+    return {
+      items: [],
+      headers: [],
+      totalCount: 0,
+      stats: computeSheetCollectionStats([], tabType),
+      fromSpreadsheet: false,
+      hasRemoteHeaders: false,
+    };
   }
 
   const cacheKey = `${tenantId}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
   if (!forceRefresh && sheetMemoryCache.has(cacheKey)) {
     const cached = sheetMemoryCache.get(cacheKey)!;
-    if (Date.now() - cached.fetchedAt < 60000) {
+    if (Date.now() - cached.fetchedAt < 300000) {
       return {
         items: cached.items,
         headers: cached.headers,
         totalCount: cached.items.length,
+        stats: cached.stats,
         fromSpreadsheet: true,
         hasRemoteHeaders: cached.headers.length > 0,
       };
@@ -1233,9 +1558,12 @@ export async function fetchTenantSheetCollection(
         }
       }
 
+      const stats = computeSheetCollectionStats(baseItems, tabType);
+
       sheetMemoryCache.set(cacheKey, {
         headers,
         items: baseItems,
+        stats,
         fetchedAt: Date.now(),
         spreadsheetUrl,
       });
@@ -1244,6 +1572,7 @@ export async function fetchTenantSheetCollection(
         items: baseItems,
         headers,
         totalCount: baseItems.length,
+        stats,
         fromSpreadsheet: true,
         hasRemoteHeaders,
       };
@@ -1254,6 +1583,247 @@ export async function fetchTenantSheetCollection(
 
   inFlightSheetFetches.set(cacheKey, fetchPromise);
   return fetchPromise;
+}
+
+export async function queryTenantSheetCollection(
+  spreadsheetUrl: string,
+  tenantId: string,
+  tabType: SheetTabType,
+  params: SheetQueryFilterParams
+): Promise<{
+  items: any[];
+  totalFilteredCount: number;
+  totalCount: number;
+  stats: SheetCollectionStats;
+  fromSpreadsheet: boolean;
+}> {
+  const data = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, false);
+  const allItems = data.items || [];
+  const searchLower = String(params.search || '').trim().toLowerCase();
+  const advTerms = Array.isArray(params.advancedSearchTerms)
+    ? params.advancedSearchTerms.map(t => String(t || '').trim().toLowerCase()).filter(t => t.length >= 2)
+    : [];
+  const advOp = params.advancedSearchOperator === 'AND' ? 'AND' : 'OR';
+  const region = params.region && params.region !== 'Tous' ? params.region.trim() : '';
+  const modeleId = params.modeleId && params.modeleId !== 'Tous' ? params.modeleId.trim().toLowerCase() : '';
+  const modeleAliases = Array.isArray(params.modeleAliases)
+    ? params.modeleAliases.map(a => String(a || '').trim().toLowerCase()).filter(Boolean)
+    : [];
+  const clientId = params.clientId && params.clientId !== 'Tous' ? params.clientId.trim().toLowerCase() : '';
+  const clientMatchTerms = Array.isArray(params.clientMatchTerms)
+    ? params.clientMatchTerms.map(c => String(c || '').trim().toLowerCase()).filter(Boolean)
+    : [];
+  const categorie = params.categorie && params.categorie !== 'Tous' ? params.categorie.trim() : '';
+  const contrat = params.contrat && params.contrat !== 'Tous' ? params.contrat.trim() : '';
+  const maintenanceFilter = params.maintenanceFilter || 'all';
+  const selectedDepartment =
+    params.selectedDepartment && params.selectedDepartment !== '__ALL__' ? params.selectedDepartment.trim().toUpperCase() : '';
+  const needDates = Boolean(params.actionExpired || params.actionUnder3 || params.action3To6);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayTime = today.getTime();
+
+  let filtered = allItems.filter(df => {
+    if (!df) return false;
+
+    if (region && df.region !== region) return false;
+
+    if (modeleId) {
+      const dfMod = String(df.modeleId || df.modele || '').trim().toLowerCase();
+      const matched = dfMod === modeleId || modeleAliases.includes(dfMod);
+      if (!matched) return false;
+    }
+
+    if (clientId) {
+      const dfCliId = String(df.clientId || '').trim().toLowerCase();
+      const dfCliField = String(df.clientIdField || '').trim().toLowerCase();
+      const dfNomSite = String(df.nomSite || '').trim().toLowerCase();
+      const dfCliNom = String(df.clientNom || '').trim().toLowerCase();
+      const matched =
+        dfCliId === clientId ||
+        dfCliField === clientId ||
+        clientMatchTerms.includes(dfCliId) ||
+        clientMatchTerms.includes(dfCliField) ||
+        clientMatchTerms.includes(dfNomSite) ||
+        clientMatchTerms.includes(dfCliNom);
+      if (!matched) return false;
+    }
+
+    if (categorie) {
+      if (categorie === 'Loué' && df.loue !== 'Oui') return false;
+      if (categorie === 'Prêté' && df.prete !== 'Oui') return false;
+      if (categorie === 'Stocké' && df.stocke !== 'Oui') return false;
+      if (categorie === 'Archivé' && df.archive !== 'Oui') return false;
+      if (categorie === 'Sous-Traitance' && df.sousTraitance !== 'Oui') return false;
+    }
+
+    if (maintenanceFilter === 'oui' || maintenanceFilter === 'non') {
+      const rawFsm = String(df.fsmAutorise || 'Oui').trim().toLowerCase();
+      const fsmVal = rawFsm === 'non' ? 'non' : 'oui';
+      if (maintenanceFilter !== fsmVal) return false;
+    }
+
+    if (contrat) {
+      const activeContrat = df.contrat || 'Non';
+      if (activeContrat !== contrat) return false;
+    }
+
+    if (selectedDepartment) {
+      const rawCp = String(df.codePostal || df.cp || '').trim().replace(/\s+/g, '').toUpperCase();
+      if (!rawCp) return false;
+      if (selectedDepartment === '2A') {
+        if (!rawCp.startsWith('2A') && !rawCp.startsWith('200') && !rawCp.startsWith('201')) return false;
+      } else if (selectedDepartment === '2B') {
+        if (!rawCp.startsWith('2B') && !rawCp.startsWith('202') && !rawCp.startsWith('206')) return false;
+      } else {
+        const normalized = /^\d{4}$/.test(rawCp) ? '0' + rawCp : rawCp;
+        if (!normalized.startsWith(selectedDepartment)) return false;
+      }
+    }
+
+    if (searchLower && advTerms.length === 0) {
+      const haystacks = [
+        df.identifiant,
+        df.numeroSerie,
+        df.ville,
+        df.cp,
+        df.nomSite,
+        df.clientNom,
+        df.modeleId,
+        df.numeroAtlasante,
+        df.versionLogiciel,
+        df.nomPrenomSite,
+        df.categorieEtablissement,
+        df.commentaire,
+        df.commentaireCoffret,
+        df.commentaireAdresse,
+        df.commentaireElectrodeA,
+        df.commentaireElectrodeP,
+        df.commentaireBatterie,
+        df.commentaireCampagneRappel,
+      ];
+      const matches = haystacks.some(v => v && String(v).toLowerCase().includes(searchLower));
+      if (!matches) return false;
+    }
+
+    if (advTerms.length > 0) {
+      const defibValues = [
+        df.identifiant,
+        df.numeroSerie,
+        df.numeroAtlasante,
+        df.ville,
+        df.nomSite,
+        df.clientNom,
+        df.cp,
+        df.numVoie,
+        df.region,
+        df.pays,
+        df.modeleId,
+        df.lotBatterie,
+        df.lotElectrodeA,
+        df.lotElectrodeP,
+        df.numeroLotCoffret,
+        df.nomPrenomSite,
+        df.telephoneSite,
+        df.emailSite,
+        df.versionLogiciel,
+        df.categorieEtablissement,
+        df.commentaire,
+        df.commentaireCoffret,
+        df.commentaireAdresse,
+        df.commentaireElectrodeA,
+        df.commentaireElectrodeP,
+        df.commentaireBatterie,
+        df.commentaireCampagneRappel,
+      ]
+        .filter(Boolean)
+        .map(v => String(v).toLowerCase());
+
+      const matchesTerm = (term: string) => defibValues.some(val => val.includes(term));
+      if (advOp === 'AND') {
+        if (!advTerms.every(matchesTerm)) return false;
+      } else {
+        if (!advTerms.some(matchesTerm)) return false;
+      }
+    }
+
+    if (needDates) {
+      const timesToCheck: number[] = [];
+      const nextMaintStr = df.prochaineMaintenance || computeNextMaintFromLast(df.derniereMaintenance);
+      const mDate = parseSheetDateHelper(nextMaintStr);
+      if (mDate) {
+        mDate.setHours(0, 0, 0, 0);
+        timesToCheck.push(mDate.getTime());
+      }
+      const eADate = parseSheetDateHelper(df.peremptionElectrodeA);
+      if (eADate) {
+        eADate.setHours(0, 0, 0, 0);
+        timesToCheck.push(eADate.getTime());
+      }
+      const ePDate = parseSheetDateHelper(df.peremptionElectrodeP);
+      if (ePDate) {
+        ePDate.setHours(0, 0, 0, 0);
+        timesToCheck.push(ePDate.getTime());
+      }
+      const bDate = parseSheetDateHelper(df.peremptionBatterie);
+      if (bDate) {
+        bDate.setHours(0, 0, 0, 0);
+        timesToCheck.push(bDate.getTime());
+      }
+
+      if (params.actionExpired) {
+        if (!timesToCheck.some(t => t < todayTime)) return false;
+      }
+      if (params.actionUnder3) {
+        if (
+          !timesToCheck.some(t => {
+            const diffDays = Math.ceil((t - todayTime) / (1000 * 60 * 60 * 24));
+            return diffDays >= 0 && diffDays < 90;
+          })
+        ) {
+          return false;
+        }
+      }
+      if (params.action3To6) {
+        if (
+          !timesToCheck.some(t => {
+            const diffDays = Math.ceil((t - todayTime) / (1000 * 60 * 60 * 24));
+            return diffDays >= 90 && diffDays <= 180;
+          })
+        ) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  });
+
+  if (params.sortFilter === 'recent') {
+    filtered = [...filtered].reverse();
+  } else if (params.sortFilter === 'closest_maintenance') {
+    filtered = [...filtered].sort((a, b) => {
+      const nextA = parseSheetDateHelper(a.prochaineMaintenance || computeNextMaintFromLast(a.derniereMaintenance));
+      const nextB = parseSheetDateHelper(b.prochaineMaintenance || computeNextMaintFromLast(b.derniereMaintenance));
+      const tA = nextA ? nextA.getTime() : Infinity;
+      const tB = nextB ? nextB.getTime() : Infinity;
+      return tA - tB;
+    });
+  }
+
+  const totalFilteredCount = filtered.length;
+  const offset = Math.max(0, Number(params.offset) || 0);
+  const limit = Math.max(1, Math.min(3000, Number(params.limit) || 2500));
+  const sliced = filtered.slice(offset, offset + limit);
+
+  return {
+    items: sliced,
+    totalFilteredCount,
+    totalCount: data.totalCount,
+    stats: data.stats,
+    fromSpreadsheet: data.fromSpreadsheet,
+  };
 }
 
 function columnIndexToLetter(colIdxZeroBased: number): string {

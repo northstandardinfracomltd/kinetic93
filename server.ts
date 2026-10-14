@@ -13,6 +13,7 @@ import {
   getGlobalGoogleConfig,
   saveGlobalGoogleConfig,
   fetchTenantSheetCollection,
+  queryTenantSheetCollection,
   upsertRecordsToTenantSheet,
   deleteRecordsFromTenantSheet,
   extractSpreadsheetIdAndGid,
@@ -2409,6 +2410,8 @@ function formatDefibrillateurOutput(d: any): any {
     latitude,
     longitude,
     commentaireAdresse,
+    aideAcces: commentaireAdresse,
+    aide_acces: commentaireAdresse,
     nomSite,
     nomPrenomSite,
     telephoneSite,
@@ -3990,6 +3993,23 @@ async function warmupDefibrillateursStore() {
       if (!id) {
         return res.status(400).json({ error: "id paramètre requis." });
       }
+      // First check if tenant has a live Google Spreadsheet collection cached or configured
+      try {
+        const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'defibrillateurs');
+        if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
+          const sheetData = await fetchTenantSheetCollection(sheetUrl, tenantId, 'defibrillateurs', false);
+          if (sheetData && Array.isArray(sheetData.items) && sheetData.items.length > 0) {
+            const matcher = matchesDefibWith(id);
+            const sheetMatch = sheetData.items.find(matcher);
+            if (sheetMatch) {
+              const formatted = formatDefibrillateurOutput(sheetMatch);
+              indexDefibrillateur(formatted, tenantId);
+              return res.json({ status: "success", defib: formatted, fromSpreadsheet: true });
+            }
+          }
+        }
+      } catch (_) {}
+
       const found = await findSingleDefibrillateur(id, tenantId);
       if (found && found.defib) {
         const formatted = formatDefibrillateurOutput(found.defib);
@@ -4240,20 +4260,109 @@ async function warmupDefibrillateursStore() {
       const tabType = String(req.query.type || 'defibrillateurs').trim() as SheetTabType;
       const forceRefresh = req.query.forceRefresh === 'true';
       const explicitUrl = String(req.query.spreadsheetUrl || '').trim();
+      const mode = String(req.query.mode || '').trim();
+      const hasLimit = req.query.limit !== undefined && req.query.limit !== '';
+      const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
+      const limit = hasLimit ? Math.max(1, Math.min(4500, parseInt(String(req.query.limit), 10) || 2500)) : 0;
+
       const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, tabType, explicitUrl);
 
       if (!sheetUrl || !extractSpreadsheetIdAndGid(sheetUrl)) {
-        return res.json({ status: 'no_spreadsheet', fromSpreadsheet: false, spreadsheetUrl: '', items: [], totalCount: 0 });
+        return res.json({
+          status: 'no_spreadsheet',
+          fromSpreadsheet: false,
+          spreadsheetUrl: '',
+          items: [],
+          totalCount: 0,
+          hasMore: false,
+          nextOffset: 0,
+          stats: {
+            totalCount: 0,
+            totalMainOui: 0,
+            totalMainNon: 0,
+            conformeEtAJourCount: 0,
+            eligibleMainOuiCount: 0,
+            compliancePercent: 0,
+            distinctModels: [],
+            distinctCoffrets: [],
+            distinctElectrodes: [],
+            distinctBatteries: [],
+          },
+        });
       }
 
       const data = await fetchTenantSheetCollection(sheetUrl, tenantId, tabType, forceRefresh);
+
+      if (tabType === 'defibrillateurs' && Array.isArray(data.items) && data.items.length > 0) {
+        for (const item of data.items) {
+          indexDefibrillateur(item, tenantId);
+        }
+      }
+
+      if (mode === 'stats') {
+        return res.json({
+          status: 'success',
+          fromSpreadsheet: data.fromSpreadsheet,
+          spreadsheetUrl: sheetUrl,
+          items: [],
+          headers: data.headers,
+          totalCount: data.totalCount,
+          stats: data.stats,
+          hasMore: data.totalCount > 0,
+          nextOffset: 0,
+        });
+      }
+
+      const itemsOut = hasLimit ? data.items.slice(offset, offset + limit) : data.items;
+      const nextOffset = offset + itemsOut.length;
+      const hasMore = hasLimit ? nextOffset < data.totalCount : false;
+
       return res.json({
         status: 'success',
         fromSpreadsheet: data.fromSpreadsheet,
         spreadsheetUrl: sheetUrl,
-        items: data.items,
+        items: itemsOut,
         headers: data.headers,
         totalCount: data.totalCount,
+        stats: data.stats,
+        offset,
+        limit: hasLimit ? limit : data.totalCount,
+        hasMore,
+        nextOffset,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/sheets/query", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const tenantId = String(body.tenantId || req.query.tenantId || 'demo').trim();
+      const tabType = String(body.type || req.query.type || 'defibrillateurs').trim() as SheetTabType;
+      const explicitUrl = String(body.spreadsheetUrl || req.query.spreadsheetUrl || '').trim();
+      const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, tabType, explicitUrl);
+
+      if (!sheetUrl || !extractSpreadsheetIdAndGid(sheetUrl)) {
+        return res.json({
+          status: 'no_spreadsheet',
+          fromSpreadsheet: false,
+          spreadsheetUrl: '',
+          items: [],
+          totalFilteredCount: 0,
+          totalCount: 0,
+        });
+      }
+
+      const result = await queryTenantSheetCollection(sheetUrl, tenantId, tabType, body);
+      return res.json({
+        status: 'success',
+        fromSpreadsheet: result.fromSpreadsheet,
+        spreadsheetUrl: sheetUrl,
+        items: result.items,
+        totalFilteredCount: result.totalFilteredCount,
+        totalCount: result.totalCount,
+        stats: result.stats,
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
