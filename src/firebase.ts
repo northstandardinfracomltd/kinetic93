@@ -47,6 +47,7 @@ try {
           k.includes('spreadsheet_') ||
           k.includes('company_info') ||
           k.includes('companyInfo') ||
+          k.includes('tenantDatabases') ||
           k === 'fs_cache_registered_tenants' ||
           k.startsWith('defib_admin_') ||
           k === 'defib_tenant_id' ||
@@ -62,7 +63,8 @@ try {
           lower.includes('other_equipment') ||
           lower.includes('otherequipment') ||
           lower.includes('deleted_defib_keys') ||
-          lower.startsWith('fs_cache_')
+          lower.startsWith('fs_cache_') ||
+          k === 'firestore_quota_exhausted_until'
         ) {
           toRemove.push(k);
         }
@@ -581,6 +583,7 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
         k.includes('spreadsheet_') ||
         k.includes('company_info') ||
         k.includes('companyInfo') ||
+        k.includes('tenantDatabases') ||
         k === 'fs_cache_registered_tenants'
       ) {
         continue;
@@ -795,6 +798,13 @@ export async function fetchCollectionFromFirestore<T>(
       );
       if (res.ok) {
         const json = await res.json();
+        if (json?.spreadsheetUrl && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            localStorage.setItem(`defib_${activeTenantId}_${sheetInfo.localKey}`, json.spreadsheetUrl);
+            localStorage.setItem(`defib_${activeTenantId.toUpperCase()}_${sheetInfo.localKey}`, json.spreadsheetUrl);
+            localStorage.setItem(`defib_${activeTenantId.toLowerCase()}_${sheetInfo.localKey}`, json.spreadsheetUrl);
+          } catch (_) {}
+        }
         const items = Array.isArray(json?.items) ? json.items : [];
         onProgress?.(items.length, items.length, `Chargement ${items.length}/${items.length}, Terminé.`);
         return items as unknown as T;
@@ -1327,8 +1337,7 @@ export function sanitizeUndefined(obj: any): any {
 let firestoreQuotaExhaustedUntil = 0;
 try {
   if (typeof window !== 'undefined' && window.localStorage) {
-    const saved = localStorage.getItem('firestore_quota_exhausted_until');
-    if (saved) firestoreQuotaExhaustedUntil = parseInt(saved, 10) || 0;
+    localStorage.removeItem('firestore_quota_exhausted_until');
   }
 } catch (_) {}
 
@@ -1336,14 +1345,8 @@ export function isFirestoreQuotaExhausted(): boolean {
   return Date.now() < firestoreQuotaExhaustedUntil;
 }
 
-export function recordFirestoreQuotaExhaustion(durationHours = 6) {
-  firestoreQuotaExhaustedUntil = Date.now() + durationHours * 3600 * 1000;
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem('firestore_quota_exhausted_until', String(firestoreQuotaExhaustedUntil));
-    }
-  } catch (_) {}
-  console.warn(`[Firestore Quota Protection] Free write units exhausted. Pausing direct client Firestore writes for ${durationHours} hours. All data is reliably preserved in local storage and backend server.`);
+export function recordFirestoreQuotaExhaustion(durationHours = 1) {
+  firestoreQuotaExhaustedUntil = Date.now() + Math.min(durationHours, 1) * 60 * 1000;
 }
 
 /**
@@ -1483,17 +1486,36 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
     console.warn(`[Sync Server Relay] Error syncing collection ${collectionName} to server:`, syncErr);
   }
 
-  if (isFirestoreQuotaExhausted()) {
+  const isCriticalMetadata =
+    collectionName === 'companyInfo' ||
+    collectionName === 'company_info' ||
+    collectionName === 'tenantDatabases' ||
+    collectionName === 'registered_tenants' ||
+    collectionName === 'members' ||
+    collectionName === 'variables' ||
+    collectionName === 'api_connectors';
+
+  if (isFirestoreQuotaExhausted() && !isCriticalMetadata) {
     // Quota reached for today; data is already stored safely in local storage & server sync
     return;
   }
 
   try {
     const primaryKey = getCollectionKey(collectionName, activeTenantId);
-    const writeKeys = [primaryKey];
+    const writeKeySet = new Set<string>([primaryKey]);
     if (primaryKey.toLowerCase() !== primaryKey) {
-      writeKeys.push(primaryKey.toLowerCase());
+      writeKeySet.add(primaryKey.toLowerCase());
     }
+    if (isCriticalMetadata && activeTenantId && activeTenantId !== 'demo') {
+      const tAliases = getTenantAliases(activeTenantId);
+      for (const al of tAliases) {
+        if (/^d\d+$/i.test(al)) {
+          writeKeySet.add(`${al.toUpperCase()}_${collectionName}`);
+          writeKeySet.add(`${al.toLowerCase()}_${collectionName}`);
+        }
+      }
+    }
+    const writeKeys = Array.from(writeKeySet);
 
     const jsonStr = JSON.stringify(finalCleanValue);
     // Firestore single doc limit is 1MB. If array and payload > 400 KB, chunk it!

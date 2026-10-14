@@ -779,13 +779,23 @@ export default function SettingsModal({
     if (JSON.stringify(companyInfo) !== JSON.stringify(lastPropsCompanyRef.current)) {
       setLocalCompany(prev => {
         if (!companyInfo) return prev;
-        // Do not overwrite non-empty tenant details with empty/placeholder values
-        const activeTid = (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+        // Do not overwrite non-empty tenant details or spreadsheet URLs with empty/placeholder values
         const isNewPlaceholder = (!companyInfo.name || companyInfo.name === 'Mon Cabinet') && (!companyInfo.email || companyInfo.email === '');
-        if (isNewPlaceholder && prev.name && prev.name !== 'Mon Cabinet') {
-          return { ...companyInfo, ...prev };
-        }
-        return { ...prev, ...companyInfo };
+        const merged = isNewPlaceholder && prev.name && prev.name !== 'Mon Cabinet'
+          ? { ...companyInfo, ...prev }
+          : { ...prev, ...companyInfo };
+        const effDefibs = companyInfo.spreadsheetDefibrillateurs || companyInfo.spreadsheetDefibrillateursUrl || prev.spreadsheetDefibrillateurs || '';
+        const effAutres = companyInfo.spreadsheetAutresMateriels || companyInfo.spreadsheetAutresMaterielsUrl || prev.spreadsheetAutresMateriels || '';
+        const effClients = companyInfo.spreadsheetClients || companyInfo.spreadsheetClientsUrl || prev.spreadsheetClients || '';
+        return {
+          ...merged,
+          spreadsheetDefibrillateurs: effDefibs,
+          spreadsheetAutresMateriels: effAutres,
+          spreadsheetClients: effClients,
+          spreadsheetDefibrillateursUrl: effDefibs,
+          spreadsheetAutresMaterielsUrl: effAutres,
+          spreadsheetClientsUrl: effClients,
+        };
       });
       if (companyInfo?.customLocationNames) setLocalLocationNames(companyInfo.customLocationNames);
       if (companyInfo?.enableAutoEmails) setEnableAutoEmails(companyInfo.enableAutoEmails);
@@ -867,9 +877,9 @@ export default function SettingsModal({
       if (comp?.disableHelpsAndTutorials) setDisableHelpsAndTutorials(comp.disableHelpsAndTutorials);
       if (comp?.enableOtherEquipments) setEnableOtherEquipments(comp.enableOtherEquipments);
 
-      // 3. Fallback to registered tenants registry if company info fields still missing
+      // 3. Fallback to registered tenants registry if company info fields still missing (local state only, never overwrite remote Firestore on mount)
       getRegisteredTenants().then(tenants => {
-        const found = tenants.find(t => 
+        const found: any = tenants.find(t => 
           t.id.toLowerCase() === activeTid.toLowerCase() || 
           (t.shortEnvId && t.shortEnvId.toLowerCase() === activeTid.toLowerCase())
         );
@@ -878,18 +888,16 @@ export default function SettingsModal({
             const isPlaceholderName = !prev.name || prev.name === 'Mon Cabinet' || (activeTid !== 'demo' && prev.name === 'Défibeo Solutions');
             const isPlaceholderEmail = !prev.email || (activeTid !== 'demo' && prev.email === 'contact@defibeo-solutions.com');
             const isPlaceholderPhone = !prev.phone || (activeTid !== 'demo' && prev.phone === '+33 1 47 20 00 01');
-            if (isPlaceholderName || isPlaceholderEmail || isPlaceholderPhone) {
-              const enriched = {
-                ...prev,
-                name: isPlaceholderName && found.companyName ? found.companyName : prev.name,
-                nomCommercial: isPlaceholderName && found.companyName ? found.companyName : (prev.nomCommercial || prev.name),
-                email: isPlaceholderEmail && (found.companyEmail || found.adminEmail) ? (found.companyEmail || found.adminEmail) : prev.email,
-                phone: isPlaceholderPhone && found.companyPhone ? found.companyPhone : prev.phone,
-              };
-              onUpdateCompanyInfo(enriched);
-              return enriched;
-            }
-            return prev;
+            return {
+              ...prev,
+              name: isPlaceholderName && found.companyName ? found.companyName : prev.name,
+              nomCommercial: isPlaceholderName && found.companyName ? found.companyName : (prev.nomCommercial || prev.name),
+              email: isPlaceholderEmail && (found.companyEmail || found.adminEmail) ? (found.companyEmail || found.adminEmail) : prev.email,
+              phone: isPlaceholderPhone && found.companyPhone ? found.companyPhone : prev.phone,
+              spreadsheetDefibrillateurs: prev.spreadsheetDefibrillateurs || found.spreadsheetDefibrillateurs || '',
+              spreadsheetAutresMateriels: prev.spreadsheetAutresMateriels || found.spreadsheetAutresMateriels || '',
+              spreadsheetClients: prev.spreadsheetClients || found.spreadsheetClients || '',
+            };
           });
         }
       }).catch(() => {});
@@ -913,30 +921,62 @@ export default function SettingsModal({
         }));
       }
 
-      // 5. Remote fetch from Firestore for both companyInfo and tenantDatabases
+      // 5. Remote fetch from Firestore / Server for both companyInfo and tenantDatabases
       if (activeTid && activeTid !== 'demo') {
-        fetchCollectionFromFirestore<CompanyInfo>('companyInfo', activeTid).then(remoteCompany => {
-          if (remoteCompany && typeof remoteCompany === 'object') {
-            setLocalCompany(prev => ({ 
-              ...prev, 
-              ...remoteCompany,
-              spreadsheetDefibrillateurs: remoteCompany.spreadsheetDefibrillateurs !== undefined ? remoteCompany.spreadsheetDefibrillateurs : prev.spreadsheetDefibrillateurs,
-              spreadsheetAutresMateriels: remoteCompany.spreadsheetAutresMateriels !== undefined ? remoteCompany.spreadsheetAutresMateriels : prev.spreadsheetAutresMateriels,
-              spreadsheetClients: remoteCompany.spreadsheetClients !== undefined ? remoteCompany.spreadsheetClients : prev.spreadsheetClients,
-            }));
-            onUpdateCompanyInfo(remoteCompany);
-          }
-        }).catch(() => {});
+        Promise.all([
+          fetchCollectionFromFirestore<CompanyInfo>('companyInfo', activeTid).catch(() => null),
+          fetchCollectionFromFirestore<any>('tenantDatabases', activeTid).catch(() => null),
+        ]).then(([remoteCompany, dbData]) => {
+          const validCompany = remoteCompany && typeof remoteCompany === 'object' && !Array.isArray(remoteCompany) ? remoteCompany : null;
+          const validDb = dbData && typeof dbData === 'object' && !Array.isArray(dbData) ? dbData : null;
+          if (!validCompany && !validDb) return;
 
-        fetchCollectionFromFirestore<any>('tenantDatabases', activeTid).then(dbData => {
-          if (dbData && typeof dbData === 'object') {
-            setLocalCompany(prev => ({
+          setLocalCompany(prev => {
+            const effDefibs =
+              validDb?.spreadsheetDefibrillateurs ||
+              validDb?.spreadsheetDefibrillateursUrl ||
+              validCompany?.spreadsheetDefibrillateurs ||
+              validCompany?.spreadsheetDefibrillateursUrl ||
+              prev.spreadsheetDefibrillateurs ||
+              cachedDefib ||
+              '';
+            const effAutres =
+              validDb?.spreadsheetAutresMateriels ||
+              validDb?.spreadsheetAutresMaterielsUrl ||
+              validCompany?.spreadsheetAutresMateriels ||
+              validCompany?.spreadsheetAutresMaterielsUrl ||
+              prev.spreadsheetAutresMateriels ||
+              cachedAutres ||
+              '';
+            const effClients =
+              validDb?.spreadsheetClients ||
+              validDb?.spreadsheetClientsUrl ||
+              validCompany?.spreadsheetClients ||
+              validCompany?.spreadsheetClientsUrl ||
+              prev.spreadsheetClients ||
+              cachedClients ||
+              '';
+
+            const tKeys = [activeTid, activeTid.toLowerCase(), activeTid.toUpperCase()];
+            try {
+              for (const tid of tKeys) {
+                if (effDefibs) localStorage.setItem(`defib_${tid}_spreadsheet_defibrillateurs`, effDefibs);
+                if (effAutres) localStorage.setItem(`defib_${tid}_spreadsheet_autres_materiels`, effAutres);
+                if (effClients) localStorage.setItem(`defib_${tid}_spreadsheet_clients`, effClients);
+              }
+            } catch (_) {}
+
+            return {
               ...prev,
-              spreadsheetDefibrillateurs: dbData.spreadsheetDefibrillateurs !== undefined ? dbData.spreadsheetDefibrillateurs : prev.spreadsheetDefibrillateurs,
-              spreadsheetAutresMateriels: dbData.spreadsheetAutresMateriels !== undefined ? dbData.spreadsheetAutresMateriels : prev.spreadsheetAutresMateriels,
-              spreadsheetClients: dbData.spreadsheetClients !== undefined ? dbData.spreadsheetClients : prev.spreadsheetClients,
-            }));
-          }
+              ...(validCompany || {}),
+              spreadsheetDefibrillateurs: effDefibs,
+              spreadsheetAutresMateriels: effAutres,
+              spreadsheetClients: effClients,
+              spreadsheetDefibrillateursUrl: effDefibs,
+              spreadsheetAutresMaterielsUrl: effAutres,
+              spreadsheetClientsUrl: effClients,
+            };
+          });
         }).catch(() => {});
       }
 
@@ -1573,18 +1613,80 @@ export default function SettingsModal({
     }));
   };
 
+  const dbAutoSaveTimerRef = React.useRef<any>(null);
+
+  const syncSpreadsheetUrlsEverywhere = async (companyObj: CompanyInfo, effectiveTenantId: string) => {
+    const dbPayload = {
+      spreadsheetDefibrillateurs: companyObj.spreadsheetDefibrillateurs || '',
+      spreadsheetAutresMateriels: companyObj.spreadsheetAutresMateriels || '',
+      spreadsheetClients: companyObj.spreadsheetClients || '',
+      spreadsheetDefibrillateursUrl: companyObj.spreadsheetDefibrillateurs || '',
+      spreadsheetAutresMaterielsUrl: companyObj.spreadsheetAutresMateriels || '',
+      spreadsheetClientsUrl: companyObj.spreadsheetClients || '',
+      updatedAt: new Date().toISOString(),
+    };
+
+    const tKeys = [effectiveTenantId, effectiveTenantId.toLowerCase(), effectiveTenantId.toUpperCase()];
+    try {
+      for (const tid of tKeys) {
+        localStorage.setItem(`defib_${tid}_spreadsheet_defibrillateurs`, dbPayload.spreadsheetDefibrillateurs);
+        localStorage.setItem(`defib_${tid}_spreadsheet_autres_materiels`, dbPayload.spreadsheetAutresMateriels);
+        localStorage.setItem(`defib_${tid}_spreadsheet_clients`, dbPayload.spreadsheetClients);
+        localStorage.setItem(`defib_${tid}_company_info`, JSON.stringify(companyObj));
+        localStorage.setItem(`fs_cache_${tid}_company_info`, JSON.stringify(companyObj));
+        localStorage.setItem(`fs_cache_${tid}_tenantDatabases`, JSON.stringify(dbPayload));
+      }
+      localStorage.setItem('defib_company_info', JSON.stringify(companyObj));
+    } catch (_) {}
+
+    await Promise.all([
+      fetch('/api/sync-collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName: 'companyInfo',
+          tenantId: effectiveTenantId,
+          value: companyObj,
+          explicitDatabaseSave: true,
+        }),
+      }).catch(() => {}),
+      fetch('/api/sync-collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName: 'tenantDatabases',
+          tenantId: effectiveTenantId,
+          value: dbPayload,
+          explicitDatabaseSave: true,
+        }),
+      }).catch(() => {}),
+      ...(effectiveTenantId && effectiveTenantId !== 'demo'
+        ? [
+            saveCollectionToFirestore('companyInfo', companyObj, effectiveTenantId).catch(() => {}),
+            saveCollectionToFirestore('tenantDatabases', dbPayload, effectiveTenantId).catch(() => {}),
+          ]
+        : []),
+    ]);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('defib-tenant-spreadsheets-updated', { detail: companyObj }));
+    }
+  };
+
   const handleDbSpreadsheetChange = (
     field: 'spreadsheetDefibrillateurs' | 'spreadsheetAutresMateriels' | 'spreadsheetClients',
     value: string
   ) => {
     if (!isCurrentUserSuperAdmin) return;
-    setLocalCompany(prev => ({
-      ...prev,
+    const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+    const nextCompany: CompanyInfo = {
+      ...localCompany,
       [field]: value,
-      [`${field}Url`]: value
-    }));
+      [`${field}Url`]: value,
+    };
+    setLocalCompany(nextCompany);
+
     try {
-      const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
       const tKeys = [activeTid, activeTid.toLowerCase(), activeTid.toUpperCase()];
       for (const tid of tKeys) {
         if (field === 'spreadsheetDefibrillateurs') localStorage.setItem(`defib_${tid}_spreadsheet_defibrillateurs`, value);
@@ -1592,6 +1694,12 @@ export default function SettingsModal({
         if (field === 'spreadsheetClients') localStorage.setItem(`defib_${tid}_spreadsheet_clients`, value);
       }
     } catch (_) {}
+
+    if (dbAutoSaveTimerRef.current) clearTimeout(dbAutoSaveTimerRef.current);
+    dbAutoSaveTimerRef.current = setTimeout(() => {
+      onUpdateCompanyInfo(nextCompany);
+      syncSpreadsheetUrlsEverywhere(nextCompany, activeTid).catch(() => {});
+    }, 450);
   };
 
   const handleSaveDatabases = async () => {
@@ -1599,6 +1707,7 @@ export default function SettingsModal({
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    if (dbAutoSaveTimerRef.current) clearTimeout(dbAutoSaveTimerRef.current);
     setDatabasesSaveStatus('saving');
     const effectiveTenantId = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
 
@@ -1615,60 +1724,8 @@ export default function SettingsModal({
     setLocalCompany(updatedCompany);
     onUpdateCompanyInfo(updatedCompany);
 
-    const tKeys = [effectiveTenantId, effectiveTenantId.toLowerCase(), effectiveTenantId.toUpperCase()];
-    for (const tid of tKeys) {
-      localStorage.setItem(`defib_${tid}_spreadsheet_defibrillateurs`, localCompany.spreadsheetDefibrillateurs || '');
-      localStorage.setItem(`defib_${tid}_spreadsheet_autres_materiels`, localCompany.spreadsheetAutresMateriels || '');
-      localStorage.setItem(`defib_${tid}_spreadsheet_clients`, localCompany.spreadsheetClients || '');
-      localStorage.setItem(`defib_${tid}_company_info`, JSON.stringify(updatedCompany));
-      localStorage.setItem(`fs_cache_${tid}_company_info`, JSON.stringify(updatedCompany));
-    }
-    localStorage.setItem('defib_company_info', JSON.stringify(updatedCompany));
-
     try {
-      await Promise.all([
-        fetch('/api/sync-collection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            collectionName: 'companyInfo',
-            tenantId: effectiveTenantId,
-            value: updatedCompany,
-          }),
-        }).catch(() => {}),
-        fetch('/api/sync-collection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            collectionName: 'tenantDatabases',
-            tenantId: effectiveTenantId,
-            value: {
-              spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
-              spreadsheetAutresMateriels: localCompany.spreadsheetAutresMateriels || '',
-              spreadsheetClients: localCompany.spreadsheetClients || '',
-              updatedAt: new Date().toISOString(),
-            },
-          }),
-        }).catch(() => {}),
-        ...(effectiveTenantId && effectiveTenantId !== 'demo'
-          ? [
-              saveCollectionToFirestore('companyInfo', updatedCompany, effectiveTenantId).catch(() => {}),
-              saveCollectionToFirestore(
-                'tenantDatabases',
-                {
-                  spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
-                  spreadsheetAutresMateriels: localCompany.spreadsheetAutresMateriels || '',
-                  spreadsheetClients: localCompany.spreadsheetClients || '',
-                  updatedAt: new Date().toISOString(),
-                },
-                effectiveTenantId
-              ).catch(() => {}),
-            ]
-          : []),
-      ]);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('defib-tenant-spreadsheets-updated', { detail: updatedCompany }));
-      }
+      await syncSpreadsheetUrlsEverywhere(updatedCompany, effectiveTenantId);
       setDatabasesSaveStatus('saved');
     } catch (err) {
       console.error('Error saving databases:', err);
@@ -2292,6 +2349,7 @@ export default function SettingsModal({
     }
 
     if (effectiveTenantId && effectiveTenantId !== 'demo') {
+      promises.push(syncSpreadsheetUrlsEverywhere(companyToSave, effectiveTenantId).catch(() => {}));
       promises.push(
         saveCollectionToFirestore('companyInfo', companyToSave, effectiveTenantId).catch(err =>
           console.error('Error saving company info directly to Firestore:', err)

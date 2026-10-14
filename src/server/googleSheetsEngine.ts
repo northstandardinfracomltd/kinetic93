@@ -512,18 +512,42 @@ function normalizeSituationFromSheet(val: string): 'Vert' | 'Orange' | 'Rouge' {
   return 'Vert';
 }
 
-export function mapRowToDefib(headers: string[], row: string[], rowIndex: number, tenantId: string): any {
+export interface PrecomputedColumnMatch {
+  colIdx: number;
+  def: SheetColumnDef;
+}
+
+export function buildColumnMatches(headers: string[], canonicalDefs: SheetColumnDef[]): PrecomputedColumnMatch[] {
   const normHeaders = headers.map(normalizeHeaderKey);
-  const rawByHeader: Record<string, string> = {};
-  headers.forEach((h, idx) => {
-    rawByHeader[h] = row[idx] !== undefined ? String(row[idx]).trim() : '';
-  });
+  const matches: PrecomputedColumnMatch[] = [];
+  for (const def of canonicalDefs) {
+    let matchedIdx = -1;
+    for (let i = 0; i < normHeaders.length; i++) {
+      if (def.aliases.includes(normHeaders[i])) {
+        matchedIdx = i;
+        break;
+      }
+    }
+    if (matchedIdx >= 0) {
+      matches.push({ colIdx: matchedIdx, def });
+    }
+  }
+  return matches;
+}
+
+export function mapRowToDefib(
+  headers: string[],
+  row: string[],
+  rowIndex: number,
+  tenantId: string,
+  precomputedMatches?: PrecomputedColumnMatch[]
+): any {
+  const colMatches = precomputedMatches || buildColumnMatches(headers, DEFIB_CANONICAL_HEADERS);
 
   const obj: any = {
     envId: tenantId,
     tenantId: tenantId,
     _sheetRowNumber: rowIndex + 2, // 1-based header = row 1, first data row = row 2
-    _rawSheetRow: rawByHeader,
     pays: 'France',
     contrat: 'Non',
     kitCiseauxPresents: 'Oui',
@@ -554,28 +578,22 @@ export function mapRowToDefib(headers: string[], row: string[], rowIndex: number
     rappelJournalierAuto: 'Non',
   };
 
-  for (const def of DEFIB_CANONICAL_HEADERS) {
-    let matchedIdx = -1;
-    for (let i = 0; i < normHeaders.length; i++) {
-      if (def.aliases.includes(normHeaders[i])) {
-        matchedIdx = i;
-        break;
-      }
-    }
-    if (matchedIdx >= 0) {
-      const rawVal = row[matchedIdx] !== undefined ? String(row[matchedIdx]).trim() : '';
-      if (def.type === 'yesno') {
-        const defVal = ['conforme', 'fsmAutorise', 'kitCiseauxPresents', 'kitMasquePresent', 'kitServiettesPresentes', 'kitGantsPresents', 'kitRasoirPresent'].includes(def.field) ? 'Oui' : 'Non';
-        obj[def.field] = normalizeYesNo(rawVal, defVal);
-      } else if (def.type === 'bool') {
-        obj[def.field] = normalizeBool(rawVal, false);
-      } else if (def.type === 'date') {
-        obj[def.field] = normalizeDateStr(rawVal);
-      } else if (def.field === 'situationElectrodeA' || def.field === 'situationElectrodeP' || def.field === 'situationBatterie') {
-        obj[def.field] = normalizeSituationFromSheet(rawVal);
-      } else {
-        obj[def.field] = rawVal;
-      }
+  for (let m = 0; m < colMatches.length; m++) {
+    const { colIdx, def } = colMatches[m];
+    const rawCell = row[colIdx];
+    const rawVal = rawCell !== undefined && rawCell !== null ? String(rawCell).trim() : '';
+    if (def.type === 'yesno') {
+      const defVal = ['conforme', 'fsmAutorise', 'kitCiseauxPresents', 'kitMasquePresent', 'kitServiettesPresentes', 'kitGantsPresents', 'kitRasoirPresent'].includes(def.field) ? 'Oui' : 'Non';
+      obj[def.field] = normalizeYesNo(rawVal, defVal);
+    } else if (def.type === 'bool') {
+      obj[def.field] = normalizeBool(rawVal, false);
+    } else if (def.type === 'date') {
+      const dStr = normalizeDateStr(rawVal);
+      if (dStr) obj[def.field] = dStr;
+    } else if (def.field === 'situationElectrodeA' || def.field === 'situationElectrodeP' || def.field === 'situationBatterie') {
+      obj[def.field] = normalizeSituationFromSheet(rawVal);
+    } else if (rawVal !== '') {
+      obj[def.field] = rawVal;
     }
   }
 
@@ -606,6 +624,7 @@ export function mapRowToDefib(headers: string[], row: string[], rowIndex: number
   const cleanSn = String(obj.numeroSerie || '').trim();
   obj.id = cleanIdent || cleanSn || `sheet_df_${tenantId}_${rowIndex + 2}`;
   if (!obj.identifiant) obj.identifiant = obj.id;
+  if (!obj.numeroSerie) obj.numeroSerie = '';
 
   return obj;
 }
@@ -663,19 +682,20 @@ export function mapDefibToRow(headers: string[], defib: any, existingRow?: strin
   return outRow;
 }
 
-export function mapRowToAutreMateriel(headers: string[], row: string[], rowIndex: number, tenantId: string): any {
-  const normHeaders = headers.map(normalizeHeaderKey);
-  const rawByHeader: Record<string, string> = {};
-  headers.forEach((h, idx) => {
-    rawByHeader[h] = row[idx] !== undefined ? String(row[idx]).trim() : '';
-  });
+export function mapRowToAutreMateriel(
+  headers: string[],
+  row: string[],
+  rowIndex: number,
+  tenantId: string,
+  precomputedMatches?: PrecomputedColumnMatch[]
+): any {
+  const colMatches = precomputedMatches || buildColumnMatches(headers, AUTRES_CANONICAL_HEADERS);
 
   const specifiques: Record<string, any> = {};
   const obj: any = {
     envId: tenantId,
     tenantId: tenantId,
     _sheetRowNumber: rowIndex + 2,
-    _rawSheetRow: rawByHeader,
     categorie: 'Extincteur',
     pays: 'France',
     loue: 'Non',
@@ -692,31 +712,23 @@ export function mapRowToAutreMateriel(headers: string[], row: string[], rowIndex
   };
 
   const matchedColIndices = new Set<number>();
-  for (const def of AUTRES_CANONICAL_HEADERS) {
-    let matchedIdx = -1;
-    for (let i = 0; i < normHeaders.length; i++) {
-      if (def.aliases.includes(normHeaders[i])) {
-        matchedIdx = i;
-        break;
-      }
+  for (let m = 0; m < colMatches.length; m++) {
+    const { colIdx, def } = colMatches[m];
+    matchedColIndices.add(colIdx);
+    const rawVal = row[colIdx] !== undefined ? String(row[colIdx]).trim() : '';
+    let formatted: any = rawVal;
+    if (def.type === 'yesno') {
+      const defVal = ['conforme', 'fsmAutorise'].includes(def.field) ? 'Oui' : 'Non';
+      formatted = normalizeYesNo(rawVal, defVal);
+    } else if (def.type === 'bool') {
+      formatted = normalizeBool(rawVal, false);
+    } else if (def.type === 'date') {
+      formatted = normalizeDateStr(rawVal);
     }
-    if (matchedIdx >= 0) {
-      matchedColIndices.add(matchedIdx);
-      const rawVal = row[matchedIdx] !== undefined ? String(row[matchedIdx]).trim() : '';
-      let formatted: any = rawVal;
-      if (def.type === 'yesno') {
-        const defVal = ['conforme', 'fsmAutorise'].includes(def.field) ? 'Oui' : 'Non';
-        formatted = normalizeYesNo(rawVal, defVal);
-      } else if (def.type === 'bool') {
-        formatted = normalizeBool(rawVal, false);
-      } else if (def.type === 'date') {
-        formatted = normalizeDateStr(rawVal);
-      }
-      if (def.isSpecifique) {
-        if (formatted !== '') specifiques[def.field] = formatted;
-      } else {
-        obj[def.field] = formatted;
-      }
+    if (def.isSpecifique) {
+      if (formatted !== '') specifiques[def.field] = formatted;
+    } else if (formatted !== '' || def.type === 'yesno' || def.type === 'bool') {
+      obj[def.field] = formatted;
     }
   }
 
@@ -750,7 +762,10 @@ export function mapAutreMaterielToRow(headers: string[], item: any, existingRow?
   for (const def of AUTRES_CANONICAL_HEADERS) {
     for (let i = 0; i < normHeaders.length; i++) {
       if (!def.aliases.includes(normHeaders[i])) continue;
-      const val = def.isSpecifique ? item.specifiques?.[def.field] : item[def.field];
+      let val = def.isSpecifique ? item.specifiques?.[def.field] : item[def.field];
+      if (def.field === 'identifiant' && !val && item.id) {
+        val = item.id;
+      }
       if (val !== undefined && val !== null) {
         if (def.type === 'bool') {
           outRow[i] = val ? 'Oui' : 'Non';
@@ -763,40 +778,34 @@ export function mapAutreMaterielToRow(headers: string[], item: any, existingRow?
   return outRow;
 }
 
-export function mapRowToClient(headers: string[], row: string[], rowIndex: number, tenantId: string): any {
-  const normHeaders = headers.map(normalizeHeaderKey);
-  const rawByHeader: Record<string, string> = {};
-  headers.forEach((h, idx) => {
-    rawByHeader[h] = row[idx] !== undefined ? String(row[idx]).trim() : '';
-  });
+export function mapRowToClient(
+  headers: string[],
+  row: string[],
+  rowIndex: number,
+  tenantId: string,
+  precomputedMatches?: PrecomputedColumnMatch[]
+): any {
+  const colMatches = precomputedMatches || buildColumnMatches(headers, CLIENTS_CANONICAL_HEADERS);
 
   const obj: any = {
     envId: tenantId,
     tenantId: tenantId,
     _sheetRowNumber: rowIndex + 2,
-    _rawSheetRow: rawByHeader,
     pays: 'France',
     contrat: 'Non',
     accesPortail: 'Non',
   };
 
-  for (const def of CLIENTS_CANONICAL_HEADERS) {
-    let matchedIdx = -1;
-    for (let i = 0; i < normHeaders.length; i++) {
-      if (def.aliases.includes(normHeaders[i])) {
-        matchedIdx = i;
-        break;
-      }
-    }
-    if (matchedIdx >= 0) {
-      const rawVal = row[matchedIdx] !== undefined ? String(row[matchedIdx]).trim() : '';
-      if (def.type === 'yesno') {
-        obj[def.field] = normalizeYesNo(rawVal, 'Non');
-      } else if (def.type === 'date') {
-        obj[def.field] = normalizeDateStr(rawVal);
-      } else {
-        obj[def.field] = rawVal;
-      }
+  for (let m = 0; m < colMatches.length; m++) {
+    const { colIdx, def } = colMatches[m];
+    const rawVal = row[colIdx] !== undefined ? String(row[colIdx]).trim() : '';
+    if (def.type === 'yesno') {
+      obj[def.field] = normalizeYesNo(rawVal, 'Non');
+    } else if (def.type === 'date') {
+      const dStr = normalizeDateStr(rawVal);
+      if (dStr) obj[def.field] = dStr;
+    } else if (rawVal !== '') {
+      obj[def.field] = rawVal;
     }
   }
 
@@ -805,6 +814,7 @@ export function mapRowToClient(headers: string[], row: string[], rowIndex: numbe
   const cleanDenom = String(obj.denomination || '').trim();
   obj.id = cleanClientId || cleanSiret || (cleanDenom ? `cli_${cleanDenom.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : `sheet_cli_${tenantId}_${rowIndex + 2}`);
   if (!obj.clientIdField) obj.clientIdField = obj.id;
+  if (!obj.denomination) obj.denomination = '';
 
   return obj;
 }
@@ -821,7 +831,10 @@ export function mapClientToRow(headers: string[], client: any, existingRow?: str
   for (const def of CLIENTS_CANONICAL_HEADERS) {
     for (let i = 0; i < normHeaders.length; i++) {
       if (!def.aliases.includes(normHeaders[i])) continue;
-      const val = client[def.field];
+      let val = client[def.field];
+      if (def.field === 'clientIdField' && !val && client.id) {
+        val = client.id;
+      }
       if (val !== undefined && val !== null) {
         outRow[i] = String(val);
       }
@@ -873,26 +886,48 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
+  if (tabType === 'autresMateriels') {
+    return [item.id, item.identifiant, item.numeroSerie, item.specifiques?.numSerie, item.denomination]
+      .filter(Boolean)
+      .map(s => String(s).trim().toLowerCase());
+  }
   return [item.id, item.identifiant, item.numeroSerie]
     .filter(Boolean)
     .map(s => String(s).trim().toLowerCase());
 }
 
+const sheetWriteLocks = new Map<string, Promise<any>>();
+
+async function withSheetWriteLock<T>(spreadsheetId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = sheetWriteLocks.get(spreadsheetId) || Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  sheetWriteLocks.set(spreadsheetId, prev.then(() => next, () => next));
+  try {
+    await prev.catch(() => {});
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
 // ==========================================
 // 5. LIVE GOOGLE SHEET FETCHING & WRITING
 // ==========================================
-const sheetTabTitleCache = new Map<string, string>();
+const sheetTabMetaCache = new Map<string, { title: string; sheetId: number }>();
 
-async function resolveSheetTabTitle(spreadsheetId: string, gid?: string | null): Promise<string | null> {
+async function resolveSheetTabMeta(spreadsheetId: string, gid?: string | null): Promise<{ title: string | null; sheetId: number | null }> {
   const cacheKey = `${spreadsheetId}_${gid || '0'}`;
-  if (sheetTabTitleCache.has(cacheKey)) {
-    return sheetTabTitleCache.get(cacheKey)!;
+  if (sheetTabMetaCache.has(cacheKey)) {
+    return sheetTabMetaCache.get(cacheKey)!;
   }
 
   const cfg = getGlobalGoogleConfig();
   const accessToken = await getServiceAccountAccessToken();
 
-  const tryFetchMeta = async (useBearer: boolean): Promise<string | null> => {
+  const tryFetchMeta = async (useBearer: boolean): Promise<{ title: string; sheetId: number } | null> => {
     try {
       const headersInit: Record<string, string> = useBearer && accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
       const queryKey = !useBearer && cfg.apiKey ? `&key=${encodeURIComponent(cfg.apiKey)}` : '';
@@ -906,35 +941,47 @@ async function resolveSheetTabTitle(spreadsheetId: string, gid?: string | null):
       if (sheets.length === 0) return null;
       if (gid !== undefined && gid !== null && gid !== '') {
         const matched = sheets.find((s: any) => String(s?.properties?.sheetId) === String(gid));
-        if (matched?.properties?.title) {
-          sheetTabTitleCache.set(cacheKey, matched.properties.title);
-          return matched.properties.title;
+        if (matched?.properties?.title !== undefined && matched?.properties?.sheetId !== undefined) {
+          const meta = { title: String(matched.properties.title), sheetId: Number(matched.properties.sheetId) };
+          sheetTabMetaCache.set(cacheKey, meta);
+          return meta;
         }
       }
-      const firstTitle = sheets[0]?.properties?.title;
-      if (firstTitle) {
-        sheetTabTitleCache.set(cacheKey, firstTitle);
-        return firstTitle;
+      const firstProps = sheets[0]?.properties;
+      if (firstProps?.title !== undefined && firstProps?.sheetId !== undefined) {
+        const meta = { title: String(firstProps.title), sheetId: Number(firstProps.sheetId) };
+        sheetTabMetaCache.set(cacheKey, meta);
+        return meta;
       }
     } catch (_) {}
     return null;
   };
 
   if (accessToken) {
-    const title = await tryFetchMeta(true);
-    if (title) return title;
+    const meta = await tryFetchMeta(true);
+    if (meta) return meta;
   }
   if (cfg.apiKey) {
-    const title = await tryFetchMeta(false);
-    if (title) return title;
+    const meta = await tryFetchMeta(false);
+    if (meta) return meta;
   }
-  return null;
+  return { title: null, sheetId: gid ? Number(gid) : null };
+}
+
+async function resolveSheetTabTitle(spreadsheetId: string, gid?: string | null): Promise<string | null> {
+  const meta = await resolveSheetTabMeta(spreadsheetId, gid);
+  return meta.title;
 }
 
 function buildSheetRangePrefix(sheetTitle: string | null): string {
   if (!sheetTitle) return '';
   return `'${sheetTitle.replace(/'/g, "''")}'!`;
 }
+
+const inFlightSheetFetches = new Map<
+  string,
+  Promise<{ items: any[]; headers: string[]; totalCount: number; fromSpreadsheet: boolean; hasRemoteHeaders?: boolean }>
+>();
 
 async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: string[]; rows: string[][] } | null> {
   const extracted = extractSpreadsheetIdAndGid(spreadsheetUrl);
@@ -945,14 +992,14 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
   // Strategy 1: Google Sheets API v4 (Service Account first, then API Key fallback)
   const accessToken = await getServiceAccountAccessToken();
   const sheetTitle = await resolveSheetTabTitle(spreadsheetId, gid);
-  const rangePrefix = buildSheetRangePrefix(sheetTitle);
-  const targetRange = encodeURIComponent(`${rangePrefix}A1:ZZ50000`);
+  const rangeStr = sheetTitle ? `'${sheetTitle.replace(/'/g, "''")}'` : 'A1:ZZ50000';
+  const targetRange = encodeURIComponent(rangeStr);
 
   if (accessToken) {
     try {
       const apiRes = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${targetRange}`,
-        { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15000) }
+        { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(45000) }
       );
       if (apiRes.ok) {
         const json = await apiRes.json();
@@ -970,7 +1017,7 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
     try {
       const apiRes = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${targetRange}?key=${encodeURIComponent(cfg.apiKey)}`,
-        { signal: AbortSignal.timeout(15000) }
+        { signal: AbortSignal.timeout(45000) }
       );
       if (apiRes.ok) {
         const json = await apiRes.json();
@@ -998,7 +1045,7 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
           Accept: 'text/csv,text/plain,*/*',
         },
         redirect: 'follow',
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(35000),
       });
       if (res.ok) {
         const contentType = res.headers.get('content-type') || '';
@@ -1030,7 +1077,7 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
           gid,
         }),
         redirect: 'follow',
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(35000),
       });
       if (bridgeRes.ok) {
         const json = await bridgeRes.json();
@@ -1058,7 +1105,7 @@ export async function fetchTenantSheetCollection(
   const cacheKey = `${tenantId}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
   if (!forceRefresh && sheetMemoryCache.has(cacheKey)) {
     const cached = sheetMemoryCache.get(cacheKey)!;
-    if (Date.now() - cached.fetchedAt < 15000) {
+    if (Date.now() - cached.fetchedAt < 60000) {
       return {
         items: cached.items,
         headers: cached.headers,
@@ -1069,93 +1116,144 @@ export async function fetchTenantSheetCollection(
     }
   }
 
-  const overlay = loadMirrorOverlay(tenantId, tabType, extracted.spreadsheetId);
-  const rawMatrix = await fetchRawSheetMatrix(spreadsheetUrl);
-  const hasRemoteHeaders = Boolean(rawMatrix && rawMatrix.headers && rawMatrix.headers.length > 0);
-
-  const defaultHeaders =
-    tabType === 'defibrillateurs'
-      ? DEFIB_CANONICAL_HEADERS.map(d => d.header)
-      : tabType === 'autresMateriels'
-      ? AUTRES_CANONICAL_HEADERS.map(d => d.header)
-      : CLIENTS_CANONICAL_HEADERS.map(d => d.header);
-
-  const headers = hasRemoteHeaders
-    ? rawMatrix!.headers
-    : (overlay.headers.length > 0 ? overlay.headers : defaultHeaders);
-
-  if (hasRemoteHeaders && JSON.stringify(overlay.headers) !== JSON.stringify(rawMatrix!.headers)) {
-    overlay.headers = rawMatrix!.headers;
-    saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
+  if (inFlightSheetFetches.has(cacheKey)) {
+    return inFlightSheetFetches.get(cacheKey)!;
   }
 
-  const deletedSet = new Set((overlay.deletedIds || []).map(k => String(k).trim().toLowerCase()));
-  const baseItems: any[] = [];
+  const fetchPromise = (async () => {
+    try {
+      const overlay = loadMirrorOverlay(tenantId, tabType, extracted.spreadsheetId);
+      const rawMatrix = await fetchRawSheetMatrix(spreadsheetUrl);
+      const hasRemoteHeaders = Boolean(rawMatrix && rawMatrix.headers && rawMatrix.headers.length > 0);
 
-  if (rawMatrix && Array.isArray(rawMatrix.rows)) {
-    for (let i = 0; i < rawMatrix.rows.length; i++) {
-      const r = rawMatrix.rows[i];
-      if (!r || r.every(c => !c || String(c).trim() === '')) continue;
-
-      const mapped =
+      const defaultHeaders =
         tabType === 'defibrillateurs'
-          ? mapRowToDefib(headers, r, i, tenantId)
+          ? DEFIB_CANONICAL_HEADERS.map(d => d.header)
           : tabType === 'autresMateriels'
-          ? mapRowToAutreMateriel(headers, r, i, tenantId)
-          : mapRowToClient(headers, r, i, tenantId);
+          ? AUTRES_CANONICAL_HEADERS.map(d => d.header)
+          : CLIENTS_CANONICAL_HEADERS.map(d => d.header);
 
-      const keys = getRecordLookupKeys(mapped, tabType);
-      if (keys.some(k => deletedSet.has(k))) continue;
+      const headers = hasRemoteHeaders
+        ? rawMatrix!.headers
+        : (overlay.headers.length > 0 ? overlay.headers : defaultHeaders);
 
-      baseItems.push(mapped);
-    }
-  }
+      if (hasRemoteHeaders && JSON.stringify(overlay.headers) !== JSON.stringify(rawMatrix!.headers)) {
+        overlay.headers = rawMatrix!.headers;
+        saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
+      }
 
-  // Merge upserted records from overlay (matching by ID / Identifiant / SIRET / _sheetRowNumber)
-  const upsertedEntries = Object.values(overlay.upsertedById || {});
-  if (upsertedEntries.length > 0) {
-    for (const upItem of upsertedEntries) {
-      const upKeys = getRecordLookupKeys(upItem, tabType);
-      if (upKeys.some(k => deletedSet.has(k))) continue;
+      const deletedSet = new Set((overlay.deletedIds || []).map(k => String(k).trim().toLowerCase()));
+      const baseItems: any[] = [];
 
-      const existingIdx = baseItems.findIndex(b => {
-        if (upItem._sheetRowNumber && b._sheetRowNumber && upItem._sheetRowNumber === b._sheetRowNumber) {
-          return true;
+      const canonicalDefs =
+        tabType === 'defibrillateurs'
+          ? DEFIB_CANONICAL_HEADERS
+          : tabType === 'autresMateriels'
+          ? AUTRES_CANONICAL_HEADERS
+          : CLIENTS_CANONICAL_HEADERS;
+      const precomputedMatches = buildColumnMatches(headers, canonicalDefs);
+
+      if (rawMatrix && Array.isArray(rawMatrix.rows)) {
+        for (let i = 0; i < rawMatrix.rows.length; i++) {
+          const r = rawMatrix.rows[i];
+          if (!r || r.every(c => !c || String(c).trim() === '')) continue;
+
+          const mapped =
+            tabType === 'defibrillateurs'
+              ? mapRowToDefib(headers, r, i, tenantId, precomputedMatches)
+              : tabType === 'autresMateriels'
+              ? mapRowToAutreMateriel(headers, r, i, tenantId, precomputedMatches)
+              : mapRowToClient(headers, r, i, tenantId, precomputedMatches);
+
+          // Ignore phantom rows where primary identifying columns were cleared in Google Sheets
+          if (tabType === 'defibrillateurs') {
+            const hasRealDefibIdentity =
+              (mapped.identifiant && !String(mapped.identifiant).startsWith('sheet_df_')) ||
+              Boolean(mapped.numeroSerie);
+            if (!hasRealDefibIdentity) continue;
+          } else if (tabType === 'clients') {
+            const hasRealClientIdentity =
+              (mapped.clientIdField && !String(mapped.clientIdField).startsWith('sheet_cli_')) ||
+              Boolean(mapped.denomination) ||
+              Boolean(mapped.siret);
+            if (!hasRealClientIdentity) continue;
+          } else if (tabType === 'autresMateriels') {
+            const hasRealAutreIdentity =
+              (mapped.identifiant && !String(mapped.identifiant).startsWith('sheet_am_')) ||
+              Boolean(mapped.denomination) ||
+              Boolean(mapped.specifiques?.numSerie);
+            if (!hasRealAutreIdentity) continue;
+          }
+
+          if (deletedSet.size > 0) {
+            const keys = getRecordLookupKeys(mapped, tabType);
+            if (keys.some(k => deletedSet.has(k))) continue;
+          }
+
+          baseItems.push(mapped);
         }
-        const bKeys = getRecordLookupKeys(b, tabType);
-        return bKeys.some(bk => upKeys.includes(bk));
+      }
+
+      // Merge upserted records from overlay (matching by ID / Identifiant / SIRET / _sheetRowNumber)
+      const upsertedEntries = Object.values(overlay.upsertedById || {});
+      if (upsertedEntries.length > 0) {
+        for (const upItem of upsertedEntries) {
+          if (!upItem || typeof upItem !== 'object') continue;
+          if (
+            String(upItem.id || '').startsWith('sheet_df_') ||
+            String(upItem.identifiant || '').startsWith('sheet_df_') ||
+            String(upItem.id || '').startsWith('sheet_am_') ||
+            String(upItem.identifiant || '').startsWith('sheet_am_') ||
+            String(upItem.id || '').startsWith('sheet_cli_')
+          ) {
+            continue;
+          }
+          const upKeys = getRecordLookupKeys(upItem, tabType);
+          if (deletedSet.size > 0 && upKeys.some(k => deletedSet.has(k))) continue;
+
+          const existingIdx = baseItems.findIndex(b => {
+            if (upItem._sheetRowNumber && b._sheetRowNumber && upItem._sheetRowNumber === b._sheetRowNumber) {
+              return true;
+            }
+            const bKeys = getRecordLookupKeys(b, tabType);
+            return bKeys.some(bk => upKeys.includes(bk));
+          });
+
+          if (existingIdx >= 0) {
+            const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
+            baseItems[existingIdx] = {
+              ...baseItems[existingIdx],
+              ...cleanUp,
+              _sheetRowNumber: baseItems[existingIdx]._sheetRowNumber || upItem._sheetRowNumber,
+            };
+          } else {
+            const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
+            baseItems.push(cleanUp);
+          }
+        }
+      }
+
+      sheetMemoryCache.set(cacheKey, {
+        headers,
+        items: baseItems,
+        fetchedAt: Date.now(),
+        spreadsheetUrl,
       });
 
-      if (existingIdx >= 0) {
-        baseItems[existingIdx] = {
-          ...baseItems[existingIdx],
-          ...upItem,
-          _sheetRowNumber: baseItems[existingIdx]._sheetRowNumber || upItem._sheetRowNumber,
-          _rawSheetRow: {
-            ...(baseItems[existingIdx]._rawSheetRow || {}),
-            ...(upItem._rawSheetRow || {}),
-          },
-        };
-      } else {
-        baseItems.push(upItem);
-      }
+      return {
+        items: baseItems,
+        headers,
+        totalCount: baseItems.length,
+        fromSpreadsheet: true,
+        hasRemoteHeaders,
+      };
+    } finally {
+      inFlightSheetFetches.delete(cacheKey);
     }
-  }
+  })();
 
-  sheetMemoryCache.set(cacheKey, {
-    headers,
-    items: baseItems,
-    fetchedAt: Date.now(),
-    spreadsheetUrl,
-  });
-
-  return {
-    items: baseItems,
-    headers,
-    totalCount: baseItems.length,
-    fromSpreadsheet: true,
-    hasRemoteHeaders,
-  };
+  inFlightSheetFetches.set(cacheKey, fetchPromise);
+  return fetchPromise;
 }
 
 function columnIndexToLetter(colIdxZeroBased: number): string {
@@ -1180,232 +1278,263 @@ export async function upsertRecordsToTenantSheet(
     return { success: false, count: 0, syncedToRemoteSheet: false };
   }
 
-  const currentData = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, false);
-  const headers = currentData.headers.length > 0
-    ? currentData.headers
-    : tabType === 'defibrillateurs'
-    ? DEFIB_CANONICAL_HEADERS.map(d => d.header)
-    : tabType === 'autresMateriels'
-    ? AUTRES_CANONICAL_HEADERS.map(d => d.header)
-    : CLIENTS_CANONICAL_HEADERS.map(d => d.header);
+  return withSheetWriteLock(extracted.spreadsheetId, async () => {
+    // Always forceRefresh=true before writing so we never miss a row that was just appended
+    const currentData = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true);
+    const headers = currentData.headers.length > 0
+      ? currentData.headers
+      : tabType === 'defibrillateurs'
+      ? DEFIB_CANONICAL_HEADERS.map(d => d.header)
+      : tabType === 'autresMateriels'
+      ? AUTRES_CANONICAL_HEADERS.map(d => d.header)
+      : CLIENTS_CANONICAL_HEADERS.map(d => d.header);
 
-  const overlay = loadMirrorOverlay(tenantId, tabType, extracted.spreadsheetId);
-  overlay.headers = headers;
+    const overlay = loadMirrorOverlay(tenantId, tabType, extracted.spreadsheetId);
+    overlay.headers = headers;
 
-  const deletedSet = new Set((overlay.deletedIds || []).map(k => String(k).trim().toLowerCase()));
-  const rowsToUpdateRemote: Array<{ rowNumber: number; values: string[]; key: string }> = [];
-  const rowsToAppendRemote: Array<{ values: string[]; key: string }> = [];
-  const upsertedList: any[] = [];
+    const deletedSet = new Set((overlay.deletedIds || []).map(k => String(k).trim().toLowerCase()));
+    const rowsToUpdateRemote: Array<{ rowNumber: number; values: string[]; key: string }> = [];
+    const rowsToAppendRemote: Array<{ values: string[]; key: string; itemRef: any }> = [];
+    const upsertedList: any[] = [];
+    const processedPrimaryKeys = new Set<string>();
 
-  for (const rec of records) {
-    if (!rec || typeof rec !== 'object') continue;
-    const recKeys = getRecordLookupKeys(rec, tabType);
-    const primaryKey = recKeys[0] || `item_${Date.now()}_${Math.random()}`;
-    recKeys.forEach(k => deletedSet.delete(k));
+    for (const rec of records) {
+      if (!rec || typeof rec !== 'object') continue;
+      const recKeys = getRecordLookupKeys(rec, tabType);
+      const primaryKey = recKeys[0] || `item_${Date.now()}_${Math.random()}`;
+      if (processedPrimaryKeys.has(primaryKey)) continue;
+      processedPrimaryKeys.add(primaryKey);
 
-    // Find if record already exists in currentData.items (by rowNumber first, then by lookup keys)
-    const existingItem = currentData.items.find(b => {
-      if (rec._sheetRowNumber && b._sheetRowNumber && rec._sheetRowNumber === b._sheetRowNumber) {
-        return true;
-      }
-      const bKeys = getRecordLookupKeys(b, tabType);
-      return bKeys.some(bk => recKeys.includes(bk));
-    });
+      recKeys.forEach(k => deletedSet.delete(k));
 
-    const mergedItem = existingItem
-      ? {
-          ...existingItem,
-          ...rec,
-          _sheetRowNumber: rec._sheetRowNumber || existingItem._sheetRowNumber,
-          _rawSheetRow: {
-            ...(existingItem._rawSheetRow || {}),
-            ...(rec._rawSheetRow || {}),
-          },
+      // Find if record already exists in currentData.items (by rowNumber first, then by lookup keys)
+      const existingItem = currentData.items.find(b => {
+        if (rec._sheetRowNumber && b._sheetRowNumber && rec._sheetRowNumber === b._sheetRowNumber) {
+          return true;
         }
-      : { ...rec };
-
-    const rowValues =
-      tabType === 'defibrillateurs'
-        ? mapDefibToRow(headers, mergedItem)
-        : tabType === 'autresMateriels'
-        ? mapAutreMaterielToRow(headers, mergedItem)
-        : mapClientToRow(headers, mergedItem);
-
-    const rawByHeader: Record<string, string> = {};
-    headers.forEach((h, i) => {
-      rawByHeader[h] = rowValues[i] ?? '';
-    });
-    mergedItem._rawSheetRow = rawByHeader;
-
-    // If user changed identifier on an existing row, remove old overlay entry so no duplicate ghost stays
-    if (existingItem) {
-      const oldKeys = getRecordLookupKeys(existingItem, tabType);
-      for (const ok of oldKeys) {
-        if (ok !== primaryKey && overlay.upsertedById[ok]) {
-          delete overlay.upsertedById[ok];
-        }
-      }
-    }
-
-    overlay.upsertedById[primaryKey] = mergedItem;
-    upsertedList.push(mergedItem);
-
-    if (mergedItem._sheetRowNumber && typeof mergedItem._sheetRowNumber === 'number' && mergedItem._sheetRowNumber >= 2) {
-      rowsToUpdateRemote.push({ rowNumber: mergedItem._sheetRowNumber, values: rowValues, key: primaryKey });
-    } else {
-      rowsToAppendRemote.push({ values: rowValues, key: primaryKey });
-    }
-  }
-
-  overlay.deletedIds = Array.from(deletedSet);
-  overlay.lastSyncedAt = Date.now();
-  saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
-
-  // Invalidate memory cache so next read immediately reflects updated items
-  const cacheKey = `${tenantId}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
-  sheetMemoryCache.delete(cacheKey);
-
-  // Push to live Google Sheet via Service Account or Apps Script Bridge
-  let syncedToRemoteSheet = false;
-  let remoteError = '';
-  const accessToken = await getServiceAccountAccessToken();
-  const cfg = getGlobalGoogleConfig();
-
-  if (accessToken) {
-    try {
-      const sheetTitle = await resolveSheetTabTitle(extracted.spreadsheetId, extracted.gid);
-      const rangePrefix = buildSheetRangePrefix(sheetTitle);
-      const lastColLetter = columnIndexToLetter(headers.length - 1);
-
-      // If remote sheet was completely blank (no header row), write the canonical header row first
-      if (!currentData.hasRemoteHeaders && currentData.items.length === 0) {
-        await fetch(
-          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchUpdate`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              valueInputOption: 'USER_ENTERED',
-              data: [
-                {
-                  range: `${rangePrefix}A1:${lastColLetter}1`,
-                  values: [headers],
-                },
-              ],
-            }),
-          }
-        ).catch(() => {});
-      }
-
-      if (rowsToUpdateRemote.length > 0) {
-        const dataPayload = rowsToUpdateRemote.map(u => ({
-          range: `${rangePrefix}A${u.rowNumber}:${lastColLetter}${u.rowNumber}`,
-          values: [u.values],
-        }));
-        const batchRes = await fetch(
-          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchUpdate`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              valueInputOption: 'USER_ENTERED',
-              data: dataPayload,
-            }),
-          }
-        );
-        if (batchRes.ok) {
-          syncedToRemoteSheet = true;
-        } else {
-          const errText = await batchRes.text().catch(() => '');
-          remoteError = `HTTP ${batchRes.status}: ${errText.slice(0, 300)}`;
-          console.warn('[GoogleSheetsEngine] Remote Sheets API batchUpdate error:', remoteError);
-        }
-      }
-
-      if (rowsToAppendRemote.length > 0) {
-        const appendTarget = encodeURIComponent(`${rangePrefix}A1`);
-        const appendRes = await fetch(
-          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values/${appendTarget}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              values: rowsToAppendRemote.map(r => r.values),
-            }),
-          }
-        );
-        if (appendRes.ok) {
-          syncedToRemoteSheet = true;
-          try {
-            const appendJson = await appendRes.json();
-            const updatedRange: string = appendJson?.updates?.updatedRange || '';
-            const rowMatch = updatedRange.match(/![A-Z]+(\d+)/i) || updatedRange.match(/^[A-Z]+(\d+)/i);
-            if (rowMatch && rowMatch[1]) {
-              const startRowNum = parseInt(rowMatch[1], 10);
-              if (!isNaN(startRowNum) && startRowNum >= 2) {
-                rowsToAppendRemote.forEach((appItem, idx) => {
-                  const targetObj = overlay.upsertedById[appItem.key];
-                  if (targetObj) {
-                    targetObj._sheetRowNumber = startRowNum + idx;
-                  }
-                });
-                saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
-              }
-            }
-          } catch (_) {}
-        } else {
-          const errText = await appendRes.text().catch(() => '');
-          remoteError = `HTTP ${appendRes.status}: ${errText.slice(0, 300)}`;
-          console.warn('[GoogleSheetsEngine] Remote Sheets API append error:', remoteError);
-        }
-      }
-    } catch (err: any) {
-      remoteError = err?.message || String(err);
-      console.warn('[GoogleSheetsEngine] Remote Sheets API write warning:', err);
-    }
-  }
-
-  if (!syncedToRemoteSheet && cfg.appsScriptBridgeUrl) {
-    try {
-      const bridgeRes = await fetch(cfg.appsScriptBridgeUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'upsertRows',
-          spreadsheetUrl,
-          spreadsheetId: extracted.spreadsheetId,
-          gid: extracted.gid,
-          headers,
-          updates: rowsToUpdateRemote,
-          appends: rowsToAppendRemote,
-        }),
-        redirect: 'follow',
+        const bKeys = getRecordLookupKeys(b, tabType);
+        return bKeys.some(bk => recKeys.includes(bk));
       });
-      if (bridgeRes.ok) {
-        syncedToRemoteSheet = true;
-        remoteError = '';
-      }
-    } catch (err) {
-      console.warn('[GoogleSheetsEngine] Apps Script Bridge write warning:', err);
-    }
-  }
 
-  return {
-    success: true,
-    count: records.length,
-    syncedToRemoteSheet,
-    records: upsertedList,
-    ...(remoteError ? { remoteError } : {}),
-  };
+      const mergedItem = existingItem
+        ? {
+            ...existingItem,
+            ...rec,
+            _sheetRowNumber: rec._sheetRowNumber || existingItem._sheetRowNumber,
+            _rawSheetRow: {
+              ...(existingItem._rawSheetRow || {}),
+              ...(rec._rawSheetRow || {}),
+            },
+          }
+        : { ...rec };
+
+      if (tabType === 'clients' && !mergedItem.clientIdField && mergedItem.id) {
+        mergedItem.clientIdField = mergedItem.id;
+      }
+      if (tabType === 'autresMateriels' && !mergedItem.identifiant && mergedItem.id) {
+        mergedItem.identifiant = mergedItem.id;
+      }
+
+      const rowValues =
+        tabType === 'defibrillateurs'
+          ? mapDefibToRow(headers, mergedItem)
+          : tabType === 'autresMateriels'
+          ? mapAutreMaterielToRow(headers, mergedItem)
+          : mapClientToRow(headers, mergedItem);
+
+      const rawByHeader: Record<string, string> = {};
+      headers.forEach((h, i) => {
+        rawByHeader[h] = rowValues[i] ?? '';
+      });
+      mergedItem._rawSheetRow = rawByHeader;
+
+      // If user changed identifier on an existing row, remove old overlay entry so no duplicate ghost stays
+      if (existingItem) {
+        const oldKeys = getRecordLookupKeys(existingItem, tabType);
+        for (const ok of oldKeys) {
+          if (ok !== primaryKey && overlay.upsertedById[ok]) {
+            delete overlay.upsertedById[ok];
+          }
+        }
+      }
+
+      upsertedList.push(mergedItem);
+
+      if (mergedItem._sheetRowNumber && typeof mergedItem._sheetRowNumber === 'number' && mergedItem._sheetRowNumber >= 2) {
+        rowsToUpdateRemote.push({ rowNumber: mergedItem._sheetRowNumber, values: rowValues, key: primaryKey });
+      } else {
+        rowsToAppendRemote.push({ values: rowValues, key: primaryKey, itemRef: mergedItem });
+      }
+    }
+
+    // Invalidate memory cache so next read immediately reflects updated items
+    const cacheKey = `${tenantId}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
+    sheetMemoryCache.delete(cacheKey);
+
+    // Push to live Google Sheet via Service Account or Apps Script Bridge
+    let syncedToRemoteSheet = false;
+    let remoteError = '';
+    const accessToken = await getServiceAccountAccessToken();
+    const cfg = getGlobalGoogleConfig();
+
+    if (accessToken) {
+      try {
+        const sheetTitle = await resolveSheetTabTitle(extracted.spreadsheetId, extracted.gid);
+        const rangePrefix = buildSheetRangePrefix(sheetTitle);
+        const lastColLetter = columnIndexToLetter(headers.length - 1);
+
+        // If remote sheet was completely blank (no header row), write the canonical header row first
+        if (!currentData.hasRemoteHeaders && currentData.items.length === 0) {
+          await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchUpdate`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                valueInputOption: 'USER_ENTERED',
+                data: [
+                  {
+                    range: `${rangePrefix}A1:${lastColLetter}1`,
+                    values: [headers],
+                  },
+                ],
+              }),
+            }
+          ).catch(() => {});
+        }
+
+        if (rowsToUpdateRemote.length > 0) {
+          const dataPayload = rowsToUpdateRemote.map(u => ({
+            range: `${rangePrefix}A${u.rowNumber}:${lastColLetter}${u.rowNumber}`,
+            values: [u.values],
+          }));
+          const batchRes = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchUpdate`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                valueInputOption: 'USER_ENTERED',
+                data: dataPayload,
+              }),
+            }
+          );
+          if (batchRes.ok) {
+            syncedToRemoteSheet = true;
+          } else {
+            const errText = await batchRes.text().catch(() => '');
+            remoteError = `HTTP ${batchRes.status}: ${errText.slice(0, 300)}`;
+            console.warn('[GoogleSheetsEngine] Remote Sheets API batchUpdate error:', remoteError);
+          }
+        }
+
+        if (rowsToAppendRemote.length > 0) {
+          const appendTarget = encodeURIComponent(`${rangePrefix}A1`);
+          const appendRes = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values/${appendTarget}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                values: rowsToAppendRemote.map(r => r.values),
+              }),
+            }
+          );
+          if (appendRes.ok) {
+            syncedToRemoteSheet = true;
+            try {
+              const appendJson = await appendRes.json();
+              const updatedRange: string = appendJson?.updates?.updatedRange || '';
+              const rowMatch = updatedRange.match(/![A-Z]+(\d+)/i) || updatedRange.match(/^[A-Z]+(\d+)/i);
+              if (rowMatch && rowMatch[1]) {
+                const startRowNum = parseInt(rowMatch[1], 10);
+                if (!isNaN(startRowNum) && startRowNum >= 2) {
+                  rowsToAppendRemote.forEach((appItem, idx) => {
+                    if (appItem.itemRef) {
+                      appItem.itemRef._sheetRowNumber = startRowNum + idx;
+                    }
+                  });
+                }
+              }
+            } catch (_) {}
+          } else {
+            const errText = await appendRes.text().catch(() => '');
+            remoteError = `HTTP ${appendRes.status}: ${errText.slice(0, 300)}`;
+            console.warn('[GoogleSheetsEngine] Remote Sheets API append error:', remoteError);
+          }
+        }
+      } catch (err: any) {
+        remoteError = err?.message || String(err);
+        console.warn('[GoogleSheetsEngine] Remote Sheets API write warning:', err);
+      }
+    }
+
+    if (!syncedToRemoteSheet && cfg.appsScriptBridgeUrl) {
+      try {
+        const bridgeRes = await fetch(cfg.appsScriptBridgeUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'upsertRows',
+            spreadsheetUrl,
+            spreadsheetId: extracted.spreadsheetId,
+            gid: extracted.gid,
+            headers,
+            updates: rowsToUpdateRemote,
+            appends: rowsToAppendRemote.map(r => ({ values: r.values, key: r.key })),
+          }),
+          redirect: 'follow',
+        });
+        if (bridgeRes.ok) {
+          syncedToRemoteSheet = true;
+          remoteError = '';
+        }
+      } catch (err) {
+        console.warn('[GoogleSheetsEngine] Apps Script Bridge write warning:', err);
+      }
+    }
+
+    // If synced directly to the remote Google Sheet, remove any stale local overlay entries for these records
+    // so fetchTenantSheetCollection never merges a duplicate copy on top of the live Google Sheet rows.
+    if (syncedToRemoteSheet) {
+      for (const item of upsertedList) {
+        const itemKeys = getRecordLookupKeys(item, tabType);
+        for (const k of itemKeys) {
+          delete overlay.upsertedById[k];
+        }
+      }
+      // Also clear any existing overlay entries that are now present in the live sheet
+      overlay.upsertedById = {};
+    } else {
+      for (const item of upsertedList) {
+        const itemKeys = getRecordLookupKeys(item, tabType);
+        const pk = itemKeys[0] || `item_${Date.now()}`;
+        overlay.upsertedById[pk] = item;
+      }
+    }
+
+    overlay.deletedIds = Array.from(deletedSet);
+    overlay.lastSyncedAt = Date.now();
+    saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
+    sheetMemoryCache.delete(cacheKey);
+
+    return {
+      success: true,
+      count: upsertedList.length,
+      syncedToRemoteSheet,
+      records: upsertedList,
+      ...(remoteError ? { remoteError } : {}),
+    };
+  });
 }
 
 export async function deleteRecordsFromTenantSheet(
@@ -1419,77 +1548,125 @@ export async function deleteRecordsFromTenantSheet(
     return { success: false, deletedCount: 0, syncedToRemoteSheet: false };
   }
 
-  const currentData = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, false);
-  const overlay = loadMirrorOverlay(tenantId, tabType, extracted.spreadsheetId);
-  const normTargets = new Set(targetKeys.filter(Boolean).map(k => String(k).trim().toLowerCase()));
+  return withSheetWriteLock(extracted.spreadsheetId, async () => {
+    const currentData = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true);
+    const overlay = loadMirrorOverlay(tenantId, tabType, extracted.spreadsheetId);
+    const normTargets = new Set(targetKeys.filter(Boolean).map(k => String(k).trim().toLowerCase()));
 
-  const rowNumbersToClear: number[] = [];
-  for (const item of currentData.items) {
-    const iKeys = getRecordLookupKeys(item, tabType);
-    if (iKeys.some(k => normTargets.has(k))) {
-      if (item._sheetRowNumber && typeof item._sheetRowNumber === 'number') {
-        rowNumbersToClear.push(item._sheetRowNumber);
-      }
-      iKeys.forEach(k => normTargets.add(k));
-    }
-  }
+    const rowNumbersToClearSet = new Set<number>();
 
-  for (const [upKey, upVal] of Object.entries(overlay.upsertedById)) {
-    const uKeys = getRecordLookupKeys(upVal, tabType);
-    if (normTargets.has(upKey.toLowerCase()) || uKeys.some(k => normTargets.has(k))) {
-      delete overlay.upsertedById[upKey];
-    }
-  }
-
-  overlay.deletedIds = Array.from(new Set([...(overlay.deletedIds || []), ...Array.from(normTargets)]));
-  overlay.lastSyncedAt = Date.now();
-  saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
-
-  const cacheKey = `${tenantId}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
-  sheetMemoryCache.delete(cacheKey);
-
-  let syncedToRemoteSheet = false;
-  const accessToken = await getServiceAccountAccessToken();
-  const cfg = getGlobalGoogleConfig();
-
-  if (accessToken && rowNumbersToClear.length > 0) {
-    try {
-      const sheetTitle = await resolveSheetTabTitle(extracted.spreadsheetId, extracted.gid);
-      const rangePrefix = buildSheetRangePrefix(sheetTitle);
-      const lastColLetter = columnIndexToLetter((currentData.headers.length || 90) - 1);
-      const ranges = rowNumbersToClear.map(rn => `${rangePrefix}A${rn}:${lastColLetter}${rn}`);
-      const clearRes = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchClear`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ ranges }),
+    // Also parse explicit row numbers from any synthetic sheet_df_ / sheet_am_ / sheet_cli_ keys
+    for (const tk of targetKeys) {
+      if (!tk) continue;
+      const m = String(tk).trim().match(/^sheet_(?:df|am|cli)_[^_]+_(\d+)$/i);
+      if (m && m[1]) {
+        const rn = parseInt(m[1], 10);
+        if (!isNaN(rn) && rn >= 2) {
+          rowNumbersToClearSet.add(rn);
         }
-      );
-      if (clearRes.ok) syncedToRemoteSheet = true;
-    } catch (_) {}
-  }
+      }
+    }
 
-  if (!syncedToRemoteSheet && cfg.appsScriptBridgeUrl && rowNumbersToClear.length > 0) {
-    try {
-      const bridgeRes = await fetch(cfg.appsScriptBridgeUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'deleteRows',
-          spreadsheetUrl,
-          spreadsheetId: extracted.spreadsheetId,
-          gid: extracted.gid,
-          rowNumbers: rowNumbersToClear,
-        }),
-        redirect: 'follow',
-      });
-      if (bridgeRes.ok) syncedToRemoteSheet = true;
-    } catch (_) {}
-  }
+    for (const item of currentData.items) {
+      const iKeys = getRecordLookupKeys(item, tabType);
+      if (iKeys.some(k => normTargets.has(k))) {
+        if (item._sheetRowNumber && typeof item._sheetRowNumber === 'number' && item._sheetRowNumber >= 2) {
+          rowNumbersToClearSet.add(item._sheetRowNumber);
+        }
+        iKeys.forEach(k => normTargets.add(k));
+      }
+    }
 
-  return { success: true, deletedCount: normTargets.size, syncedToRemoteSheet };
+    for (const [upKey, upVal] of Object.entries(overlay.upsertedById)) {
+      const uKeys = getRecordLookupKeys(upVal, tabType);
+      if (normTargets.has(upKey.toLowerCase()) || uKeys.some(k => normTargets.has(k))) {
+        delete overlay.upsertedById[upKey];
+      }
+    }
+
+    overlay.deletedIds = Array.from(new Set([...(overlay.deletedIds || []), ...Array.from(normTargets)]));
+    overlay.lastSyncedAt = Date.now();
+    saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
+
+    const cacheKey = `${tenantId}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
+    sheetMemoryCache.delete(cacheKey);
+
+    const rowNumbersToClear = Array.from(rowNumbersToClearSet).sort((a, b) => b - a);
+    let syncedToRemoteSheet = false;
+    const accessToken = await getServiceAccountAccessToken();
+    const cfg = getGlobalGoogleConfig();
+
+    if (accessToken && rowNumbersToClear.length > 0) {
+      try {
+        const tabMeta = await resolveSheetTabMeta(extracted.spreadsheetId, extracted.gid);
+        const rangePrefix = buildSheetRangePrefix(tabMeta.title);
+        // 1. Clear full rows using A1 whole-row notation (e.g. 'Feuille 1'!4:4) so no trailing columns (e.g. col > 90) ever remain
+        const ranges = rowNumbersToClear.map(rn => `${rangePrefix}${rn}:${rn}`);
+        const clearRes = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchClear`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ranges }),
+          }
+        );
+        if (clearRes.ok) syncedToRemoteSheet = true;
+
+        // 2. Physically delete the rows from the Google Sheet in descending row order so no blank row gap stays
+        if (tabMeta.sheetId !== null && !isNaN(tabMeta.sheetId)) {
+          const deleteRequests = rowNumbersToClear.map(rn => ({
+            deleteDimension: {
+              range: {
+                sheetId: tabMeta.sheetId,
+                dimension: 'ROWS',
+                startIndex: rn - 1,
+                endIndex: rn,
+              },
+            },
+          }));
+          const delDimRes = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}:batchUpdate`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ requests: deleteRequests }),
+            }
+          );
+          if (delDimRes.ok) syncedToRemoteSheet = true;
+        }
+      } catch (_) {}
+    }
+
+    if (!syncedToRemoteSheet && cfg.appsScriptBridgeUrl && rowNumbersToClear.length > 0) {
+      try {
+        const bridgeRes = await fetch(cfg.appsScriptBridgeUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'deleteRows',
+            spreadsheetUrl,
+            spreadsheetId: extracted.spreadsheetId,
+            gid: extracted.gid,
+            rowNumbers: rowNumbersToClear,
+          }),
+          redirect: 'follow',
+        });
+        if (bridgeRes.ok) syncedToRemoteSheet = true;
+      } catch (_) {}
+    }
+
+    if (syncedToRemoteSheet) {
+      overlay.deletedIds = [];
+      saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
+    }
+
+    sheetMemoryCache.delete(cacheKey);
+    return { success: true, deletedCount: normTargets.size, syncedToRemoteSheet };
+  });
 }

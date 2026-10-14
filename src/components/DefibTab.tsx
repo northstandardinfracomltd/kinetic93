@@ -5039,16 +5039,6 @@ export default function DefibTab({
                                   localStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
                                   localStorage.setItem('defib_D27_deleted_defib_keys', JSON.stringify(combined));
                                   localStorage.setItem('defib_D58_deleted_defib_keys', JSON.stringify(combined));
-                                  fetch('/api/delete-single-defib', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      tenantId: activeTenantId,
-                                      id: df.id,
-                                      identifiant: df.identifiant,
-                                      numeroSerie: df.numeroSerie || (df as any).num_serie
-                                    })
-                                  }).catch(() => {});
                                 } catch (_) {}
                                 onDeleteDefib(df.id);
                                 setSelectedIds(prev => prev.filter(id => id !== df.id));
