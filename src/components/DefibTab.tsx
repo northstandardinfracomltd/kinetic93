@@ -2632,6 +2632,7 @@ export default function DefibTab({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tenantId: activeTenantId,
+            spreadsheetUrl: resolvedSpreadsheetUrl,
             type: 'defibrillateurs',
             search,
             advancedSearchTerms: activeFilters.advancedSearchTerms,
@@ -2656,9 +2657,11 @@ export default function DefibTab({
         if (!res.ok || cancelled) return;
         const json = await res.json();
         if (!cancelled && Array.isArray(json.items)) {
-          setRemoteQueriedDefibs(json.items);
-          if (typeof json.totalFilteredCount === 'number') {
-            setRemoteFilteredTotal(json.totalFilteredCount);
+          if (json.items.length > 0 || (json.fromSpreadsheet && (json.totalCount || 0) > 0)) {
+            setRemoteQueriedDefibs(json.items);
+            if (typeof json.totalFilteredCount === 'number') {
+              setRemoteFilteredTotal(json.totalFilteredCount);
+            }
           }
         }
       } catch (_) {
@@ -3534,41 +3537,49 @@ export default function DefibTab({
 
     try {
       const targetKey = df.identifiant || df.numeroSerie || df.id;
-      if (targetKey) {
+      const alreadyHasSheetRow = Boolean((df as any)._rawSheetRow && (df as any)._sheetRowNumber);
+      if (targetKey && !alreadyHasSheetRow) {
         const activeTenant = activeTenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : '') || 'demo';
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 1200);
-          const res = await fetch(`/api/sync-single-defib?id=${encodeURIComponent(targetKey)}&tenantId=${encodeURIComponent(activeTenant || 'D27')}`, { signal: controller.signal });
+          const res = await fetch(
+            `/api/sync-single-defib?id=${encodeURIComponent(targetKey)}&tenantId=${encodeURIComponent(activeTenant)}&spreadsheetUrl=${encodeURIComponent(resolvedSpreadsheetUrl)}`,
+            { signal: controller.signal }
+          );
           clearTimeout(timeoutId);
           if (res.ok) {
             const json = await res.json();
-            if (json && json.defib) {
+            if (json && json.defib && json.fromSpreadsheet) {
               const fresh = json.defib;
-              if (fresh.commentaire?.trim()) setCommentaire(prev => prev || fresh.commentaire);
-              if (fresh.commentaireInterne?.trim()) setCommentaireInterne(prev => prev || fresh.commentaireInterne);
-              if (fresh.commentaireAdresse?.trim() || fresh.aideAcces?.trim() || fresh.aide_acces?.trim()) {
-                const freshAide = (fresh.commentaireAdresse || fresh.aideAcces || fresh.aide_acces || '').trim();
-                if (freshAide) setCommentaireAdresse(prev => prev || freshAide);
+              if (fresh._sheetRowNumber) {
+                setEditingDefib(prev => prev ? ({ ...prev, _sheetRowNumber: fresh._sheetRowNumber, _rawSheetRow: fresh._rawSheetRow || (prev as any)._rawSheetRow } as any) : prev);
               }
-              if (fresh.commentaireCoffret?.trim()) setCommentaireCoffret(prev => prev || fresh.commentaireCoffret);
-              if (fresh.numeroLotCoffret?.trim()) setNumeroLotCoffret(prev => prev || fresh.numeroLotCoffret);
-              if (fresh.lotBatterie?.trim()) setLotBatterie(prev => prev || fresh.lotBatterie);
-              if (fresh.commentaireBatterie?.trim()) setCommentaireBatterie(prev => prev || fresh.commentaireBatterie);
-              if (fresh.peremptionBatterie?.trim()) setPeremptionBatterie(prev => prev || toISODateOnly(fresh.peremptionBatterie));
-              if (fresh.lotElectrodeA?.trim()) setLotElectrodeA(prev => prev || fresh.lotElectrodeA);
-              if (fresh.commentaireElectrodeA?.trim()) setCommentaireElectrodeA(prev => prev || fresh.commentaireElectrodeA);
-              if (fresh.peremptionElectrodeA?.trim()) setPeremptionElectrodeA(prev => prev || toISODateOnly(fresh.peremptionElectrodeA));
-              if (fresh.lotElectrodeP?.trim()) setLotElectrodeP(prev => prev || fresh.lotElectrodeP);
-              if (fresh.commentaireElectrodeP?.trim()) setCommentaireElectrodeP(prev => prev || fresh.commentaireElectrodeP);
-              if (fresh.peremptionElectrodeP?.trim()) setPeremptionElectrodeP(prev => prev || toISODateOnly(fresh.peremptionElectrodeP));
-              if (fresh.derniereMaintenance?.trim()) setDerniereMaintenance(prev => prev || toISODateOnly(fresh.derniereMaintenance));
+              if (!(df as any)._rawSheetRow) {
+                if (fresh.commentaire?.trim()) setCommentaire(prev => prev || fresh.commentaire);
+                if (fresh.commentaireInterne?.trim()) setCommentaireInterne(prev => prev || fresh.commentaireInterne);
+                if (fresh.commentaireAdresse?.trim() || fresh.aideAcces?.trim() || fresh.aide_acces?.trim()) {
+                  const freshAide = (fresh.commentaireAdresse || fresh.aideAcces || fresh.aide_acces || '').trim();
+                  if (freshAide) setCommentaireAdresse(prev => prev || freshAide);
+                }
+                if (fresh.commentaireCoffret?.trim()) setCommentaireCoffret(prev => prev || fresh.commentaireCoffret);
+                if (fresh.numeroLotCoffret?.trim()) setNumeroLotCoffret(prev => prev || fresh.numeroLotCoffret);
+                if (fresh.lotBatterie?.trim()) setLotBatterie(prev => prev || fresh.lotBatterie);
+                if (fresh.commentaireBatterie?.trim()) setCommentaireBatterie(prev => prev || fresh.commentaireBatterie);
+                if (fresh.peremptionBatterie?.trim()) setPeremptionBatterie(prev => prev || toISODateOnly(fresh.peremptionBatterie));
+                if (fresh.lotElectrodeA?.trim()) setLotElectrodeA(prev => prev || fresh.lotElectrodeA);
+                if (fresh.commentaireElectrodeA?.trim()) setCommentaireElectrodeA(prev => prev || fresh.commentaireElectrodeA);
+                if (fresh.peremptionElectrodeA?.trim()) setPeremptionElectrodeA(prev => prev || toISODateOnly(fresh.peremptionElectrodeA));
+                if (fresh.lotElectrodeP?.trim()) setLotElectrodeP(prev => prev || fresh.lotElectrodeP);
+                if (fresh.commentaireElectrodeP?.trim()) setCommentaireElectrodeP(prev => prev || fresh.commentaireElectrodeP);
+                if (fresh.peremptionElectrodeP?.trim()) setPeremptionElectrodeP(prev => prev || toISODateOnly(fresh.peremptionElectrodeP));
+                if (fresh.derniereMaintenance?.trim()) setDerniereMaintenance(prev => prev || toISODateOnly(fresh.derniereMaintenance));
+              }
             }
           }
         } catch (_) {}
       }
 
-      await new Promise(r => setTimeout(r, 120));
       setIsFormOpen(true);
     } finally {
       if (typeof document !== 'undefined') {
@@ -3781,6 +3792,7 @@ export default function DefibTab({
 
     const nowIso = new Date().toISOString();
     try {
+      let savedOk = false;
       if (editingDefib) {
         const updatedRecord: Defibrillateur = {
           ...editingDefib,
@@ -3790,26 +3802,52 @@ export default function DefibTab({
           updatedAt: nowIso,
           dateDerniereModification: nowIso,
         } as any;
-        setRemoteQueriedDefibs(prev =>
-          prev.map(df =>
-            df && (
-              (df.id && df.id === editingDefib.id) ||
-              (df.identifiant && editingDefib.identifiant && df.identifiant.toUpperCase() === editingDefib.identifiant.toUpperCase())
+        const res = await onUpdateDefib(updatedRecord);
+        savedOk = res !== false;
+        if (savedOk) {
+          setRemoteQueriedDefibs(prev =>
+            prev.map(df =>
+              df && (
+                (df.id && df.id === editingDefib.id) ||
+                (df.identifiant && editingDefib.identifiant && df.identifiant.toUpperCase() === editingDefib.identifiant.toUpperCase())
+              )
+                ? { ...df, ...updatedRecord }
+                : df
             )
-              ? { ...df, ...updatedRecord }
-              : df
-          )
-        );
-        await onUpdateDefib(updatedRecord);
-        recordRecentDefibChange([editingDefib.id, payload.identifiant, payload.numeroSerie]);
+          );
+          if (stableDefibsRef.current.items.length > 0) {
+            stableDefibsRef.current.items = stableDefibsRef.current.items.map(df =>
+              df && (
+                (df.id && df.id === editingDefib.id) ||
+                (df.identifiant && editingDefib.identifiant && df.identifiant.toUpperCase() === editingDefib.identifiant.toUpperCase())
+              )
+                ? { ...df, ...updatedRecord }
+                : df
+            );
+          }
+          recordRecentDefibChange([editingDefib.id, payload.identifiant, payload.numeroSerie]);
+        }
       } else {
-        await onAddDefib({
+        const res = await onAddDefib({
           ...payload,
           createdAt: nowIso,
           updatedAt: nowIso,
           dateDerniereModification: nowIso,
         });
-        recordRecentDefibChange([payload.identifiant, payload.numeroSerie]);
+        savedOk = res !== false;
+        if (savedOk) {
+          recordRecentDefibChange([payload.identifiant, payload.numeroSerie]);
+        }
+      }
+
+      if (!savedOk) {
+        setFormError("Erreur lors de l'enregistrement des changements dans la base de données.");
+        setIsSubmitChecking(false);
+        setTimeout(() => {
+          const el = document.getElementById('form-submit-error');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 50);
+        return false;
       }
 
       setIsFormOpen(false);
@@ -3817,8 +3855,12 @@ export default function DefibTab({
       return true;
     } catch (err: any) {
       console.error('Error saving defibrillator:', err);
-      setFormError(err?.message || "Une erreur est survenue lors de l'enregistrement.");
+      setFormError("Erreur lors de l'enregistrement des changements dans la base de données.");
       setIsSubmitChecking(false);
+      setTimeout(() => {
+        const el = document.getElementById('form-submit-error');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
       return false;
     }
   };
