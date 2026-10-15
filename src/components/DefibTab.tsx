@@ -2063,13 +2063,13 @@ export default function DefibTab({
   };
 
   useEffect(() => {
-    if (isModalOpen && editingDefib && !clientId && clients.length > 0) {
+    if (isFormOpen && editingDefib && !clientId && clients.length > 0) {
       const resolved = getLinkedClientForDefib(editingDefib);
       if (resolved?.id) {
         setClientId(resolved.id);
       }
     }
-  }, [isModalOpen, editingDefib, clientId, clients.length, clientMap]);
+  }, [isFormOpen, editingDefib, clientId, clients.length, clientMap]);
 
   // Variables categorized lists for fast lookup selects (including any custom model names from Google Spreadsheet)
   const modelesDefib = useMemo(() => {
