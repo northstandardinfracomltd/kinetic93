@@ -7,6 +7,7 @@ import HelpBubble from './HelpBubble';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
 import { runMonthlyVigilanceCampaign } from '../utils/emailService';
 import { checkIfDefibIdentifiantExistsAnywhere, fetchCollectionFromFirestore, getTenantAliases } from '../firebase';
+import { idbGet, idbSet } from '../idb';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { DefibTablePreloader } from './DefibTablePreloader';
 import { SafeDateInput } from './SafeDateInput';
@@ -550,7 +551,7 @@ export default function DefibTab({
   currentLang,
   defibrillateurs,
   otherEquipments = [],
-  clients,
+  clients: clientsProp,
   variables,
   onAddDefib,
   onUpdateDefib,
@@ -576,11 +577,113 @@ export default function DefibTab({
   const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
   const [remoteQueriedDefibs, setRemoteQueriedDefibs] = useState<Defibrillateur[]>([]);
   const [remoteFilteredTotal, setRemoteFilteredTotal] = useState<number | null>(null);
+  const [fallbackSheetClients, setFallbackSheetClients] = useState<Client[]>([]);
 
   // Manual Refresh State
   const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const effectiveRefreshing = isRefreshing || isLocalRefreshing;
+
+  useEffect(() => {
+    if (isRefreshing) {
+      setRefreshTrigger(prev => prev + 1);
+    }
+  }, [isRefreshing]);
+
+  // Direct lookup & cache fallback for Clients Spreadsheet (Col 1: "Section 1 - Entreprise.")
+  useEffect(() => {
+    if (Array.isArray(clientsProp) && clientsProp.length > 0) {
+      return;
+    }
+    let cancelled = false;
+
+    idbGet<Client[]>(`defib_${activeTenantId}_clients`)
+      .then(cached => {
+        if (!cancelled && Array.isArray(cached) && cached.length > 0) {
+          setFallbackSheetClients(prev => (prev.length === 0 ? cached : prev));
+        }
+      })
+      .catch(() => {});
+
+    (async () => {
+      try {
+        const rawUrl =
+          companyInfo?.spreadsheetClients ||
+          companyInfo?.spreadsheetClientsUrl ||
+          (typeof window !== 'undefined'
+            ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_clients`) ||
+              localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_clients`) ||
+              localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_clients`)
+            : '') ||
+          '';
+        const sheetUrl = (rawUrl.includes('1tB1e41') || rawUrl.includes('2mX5O6r9hD0i3Z9m')) ? '' : rawUrl.trim();
+        let offset = 0;
+        let hasMore = true;
+        const acc: Client[] = [];
+
+        while (hasMore && !cancelled) {
+          const res = await fetch(
+            `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=clients&forceRefresh=false&offset=${offset}&limit=2500&spreadsheetUrl=${encodeURIComponent(sheetUrl)}`
+          );
+          if (!res.ok) break;
+          const json = await res.json();
+          if (cancelled) break;
+          const batch = Array.isArray(json.items) ? json.items : [];
+          acc.push(...batch);
+          const valid = acc.filter(
+            (cl: any) =>
+              cl &&
+              !String(cl.id || '').startsWith('sheet_cli_') &&
+              !String(cl.clientIdField || '').startsWith('sheet_cli_')
+          );
+          if (valid.length > 0) {
+            setFallbackSheetClients(valid);
+          }
+          if (json.hasMore && batch.length > 0 && typeof json.nextOffset === 'number' && json.nextOffset > offset) {
+            offset = json.nextOffset;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        if (!cancelled && acc.length > 0) {
+          const valid = acc.filter(
+            (cl: any) =>
+              cl &&
+              !String(cl.id || '').startsWith('sheet_cli_') &&
+              !String(cl.clientIdField || '').startsWith('sheet_cli_')
+          );
+          if (valid.length > 0) {
+            idbSet(`defib_${activeTenantId}_clients`, valid).catch(() => {});
+          }
+        }
+      } catch (_) {}
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTenantId, clientsProp?.length, companyInfo?.spreadsheetClients, refreshTrigger]);
+
+  const clients = useMemo(() => {
+    const source = Array.isArray(clientsProp) && clientsProp.length > 0 ? clientsProp : fallbackSheetClients;
+    const normalized: Client[] = [];
+    for (const c of source || []) {
+      if (!c || typeof c !== 'object') continue;
+      if ((c as any).numeroSerie && !c.denomination && !c.siret) continue;
+      const denom = String(
+        c.denomination ||
+          (c as any).entreprise ||
+          (c as any)['Section 1 - Entreprise.'] ||
+          (c as any).nomSite ||
+          (c as any).nom ||
+          ''
+      ).trim();
+      if (!denom) continue;
+      normalized.push(denom === c.denomination ? c : { ...c, denomination: denom });
+    }
+    return normalized;
+  }, [clientsProp, fallbackSheetClients]);
 
   const resolvedSpreadsheetUrl = useMemo(() => {
     const raw =
@@ -1077,7 +1180,9 @@ export default function DefibTab({
   };
 
   const sortedClientsForFilter = useMemo(() => {
-    return [...clients].sort((a, b) => (a.denomination || '').localeCompare(b.denomination || '', 'fr', { sensitivity: 'base' }));
+    return [...clients]
+      .filter(c => c && c.denomination && !isPlaceholderClientVal(c.denomination))
+      .sort((a, b) => (a.denomination || '').localeCompare(b.denomination || '', 'fr', { sensitivity: 'base' }));
   }, [clients]);
 
   const filteredSidePaneClients = useMemo(() => {
@@ -1956,6 +2061,15 @@ export default function DefibTab({
     }
     return undefined;
   };
+
+  useEffect(() => {
+    if (isModalOpen && editingDefib && !clientId && clients.length > 0) {
+      const resolved = getLinkedClientForDefib(editingDefib);
+      if (resolved?.id) {
+        setClientId(resolved.id);
+      }
+    }
+  }, [isModalOpen, editingDefib, clientId, clients.length, clientMap]);
 
   // Variables categorized lists for fast lookup selects (including any custom model names from Google Spreadsheet)
   const modelesDefib = useMemo(() => {
@@ -6052,9 +6166,9 @@ export default function DefibTab({
                           className="w-full px-3 py-1.5 border border-slate-200 hover:border-slate-300 focus:border-slate-400 rounded-lg text-xs bg-white text-slate-800 font-semibold"
                         >
                           <option value="">Sélectionnez un client...</option>
-                          {clients.map(c => (
+                          {sortedClientsForFilter.map(c => (
                             <option key={c.id} value={c.id}>
-                              {c.denomination} {c.siret ? `(${c.siret})` : ''}
+                              {c.denomination}{c.siret && !isPlaceholderClientVal(c.siret) ? ` (${c.siret})` : ''}
                             </option>
                           ))}
                         </select>

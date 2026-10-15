@@ -1933,7 +1933,12 @@ export default function App() {
     }
   };
 
+  const isManualDefibRefreshInFlightRef = React.useRef<boolean>(false);
+  const hasAutoRefreshedDefibTabRef = React.useRef<string>('');
+
   const handleManualRefreshDefibs = async () => {
+    if (isManualDefibRefreshInFlightRef.current) return;
+    isManualDefibRefreshInFlightRef.current = true;
     setIsRefreshingDefibs(true);
     if (defibrillateurs.length === 0) {
       setIsDefibLoading(true);
@@ -1964,9 +1969,17 @@ export default function App() {
       // 1b. Fetch exclusively from the tenant's Google Spreadsheet for Défibrillateurs in 2,500-row chunks
       const rawUrl =
         companyInfo?.spreadsheetDefibrillateurs ||
+        companyInfo?.spreadsheetDefibrillateursUrl ||
         localStorage.getItem(`defib_${activeTenant}_spreadsheet_defibrillateurs`) ||
+        localStorage.getItem(`defib_${activeTenant.toUpperCase()}_spreadsheet_defibrillateurs`) ||
+        localStorage.getItem(`defib_${activeTenant.toLowerCase()}_spreadsheet_defibrillateurs`) ||
         '';
-      const defibSheetUrl = (rawUrl.includes('1tB1e41') || rawUrl.includes('2mX5O6r9hD0i3Z9m')) ? '' : rawUrl;
+      const defibSheetUrl = (rawUrl.includes('1tB1e41') || rawUrl.includes('2mX5O6r9hD0i3Z9m')) ? '' : rawUrl.trim();
+
+      if (defibSheetUrl) {
+        lastLoadedSheetUrlsRef.current.tenant = activeTenant;
+        lastLoadedSheetUrlsRef.current.defibs = defibSheetUrl;
+      }
 
       await fetchSheetCollectionInBatches(
         activeTenant,
@@ -1974,6 +1987,23 @@ export default function App() {
         defibSheetUrl,
         true,
         (json, firstItems) => {
+          if (json.spreadsheetUrl && typeof json.spreadsheetUrl === 'string') {
+            const cleanUrl = json.spreadsheetUrl.trim();
+            if (cleanUrl && !cleanUrl.includes('1tB1e41') && !cleanUrl.includes('2mX5O6r9hD0i3Z9m')) {
+              lastLoadedSheetUrlsRef.current.tenant = activeTenant;
+              lastLoadedSheetUrlsRef.current.defibs = cleanUrl;
+              try {
+                for (const k of [activeTenant, activeTenant.toUpperCase(), activeTenant.toLowerCase()]) {
+                  localStorage.setItem(`defib_${k}_spreadsheet_defibrillateurs`, cleanUrl);
+                }
+              } catch (_) {}
+              setCompanyInfo(prev =>
+                prev.spreadsheetDefibrillateurs === cleanUrl
+                  ? prev
+                  : { ...prev, spreadsheetDefibrillateurs: cleanUrl, spreadsheetDefibrillateursUrl: cleanUrl }
+              );
+            }
+          }
           if (json.stats) setDefibSheetStats(json.stats);
           const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
           if (filtered.length > 0) {
@@ -2001,17 +2031,100 @@ export default function App() {
           });
         }
       );
+
+      // Ensure Clients spreadsheet is also loaded if clients state is currently empty
+      if (clients.length === 0) {
+        const rawUrlClients =
+          companyInfo?.spreadsheetClients ||
+          companyInfo?.spreadsheetClientsUrl ||
+          localStorage.getItem(`defib_${activeTenant}_spreadsheet_clients`) ||
+          localStorage.getItem(`defib_${activeTenant.toUpperCase()}_spreadsheet_clients`) ||
+          localStorage.getItem(`defib_${activeTenant.toLowerCase()}_spreadsheet_clients`) ||
+          '';
+        const clientSheetUrl = (rawUrlClients.includes('1tB1e41') || rawUrlClients.includes('2mX5O6r9hD0i3Z9m')) ? '' : rawUrlClients.trim();
+        fetchSheetCollectionInBatches(
+          activeTenant,
+          'clients',
+          clientSheetUrl,
+          false,
+          (json, firstItems) => {
+            const validClients = firstItems.filter(
+              (cl: any) =>
+                cl &&
+                !String(cl.id || '').startsWith('sheet_cli_') &&
+                !String(cl.clientIdField || '').startsWith('sheet_cli_')
+            );
+            if (validClients.length > 0) {
+              setClients(validClients);
+              idbSet(`defib_${activeTenant}_clients`, validClients).catch(() => {});
+            }
+          },
+          (allItems) => {
+            const validClients = allItems.filter(
+              (cl: any) =>
+                cl &&
+                !String(cl.id || '').startsWith('sheet_cli_') &&
+                !String(cl.clientIdField || '').startsWith('sheet_cli_')
+            );
+            if (validClients.length > 0) {
+              setClients(validClients);
+              idbSet(`defib_${activeTenant}_clients`, validClients).catch(() => {});
+            }
+          }
+        ).catch(() => {});
+      }
+
       setTimeout(() => setIsDefibLoading(false), 200);
       return;
     } catch (err) {
       console.warn('Manual refresh error:', err);
     } finally {
+      isManualDefibRefreshInFlightRef.current = false;
       setTimeout(() => {
         setIsRefreshingDefibs(false);
         setIsDefibLoading(false);
       }, 500);
     }
   };
+
+  // Auto-trigger "Actualiser les données" when accessing the Défibrillateurs tab after login or browser reload (not on tab transitions)
+  useEffect(() => {
+    if (!isLoggedIn) {
+      hasAutoRefreshedDefibTabRef.current = '';
+      return;
+    }
+    const role = localStorage.getItem('defib_logged_user_role') || '';
+    const emailLower = (loggedUser?.email || '').trim().toLowerCase();
+    if (
+      role === 'megaadmin' ||
+      role === 'technicien' ||
+      role === 'client' ||
+      emailLower === 'tech.ouest@defibeo.com' ||
+      emailLower === 'client@demo.com' ||
+      isClientPortalOpen ||
+      isPublicPortalOpen ||
+      isBlockedByPrez
+    ) {
+      return;
+    }
+    if (activeTab !== 'defibrillateurs') {
+      return;
+    }
+    const sessionKey = `${tenantId || 'demo'}_${emailLower || 'admin'}_${envReloadTrigger}`;
+    if (hasAutoRefreshedDefibTabRef.current !== sessionKey) {
+      hasAutoRefreshedDefibTabRef.current = sessionKey;
+      handleManualRefreshDefibs();
+    }
+  }, [
+    isLoggedIn,
+    activeTab,
+    tenantId,
+    loggedUser?.email,
+    envReloadTrigger,
+    isClientPortalOpen,
+    isPublicPortalOpen,
+    isBlockedByPrez,
+  ]);
 
   const handleManualRefreshAutresMateriels = async () => {
     setIsRefreshingAutresMateriels(true);
@@ -2122,24 +2235,28 @@ export default function App() {
               spreadsheetClientsUrl: clean,
             }));
           }
-          setClients(
-            firstItems.filter(
-              (cl: any) =>
-                cl &&
-                !String(cl.id || '').startsWith('sheet_cli_') &&
-                !String(cl.clientIdField || '').startsWith('sheet_cli_')
-            )
+          const validFirst = firstItems.filter(
+            (cl: any) =>
+              cl &&
+              !String(cl.id || '').startsWith('sheet_cli_') &&
+              !String(cl.clientIdField || '').startsWith('sheet_cli_')
           );
+          setClients(validFirst);
+          if (validFirst.length > 0) {
+            idbSet(`defib_${activeTenant}_clients`, validFirst).catch(() => {});
+          }
         },
         (allItems) => {
-          setClients(
-            allItems.filter(
-              (cl: any) =>
-                cl &&
-                !String(cl.id || '').startsWith('sheet_cli_') &&
-                !String(cl.clientIdField || '').startsWith('sheet_cli_')
-            )
+          const validAll = allItems.filter(
+            (cl: any) =>
+              cl &&
+              !String(cl.id || '').startsWith('sheet_cli_') &&
+              !String(cl.clientIdField || '').startsWith('sheet_cli_')
           );
+          setClients(validAll);
+          if (validAll.length > 0) {
+            idbSet(`defib_${activeTenant}_clients`, validAll).catch(() => {});
+          }
         }
       );
 
@@ -2199,20 +2316,19 @@ export default function App() {
       // Avoid redundant re-fetching when background companyInfo sync resolves the exact same spreadsheet URL
       const prevLoaded = lastLoadedSheetUrlsRef.current;
       const isSameTenant = prevLoaded.tenant.toLowerCase() === activeTid.toLowerCase();
-      const skipDefibs = !force && isSameTenant && prevLoaded.defibs && (!urlDefibs || prevLoaded.defibs === urlDefibs);
-      const skipAutres = !force && isSameTenant && prevLoaded.autres && (!urlAutres || prevLoaded.autres === urlAutres);
-      const skipClients = !force && isSameTenant && prevLoaded.clients && (!urlClients || prevLoaded.clients === urlClients);
+      const skipDefibs =
+        !force &&
+        (isManualDefibRefreshInFlightRef.current ||
+          (defibrillateurs.length > 0 && isSameTenant && prevLoaded.defibs && (!urlDefibs || prevLoaded.defibs === urlDefibs)));
+      const skipAutres = !force && otherEquipments.length > 0 && isSameTenant && prevLoaded.autres && (!urlAutres || prevLoaded.autres === urlAutres);
+      const skipClients = !force && clients.length > 0 && isSameTenant && prevLoaded.clients && (!urlClients || prevLoaded.clients === urlClients);
 
       if (skipDefibs && skipAutres && skipClients) {
         return;
       }
 
       if (!isSameTenant) {
-        lastLoadedSheetUrlsRef.current = { tenant: activeTid, defibs: urlDefibs, autres: urlAutres, clients: urlClients };
-      } else {
-        if (urlDefibs) lastLoadedSheetUrlsRef.current.defibs = urlDefibs;
-        if (urlAutres) lastLoadedSheetUrlsRef.current.autres = urlAutres;
-        if (urlClients) lastLoadedSheetUrlsRef.current.clients = urlClients;
+        lastLoadedSheetUrlsRef.current = { tenant: activeTid, defibs: '', autres: '', clients: '' };
       }
 
       // If this browser already has spreadsheet URLs in localStorage, ensure they are pushed to server & Firestore for other PCs
@@ -2356,6 +2472,10 @@ export default function App() {
                     !String(cl.id || '').startsWith('sheet_cli_') &&
                     !String(cl.clientIdField || '').startsWith('sheet_cli_')
                 );
+                if (filtered.length > 0) {
+                  lastLoadedSheetUrlsRef.current.clients = json.spreadsheetUrl || urlClients || 'loaded';
+                  idbSet(`defib_${activeTid}_clients`, filtered).catch(() => {});
+                }
                 setClients(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
               },
               (allItems) => {
@@ -2365,6 +2485,9 @@ export default function App() {
                     !String(cl.id || '').startsWith('sheet_cli_') &&
                     !String(cl.clientIdField || '').startsWith('sheet_cli_')
                 );
+                if (filtered.length > 0) {
+                  idbSet(`defib_${activeTid}_clients`, filtered).catch(() => {});
+                }
                 setClients(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
               },
               () => isCancelled
@@ -5938,10 +6061,17 @@ export default function App() {
         return fallback;
       };
 
-      // 1. Initialize empty arrays for Google Sheets-backed collections (Clients, Défibrillateurs, Autres Matériels)
+      // 1. Initialize Google Sheets-backed collections (preserve current tenant data or hydrate from IndexedDB cache)
       try {
         let sanitizedOffline: Client[] = [];
-        setClients([]);
+        setClients(prev => (loadedTenantIdState && loadedTenantIdState !== activeRunTenantId ? [] : prev));
+        idbGet<Client[]>(`defib_${activeRunTenantId}_clients`)
+          .then(cachedClients => {
+            if (Array.isArray(cachedClients) && cachedClients.length > 0) {
+              setClients(prev => (prev.length === 0 ? cachedClients : prev));
+            }
+          })
+          .catch(() => {});
 
         const rawOfflineVariables = getLocalTenantValue<Variable[]>('variables', INITIAL_VARIABLES);
         const existingCategorySet = new Set((rawOfflineVariables || []).map(v => v.category));

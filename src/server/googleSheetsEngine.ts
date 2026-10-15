@@ -549,7 +549,7 @@ export const AUTRES_CANONICAL_HEADERS: Array<{ header: string; field: string; al
 // 3. CLIENTS MAPPING (GET & POST)
 // ==========================================
 export const CLIENTS_CANONICAL_HEADERS: Array<{ header: string; field: string; aliases: string[]; type?: 'yesno' | 'date' }> = [
-  { header: 'Dénomination', field: 'denomination', aliases: ['denomination', 'entreprise', 'raisonsociale', 'nomclient', 'societe', 'nom'] },
+  { header: 'Dénomination', field: 'denomination', aliases: ['denomination', 'entreprise', 'section1entreprise', 'cliententreprise', 'denominationentreprise', 'nomentreprise', 'raisonsociale', 'nomclient', 'societe', 'nom'] },
   { header: "Numéro d'entreprise", field: 'siret', aliases: ['numerodentreprise', 'numeroentreprise', 'siret', 'siren', 'numerofiscal', 'identifiantfiscal'] },
   { header: 'TVA Intracommunautaire', field: 'tvaIntra', aliases: ['tvaintracommunautaire', 'tvaintra', 'numerotva', 'tva'] },
   { header: 'Numéro et voie', field: 'adresse', aliases: ['numeroetvoie', 'adresse', 'numvoie', 'rue', 'voie'] },
@@ -982,6 +982,9 @@ export function mapRowToClient(
     }
   }
 
+  if (!obj.denomination && row[0] !== undefined && !isPlaceholderClientValue(String(row[0]).trim())) {
+    obj.denomination = String(row[0]).trim();
+  }
   const cleanClientId = String(obj.clientIdField || '').trim();
   const cleanSiret = String(obj.siret || '').trim();
   const cleanDenom = String(obj.denomination || '').trim();
