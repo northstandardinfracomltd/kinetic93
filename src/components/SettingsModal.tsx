@@ -23,7 +23,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText } from '../types';
-import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile, auth } from '../firebase';
+import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile, auth, findTenantInList, KNOWN_TENANTS_REGISTRY, ensureTenantMembersClient, ensureTenantCustomLocationNames } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { getAppsScriptUrl, saveAppsScriptUrl, triggerEmail2TechnicianConnexion, triggerEmail3AdminConnexion, triggerEmailNewMemberAdded, sendScriptEmail } from '../utils/emailService';
 import { setLanguage, t } from '../utils/translate';
@@ -94,13 +94,13 @@ export default function SettingsModal({
   const [shortEnvId, setShortEnvId] = React.useState(() => localStorage.getItem('defib_short_env_id') || 'D18');
 
   React.useEffect(() => {
-    const activeId = localStorage.getItem('defib_tenant_id') || 'demo';
+    const activeId = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
     if (activeId.toLowerCase() === 'demo') {
       setShortEnvId('D18');
       localStorage.setItem('defib_short_env_id', 'D18');
     } else {
       getRegisteredTenants().then(tenants => {
-        const found = tenants.find(t => t.id === activeId);
+        const found = findTenantInList(tenants, activeId);
         if (found && found.shortEnvId) {
           setShortEnvId(found.shortEnvId);
           localStorage.setItem('defib_short_env_id', found.shortEnvId);
@@ -111,7 +111,7 @@ export default function SettingsModal({
         console.error('Error fetching registered tenants shortEnvId in SettingsModal:', err);
       });
     }
-  }, []);
+  }, [propTenantId, isOpen, isPage]);
 
   const [appsScriptUrl, setAppsScriptUrl] = React.useState<string>('');
   
@@ -147,11 +147,58 @@ export default function SettingsModal({
     return () => window.removeEventListener('defib-suspicious-activity-logged', handleLogEvent);
   }, []);
 
+  const getCleanTenantDefaultCompany = React.useCallback((tid: string): CompanyInfo => {
+    const isDemo = tid.toLowerCase() === 'demo';
+    const matched = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], tid) as any;
+    return {
+      name: isDemo ? 'Défibeo Solutions' : (matched?.companyName || 'Mon Cabinet'),
+      nomCommercial: isDemo ? 'Défibeo Solutions' : (matched?.companyName || 'Mon Cabinet'),
+      logo: isDemo ? 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=80&auto=format&fit=crop' : (matched?.logo || ''),
+      website: isDemo ? '29382302.defibeo.com' : (matched?.website || ''),
+      email: isDemo ? 'contact@defibeo-solutions.com' : (matched?.companyEmail || matched?.adminEmail || ''),
+      phone: isDemo ? '+33 1 47 20 00 01' : (matched?.companyPhone || ''),
+      nomLogiciel: matched?.nomLogiciel || '',
+      conditionsLegalesLink: '',
+      mentionsLegalesFactures: '',
+      gmailPartageLocalisation: '',
+      communicationPortailClient: '',
+      pdfHeaderImg: '',
+      pdfPageHeaderText: '',
+      pdfPageFooterText: '',
+      pdfLastPageInfoText: '',
+      pdfHeaderBgColor: '#7c2882',
+      pdfCardBorderColor: '#7d2882',
+      pdfCardBgColor: '#fef2ff',
+      pdfLabelTextColor: '#000000',
+      pdfHideElectrodeSecoursA: 'Non',
+      pdfHideElectrodeSecoursP: 'Non',
+      pdfHideKitSecours: 'Non',
+      pdfSimplifyCoffret: 'Non',
+      pdfHideVerificationsTechniques: 'Non',
+      pdfHideHorodatagesDiagnostic: 'Non',
+      pdfShowDemandeDevisDetails: 'Non',
+      enableAutoEmails: 'Oui',
+      enableSatisfactionAvis: 'Oui',
+      enableDevisFactures: 'Oui',
+      disableHelpsAndTutorials: 'Non',
+      enableOtherEquipments: 'Non',
+      hiddenTabs: [],
+      customLocationNames: {},
+      spreadsheetDefibrillateurs: '',
+      spreadsheetAutresMateriels: '',
+      spreadsheetClients: '',
+      spreadsheetDefibrillateursUrl: '',
+      spreadsheetAutresMaterielsUrl: '',
+      spreadsheetClientsUrl: '',
+    };
+  }, []);
+
   // Local states for form editing without auto-saving until save clicked ("pas d'auto-save")
   const [localCompany, setLocalCompany] = React.useState<CompanyInfo>(() => {
     const activeTid = propTenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
-    let base: CompanyInfo = companyInfo ? { ...companyInfo } : ({} as CompanyInfo);
-    // If companyInfo is missing or empty placeholder, try reading from tenant localStorage cache immediately
+    const cleanDefault = getCleanTenantDefaultCompany(activeTid);
+    let base: CompanyInfo = { ...cleanDefault, ...(companyInfo || {}) };
+    // Try reading from tenant-scoped localStorage cache only (NEVER read unprefixed defib_company_info!)
     const isBaseEmpty = !base.name || base.name === 'Mon Cabinet' || (!base.email && activeTid !== 'demo');
     if (isBaseEmpty && typeof window !== 'undefined') {
       try {
@@ -161,14 +208,13 @@ export default function SettingsModal({
           `defib_${activeTid.toLowerCase()}_company_info`,
           `fs_cache_${activeTid}_company_info`,
           `fs_cache_${activeTid}_companyInfo`,
-          `defib_company_info`
         ];
         for (const k of candidateKeys) {
           const raw = localStorage.getItem(k);
           if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object' && parsed.name) {
-              base = { ...base, ...parsed };
+              base = { ...cleanDefault, ...parsed, ...base };
               break;
             }
           }
@@ -193,7 +239,10 @@ export default function SettingsModal({
     return base;
   });
   const envIdDisplay = shortEnvId || (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || 'D18';
-  const [localMembers, setLocalMembers] = React.useState<Member[]>(members);
+  const [localMembers, setLocalMembers] = React.useState<Member[]>(() => {
+    const activeTid = propTenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+    return ensureTenantMembersClient(members, activeTid);
+  });
 
   type SettingsSectionKey = 
     | 'reglages'
@@ -289,16 +338,8 @@ export default function SettingsModal({
   const [enableOtherEquipments, setEnableOtherEquipments] = React.useState(propEnableOtherEquipments);
   const [showDisableOtherEquipmentsConfirmation, setShowDisableOtherEquipmentsConfirmation] = React.useState(false);
   const [localLocationNames, setLocalLocationNames] = React.useState<Record<string, string>>(() => {
-    if (companyInfo && companyInfo.customLocationNames) {
-      return companyInfo.customLocationNames;
-    }
-    const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
-    try {
-      const saved = localStorage.getItem(`defib_${tenantId}_custom_location_names`);
-      return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-      return {};
-    }
+    const activeTid = propTenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+    return ensureTenantCustomLocationNames(companyInfo?.customLocationNames, activeTid, members);
   });
   const [enableAutoEmails, setEnableAutoEmails] = React.useState<'Oui' | 'Non'>(() => {
     if (companyInfo && companyInfo.enableAutoEmails) {
@@ -670,37 +711,25 @@ export default function SettingsModal({
   );
 
   React.useEffect(() => {
-    if (isOpen) {
-      if (companyInfo && companyInfo.customLocationNames) {
-        setLocalLocationNames(companyInfo.customLocationNames);
-      } else {
-        const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
-        try {
-          const saved = localStorage.getItem(`defib_${tenantId}_custom_location_names`);
-          setLocalLocationNames(saved ? JSON.parse(saved) : {});
-        } catch (e) {
-          setLocalLocationNames({});
-        }
-      }
+    if (isOpen || isPage) {
+      const tenantId = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      setLocalLocationNames(ensureTenantCustomLocationNames(companyInfo?.customLocationNames, tenantId, members));
 
       if (companyInfo && companyInfo.enableAutoEmails) {
         setEnableAutoEmails(companyInfo.enableAutoEmails);
       } else {
-        const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
         setEnableAutoEmails((localStorage.getItem(`defib_${tenantId}_enable_auto_emails`) as 'Oui' | 'Non') || 'Oui');
       }
 
       if (companyInfo && companyInfo.enableSatisfactionAvis) {
         setEnableSatisfactionAvis(companyInfo.enableSatisfactionAvis);
       } else {
-        const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
         setEnableSatisfactionAvis((localStorage.getItem(`defib_${tenantId}_enable_satisfaction_avis`) as 'Oui' | 'Non') || 'Oui');
       }
 
       if (companyInfo && companyInfo.enableDevisFactures) {
         setEnableDevisFactures(companyInfo.enableDevisFactures);
       } else {
-        const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
         setEnableDevisFactures((localStorage.getItem(`defib_${tenantId}_enable_devis_factures`) as 'Oui' | 'Non') || 'Oui');
       }
 
@@ -716,18 +745,16 @@ export default function SettingsModal({
           }
         } catch (e) {}
       }
-      const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
       const userSpecificKey = userEmail ? `defib_${tenantId}_user_${userEmail}_disable_helps_tutorials` : `defib_${tenantId}_disable_helps_tutorials`;
       setDisableHelpsAndTutorials((localStorage.getItem(userSpecificKey) as 'Oui' | 'Non') || 'Non');
 
       if (companyInfo && companyInfo.communicationPortailClient !== undefined) {
         setCommunicationPortailClient(companyInfo.communicationPortailClient);
       } else {
-        const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
         setCommunicationPortailClient(localStorage.getItem(`defib_${tenantId}_communication_portail_client`) || '');
       }
     }
-  }, [isOpen, companyInfo]);
+  }, [isOpen, isPage, propTenantId, companyInfo, members]);
 
   React.useEffect(() => {
     setEnableOtherEquipments(propEnableOtherEquipments);
@@ -767,26 +794,34 @@ export default function SettingsModal({
   // Synchronise if parent prop changes upon load or reset, keeping refs to trace incoming changes
   const lastPropsMembersRef = React.useRef<Member[]>(members);
   const lastPropsCompanyRef = React.useRef<CompanyInfo>(companyInfo);
+  const lastPropTenantIdRef = React.useRef<string | undefined>(propTenantId);
 
   React.useEffect(() => {
-    if (JSON.stringify(members) !== JSON.stringify(lastPropsMembersRef.current)) {
-      setLocalMembers(members);
-      lastPropsMembersRef.current = members;
+    const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+    const ensured = ensureTenantMembersClient(members, activeTid);
+    if (JSON.stringify(ensured) !== JSON.stringify(lastPropsMembersRef.current)) {
+      setLocalMembers(ensured);
+      lastPropsMembersRef.current = ensured;
     }
-  }, [members]);
+  }, [members, propTenantId]);
 
   React.useEffect(() => {
-    if (JSON.stringify(companyInfo) !== JSON.stringify(lastPropsCompanyRef.current)) {
+    const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+    const tenantChanged = propTenantId !== lastPropTenantIdRef.current;
+    if (tenantChanged || JSON.stringify(companyInfo) !== JSON.stringify(lastPropsCompanyRef.current)) {
+      lastPropTenantIdRef.current = propTenantId;
+      const cleanDefault = getCleanTenantDefaultCompany(activeTid);
       setLocalCompany(prev => {
-        if (!companyInfo) return prev;
-        // Do not overwrite non-empty tenant details or spreadsheet URLs with empty/placeholder values
+        const basePrev = tenantChanged ? cleanDefault : prev;
+        if (!companyInfo) return basePrev;
+        // Do not overwrite non-empty tenant details or spreadsheet URLs with empty/placeholder values on the SAME tenant
         const isNewPlaceholder = (!companyInfo.name || companyInfo.name === 'Mon Cabinet') && (!companyInfo.email || companyInfo.email === '');
-        const merged = isNewPlaceholder && prev.name && prev.name !== 'Mon Cabinet'
-          ? { ...companyInfo, ...prev }
-          : { ...prev, ...companyInfo };
-        const effDefibs = companyInfo.spreadsheetDefibrillateurs || companyInfo.spreadsheetDefibrillateursUrl || prev.spreadsheetDefibrillateurs || '';
-        const effAutres = companyInfo.spreadsheetAutresMateriels || companyInfo.spreadsheetAutresMaterielsUrl || prev.spreadsheetAutresMateriels || '';
-        const effClients = companyInfo.spreadsheetClients || companyInfo.spreadsheetClientsUrl || prev.spreadsheetClients || '';
+        const merged = !tenantChanged && isNewPlaceholder && basePrev.name && basePrev.name !== 'Mon Cabinet'
+          ? { ...cleanDefault, ...companyInfo, ...basePrev }
+          : { ...cleanDefault, ...basePrev, ...companyInfo };
+        const effDefibs = companyInfo.spreadsheetDefibrillateurs || companyInfo.spreadsheetDefibrillateursUrl || (!tenantChanged ? basePrev.spreadsheetDefibrillateurs : '') || '';
+        const effAutres = companyInfo.spreadsheetAutresMateriels || companyInfo.spreadsheetAutresMaterielsUrl || (!tenantChanged ? basePrev.spreadsheetAutresMateriels : '') || '';
+        const effClients = companyInfo.spreadsheetClients || companyInfo.spreadsheetClientsUrl || (!tenantChanged ? basePrev.spreadsheetClients : '') || '';
         return {
           ...merged,
           spreadsheetDefibrillateurs: effDefibs,
@@ -797,23 +832,24 @@ export default function SettingsModal({
           spreadsheetClientsUrl: effClients,
         };
       });
-      if (companyInfo?.customLocationNames) setLocalLocationNames(companyInfo.customLocationNames);
-      if (companyInfo?.enableAutoEmails) setEnableAutoEmails(companyInfo.enableAutoEmails);
-      if (companyInfo?.enableSatisfactionAvis) setEnableSatisfactionAvis(companyInfo.enableSatisfactionAvis);
-      if (companyInfo?.enableDevisFactures) setEnableDevisFactures(companyInfo.enableDevisFactures);
-      if (companyInfo?.communicationPortailClient !== undefined) setCommunicationPortailClient(companyInfo.communicationPortailClient);
-      if (companyInfo?.disableHelpsAndTutorials) setDisableHelpsAndTutorials(companyInfo.disableHelpsAndTutorials);
-      if (companyInfo?.enableOtherEquipments) setEnableOtherEquipments(companyInfo.enableOtherEquipments);
+      setLocalLocationNames(ensureTenantCustomLocationNames(companyInfo?.customLocationNames, activeTid, members));
+      setEnableAutoEmails(companyInfo?.enableAutoEmails || 'Oui');
+      setEnableSatisfactionAvis(companyInfo?.enableSatisfactionAvis || 'Oui');
+      setEnableDevisFactures(companyInfo?.enableDevisFactures || 'Oui');
+      setCommunicationPortailClient(companyInfo?.communicationPortailClient ?? '');
+      setDisableHelpsAndTutorials(companyInfo?.disableHelpsAndTutorials || 'Non');
+      setEnableOtherEquipments(companyInfo?.enableOtherEquipments || 'Non');
       lastPropsCompanyRef.current = companyInfo;
     }
-  }, [companyInfo]);
+  }, [companyInfo, propTenantId, members, getCleanTenantDefaultCompany]);
 
   React.useEffect(() => {
     if (isOpen || isPage) {
       const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      const cleanDefault = getCleanTenantDefaultCompany(activeTid);
 
-      // 1. Sync companyInfo from props or localStorage cache
-      let comp = companyInfo ? { ...companyInfo } : ({} as CompanyInfo);
+      // 1. Sync companyInfo from props or tenant-scoped localStorage cache (NEVER unprefixed defib_company_info!)
+      let comp: CompanyInfo = { ...cleanDefault, ...(companyInfo || {}) };
       const isCompEmpty = !comp.name || comp.name === 'Mon Cabinet' || (!comp.email && activeTid !== 'demo');
       if (isCompEmpty) {
         const candidateKeys = [
@@ -822,7 +858,6 @@ export default function SettingsModal({
           `defib_${activeTid.toLowerCase()}_company_info`,
           `fs_cache_${activeTid}_company_info`,
           `fs_cache_${activeTid}_companyInfo`,
-          `defib_company_info`
         ];
         for (const k of candidateKeys) {
           const raw = localStorage.getItem(k);
@@ -830,7 +865,7 @@ export default function SettingsModal({
             try {
               const parsed = JSON.parse(raw);
               if (parsed && typeof parsed === 'object' && parsed.name) {
-                comp = { ...comp, ...parsed };
+                comp = { ...cleanDefault, ...parsed, ...(companyInfo?.name && companyInfo.name !== 'Mon Cabinet' ? companyInfo : {}) };
                 break;
               }
             } catch (e) {}
@@ -838,51 +873,51 @@ export default function SettingsModal({
         }
       }
 
-      setLocalCompany(prev => ({
-        ...prev,
+      setLocalCompany({
+        ...cleanDefault,
         ...comp,
-        name: comp.name || prev.name,
-        email: comp.email || prev.email,
-        phone: comp.phone || prev.phone,
-      }));
+        name: comp.name || cleanDefault.name,
+        email: comp.email || cleanDefault.email,
+        phone: comp.phone || cleanDefault.phone,
+      });
 
-      // 2. Members sync
-      if (members && members.length > 0) {
-        setLocalMembers(members);
-      } else {
-        const memRaw = localStorage.getItem(`defib_${activeTid}_members`) || localStorage.getItem('defib_members');
+      // 2. Members sync (strictly tenant-scoped, guaranteed non-empty via ensureTenantMembersClient)
+      let initialMems: Member[] = Array.isArray(members) && members.length > 0 ? members : [];
+      if (initialMems.length === 0) {
+        const memRaw = localStorage.getItem(`defib_${activeTid}_members`) || (activeTid === 'demo' ? localStorage.getItem('defib_members') : null);
         if (memRaw) {
           try {
             const parsed = JSON.parse(memRaw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              setLocalMembers(parsed);
+              initialMems = parsed;
             }
           } catch (e) {}
         }
-        if (activeTid && activeTid !== 'demo') {
-          fetchCollectionFromFirestore<Member[]>('members', activeTid).then(remoteMembers => {
-            if (Array.isArray(remoteMembers) && remoteMembers.length > 0) {
-              setLocalMembers(remoteMembers);
-              onUpdateMembers(remoteMembers);
-            }
-          }).catch(() => {});
-        }
+      }
+      const ensuredMems = ensureTenantMembersClient(initialMems, activeTid);
+      setLocalMembers(ensuredMems);
+
+      if (activeTid && activeTid !== 'demo') {
+        fetchCollectionFromFirestore<Member[]>('members', activeTid).then(remoteMembers => {
+          const ensuredRemote = ensureTenantMembersClient(Array.isArray(remoteMembers) ? remoteMembers : ensuredMems, activeTid);
+          if (ensuredRemote.length > 0) {
+            setLocalMembers(ensuredRemote);
+            onUpdateMembers(ensuredRemote);
+          }
+        }).catch(() => {});
       }
 
-      if (comp?.customLocationNames) setLocalLocationNames(comp.customLocationNames);
-      if (comp?.enableAutoEmails) setEnableAutoEmails(comp.enableAutoEmails);
-      if (comp?.enableSatisfactionAvis) setEnableSatisfactionAvis(comp.enableSatisfactionAvis);
-      if (comp?.enableDevisFactures) setEnableDevisFactures(comp.enableDevisFactures);
-      if (comp?.communicationPortailClient !== undefined) setCommunicationPortailClient(comp.communicationPortailClient);
-      if (comp?.disableHelpsAndTutorials) setDisableHelpsAndTutorials(comp.disableHelpsAndTutorials);
-      if (comp?.enableOtherEquipments) setEnableOtherEquipments(comp.enableOtherEquipments);
+      setLocalLocationNames(ensureTenantCustomLocationNames(comp?.customLocationNames, activeTid, ensuredMems));
+      setEnableAutoEmails(comp?.enableAutoEmails || 'Oui');
+      setEnableSatisfactionAvis(comp?.enableSatisfactionAvis || 'Oui');
+      setEnableDevisFactures(comp?.enableDevisFactures || 'Oui');
+      setCommunicationPortailClient(comp?.communicationPortailClient ?? '');
+      setDisableHelpsAndTutorials(comp?.disableHelpsAndTutorials || 'Non');
+      setEnableOtherEquipments(comp?.enableOtherEquipments || 'Non');
 
       // 3. Fallback to registered tenants registry if company info fields still missing (local state only, never overwrite remote Firestore on mount)
       getRegisteredTenants().then(tenants => {
-        const found: any = tenants.find(t => 
-          t.id.toLowerCase() === activeTid.toLowerCase() || 
-          (t.shortEnvId && t.shortEnvId.toLowerCase() === activeTid.toLowerCase())
-        );
+        const found: any = findTenantInList(tenants, activeTid);
         if (found) {
           setLocalCompany(prev => {
             const isPlaceholderName = !prev.name || prev.name === 'Mon Cabinet' || (activeTid !== 'demo' && prev.name === 'Défibeo Solutions');
@@ -894,6 +929,7 @@ export default function SettingsModal({
               nomCommercial: isPlaceholderName && found.companyName ? found.companyName : (prev.nomCommercial || prev.name),
               email: isPlaceholderEmail && (found.companyEmail || found.adminEmail) ? (found.companyEmail || found.adminEmail) : prev.email,
               phone: isPlaceholderPhone && found.companyPhone ? found.companyPhone : prev.phone,
+              nomLogiciel: prev.nomLogiciel || found.nomLogiciel || '',
               spreadsheetDefibrillateurs: prev.spreadsheetDefibrillateurs || found.spreadsheetDefibrillateurs || '',
               spreadsheetAutresMateriels: prev.spreadsheetAutresMateriels || found.spreadsheetAutresMateriels || '',
               spreadsheetClients: prev.spreadsheetClients || found.spreadsheetClients || '',
@@ -931,6 +967,13 @@ export default function SettingsModal({
           const validDb = dbData && typeof dbData === 'object' && !Array.isArray(dbData) ? dbData : null;
           if (!validCompany && !validDb) return;
 
+          if (validCompany) {
+            setLocalLocationNames(prev => ensureTenantCustomLocationNames(validCompany.customLocationNames || prev, activeTid, ensuredMems));
+            if (validCompany.communicationPortailClient !== undefined) {
+              setCommunicationPortailClient(validCompany.communicationPortailClient);
+            }
+          }
+
           setLocalCompany(prev => {
             const effDefibs =
               validDb?.spreadsheetDefibrillateurs ||
@@ -966,9 +1009,17 @@ export default function SettingsModal({
               }
             } catch (_) {}
 
+            const resolvedCustomLocs = ensureTenantCustomLocationNames(
+              validCompany?.customLocationNames || prev.customLocationNames,
+              activeTid,
+              ensuredMems
+            );
+
             return {
+              ...cleanDefault,
               ...prev,
               ...(validCompany || {}),
+              customLocationNames: resolvedCustomLocs,
               spreadsheetDefibrillateurs: effDefibs,
               spreadsheetAutresMateriels: effAutres,
               spreadsheetClients: effClients,
@@ -980,10 +1031,10 @@ export default function SettingsModal({
         }).catch(() => {});
       }
 
-      lastPropsMembersRef.current = members;
+      lastPropsMembersRef.current = ensuredMems;
       lastPropsCompanyRef.current = companyInfo;
     }
-  }, [isOpen, isPage, propTenantId]);
+  }, [isOpen, isPage, propTenantId, getCleanTenantDefaultCompany]);
 
   // States for the member addition form inside the local state
   const [newMemberName, setNewMemberName] = React.useState('');
@@ -1444,66 +1495,105 @@ export default function SettingsModal({
 
   React.useEffect(() => {
     if (isOpen || isPage) {
-      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      const activeTenant = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      // Reset all connector states first so another tenant's connectors never persist
+      setApiDefibeoActive(false);
+      setApiDefibeoApiKey('');
+      setApiDefibeoSecretKey('');
+      setSageActive(false);
+      setSageClientId('');
+      setSageAccessToken('');
+      setSageSecretToken('');
+      setSage4197Active(false);
+      setSage4197ClientId('');
+      setSage4197AccessToken('');
+      setSage4197SecretToken('');
+      setPennylaneActive(false);
+      setPennylaneClientId('');
+      setPennylaneCompanyToken('');
+      setPennylaneSecretToken('');
+      setDropboxActive(false);
+      setDropboxAppKey('');
+      setDropboxAppSecret('');
+      setDropboxAccessToken('');
+      setCegidActive(false);
+      setCegidApiKey('');
+      setCegidApiSecret('');
+      setLemonGroupWsActive(false);
+      setLemonGroupWsApiKey('');
+      setLemonGroupWsApiSecret('');
+      setTextelpActive(false);
+      setTextelpEnvId('');
+      setTextelpSecretId('');
+      setCivilpromActive(false);
+      setCivilpromWebsiteUrl('');
+      setCivilpromAssetsFileUrl('');
+      setAtlasanteActive(localStorage.getItem(`defib_${activeTenant}_atlasante_active`) === 'true');
+      setAtlasanteDeclarantId('');
+      setAtlasanteUrlAuth('https://catalogue.atlasante.fr/api/login');
+      setGoogleDriveActive(localStorage.getItem(`defib_${activeTenant}_google_drive_active`) === 'true');
+      setGoogleDriveEmail(localStorage.getItem(`defib_${activeTenant}_google_drive_email`) || '');
+      setGoogleDriveAccessToken(localStorage.getItem(`defib_${activeTenant}_google_drive_token`) || '');
+
       fetchCollectionFromFirestore<any>('api_connectors', activeTenant).then(data => {
-        if (data) {
-          if (data.apiDefibeoActive !== undefined) setApiDefibeoActive(data.apiDefibeoActive);
-          if (data.apiDefibeoApiKey !== undefined) setApiDefibeoApiKey(data.apiDefibeoApiKey);
-          if (data.apiDefibeoSecretKey !== undefined) setApiDefibeoSecretKey(data.apiDefibeoSecretKey);
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          if (data.apiDefibeoActive !== undefined) setApiDefibeoActive(Boolean(data.apiDefibeoActive));
+          if (data.apiDefibeoApiKey !== undefined) setApiDefibeoApiKey(data.apiDefibeoApiKey || '');
+          if (data.apiDefibeoSecretKey !== undefined) setApiDefibeoSecretKey(data.apiDefibeoSecretKey || '');
 
-          if (data.sageActive !== undefined) setSageActive(data.sageActive);
-          if (data.sageClientId !== undefined) setSageClientId(data.sageClientId);
-          if (data.sageAccessToken !== undefined) setSageAccessToken(data.sageAccessToken);
-          if (data.sageSecretToken !== undefined) setSageSecretToken(data.sageSecretToken);
+          if (data.sageActive !== undefined) setSageActive(Boolean(data.sageActive));
+          if (data.sageClientId !== undefined) setSageClientId(data.sageClientId || '');
+          if (data.sageAccessToken !== undefined) setSageAccessToken(data.sageAccessToken || '');
+          if (data.sageSecretToken !== undefined) setSageSecretToken(data.sageSecretToken || '');
 
-          if (data.sage4197Active !== undefined) setSage4197Active(data.sage4197Active);
-          if (data.sage4197ClientId !== undefined) setSage4197ClientId(data.sage4197ClientId);
-          if (data.sage4197AccessToken !== undefined) setSage4197AccessToken(data.sage4197AccessToken);
-          if (data.sage4197SecretToken !== undefined) setSage4197SecretToken(data.sage4197SecretToken);
+          if (data.sage4197Active !== undefined) setSage4197Active(Boolean(data.sage4197Active));
+          if (data.sage4197ClientId !== undefined) setSage4197ClientId(data.sage4197ClientId || '');
+          if (data.sage4197AccessToken !== undefined) setSage4197AccessToken(data.sage4197AccessToken || '');
+          if (data.sage4197SecretToken !== undefined) setSage4197SecretToken(data.sage4197SecretToken || '');
 
-          if (data.pennylaneActive !== undefined) setPennylaneActive(data.pennylaneActive);
-          if (data.pennylaneClientId !== undefined) setPennylaneClientId(data.pennylaneClientId);
-          if (data.pennylaneCompanyToken !== undefined) setPennylaneCompanyToken(data.pennylaneCompanyToken);
-          if (data.pennylaneSecretToken !== undefined) setPennylaneSecretToken(data.pennylaneSecretToken);
+          if (data.pennylaneActive !== undefined) setPennylaneActive(Boolean(data.pennylaneActive));
+          if (data.pennylaneClientId !== undefined) setPennylaneClientId(data.pennylaneClientId || '');
+          if (data.pennylaneCompanyToken !== undefined) setPennylaneCompanyToken(data.pennylaneCompanyToken || '');
+          if (data.pennylaneSecretToken !== undefined) setPennylaneSecretToken(data.pennylaneSecretToken || '');
 
-          if (data.dropboxActive !== undefined) setDropboxActive(data.dropboxActive);
-          if (data.dropboxAppKey !== undefined) setDropboxAppKey(data.dropboxAppKey);
-          if (data.dropboxAppSecret !== undefined) setDropboxAppSecret(data.dropboxAppSecret);
-          if (data.dropboxAccessToken !== undefined) setDropboxAccessToken(data.dropboxAccessToken);
+          if (data.dropboxActive !== undefined) setDropboxActive(Boolean(data.dropboxActive));
+          if (data.dropboxAppKey !== undefined) setDropboxAppKey(data.dropboxAppKey || '');
+          if (data.dropboxAppSecret !== undefined) setDropboxAppSecret(data.dropboxAppSecret || '');
+          if (data.dropboxAccessToken !== undefined) setDropboxAccessToken(data.dropboxAccessToken || '');
 
-          if (data.cegidActive !== undefined) setCegidActive(data.cegidActive);
-          if (data.cegidApiKey !== undefined) setCegidApiKey(data.cegidApiKey);
-          if (data.cegidApiSecret !== undefined) setCegidApiSecret(data.cegidApiSecret);
+          if (data.cegidActive !== undefined) setCegidActive(Boolean(data.cegidActive));
+          if (data.cegidApiKey !== undefined) setCegidApiKey(data.cegidApiKey || '');
+          if (data.cegidApiSecret !== undefined) setCegidApiSecret(data.cegidApiSecret || '');
 
-          if (data.lemonGroupWsActive !== undefined) setLemonGroupWsActive(data.lemonGroupWsActive);
-          if (data.lemonGroupWsApiKey !== undefined) setLemonGroupWsApiKey(data.lemonGroupWsApiKey);
-          if (data.lemonGroupWsApiSecret !== undefined) setLemonGroupWsApiSecret(data.lemonGroupWsApiSecret);
+          if (data.lemonGroupWsActive !== undefined) setLemonGroupWsActive(Boolean(data.lemonGroupWsActive));
+          if (data.lemonGroupWsApiKey !== undefined) setLemonGroupWsApiKey(data.lemonGroupWsApiKey || '');
+          if (data.lemonGroupWsApiSecret !== undefined) setLemonGroupWsApiSecret(data.lemonGroupWsApiSecret || '');
 
-          if (data.textelpActive !== undefined) setTextelpActive(data.textelpActive);
-          if (data.textelpEnvId !== undefined) setTextelpEnvId(data.textelpEnvId);
-          if (data.textelpSecretId !== undefined) setTextelpSecretId(data.textelpSecretId);
+          if (data.textelpActive !== undefined) setTextelpActive(Boolean(data.textelpActive));
+          if (data.textelpEnvId !== undefined) setTextelpEnvId(data.textelpEnvId || '');
+          if (data.textelpSecretId !== undefined) setTextelpSecretId(data.textelpSecretId || '');
 
-          if (data.civilpromActive !== undefined) setCivilpromActive(data.civilpromActive);
-          if (data.civilpromWebsiteUrl !== undefined) setCivilpromWebsiteUrl(data.civilpromWebsiteUrl);
-          if (data.civilpromAssetsFileUrl !== undefined) setCivilpromAssetsFileUrl(data.civilpromAssetsFileUrl);
+          if (data.civilpromActive !== undefined) setCivilpromActive(Boolean(data.civilpromActive));
+          if (data.civilpromWebsiteUrl !== undefined) setCivilpromWebsiteUrl(data.civilpromWebsiteUrl || '');
+          if (data.civilpromAssetsFileUrl !== undefined) setCivilpromAssetsFileUrl(data.civilpromAssetsFileUrl || '');
 
-          if (data.atlasanteActive !== undefined) setAtlasanteActive(data.atlasanteActive);
-          if (data.atlasanteDeclarantId !== undefined) setAtlasanteDeclarantId(data.atlasanteDeclarantId);
-          if (data.atlasanteUrlAuth !== undefined) {
+          if (data.atlasanteActive !== undefined) setAtlasanteActive(Boolean(data.atlasanteActive));
+          if (data.atlasanteDeclarantId !== undefined) setAtlasanteDeclarantId(data.atlasanteDeclarantId || '');
+          if (data.atlasanteUrlAuth !== undefined && data.atlasanteUrlAuth) {
             setAtlasanteUrlAuth(data.atlasanteUrlAuth);
           } else {
             setAtlasanteUrlAuth('https://catalogue.atlasante.fr/api/login');
           }
 
-          if (data.googleDriveActive !== undefined) setGoogleDriveActive(data.googleDriveActive);
-          if (data.googleDriveEmail !== undefined) setGoogleDriveEmail(data.googleDriveEmail);
-          if (data.googleDriveAccessToken !== undefined) setGoogleDriveAccessToken(data.googleDriveAccessToken);
+          if (data.googleDriveActive !== undefined) setGoogleDriveActive(Boolean(data.googleDriveActive));
+          if (data.googleDriveEmail !== undefined) setGoogleDriveEmail(data.googleDriveEmail || '');
+          if (data.googleDriveAccessToken !== undefined) setGoogleDriveAccessToken(data.googleDriveAccessToken || '');
         }
       }).catch(err => {
         console.error('Error loading API connectors from Firestore:', err);
       });
     }
-  }, [isOpen, isPage]);
+  }, [isOpen, isPage, propTenantId]);
 
   const handleSaveConnectors = async () => {
     setConnectorsSaveStatus('saving');
@@ -1528,6 +1618,7 @@ export default function SettingsModal({
     }
 
     try {
+      const activeTenant = propTenantId || myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
       const payload = {
         apiDefibeoActive,
         apiDefibeoApiKey,
@@ -1567,26 +1658,27 @@ export default function SettingsModal({
         googleDriveEmail,
         googleDriveAccessToken
       };
+      localStorage.setItem(`defib_${activeTenant}_atlasante_active`, String(atlasanteActive));
       localStorage.setItem('defib_atlasante_active', String(atlasanteActive));
       window.dispatchEvent(new Event('atlasante-status-changed'));
-      localStorage.setItem(`defib_${myTenantId}_google_drive_active`, String(googleDriveActive));
+      localStorage.setItem(`defib_${activeTenant}_google_drive_active`, String(googleDriveActive));
       localStorage.setItem('defib_google_drive_active', String(googleDriveActive));
       if (googleDriveEmail) {
-        localStorage.setItem(`defib_${myTenantId}_google_drive_email`, googleDriveEmail);
+        localStorage.setItem(`defib_${activeTenant}_google_drive_email`, googleDriveEmail);
         localStorage.setItem('defib_google_drive_email', googleDriveEmail);
       } else {
-        localStorage.removeItem(`defib_${myTenantId}_google_drive_email`);
+        localStorage.removeItem(`defib_${activeTenant}_google_drive_email`);
         localStorage.removeItem('defib_google_drive_email');
       }
       if (googleDriveAccessToken) {
-        localStorage.setItem(`defib_${myTenantId}_google_drive_token`, googleDriveAccessToken);
+        localStorage.setItem(`defib_${activeTenant}_google_drive_token`, googleDriveAccessToken);
         localStorage.setItem('defib_google_drive_token', googleDriveAccessToken);
       } else {
-        localStorage.removeItem(`defib_${myTenantId}_google_drive_token`);
+        localStorage.removeItem(`defib_${activeTenant}_google_drive_token`);
         localStorage.removeItem('defib_google_drive_token');
       }
       window.dispatchEvent(new Event('google-drive-status-changed'));
-      await saveCollectionToFirestore('api_connectors', payload);
+      await saveCollectionToFirestore('api_connectors', payload, activeTenant);
       setConnectorsSaveStatus('saved');
       if (onConnectorsUpdated) {
         onConnectorsUpdated();
@@ -1636,7 +1728,9 @@ export default function SettingsModal({
         localStorage.setItem(`fs_cache_${tid}_company_info`, JSON.stringify(companyObj));
         localStorage.setItem(`fs_cache_${tid}_tenantDatabases`, JSON.stringify(dbPayload));
       }
-      localStorage.setItem('defib_company_info', JSON.stringify(companyObj));
+      if (effectiveTenantId === 'demo') {
+        localStorage.setItem('defib_company_info', JSON.stringify(companyObj));
+      }
     } catch (_) {}
 
     await Promise.all([
@@ -2325,10 +2419,12 @@ export default function SettingsModal({
     try {
       const membersJson = JSON.stringify(membersToSave);
       const companyJson = JSON.stringify(companyToSave);
-      localStorage.setItem('defib_members', membersJson);
+      if (effectiveTenantId === 'demo') {
+        localStorage.setItem('defib_members', membersJson);
+        localStorage.setItem('defib_company_info', companyJson);
+      }
       localStorage.setItem(`defib_${effectiveTenantId}_members`, membersJson);
       localStorage.setItem(`fs_cache_${effectiveTenantId}_members`, membersJson);
-      localStorage.setItem('defib_company_info', companyJson);
       localStorage.setItem(`defib_${effectiveTenantId}_company_info`, companyJson);
       localStorage.setItem(`fs_cache_${effectiveTenantId}_company_info`, companyJson);
 

@@ -1,1 +1,24 @@
-{"name":"UN DÉFI POUR LA VIE","nomCommercial":"UN DÉFI POUR LA VIE","logo":"","website":"https://undefipourlavie.com","email":"copilotudplv@civilprom.com","phone":"0612345678","adminName":"Jean-Luc Degont","nomLogiciel":"Copilot","lang":"Français, France","enableAutoEmails":"Oui","enableSatisfactionAvis":"Oui","enableDevisFactures":"Oui","disableHelpsAndTutorials":"Non","enableOtherEquipments":"Non","hiddenTabs":[],"customLocationNames":{},"spreadsheetDefibrillateurs":"https://docs.google.com/spreadsheets/d/1gZO503C5HtbV5KzxOA4WXcBpsF9srKmlga0xD9J0exs/edit","spreadsheetDefibrillateursUrl":"https://docs.google.com/spreadsheets/d/1gZO503C5HtbV5KzxOA4WXcBpsF9srKmlga0xD9J0exs/edit","updatedAt":"2026-10-15T09:53:48.590Z"}
+{
+  "name": "UN DÉFI POUR LA VIE",
+  "nomCommercial": "UN DÉFI POUR LA VIE",
+  "logo": "",
+  "website": "https://undefipourlavie.com",
+  "email": "copilotudplv@civilprom.com",
+  "phone": "0612345678",
+  "adminName": "Jean-Luc Degont",
+  "nomLogiciel": "Copilot",
+  "lang": "Français, France",
+  "enableAutoEmails": "Oui",
+  "enableSatisfactionAvis": "Oui",
+  "enableDevisFactures": "Oui",
+  "disableHelpsAndTutorials": "Non",
+  "enableOtherEquipments": "Non",
+  "hiddenTabs": [],
+  "customLocationNames": {
+    "Entrepôt A": "Entrepôt Principal - UN DÉFI POUR LA VIE",
+    "Véhicule A": "Véhicule - Technicien Test"
+  },
+  "spreadsheetDefibrillateurs": "https://docs.google.com/spreadsheets/d/1gZO503C5HtbV5KzxOA4WXcBpsF9srKmlga0xD9J0exs/edit",
+  "spreadsheetDefibrillateursUrl": "https://docs.google.com/spreadsheets/d/1gZO503C5HtbV5KzxOA4WXcBpsF9srKmlga0xD9J0exs/edit",
+  "updatedAt": "2026-10-15T09:53:48.590Z"
+}

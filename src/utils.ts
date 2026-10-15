@@ -1092,11 +1092,25 @@ export function getLocationCustomName(originalName: any, customMap?: Record<stri
   if (typeof window === 'undefined') return originalName;
   const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
   try {
-    const saved = localStorage.getItem(`defib_${tenantId}_custom_location_names`) || localStorage.getItem(`defib_${tenantId}_location_names`);
+    const saved =
+      localStorage.getItem(`defib_${tenantId}_custom_location_names`) ||
+      localStorage.getItem(`defib_${tenantId.toUpperCase()}_custom_location_names`) ||
+      localStorage.getItem(`defib_${tenantId.toLowerCase()}_custom_location_names`) ||
+      localStorage.getItem(`defib_${tenantId}_location_names`);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed && typeof parsed === 'object' && parsed[originalName]) {
         return parsed[originalName];
+      }
+    }
+    const rawInfo =
+      localStorage.getItem(`defib_${tenantId}_company_info`) ||
+      localStorage.getItem(`fs_cache_${tenantId}_companyInfo`) ||
+      localStorage.getItem(`fs_cache_${tenantId}_company_info`);
+    if (rawInfo) {
+      const info = JSON.parse(rawInfo);
+      if (info?.customLocationNames && typeof info.customLocationNames[originalName] === 'string' && info.customLocationNames[originalName].trim() !== '') {
+        return info.customLocationNames[originalName].trim();
       }
     }
   } catch (e) {

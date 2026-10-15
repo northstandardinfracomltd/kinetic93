@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { getRegionsForCountry } from './utils/regions';
-import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion, fetchRemoteDeletedDefibKeys } from './firebase';
+import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion, fetchRemoteDeletedDefibKeys, findTenantInList, ensureTenantMembersClient, ensureTenantCustomLocationNames } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { idbSet, idbGet } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
@@ -1209,21 +1209,14 @@ export default function App() {
       let updated = false;
       const nextCompanyInfo = { ...companyInfo };
 
-      if (companyInfo.customLocationNames) {
-        setLocationNames(companyInfo.customLocationNames);
-        localStorage.setItem(`defib_${tenantId}_custom_location_names`, JSON.stringify(companyInfo.customLocationNames));
-      } else {
-        try {
-          const saved = localStorage.getItem(`defib_${tenantId}_custom_location_names`);
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            if (Object.keys(parsed).length > 0) {
-              nextCompanyInfo.customLocationNames = parsed;
-              setLocationNames(parsed);
-              updated = true;
-            }
-          }
-        } catch (e) {}
+      const resolvedLocs = ensureTenantCustomLocationNames(companyInfo.customLocationNames, tenantId, members, stocks, distributedStocks);
+      if (Object.keys(resolvedLocs).length > 0) {
+        setLocationNames(resolvedLocs);
+        localStorage.setItem(`defib_${tenantId}_custom_location_names`, JSON.stringify(resolvedLocs));
+        if (!companyInfo.customLocationNames || Object.keys(companyInfo.customLocationNames).length === 0) {
+          nextCompanyInfo.customLocationNames = resolvedLocs;
+          updated = true;
+        }
       }
 
       if (companyInfo.enableAutoEmails) {
@@ -1242,12 +1235,12 @@ export default function App() {
         setCompanyInfo(nextCompanyInfo);
       }
     }
-  }, [companyInfo, tenantId, isFirebaseLoaded, loadedTenantIdState]);
+  }, [companyInfo, tenantId, isFirebaseLoaded, loadedTenantIdState, members, stocks, distributedStocks]);
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (!e.key) return;
-      if (e.key === 'defib_company_info' || e.key === `defib_${tenantId}_company_info`) {
+      if ((tenantId === 'demo' && e.key === 'defib_company_info') || e.key === `defib_${tenantId}_company_info`) {
         if (e.newValue) {
           try {
             const info = JSON.parse(e.newValue);
@@ -1255,7 +1248,7 @@ export default function App() {
           } catch (err) {}
         }
       }
-      if (e.key === 'defib_fsm_tours' || e.key === `defib_${tenantId}_fsm_tours`) {
+      if ((tenantId === 'demo' && e.key === 'defib_fsm_tours') || e.key === `defib_${tenantId}_fsm_tours`) {
         if (e.newValue) {
           try {
             const tours = JSON.parse(e.newValue);
@@ -6082,21 +6075,27 @@ export default function App() {
         let baseDefibrillateurs: Defibrillateur[] = [];
         setDefibrillateurs(prev => (loadedTenantIdState && loadedTenantIdState !== activeRunTenantId ? [] : prev));
 
-        const matchedInitTenant = KNOWN_TENANTS_REGISTRY.find(
-          t => t.id.toLowerCase() === activeRunTenantId.toLowerCase() || t.shortEnvId.toLowerCase() === activeRunTenantId.toLowerCase()
-        );
-        const defaultInfo = {
+        const matchedInitTenant = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], activeRunTenantId) as any;
+        const defaultInfo: CompanyInfo = {
           name: activeRunTenantId === 'demo' ? "Défibeo Solutions" : (matchedInitTenant?.companyName || "Mon Cabinet"),
           nomCommercial: activeRunTenantId === 'demo' ? "Défibeo Solutions" : (matchedInitTenant?.companyName || "Mon Cabinet"),
           logo: activeRunTenantId === 'demo' ? "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=80&auto=format&fit=crop" : "",
           website: activeRunTenantId === 'demo' ? "29382302.defibeo.com" : "",
-          email: activeRunTenantId === 'demo' ? "contact@defibeo-solutions.com" : "",
-          phone: activeRunTenantId === 'demo' ? "+33 1 47 20 00 01" : ""
+          email: activeRunTenantId === 'demo' ? "contact@defibeo-solutions.com" : (matchedInitTenant?.companyEmail || matchedInitTenant?.adminEmail || ""),
+          phone: activeRunTenantId === 'demo' ? "+33 1 47 20 00 01" : (matchedInitTenant?.companyPhone || ""),
+          nomLogiciel: matchedInitTenant?.nomLogiciel || ""
         };
-        const baseCompanyInfo = getLocalTenantValue<CompanyInfo>('company_info', defaultInfo);
+        const rawLocalCompany = getLocalTenantValue<CompanyInfo>('company_info', defaultInfo);
+        const rawLocalMembers = getLocalTenantValue<Member[]>('members', activeRunTenantId === 'demo' ? INITIAL_MEMBERS : []);
+        const baseMembers = ensureTenantMembersClient(rawLocalMembers, activeRunTenantId);
+        const resolvedInitLocs = ensureTenantCustomLocationNames(rawLocalCompany?.customLocationNames, activeRunTenantId, baseMembers);
+        const baseCompanyInfo: CompanyInfo = {
+          ...defaultInfo,
+          ...rawLocalCompany,
+          customLocationNames: resolvedInitLocs
+        };
         setCompanyInfo(baseCompanyInfo);
-
-        const baseMembers = getLocalTenantValue<Member[]>('members', activeRunTenantId === 'demo' ? INITIAL_MEMBERS : []);
+        setLocationNames(resolvedInitLocs);
         setMembers(baseMembers);
 
         const rawTickets = getLocalTenantValue<SupportTicket[]>('support_tickets', activeRunTenantId === 'demo' ? INITIAL_TICKETS : []);
@@ -6405,7 +6404,10 @@ export default function App() {
             ...localData,
             ...validRemote,
             hiddenTabs: validRemote.hiddenTabs !== undefined ? validRemote.hiddenTabs : (localData.hiddenTabs || []),
-            customLocationNames: validRemote.customLocationNames !== undefined ? validRemote.customLocationNames : (localData.customLocationNames || {}),
+            customLocationNames: ensureTenantCustomLocationNames(
+              validRemote.customLocationNames || localData.customLocationNames,
+              activeRunTenantId
+            ),
             enableAutoEmails: validRemote.enableAutoEmails !== undefined ? validRemote.enableAutoEmails : (localData.enableAutoEmails || 'Oui'),
             enableSatisfactionAvis: validRemote.enableSatisfactionAvis !== undefined ? validRemote.enableSatisfactionAvis : (localData.enableSatisfactionAvis || 'Oui'),
             enableDevisFactures: validRemote.enableDevisFactures !== undefined ? validRemote.enableDevisFactures : (localData.enableDevisFactures || 'Oui'),
@@ -6433,7 +6435,7 @@ export default function App() {
             spreadsheetAutresMaterielsUrl: effSheetAutres,
             spreadsheetClientsUrl: effSheetClients,
           };
-          if (merged.customLocationNames) {
+          if (merged.customLocationNames && Object.keys(merged.customLocationNames).length > 0) {
             setLocationNames(merged.customLocationNames);
             safeSetLocalStorage(`defib_${tenantId}_custom_location_names`, JSON.stringify(merged.customLocationNames));
           }
@@ -6456,7 +6458,8 @@ export default function App() {
           return merged;
         }));
 
-        syncTasks.push(syncBackground<Member[]>('members', 'members', setMembers, (mems) => {
+        syncTasks.push(syncBackground<Member[]>('members', 'members', setMembers, (rawMems) => {
+          const mems = ensureTenantMembersClient(Array.isArray(rawMems) ? rawMems : [], activeRunTenantId);
           const uEmail = loggedUser?.email?.trim().toLowerCase();
           if (uEmail && Array.isArray(mems)) {
             const m = mems.find(item => item.email?.trim().toLowerCase() === uEmail);
@@ -18972,6 +18975,7 @@ export default function App() {
 
           {activeTab === 'parametres' && (
             <SettingsModal
+              key={`settings-page-${tenantId}`}
               tenantId={tenantId}
               isPage={true}
               isOpen={true}
@@ -19025,6 +19029,7 @@ export default function App() {
 
       {/* Global popups block settings / membres */}
       <SettingsModal
+        key={`settings-modal-${tenantId}`}
         tenantId={tenantId}
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}

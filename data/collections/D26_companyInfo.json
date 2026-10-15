@@ -1,1 +1,23 @@
-{"name":"DSG Test","nomCommercial":"DSG Test","logo":"https://civilprom.s3.eu-north-1.amazonaws.com/logo-dsg.png","website":"https://dsg-test.defibeo.com","email":"dsg.test@civilprom.com","phone":"061234567890","address":"12 Rue de la Paix","codePostal":"75001","ville":"Paris","siret":"93829007900020","lang":"Français, France","enableAutoEmails":"Oui","enableSatisfactionAvis":"Oui","enableDevisFactures":"Oui","disableHelpsAndTutorials":"Non","enableOtherEquipments":"Non","hiddenTabs":[],"customLocationNames":{}}
+{
+  "name": "DSG Test",
+  "nomCommercial": "DSG Test",
+  "logo": "https://civilprom.s3.eu-north-1.amazonaws.com/logo-dsg.png",
+  "website": "https://dsg-test.defibeo.com",
+  "email": "dsg.test@civilprom.com",
+  "phone": "061234567890",
+  "address": "12 Rue de la Paix",
+  "codePostal": "75001",
+  "ville": "Paris",
+  "siret": "93829007900020",
+  "lang": "Français, France",
+  "enableAutoEmails": "Oui",
+  "enableSatisfactionAvis": "Oui",
+  "enableDevisFactures": "Oui",
+  "disableHelpsAndTutorials": "Non",
+  "enableOtherEquipments": "Non",
+  "hiddenTabs": [],
+  "customLocationNames": {
+    "Entrepôt A": "Entrepôt Principal - DSG Test",
+    "Véhicule A": "Véhicule - Technicien D26"
+  }
+}

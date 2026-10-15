@@ -37,17 +37,69 @@ try {
       localStorage.removeItem(k);
     }
     // Force one-time & session purge of legacy Firebase defibrillateurs, clients, and other_equipments caches
+    // and remove any unprefixed cross-tenant localStorage keys
     const purgeLegacyFirebaseTabCaches = () => {
+      const unprefixedCrossTenantKeys = new Set([
+        'defib_company_info',
+        'defib_members',
+        'defib_location_names',
+        'defib_custom_location_names',
+        'defib_sage100_active',
+        'defib_sage100_client_id',
+        'defib_sage100_access_token',
+        'defib_sage100_secret_token',
+        'defib_sage4197_active',
+        'defib_sage4197_client_id',
+        'defib_sage4197_access_token',
+        'defib_sage4197_secret_token',
+        'defib_pennylane_active',
+        'defib_pennylane_client_id',
+        'defib_pennylane_company_token',
+        'defib_pennylane_secret_token',
+        'defib_dropbox_active',
+        'defib_dropbox_app_key',
+        'defib_dropbox_app_secret',
+        'defib_dropbox_access_token',
+        'defib_cegid_active',
+        'defib_cegid_api_key',
+        'defib_cegid_api_secret',
+        'defib_lemongroup_ws_active',
+        'defib_lemongroup_ws_api_key',
+        'defib_lemongroup_ws_api_secret',
+        'defib_textelp_active',
+        'defib_textelp_env_id',
+        'defib_textelp_secret_id',
+        'defib_civilprom_active',
+        'defib_civilprom_website_url',
+        'defib_civilprom_assets_file_url',
+        'defib_atlasante_active',
+        'defib_atlasante_declarant_id',
+        'defib_atlasante_url_auth',
+        'defib_google_drive_active',
+        'defib_google_drive_email',
+        'defib_google_drive_token',
+        'defib_api_defibeo_active',
+        'defib_api_defibeo_key',
+        'defib_api_defibeo_secret',
+        'firestore_quota_exhausted_until'
+      ]);
       const toRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (!k) continue;
-        // Preserve spreadsheet URL keys, company_info, registered_tenants, login state
+        if (unprefixedCrossTenantKeys.has(k)) {
+          toRemove.push(k);
+          continue;
+        }
+        // Preserve spreadsheet URL keys, tenant-scoped company_info, members, location names, connectors, registered_tenants, login state
         if (
           k.includes('spreadsheet_') ||
           k.includes('company_info') ||
           k.includes('companyInfo') ||
           k.includes('tenantDatabases') ||
+          k.includes('_members') ||
+          k.includes('custom_location_names') ||
+          k.includes('api_connectors') ||
           k === 'fs_cache_registered_tenants' ||
           k.startsWith('defib_admin_') ||
           k === 'defib_tenant_id' ||
@@ -62,9 +114,7 @@ try {
           lower.includes('_clients') ||
           lower.includes('other_equipment') ||
           lower.includes('otherequipment') ||
-          lower.includes('deleted_defib_keys') ||
-          lower.startsWith('fs_cache_') ||
-          k === 'firestore_quota_exhausted_until'
+          lower.includes('deleted_defib_keys')
         ) {
           toRemove.push(k);
         }
@@ -72,7 +122,6 @@ try {
       for (const k of toRemove) {
         localStorage.removeItem(k);
       }
-      idbClear().catch(() => {});
     };
     purgeLegacyFirebaseTabCaches();
   }
@@ -259,26 +308,63 @@ export function getCollectionKey(collectionName: string, tenantId: string = curr
   return `${activeTenant}_${collectionName}`;
 }
 
-export const KNOWN_TENANTS_REGISTRY: Array<{ id: string; shortEnvId: string; companyName?: string }> = [
-  { id: 'D10', shortEnvId: 'D10', companyName: 'Défibeo Solutions' },
-  { id: 'D12', shortEnvId: 'D22', companyName: 'CardiacSafe' },
-  { id: 'D13', shortEnvId: 'D31', companyName: 'Urgence Secours Équipements' },
-  { id: 'D14', shortEnvId: 'D30', companyName: 'ExtraLife' },
-  { id: 'D15', shortEnvId: 'D62', companyName: 'Serenicoeur' },
-  { id: 'D16', shortEnvId: 'D85', companyName: 'Un Défi Pour La Vie' },
-  { id: 'D17', shortEnvId: 'D56', companyName: 'DLFranceDefib' },
-  { id: 'D18', shortEnvId: 'D83', companyName: 'DSECURITE GROUPE' },
-  { id: 'D19', shortEnvId: 'D66', companyName: 'LION' },
-  { id: 'D20', shortEnvId: 'D74', companyName: 'Moraira' },
-  { id: 'D21', shortEnvId: 'D86', companyName: 'Denia' },
-  { id: 'D22', shortEnvId: 'D13', companyName: 'Xabia' },
-  { id: 'D23', shortEnvId: 'D73', companyName: 'Tolede' },
-  { id: 'D24', shortEnvId: 'D20', companyName: 'Hendaye' },
-  { id: 'D25', shortEnvId: 'D24', companyName: 'Test DSG' },
-  { id: 'D26', shortEnvId: 'D67', companyName: 'DSG Test' },
-  { id: 'D27', shortEnvId: 'D58', companyName: 'UN DÉFI POUR LA VIE' },
-  { id: 'D28', shortEnvId: 'D19', companyName: 'Le Cœur d\'un Sam' }
+export const KNOWN_TENANTS_REGISTRY: Array<Partial<Tenant> & { id: string; shortEnvId: string; companyName: string }> = [
+  { id: 'demo', shortEnvId: 'D10', companyName: 'Défibeo Solutions', companyEmail: 'contact@defibeo-solutions.com', companyPhone: '+33 1 47 20 00 01', adminName: 'Admin Démo', adminEmail: 'account@demo.com', adminPasswordHexOrPlain: '123456', lang: 'Français' },
+  { id: 'tenant_pvzvub57h_1781513640995', shortEnvId: 'D71', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv@civilprom.com', companyPhone: '0651517065', adminName: 'Jean-Luc Degont', adminEmail: 'udplv@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France' },
+  { id: 'D1', shortEnvId: 'D38', companyName: 'DemoTest', companyEmail: 'demottest@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'demottest@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
+  { id: 'D2', shortEnvId: 'D90', companyName: 'Test', companyEmail: 'test@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'test@civilprom.com', adminPasswordHexOrPlain: '95162testdemo', lang: 'Français' },
+  { id: 'D3', shortEnvId: 'D63', companyName: 'DEROESCH', companyEmail: 'deroesch@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'deroesch@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
+  { id: 'D4', shortEnvId: 'D64', companyName: 'DemoTest', companyEmail: 'demotest@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'demotest@civilprom.com', adminPasswordHexOrPlain: '951demo360', lang: 'Français' },
+  { id: 'D5', shortEnvId: 'D52', companyName: 'MATEO', companyEmail: 'mateo@civilprom.com', companyPhone: '0651516087', adminName: 'Alban test', adminEmail: 'mateo@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
+  { id: 'D6', shortEnvId: 'D53', companyName: 'cozy', companyEmail: 'cozy@civilprom.com', companyPhone: '0909090909', adminName: 'test mind', adminEmail: 'cozy@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
+  { id: 'D7', shortEnvId: 'D28', companyName: 'JPM973', companyEmail: 'jpm973@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Pedro Maignan', adminEmail: 'jpm973@civilprom.com', adminPasswordHexOrPlain: '862379OHL-GENZX', lang: 'Français, France', nomLogiciel: 'JPM973' },
+  { id: 'D8', shortEnvId: 'D21', companyName: 'SAS Restenvie', companyEmail: 'restenvie@civilprom.com', companyPhone: '0600000000', adminName: 'Laurent Muller', adminEmail: 'restenvie@civilprom.com', adminPasswordHexOrPlain: 'R3S73NV1E-GENZX', lang: 'Français', nomLogiciel: 'Restenvie' },
+  { id: 'D9', shortEnvId: 'D11', companyName: 'DL France Defib', companyEmail: 'dlfrancedefib@civilprom.com', companyPhone: '0600000000', adminName: 'Denis Lamarche', adminEmail: 'dlfrancedefib@civilprom.com', adminPasswordHexOrPlain: 'D1FR4NC3D3F18-GENZL', lang: 'Français', nomLogiciel: 'DLFRANCEDEFIB' },
+  { id: 'D10', shortEnvId: 'D88', companyName: 'CardioPro', companyEmail: 'cardiopro@civilprom.com', companyPhone: '0600000000', adminName: 'Anthony Monaldi', adminEmail: 'cardiopro@civilprom.com', adminPasswordHexOrPlain: 'C4RD10PR0-GENWL', lang: 'Français', nomLogiciel: 'CardioPro' },
+  { id: 'D11', shortEnvId: 'D39', companyName: 'CardiaPulse', companyEmail: 'cardiapulse@civilprom.com', companyPhone: '0600000000', adminName: 'Georges Lanzi', adminEmail: 'cardiapulse@civilprom.com', adminPasswordHexOrPlain: 'C4RD14PU7S3-GENYL', lang: 'Français, France', nomLogiciel: 'CardiaPulse' },
+  { id: 'D12', shortEnvId: 'D22', companyName: 'CardiacSafe', companyEmail: 'cardiacsafe@civilprom.com', companyPhone: '0600000000', adminName: 'Ludovic Desvaux', adminEmail: 'cardiacsafe@civilprom.com', adminPasswordHexOrPlain: 'C4RD14C84F3-GENZV', lang: 'Français', nomLogiciel: 'CardiacSafe' },
+  { id: 'D13', shortEnvId: 'D31', companyName: 'Urgence Secours Équipements', companyEmail: 'use@civilprom.com', companyPhone: '0600000000', adminName: 'Arthur Sallé', adminEmail: 'use@civilprom.com', adminPasswordHexOrPlain: 'U5G3NC3S3C0U4R8-GENZH', lang: 'Français', nomLogiciel: 'USE' },
+  { id: 'D14', shortEnvId: 'D30', companyName: 'ExtraLife', companyEmail: 'extralife@civilprom.com', companyPhone: '0600000000', adminName: 'Thomas Christophe', adminEmail: 'extralife@civilprom.com', adminPasswordHexOrPlain: '3X7R4L163-GENZT', lang: 'Français', nomLogiciel: 'ExtraLife' },
+  { id: 'D15', shortEnvId: 'D62', companyName: 'Serenicoeur', companyEmail: 'serenicoeur@civilprom.com', companyPhone: '0600000000', adminName: 'Hubert Duverdier', adminEmail: 'serenicoeur@civilprom.com', adminPasswordHexOrPlain: 'S3R3N1C03U5-GENEL', lang: 'Français, France', nomLogiciel: 'Serenicoeur' },
+  { id: 'D16', shortEnvId: 'D85', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv.copilot@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Luc Degont', adminEmail: 'udplv.copilot@civilprom.com', adminPasswordHexOrPlain: 'UND3F1P0U5L4V13-GENZR', lang: 'Français', nomLogiciel: 'Copilot' },
+  { id: 'D17', shortEnvId: 'D56', companyName: 'DLFranceDefib', companyEmail: 'dlfrancedefib2@civilprom.com', companyPhone: '0651517065', adminName: 'Demarche Denis', adminEmail: 'dlfrancedefib2@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'DFranceDefib' },
+  { id: 'D18', shortEnvId: 'D83', companyName: 'DSECURITE GROUPE', companyEmail: 'dsecurite.test@civilprom.com', companyPhone: '0612345678', adminName: 'Jean Dupont', adminEmail: 'dsecurite.test@civilprom.com', adminPasswordHexOrPlain: 'DS3CUR1T3*%', lang: 'Français, France', nomLogiciel: 'DSECURITE' },
+  { id: 'D19', shortEnvId: 'D66', companyName: 'LION', companyEmail: 'lion@civilprom.com', companyPhone: '0651517065', adminName: 'Roesch Ronan', adminEmail: 'lion@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'LION123' },
+  { id: 'D20', shortEnvId: 'D74', companyName: 'Moraira', companyEmail: 'moraira@civilprom.com', companyPhone: '0612345678', adminName: 'Roesch Ronan', adminEmail: 'moraira@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français', nomLogiciel: 'MorairaGo' },
+  { id: 'D21', shortEnvId: 'D86', companyName: 'Denia', companyEmail: 'denia@civilprom.com', companyPhone: '0787878787', adminName: 'Roesch Ronan', adminEmail: 'denia@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Denia123' },
+  { id: 'D22', shortEnvId: 'D13', companyName: 'Xabia', companyEmail: 'xabia@civilprom.com', companyPhone: '0909090909', adminName: 'Axel Ronan', adminEmail: 'xabia@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Xabia123' },
+  { id: 'D23', shortEnvId: 'D73', companyName: 'Tolede', companyEmail: 'tolede@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch RonanPDF', adminEmail: 'tolede@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'ToledePDF' },
+  { id: 'D24', shortEnvId: 'D20', companyName: 'Hendaye', companyEmail: 'hendaye@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch Ronan', adminEmail: 'hendaye@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Hendaye123' },
+  { id: 'D25', shortEnvId: 'D24', companyName: 'Test DSG', companyEmail: 'test.dsg@civilprom.com', companyPhone: '0612345678', adminName: 'Jérôme Sommet', adminEmail: 'test.dsg@civilprom.com', adminPasswordHexOrPlain: 'DS3CU51TE', lang: 'Français, France', nomLogiciel: 'TestDSG' },
+  { id: 'D26', shortEnvId: 'D67', companyName: 'DSG Test', companyEmail: 'dsg.test@civilprom.com', companyPhone: '061234567890', adminName: 'Sommet Jérôme', adminEmail: 'dsg.test@civilprom.com', adminPasswordHexOrPlain: 'DS3CU51TE123', lang: 'Français, France', nomLogiciel: 'EssaiDSG' },
+  { id: 'D27', shortEnvId: 'D58', companyName: 'UN DÉFI POUR LA VIE', companyEmail: 'copilotudplv@civilprom.com', companyPhone: '0612345678', adminName: 'Jean-Luc Degont', adminEmail: 'copilotudplv@civilprom.com', adminPasswordHexOrPlain: 'C0P1L07UDPLV1IS0', lang: 'Français, France', nomLogiciel: 'Copilot' },
+  { id: 'D28', shortEnvId: 'D19', companyName: "Le Cœur d'un Sam", companyEmail: 'lecoeurdunsam@civilprom.com', companyPhone: '0765582200', adminName: 'Océane Chabrier', adminEmail: 'contact.lecoeurdunsam@gmail.com', adminPasswordHexOrPlain: 'L3C03U5D1S4M*%', lang: 'Français, France', nomLogiciel: 'lecoeurdunsam' }
 ];
+
+export function findTenantInList<T extends { id?: string; shortEnvId?: string }>(tenants: T[], targetTenantId: string): T | undefined {
+  if (!Array.isArray(tenants) || !targetTenantId) return undefined;
+  const clean = targetTenantId.trim().toLowerCase();
+  const isDNum = /^d\d+$/i.test(clean);
+  const isNum = /^\d+$/.test(clean);
+  const numOnly = (isDNum || isNum) ? clean.replace(/^d/i, '') : '';
+
+  // 1. Always prioritize exact match on primary tenant `id` first to prevent shortEnvId collisions!
+  const idMatch = tenants.find(t =>
+    t && (
+      t.id?.toLowerCase() === clean ||
+      (numOnly && t.id?.toLowerCase() === `d${numOnly}`)
+    )
+  );
+  if (idMatch) return idMatch;
+
+  // 2. Only fall back to shortEnvId if no tenant has that `id`
+  return tenants.find(t =>
+    t && (
+      t.shortEnvId?.toLowerCase() === clean ||
+      (numOnly && t.shortEnvId?.toLowerCase() === `d${numOnly}`)
+    )
+  );
+}
 
 export function getCollectionKeyCandidates(collectionName: string, tenantId: string = currentTenantId): string[] {
   const colAliases = getCollectionNameAliases(collectionName);
@@ -305,12 +391,13 @@ export function getCollectionKeyCandidates(collectionName: string, tenantId: str
     tenantPrefixes.add(`${numOnly}`);
   }
 
-  // Also check if this tenant has an alias in registered_tenants cache or known registry
+  // Also check if this tenant has a non-colliding shortEnvId in registered_tenants cache or known registry
   try {
     let regTenants = getFromLocalCache<Tenant[]>('registered_tenants');
     if (!Array.isArray(regTenants) || regTenants.length === 0) {
-      regTenants = KNOWN_TENANTS_REGISTRY as any[];
+      regTenants = [...(KNOWN_TENANTS_REGISTRY as any[])];
     } else {
+      regTenants = [...regTenants];
       const existingIds = new Set(regTenants.map(t => t.id?.toLowerCase()));
       for (const kt of KNOWN_TENANTS_REGISTRY) {
         if (!existingIds.has(kt.id.toLowerCase())) {
@@ -319,28 +406,30 @@ export function getCollectionKeyCandidates(collectionName: string, tenantId: str
       }
     }
     if (Array.isArray(regTenants)) {
-      const match = regTenants.find(t => 
-        t.id?.toLowerCase() === activeTenant.toLowerCase() ||
-        t.shortEnvId?.toLowerCase() === activeTenant.toLowerCase() ||
-        (numOnly && (t.id?.replace(/^d/i, '') === numOnly || t.shortEnvId?.replace(/^d/i, '') === numOnly))
-      );
+      const allPrimaryIds = new Set(regTenants.map(t => (t.id || '').toLowerCase().trim()).filter(Boolean));
+      const match = findTenantInList(regTenants, activeTenant);
       if (match) {
-        if (match.id) {
+        if (match.id && match.id !== 'demo') {
           tenantPrefixes.add(match.id);
           const mNum = match.id.replace(/^d/i, '');
-          if (mNum) {
+          if (/^\d+$/.test(mNum)) {
             tenantPrefixes.add(`D${mNum}`);
             tenantPrefixes.add(`d${mNum}`);
             tenantPrefixes.add(mNum);
           }
         }
-        if (match.shortEnvId) {
-          tenantPrefixes.add(match.shortEnvId);
-          const sNum = match.shortEnvId.replace(/^d/i, '');
-          if (sNum) {
-            tenantPrefixes.add(`D${sNum}`);
-            tenantPrefixes.add(`d${sNum}`);
-            tenantPrefixes.add(sNum);
+        // Only add shortEnvId as a storage prefix if it does NOT collide with another tenant's primary ID
+        if (match.shortEnvId && match.id !== 'demo') {
+          const sidLower = match.shortEnvId.toLowerCase().trim();
+          const collidesWithOtherTenant = allPrimaryIds.has(sidLower) && sidLower !== (match.id || '').toLowerCase().trim();
+          if (!collidesWithOtherTenant) {
+            tenantPrefixes.add(match.shortEnvId);
+            const sNum = match.shortEnvId.replace(/^d/i, '');
+            if (/^\d+$/.test(sNum)) {
+              tenantPrefixes.add(`D${sNum}`);
+              tenantPrefixes.add(`d${sNum}`);
+              tenantPrefixes.add(sNum);
+            }
           }
         }
       }
@@ -547,7 +636,9 @@ export function saveToLocalCache(key: string, value: any): void {
 
 export function getFromLocalCache<T>(key: string): T | null {
   try {
-    const val = localStorage.getItem(`fs_cache_${key}`);
+    const val =
+      localStorage.getItem(`fs_cache_${key}`) ||
+      (key.startsWith('fs_cache_') || key.startsWith('defib_') ? localStorage.getItem(key) : localStorage.getItem(`defib_${key}`));
     return val ? JSON.parse(val) as T : null;
   } catch (err) {
     console.warn(`Failed to read from local cache for key ${key}:`, err);
@@ -573,17 +664,68 @@ export async function getFromLocalCacheAsync<T>(key: string): Promise<T | null> 
 export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
+    const unprefixedCrossTenantKeys = new Set([
+      'defib_company_info',
+      'defib_members',
+      'defib_location_names',
+      'defib_custom_location_names',
+      'defib_sage100_active',
+      'defib_sage100_client_id',
+      'defib_sage100_access_token',
+      'defib_sage100_secret_token',
+      'defib_sage4197_active',
+      'defib_sage4197_client_id',
+      'defib_sage4197_access_token',
+      'defib_sage4197_secret_token',
+      'defib_pennylane_active',
+      'defib_pennylane_client_id',
+      'defib_pennylane_company_token',
+      'defib_pennylane_secret_token',
+      'defib_dropbox_active',
+      'defib_dropbox_app_key',
+      'defib_dropbox_app_secret',
+      'defib_dropbox_access_token',
+      'defib_cegid_active',
+      'defib_cegid_api_key',
+      'defib_cegid_api_secret',
+      'defib_lemongroup_ws_active',
+      'defib_lemongroup_ws_api_key',
+      'defib_lemongroup_ws_api_secret',
+      'defib_textelp_active',
+      'defib_textelp_env_id',
+      'defib_textelp_secret_id',
+      'defib_civilprom_active',
+      'defib_civilprom_website_url',
+      'defib_civilprom_assets_file_url',
+      'defib_atlasante_active',
+      'defib_atlasante_declarant_id',
+      'defib_atlasante_url_auth',
+      'defib_google_drive_active',
+      'defib_google_drive_email',
+      'defib_google_drive_token',
+      'defib_api_defibeo_active',
+      'defib_api_defibeo_key',
+      'defib_api_defibeo_secret'
+    ]);
     const keysToRemove: string[] = [];
 
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
 
+      if (unprefixedCrossTenantKeys.has(k)) {
+        keysToRemove.push(k);
+        continue;
+      }
+
       if (
         k.includes('spreadsheet_') ||
         k.includes('company_info') ||
         k.includes('companyInfo') ||
         k.includes('tenantDatabases') ||
+        k.includes('_members') ||
+        k.includes('custom_location_names') ||
+        k.includes('api_connectors') ||
         k === 'fs_cache_registered_tenants'
       ) {
         continue;
@@ -600,8 +742,7 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
         lower.includes('otherequipment') ||
         lower.includes('recent_defib_activity') ||
         lower.includes('recent_client_activity') ||
-        lower.includes('deleted_defib_keys') ||
-        lower.startsWith('fs_cache_')
+        lower.includes('deleted_defib_keys')
       ) {
         keysToRemove.push(k);
       }
@@ -610,9 +751,6 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
     for (const k of keysToRemove) {
       localStorage.removeItem(k);
     }
-
-    // Completely clear IndexedDB cache on login/logout so no stale Firebase items remain
-    idbClear().catch(() => {});
 
     // Also clear session storage
     if (window.sessionStorage) {
@@ -624,10 +762,8 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
 }
 
 /**
- * Resolves all valid tenant alias identifiers for a target tenant ID.
- * E.g., for D27 (shortEnvId D58): ['d27', '27', 'd58', '58'].
- * E.g., for D18 (shortEnvId D83): ['d18', '18', 'd83', '83'].
- * E.g., for demo (shortEnvId D10): ['demo', 'd10', '10'].
+ * Resolves all valid tenant alias identifiers for a target tenant ID,
+ * avoiding any collision with another tenant's primary ID.
  */
 export function getTenantAliases(targetTenantId: string): Set<string> {
   const aliases = new Set<string>();
@@ -641,8 +777,9 @@ export function getTenantAliases(targetTenantId: string): Set<string> {
   try {
     let regTenants = getFromLocalCache<Tenant[]>('registered_tenants');
     if (!Array.isArray(regTenants) || regTenants.length === 0) {
-      regTenants = KNOWN_TENANTS_REGISTRY as any[];
+      regTenants = [...(KNOWN_TENANTS_REGISTRY as any[])];
     } else {
+      regTenants = [...regTenants];
       const existingIds = new Set(regTenants.map(t => t.id?.toLowerCase()));
       for (const kt of KNOWN_TENANTS_REGISTRY) {
         if (!existingIds.has(kt.id.toLowerCase())) {
@@ -651,11 +788,8 @@ export function getTenantAliases(targetTenantId: string): Set<string> {
       }
     }
     if (Array.isArray(regTenants)) {
-      const match = regTenants.find(t =>
-        t.id?.toLowerCase() === clean ||
-        t.shortEnvId?.toLowerCase() === clean ||
-        (num && (t.id?.replace(/^d/i, '') === num || t.shortEnvId?.replace(/^d/i, '') === num))
-      );
+      const allPrimaryIds = new Set(regTenants.map(t => (t.id || '').toLowerCase().trim()).filter(Boolean));
+      const match = findTenantInList(regTenants, clean);
       if (match) {
         if (match.id) {
           const mid = match.id.toLowerCase().trim();
@@ -666,13 +800,16 @@ export function getTenantAliases(targetTenantId: string): Set<string> {
             aliases.add(mnum);
           }
         }
-        if (match.shortEnvId) {
+        if (match.shortEnvId && match.id !== 'demo') {
           const sid = match.shortEnvId.toLowerCase().trim();
-          aliases.add(sid);
-          const snum = sid.replace(/^d/i, '');
-          if (/^\d+$/.test(snum)) {
-            aliases.add(`d${snum}`);
-            aliases.add(snum);
+          const collidesWithOtherTenant = allPrimaryIds.has(sid) && sid !== (match.id || '').toLowerCase().trim();
+          if (!collidesWithOtherTenant) {
+            aliases.add(sid);
+            const snum = sid.replace(/^d/i, '');
+            if (/^\d+$/.test(snum)) {
+              aliases.add(`d${snum}`);
+              aliases.add(snum);
+            }
           }
         }
       }
@@ -708,7 +845,7 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
   if (!Array.isArray(data)) return data;
   
   const cleanTid = (activeTenantId || 'demo').trim().toLowerCase();
-  const isDemo = cleanTid === 'demo' || cleanTid === 'd10' || cleanTid === '10';
+  const isDemo = cleanTid === 'demo';
   const tenantAliases = getTenantAliases(cleanTid);
 
   return (data as any[]).filter((item: any) => {
@@ -741,7 +878,257 @@ export function filterCollectionForTenant<T>(data: T, collectionName: string, ac
 
     // Unassigned mock or demo item: NEVER show in a customer tenant
     return false;
-  }) as unknown as T;
+   }) as unknown as T;
+}
+
+/**
+ * Ensures a tenant's members list is never empty by guaranteeing its Super-Administrateur
+ * from registered_tenants / KNOWN_TENANTS_REGISTRY and any technicians from fsmTours are present,
+ * while strictly filtering out any cross-tenant or demo members.
+ */
+export function ensureTenantMembersClient(rawMembers: any[], activeTenantId: string, extraTours?: any[]): Member[] {
+  const cleanTid = (activeTenantId || 'demo').trim();
+  const isDemo = cleanTid.toLowerCase() === 'demo';
+  const filtered = filterCollectionForTenant<any[]>(Array.isArray(rawMembers) ? rawMembers : [], 'members', cleanTid);
+  if (isDemo) {
+    return filtered.length > 0 ? filtered : INITIAL_MEMBERS;
+  }
+
+  // Filter out default demo mock members if they accidentally leaked without envId
+  const demoEmails = new Set(['roesch.ronan@gmail.com', 'tech.ouest@defibeo.com', 'support@defibeo.com', 'account@demo.com']);
+  const list: any[] = filtered.filter((m: any) => {
+    if (!m || typeof m !== 'object') return false;
+    const mEnv = String(m.envId || m.tenantId || '').trim().toLowerCase();
+    const mEmail = String(m.email || '').trim().toLowerCase();
+    if (!mEnv && demoEmails.has(mEmail)) return false;
+    return true;
+  });
+
+  let regTenants = getFromLocalCache<Tenant[]>('registered_tenants');
+  if (!Array.isArray(regTenants) || regTenants.length === 0) {
+    regTenants = [...(KNOWN_TENANTS_REGISTRY as any[])];
+  } else {
+    regTenants = [...regTenants];
+    const existingIds = new Set(regTenants.map(t => t.id?.toLowerCase()));
+    for (const kt of KNOWN_TENANTS_REGISTRY) {
+      if (!existingIds.has(kt.id.toLowerCase())) {
+        regTenants.push(kt as any);
+      }
+    }
+  }
+
+  const tenantMatch = findTenantInList(regTenants, cleanTid);
+  const effTenantId = tenantMatch?.id || cleanTid;
+  const adminEmail = String(tenantMatch?.adminEmail || tenantMatch?.companyEmail || '').trim();
+  const adminName = String(tenantMatch?.adminName || (tenantMatch?.companyName ? `Admin ${tenantMatch.companyName}` : '')).trim();
+  const rawPass = String(tenantMatch?.adminPasswordHexOrPlain || '1234').trim();
+  const adminPin = /^\d{4}$/.test(rawPass) ? rawPass : '1234';
+
+  const hasSuperAdmin = list.some((m: any) =>
+    m && (
+      m.role === 'Super-Administrateur' ||
+      m.role === 'Propriétaire / Admin' ||
+      String(m.role || '').toLowerCase().includes('super') ||
+      String(m.role || '').toLowerCase().includes('propriétaire') ||
+      (adminEmail && String(m.email || '').trim().toLowerCase() === adminEmail.toLowerCase())
+    )
+  );
+
+  if (!hasSuperAdmin && (adminEmail || adminName)) {
+    list.unshift({
+      id: `mem-admin-${effTenantId}`,
+      name: adminName || 'Administrateur',
+      email: adminEmail,
+      role: 'Super-Administrateur',
+      status: 'Actif',
+      lastActive: 'En ligne',
+      pin: adminPin,
+      envId: effTenantId,
+      tenantId: effTenantId
+    });
+  }
+
+  // Also check fsmTours for any technicians belonging to this tenant
+  let tours = Array.isArray(extraTours) ? extraTours : [];
+  if (tours.length === 0 && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const rawTours =
+        localStorage.getItem(`defib_${cleanTid}_fsm_tours`) ||
+        localStorage.getItem(`defib_${effTenantId}_fsm_tours`) ||
+        localStorage.getItem(`fs_cache_${cleanTid}_fsmTours`) ||
+        localStorage.getItem(`fs_cache_${effTenantId}_fsmTours`);
+      if (rawTours) {
+        const parsed = JSON.parse(rawTours);
+        if (Array.isArray(parsed)) tours = parsed;
+      }
+    } catch (_) {}
+  }
+
+  const vehiclePool = ['Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E'];
+  if (Array.isArray(tours) && tours.length > 0) {
+    for (const tour of tours) {
+      const tName = String(tour?.techName || '').trim();
+      if (!tName || tName === 'Non assigné' || tName === 'Jakub Démo') continue;
+      const alreadyExists = list.some((m: any) => String(m?.name || '').trim().toLowerCase() === tName.toLowerCase());
+      if (!alreadyExists) {
+        const usedLocs = new Set(list.map((m: any) => m?.locationLink).filter(Boolean));
+        const availLoc = vehiclePool.find(v => !usedLocs.has(v)) || 'Véhicule A';
+        const slug = tName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+        const domain = adminEmail.includes('@') ? adminEmail.split('@')[1] : 'civilprom.com';
+        list.push({
+          id: `mem-tech-${effTenantId}-${slug}`,
+          name: tName,
+          email: `${slug}@${domain}`,
+          role: 'Technicien',
+          status: 'Actif',
+          lastActive: 'En ligne',
+          pin: '1234',
+          locationLink: availLoc,
+          envId: effTenantId,
+          tenantId: effTenantId
+        });
+      }
+    }
+  }
+
+  const usedLocations = new Set(list.map((m: any) => m?.locationLink).filter(Boolean));
+  return list.map((m: any, idx: number) => {
+    if (!m || typeof m !== 'object') return m;
+    const isTech = m.role === 'Technicien' || m.role === 'Maintenance Terrain' || String(m.role || '').toLowerCase().includes('tech');
+    let loc = m.locationLink;
+    if (isTech && !loc) {
+      loc = vehiclePool.find(v => !usedLocations.has(v)) || 'Véhicule A';
+      usedLocations.add(loc);
+    }
+    let email = m.email;
+    if (!email && m.name) {
+      const slug = String(m.name).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+      const domain = adminEmail.includes('@') ? adminEmail.split('@')[1] : 'civilprom.com';
+      email = `${slug || `membre${idx}`}@${domain}`;
+    }
+    return {
+      ...m,
+      email: email || '',
+      pin: m.pin || '1234',
+      status: m.status || 'Actif',
+      lastActive: m.lastActive || 'En ligne',
+      ...(isTech && loc ? { locationLink: loc } : {}),
+      envId: m.envId || effTenantId,
+      tenantId: m.tenantId || effTenantId
+    };
+  });
+}
+
+/**
+ * Resolves customLocationNames for a tenant without ever letting an empty `{}` overwrite
+ * saved location names, and automatically populates active emplacements (warehouses with stock
+ * or vehicles linked to technicians) if no custom names were saved yet.
+ */
+export function ensureTenantCustomLocationNames(
+  rawNames: Record<string, string> | undefined | null,
+  activeTenantId: string,
+  membersList?: any[],
+  stocksList?: any[],
+  distribList?: any[]
+): Record<string, string> {
+  const cleanTid = (activeTenantId || 'demo').trim();
+  const aliases = Array.from(getTenantAliases(cleanTid));
+  const candidateTenants = Array.from(new Set([
+    cleanTid,
+    cleanTid.toUpperCase(),
+    cleanTid.toLowerCase(),
+    ...aliases.flatMap(a => [a, a.toUpperCase(), a.toLowerCase()])
+  ]));
+
+  const merged: Record<string, string> = {};
+  const applyNonEmpty = (source?: Record<string, string> | null) => {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+    for (const [k, v] of Object.entries(source)) {
+      if (typeof v === 'string' && v.trim() !== '') {
+        merged[k] = v.trim();
+      }
+    }
+  };
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    for (const tid of candidateTenants) {
+      try {
+        const rawLoc = localStorage.getItem(`defib_${tid}_custom_location_names`);
+        if (rawLoc) applyNonEmpty(JSON.parse(rawLoc));
+      } catch (_) {}
+      try {
+        const rawInfo = localStorage.getItem(`defib_${tid}_company_info`) || localStorage.getItem(`fs_cache_${tid}_companyInfo`) || localStorage.getItem(`fs_cache_${tid}_company_info`);
+        if (rawInfo) {
+          const parsed = JSON.parse(rawInfo);
+          if (parsed?.customLocationNames) applyNonEmpty(parsed.customLocationNames);
+        }
+      } catch (_) {}
+    }
+  }
+
+  applyNonEmpty(rawNames);
+
+  if (Object.keys(merged).length > 0) {
+    return merged;
+  }
+
+  // If no custom names exist yet, populate emplacements that have active data (members, stocks, distributed_stocks)
+  let regTenants = getFromLocalCache<Tenant[]>('registered_tenants');
+  if (!Array.isArray(regTenants) || regTenants.length === 0) {
+    regTenants = [...(KNOWN_TENANTS_REGISTRY as any[])];
+  }
+  const tenantMatch = findTenantInList(regTenants, cleanTid);
+  const compName = tenantMatch?.companyName || (cleanTid.toLowerCase() === 'demo' ? 'Défibeo Solutions' : '');
+
+  merged['Entrepôt A'] = compName ? `Entrepôt Principal - ${compName}` : 'Entrepôt Principal';
+
+  const effectiveMembers = Array.isArray(membersList) && membersList.length > 0
+    ? membersList
+    : ensureTenantMembersClient([], cleanTid);
+
+  for (const m of effectiveMembers) {
+    if (m && m.locationLink && m.name && !merged[m.locationLink]) {
+      const prefix = String(m.locationLink).startsWith('Véhicule') ? 'Véhicule' : 'Dépôt';
+      merged[m.locationLink] = `${prefix} - ${m.name}`;
+    }
+  }
+
+  let effStocks = Array.isArray(stocksList) ? stocksList : [];
+  let effDistrib = Array.isArray(distribList) ? distribList : [];
+  if (typeof window !== 'undefined' && window.localStorage) {
+    if (effStocks.length === 0) {
+      try {
+        const rawS = localStorage.getItem(`defib_${cleanTid}_stocks`);
+        if (rawS) effStocks = JSON.parse(rawS) || [];
+      } catch (_) {}
+    }
+    if (effDistrib.length === 0) {
+      try {
+        const rawD = localStorage.getItem(`defib_${cleanTid}_distributed_stocks`);
+        if (rawD) effDistrib = JSON.parse(rawD) || [];
+      } catch (_) {}
+    }
+  }
+
+  for (const st of effStocks) {
+    const loc = st?.stockage;
+    if (loc && (loc.startsWith('Entrepôt') || loc.startsWith('Véhicule')) && !merged[loc]) {
+      merged[loc] = loc === 'Entrepôt B'
+        ? (compName ? `Entrepôt Secondaire - ${compName}` : 'Entrepôt Secondaire')
+        : `${loc} - ${compName || 'Stock'}`;
+    }
+  }
+
+  for (const ds of effDistrib) {
+    const loc = ds?.locationName;
+    if (loc && (loc.startsWith('Entrepôt') || loc.startsWith('Véhicule')) && !merged[loc]) {
+      merged[loc] = loc.startsWith('Véhicule')
+        ? `Véhicule d'intervention ${loc.replace('Véhicule ', '')}`
+        : `${loc} - ${compName || 'Stock'}`;
+    }
+  }
+
+  return merged;
 }
 
 /**
@@ -1219,24 +1606,36 @@ export async function fetchCollectionFromFirestore<T>(
           const primaryKey = candidateKeys[0] || `${collectionName}_${activeTenantId}`;
 
           if (Array.isArray(val)) {
-            if (val.length > 0) {
-              onProgress?.(val.length, val.length, `Chargement ${val.length.toLocaleString('en-US')}/${val.length.toLocaleString('en-US')}, Terminé.`);
+            let finalArr: any[] = val;
+            if (collectionName === 'members') {
+              // Merge with any locally saved members for this tenant so browser additions are preserved
+              const localMem = getFromLocalCache<any[]>(`defib_${activeTenantId}_members`) || getFromLocalCache<any[]>(`${activeTenantId}_members`) || [];
+              const combinedMem = mergeCollectionItems('members', [...(Array.isArray(localMem) ? localMem : []), ...val]);
+              finalArr = ensureTenantMembersClient(combinedMem, activeTenantId);
             }
-            // Always update local cache and IndexedDB to mirror the authoritative server truth
-            idbSet(primaryKey, val).catch(() => {});
-            idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
-            idbSet(`defib_${activeTenantId}_${collectionName}`, val).catch(() => {});
-            saveToLocalCache(primaryKey, val);
-            saveToLocalCache(`${activeTenantId}_${collectionName}`, val);
-            saveToLocalCache(`defib_${activeTenantId}_${collectionName}`, val);
-            return val;
-          } else {
-            // Non-array object/primitive (e.g. companyInfo)
-            idbSet(primaryKey, val).catch(() => {});
-            idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
-            idbSet(`defib_${activeTenantId}_${collectionName}`, val).catch(() => {});
-            saveToLocalCache(primaryKey, val);
-            return val;
+            if (finalArr.length > 0) {
+              onProgress?.(finalArr.length, finalArr.length, `Chargement ${finalArr.length.toLocaleString('en-US')}/${finalArr.length.toLocaleString('en-US')}, Terminé.`);
+              // Update local cache and IndexedDB when server has populated items
+              idbSet(primaryKey, finalArr).catch(() => {});
+              idbSet(`${activeTenantId}_${collectionName}`, finalArr).catch(() => {});
+              idbSet(`defib_${activeTenantId}_${collectionName}`, finalArr).catch(() => {});
+              saveToLocalCache(primaryKey, finalArr);
+              saveToLocalCache(`${activeTenantId}_${collectionName}`, finalArr);
+              saveToLocalCache(`defib_${activeTenantId}_${collectionName}`, finalArr);
+              return finalArr as unknown as T;
+            }
+            // If server returned empty array [], do NOT overwrite local cache before checking Strategy 3 below!
+          } else if (val && typeof val === 'object' && Object.keys(val as any).length > 0) {
+            if ((collectionName === 'companyInfo' || collectionName === 'company_info') && (val as any)._isDefaultFallback) {
+              // Do not overwrite local cache with synthetic default fallback before checking Strategy 3
+            } else {
+              // Non-empty object (e.g. companyInfo, api_connectors, tenantDatabases)
+              idbSet(primaryKey, val).catch(() => {});
+              idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
+              idbSet(`defib_${activeTenantId}_${collectionName}`, val).catch(() => {});
+              saveToLocalCache(primaryKey, val);
+              return val;
+            }
           }
         }
       }
@@ -1288,7 +1687,15 @@ export async function fetchCollectionFromFirestore<T>(
   }
 
   if (bestCandidateData !== null && bestCandidateData !== undefined) {
-    return filterCollectionForTenant(bestCandidateData as T, collectionName, activeTenantId);
+    const filtered = filterCollectionForTenant(bestCandidateData as T, collectionName, activeTenantId);
+    if (collectionName === 'members' && Array.isArray(filtered)) {
+      return ensureTenantMembersClient(filtered, activeTenantId) as unknown as T;
+    }
+    return filtered;
+  }
+
+  if (collectionName === 'members') {
+    return ensureTenantMembersClient([], activeTenantId) as unknown as T;
   }
 
   return null;
@@ -1695,8 +2102,32 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
     console.log('[Firestore Cache-First] Fallback to cache for registered_tenants:', err);
   }
 
+  // Secondary strategy: fetch registered_tenants from server relay if available
+  try {
+    if (typeof fetch !== 'undefined') {
+      const resp = await fetch('/api/sync-collection?collectionName=registered_tenants&tenantId=demo', {
+        signal: AbortSignal.timeout(6000)
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        if (Array.isArray(json?.value) && json.value.length > 0) {
+          const mergedServer = addDemoIfNeeded(json.value as Tenant[]);
+          saveToLocalCache('registered_tenants', mergedServer);
+          return mergedServer;
+        }
+      }
+    }
+  } catch (_) {}
+
   const cached = getFromLocalCache<Tenant[]>('registered_tenants') || [];
-  return addDemoIfNeeded(cached);
+  const combined = [...cached];
+  const existingIds = new Set(combined.map(t => t.id?.toLowerCase()));
+  for (const kt of KNOWN_TENANTS_REGISTRY) {
+    if (!existingIds.has(kt.id.toLowerCase())) {
+      combined.push(kt as Tenant);
+    }
+  }
+  return addDemoIfNeeded(combined);
 }
 
 /**

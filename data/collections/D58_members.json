@@ -1,1 +1,25 @@
-[{"id":"mem_1","name":"Technicien Test","role":"Technicien","envId":"D27","tenantId":"D27"}]
+[
+  {
+    "id": "mem-admin-D27",
+    "name": "Jean-Luc Degont",
+    "email": "copilotudplv@civilprom.com",
+    "role": "Super-Administrateur",
+    "status": "Actif",
+    "lastActive": "En ligne",
+    "pin": "1234",
+    "envId": "D27",
+    "tenantId": "D27"
+  },
+  {
+    "id": "mem_1",
+    "name": "Technicien Test",
+    "email": "technicien.test@civilprom.com",
+    "role": "Technicien",
+    "status": "Actif",
+    "lastActive": "En ligne",
+    "pin": "1234",
+    "locationLink": "Véhicule A",
+    "envId": "D27",
+    "tenantId": "D27"
+  }
+]

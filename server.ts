@@ -2470,37 +2470,40 @@ function formatDefibrillateurOutput(d: any): any {
   };
 }
 
-const SERVER_KNOWN_TENANTS = [
-  { id: 'D10', shortEnvId: 'D10', companyName: 'Défibeo Solutions' },
-  { id: 'D12', shortEnvId: 'D22', companyName: 'CardiacSafe' },
-  { id: 'D13', shortEnvId: 'D31', companyName: 'Urgence Secours Équipements' },
-  { id: 'D14', shortEnvId: 'D30', companyName: 'ExtraLife' },
-  { id: 'D15', shortEnvId: 'D62', companyName: 'Serenicoeur' },
-  { id: 'D16', shortEnvId: 'D85', companyName: 'Un Défi Pour La Vie' },
-  { id: 'D17', shortEnvId: 'D56', companyName: 'DLFranceDefib' },
-  { id: 'D18', shortEnvId: 'D83', companyName: 'DSECURITE GROUPE' },
-  { id: 'D19', shortEnvId: 'D66', companyName: 'LION' },
-  { id: 'D20', shortEnvId: 'D74', companyName: 'Moraira' },
-  { id: 'D21', shortEnvId: 'D86', companyName: 'Denia' },
-  { id: 'D22', shortEnvId: 'D13', companyName: 'Xabia' },
-  { id: 'D23', shortEnvId: 'D73', companyName: 'Tolede' },
-  { id: 'D24', shortEnvId: 'D20', companyName: 'Hendaye' },
-  { id: 'D25', shortEnvId: 'D24', companyName: 'Test DSG' },
-  { id: 'D26', shortEnvId: 'D67', companyName: 'DSG Test' },
-  { id: 'D27', shortEnvId: 'D58', companyName: 'UN DÉFI POUR LA VIE' },
-  { id: 'D28', shortEnvId: 'D19', companyName: "Le Cœur d'un Sam" }
+const SERVER_KNOWN_TENANTS: any[] = [
+  { id: 'demo', shortEnvId: 'D10', companyName: 'Défibeo Solutions', companyEmail: 'contact@defibeo-solutions.com', companyPhone: '+33 1 47 20 00 01', adminName: 'Admin Démo', adminEmail: 'account@demo.com', adminPasswordHexOrPlain: '123456', lang: 'Français' },
+  { id: 'tenant_pvzvub57h_1781513640995', shortEnvId: 'D71', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv@civilprom.com', companyPhone: '0651517065', adminName: 'Jean-Luc Degont', adminEmail: 'udplv@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France' },
+  { id: 'D1', shortEnvId: 'D38', companyName: 'DemoTest', companyEmail: 'demottest@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'demottest@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
+  { id: 'D2', shortEnvId: 'D90', companyName: 'Test', companyEmail: 'test@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'test@civilprom.com', adminPasswordHexOrPlain: '95162testdemo', lang: 'Français' },
+  { id: 'D3', shortEnvId: 'D63', companyName: 'DEROESCH', companyEmail: 'deroesch@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'deroesch@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
+  { id: 'D4', shortEnvId: 'D64', companyName: 'DemoTest', companyEmail: 'demotest@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'demotest@civilprom.com', adminPasswordHexOrPlain: '951demo360', lang: 'Français' },
+  { id: 'D5', shortEnvId: 'D52', companyName: 'MATEO', companyEmail: 'mateo@civilprom.com', companyPhone: '0651516087', adminName: 'Alban test', adminEmail: 'mateo@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
+  { id: 'D6', shortEnvId: 'D53', companyName: 'cozy', companyEmail: 'cozy@civilprom.com', companyPhone: '0909090909', adminName: 'test mind', adminEmail: 'cozy@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
+  { id: 'D7', shortEnvId: 'D28', companyName: 'JPM973', companyEmail: 'jpm973@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Pedro Maignan', adminEmail: 'jpm973@civilprom.com', adminPasswordHexOrPlain: '862379OHL-GENZX', lang: 'Français, France', nomLogiciel: 'JPM973' },
+  { id: 'D8', shortEnvId: 'D21', companyName: 'SAS Restenvie', companyEmail: 'restenvie@civilprom.com', companyPhone: '0600000000', adminName: 'Laurent Muller', adminEmail: 'restenvie@civilprom.com', adminPasswordHexOrPlain: 'R3S73NV1E-GENZX', lang: 'Français', nomLogiciel: 'Restenvie' },
+  { id: 'D9', shortEnvId: 'D11', companyName: 'DL France Defib', companyEmail: 'dlfrancedefib@civilprom.com', companyPhone: '0600000000', adminName: 'Denis Lamarche', adminEmail: 'dlfrancedefib@civilprom.com', adminPasswordHexOrPlain: 'D1FR4NC3D3F18-GENZL', lang: 'Français', nomLogiciel: 'DLFRANCEDEFIB' },
+  { id: 'D10', shortEnvId: 'D88', companyName: 'CardioPro', companyEmail: 'cardiopro@civilprom.com', companyPhone: '0600000000', adminName: 'Anthony Monaldi', adminEmail: 'cardiopro@civilprom.com', adminPasswordHexOrPlain: 'C4RD10PR0-GENWL', lang: 'Français', nomLogiciel: 'CardioPro' },
+  { id: 'D11', shortEnvId: 'D39', companyName: 'CardiaPulse', companyEmail: 'cardiapulse@civilprom.com', companyPhone: '0600000000', adminName: 'Georges Lanzi', adminEmail: 'cardiapulse@civilprom.com', adminPasswordHexOrPlain: 'C4RD14PU7S3-GENYL', lang: 'Français, France', nomLogiciel: 'CardiaPulse' },
+  { id: 'D12', shortEnvId: 'D22', companyName: 'CardiacSafe', companyEmail: 'cardiacsafe@civilprom.com', companyPhone: '0600000000', adminName: 'Ludovic Desvaux', adminEmail: 'cardiacsafe@civilprom.com', adminPasswordHexOrPlain: 'C4RD14C84F3-GENZV', lang: 'Français', nomLogiciel: 'CardiacSafe' },
+  { id: 'D13', shortEnvId: 'D31', companyName: 'Urgence Secours Équipements', companyEmail: 'use@civilprom.com', companyPhone: '0600000000', adminName: 'Arthur Sallé', adminEmail: 'use@civilprom.com', adminPasswordHexOrPlain: 'U5G3NC3S3C0U4R8-GENZH', lang: 'Français', nomLogiciel: 'USE' },
+  { id: 'D14', shortEnvId: 'D30', companyName: 'ExtraLife', companyEmail: 'extralife@civilprom.com', companyPhone: '0600000000', adminName: 'Thomas Christophe', adminEmail: 'extralife@civilprom.com', adminPasswordHexOrPlain: '3X7R4L163-GENZT', lang: 'Français', nomLogiciel: 'ExtraLife' },
+  { id: 'D15', shortEnvId: 'D62', companyName: 'Serenicoeur', companyEmail: 'serenicoeur@civilprom.com', companyPhone: '0600000000', adminName: 'Hubert Duverdier', adminEmail: 'serenicoeur@civilprom.com', adminPasswordHexOrPlain: 'S3R3N1C03U5-GENEL', lang: 'Français, France', nomLogiciel: 'Serenicoeur' },
+  { id: 'D16', shortEnvId: 'D85', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv.copilot@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Luc Degont', adminEmail: 'udplv.copilot@civilprom.com', adminPasswordHexOrPlain: 'UND3F1P0U5L4V13-GENZR', lang: 'Français', nomLogiciel: 'Copilot' },
+  { id: 'D17', shortEnvId: 'D56', companyName: 'DLFranceDefib', companyEmail: 'dlfrancedefib2@civilprom.com', companyPhone: '0651517065', adminName: 'Demarche Denis', adminEmail: 'dlfrancedefib2@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'DFranceDefib' },
+  { id: 'D18', shortEnvId: 'D83', companyName: 'DSECURITE GROUPE', companyEmail: 'dsecurite.test@civilprom.com', companyPhone: '0612345678', adminName: 'Jean Dupont', adminEmail: 'dsecurite.test@civilprom.com', adminPasswordHexOrPlain: 'DS3CUR1T3*%', lang: 'Français, France', nomLogiciel: 'DSECURITE' },
+  { id: 'D19', shortEnvId: 'D66', companyName: 'LION', companyEmail: 'lion@civilprom.com', companyPhone: '0651517065', adminName: 'Roesch Ronan', adminEmail: 'lion@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'LION123' },
+  { id: 'D20', shortEnvId: 'D74', companyName: 'Moraira', companyEmail: 'moraira@civilprom.com', companyPhone: '0612345678', adminName: 'Roesch Ronan', adminEmail: 'moraira@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français', nomLogiciel: 'MorairaGo' },
+  { id: 'D21', shortEnvId: 'D86', companyName: 'Denia', companyEmail: 'denia@civilprom.com', companyPhone: '0787878787', adminName: 'Roesch Ronan', adminEmail: 'denia@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Denia123' },
+  { id: 'D22', shortEnvId: 'D13', companyName: 'Xabia', companyEmail: 'xabia@civilprom.com', companyPhone: '0909090909', adminName: 'Axel Ronan', adminEmail: 'xabia@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Xabia123' },
+  { id: 'D23', shortEnvId: 'D73', companyName: 'Tolede', companyEmail: 'tolede@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch RonanPDF', adminEmail: 'tolede@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'ToledePDF' },
+  { id: 'D24', shortEnvId: 'D20', companyName: 'Hendaye', companyEmail: 'hendaye@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch Ronan', adminEmail: 'hendaye@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Hendaye123' },
+  { id: 'D25', shortEnvId: 'D24', companyName: 'Test DSG', companyEmail: 'test.dsg@civilprom.com', companyPhone: '0612345678', adminName: 'Jérôme Sommet', adminEmail: 'test.dsg@civilprom.com', adminPasswordHexOrPlain: 'DS3CU51TE', lang: 'Français, France', nomLogiciel: 'TestDSG' },
+  { id: 'D26', shortEnvId: 'D67', companyName: 'DSG Test', companyEmail: 'dsg.test@civilprom.com', companyPhone: '061234567890', adminName: 'Sommet Jérôme', adminEmail: 'dsg.test@civilprom.com', adminPasswordHexOrPlain: 'DS3CU51TE123', lang: 'Français, France', nomLogiciel: 'EssaiDSG' },
+  { id: 'D27', shortEnvId: 'D58', companyName: 'UN DÉFI POUR LA VIE', companyEmail: 'copilotudplv@civilprom.com', companyPhone: '0612345678', adminName: 'Jean-Luc Degont', adminEmail: 'copilotudplv@civilprom.com', adminPasswordHexOrPlain: 'C0P1L07UDPLV1IS0', lang: 'Français, France', nomLogiciel: 'Copilot' },
+  { id: 'D28', shortEnvId: 'D19', companyName: "Le Cœur d'un Sam", companyEmail: 'lecoeurdunsam@civilprom.com', companyPhone: '0765582200', adminName: 'Océane Chabrier', adminEmail: 'contact.lecoeurdunsam@gmail.com', adminPasswordHexOrPlain: 'L3C03U5D1S4M*%', lang: 'Français, France', nomLogiciel: 'lecoeurdunsam' }
 ];
 
-// Helper to synchronously resolve all valid tenant aliases (IDs, shortEnvIds, numeric suffixes)
-function getTenantAliasesSync(targetTenantId: string): Set<string> {
-  const aliases = new Set<string>();
-  const clean = (targetTenantId || 'demo').trim().toLowerCase();
-  aliases.add(clean);
-  const num = clean.replace(/^d/i, '');
-  if (/^\d+$/.test(num)) {
-    aliases.add(`d${num}`);
-    aliases.add(num);
-  }
+function getAllServerRegisteredTenantsSync(): any[] {
   let regTenants: any[] = [];
   if (serverMemoryStore.has('registered_tenants')) {
     regTenants = serverMemoryStore.get('registered_tenants');
@@ -2526,6 +2529,7 @@ function getTenantAliasesSync(targetTenantId: string): Set<string> {
   if (!Array.isArray(regTenants) || regTenants.length === 0) {
     regTenants = [...SERVER_KNOWN_TENANTS];
   } else {
+    regTenants = [...regTenants];
     const existingIds = new Set(regTenants.map((t: any) => String(t.id || '').toLowerCase()));
     for (const kt of SERVER_KNOWN_TENANTS) {
       if (!existingIds.has(kt.id.toLowerCase())) {
@@ -2533,15 +2537,46 @@ function getTenantAliasesSync(targetTenantId: string): Set<string> {
       }
     }
   }
+  return regTenants;
+}
+
+function findServerTenantInList(regTenants: any[], targetTenantId: string): any | null {
+  if (!Array.isArray(regTenants) || !targetTenantId) return null;
+  const clean = targetTenantId.trim().toLowerCase();
+  const isDNum = /^d\d+$/i.test(clean);
+  const isNum = /^\d+$/.test(clean);
+  const num = (isDNum || isNum) ? clean.replace(/^d/i, '') : '';
+
+  // 1. Prioritize primary `id` match first so shortEnvId collisions never hijack another tenant
+  const idMatch = regTenants.find((t: any) => {
+    if (!t) return false;
+    const tid = String(t.id || '').toLowerCase().trim();
+    return tid === clean || (num && tid === `d${num}`);
+  });
+  if (idMatch) return idMatch;
+
+  // 2. Fallback to shortEnvId only if no tenant has that `id`
+  return regTenants.find((t: any) => {
+    if (!t) return false;
+    const tshort = String(t.shortEnvId || t.code || '').toLowerCase().trim();
+    return tshort === clean || (num && tshort === `d${num}`);
+  }) || null;
+}
+
+// Helper to synchronously resolve all valid tenant aliases (IDs, non-colliding shortEnvIds, numeric suffixes)
+function getTenantAliasesSync(targetTenantId: string): Set<string> {
+  const aliases = new Set<string>();
+  const clean = (targetTenantId || 'demo').trim().toLowerCase();
+  aliases.add(clean);
+  const num = clean.replace(/^d/i, '');
+  if (/^\d+$/.test(num)) {
+    aliases.add(`d${num}`);
+    aliases.add(num);
+  }
+  const regTenants = getAllServerRegisteredTenantsSync();
   if (Array.isArray(regTenants)) {
-    const match = regTenants.find((t: any) => {
-      if (!t) return false;
-      const tid = String(t.id || '').toLowerCase().trim();
-      const tshort = String(t.shortEnvId || t.code || '').toLowerCase().trim();
-      if (tid === clean || tshort === clean) return true;
-      if (num && (tid.replace(/^d/i, '') === num || tshort.replace(/^d/i, '') === num)) return true;
-      return false;
-    });
+    const allPrimaryIds = new Set(regTenants.map((t: any) => String(t?.id || '').toLowerCase().trim()).filter(Boolean));
+    const match = findServerTenantInList(regTenants, clean);
     if (match) {
       if (match.id) {
         const mid = String(match.id).toLowerCase().trim();
@@ -2552,13 +2587,16 @@ function getTenantAliasesSync(targetTenantId: string): Set<string> {
           aliases.add(mnum);
         }
       }
-      if (match.shortEnvId) {
+      if (match.shortEnvId && String(match.id).toLowerCase() !== 'demo') {
         const sid = String(match.shortEnvId).toLowerCase().trim();
-        aliases.add(sid);
-        const snum = sid.replace(/^d/i, '');
-        if (/^\d+$/.test(snum)) {
-          aliases.add(`d${snum}`);
-          aliases.add(snum);
+        const collidesWithOtherTenant = allPrimaryIds.has(sid) && sid !== String(match.id || '').toLowerCase().trim();
+        if (!collidesWithOtherTenant) {
+          aliases.add(sid);
+          const snum = sid.replace(/^d/i, '');
+          if (/^\d+$/.test(snum)) {
+            aliases.add(`d${snum}`);
+            aliases.add(snum);
+          }
         }
       }
     }
@@ -2935,16 +2973,116 @@ async function findSingleDefibrillateur(
 
 // Helper function to read a collection from Firestore with support for chunked documents, multiple aliases and memory caching
 async function fetchServerCollection(colName: string, tenantId: string, extraAliases: (string | undefined | null)[] = []): Promise<any[]> {
+  if (colName === 'registered_tenants') {
+    return getAllServerRegisteredTenantsSync();
+  }
   const activeTenant = (tenantId || 'demo').trim();
   const cleanTid = activeTenant.toLowerCase();
-  const isDemo = cleanTid === 'demo' || cleanTid === 'd10' || cleanTid === '10';
+  const isDemo = cleanTid === 'demo';
   const tenantAliases = getTenantAliasesSync(activeTenant);
   const isD27OrD58 = tenantAliases.has('d27') || tenantAliases.has('d58');
   const isDefibCol = colName === 'defibrillateurs' || colName === 'defibs' || colName === 'devices';
+  const isMemberCol = colName === 'members' || colName === 'users' || colName === 'team' || colName === 'staff';
   const canonicalKey = isDemo ? colName : `${activeTenant}_${colName}`;
   const isDNum = /^d\d+$/i.test(activeTenant);
   const isNum = /^\d+$/.test(activeTenant);
   const numOnly = isDNum || isNum ? activeTenant.replace(/^d/i, '') : '';
+
+  const ensureTenantMembers = (rawMembers: any[]): any[] => {
+    const list = Array.isArray(rawMembers) ? [...rawMembers] : [];
+    const regTenants = getAllServerRegisteredTenantsSync();
+    const tenantMatch = findServerTenantInList(regTenants, activeTenant);
+    if (!tenantMatch) return list;
+
+    const effTenantId = tenantMatch.id || activeTenant;
+    const adminEmail = String(tenantMatch.adminEmail || tenantMatch.companyEmail || '').trim();
+    const adminName = String(tenantMatch.adminName || `Admin ${tenantMatch.companyName || effTenantId}`).trim();
+    const rawPass = String(tenantMatch.adminPasswordHexOrPlain || '1234').trim();
+    const adminPin = /^\d{4}$/.test(rawPass) ? rawPass : '1234';
+
+    const hasSuperAdmin = list.some((m: any) =>
+      m && (
+        m.role === 'Super-Administrateur' ||
+        m.role === 'Propriétaire / Admin' ||
+        String(m.role || '').toLowerCase().includes('super') ||
+        String(m.role || '').toLowerCase().includes('propriétaire') ||
+        (adminEmail && String(m.email || '').trim().toLowerCase() === adminEmail.toLowerCase())
+      )
+    );
+
+    if (!hasSuperAdmin && (adminEmail || adminName)) {
+      list.unshift({
+        id: `mem-admin-${effTenantId}`,
+        name: adminName,
+        email: adminEmail,
+        role: 'Super-Administrateur',
+        status: 'Actif',
+        lastActive: 'En ligne',
+        pin: adminPin,
+        envId: effTenantId,
+        tenantId: effTenantId
+      });
+    }
+
+    // Also include any technicians referenced in this tenant's fsmTours if not already in members
+    const tourKey = isDemo ? 'fsmTours' : `${effTenantId}_fsmTours`;
+    const tours = serverMemoryStore.get(tourKey) || [];
+    if (Array.isArray(tours) && tours.length > 0) {
+      const vehiclePool = ['Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E'];
+      for (const tour of tours) {
+        const tName = String(tour?.techName || '').trim();
+        if (!tName) continue;
+        const alreadyExists = list.some((m: any) => String(m?.name || '').trim().toLowerCase() === tName.toLowerCase());
+        if (!alreadyExists) {
+          const usedLocs = new Set(list.map((m: any) => m?.locationLink).filter(Boolean));
+          const availLoc = vehiclePool.find(v => !usedLocs.has(v)) || 'Véhicule A';
+          const slug = tName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+          const domain = adminEmail.includes('@') ? adminEmail.split('@')[1] : 'civilprom.com';
+          list.push({
+            id: `mem-tech-${effTenantId}-${slug}`,
+            name: tName,
+            email: `${slug}@${domain}`,
+            role: 'Technicien',
+            status: 'Actif',
+            lastActive: 'En ligne',
+            pin: '1234',
+            locationLink: availLoc,
+            envId: effTenantId,
+            tenantId: effTenantId
+          });
+        }
+      }
+    }
+
+    // Ensure every technician has valid email, pin, and locationLink
+    const usedLocations = new Set(list.map((m: any) => m?.locationLink).filter(Boolean));
+    const defaultVehicles = ['Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E'];
+    return list.map((m: any, idx: number) => {
+      if (!m || typeof m !== 'object') return m;
+      const isTech = m.role === 'Technicien' || m.role === 'Maintenance Terrain' || String(m.role || '').toLowerCase().includes('tech');
+      let loc = m.locationLink;
+      if (isTech && !loc) {
+        loc = defaultVehicles.find(v => !usedLocations.has(v)) || 'Véhicule A';
+        usedLocations.add(loc);
+      }
+      let email = m.email;
+      if (!email && m.name) {
+        const slug = String(m.name).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+        const domain = adminEmail.includes('@') ? adminEmail.split('@')[1] : 'civilprom.com';
+        email = `${slug || `membre${idx}`}@${domain}`;
+      }
+      return {
+        ...m,
+        email: email || '',
+        pin: m.pin || '1234',
+        status: m.status || 'Actif',
+        lastActive: m.lastActive || 'En ligne',
+        ...(isTech && loc ? { locationLink: loc } : {}),
+        envId: m.envId || effTenantId,
+        tenantId: m.tenantId || effTenantId
+      };
+    });
+  };
 
   const sanitizeForTenant = (items: any): any => {
     if (!Array.isArray(items)) return items;
@@ -2988,6 +3126,60 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   const isTenantDbCol = colName === 'tenantDatabases';
   const isObjectCol = isCompanyCol || isTenantDbCol || colName === 'api_connectors';
 
+  const ensureServerCustomLocationNames = (existingLocs?: Record<string, string> | null): Record<string, string> => {
+    const merged: Record<string, string> = {};
+    if (existingLocs && typeof existingLocs === 'object' && !Array.isArray(existingLocs)) {
+      for (const [k, v] of Object.entries(existingLocs)) {
+        if (typeof v === 'string' && v.trim() !== '') {
+          merged[k] = v.trim();
+        }
+      }
+    }
+    if (Object.keys(merged).length > 0) return merged;
+
+    const regTenants = getAllServerRegisteredTenantsSync();
+    const tenantMatch = findServerTenantInList(regTenants, activeTenant);
+    const compName = tenantMatch?.companyName || (isDemo ? 'Défibeo Solutions' : '');
+    const effTid = tenantMatch?.id || activeTenant;
+
+    merged['Entrepôt A'] = compName ? `Entrepôt Principal - ${compName}` : 'Entrepôt Principal';
+
+    const rawMem = serverMemoryStore.get(isDemo ? 'members' : `${effTid}_members`) || serverMemoryStore.get(`${activeTenant}_members`) || [];
+    const memList = ensureTenantMembers(Array.isArray(rawMem) ? rawMem : []);
+    for (const m of memList) {
+      if (m && m.locationLink && m.name && !merged[m.locationLink]) {
+        const prefix = String(m.locationLink).startsWith('Véhicule') ? 'Véhicule' : 'Dépôt';
+        merged[m.locationLink] = `${prefix} - ${m.name}`;
+      }
+    }
+
+    const rawStocks = serverMemoryStore.get(isDemo ? 'stocks' : `${effTid}_stocks`) || [];
+    if (Array.isArray(rawStocks)) {
+      for (const st of rawStocks) {
+        const loc = st?.stockage;
+        if (loc && (loc.startsWith('Entrepôt') || loc.startsWith('Véhicule')) && !merged[loc]) {
+          merged[loc] = loc === 'Entrepôt B'
+            ? (compName ? `Entrepôt Secondaire - ${compName}` : 'Entrepôt Secondaire')
+            : `${loc} - ${compName || 'Stock'}`;
+        }
+      }
+    }
+
+    const rawDistrib = serverMemoryStore.get(isDemo ? 'distributed_stocks' : `${effTid}_distributed_stocks`) || [];
+    if (Array.isArray(rawDistrib)) {
+      for (const ds of rawDistrib) {
+        const loc = ds?.locationName;
+        if (loc && (loc.startsWith('Entrepôt') || loc.startsWith('Véhicule')) && !merged[loc]) {
+          merged[loc] = loc.startsWith('Véhicule')
+            ? `Véhicule d'intervention ${loc.replace('Véhicule ', '')}`
+            : `${loc} - ${compName || 'Stock'}`;
+        }
+      }
+    }
+
+    return merged;
+  };
+
   const enrichObjectWithKnownUrls = (obj: any): any => {
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
     if (!isCompanyCol && !isTenantDbCol) return obj;
@@ -2996,6 +3188,7 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     const clientsUrl = obj.spreadsheetClients || obj.spreadsheetClientsUrl || getTenantSpreadsheetUrlSync(activeTenant, 'clients') || '';
     return {
       ...obj,
+      ...(isCompanyCol ? { customLocationNames: ensureServerCustomLocationNames(obj.customLocationNames) } : {}),
       spreadsheetDefibrillateurs: defibUrl,
       spreadsheetAutresMateriels: autresUrl,
       spreadsheetClients: clientsUrl,
@@ -3062,8 +3255,8 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
           const sanitized = sanitizeForTenant(memVal);
           if (isDefibCol && isD27OrD58 && sanitized.length < 1000) {
             // Partial in-memory cache, proceed to authoritative disk files
-          } else if (sanitized.length > 0 || !isD27OrD58) {
-            return sanitized;
+          } else if (sanitized.length > 0) {
+            return isMemberCol ? ensureTenantMembers(sanitized) : sanitized;
           }
         } else if (typeof memVal === 'object') {
           return enrichObjectWithKnownUrls(memVal);
@@ -3082,13 +3275,14 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
           if (Array.isArray(diskVal)) {
             if (isObjectCol) continue;
             const sanitized = sanitizeForTenant(diskVal);
-            serverMemoryStore.set(lk, sanitized);
-            serverMemoryStore.set(canonicalKey, sanitized);
-            serverStoreTimestamps.set(canonicalKey, Date.now());
             if (isDefibCol && isD27OrD58 && sanitized.length < 1000) {
               // Partial, fall through to full chunks
-            } else if (sanitized.length > 0 || !isD27OrD58) {
-              return sanitized;
+            } else if (sanitized.length > 0) {
+              const finalSanitized = isMemberCol ? ensureTenantMembers(sanitized) : sanitized;
+              serverMemoryStore.set(lk, finalSanitized);
+              serverMemoryStore.set(canonicalKey, finalSanitized);
+              serverStoreTimestamps.set(canonicalKey, Date.now());
+              return finalSanitized;
             }
           } else if (typeof diskVal === 'object') {
             const enriched = enrichObjectWithKnownUrls(diskVal);
@@ -3245,10 +3439,11 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
           if (isObjectCol) continue;
           const merged = mergeServerCollectionItems(colName, val.items);
           const sanitized = sanitizeForTenant(merged);
-          
-          serverMemoryStore.set(canonicalKey, sanitized);
+          if (sanitized.length === 0) continue;
+          const finalSanitized = isMemberCol ? ensureTenantMembers(sanitized) : sanitized;
+          serverMemoryStore.set(canonicalKey, finalSanitized);
           serverStoreTimestamps.set(canonicalKey, Date.now());
-          return sanitized;
+          return finalSanitized;
         } else if (val.type === 'object' && val.data) {
           const enriched = enrichObjectWithKnownUrls(val.data);
           serverMemoryStore.set(canonicalKey, enriched);
@@ -3269,21 +3464,8 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
   }
 
   if (isCompanyCol) {
-    let regTenants: any[] = [];
-    if (serverMemoryStore.has('registered_tenants')) {
-      regTenants = serverMemoryStore.get('registered_tenants');
-    }
-    if (!Array.isArray(regTenants) || regTenants.length === 0) {
-      try {
-        const diskPath = path.join(COLLECTIONS_DIR, 'registered_tenants.json');
-        if (fs.existsSync(diskPath)) {
-          regTenants = JSON.parse(fs.readFileSync(diskPath, 'utf-8'));
-        }
-      } catch (_) {}
-    }
-    const tenantMatch = Array.isArray(regTenants)
-      ? regTenants.find((t: any) => t && (tenantAliases.has(String(t.id).toLowerCase()) || tenantAliases.has(String(t.shortEnvId).toLowerCase())))
-      : null;
+    const regTenants = getAllServerRegisteredTenantsSync();
+    const tenantMatch = findServerTenantInList(regTenants, activeTenant);
     const defaultInfo = enrichObjectWithKnownUrls({
       name: tenantMatch?.companyName || (isDemo ? "Défibeo Solutions" : "Mon Cabinet"),
       nomCommercial: tenantMatch?.companyName || (isDemo ? "Défibeo Solutions" : "Mon Cabinet"),
@@ -3300,10 +3482,13 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
       disableHelpsAndTutorials: "Non",
       enableOtherEquipments: "Non",
       hiddenTabs: [],
-      customLocationNames: {},
+      customLocationNames: ensureServerCustomLocationNames({}),
       spreadsheetDefibrillateurs: tenantMatch?.spreadsheetDefibrillateurs || "",
       spreadsheetAutresMateriels: tenantMatch?.spreadsheetAutresMateriels || "",
       spreadsheetClients: tenantMatch?.spreadsheetClients || "",
+      envId: tenantMatch?.id || activeTenant,
+      tenantId: tenantMatch?.id || activeTenant,
+      _isDefaultFallback: true,
     });
     return defaultInfo as any;
   }
@@ -3312,8 +3497,15 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     return {} as any;
   }
 
-  serverMemoryStore.set(canonicalKey, []);
-  serverStoreTimestamps.set(canonicalKey, Date.now());
+  if (isMemberCol) {
+    const seededMembers = ensureTenantMembers([]);
+    if (seededMembers.length > 0) {
+      serverMemoryStore.set(canonicalKey, seededMembers);
+      serverStoreTimestamps.set(canonicalKey, Date.now());
+    }
+    return seededMembers;
+  }
+
   return [];
 }
 
@@ -4015,7 +4207,9 @@ async function warmupDefibrillateursStore() {
     const isInvalidPlaceholder = (u?: string) => !u || u.includes('1tB1e41') || u.includes('2mX5O6r9hD0i3Z9m');
     const activeTenant = (tenantId || 'demo').trim();
     const tAliases = getTenantAliasesSync(activeTenant);
-    const numOnly = activeTenant.replace(/^d/i, '');
+    const isDNum = /^d\d+$/i.test(activeTenant);
+    const isNum = /^\d+$/.test(activeTenant);
+    const numOnly = (isDNum || isNum) ? activeTenant.replace(/^d/i, '') : '';
     const candidateTenants = Array.from(new Set([
       activeTenant,
       activeTenant.toUpperCase(),
@@ -4167,7 +4361,9 @@ async function warmupDefibrillateursStore() {
         clients: ['spreadsheetClients', 'spreadsheetClientsUrl'],
       };
       const fields = fieldMap[tabType];
-      const numOnly = activeTenant.replace(/^d/i, '');
+      const isDNum = /^d\d+$/i.test(activeTenant);
+      const isNum = /^\d+$/.test(activeTenant);
+      const numOnly = (isDNum || isNum) ? activeTenant.replace(/^d/i, '') : '';
       const candidates = Array.from(new Set([
         activeTenant,
         activeTenant.toUpperCase(),
@@ -4704,8 +4900,16 @@ async function warmupDefibrillateursStore() {
             ? (value.spreadsheetClients ?? value.spreadsheetClientsUrl ?? '')
             : (value.spreadsheetClients || value.spreadsheetClientsUrl || knownClients || '');
 
+          const existingInMem = serverMemoryStore.get(collectionKey);
+          const safeExisting = (existingInMem && typeof existingInMem === 'object' && !Array.isArray(existingInMem)) ? existingInMem : {};
+          const mergedCustomLocs = (value.customLocationNames && typeof value.customLocationNames === 'object' && Object.keys(value.customLocationNames).length > 0)
+            ? value.customLocationNames
+            : (safeExisting.customLocationNames && typeof safeExisting.customLocationNames === 'object' && Object.keys(safeExisting.customLocationNames).length > 0 ? safeExisting.customLocationNames : (value.customLocationNames || {}));
+
           finalValueToStore = {
+            ...safeExisting,
             ...value,
+            ...(isCompanyInfoCol ? { customLocationNames: mergedCustomLocs } : {}),
             spreadsheetDefibrillateurs: effDefibs,
             spreadsheetAutresMateriels: effAutres,
             spreadsheetClients: effClients,
