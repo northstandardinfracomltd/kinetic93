@@ -1937,7 +1937,7 @@ export async function queryTenantSheetCollection(
 
   const totalFilteredCount = filtered.length;
   const offset = Math.max(0, Number(params.offset) || 0);
-  const limit = Math.max(1, Math.min(3000, Number(params.limit) || 2500));
+  const limit = Math.max(1, Math.min(25000, Number(params.limit) || 25000));
   const sliced = filtered.slice(offset, offset + limit);
 
   return {

@@ -4900,11 +4900,44 @@ async function warmupDefibrillateursStore() {
             ? (value.spreadsheetClients ?? value.spreadsheetClientsUrl ?? '')
             : (value.spreadsheetClients || value.spreadsheetClientsUrl || knownClients || '');
 
+          const EXTRA_SERVER_SHEET_KEYS = [
+            'spreadsheetTournees',
+            'spreadsheetMissionsTournees',
+            'spreadsheetRapportsPdf',
+            'spreadsheetCrm',
+            'spreadsheetSatisfaction',
+            'spreadsheetCommandes',
+            'spreadsheetStocks',
+            'spreadsheetAchatsFournisseurs',
+            'spreadsheetTemps',
+            'spreadsheetTicketsCaisse',
+            'spreadsheetReleveConcurrentiel',
+            'spreadsheetFormations',
+            'spreadsheetStagiaires',
+            'spreadsheetEmargements',
+            'spreadsheetMessagesInternes',
+            'spreadsheetVariables',
+            'spreadsheetGed',
+            'spreadsheetReglages',
+            'spreadsheetIntituleEmplacements',
+            'spreadsheetMembresEnvironnement',
+          ];
+
           const existingInMem = serverMemoryStore.get(collectionKey);
           const safeExisting = (existingInMem && typeof existingInMem === 'object' && !Array.isArray(existingInMem)) ? existingInMem : {};
           const mergedCustomLocs = (value.customLocationNames && typeof value.customLocationNames === 'object' && Object.keys(value.customLocationNames).length > 0)
             ? value.customLocationNames
             : (safeExisting.customLocationNames && typeof safeExisting.customLocationNames === 'object' && Object.keys(safeExisting.customLocationNames).length > 0 ? safeExisting.customLocationNames : (value.customLocationNames || {}));
+
+          const extraEffectiveMap: Record<string, string> = {};
+          for (const k of EXTRA_SERVER_SHEET_KEYS) {
+            const urlKey = `${k}Url`;
+            const effVal = explicitDatabaseSave
+              ? (value[k] ?? value[urlKey] ?? safeExisting[k] ?? safeExisting[urlKey] ?? '')
+              : (value[k] || value[urlKey] || safeExisting[k] || safeExisting[urlKey] || '');
+            extraEffectiveMap[k] = effVal;
+            extraEffectiveMap[urlKey] = effVal;
+          }
 
           finalValueToStore = {
             ...safeExisting,
@@ -4916,6 +4949,7 @@ async function warmupDefibrillateursStore() {
             spreadsheetDefibrillateursUrl: effDefibs,
             spreadsheetAutresMaterielsUrl: effAutres,
             spreadsheetClientsUrl: effClients,
+            ...extraEffectiveMap,
           };
 
           // Also keep tenantDatabases and companyInfo in lockstep across all tenant aliases
@@ -4929,6 +4963,15 @@ async function warmupDefibrillateursStore() {
             const crossKey = tTarget === 'demo' ? crossSuffix : `${tTarget}_${crossSuffix}`;
             const existingCross = serverMemoryStore.get(crossKey);
             if (existingCross && typeof existingCross === 'object' && !Array.isArray(existingCross)) {
+              const crossExtra: Record<string, string> = {};
+              for (const k of EXTRA_SERVER_SHEET_KEYS) {
+                const urlKey = `${k}Url`;
+                const v = explicitDatabaseSave
+                  ? (value[k] ?? value[urlKey] ?? existingCross[k] ?? existingCross[urlKey] ?? '')
+                  : (extraEffectiveMap[k] || existingCross[k] || existingCross[urlKey] || '');
+                crossExtra[k] = v;
+                crossExtra[urlKey] = v;
+              }
               const updatedCross = {
                 ...existingCross,
                 spreadsheetDefibrillateurs: effDefibs || existingCross.spreadsheetDefibrillateurs || '',
@@ -4937,6 +4980,7 @@ async function warmupDefibrillateursStore() {
                 spreadsheetDefibrillateursUrl: effDefibs || existingCross.spreadsheetDefibrillateursUrl || '',
                 spreadsheetAutresMaterielsUrl: effAutres || existingCross.spreadsheetAutresMaterielsUrl || '',
                 spreadsheetClientsUrl: effClients || existingCross.spreadsheetClientsUrl || '',
+                ...crossExtra,
               };
               serverMemoryStore.set(crossKey, updatedCross);
               try {
@@ -4946,7 +4990,7 @@ async function warmupDefibrillateursStore() {
                 const crossDocRef = doc(db, 'appData', crossKey);
                 safeServerSetDoc(crossDocRef, { value: updatedCross, _chunked: false }).catch(() => {});
               } catch (_) {}
-            } else if (crossSuffix === 'tenantDatabases' && (effDefibs || effAutres || effClients)) {
+            } else if (crossSuffix === 'tenantDatabases' && (effDefibs || effAutres || effClients || Object.values(extraEffectiveMap).some(Boolean))) {
               const newDbObj = {
                 spreadsheetDefibrillateurs: effDefibs,
                 spreadsheetAutresMateriels: effAutres,
@@ -4954,6 +4998,7 @@ async function warmupDefibrillateursStore() {
                 spreadsheetDefibrillateursUrl: effDefibs,
                 spreadsheetAutresMaterielsUrl: effAutres,
                 spreadsheetClientsUrl: effClients,
+                ...extraEffectiveMap,
                 updatedAt: new Date().toISOString(),
               };
               serverMemoryStore.set(crossKey, newDbObj);

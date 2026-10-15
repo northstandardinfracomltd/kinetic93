@@ -6,7 +6,7 @@ import { idbSet, idbGet } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
-import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, TeamWorkGroup, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, TenantMessage } from './types';
+import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, TeamWorkGroup, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, TenantMessage, EXTRA_SPREADSHEET_FIELDS } from './types';
 import {
   INITIAL_CLIENTS,
   INITIAL_VARIABLES,
@@ -2339,6 +2339,18 @@ export default function App() {
           dbSyncPayload.spreadsheetClients = urlClients;
           dbSyncPayload.spreadsheetClientsUrl = urlClients;
         }
+        for (const f of EXTRA_SPREADSHEET_FIELDS) {
+          const extraUrl =
+            sanitizeSheetUrl((customInfo as any)?.[f.key]) ||
+            sanitizeSheetUrl((customInfo as any)?.[f.urlKey]) ||
+            sanitizeSheetUrl((companyInfo as any)?.[f.key]) ||
+            sanitizeSheetUrl((companyInfo as any)?.[f.urlKey]) ||
+            sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid}_${f.storageSuffix}`));
+          if (extraUrl) {
+            dbSyncPayload[f.key] = extraUrl;
+            dbSyncPayload[f.urlKey as string] = extraUrl;
+          }
+        }
         fetch('/api/sync-collection', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2701,19 +2713,89 @@ export default function App() {
 
   const [fsmTours, setFsmTours] = useState<any[]>([]);
 
+  const getTenantTourPrefix = useCallback((tid?: string): string => {
+    const clean = (tid || tenantId || '').trim();
+    if (!clean || clean.toLowerCase() === 'demo') {
+      const shortId = (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || 'D10';
+      return shortId.trim().toUpperCase();
+    }
+    if (/^d\d+$/i.test(clean)) {
+      return clean.toUpperCase();
+    }
+    const matched = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], clean) as any;
+    if (matched?.id && /^d\d+$/i.test(matched.id)) return matched.id.toUpperCase();
+    if (matched?.shortEnvId) return String(matched.shortEnvId).trim().toUpperCase();
+    return clean.toUpperCase();
+  }, [tenantId]);
+
+  const ensureFsmTourIdentifiers = useCallback((toursList: any[], activeTid?: string): { tours: any[]; changed: boolean } => {
+    if (!Array.isArray(toursList) || toursList.length === 0) {
+      return { tours: toursList || [], changed: false };
+    }
+    const prefix = getTenantTourPrefix(activeTid || tenantId);
+    const seqRegex = new RegExp(`^([A-Z0-9_-]+)-TOUR-(\\d{4,})$`, 'i');
+    let maxSeq = 0;
+    try {
+      const savedSeq = parseInt(localStorage.getItem(`defib_${prefix}_tour_last_seq`) || '0', 10);
+      if (!isNaN(savedSeq) && savedSeq > maxSeq) maxSeq = savedSeq;
+    } catch (_) {}
+
+    for (const t of toursList) {
+      if (!t || t.id === 'a-trier') continue;
+      const existingId = String(t.tourIdentifiant || t.identifiant || '').trim();
+      const match = existingId.match(seqRegex);
+      if (match) {
+        const num = parseInt(match[2], 10);
+        if (!isNaN(num) && num > maxSeq) maxSeq = num;
+      }
+    }
+
+    // Assign missing identifiers from oldest to newest (bottom to top since new tours are prepended)
+    const indicesNeedingId: number[] = [];
+    toursList.forEach((t, idx) => {
+      if (!t || t.id === 'a-trier') return;
+      const existingId = String(t.tourIdentifiant || '').trim();
+      if (!seqRegex.test(existingId)) {
+        indicesNeedingId.push(idx);
+      }
+    });
+
+    if (indicesNeedingId.length === 0) {
+      return { tours: toursList, changed: false };
+    }
+
+    const updated = [...toursList];
+    for (let i = indicesNeedingId.length - 1; i >= 0; i--) {
+      const idx = indicesNeedingId[i];
+      maxSeq += 1;
+      const frozenId = `${prefix}-TOUR-${String(maxSeq).padStart(4, '0')}`;
+      updated[idx] = {
+        ...updated[idx],
+        tourIdentifiant: frozenId
+      };
+    }
+
+    try {
+      localStorage.setItem(`defib_${prefix}_tour_last_seq`, String(maxSeq));
+    } catch (_) {}
+
+    return { tours: updated, changed: true };
+  }, [getTenantTourPrefix, tenantId]);
+
   const saveFsmTours = (updated: any[]) => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
-    setFsmTours(updated);
+    const { tours: withIds } = ensureFsmTourIdentifiers(updated, tenantId);
+    setFsmTours(withIds);
     try {
-      localStorage.setItem(`defib_${tenantId}_fsm_tours`, JSON.stringify(updated));
+      localStorage.setItem(`defib_${tenantId}_fsm_tours`, JSON.stringify(withIds));
     } catch (e) {
       console.warn("Storage quota exceeded in saveFsmTours:", e);
     }
     if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
-      saveCollectionToFirestore('fsmTours', updated, tenantId);
+      saveCollectionToFirestore('fsmTours', withIds, tenantId);
     }
   };
 
@@ -2721,9 +2803,10 @@ export default function App() {
   useEffect(() => {
     if (!fsmTours || fsmTours.length === 0) return;
 
-    // 1. Ensure all missions have a unique interventionReference
-    let toursUpdated = false;
-    const verifiedTours = fsmTours.map((tour) => {
+    // 1. Ensure all tours have a frozen tourIdentifiant and all missions have a unique interventionReference
+    const { tours: toursWithIds, changed: idsChanged } = ensureFsmTourIdentifiers(fsmTours, tenantId);
+    let toursUpdated = idsChanged;
+    const verifiedTours = toursWithIds.map((tour) => {
       let tourMissionsUpdated = false;
       const verifiedMissions = (tour.missions || []).map((m: any) => {
         if (!m.interventionReference) {
@@ -6394,6 +6477,23 @@ export default function App() {
             cleanSheetUrl(localData.spreadsheetClientsUrl) ||
             cleanSheetUrl(localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`)) ||
             '';
+          const effExtraSheets: Record<string, string> = {};
+          for (const f of EXTRA_SPREADSHEET_FIELDS) {
+            const val =
+              cleanSheetUrl(validDb[f.key]) ||
+              cleanSheetUrl(validDb[f.urlKey as string]) ||
+              cleanSheetUrl((validRemote as any)[f.key]) ||
+              cleanSheetUrl((validRemote as any)[f.urlKey]) ||
+              cleanSheetUrl((localData as any)[f.key]) ||
+              cleanSheetUrl((localData as any)[f.urlKey]) ||
+              cleanSheetUrl(localStorage.getItem(`defib_${tenantId}_${f.storageSuffix}`)) ||
+              '';
+            effExtraSheets[f.key] = val;
+            effExtraSheets[f.urlKey as string] = val;
+            if (val) {
+              safeSetLocalStorage(`defib_${tenantId}_${f.storageSuffix}`, val);
+            }
+          }
           // Firestore is the supreme source of truth for cross-device consistency
           const merged: CompanyInfo = {
             name: validRemote.name || localData.name || (tenantId === 'demo' ? "Défibeo Solutions" : "Mon Cabinet"),
@@ -6434,6 +6534,7 @@ export default function App() {
             spreadsheetDefibrillateursUrl: effSheetDefibs,
             spreadsheetAutresMaterielsUrl: effSheetAutres,
             spreadsheetClientsUrl: effSheetClients,
+            ...effExtraSheets,
           };
           if (merged.customLocationNames && Object.keys(merged.customLocationNames).length > 0) {
             setLocationNames(merged.customLocationNames);
@@ -6683,6 +6784,21 @@ export default function App() {
                     prev?.spreadsheetClients,
                     localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`),
                   ].find(u => u && !u.includes('1tB1e41') && !u.includes('2mX5O6r9hD0i3Z9m')) || '',
+                ...Object.fromEntries(
+                  EXTRA_SPREADSHEET_FIELDS.flatMap(f => {
+                    const resolved =
+                      [
+                        (data as any)[f.key],
+                        (data as any)[f.urlKey],
+                        (prev as any)?.[f.key],
+                        localStorage.getItem(`defib_${tenantId}_${f.storageSuffix}`),
+                      ].find(u => u && !u.includes('1tB1e41') && !u.includes('2mX5O6r9hD0i3Z9m')) || '';
+                    return [
+                      [f.key, resolved],
+                      [f.urlKey, resolved],
+                    ];
+                  })
+                ),
               };
               const strVal = JSON.stringify(merged);
               localStorage.setItem(`defib_${tenantId}_company_info`, strVal);
@@ -12769,7 +12885,7 @@ export default function App() {
                         <div key={t.id} className="bg-white relative space-y-6 animate-fadeIn" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px', maxWidth: '98%', margin: '24px auto', backgroundColor: '#ffffff', overflow: 'hidden' }}>
                           {/* THE INTERCALAIRE TOUR HEADER */}
                           <div className="bg-white px-5 pt-5 pb-2.5 flex flex-col gap-3 font-sans" style={{ borderBottom: 'none', borderRadius: '17px 17px 0px 0px', backgroundColor: '#ffffff' }}>
-                            {/* Row 1: Titre de la tournée + Action Buttons */}
+                            {/* Row 1: Titre de la tournée + Identifiant de la tournée + Action Buttons */}
                             <div className="flex flex-col md:flex-row md:items-end gap-3 w-full">
                               <div className="flex-1">
                                 <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Titre de la tournée.</label>
@@ -12797,6 +12913,29 @@ export default function App() {
                                 }}
                                 className="font-sans focus:outline-none"
                                 placeholder="Entrez un titre."
+                              />
+                            </div>
+
+                            <div className="w-full md:w-[205px] shrink-0">
+                              <label className="block mb-1.5 fsm-label-style whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Identifiant de la tournée.</label>
+                              <input
+                                type="text"
+                                value={t.tourIdentifiant || `${getTenantTourPrefix(tenantId)}-TOUR-0001`}
+                                disabled
+                                readOnly
+                                style={{
+                                  border: '1px solid #dedede',
+                                  borderRadius: '13px',
+                                  padding: '12px',
+                                  fontSize: '16px',
+                                  fontWeight: '100',
+                                  color: '#000000',
+                                  backgroundColor: '#f9fafb',
+                                  width: '100%',
+                                  cursor: 'not-allowed',
+                                  opacity: 0.75
+                                }}
+                                className="font-sans focus:outline-none"
                               />
                             </div>
 

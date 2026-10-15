@@ -510,7 +510,101 @@ export interface CompanyInfo {
   spreadsheetDefibrillateursUrl?: string;
   spreadsheetAutresMaterielsUrl?: string;
   spreadsheetClientsUrl?: string;
+  spreadsheetTournees?: string;
+  spreadsheetTourneesUrl?: string;
+  spreadsheetMissionsTournees?: string;
+  spreadsheetMissionsTourneesUrl?: string;
+  spreadsheetRapportsPdf?: string;
+  spreadsheetRapportsPdfUrl?: string;
+  spreadsheetCrm?: string;
+  spreadsheetCrmUrl?: string;
+  spreadsheetSatisfaction?: string;
+  spreadsheetSatisfactionUrl?: string;
+  spreadsheetCommandes?: string;
+  spreadsheetCommandesUrl?: string;
+  spreadsheetStocks?: string;
+  spreadsheetStocksUrl?: string;
+  spreadsheetAchatsFournisseurs?: string;
+  spreadsheetAchatsFournisseursUrl?: string;
+  spreadsheetTemps?: string;
+  spreadsheetTempsUrl?: string;
+  spreadsheetTicketsCaisse?: string;
+  spreadsheetTicketsCaisseUrl?: string;
+  spreadsheetReleveConcurrentiel?: string;
+  spreadsheetReleveConcurrentielUrl?: string;
+  spreadsheetFormations?: string;
+  spreadsheetFormationsUrl?: string;
+  spreadsheetStagiaires?: string;
+  spreadsheetStagiairesUrl?: string;
+  spreadsheetEmargements?: string;
+  spreadsheetEmargementsUrl?: string;
+  spreadsheetMessagesInternes?: string;
+  spreadsheetMessagesInternesUrl?: string;
+  spreadsheetVariables?: string;
+  spreadsheetVariablesUrl?: string;
+  spreadsheetGed?: string;
+  spreadsheetGedUrl?: string;
+  spreadsheetReglages?: string;
+  spreadsheetReglagesUrl?: string;
+  spreadsheetIntituleEmplacements?: string;
+  spreadsheetIntituleEmplacementsUrl?: string;
+  spreadsheetMembresEnvironnement?: string;
+  spreadsheetMembresEnvironnementUrl?: string;
 }
+
+export type SpreadsheetFieldKey =
+  | 'spreadsheetDefibrillateurs'
+  | 'spreadsheetAutresMateriels'
+  | 'spreadsheetClients'
+  | 'spreadsheetTournees'
+  | 'spreadsheetMissionsTournees'
+  | 'spreadsheetRapportsPdf'
+  | 'spreadsheetCrm'
+  | 'spreadsheetSatisfaction'
+  | 'spreadsheetCommandes'
+  | 'spreadsheetStocks'
+  | 'spreadsheetAchatsFournisseurs'
+  | 'spreadsheetTemps'
+  | 'spreadsheetTicketsCaisse'
+  | 'spreadsheetReleveConcurrentiel'
+  | 'spreadsheetFormations'
+  | 'spreadsheetStagiaires'
+  | 'spreadsheetEmargements'
+  | 'spreadsheetMessagesInternes'
+  | 'spreadsheetVariables'
+  | 'spreadsheetGed'
+  | 'spreadsheetReglages'
+  | 'spreadsheetIntituleEmplacements'
+  | 'spreadsheetMembresEnvironnement';
+
+export const EXTRA_SPREADSHEET_FIELDS: {
+  key: SpreadsheetFieldKey;
+  urlKey: keyof CompanyInfo;
+  storageSuffix: string;
+  label: string;
+  id: string;
+}[] = [
+  { key: 'spreadsheetTournees', urlKey: 'spreadsheetTourneesUrl', storageSuffix: 'spreadsheet_tournees', label: 'Spreadsheet Tournées.', id: 'settings-db-spreadsheet-tournees' },
+  { key: 'spreadsheetMissionsTournees', urlKey: 'spreadsheetMissionsTourneesUrl', storageSuffix: 'spreadsheet_missions_tournees', label: 'Spreadsheet Missions des Tournées.', id: 'settings-db-spreadsheet-missions-tournees' },
+  { key: 'spreadsheetRapportsPdf', urlKey: 'spreadsheetRapportsPdfUrl', storageSuffix: 'spreadsheet_rapports_pdf', label: 'Spreadsheet Rapports PDF.', id: 'settings-db-spreadsheet-rapports-pdf' },
+  { key: 'spreadsheetCrm', urlKey: 'spreadsheetCrmUrl', storageSuffix: 'spreadsheet_crm', label: 'Spreadsheet CRM.', id: 'settings-db-spreadsheet-crm' },
+  { key: 'spreadsheetSatisfaction', urlKey: 'spreadsheetSatisfactionUrl', storageSuffix: 'spreadsheet_satisfaction', label: 'Spreadsheet Satisfaction.', id: 'settings-db-spreadsheet-satisfaction' },
+  { key: 'spreadsheetCommandes', urlKey: 'spreadsheetCommandesUrl', storageSuffix: 'spreadsheet_commandes', label: 'Spreadsheet Commandes.', id: 'settings-db-spreadsheet-commandes' },
+  { key: 'spreadsheetStocks', urlKey: 'spreadsheetStocksUrl', storageSuffix: 'spreadsheet_stocks', label: 'Spreadsheet Stocks.', id: 'settings-db-spreadsheet-stocks' },
+  { key: 'spreadsheetAchatsFournisseurs', urlKey: 'spreadsheetAchatsFournisseursUrl', storageSuffix: 'spreadsheet_achats_fournisseurs', label: 'Spreadsheet Achats fournisseurs.', id: 'settings-db-spreadsheet-achats-fournisseurs' },
+  { key: 'spreadsheetTemps', urlKey: 'spreadsheetTempsUrl', storageSuffix: 'spreadsheet_temps', label: 'Spreadsheet Temps.', id: 'settings-db-spreadsheet-temps' },
+  { key: 'spreadsheetTicketsCaisse', urlKey: 'spreadsheetTicketsCaisseUrl', storageSuffix: 'spreadsheet_tickets_caisse', label: 'Spreadsheet Tickets Caisse.', id: 'settings-db-spreadsheet-tickets-caisse' },
+  { key: 'spreadsheetReleveConcurrentiel', urlKey: 'spreadsheetReleveConcurrentielUrl', storageSuffix: 'spreadsheet_releve_concurrentiel', label: 'Spreadsheet Relevé Concurrentiel.', id: 'settings-db-spreadsheet-releve-concurrentiel' },
+  { key: 'spreadsheetFormations', urlKey: 'spreadsheetFormationsUrl', storageSuffix: 'spreadsheet_formations', label: 'Spreadsheet Formations.', id: 'settings-db-spreadsheet-formations' },
+  { key: 'spreadsheetStagiaires', urlKey: 'spreadsheetStagiairesUrl', storageSuffix: 'spreadsheet_stagiaires', label: 'Spreadsheet Stagiaires.', id: 'settings-db-spreadsheet-stagiaires' },
+  { key: 'spreadsheetEmargements', urlKey: 'spreadsheetEmargementsUrl', storageSuffix: 'spreadsheet_emargements', label: 'Spreadsheet Émargements.', id: 'settings-db-spreadsheet-emargements' },
+  { key: 'spreadsheetMessagesInternes', urlKey: 'spreadsheetMessagesInternesUrl', storageSuffix: 'spreadsheet_messages_internes', label: 'Spreadsheet Messages internes.', id: 'settings-db-spreadsheet-messages-internes' },
+  { key: 'spreadsheetVariables', urlKey: 'spreadsheetVariablesUrl', storageSuffix: 'spreadsheet_variables', label: 'Spreadsheet Variables.', id: 'settings-db-spreadsheet-variables' },
+  { key: 'spreadsheetGed', urlKey: 'spreadsheetGedUrl', storageSuffix: 'spreadsheet_ged', label: 'Spreadsheet GED.', id: 'settings-db-spreadsheet-ged' },
+  { key: 'spreadsheetReglages', urlKey: 'spreadsheetReglagesUrl', storageSuffix: 'spreadsheet_reglages', label: 'Spreadsheet Réglages.', id: 'settings-db-spreadsheet-reglages' },
+  { key: 'spreadsheetIntituleEmplacements', urlKey: 'spreadsheetIntituleEmplacementsUrl', storageSuffix: 'spreadsheet_intitule_emplacements', label: 'Spreadsheet Intitulé des emplacements.', id: 'settings-db-spreadsheet-intitule-emplacements' },
+  { key: 'spreadsheetMembresEnvironnement', urlKey: 'spreadsheetMembresEnvironnementUrl', storageSuffix: 'spreadsheet_membres_environnement', label: 'Spreadsheet Membres de l’environnement.', id: 'settings-db-spreadsheet-membres-environnement' },
+];
 
 export interface PointageLog {
   id: string;

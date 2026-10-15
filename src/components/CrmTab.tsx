@@ -800,14 +800,15 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     }
   };
 
-  // Add a commercial event
+  // Add a commercial event (max 5)
   const handleAddCommercialEvent = () => {
+    if (formCommercialEvents.length >= 5) return;
     const newEvt: CommercialEvent = {
       id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       date: getTodayFormatted(),
       commentaire: '',
     };
-    setFormCommercialEvents(prev => [newEvt, ...prev]);
+    setFormCommercialEvents(prev => (prev.length >= 5 ? prev : [newEvt, ...prev]));
   };
 
   const handleUpdateCommercialEvent = (id: string, field: 'date' | 'commentaire', value: string) => {
@@ -818,9 +819,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormCommercialEvents(prev => prev.filter(e => e.id !== id));
   };
 
-  // Support Message Handlers (Technique / Réclamation / Sans Catégorie)
+  // Support Message Handlers (Technique / Réclamation / Sans Catégorie - max 5)
   const handleOpenNewMessage = () => {
     if (!isNewMessageOpen) {
+      if (formSupportMessages.length >= 5) return;
       const clientName = formClientSelect === 'Autre' ? (formCustomClientName.trim() || 'Client') : formClientSelect;
       const ref = formRef || 'SUPPORT';
       const obj = formObjet || 'Assistance';
@@ -847,6 +849,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   const handleSendSupportMessage = async () => {
+    if (formSupportMessages.length >= 5) {
+      setIsNewMessageOpen(false);
+      return;
+    }
     let targetEmail = formEmail.trim();
     if (!targetEmail && formClientSelect !== 'Autre') {
       const found = clients.find(c => (c.denomination || (c as any).name || c.id) === formClientSelect);
@@ -3525,6 +3531,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           <button
                             type="button"
                             onClick={handleAddCommercialEvent}
+                            disabled={formCommercialEvents.length >= 5}
                             style={{
                               backgroundColor: '#000000',
                               color: '#ffffff',
@@ -3532,10 +3539,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               fontSize: '18px',
                               padding: '10px 19px',
                               border: 'none',
-                              cursor: 'pointer',
+                              cursor: formCommercialEvents.length >= 5 ? 'not-allowed' : 'pointer',
+                              opacity: formCommercialEvents.length >= 5 ? 0.45 : 1,
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                             }}
-                            className="hover:bg-zinc-800 transition-colors"
+                            className={formCommercialEvents.length >= 5 ? 'transition-colors' : 'hover:bg-zinc-800 transition-colors'}
                           >
                             Nouvel événement
                           </button>
@@ -3626,6 +3634,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         <button
                           type="button"
                           onClick={handleOpenNewMessage}
+                          disabled={!isNewMessageOpen && formSupportMessages.length >= 5}
                           style={{
                             backgroundColor: '#000000',
                             color: '#ffffff',
@@ -3633,10 +3642,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             fontSize: '18px',
                             padding: '8px 16px',
                             border: 'none',
-                            cursor: 'pointer',
+                            cursor: !isNewMessageOpen && formSupportMessages.length >= 5 ? 'not-allowed' : 'pointer',
+                            opacity: !isNewMessageOpen && formSupportMessages.length >= 5 ? 0.45 : 1,
                             fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                           }}
-                          className="hover:bg-zinc-800 transition-colors"
+                          className={!isNewMessageOpen && formSupportMessages.length >= 5 ? 'transition-colors' : 'hover:bg-zinc-800 transition-colors'}
                         >
                           {isNewMessageOpen ? 'Fermer le formulaire' : 'Nouveau message'}
                         </button>

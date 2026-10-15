@@ -974,6 +974,53 @@ export default function DefibTab({
   
   // Selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectedIdsSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  const stableDefibsRef = useRef<{ tenant: string; items: Defibrillateur[] }>({ tenant: '', items: [] });
+
+  // Merge local loaded defibrillateurs with any on-demand rows returned from /api/sheets/query
+  const mergedDefibrillateurs = useMemo(() => {
+    let baseList = defibrillateurs;
+    if (baseList.length > 0) {
+      stableDefibsRef.current = { tenant: activeTenantId, items: baseList };
+    } else if (stableDefibsRef.current.tenant === activeTenantId && stableDefibsRef.current.items.length > 0) {
+      baseList = stableDefibsRef.current.items;
+    }
+
+    if (remoteQueriedDefibs.length === 0) return baseList;
+    const byKey = new Map<string, Defibrillateur>();
+    const out: Defibrillateur[] = [];
+
+    for (const df of baseList) {
+      if (!df) continue;
+      const k = String(df.id || df.identifiant || '').trim().toLowerCase();
+      if (k) byKey.set(k, df);
+      out.push(df);
+    }
+    for (const df of remoteQueriedDefibs) {
+      if (!df) continue;
+      const k = String(df.id || df.identifiant || '').trim().toLowerCase();
+      if (k) {
+        const existing = byKey.get(k);
+        if (!existing) {
+          byKey.set(k, df);
+          out.push(df);
+        } else if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
+          const idx = out.indexOf(existing);
+          if (idx >= 0) out[idx] = { ...existing, ...df };
+        }
+      }
+    }
+    return out;
+  }, [defibrillateurs, remoteQueriedDefibs, activeTenantId]);
+
+  const mergedDefibByIdMap = useMemo(() => {
+    const map = new Map<string, Defibrillateur>();
+    for (const df of mergedDefibrillateurs) {
+      if (df?.id) map.set(df.id, df);
+    }
+    return map;
+  }, [mergedDefibrillateurs]);
 
   // Pinned items state (persisted in localStorage)
   const [pinnedDefibIds, setPinnedDefibIds] = useState<string[]>(() => {
@@ -1106,13 +1153,16 @@ export default function DefibTab({
     }
   }, [isFormOpen]);
 
-  const isAnySelectedInTour = selectedIds.some(id => {
-    const defib = defibrillateurs.find(d => d.id === id);
-    if (!defib) return false;
-    return (fsmTours || []).some(t =>
-      (t.missions || []).some((m: any) => m.defibIdentifiant === defib.identifiant)
-    );
-  });
+  const isAnySelectedInTour = useMemo(() => {
+    if (selectedIds.length === 0) return false;
+    return selectedIds.some(id => {
+      const defib = mergedDefibByIdMap.get(id);
+      if (!defib) return false;
+      return (fsmTours || []).some(t =>
+        (t.missions || []).some((m: any) => m.defibIdentifiant === defib.identifiant)
+      );
+    });
+  }, [selectedIds, mergedDefibByIdMap, fsmTours]);
   const [clientSearchQuery, setClientSearchQuery] = useState('');
   const [isClientSearchFocused, setIsClientSearchFocused] = useState(false);
   const [editingDefib, setEditingDefib] = useState<Defibrillateur | null>(null);
@@ -1235,7 +1285,7 @@ export default function DefibTab({
   };
 
   const handleExportToAtlasanteCSV = () => {
-    const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
+    const selectedDefibs = mergedDefibrillateurs.filter(d => selectedIdsSet.has(d.id));
     const clientMap = new Map(clients.map(c => [c.id, c]));
     const variableMap = new Map(variables.map(v => [v.id, v]));
 
@@ -1305,7 +1355,7 @@ export default function DefibTab({
     setIsAtlasanteUploading(true);
     setAtlasanteUploadResults([]);
 
-    const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
+    const selectedDefibs = mergedDefibrillateurs.filter(d => selectedIdsSet.has(d.id));
     const clientMap = new Map(clients.map(c => [c.id, c]));
     const variableMap = new Map(variables.map(v => [v.id, v]));
 
@@ -1422,7 +1472,7 @@ export default function DefibTab({
   const executeNouvelleTournee = () => {
     if (!onUpdateFsmTours) return;
     const missions = selectedIds.map((id, index) => {
-      const defib = defibrillateurs.find(d => d.id === id);
+      const defib = mergedDefibByIdMap.get(id) || defibrillateurs.find(d => d.id === id);
       const client = clients.find(c => c.id === defib?.clientId);
       const clientName = defib?.nomSite || defib?.nomPrenomSite || (client ? client.denomination : 'Nom du Site');
       return {
@@ -1463,7 +1513,7 @@ export default function DefibTab({
   const executeAddToTrier = () => {
     if (!onUpdateFsmTours) return;
     const missionsToAdd = selectedIds.map((id, index) => {
-      const defib = defibrillateurs.find(d => d.id === id);
+      const defib = mergedDefibByIdMap.get(id) || defibrillateurs.find(d => d.id === id);
       const client = clients.find(c => c.id === defib?.clientId);
       const clientName = defib?.nomSite || defib?.nomPrenomSite || (client ? client.denomination : 'Nom du Site');
       return {
@@ -1528,7 +1578,7 @@ export default function DefibTab({
     const updated = fsmTours.map(t => {
       if (t.id === targetTourId) {
         const addedMissions = selectedIds.map((id, index) => {
-          const defib = defibrillateurs.find(d => d.id === id);
+          const defib = mergedDefibByIdMap.get(id) || defibrillateurs.find(d => d.id === id);
           const client = clients.find(c => c.id === defib?.clientId);
           const clientName = defib?.nomSite || defib?.nomPrenomSite || (client ? client.denomination : 'Nom du Site');
           return {
@@ -2215,7 +2265,7 @@ export default function DefibTab({
     if (!atlasanteActive) return true;
     if (selectedIds.length === 0) return true;
 
-    const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
+    const selectedDefibs = mergedDefibrillateurs.filter(d => selectedIdsSet.has(d.id));
     if (selectedDefibs.length === 0) return true;
 
     return selectedDefibs.some(df => {
@@ -2229,13 +2279,13 @@ export default function DefibTab({
 
       return !lat || !lng || !tel || !email || !modele || modele === 'Tous' || !serie;
     });
-  }, [atlasanteActive, selectedIds, defibrillateurs, clientMap]);
+  }, [atlasanteActive, selectedIds, selectedIdsSet, mergedDefibrillateurs, clientMap]);
 
   const syncAtlasanteDisabledReason = useMemo(() => {
     if (!atlasanteActive) {
       return "Action impossible : 'Atlasanté GEODAE' est désactivé dans les paramètres du tenant.";
     }
-    const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
+    const selectedDefibs = mergedDefibrillateurs.filter(d => selectedIdsSet.has(d.id));
     const hasMissingFields = selectedDefibs.some(df => {
       const cl = getLinkedClientForDefib(df);
       const lat = (df.latitude || '').trim();
@@ -2250,7 +2300,7 @@ export default function DefibTab({
       return "Action impossible : au moins 1 défibrillateur sélectionné a un ou plusieurs champs manquants (Latitude, Longitude, Téléphone, Email, Modèle, Numéro Série).";
     }
     return "";
-  }, [atlasanteActive, selectedIds, defibrillateurs, clientMap]);
+  }, [atlasanteActive, selectedIds, selectedIdsSet, mergedDefibrillateurs, clientMap]);
 
   // Autopopulate site / contract fields on Client lookup change
   const handleClientChange = (selectedClientId: string) => {
@@ -2334,44 +2384,6 @@ export default function DefibTab({
     }
     return set;
   }, [activeTenantId, defibrillateurs]);
-
-  const stableDefibsRef = useRef<{ tenant: string; items: Defibrillateur[] }>({ tenant: '', items: [] });
-
-  // Merge local loaded defibrillateurs with any on-demand rows returned from /api/sheets/query
-  const mergedDefibrillateurs = useMemo(() => {
-    let baseList = defibrillateurs;
-    if (baseList.length > 0) {
-      stableDefibsRef.current = { tenant: activeTenantId, items: baseList };
-    } else if (stableDefibsRef.current.tenant === activeTenantId && stableDefibsRef.current.items.length > 0) {
-      baseList = stableDefibsRef.current.items;
-    }
-
-    if (remoteQueriedDefibs.length === 0) return baseList;
-    const byKey = new Map<string, Defibrillateur>();
-    const out: Defibrillateur[] = [];
-
-    for (const df of baseList) {
-      if (!df) continue;
-      const k = String(df.id || df.identifiant || '').trim().toLowerCase();
-      if (k) byKey.set(k, df);
-      out.push(df);
-    }
-    for (const df of remoteQueriedDefibs) {
-      if (!df) continue;
-      const k = String(df.id || df.identifiant || '').trim().toLowerCase();
-      if (k) {
-        const existing = byKey.get(k);
-        if (!existing) {
-          byKey.set(k, df);
-          out.push(df);
-        } else if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
-          const idx = out.indexOf(existing);
-          if (idx >= 0) out[idx] = { ...existing, ...df };
-        }
-      }
-    }
-    return out;
-  }, [defibrillateurs, remoteQueriedDefibs, activeTenantId]);
 
   // Total active defibs excluding deleted records
   const activeDefibrillateurs = useMemo(() => {
@@ -2764,7 +2776,7 @@ export default function DefibTab({
             actionUnder3: activeFilters.actionUnder3,
             action3To6: activeFilters.action3To6,
             sortFilter,
-            limit: 2500,
+            limit: 25000,
             forceRefresh: refreshTrigger > 0,
           }),
         });
@@ -3108,8 +3120,17 @@ export default function DefibTab({
     });
   };
 
+  const selectedDefibsForExport = useMemo(() => {
+    if (selectedIds.length === 0) return [];
+    const inFiltered = filteredDefibs.filter(d => selectedIdsSet.has(d.id));
+    if (inFiltered.length === selectedIds.length) return inFiltered;
+    const seen = new Set(inFiltered.map(d => d.id));
+    const extras = mergedDefibrillateurs.filter(d => selectedIdsSet.has(d.id) && !seen.has(d.id));
+    return [...inFiltered, ...extras];
+  }, [selectedIds, selectedIdsSet, filteredDefibs, mergedDefibrillateurs]);
+
   const handleDownloadCustomCsv = () => {
-    const selectedDefibs = defibrillateurs.filter(d => selectedIds.includes(d.id));
+    const selectedDefibs = selectedDefibsForExport;
     if (selectedDefibs.length === 0) {
       alert(t("Aucun défibrillateur sélectionné."));
       return;
@@ -3137,8 +3158,8 @@ export default function DefibTab({
       }
     });
     const rows = selectedDefibs.map(df => {
-      const cl = clients.find(c => c.id === df.clientId);
-      const model = variables.find(v => v.id === df.modeleId);
+      const cl = getLinkedClientForDefib(df) || clients.find(c => c.id === df.clientId);
+      const model = variableMap.get(df.modeleId) || variables.find(v => v.id === df.modeleId);
       const matchingTours = (fsmTours || []).filter(t => t.missions?.some((m: any) => m.defibIdentifiant === df.identifiant));
       const prochaineMaint = (df as any).prochaineMaintenance || (df as any).prochaine_visite || (df as any).prochaine_v || computeProchaineMaintenance(df.derniereMaintenance);
 
@@ -3275,17 +3296,39 @@ export default function DefibTab({
     };
   }, [filteredDefibs, isFormOpen, isTableFitView, updateHeaderStickyPosition]);
 
+  // Exclusively when in search (via search-bar or at least 1 filter applied in Filtres),
+  // clicking header 'Tous' radio-check selects ALL search/filter results across all pages.
+  const isSearchOrFilterActive = useMemo(() => {
+    const hasSearch = Boolean(search && search.trim().length > 0);
+    const hasActiveSidePaneFilter = Boolean(
+      activeFilters.region !== 'Tous' ||
+      activeFilters.modeleId !== 'Tous' ||
+      (activeFilters.clientId && activeFilters.clientId !== 'Tous') ||
+      activeFilters.categorie !== 'Tous' ||
+      activeFilters.contrat !== 'Tous' ||
+      activeFilters.action3To6 ||
+      activeFilters.actionUnder3 ||
+      activeFilters.actionExpired ||
+      activeFilters.actionRejected ||
+      (activeFilters.advancedSearchTerms && activeFilters.advancedSearchTerms.length > 0)
+    );
+    return hasSearch || hasActiveSidePaneFilter;
+  }, [search, activeFilters]);
+
   // Row selectors
   const displayedToSelect = useMemo(() => {
+    if (isSearchOrFilterActive) {
+      return filteredDefibs;
+    }
     return paginatedDefibs.slice(0, 50);
-  }, [paginatedDefibs]);
+  }, [isSearchOrFilterActive, filteredDefibs, paginatedDefibs]);
 
   const handleSelectRow = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (selectedIds.includes(id)) {
+    if (selectedIdsSet.has(id)) {
       setSelectedIds(selectedIds.filter(selectedId => selectedId !== id));
     } else {
-      if (selectedIds.length >= 50) {
+      if (!isSearchOrFilterActive && selectedIds.length >= 50) {
         return;
       }
       setSelectedIds([...selectedIds, id]);
@@ -3300,7 +3343,7 @@ export default function DefibTab({
     }
   };
 
-  const isAllSelected = displayedToSelect.length > 0 && displayedToSelect.every(df => selectedIds.includes(df.id));
+  const isAllSelected = displayedToSelect.length > 0 && displayedToSelect.every(df => selectedIdsSet.has(df.id));
 
   // Re-roll random identifiant button helper
   const reRollIdentifiant = () => {
@@ -4581,7 +4624,7 @@ export default function DefibTab({
                   <button
                     type="button"
                     onClick={() => {
-                      const selectedList = defibrillateurs.filter(d => selectedIds.includes(d.id));
+                      const selectedList = selectedDefibsForExport;
                       exportSelectedDefibsToPDF({
                         selectedDefibs: selectedList,
                         clients,
@@ -5150,7 +5193,7 @@ export default function DefibTab({
                 {paginatedDefibs.map(df => {
                   const linkedClient = getLinkedClientForDefib(df);
                   const linkedModel = variableMap.get(df.modeleId);
-                  const isChecked = selectedIds.includes(df.id);
+                  const isChecked = selectedIdsSet.has(df.id);
                   const isPinned = pinnedDefibIds.includes(df.id);
                   const prochaineMaint = (df as any).prochaineMaintenance || (df as any).prochaine_visite || (df as any).prochaine_v || computeProchaineMaintenance(df.derniereMaintenance);
 

@@ -22,7 +22,7 @@ import {
   Activity,
   FileSpreadsheet
 } from 'lucide-react';
-import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText } from '../types';
+import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, EXTRA_SPREADSHEET_FIELDS, SpreadsheetFieldKey } from '../types';
 import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile, auth, findTenantInList, KNOWN_TENANTS_REGISTRY, ensureTenantMembersClient, ensureTenantCustomLocationNames } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { getAppsScriptUrl, saveAppsScriptUrl, triggerEmail2TechnicianConnexion, triggerEmail3AdminConnexion, triggerEmailNewMemberAdded, sendScriptEmail } from '../utils/emailService';
@@ -190,6 +190,7 @@ export default function SettingsModal({
       spreadsheetDefibrillateursUrl: '',
       spreadsheetAutresMaterielsUrl: '',
       spreadsheetClientsUrl: '',
+      ...Object.fromEntries(EXTRA_SPREADSHEET_FIELDS.flatMap(f => [[f.key, ''], [f.urlKey, '']])),
     };
   }, []);
 
@@ -221,7 +222,7 @@ export default function SettingsModal({
         }
       } catch (e) {}
     }
-    // Also read the 3 spreadsheet URLs if present in individual tenant keys
+    // Also read the spreadsheet URLs if present in individual tenant keys
     if (typeof window !== 'undefined') {
       const cachedDefib = localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) || 
                           localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_defibrillateurs`) || 
@@ -235,6 +236,16 @@ export default function SettingsModal({
       if (cachedDefib && !base.spreadsheetDefibrillateurs) base.spreadsheetDefibrillateurs = cachedDefib;
       if (cachedAutres && !base.spreadsheetAutresMateriels) base.spreadsheetAutresMateriels = cachedAutres;
       if (cachedClients && !base.spreadsheetClients) base.spreadsheetClients = cachedClients;
+      for (const f of EXTRA_SPREADSHEET_FIELDS) {
+        const cachedVal =
+          localStorage.getItem(`defib_${activeTid}_${f.storageSuffix}`) ||
+          localStorage.getItem(`defib_${activeTid.toLowerCase()}_${f.storageSuffix}`) ||
+          localStorage.getItem(`defib_${activeTid.toUpperCase()}_${f.storageSuffix}`);
+        if (cachedVal && !(base as any)[f.key]) {
+          (base as any)[f.key] = cachedVal;
+          (base as any)[f.urlKey] = cachedVal;
+        }
+      }
     }
     return base;
   });
@@ -822,6 +833,12 @@ export default function SettingsModal({
         const effDefibs = companyInfo.spreadsheetDefibrillateurs || companyInfo.spreadsheetDefibrillateursUrl || (!tenantChanged ? basePrev.spreadsheetDefibrillateurs : '') || '';
         const effAutres = companyInfo.spreadsheetAutresMateriels || companyInfo.spreadsheetAutresMaterielsUrl || (!tenantChanged ? basePrev.spreadsheetAutresMateriels : '') || '';
         const effClients = companyInfo.spreadsheetClients || companyInfo.spreadsheetClientsUrl || (!tenantChanged ? basePrev.spreadsheetClients : '') || '';
+        const extraEff: Record<string, string> = {};
+        for (const f of EXTRA_SPREADSHEET_FIELDS) {
+          const val = (companyInfo as any)[f.key] || (companyInfo as any)[f.urlKey] || (!tenantChanged ? (basePrev as any)[f.key] : '') || '';
+          extraEff[f.key] = val;
+          extraEff[f.urlKey as string] = val;
+        }
         return {
           ...merged,
           spreadsheetDefibrillateurs: effDefibs,
@@ -830,6 +847,7 @@ export default function SettingsModal({
           spreadsheetDefibrillateursUrl: effDefibs,
           spreadsheetAutresMaterielsUrl: effAutres,
           spreadsheetClientsUrl: effClients,
+          ...extraEff,
         };
       });
       setLocalLocationNames(ensureTenantCustomLocationNames(companyInfo?.customLocationNames, activeTid, members));
@@ -948,13 +966,30 @@ export default function SettingsModal({
       const cachedClients = localStorage.getItem(`defib_${activeTid}_spreadsheet_clients`) || 
                             localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_clients`) || 
                             localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_clients`) || '';
-      if (cachedDefib || cachedAutres || cachedClients) {
-        setLocalCompany(prev => ({
-          ...prev,
-          spreadsheetDefibrillateurs: prev.spreadsheetDefibrillateurs || cachedDefib,
-          spreadsheetAutresMateriels: prev.spreadsheetAutresMateriels || cachedAutres,
-          spreadsheetClients: prev.spreadsheetClients || cachedClients,
-        }));
+      const cachedExtraMap: Record<string, string> = {};
+      for (const f of EXTRA_SPREADSHEET_FIELDS) {
+        cachedExtraMap[f.key] =
+          localStorage.getItem(`defib_${activeTid}_${f.storageSuffix}`) ||
+          localStorage.getItem(`defib_${activeTid.toLowerCase()}_${f.storageSuffix}`) ||
+          localStorage.getItem(`defib_${activeTid.toUpperCase()}_${f.storageSuffix}`) ||
+          '';
+      }
+      if (cachedDefib || cachedAutres || cachedClients || Object.values(cachedExtraMap).some(Boolean)) {
+        setLocalCompany(prev => {
+          const extraMerged: Record<string, string> = {};
+          for (const f of EXTRA_SPREADSHEET_FIELDS) {
+            const val = (prev as any)[f.key] || (prev as any)[f.urlKey] || cachedExtraMap[f.key] || '';
+            extraMerged[f.key] = val;
+            extraMerged[f.urlKey as string] = val;
+          }
+          return {
+            ...prev,
+            spreadsheetDefibrillateurs: prev.spreadsheetDefibrillateurs || cachedDefib,
+            spreadsheetAutresMateriels: prev.spreadsheetAutresMateriels || cachedAutres,
+            spreadsheetClients: prev.spreadsheetClients || cachedClients,
+            ...extraMerged,
+          };
+        });
       }
 
       // 5. Remote fetch from Firestore / Server for both companyInfo and tenantDatabases
@@ -1000,7 +1035,28 @@ export default function SettingsModal({
               cachedClients ||
               '';
 
+            const extraEffFields: Record<string, string> = {};
             const tKeys = [activeTid, activeTid.toLowerCase(), activeTid.toUpperCase()];
+            for (const f of EXTRA_SPREADSHEET_FIELDS) {
+              const effVal =
+                validDb?.[f.key] ||
+                validDb?.[f.urlKey] ||
+                (validCompany as any)?.[f.key] ||
+                (validCompany as any)?.[f.urlKey] ||
+                (prev as any)[f.key] ||
+                cachedExtraMap[f.key] ||
+                '';
+              extraEffFields[f.key] = effVal;
+              extraEffFields[f.urlKey as string] = effVal;
+              if (effVal) {
+                try {
+                  for (const tid of tKeys) {
+                    localStorage.setItem(`defib_${tid}_${f.storageSuffix}`, effVal);
+                  }
+                } catch (_) {}
+              }
+            }
+
             try {
               for (const tid of tKeys) {
                 if (effDefibs) localStorage.setItem(`defib_${tid}_spreadsheet_defibrillateurs`, effDefibs);
@@ -1026,6 +1082,7 @@ export default function SettingsModal({
               spreadsheetDefibrillateursUrl: effDefibs,
               spreadsheetAutresMaterielsUrl: effAutres,
               spreadsheetClientsUrl: effClients,
+              ...extraEffFields,
             };
           });
         }).catch(() => {});
@@ -1708,13 +1765,21 @@ export default function SettingsModal({
   const dbAutoSaveTimerRef = React.useRef<any>(null);
 
   const syncSpreadsheetUrlsEverywhere = async (companyObj: CompanyInfo, effectiveTenantId: string) => {
-    const dbPayload = {
+    const extraDbPayload: Record<string, string> = {};
+    for (const f of EXTRA_SPREADSHEET_FIELDS) {
+      const val = String((companyObj as any)[f.key] ?? (companyObj as any)[f.urlKey] ?? '');
+      extraDbPayload[f.key] = val;
+      extraDbPayload[f.urlKey as string] = val;
+    }
+
+    const dbPayload: Record<string, any> = {
       spreadsheetDefibrillateurs: companyObj.spreadsheetDefibrillateurs || '',
       spreadsheetAutresMateriels: companyObj.spreadsheetAutresMateriels || '',
       spreadsheetClients: companyObj.spreadsheetClients || '',
       spreadsheetDefibrillateursUrl: companyObj.spreadsheetDefibrillateurs || '',
       spreadsheetAutresMaterielsUrl: companyObj.spreadsheetAutresMateriels || '',
       spreadsheetClientsUrl: companyObj.spreadsheetClients || '',
+      ...extraDbPayload,
       updatedAt: new Date().toISOString(),
     };
 
@@ -1724,6 +1789,9 @@ export default function SettingsModal({
         localStorage.setItem(`defib_${tid}_spreadsheet_defibrillateurs`, dbPayload.spreadsheetDefibrillateurs);
         localStorage.setItem(`defib_${tid}_spreadsheet_autres_materiels`, dbPayload.spreadsheetAutresMateriels);
         localStorage.setItem(`defib_${tid}_spreadsheet_clients`, dbPayload.spreadsheetClients);
+        for (const f of EXTRA_SPREADSHEET_FIELDS) {
+          localStorage.setItem(`defib_${tid}_${f.storageSuffix}`, extraDbPayload[f.key] || '');
+        }
         localStorage.setItem(`defib_${tid}_company_info`, JSON.stringify(companyObj));
         localStorage.setItem(`fs_cache_${tid}_company_info`, JSON.stringify(companyObj));
         localStorage.setItem(`fs_cache_${tid}_tenantDatabases`, JSON.stringify(dbPayload));
@@ -1768,7 +1836,7 @@ export default function SettingsModal({
   };
 
   const handleDbSpreadsheetChange = (
-    field: 'spreadsheetDefibrillateurs' | 'spreadsheetAutresMateriels' | 'spreadsheetClients',
+    field: SpreadsheetFieldKey,
     value: string
   ) => {
     if (!isCurrentUserSuperAdmin) return;
@@ -1782,10 +1850,12 @@ export default function SettingsModal({
 
     try {
       const tKeys = [activeTid, activeTid.toLowerCase(), activeTid.toUpperCase()];
+      const extraMeta = EXTRA_SPREADSHEET_FIELDS.find(f => f.key === field);
       for (const tid of tKeys) {
         if (field === 'spreadsheetDefibrillateurs') localStorage.setItem(`defib_${tid}_spreadsheet_defibrillateurs`, value);
         if (field === 'spreadsheetAutresMateriels') localStorage.setItem(`defib_${tid}_spreadsheet_autres_materiels`, value);
         if (field === 'spreadsheetClients') localStorage.setItem(`defib_${tid}_spreadsheet_clients`, value);
+        if (extraMeta) localStorage.setItem(`defib_${tid}_${extraMeta.storageSuffix}`, value);
       }
     } catch (_) {}
 
@@ -1805,6 +1875,13 @@ export default function SettingsModal({
     setDatabasesSaveStatus('saving');
     const effectiveTenantId = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
 
+    const extraUpdated: Record<string, string> = {};
+    for (const f of EXTRA_SPREADSHEET_FIELDS) {
+      const val = String((localCompany as any)[f.key] ?? (localCompany as any)[f.urlKey] ?? '');
+      extraUpdated[f.key] = val;
+      extraUpdated[f.urlKey as string] = val;
+    }
+
     const updatedCompany: CompanyInfo = {
       ...localCompany,
       spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
@@ -1813,6 +1890,7 @@ export default function SettingsModal({
       spreadsheetDefibrillateursUrl: localCompany.spreadsheetDefibrillateurs || '',
       spreadsheetAutresMaterielsUrl: localCompany.spreadsheetAutresMateriels || '',
       spreadsheetClientsUrl: localCompany.spreadsheetClients || '',
+      ...extraUpdated,
     };
 
     setLocalCompany(updatedCompany);
@@ -2337,6 +2415,13 @@ export default function SettingsModal({
       setIsVerifyingEmail(false);
     }
 
+    const extraSaveFields: Record<string, string> = {};
+    for (const f of EXTRA_SPREADSHEET_FIELDS) {
+      const val = String((localCompany as any)[f.key] ?? (localCompany as any)[f.urlKey] ?? '');
+      extraSaveFields[f.key] = val;
+      extraSaveFields[f.urlKey as string] = val;
+    }
+
     const companyToSave = {
       ...localCompany,
       name: compName,
@@ -2354,6 +2439,7 @@ export default function SettingsModal({
       spreadsheetDefibrillateursUrl: localCompany.spreadsheetDefibrillateurs || '',
       spreadsheetAutresMaterielsUrl: localCompany.spreadsheetAutresMateriels || '',
       spreadsheetClientsUrl: localCompany.spreadsheetClients || '',
+      ...extraSaveFields,
     };
 
     // Log suspicious activity event K for modified fields in Réglages
@@ -2385,6 +2471,7 @@ export default function SettingsModal({
         { key: 'spreadsheetDefibrillateurs', label: 'Spreadsheet Défibrillateurs' },
         { key: 'spreadsheetAutresMateriels', label: 'Spreadsheet Autres Matériels' },
         { key: 'spreadsheetClients', label: 'Spreadsheet Clients' },
+        ...EXTRA_SPREADSHEET_FIELDS.map(f => ({ key: f.key as keyof CompanyInfo, label: f.label.replace(/\.$/, '') })),
       ];
 
       for (const f of checkFields) {
@@ -2532,6 +2619,9 @@ export default function SettingsModal({
     localStorage.setItem(`defib_${myTenantId}_spreadsheet_defibrillateurs`, localCompany.spreadsheetDefibrillateurs || '');
     localStorage.setItem(`defib_${myTenantId}_spreadsheet_autres_materiels`, localCompany.spreadsheetAutresMateriels || '');
     localStorage.setItem(`defib_${myTenantId}_spreadsheet_clients`, localCompany.spreadsheetClients || '');
+    for (const f of EXTRA_SPREADSHEET_FIELDS) {
+      localStorage.setItem(`defib_${myTenantId}_${f.storageSuffix}`, extraSaveFields[f.key] || '');
+    }
 
     if (effectiveTenantId && effectiveTenantId !== 'demo') {
       promises.push(
@@ -2539,6 +2629,7 @@ export default function SettingsModal({
           spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
           spreadsheetAutresMateriels: localCompany.spreadsheetAutresMateriels || '',
           spreadsheetClients: localCompany.spreadsheetClients || '',
+          ...extraSaveFields,
           updatedAt: new Date().toISOString()
         }, effectiveTenantId).catch(err =>
           console.error('Error saving tenantDatabases directly to Firestore:', err)
@@ -5502,6 +5593,22 @@ export default function SettingsModal({
                 placeholder={t("https://docs.google.com/spreadsheets/d/...")}
               />
             </div>
+
+            {EXTRA_SPREADSHEET_FIELDS.map((field) => (
+              <div key={field.key} className="space-y-1.5" id={field.id}>
+                <label className="block text-[16px] font-bold text-black font-sans">
+                  {t(field.label)}
+                </label>
+                <input
+                  type="url"
+                  disabled={!isCurrentUserSuperAdmin}
+                  value={(localCompany as any)[field.key] ?? ''}
+                  onChange={(e) => handleDbSpreadsheetChange(field.key, e.target.value)}
+                  className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  placeholder={t("https://docs.google.com/spreadsheets/d/...")}
+                />
+              </div>
+            ))}
           </div>
         )}
 
