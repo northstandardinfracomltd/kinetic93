@@ -940,6 +940,15 @@ export function mapAutreMaterielToRow(headers: string[], item: any, existingRow?
   return outRow;
 }
 
+export function isPlaceholderClientValue(v?: string | null): boolean {
+  if (!v) return true;
+  const s = String(v).trim();
+  if (!s) return true;
+  return /^(num[eé]ro\s*vierge|information\s*manquante|manquant|non\s*renseign[eé]|inconnu|aucun|n\/?a|-+|0+|client\s*manquant|nom\s*et\s*pr[eé]nom\s*vierge|tel\s*port\s*vierge)$/i.test(
+    s
+  );
+}
+
 export function mapRowToClient(
   headers: string[],
   row: string[],
@@ -974,8 +983,29 @@ export function mapRowToClient(
   const cleanClientId = String(obj.clientIdField || '').trim();
   const cleanSiret = String(obj.siret || '').trim();
   const cleanDenom = String(obj.denomination || '').trim();
-  obj.id = cleanClientId || cleanSiret || (cleanDenom ? `cli_${cleanDenom.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : `sheet_cli_${tenantId}_${rowIndex + 2}`);
-  if (!obj.clientIdField) obj.clientIdField = obj.id;
+  const validClientId = !isPlaceholderClientValue(cleanClientId) ? cleanClientId : '';
+  const validSiret = !isPlaceholderClientValue(cleanSiret) ? cleanSiret : '';
+  const slugDenom = cleanDenom
+    ? cleanDenom
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+    : '';
+
+  if (validClientId) {
+    obj.id = validClientId;
+  } else if (slugDenom && validSiret) {
+    obj.id = `cli_${slugDenom}_${validSiret.replace(/[^a-z0-9]/gi, '')}`;
+  } else if (slugDenom) {
+    obj.id = `cli_${slugDenom}`;
+  } else if (validSiret) {
+    obj.id = `cli_siret_${validSiret.replace(/[^a-z0-9]/gi, '')}`;
+  } else {
+    obj.id = `sheet_cli_${tenantId}_${rowIndex + 2}`;
+  }
+  obj.clientIdField = validClientId;
   if (!obj.denomination) obj.denomination = '';
 
   return obj;
@@ -994,7 +1024,7 @@ export function mapClientToRow(headers: string[], client: any, existingRow?: str
     for (let i = 0; i < normHeaders.length; i++) {
       if (!def.aliases.includes(normHeaders[i])) continue;
       let val = client[def.field];
-      if (def.field === 'clientIdField' && !val && client.id) {
+      if (def.field === 'clientIdField' && !val && client.id && !String(client.id).startsWith('cli_') && !String(client.id).startsWith('sheet_cli_')) {
         val = client.id;
       }
       if (val !== undefined && val !== null) {
@@ -1044,7 +1074,11 @@ function saveMirrorOverlay(tenantId: string, tabType: SheetTabType, spreadsheetI
 function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
   if (!item || typeof item !== 'object') return [];
   if (tabType === 'clients') {
-    return [item.id, item.clientIdField, item.siret, item.denomination]
+    return [
+      item.id,
+      !isPlaceholderClientValue(item.clientIdField) ? item.clientIdField : '',
+      item.denomination,
+    ]
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
