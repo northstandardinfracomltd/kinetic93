@@ -1043,17 +1043,38 @@ export default function DefibTab({
   const [variableSidePaneSearch, setVariableSidePaneSearch] = useState('');
   const [clientSearchTarget, setClientSearchTarget] = useState<'form' | 'filter'>('form');
   const [cursorLoading, setCursorLoading] = useState<{ x: number; y: number } | null>(null);
+  const [isSearchingSpreadsheet, setIsSearchingSpreadsheet] = useState(false);
+  const [cursorSearchPos, setCursorSearchPos] = useState<{ x: number; y: number }>({
+    x: typeof window !== 'undefined' ? Math.round(window.innerWidth / 2) : 300,
+    y: typeof window !== 'undefined' ? 140 : 140,
+  });
+  const lastMousePosRef = useRef<{ x: number; y: number }>({
+    x: typeof window !== 'undefined' ? Math.round(window.innerWidth / 2) : 300,
+    y: typeof window !== 'undefined' ? 140 : 140,
+  });
 
   useEffect(() => {
-    if (!cursorLoading) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      setCursorLoading({ x: e.clientX, y: e.clientY });
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+      if (cursorLoading) {
+        setCursorLoading({ x: e.clientX, y: e.clientY });
+      }
+      if (isSearchingSpreadsheet || (!isInitialView && isDefibLoading)) {
+        setCursorSearchPos({ x: e.clientX, y: e.clientY });
+      }
     };
-    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousemove', handleGlobalMouseMove, { passive: true });
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
     };
-  }, [cursorLoading !== null]);
+  }, [cursorLoading !== null, isSearchingSpreadsheet, isDefibLoading]);
+
+  const isPlaceholderClientVal = (v?: string | null): boolean => {
+    if (!v) return true;
+    const s = String(v).trim();
+    if (!s) return true;
+    return /^(num[eé]ro\s*vierge|information\s*manquante|manquant|non\s*renseign[eé]|inconnu|aucun|n\/?a|-+|0+|nom\s*et\s*pr[eé]nom\s*vierge|tel\s*port\s*vierge)$/i.test(s);
+  };
 
   const sortedClientsForFilter = useMemo(() => {
     return [...clients].sort((a, b) => (a.denomination || '').localeCompare(b.denomination || '', 'fr', { sensitivity: 'base' }));
@@ -1064,10 +1085,10 @@ export default function DefibTab({
     const q = clientSidePaneSearch.trim().toLowerCase();
     return clients.filter(c => {
       const denom = (c.denomination || '').toLowerCase();
-      const siret = (c.siret || '').toLowerCase();
+      const siret = (!isPlaceholderClientVal(c.siret) ? (c.siret || '') : '').toLowerCase();
       const ville = (c.ville || '').toLowerCase();
       const cp = (c.codePostal || (c as any).cp || '').toLowerCase();
-      const code = (c.clientIdField || (c as any).codeClient || '').toLowerCase();
+      const code = (!isPlaceholderClientVal(c.clientIdField) ? (c.clientIdField || (c as any).codeClient || '') : '').toLowerCase();
       return denom.includes(q) || siret.includes(q) || ville.includes(q) || cp.includes(q) || code.includes(q);
     });
   }, [clients, clientSidePaneSearch]);
@@ -1863,15 +1884,28 @@ export default function DefibTab({
     const map = new Map<string, Client>();
     for (const c of (clients || [])) {
       if (!c) continue;
-      if (c.id) map.set(c.id, c);
-      if (c.clientIdField && c.clientIdField.trim()) {
-        map.set(c.clientIdField.trim(), c);
-        map.set(c.clientIdField.trim().toLowerCase(), c);
+      if (c.id && !isPlaceholderClientVal(c.id)) {
+        map.set(c.id, c);
+        map.set(c.id.trim().toLowerCase(), c);
+      }
+      if (c.clientIdField && !isPlaceholderClientVal(c.clientIdField)) {
+        const cif = c.clientIdField.trim();
+        if (!map.has(cif)) map.set(cif, c);
+        if (!map.has(cif.toLowerCase())) map.set(cif.toLowerCase(), c);
       }
       if (c.denomination && c.denomination.trim()) {
         const denomKey = c.denomination.trim().toLowerCase();
         if (!map.has(denomKey)) {
           map.set(denomKey, c);
+        }
+        const normDenomKey = denomKey
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/&#0*39;/g, "'")
+          .replace(/[^a-z0-9]+/g, ' ')
+          .trim();
+        if (normDenomKey && !map.has(normDenomKey)) {
+          map.set(normDenomKey, c);
         }
       }
       if ((c as any).nomSite && (c as any).nomSite.trim()) {
@@ -1886,19 +1920,39 @@ export default function DefibTab({
 
   const getLinkedClientForDefib = (df: any): Client | undefined => {
     if (!df) return undefined;
-    if (df.clientId && clientMap.has(df.clientId)) {
-      return clientMap.get(df.clientId);
+    const rawId = String(df.clientId || '').trim();
+    if (rawId && !isPlaceholderClientVal(rawId)) {
+      const byId = clientMap.get(rawId) || clientMap.get(rawId.toLowerCase());
+      if (byId) return byId;
     }
-    if (df.clientIdField && clientMap.has(df.clientIdField)) {
-      return clientMap.get(df.clientIdField);
+    const rawField = String(df.clientIdField || '').trim();
+    if (rawField && !isPlaceholderClientVal(rawField)) {
+      const byField = clientMap.get(rawField) || clientMap.get(rawField.toLowerCase());
+      if (byField) return byField;
     }
-    if (df.nomSite) {
-      const bySite = clientMap.get(String(df.nomSite).trim().toLowerCase());
-      if (bySite) return bySite;
-    }
-    if (df.clientNom) {
-      const byNom = clientMap.get(String(df.clientNom).trim().toLowerCase());
+    if (df.clientNom && String(df.clientNom).trim()) {
+      const rawNom = String(df.clientNom).trim().toLowerCase();
+      const byNom = clientMap.get(rawNom);
       if (byNom) return byNom;
+      const normNom = rawNom
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/&#0*39;/g, "'")
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      if (normNom && clientMap.has(normNom)) return clientMap.get(normNom);
+    }
+    if (df.nomSite && String(df.nomSite).trim()) {
+      const rawSite = String(df.nomSite).trim().toLowerCase();
+      const bySite = clientMap.get(rawSite);
+      if (bySite) return bySite;
+      const normSite = rawSite
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/&#0*39;/g, "'")
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      if (normSite && clientMap.has(normSite)) return clientMap.get(normSite);
     }
     return undefined;
   };
@@ -2532,10 +2586,15 @@ export default function DefibTab({
   useEffect(() => {
     if (isInitialView && maintenanceFilter === 'all') {
       setRemoteFilteredTotal(null);
+      setIsSearchingSpreadsheet(false);
       return;
     }
 
     let cancelled = false;
+    setIsSearchingSpreadsheet(true);
+    setCursorSearchPos({ ...lastMousePosRef.current });
+    const startedAt = Date.now();
+
     const timer = setTimeout(async () => {
       try {
         const targetVar = activeFilters.modeleId !== 'Tous' ? variableMap.get(activeFilters.modeleId) : undefined;
@@ -2581,7 +2640,16 @@ export default function DefibTab({
             setRemoteFilteredTotal(json.totalFilteredCount);
           }
         }
-      } catch (_) {}
+      } catch (_) {
+      } finally {
+        const elapsed = Date.now() - startedAt;
+        const minWait = Math.max(0, 350 - elapsed);
+        setTimeout(() => {
+          if (!cancelled) {
+            setIsSearchingSpreadsheet(false);
+          }
+        }, minWait);
+      }
     }, 150);
 
     return () => {
@@ -3298,9 +3366,9 @@ export default function DefibTab({
     setVersionLogiciel(df.versionLogiciel || anyDf.version_logiciel || '');
 
     const resolvedLinkedClient = getLinkedClientForDefib(df);
-    const effClientId = df.clientId || anyDf.client_id || resolvedLinkedClient?.id || '';
+    const effClientId = resolvedLinkedClient?.id || (!isPlaceholderClientVal(df.clientId) && clientMap.has(df.clientId) ? df.clientId : '');
     setClientId(effClientId);
-    setClientSearchQuery(resolvedLinkedClient ? `${resolvedLinkedClient.denomination} (${resolvedLinkedClient.siret || ''})` : ((df as any).clientNom || df.nomSite || ''));
+    setClientSearchQuery(resolvedLinkedClient ? `${resolvedLinkedClient.denomination}${resolvedLinkedClient.siret && !isPlaceholderClientVal(resolvedLinkedClient.siret) ? ` (${resolvedLinkedClient.siret})` : ''}` : ((df as any).clientNom || df.nomSite || ''));
     setNomSite(df.nomSite || anyDf.nom_site || (resolvedLinkedClient as any)?.nomSite || resolvedLinkedClient?.denomination || '');
     setCategorieEtablissement(df.categorieEtablissement || anyDf.categorie_etablissement || '');
     setNomPrenomSite(df.nomPrenomSite || anyDf.nom_prenom || anyDf.contact || anyDf.nom_prenom_site || anyDf.contact_site || resolvedLinkedClient?.nomPrenomSite || (resolvedLinkedClient as any)?.responsable || (resolvedLinkedClient as any)?.contact || '');
@@ -3312,7 +3380,7 @@ export default function DefibTab({
     setDebutContrat(toISODateOnly(df.debutContrat || anyDf.debut_contrat || resolvedLinkedClient?.debutContrat || ''));
     setFinContrat(toISODateOnly(df.finContrat || anyDf.fin_contrat || resolvedLinkedClient?.finContrat || ''));
     setPayeurId(df.payeurId || anyDf.payeur_id || resolvedLinkedClient?.payeurId || '');
-    setClientIdField(df.clientIdField || anyDf.client_id_field || resolvedLinkedClient?.clientIdField || '');
+    setClientIdField((!isPlaceholderClientVal(df.clientIdField) ? df.clientIdField : '') || resolvedLinkedClient?.clientIdField || '');
 
     setModeleCoffretId(resolveModelSelectValue(df.modeleCoffretId || anyDf.modeleCoffret || anyDf.boitier_modele || anyDf.modele_coffret || anyDf.coffret_modele, modelesCoffret));
     setNumeroLotCoffret(df.numeroLotCoffret || anyDf.boitier_lot || anyDf.lot_coffret || anyDf.lotCoffret || '');
@@ -4092,7 +4160,20 @@ export default function DefibTab({
                       Boolean(activeFilters.advancedSearchTerms && activeFilters.advancedSearchTerms.length > 0),
                     ].filter(Boolean).length;
                     return count > 0 ? (
-                      <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#fe4eba] rounded-full ml-1">
+                      <span
+                        className="inline-flex items-center justify-center font-black rounded-full"
+                        style={{
+                          color: '#ffffff',
+                          background: '#000000',
+                          border: '1.5px solid #ffffff59',
+                          fontSize: '14px',
+                          width: '25px',
+                          height: '25px',
+                          marginLeft: '-1px',
+                          marginRight: '-5px',
+                          padding: '0px 1px 0px 0px',
+                        }}
+                      >
                         {count}
                       </span>
                     ) : null;
@@ -4431,6 +4512,7 @@ export default function DefibTab({
               />
               {/* Layer bleu plein: conforme et à jour actuel */}
               <div 
+                className="animate-compliance-blue-wave overflow-hidden"
                 style={{ 
                   position: 'absolute',
                   top: 0,
@@ -5030,11 +5112,6 @@ export default function DefibTab({
                       {!hiddenColumns.has('serie') && (
                         <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                           <div>{df.numeroSerie}</div>
-                          {df.numeroAtlasante ? (
-                            <div className="text-[10px] text-slate-400 font-mono mt-0.5" title="Numéro Atlasanté">
-                              Atlas: {df.numeroAtlasante}
-                            </div>
-                          ) : null}
                         </td>
                       )}
 
@@ -5289,7 +5366,7 @@ export default function DefibTab({
       >
         <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
           {isDefibLoading && filteredDefibs.length <= 1 ? (
-            <span className="text-slate-500 text-sm font-medium">
+            <span className="text-black text-sm font-medium" style={{ color: '#000000' }}>
               Chargement et vérification de vos données, veuillez patienter.
             </span>
           ) : isInitialView ? (
@@ -5420,13 +5497,7 @@ export default function DefibTab({
                 className="transition-all"
               >
                 {isSubmitChecking ? (
-                  <span className="flex items-center gap-2">
-                    <svg className="animate-spin h-4 w-4 text-white inline-block" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Enregistrement en cours...</span>
-                  </span>
+                  <span>Enregistrement en cours...</span>
                 ) : (
                   <span>Enregistrer</span>
                 )}
@@ -9290,17 +9361,18 @@ export default function DefibTab({
 
               <div className="w-full pt-0.5">
                 <div 
-                  className="w-full grid grid-cols-2 rounded-lg border p-0.5 bg-transparent"
-                  style={{ borderColor: '#dadada', backgroundColor: 'transparent' }}
+                  className="w-full grid grid-cols-2 border p-0.5 bg-transparent"
+                  style={{ borderColor: '#dadada', backgroundColor: 'transparent', borderRadius: '14px' }}
                 >
                   <button
                     type="button"
                     onClick={() => setDraftFilters(prev => ({ ...prev, advancedSearchOperator: 'OR' }))}
                     style={{
                       backgroundColor: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '#fa53d5' : 'transparent',
-                      color: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '#ffffff' : '#475569',
+                      color: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '#ffffff' : '#000000',
+                      borderRadius: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '15px' : '14px',
                     }}
-                    className={`py-1 text-[11px] font-sans rounded-md text-center transition-all cursor-pointer ${
+                    className={`py-1 text-[11px] font-sans text-center transition-all cursor-pointer ${
                       (draftFilters.advancedSearchOperator || 'OR') === 'OR'
                         ? 'font-semibold shadow-xs'
                         : 'hover:text-black hover:bg-slate-50/50'
@@ -9313,9 +9385,10 @@ export default function DefibTab({
                     onClick={() => setDraftFilters(prev => ({ ...prev, advancedSearchOperator: 'AND' }))}
                     style={{
                       backgroundColor: draftFilters.advancedSearchOperator === 'AND' ? '#fa53d5' : 'transparent',
-                      color: draftFilters.advancedSearchOperator === 'AND' ? '#ffffff' : '#475569',
+                      color: draftFilters.advancedSearchOperator === 'AND' ? '#ffffff' : '#000000',
+                      borderRadius: draftFilters.advancedSearchOperator === 'AND' ? '15px' : '14px',
                     }}
-                    className={`py-1 text-[11px] font-sans rounded-md text-center transition-all cursor-pointer ${
+                    className={`py-1 text-[11px] font-sans text-center transition-all cursor-pointer ${
                       draftFilters.advancedSearchOperator === 'AND'
                         ? 'font-semibold shadow-xs'
                         : 'hover:text-black hover:bg-slate-50/50'
@@ -10402,6 +10475,27 @@ export default function DefibTab({
           }}
         >
           {t("Chargement...")}
+        </div>,
+        document.body
+      )}
+
+      {/* 🔎 Floating Cursor Search/Filter Indicator ("Recherche en cours…") 🔎 */}
+      {!cursorLoading && (isSearchingSpreadsheet || (!isInitialView && isDefibLoading)) && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            left: `${cursorSearchPos.x + 14}px`,
+            top: `${cursorSearchPos.y + 10}px`,
+            zIndex: 1000000,
+            pointerEvents: 'none',
+            color: '#000000',
+            fontSize: '12px',
+            fontWeight: 600,
+            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {t("Recherche en cours…")}
         </div>,
         document.body
       )}

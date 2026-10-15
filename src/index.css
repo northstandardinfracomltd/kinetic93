@@ -211,6 +211,29 @@ html.is-edge [style*="font-weight:100"] {
   }
 }
 
+@keyframes complianceBlueWave {
+  0% {
+    background-position: 200% 0;
+  }
+  45%, 100% {
+    background-position: -200% 0;
+  }
+}
+
+.animate-compliance-blue-wave {
+  background: linear-gradient(
+    90deg,
+    #3b82f6 0%,
+    #3b82f6 35%,
+    rgba(147, 197, 253, 0.85) 50%,
+    #3b82f6 65%,
+    #3b82f6 100%
+  );
+  background-size: 200% 100%;
+  background-color: #3b82f6;
+  animation: complianceBlueWave 5s infinite linear;
+}
+
 @keyframes matSlide1 {
   0% {
     left: -35%;

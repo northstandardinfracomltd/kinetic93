@@ -760,6 +760,8 @@ export function mapRowToDefib(
   if (obj.modeleId && !obj.modele) obj.modele = obj.modeleId;
   if (obj.clientNom && !obj.nomSite) obj.nomSite = obj.clientNom;
   if (obj.nomSite && !obj.clientNom) obj.clientNom = obj.nomSite;
+  if (isPlaceholderClientValue(obj.clientIdField)) obj.clientIdField = '';
+  if (isPlaceholderClientValue(obj.clientId)) obj.clientId = '';
   if (obj.clientIdField && !obj.clientId) obj.clientId = obj.clientIdField;
 
   const cleanIdent = String(obj.identifiant || '').trim();
@@ -944,7 +946,7 @@ export function isPlaceholderClientValue(v?: string | null): boolean {
   if (!v) return true;
   const s = String(v).trim();
   if (!s) return true;
-  return /^(num[eé]ro\s*vierge|information\s*manquante|manquant|non\s*renseign[eé]|inconnu|aucun|n\/?a|-+|0+|client\s*manquant|nom\s*et\s*pr[eé]nom\s*vierge|tel\s*port\s*vierge)$/i.test(
+  return /^(num[eé]ro\s*vierge|information\s*manquante|manquant|non\s*renseign[eé]|inconnu|aucun|n\/?a|-+|0+|nom\s*et\s*pr[eé]nom\s*vierge|tel\s*port\s*vierge)$/i.test(
     s
   );
 }
@@ -1580,6 +1582,13 @@ export async function fetchTenantSheetCollection(
 
           if (existingIdx >= 0) {
             const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
+            if (tabType === 'clients' && isPlaceholderClientValue(cleanUp.id)) {
+              delete cleanUp.id;
+            }
+            if (tabType === 'defibrillateurs') {
+              if (isPlaceholderClientValue(cleanUp.clientId)) cleanUp.clientId = '';
+              if (isPlaceholderClientValue(cleanUp.clientIdField)) cleanUp.clientIdField = '';
+            }
             baseItems[existingIdx] = {
               ...baseItems[existingIdx],
               ...cleanUp,
@@ -1587,8 +1596,40 @@ export async function fetchTenantSheetCollection(
             };
           } else {
             const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
+            if (tabType === 'clients' && isPlaceholderClientValue(cleanUp.id)) {
+              const slug = String(cleanUp.denomination || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '_')
+                .replace(/^_+|_+$/g, '');
+              cleanUp.id = slug ? `cli_${slug}` : `cli_up_${baseItems.length + 1}`;
+            }
             baseItems.push(cleanUp);
           }
+        }
+      }
+
+      if (tabType === 'clients') {
+        const seenClientIds = new Set<string>();
+        for (let i = 0; i < baseItems.length; i++) {
+          const item = baseItems[i];
+          if (!item) continue;
+          let cid = String(item.id || '').trim();
+          if (!cid || isPlaceholderClientValue(cid)) {
+            const slug = String(item.denomination || '')
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '_')
+              .replace(/^_+|_+$/g, '');
+            cid = slug ? `cli_${slug}` : `cli_row_${item._sheetRowNumber || i + 2}`;
+          }
+          if (seenClientIds.has(cid)) {
+            cid = `${cid}_r${item._sheetRowNumber || i + 2}`;
+          }
+          seenClientIds.add(cid);
+          item.id = cid;
         }
       }
 

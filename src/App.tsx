@@ -2136,19 +2136,7 @@ export default function App() {
         }
       );
 
-      if (!loadedFromSheet) {
-        const remoteClients = await fetchCollectionFromFirestore('clients', activeTenant);
-        if (Array.isArray(remoteClients)) {
-          setClients(
-            remoteClients.filter(
-              (cl: any) =>
-                cl &&
-                !String(cl.id || '').startsWith('sheet_cli_') &&
-                !String(cl.clientIdField || '').startsWith('sheet_cli_')
-            )
-          );
-        }
-      }
+      void loadedFromSheet;
     } catch (err) {
       console.warn('Manual refresh Clients error:', err);
     } finally {
@@ -2461,14 +2449,8 @@ export default function App() {
         loadedDataRef.current.tickets = str;
       }
 
-      // 2. Fetch clients
-      const rawClients = await fetchCollectionFromFirestore<Client[]>('clients', activeTenant);
-      if (Array.isArray(rawClients) && rawClients.length > 0) {
-        setClients(rawClients);
-        const str = JSON.stringify(rawClients);
-        safeSetLocalStorage(`defib_${activeTenant}_clients`, str);
-        loadedDataRef.current.clients = str;
-      }
+      // 2. Refresh clients from Google Spreadsheet
+      await handleManualRefreshClients();
 
       // 3. Fetch members
       const rawMembers = await fetchCollectionFromFirestore<Member[]>('members', activeTenant);
