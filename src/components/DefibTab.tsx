@@ -2221,27 +2221,43 @@ export default function DefibTab({
     return set;
   }, [activeTenantId, defibrillateurs]);
 
+  const stableDefibsRef = useRef<{ tenant: string; items: Defibrillateur[] }>({ tenant: '', items: [] });
+
   // Merge local loaded defibrillateurs with any on-demand rows returned from /api/sheets/query
   const mergedDefibrillateurs = useMemo(() => {
-    if (remoteQueriedDefibs.length === 0) return defibrillateurs;
-    const seen = new Set<string>();
+    let baseList = defibrillateurs;
+    if (baseList.length > 0) {
+      stableDefibsRef.current = { tenant: activeTenantId, items: baseList };
+    } else if (stableDefibsRef.current.tenant === activeTenantId && stableDefibsRef.current.items.length > 0) {
+      baseList = stableDefibsRef.current.items;
+    }
+
+    if (remoteQueriedDefibs.length === 0) return baseList;
+    const byKey = new Map<string, Defibrillateur>();
     const out: Defibrillateur[] = [];
-    for (const df of defibrillateurs) {
+
+    for (const df of baseList) {
       if (!df) continue;
       const k = String(df.id || df.identifiant || '').trim().toLowerCase();
-      if (k) seen.add(k);
+      if (k) byKey.set(k, df);
       out.push(df);
     }
     for (const df of remoteQueriedDefibs) {
       if (!df) continue;
       const k = String(df.id || df.identifiant || '').trim().toLowerCase();
-      if (k && !seen.has(k)) {
-        seen.add(k);
-        out.push(df);
+      if (k) {
+        const existing = byKey.get(k);
+        if (!existing) {
+          byKey.set(k, df);
+          out.push(df);
+        } else if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
+          const idx = out.indexOf(existing);
+          if (idx >= 0) out[idx] = { ...existing, ...df };
+        }
       }
     }
     return out;
-  }, [defibrillateurs, remoteQueriedDefibs]);
+  }, [defibrillateurs, remoteQueriedDefibs, activeTenantId]);
 
   // Total active defibs excluding deleted records
   const activeDefibrillateurs = useMemo(() => {
@@ -2493,6 +2509,7 @@ export default function DefibTab({
     const hasSearch = Boolean(searchLower);
     const hasSortFilter = Boolean(sortFilter);
     const hasDeptFilter = Boolean(selectedDepartment !== null);
+    const hasMaintFilter = Boolean(maintenanceFilter !== 'all');
     const hasActiveSidePaneFilter = Boolean(
       activeFilters.region !== 'Tous' ||
       activeFilters.modeleId !== 'Tous' ||
@@ -2502,10 +2519,11 @@ export default function DefibTab({
       activeFilters.action3To6 ||
       activeFilters.actionUnder3 ||
       activeFilters.actionExpired ||
-      activeFilters.actionRejected
+      activeFilters.actionRejected ||
+      (activeFilters.advancedSearchTerms && activeFilters.advancedSearchTerms.length > 0)
     );
 
-    const isInitial = !hasSearch && !hasSortFilter && !hasDeptFilter && !hasActiveSidePaneFilter;
+    const isInitial = !hasSearch && !hasSortFilter && !hasDeptFilter && !hasMaintFilter && !hasActiveSidePaneFilter;
 
     if (isInitial) {
       const now = Date.now();
@@ -2523,8 +2541,11 @@ export default function DefibTab({
 
       const cachedRecent = result.filter(df => getCacheTs(df) > 0);
       cachedRecent.sort((a, b) => getCacheTs(b) - getCacheTs(a));
-      // Display strictly up to the 3 most recently added or modified defibrillators remembered by the cache
-      result = cachedRecent.slice(0, 3);
+      if (cachedRecent.length > 0) {
+        result = cachedRecent.slice(0, 3);
+      } else {
+        result = result.slice(0, 3);
+      }
     } else if (sortFilter === 'recent') {
       const totalLen = defibrillateurs.length;
       const indexMap = new Map(defibrillateurs.map((df, idx) => [df.id, totalLen - idx]));
@@ -2664,8 +2685,6 @@ export default function DefibTab({
     selectedDepartment,
     maintenanceFilter,
     activeTenantId,
-    variableMap,
-    clientMap,
     refreshTrigger,
   ]);
 
@@ -3763,13 +3782,25 @@ export default function DefibTab({
     const nowIso = new Date().toISOString();
     try {
       if (editingDefib) {
-        await onUpdateDefib({
+        const updatedRecord: Defibrillateur = {
           ...editingDefib,
           ...payload,
           id: editingDefib.id,
+          _sheetRowNumber: (editingDefib as any)._sheetRowNumber,
           updatedAt: nowIso,
           dateDerniereModification: nowIso,
-        });
+        } as any;
+        setRemoteQueriedDefibs(prev =>
+          prev.map(df =>
+            df && (
+              (df.id && df.id === editingDefib.id) ||
+              (df.identifiant && editingDefib.identifiant && df.identifiant.toUpperCase() === editingDefib.identifiant.toUpperCase())
+            )
+              ? { ...df, ...updatedRecord }
+              : df
+          )
+        );
+        await onUpdateDefib(updatedRecord);
         recordRecentDefibChange([editingDefib.id, payload.identifiant, payload.numeroSerie]);
       } else {
         await onAddDefib({
@@ -3975,6 +4006,18 @@ export default function DefibTab({
 
     setIsBulkSubmitting(true);
     try {
+      const normSelected = new Set(selectedIds.map(s => String(s || '').trim().toUpperCase()).filter(Boolean));
+      const nowIso = new Date().toISOString();
+      setRemoteQueriedDefibs(prev =>
+        prev.map(df => {
+          if (!df) return df;
+          const matched =
+            (df.id && normSelected.has(String(df.id).trim().toUpperCase())) ||
+            (df.identifiant && normSelected.has(String(df.identifiant).trim().toUpperCase())) ||
+            (df.numeroSerie && normSelected.has(String(df.numeroSerie).trim().toUpperCase()));
+          return matched ? { ...df, ...updates, updatedAt: nowIso } : df;
+        })
+      );
       await Promise.race([
         onBulkEdit(selectedIds, updates),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout de l’opération")), 8000))
@@ -4841,7 +4884,7 @@ export default function DefibTab({
           className={isTableFitView ? "overflow-x-hidden" : "overflow-x-auto"}
           style={isTableFitView ? { width: '100%', overflowX: 'hidden' } : undefined}
         >
-          {isDefibLoading && filteredDefibs.length <= 1 ? (
+          {isDefibLoading && filteredDefibs.length === 0 ? (
             <DefibTablePreloader 
               variant="inline"
               current={defibLoadingProgress?.current}

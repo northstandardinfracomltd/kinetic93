@@ -2223,39 +2223,39 @@ function formatDefibrillateurOutput(d: any): any {
   const kitRasoirPresent = d.kitRasoirPresent || d.kit_rasoir_present || d.rasoir_present || d.rasoir || 'Oui';
 
   // Localisation & Site
-  const numVoie = d.numVoie || d.numero_et_voie || d.adresse || '';
-  const cp = d.cp || d.code_postal || d.zip || '';
-  const ville = d.ville || d.city || '';
-  const region = d.region || '';
-  const pays = d.pays || d.country || '';
-  const latitude = d.latitude || d.lat || '';
-  const longitude = d.longitude || d.lon || d.lng || '';
-  const commentaireAdresse = d.commentaireAdresse || d.aide_acces || '';
-  const nomSite = d.nomSite || d.nom_site || '';
-  const nomPrenomSite = d.nomPrenomSite || d.nom_prenom || '';
-  const telephoneSite = d.telephoneSite || d.telephone_portable || d.telephone_site || d.phone || '';
-  const emailSite = d.emailSite || d.email || d.email_site || '';
-  const categorieEtablissement = d.categorieEtablissement || d.categorie_etablissement || '';
-  const horaires = d.horaires || '';
+  const numVoie = d.numVoie !== undefined ? d.numVoie : (d.numero_et_voie || d.adresse || '');
+  const cp = d.cp !== undefined ? d.cp : (d.code_postal || d.zip || '');
+  const ville = d.ville !== undefined ? d.ville : (d.city || '');
+  const region = d.region !== undefined ? d.region : '';
+  const pays = d.pays !== undefined ? d.pays : (d.country || '');
+  const latitude = d.latitude !== undefined ? d.latitude : (d.lat || '');
+  const longitude = d.longitude !== undefined ? d.longitude : (d.lon || d.lng || '');
+  const commentaireAdresse = d.commentaireAdresse !== undefined ? d.commentaireAdresse : (d.aide_acces || '');
+  const nomSite = d.nomSite !== undefined ? d.nomSite : (d.nom_site || '');
+  const nomPrenomSite = d.nomPrenomSite !== undefined ? d.nomPrenomSite : (d.nom_prenom || '');
+  const telephoneSite = d.telephoneSite !== undefined ? d.telephoneSite : (d.telephone_portable || d.telephone_site || d.phone || '');
+  const emailSite = d.emailSite !== undefined ? d.emailSite : (d.email || d.email_site || '');
+  const categorieEtablissement = d.categorieEtablissement !== undefined ? d.categorieEtablissement : (d.categorie_etablissement || '');
+  const horaires = d.horaires !== undefined ? d.horaires : '';
 
   // Commentaires
-  const commentaire = d.commentaire || d.notes || d.note || '';
-  const commentaireInterne = d.commentaireInterne || d.commentaire_interne || '';
-  const commentaireCampagneRappel = d.commentaireCampagneRappel || d.commentaire_campagne_rappel || '';
+  const commentaire = d.commentaire !== undefined ? d.commentaire : (d.notes || d.note || '');
+  const commentaireInterne = d.commentaireInterne !== undefined ? d.commentaireInterne : (d.commentaire_interne || '');
+  const commentaireCampagneRappel = d.commentaireCampagneRappel !== undefined ? d.commentaireCampagneRappel : (d.commentaire_campagne_rappel || '');
 
   // Contrat & Facturation
   const contrat = d.contrat || d.nomContrat || d.nom_contrat || 'Non';
-  const nomContrat = d.nomContrat || d.nom_contrat || '';
-  const referenceContrat = d.referenceContrat || d.reference_contrat || '';
-  const debutContrat = d.debutContrat || d.debut_contrat || '';
-  const finContrat = d.finContrat || d.fin_contrat || '';
-  const payeurId = d.payeurId || d.payeur_id || '';
-  const clientId = String(d.clientId || d.client_id || '').trim();
-  let clientNom = String(d.clientNom || d.client_nom || d.client || '').trim();
-  const clientIdField = String(d.clientIdField || d.client_id_field || '').trim();
+  const nomContrat = d.nomContrat !== undefined ? d.nomContrat : (d.nom_contrat || '');
+  const referenceContrat = d.referenceContrat !== undefined ? d.referenceContrat : (d.reference_contrat || '');
+  const debutContrat = d.debutContrat !== undefined ? d.debutContrat : (d.debut_contrat || '');
+  const finContrat = d.finContrat !== undefined ? d.finContrat : (d.fin_contrat || '');
+  const payeurId = d.payeurId !== undefined ? d.payeurId : (d.payeur_id || '');
+  const clientId = String(d.clientId !== undefined ? d.clientId : (d.client_id || '')).trim();
+  let clientNom = String(d.clientNom !== undefined ? d.clientNom : (d.client_nom || d.client || '')).trim();
+  const clientIdField = String(d.clientIdField !== undefined ? d.clientIdField : (d.client_id_field || '')).trim();
 
-  // If clientId is provided, prioritize looking up the authoritative client denomination
-  if (clientId) {
+  // If clientId is provided and clientNom is not already explicitly provided, look up the client denomination
+  if (clientId && !clientNom) {
     let clientsData = serverMemoryStore.get('D27_clients') || serverMemoryStore.get('D58_clients') || serverMemoryStore.get('clients');
     if (!Array.isArray(clientsData) || clientsData.length === 0) {
       for (const f of [
@@ -4158,12 +4158,13 @@ async function warmupDefibrillateursStore() {
   }
 
   async function resolveTenantSpreadsheetUrl(tenantId: string, tabType: SheetTabType, explicitUrl?: string): Promise<string> {
-    if (explicitUrl && explicitUrl.trim() && extractSpreadsheetIdAndGid(explicitUrl.trim())) {
+    const isInvalidPlaceholderUrl = (u?: string) => !u || u.includes('1tB1e41') || u.includes('2mX5O6r9hD0i3Z9m');
+    if (explicitUrl && explicitUrl.trim() && !isInvalidPlaceholderUrl(explicitUrl) && extractSpreadsheetIdAndGid(explicitUrl.trim())) {
       rememberTenantSpreadsheetUrl(tenantId, tabType, explicitUrl.trim());
       return explicitUrl.trim();
     }
     const syncUrl = getTenantSpreadsheetUrlSync(tenantId, tabType);
-    if (syncUrl && extractSpreadsheetIdAndGid(syncUrl)) {
+    if (syncUrl && !isInvalidPlaceholderUrl(syncUrl) && extractSpreadsheetIdAndGid(syncUrl)) {
       return syncUrl;
     }
     // Check if companyInfo or tenantDatabases exists in Firestore REST (across all tenant aliases e.g. D27 / D58)

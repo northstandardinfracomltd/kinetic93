@@ -1462,10 +1462,11 @@ export async function fetchTenantSheetCollection(
     };
   }
 
-  const cacheKey = `${tenantId}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
+  const normTenant = (tenantId || 'demo').trim().toUpperCase();
+  const cacheKey = `${normTenant}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
   if (!forceRefresh && sheetMemoryCache.has(cacheKey)) {
     const cached = sheetMemoryCache.get(cacheKey)!;
-    if (Date.now() - cached.fetchedAt < 300000) {
+    if (Date.now() - cached.fetchedAt < 3600000) {
       return {
         items: cached.items,
         headers: cached.headers,
@@ -1924,8 +1925,31 @@ export async function upsertRecordsToTenantSheet(
   }
 
   return withSheetWriteLock(extracted.spreadsheetId, async () => {
-    // Always forceRefresh=true before writing so we never miss a row that was just appended
-    const currentData = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true);
+    const normTenant = (tenantId || 'demo').trim().toUpperCase();
+    const cacheKey = `${normTenant}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
+
+    // Use warm memory cache first for instant (~0ms) lookup instead of re-downloading 18,000+ rows on every save
+    let currentData = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, false);
+
+    // Only forceRefresh if cache was completely empty or if any record without _sheetRowNumber is not found in warm cache
+    const needsFreshFetch =
+      currentData.items.length === 0 ||
+      records.some(rec => {
+        if (!rec || typeof rec !== 'object') return false;
+        if (rec._sheetRowNumber && typeof rec._sheetRowNumber === 'number' && rec._sheetRowNumber >= 2) return false;
+        const rKeys = getRecordLookupKeys(rec, tabType);
+        if (rKeys.length === 0) return false;
+        const found = currentData.items.some(b => {
+          const bKeys = getRecordLookupKeys(b, tabType);
+          return bKeys.some(bk => rKeys.includes(bk));
+        });
+        return !found;
+      });
+
+    if (needsFreshFetch && !sheetMemoryCache.has(cacheKey)) {
+      currentData = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true);
+    }
+
     const headers = currentData.headers.length > 0
       ? currentData.headers
       : tabType === 'defibrillateurs'
@@ -1942,6 +1966,7 @@ export async function upsertRecordsToTenantSheet(
     const rowsToAppendRemote: Array<{ values: string[]; key: string; itemRef: any }> = [];
     const upsertedList: any[] = [];
     const processedPrimaryKeys = new Set<string>();
+    const updatedItemsList = [...currentData.items];
 
     for (const rec of records) {
       if (!rec || typeof rec !== 'object') continue;
@@ -1952,14 +1977,15 @@ export async function upsertRecordsToTenantSheet(
 
       recKeys.forEach(k => deletedSet.delete(k));
 
-      // Find if record already exists in currentData.items (by rowNumber first, then by lookup keys)
-      const existingItem = currentData.items.find(b => {
+      // Find if record already exists in updatedItemsList (by rowNumber first, then by lookup keys)
+      const existingIdx = updatedItemsList.findIndex(b => {
         if (rec._sheetRowNumber && b._sheetRowNumber && rec._sheetRowNumber === b._sheetRowNumber) {
           return true;
         }
         const bKeys = getRecordLookupKeys(b, tabType);
         return bKeys.some(bk => recKeys.includes(bk));
       });
+      const existingItem = existingIdx >= 0 ? updatedItemsList[existingIdx] : undefined;
 
       const mergedItem = existingItem
         ? {
@@ -2001,6 +2027,9 @@ export async function upsertRecordsToTenantSheet(
             delete overlay.upsertedById[ok];
           }
         }
+        updatedItemsList[existingIdx] = mergedItem;
+      } else {
+        updatedItemsList.push(mergedItem);
       }
 
       upsertedList.push(mergedItem);
@@ -2011,10 +2040,6 @@ export async function upsertRecordsToTenantSheet(
         rowsToAppendRemote.push({ values: rowValues, key: primaryKey, itemRef: mergedItem });
       }
     }
-
-    // Invalidate memory cache so next read immediately reflects updated items
-    const cacheKey = `${tenantId}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
-    sheetMemoryCache.delete(cacheKey);
 
     // Push to live Google Sheet via Service Account or Apps Script Bridge
     let syncedToRemoteSheet = false;
@@ -2157,7 +2182,6 @@ export async function upsertRecordsToTenantSheet(
           delete overlay.upsertedById[k];
         }
       }
-      // Also clear any existing overlay entries that are now present in the live sheet
       overlay.upsertedById = {};
     } else {
       for (const item of upsertedList) {
@@ -2170,7 +2194,16 @@ export async function upsertRecordsToTenantSheet(
     overlay.deletedIds = Array.from(deletedSet);
     overlay.lastSyncedAt = Date.now();
     saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
-    sheetMemoryCache.delete(cacheKey);
+
+    // Update memory cache in-place so subsequent reads and queries are instantaneous (0ms)
+    const updatedStats = computeSheetCollectionStats(updatedItemsList, tabType);
+    sheetMemoryCache.set(cacheKey, {
+      headers,
+      items: updatedItemsList,
+      stats: updatedStats,
+      fetchedAt: Date.now(),
+      spreadsheetUrl,
+    });
 
     return {
       success: true,
@@ -2194,7 +2227,9 @@ export async function deleteRecordsFromTenantSheet(
   }
 
   return withSheetWriteLock(extracted.spreadsheetId, async () => {
-    const currentData = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true);
+    const normTenant = (tenantId || 'demo').trim().toUpperCase();
+    const cacheKey = `${normTenant}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
+    const currentData = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, false);
     const overlay = loadMirrorOverlay(tenantId, tabType, extracted.spreadsheetId);
     const normTargets = new Set(targetKeys.filter(Boolean).map(k => String(k).trim().toLowerCase()));
 
@@ -2212,13 +2247,17 @@ export async function deleteRecordsFromTenantSheet(
       }
     }
 
+    const remainingItems: any[] = [];
     for (const item of currentData.items) {
       const iKeys = getRecordLookupKeys(item, tabType);
-      if (iKeys.some(k => normTargets.has(k))) {
+      const isRowTargeted = item._sheetRowNumber && rowNumbersToClearSet.has(item._sheetRowNumber);
+      if (isRowTargeted || iKeys.some(k => normTargets.has(k))) {
         if (item._sheetRowNumber && typeof item._sheetRowNumber === 'number' && item._sheetRowNumber >= 2) {
           rowNumbersToClearSet.add(item._sheetRowNumber);
         }
         iKeys.forEach(k => normTargets.add(k));
+      } else {
+        remainingItems.push(item);
       }
     }
 
@@ -2232,9 +2271,6 @@ export async function deleteRecordsFromTenantSheet(
     overlay.deletedIds = Array.from(new Set([...(overlay.deletedIds || []), ...Array.from(normTargets)]));
     overlay.lastSyncedAt = Date.now();
     saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
-
-    const cacheKey = `${tenantId}_${tabType}_${extracted.spreadsheetId}_${extracted.gid || '0'}`;
-    sheetMemoryCache.delete(cacheKey);
 
     const rowNumbersToClear = Array.from(rowNumbersToClearSet).sort((a, b) => b - a);
     let syncedToRemoteSheet = false;
@@ -2283,7 +2319,17 @@ export async function deleteRecordsFromTenantSheet(
               body: JSON.stringify({ requests: deleteRequests }),
             }
           );
-          if (delDimRes.ok) syncedToRemoteSheet = true;
+          if (delDimRes.ok) {
+            syncedToRemoteSheet = true;
+            // Adjust _sheetRowNumber in remainingItems for rows below deleted rows
+            for (const deletedRn of rowNumbersToClear) {
+              for (const rem of remainingItems) {
+                if (rem._sheetRowNumber && rem._sheetRowNumber > deletedRn) {
+                  rem._sheetRowNumber -= 1;
+                }
+              }
+            }
+          }
         }
       } catch (_) {}
     }
@@ -2311,7 +2357,15 @@ export async function deleteRecordsFromTenantSheet(
       saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
     }
 
-    sheetMemoryCache.delete(cacheKey);
+    if (currentData.headers.length > 0) {
+      sheetMemoryCache.set(cacheKey, {
+        headers: currentData.headers,
+        items: remainingItems,
+        stats: computeSheetCollectionStats(remainingItems, tabType),
+        fetchedAt: Date.now(),
+        spreadsheetUrl,
+      });
+    }
     return { success: true, deletedCount: normTargets.size, syncedToRemoteSheet };
   });
 }

@@ -1935,7 +1935,9 @@ export default function App() {
 
   const handleManualRefreshDefibs = async () => {
     setIsRefreshingDefibs(true);
-    setIsDefibLoading(true);
+    if (defibrillateurs.length === 0) {
+      setIsDefibLoading(true);
+    }
     const initialCount = defibSheetStats?.totalCount || defibrillateurs.length || 0;
     setDefibLoadingProgress({
       current: 0,
@@ -1960,10 +1962,11 @@ export default function App() {
       const delSet = new Set(getDeletedDefibKeys(activeTenant));
 
       // 1b. Fetch exclusively from the tenant's Google Spreadsheet for Défibrillateurs in 2,500-row chunks
-      const defibSheetUrl =
+      const rawUrl =
         companyInfo?.spreadsheetDefibrillateurs ||
         localStorage.getItem(`defib_${activeTenant}_spreadsheet_defibrillateurs`) ||
         '';
+      const defibSheetUrl = (rawUrl.includes('1tB1e41') || rawUrl.includes('2mX5O6r9hD0i3Z9m')) ? '' : rawUrl;
 
       await fetchSheetCollectionInBatches(
         activeTenant,
@@ -1973,7 +1976,9 @@ export default function App() {
         (json, firstItems) => {
           if (json.stats) setDefibSheetStats(json.stats);
           const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
-          setDefibrillateurs(filtered);
+          if (filtered.length > 0) {
+            setDefibrillateurs(filtered);
+          }
           const tot = json.totalCount || filtered.length;
           setDefibLoadingProgress({
             current: filtered.length,
@@ -1985,7 +1990,9 @@ export default function App() {
         },
         (allItems, _loadedCount, totalCount) => {
           const filtered = allItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
-          setDefibrillateurs(filtered);
+          if (filtered.length > 0) {
+            setDefibrillateurs(filtered);
+          }
           setDefibLoadingProgress({
             current: filtered.length,
             total: totalCount || filtered.length,
@@ -2146,34 +2153,67 @@ export default function App() {
     }
   };
 
+  const lastLoadedSheetUrlsRef = React.useRef<{ tenant: string; defibs: string; autres: string; clients: string }>({
+    tenant: '',
+    defibs: '',
+    autres: '',
+    clients: '',
+  });
+
   // Automatic Google Spreadsheets sync for Défibrillateurs, Autres Matériels, and Clients whenever URLs are configured or updated
   useEffect(() => {
     if (!tenantId) return;
     let isCancelled = false;
 
+    const sanitizeSheetUrl = (u?: string | null): string => {
+      if (!u || typeof u !== 'string') return '';
+      const trimmed = u.trim();
+      if (trimmed.includes('1tB1e41') || trimmed.includes('2mX5O6r9hD0i3Z9m')) return '';
+      return trimmed;
+    };
+
     const loadSpreadsheetsForTenant = async (customInfo?: Partial<CompanyInfo>, force = false) => {
       const activeTid = tenantId || 'demo';
       const urlDefibs =
-        customInfo?.spreadsheetDefibrillateurs ||
-        companyInfo?.spreadsheetDefibrillateurs ||
-        localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
-        localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_defibrillateurs`) ||
-        localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_defibrillateurs`) ||
+        sanitizeSheetUrl(customInfo?.spreadsheetDefibrillateurs) ||
+        sanitizeSheetUrl(companyInfo?.spreadsheetDefibrillateurs) ||
+        sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`)) ||
+        sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_defibrillateurs`)) ||
+        sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_defibrillateurs`)) ||
         '';
       const urlAutres =
-        customInfo?.spreadsheetAutresMateriels ||
-        companyInfo?.spreadsheetAutresMateriels ||
-        localStorage.getItem(`defib_${activeTid}_spreadsheet_autres_materiels`) ||
-        localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_autres_materiels`) ||
-        localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_autres_materiels`) ||
+        sanitizeSheetUrl(customInfo?.spreadsheetAutresMateriels) ||
+        sanitizeSheetUrl(companyInfo?.spreadsheetAutresMateriels) ||
+        sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid}_spreadsheet_autres_materiels`)) ||
+        sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_autres_materiels`)) ||
+        sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_autres_materiels`)) ||
         '';
       const urlClients =
-        customInfo?.spreadsheetClients ||
-        companyInfo?.spreadsheetClients ||
-        localStorage.getItem(`defib_${activeTid}_spreadsheet_clients`) ||
-        localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_clients`) ||
-        localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_clients`) ||
+        sanitizeSheetUrl(customInfo?.spreadsheetClients) ||
+        sanitizeSheetUrl(companyInfo?.spreadsheetClients) ||
+        sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid}_spreadsheet_clients`)) ||
+        sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_clients`)) ||
+        sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_clients`)) ||
         '';
+
+      // Avoid redundant re-fetching when background companyInfo sync resolves the exact same spreadsheet URL
+      const prevLoaded = lastLoadedSheetUrlsRef.current;
+      const isSameTenant = prevLoaded.tenant.toLowerCase() === activeTid.toLowerCase();
+      const skipDefibs = !force && isSameTenant && prevLoaded.defibs && (!urlDefibs || prevLoaded.defibs === urlDefibs);
+      const skipAutres = !force && isSameTenant && prevLoaded.autres && (!urlAutres || prevLoaded.autres === urlAutres);
+      const skipClients = !force && isSameTenant && prevLoaded.clients && (!urlClients || prevLoaded.clients === urlClients);
+
+      if (skipDefibs && skipAutres && skipClients) {
+        return;
+      }
+
+      if (!isSameTenant) {
+        lastLoadedSheetUrlsRef.current = { tenant: activeTid, defibs: urlDefibs, autres: urlAutres, clients: urlClients };
+      } else {
+        if (urlDefibs) lastLoadedSheetUrlsRef.current.defibs = urlDefibs;
+        if (urlAutres) lastLoadedSheetUrlsRef.current.autres = urlAutres;
+        if (urlClients) lastLoadedSheetUrlsRef.current.clients = urlClients;
+      }
 
       // If this browser already has spreadsheet URLs in localStorage, ensure they are pushed to server & Firestore for other PCs
       if (urlDefibs || urlAutres || urlClients) {
@@ -2211,8 +2251,11 @@ export default function App() {
         localKeySuffix: string,
         resolvedUrl?: string
       ) => {
-        if (!resolvedUrl || !resolvedUrl.trim()) return;
-        const clean = resolvedUrl.trim();
+        const clean = sanitizeSheetUrl(resolvedUrl);
+        if (!clean) return;
+        if (field === 'spreadsheetDefibrillateurs') lastLoadedSheetUrlsRef.current.defibs = clean;
+        if (field === 'spreadsheetAutresMateriels') lastLoadedSheetUrlsRef.current.autres = clean;
+        if (field === 'spreadsheetClients') lastLoadedSheetUrlsRef.current.clients = clean;
         try {
           for (const k of [activeTid, activeTid.toUpperCase(), activeTid.toLowerCase()]) {
             localStorage.setItem(`defib_${k}_${localKeySuffix}`, clean);
@@ -2234,6 +2277,7 @@ export default function App() {
 
       await Promise.all([
         (async () => {
+          if (skipDefibs) return;
           try {
             await fetchSheetCollectionInBatches(
               activeTid,
@@ -2247,11 +2291,13 @@ export default function App() {
                 if (json.stats) {
                   setDefibSheetStats(json.stats);
                 }
-                setDefibrillateurs(firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
+                const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
+                setDefibrillateurs(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
                 setIsDefibLoading(false);
               },
               (allItems) => {
-                setDefibrillateurs(allItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
+                const filtered = allItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
+                setDefibrillateurs(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
               },
               () => isCancelled
             );
@@ -2260,6 +2306,7 @@ export default function App() {
           }
         })(),
         (async () => {
+          if (skipAutres) return;
           try {
             await fetchSheetCollectionInBatches(
               activeTid,
@@ -2270,30 +2317,29 @@ export default function App() {
                 if (json.spreadsheetUrl) {
                   persistResolvedUrl('spreadsheetAutresMateriels', 'spreadsheet_autres_materiels', json.spreadsheetUrl);
                 }
-                setOtherEquipments(
-                  firstItems.filter(
-                    (eq: any) =>
-                      eq &&
-                      !String(eq.id || '').startsWith('sheet_am_') &&
-                      !String(eq.identifiant || '').startsWith('sheet_am_')
-                  )
+                const filtered = firstItems.filter(
+                  (eq: any) =>
+                    eq &&
+                    !String(eq.id || '').startsWith('sheet_am_') &&
+                    !String(eq.identifiant || '').startsWith('sheet_am_')
                 );
+                setOtherEquipments(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
               },
               (allItems) => {
-                setOtherEquipments(
-                  allItems.filter(
-                    (eq: any) =>
-                      eq &&
-                      !String(eq.id || '').startsWith('sheet_am_') &&
-                      !String(eq.identifiant || '').startsWith('sheet_am_')
-                  )
+                const filtered = allItems.filter(
+                  (eq: any) =>
+                    eq &&
+                    !String(eq.id || '').startsWith('sheet_am_') &&
+                    !String(eq.identifiant || '').startsWith('sheet_am_')
                 );
+                setOtherEquipments(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
               },
               () => isCancelled
             );
           } catch (_) {}
         })(),
         (async () => {
+          if (skipClients) return;
           try {
             await fetchSheetCollectionInBatches(
               activeTid,
@@ -2304,24 +2350,22 @@ export default function App() {
                 if (json.spreadsheetUrl) {
                   persistResolvedUrl('spreadsheetClients', 'spreadsheet_clients', json.spreadsheetUrl);
                 }
-                setClients(
-                  firstItems.filter(
-                    (cl: any) =>
-                      cl &&
-                      !String(cl.id || '').startsWith('sheet_cli_') &&
-                      !String(cl.clientIdField || '').startsWith('sheet_cli_')
-                  )
+                const filtered = firstItems.filter(
+                  (cl: any) =>
+                    cl &&
+                    !String(cl.id || '').startsWith('sheet_cli_') &&
+                    !String(cl.clientIdField || '').startsWith('sheet_cli_')
                 );
+                setClients(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
               },
               (allItems) => {
-                setClients(
-                  allItems.filter(
-                    (cl: any) =>
-                      cl &&
-                      !String(cl.id || '').startsWith('sheet_cli_') &&
-                      !String(cl.clientIdField || '').startsWith('sheet_cli_')
-                  )
+                const filtered = allItems.filter(
+                  (cl: any) =>
+                    cl &&
+                    !String(cl.id || '').startsWith('sheet_cli_') &&
+                    !String(cl.clientIdField || '').startsWith('sheet_cli_')
                 );
+                setClients(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
               },
               () => isCancelled
             );
@@ -2348,7 +2392,7 @@ export default function App() {
     companyInfo?.spreadsheetClients,
   ]);
 
-  // High-availability automatic real-time sync across multi-PC sessions for massive chunked tenants (D27 / D58)
+  // High-availability deleted-keys sync across multi-PC sessions (never wipes or reloads table display)
   useEffect(() => {
     if (!tenantId) return;
     const tAliases = getTenantAliases(tenantId);
@@ -2356,64 +2400,31 @@ export default function App() {
     if (!isChunkedTenant) return;
 
     let isCancelled = false;
-    let lastKnownVersion = 0;
 
-    const checkServerVersion = async () => {
+    const syncDeletedKeysOnly = async () => {
       try {
-        const metaRes = await fetch(`/api/defib-chunks/meta?tenantId=${encodeURIComponent(tenantId)}`);
-        if (metaRes.ok && !isCancelled) {
-          const meta = await metaRes.json();
-
-          // Immediately sync remote deleted keys to keep PC counts in perfect lockstep
-          try {
-            const remoteKeys = await fetchRemoteDeletedDefibKeys(tenantId);
-            if (remoteKeys.length > 0) {
-              const localKeys = getDeletedDefibKeys(tenantId);
-              const combined = Array.from(new Set([...localKeys, ...remoteKeys]));
-              localStorage.setItem(`defib_${tenantId}_deleted_defib_keys`, JSON.stringify(combined));
-              const delSet = new Set(combined);
-              setDefibrillateurs(prev => {
-                if (!Array.isArray(prev) || prev.length === 0) return prev;
-                const filtered = prev.filter(df => !isDefibInDeletedList(df, delSet));
-                if (filtered.length !== prev.length) {
-                  idbSet(`defib_${tenantId}_defibrillateurs`, filtered).catch(() => {});
-                }
-                return filtered;
-              });
-            }
-          } catch (_) {}
-
-          if (
-            meta.version &&
-            lastKnownVersion > 0 &&
-            meta.version !== lastKnownVersion &&
-            Date.now() - lastLocalSheetMutationRef.current > 10000
-          ) {
-            handleManualRefreshDefibs();
-          }
-          if (meta.version) {
-            lastKnownVersion = meta.version;
-          }
+        if (isCancelled) return;
+        const remoteKeys = await fetchRemoteDeletedDefibKeys(tenantId);
+        if (remoteKeys.length > 0 && !isCancelled) {
+          const localKeys = getDeletedDefibKeys(tenantId);
+          const combined = Array.from(new Set([...localKeys, ...remoteKeys]));
+          localStorage.setItem(`defib_${tenantId}_deleted_defib_keys`, JSON.stringify(combined));
+          const delSet = new Set(combined);
+          setDefibrillateurs(prev => {
+            if (!Array.isArray(prev) || prev.length === 0) return prev;
+            const filtered = prev.filter(df => !isDefibInDeletedList(df, delSet));
+            return filtered.length !== prev.length ? filtered : prev;
+          });
         }
       } catch (_) {}
     };
 
-    checkServerVersion();
-    const intervalId = setInterval(checkServerVersion, 15000);
-
-    const handleVisibilityOrFocus = () => {
-      if (!document.hidden) {
-        checkServerVersion();
-      }
-    };
-    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
-    window.addEventListener('focus', handleVisibilityOrFocus);
+    syncDeletedKeysOnly();
+    const intervalId = setInterval(syncDeletedKeysOnly, 30000);
 
     return () => {
       isCancelled = true;
       clearInterval(intervalId);
-      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
-      window.removeEventListener('focus', handleVisibilityOrFocus);
     };
   }, [tenantId]);
 
@@ -5939,7 +5950,7 @@ export default function App() {
         setVariables(baseVariables);
 
         let baseDefibrillateurs: Defibrillateur[] = [];
-        setDefibrillateurs([]);
+        setDefibrillateurs(prev => (loadedTenantIdState && loadedTenantIdState !== activeRunTenantId ? [] : prev));
 
         const matchedInitTenant = KNOWN_TENANTS_REGISTRY.find(
           t => t.id.toLowerCase() === activeRunTenantId.toLowerCase() || t.shortEnvId.toLowerCase() === activeRunTenantId.toLowerCase()
@@ -6225,32 +6236,34 @@ export default function App() {
           const validRemote = (firestoreData && typeof firestoreData === 'object' && !Array.isArray(firestoreData))
             ? (firestoreData as Partial<CompanyInfo>)
             : {};
+          const cleanSheetUrl = (u?: string | null) =>
+            u && !u.includes('1tB1e41') && !u.includes('2mX5O6r9hD0i3Z9m') ? u.trim() : '';
           const effSheetDefibs =
-            validDb.spreadsheetDefibrillateurs ||
-            validDb.spreadsheetDefibrillateursUrl ||
-            validRemote.spreadsheetDefibrillateurs ||
-            validRemote.spreadsheetDefibrillateursUrl ||
-            localData.spreadsheetDefibrillateurs ||
-            localData.spreadsheetDefibrillateursUrl ||
-            localStorage.getItem(`defib_${tenantId}_spreadsheet_defibrillateurs`) ||
+            cleanSheetUrl(validDb.spreadsheetDefibrillateurs) ||
+            cleanSheetUrl(validDb.spreadsheetDefibrillateursUrl) ||
+            cleanSheetUrl(validRemote.spreadsheetDefibrillateurs) ||
+            cleanSheetUrl(validRemote.spreadsheetDefibrillateursUrl) ||
+            cleanSheetUrl(localData.spreadsheetDefibrillateurs) ||
+            cleanSheetUrl(localData.spreadsheetDefibrillateursUrl) ||
+            cleanSheetUrl(localStorage.getItem(`defib_${tenantId}_spreadsheet_defibrillateurs`)) ||
             '';
           const effSheetAutres =
-            validDb.spreadsheetAutresMateriels ||
-            validDb.spreadsheetAutresMaterielsUrl ||
-            validRemote.spreadsheetAutresMateriels ||
-            validRemote.spreadsheetAutresMaterielsUrl ||
-            localData.spreadsheetAutresMateriels ||
-            localData.spreadsheetAutresMaterielsUrl ||
-            localStorage.getItem(`defib_${tenantId}_spreadsheet_autres_materiels`) ||
+            cleanSheetUrl(validDb.spreadsheetAutresMateriels) ||
+            cleanSheetUrl(validDb.spreadsheetAutresMaterielsUrl) ||
+            cleanSheetUrl(validRemote.spreadsheetAutresMateriels) ||
+            cleanSheetUrl(validRemote.spreadsheetAutresMaterielsUrl) ||
+            cleanSheetUrl(localData.spreadsheetAutresMateriels) ||
+            cleanSheetUrl(localData.spreadsheetAutresMaterielsUrl) ||
+            cleanSheetUrl(localStorage.getItem(`defib_${tenantId}_spreadsheet_autres_materiels`)) ||
             '';
           const effSheetClients =
-            validDb.spreadsheetClients ||
-            validDb.spreadsheetClientsUrl ||
-            validRemote.spreadsheetClients ||
-            validRemote.spreadsheetClientsUrl ||
-            localData.spreadsheetClients ||
-            localData.spreadsheetClientsUrl ||
-            localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`) ||
+            cleanSheetUrl(validDb.spreadsheetClients) ||
+            cleanSheetUrl(validDb.spreadsheetClientsUrl) ||
+            cleanSheetUrl(validRemote.spreadsheetClients) ||
+            cleanSheetUrl(validRemote.spreadsheetClientsUrl) ||
+            cleanSheetUrl(localData.spreadsheetClients) ||
+            cleanSheetUrl(localData.spreadsheetClientsUrl) ||
+            cleanSheetUrl(localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`)) ||
             '';
           // Firestore is the supreme source of truth for cross-device consistency
           const merged: CompanyInfo = {
@@ -6517,23 +6530,26 @@ export default function App() {
                 pdfHideHorodatagesDiagnostic: data.pdfHideHorodatagesDiagnostic !== undefined ? data.pdfHideHorodatagesDiagnostic : prev?.pdfHideHorodatagesDiagnostic,
                 pdfShowDemandeDevisDetails: data.pdfShowDemandeDevisDetails !== undefined ? data.pdfShowDemandeDevisDetails : prev?.pdfShowDemandeDevisDetails,
                 spreadsheetDefibrillateurs:
-                  data.spreadsheetDefibrillateurs ||
-                  data.spreadsheetDefibrillateursUrl ||
-                  prev?.spreadsheetDefibrillateurs ||
-                  localStorage.getItem(`defib_${tenantId}_spreadsheet_defibrillateurs`) ||
-                  '',
+                  [
+                    data.spreadsheetDefibrillateurs,
+                    data.spreadsheetDefibrillateursUrl,
+                    prev?.spreadsheetDefibrillateurs,
+                    localStorage.getItem(`defib_${tenantId}_spreadsheet_defibrillateurs`),
+                  ].find(u => u && !u.includes('1tB1e41') && !u.includes('2mX5O6r9hD0i3Z9m')) || '',
                 spreadsheetAutresMateriels:
-                  data.spreadsheetAutresMateriels ||
-                  data.spreadsheetAutresMaterielsUrl ||
-                  prev?.spreadsheetAutresMateriels ||
-                  localStorage.getItem(`defib_${tenantId}_spreadsheet_autres_materiels`) ||
-                  '',
+                  [
+                    data.spreadsheetAutresMateriels,
+                    data.spreadsheetAutresMaterielsUrl,
+                    prev?.spreadsheetAutresMateriels,
+                    localStorage.getItem(`defib_${tenantId}_spreadsheet_autres_materiels`),
+                  ].find(u => u && !u.includes('1tB1e41') && !u.includes('2mX5O6r9hD0i3Z9m')) || '',
                 spreadsheetClients:
-                  data.spreadsheetClients ||
-                  data.spreadsheetClientsUrl ||
-                  prev?.spreadsheetClients ||
-                  localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`) ||
-                  '',
+                  [
+                    data.spreadsheetClients,
+                    data.spreadsheetClientsUrl,
+                    prev?.spreadsheetClients,
+                    localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`),
+                  ].find(u => u && !u.includes('1tB1e41') && !u.includes('2mX5O6r9hD0i3Z9m')) || '',
               };
               const strVal = JSON.stringify(merged);
               localStorage.setItem(`defib_${tenantId}_company_info`, strVal);
