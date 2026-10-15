@@ -1209,7 +1209,7 @@ export default function App() {
       let updated = false;
       const nextCompanyInfo = { ...companyInfo };
 
-      const resolvedLocs = ensureTenantCustomLocationNames(companyInfo.customLocationNames, tenantId, members, stocks, distributedStocks);
+      const resolvedLocs = ensureTenantCustomLocationNames(companyInfo.customLocationNames, tenantId);
       if (Object.keys(resolvedLocs).length > 0) {
         setLocationNames(resolvedLocs);
         localStorage.setItem(`defib_${tenantId}_custom_location_names`, JSON.stringify(resolvedLocs));
@@ -1235,7 +1235,7 @@ export default function App() {
         setCompanyInfo(nextCompanyInfo);
       }
     }
-  }, [companyInfo, tenantId, isFirebaseLoaded, loadedTenantIdState, members, stocks, distributedStocks]);
+  }, [companyInfo, tenantId, isFirebaseLoaded, loadedTenantIdState]);
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
