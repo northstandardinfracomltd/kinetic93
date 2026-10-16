@@ -577,6 +577,7 @@ export default function DefibTab({
   const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
   const [remoteQueriedDefibs, setRemoteQueriedDefibs] = useState<Defibrillateur[]>([]);
   const [planSheetDefibs, setPlanSheetDefibs] = useState<Defibrillateur[]>([]);
+  const [fallbackSheetDefibs, setFallbackSheetDefibs] = useState<Defibrillateur[]>([]);
   const [remoteFilteredTotal, setRemoteFilteredTotal] = useState<number | null>(null);
   const [fallbackSheetClients, setFallbackSheetClients] = useState<Client[]>([]);
 
@@ -590,6 +591,52 @@ export default function DefibTab({
       setRefreshTrigger(prev => prev + 1);
     }
   }, [isRefreshing]);
+
+  // Instant IndexedDB hydration & fast first-chunk fallback for Défibrillateurs on browser reload
+  useEffect(() => {
+    if (Array.isArray(defibrillateurs) && defibrillateurs.length > 0) {
+      return;
+    }
+    let cancelled = false;
+
+    idbGet<Defibrillateur[]>(`defib_${activeTenantId}_defibrillateurs`)
+      .then(cached => {
+        if (!cancelled && Array.isArray(cached) && cached.length > 0) {
+          setFallbackSheetDefibs(prev => (prev.length === 0 ? cached : prev));
+        }
+      })
+      .catch(() => {});
+
+    (async () => {
+      try {
+        const rawUrl =
+          companyInfo?.spreadsheetDefibrillateurs ||
+          companyInfo?.spreadsheetDefibrillateursUrl ||
+          (typeof window !== 'undefined'
+            ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_defibrillateurs`) ||
+              localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_defibrillateurs`) ||
+              localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_defibrillateurs`)
+            : '') ||
+          '';
+        const sheetUrl = (rawUrl.includes('1tB1e41') || rawUrl.includes('2mX5O6r9hD0i3Z9m')) ? '' : rawUrl.trim();
+        const res = await fetch(
+          `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=defibrillateurs&forceRefresh=false&offset=0&limit=2500&spreadsheetUrl=${encodeURIComponent(sheetUrl)}`
+        );
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (cancelled) return;
+        const items = Array.isArray(json.items) ? json.items : [];
+        if (items.length > 0) {
+          setFallbackSheetDefibs(prev => (prev.length >= items.length ? prev : items));
+          idbSet(`defib_${activeTenantId}_defibrillateurs`, items).catch(() => {});
+        }
+      } catch (_) {}
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTenantId, defibrillateurs?.length, companyInfo?.spreadsheetDefibrillateurs, refreshTrigger]);
 
   // Direct lookup & cache fallback for Clients Spreadsheet (Col 1: "Section 1 - Entreprise.")
   useEffect(() => {
@@ -981,7 +1028,7 @@ export default function DefibTab({
 
   // Merge local loaded defibrillateurs with any on-demand rows returned from /api/sheets/query and planSheetDefibs
   const mergedDefibrillateurs = useMemo(() => {
-    let baseList = defibrillateurs;
+    let baseList = defibrillateurs.length > 0 ? defibrillateurs : fallbackSheetDefibs;
     if (baseList.length > 0) {
       stableDefibsRef.current = { tenant: activeTenantId, items: baseList };
     } else if (stableDefibsRef.current.tenant === activeTenantId && stableDefibsRef.current.items.length > 0) {
@@ -989,33 +1036,36 @@ export default function DefibTab({
     }
 
     if (remoteQueriedDefibs.length === 0 && planSheetDefibs.length === 0) return baseList;
-    const byKey = new Map<string, Defibrillateur>();
+    const byKey = new Map<string, number>();
     const out: Defibrillateur[] = [];
 
     for (const df of baseList) {
       if (!df) continue;
       const k = String(df.id || df.identifiant || '').trim().toLowerCase();
-      if (k) byKey.set(k, df);
+      const idx = out.length;
       out.push(df);
+      if (k) byKey.set(k, idx);
     }
     for (const sourceList of [planSheetDefibs, remoteQueriedDefibs]) {
       for (const df of sourceList) {
         if (!df) continue;
         const k = String(df.id || df.identifiant || '').trim().toLowerCase();
         if (k) {
-          const existing = byKey.get(k);
-          if (!existing) {
-            byKey.set(k, df);
+          const existingIdx = byKey.get(k);
+          if (existingIdx === undefined) {
+            byKey.set(k, out.length);
             out.push(df);
-          } else if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
-            const idx = out.indexOf(existing);
-            if (idx >= 0) out[idx] = { ...existing, ...df };
+          } else {
+            const existing = out[existingIdx];
+            if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
+              out[existingIdx] = { ...existing, ...df };
+            }
           }
         }
       }
     }
     return out;
-  }, [defibrillateurs, planSheetDefibs, remoteQueriedDefibs, activeTenantId]);
+  }, [defibrillateurs, fallbackSheetDefibs, planSheetDefibs, remoteQueriedDefibs, activeTenantId]);
 
   const mergedDefibByIdMap = useMemo(() => {
     const map = new Map<string, Defibrillateur>();
@@ -2028,8 +2078,11 @@ export default function DefibTab({
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('all');
 
-  // Ensure 100% of MAIN OUI defibrillators from the tenant's Spreadsheet are loaded for the Plan map
+  // Ensure 100% of MAIN OUI defibrillators from the tenant's Spreadsheet are loaded when the Plan map is opened
   useEffect(() => {
+    if (!isMapOpen && defibrillateurs.length > 0) {
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -2042,7 +2095,7 @@ export default function DefibTab({
             type: 'defibrillateurs',
             maintenanceFilter: 'oui',
             limit: 25000,
-            forceRefresh: refreshTrigger > 0,
+            forceRefresh: false,
           }),
         });
         if (!res.ok || cancelled) return;
@@ -2055,7 +2108,7 @@ export default function DefibTab({
     return () => {
       cancelled = true;
     };
-  }, [activeTenantId, resolvedSpreadsheetUrl, refreshTrigger, isMapOpen]);
+  }, [activeTenantId, resolvedSpreadsheetUrl, refreshTrigger, isMapOpen, defibrillateurs.length]);
 
   // --- LOOKUP INDEXES ---
   const clientMap = useMemo(() => {

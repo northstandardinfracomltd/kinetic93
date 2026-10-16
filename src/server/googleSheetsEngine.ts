@@ -105,6 +105,34 @@ function getMirrorDir(): string {
   }
 }
 
+function getDiskSnapshotPath(cacheKey: string): string {
+  const safeKey = cacheKey.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(getMirrorDir(), `snapshot_${safeKey}.json`);
+}
+
+function loadDiskSnapshot(cacheKey: string): CachedSheetResult | null {
+  try {
+    const p = getDiskSnapshotPath(cacheKey);
+    if (fs.existsSync(p)) {
+      const parsed = JSON.parse(fs.readFileSync(p, 'utf-8'));
+      if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
+        return parsed as CachedSheetResult;
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+function saveDiskSnapshotAsync(cacheKey: string, snapshot: CachedSheetResult): void {
+  setImmediate(() => {
+    try {
+      if (!snapshot || !Array.isArray(snapshot.items) || snapshot.items.length === 0) return;
+      const p = getDiskSnapshotPath(cacheKey);
+      fs.writeFileSync(p, JSON.stringify(snapshot), 'utf-8');
+    } catch (_) {}
+  });
+}
+
 function getGlobalConfigPaths(): string[] {
   return [
     path.join(process.cwd(), '.data', 'collections', 'global_google_sheets_config.json'),
@@ -1472,15 +1500,20 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
 
   // Strategy 1: Google Sheets API v4 (Service Account first, then API Key fallback)
   const accessToken = await getServiceAccountAccessToken();
-  const sheetTitle = await resolveSheetTabTitle(spreadsheetId, gid);
+  const metaCacheKey = `${spreadsheetId}_${gid || '0'}`;
+  const cachedMeta = sheetTabMetaCache.get(metaCacheKey);
+  const sheetTitle =
+    cachedMeta?.title ||
+    (gid && gid !== '0' ? await resolveSheetTabTitle(spreadsheetId, gid) : null);
   const rangeStr = sheetTitle ? `'${sheetTitle.replace(/'/g, "''")}'` : 'A1:ZZ100000';
   const targetRange = encodeURIComponent(rangeStr);
 
   if (accessToken) {
     try {
-      const apiRes = await fetch(
+      const apiRes = await fetchWithRetry(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${targetRange}`,
-        { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(90000) }
+        { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(60000) },
+        2
       );
       if (apiRes.ok) {
         const json = await apiRes.json();
@@ -1496,9 +1529,10 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
 
   if (cfg.apiKey) {
     try {
-      const apiRes = await fetch(
+      const apiRes = await fetchWithRetry(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${targetRange}?key=${encodeURIComponent(cfg.apiKey)}`,
-        { signal: AbortSignal.timeout(45000) }
+        { signal: AbortSignal.timeout(45000) },
+        2
       );
       if (apiRes.ok) {
         const json = await apiRes.json();
@@ -1611,9 +1645,21 @@ export async function fetchTenantSheetCollection(
   }
 
   const cacheKey = getSheetCacheKey(tabType, extracted.spreadsheetId, extracted.gid);
+  if (!sheetMemoryCache.has(cacheKey)) {
+    const diskSnap = loadDiskSnapshot(cacheKey);
+    if (diskSnap && Array.isArray(diskSnap.items) && diskSnap.items.length > 0) {
+      sheetMemoryCache.set(cacheKey, diskSnap);
+    }
+  }
+
   if (!forceRefresh && sheetMemoryCache.has(cacheKey)) {
     const cached = sheetMemoryCache.get(cacheKey)!;
-    if (Date.now() - cached.fetchedAt < 3600000) {
+    if (cached.items.length > 0) {
+      if (Date.now() - cached.fetchedAt > 300000 && !inFlightSheetFetches.has(cacheKey)) {
+        setImmediate(() => {
+          fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true).catch(() => {});
+        });
+      }
       return {
         items: cached.items,
         headers: cached.headers,
@@ -1819,15 +1865,35 @@ export async function fetchTenantSheetCollection(
         }
       }
 
+      // Never overwrite a warm non-empty cache with an empty result caused by a transient Google API timeout/rate-limit
+      const prevCached = sheetMemoryCache.get(cacheKey);
+      if (baseItems.length === 0 && prevCached && prevCached.items.length > 0 && (!rawMatrix || rawMatrix.rows.length === 0)) {
+        return {
+          items: prevCached.items,
+          headers: prevCached.headers,
+          totalCount: prevCached.items.length,
+          stats: prevCached.stats,
+          fromSpreadsheet: true,
+          hasRemoteHeaders: prevCached.headers.length > 0,
+        };
+      }
+
       const stats = computeSheetCollectionStats(baseItems, tabType);
 
-      sheetMemoryCache.set(cacheKey, {
+      const snapshotToStore: CachedSheetResult = {
         headers,
         items: baseItems,
         stats,
         fetchedAt: Date.now(),
         spreadsheetUrl,
-      });
+      };
+
+      if (baseItems.length > 0 || !prevCached) {
+        sheetMemoryCache.set(cacheKey, snapshotToStore);
+      }
+      if (baseItems.length > 0) {
+        saveDiskSnapshotAsync(cacheKey, snapshotToStore);
+      }
 
       return {
         items: baseItems,
@@ -2649,10 +2715,11 @@ export async function upsertRecordsToTenantSheet(
     if (warmCached) {
       warmCached.fetchedAt = Date.now();
       warmCached.headers = headers;
-      // Recompute collection stats asynchronously in background so 18,000-row date parsing never blocks the response
+      // Recompute collection stats and save disk snapshot asynchronously in background
       setImmediate(() => {
         try {
           warmCached.stats = computeSheetCollectionStats(warmCached.items, tabType);
+          saveDiskSnapshotAsync(cacheKey, warmCached);
         } catch (_) {}
       });
     } else {
@@ -2814,13 +2881,15 @@ export async function deleteRecordsFromTenantSheet(
     }
 
     if (currentData.headers.length > 0) {
-      sheetMemoryCache.set(cacheKey, {
+      const updatedSnapshot: CachedSheetResult = {
         headers: currentData.headers,
         items: remainingItems,
         stats: computeSheetCollectionStats(remainingItems, tabType),
         fetchedAt: Date.now(),
         spreadsheetUrl,
-      });
+      };
+      sheetMemoryCache.set(cacheKey, updatedSnapshot);
+      saveDiskSnapshotAsync(cacheKey, updatedSnapshot);
     }
     return { success: true, deletedCount: normTargets.size, syncedToRemoteSheet };
   });

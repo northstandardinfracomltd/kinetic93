@@ -1902,7 +1902,32 @@ export default function App() {
     return (id && deletedKeys.has(id)) || (identifiant && deletedKeys.has(identifiant)) || (numSerie && deletedKeys.has(numSerie));
   };
 
-  const [defibSheetStats, setDefibSheetStats] = useState<any>(null);
+  const [defibSheetStats, setDefibSheetStats] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+        const raw = localStorage.getItem(`defib_${tid}_defib_sheet_stats`);
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
+    }
+    return null;
+  });
+
+  const persistDefibCache = (tid: string, items: Defibrillateur[], stats?: any) => {
+    if (stats) {
+      setDefibSheetStats(stats);
+      try {
+        for (const k of [tid, tid.toUpperCase(), tid.toLowerCase()]) {
+          localStorage.setItem(`defib_${k}_defib_sheet_stats`, JSON.stringify(stats));
+        }
+      } catch (_) {}
+    }
+    if (Array.isArray(items) && items.length > 0) {
+      for (const k of [tid, tid.toUpperCase(), tid.toLowerCase()]) {
+        idbSet(`defib_${k}_defibrillateurs`, items).catch(() => {});
+      }
+    }
+  };
 
   const fetchSheetCollectionInBatches = async (
     activeTid: string,
@@ -1913,7 +1938,8 @@ export default function App() {
     onBatchAppended: (allAccumulatedItems: any[], loadedCount: number, totalCount: number) => void,
     isCancelledFn?: () => boolean
   ) => {
-    const CHUNK_SIZE = 10000;
+    const FIRST_CHUNK_SIZE = 2500;
+    const NEXT_CHUNK_SIZE = 10000;
     let offset = 0;
     let hasMore = true;
     const accumulated: any[] = [];
@@ -1921,12 +1947,25 @@ export default function App() {
     while (hasMore) {
       if (isCancelledFn && isCancelledFn()) return;
       const isFirst = offset === 0;
-      const res = await fetch(
-        `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=${encodeURIComponent(tabType)}&forceRefresh=${isFirst && forceRefresh}&offset=${offset}&limit=${CHUNK_SIZE}&spreadsheetUrl=${encodeURIComponent(spreadsheetUrl)}`
-      );
-      if (!res.ok) break;
-      const json = await res.json();
-      if (isCancelledFn && isCancelledFn()) return;
+      const chunkSize = isFirst ? FIRST_CHUNK_SIZE : NEXT_CHUNK_SIZE;
+      const url = `/api/sheets/data?tenantId=${encodeURIComponent(activeTid)}&type=${encodeURIComponent(tabType)}&forceRefresh=${isFirst && forceRefresh}&offset=${offset}&limit=${chunkSize}&spreadsheetUrl=${encodeURIComponent(spreadsheetUrl)}`;
+
+      let json: any = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          if (isCancelledFn && isCancelledFn()) return;
+          const res = await fetch(url);
+          if (res.ok) {
+            json = await res.json();
+            break;
+          }
+        } catch (_) {}
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 250 * attempt));
+        }
+      }
+
+      if (!json || (isCancelledFn && isCancelledFn())) break;
 
       const batchItems = Array.isArray(json.items) ? json.items : [];
       accumulated.push(...batchItems);
@@ -1945,12 +1984,10 @@ export default function App() {
     }
   };
 
-  const isManualDefibRefreshInFlightRef = React.useRef<boolean>(false);
-  const hasAutoRefreshedDefibTabRef = React.useRef<string>('');
+  const manualDefibRefreshRunIdRef = React.useRef<number>(0);
 
-  const handleManualRefreshDefibs = async () => {
-    if (isManualDefibRefreshInFlightRef.current) return;
-    isManualDefibRefreshInFlightRef.current = true;
+  const handleManualRefreshDefibs = async (forceRemote = true) => {
+    const runId = ++manualDefibRefreshRunIdRef.current;
     setIsRefreshingDefibs(true);
     if (defibrillateurs.length === 0) {
       setIsDefibLoading(true);
@@ -1965,10 +2002,12 @@ export default function App() {
     try {
       const activeTenant = tenantId || 'demo';
 
-      // 1. Fetch persistent deleted keys from backend first to ensure deleted defibs stay deleted across all sessions
-      let remoteDeletedKeys: string[] = [];
+      // 1. Fetch persistent deleted keys in parallel without blocking sheet fetch if slow
       try {
-        remoteDeletedKeys = await fetchRemoteDeletedDefibKeys(activeTenant);
+        const remoteDeletedKeys = await Promise.race([
+          fetchRemoteDeletedDefibKeys(activeTenant),
+          new Promise<string[]>(r => setTimeout(() => r([]), 1200)),
+        ]);
         if (remoteDeletedKeys.length > 0) {
           const localKeys = getDeletedDefibKeys(activeTenant);
           const combined = Array.from(new Set([...localKeys, ...remoteDeletedKeys]));
@@ -1978,7 +2017,7 @@ export default function App() {
 
       const delSet = new Set(getDeletedDefibKeys(activeTenant));
 
-      // 1b. Fetch exclusively from the tenant's Google Spreadsheet for Défibrillateurs in 2,500-row chunks
+      // 1b. Fetch from the tenant's Google Spreadsheet for Défibrillateurs in progressive chunks
       const rawUrl =
         companyInfo?.spreadsheetDefibrillateurs ||
         companyInfo?.spreadsheetDefibrillateursUrl ||
@@ -1997,7 +2036,7 @@ export default function App() {
         activeTenant,
         'defibrillateurs',
         defibSheetUrl,
-        true,
+        forceRemote,
         (json, firstItems) => {
           if (json.spreadsheetUrl && typeof json.spreadsheetUrl === 'string') {
             const cleanUrl = json.spreadsheetUrl.trim();
@@ -2016,10 +2055,12 @@ export default function App() {
               );
             }
           }
-          if (json.stats) setDefibSheetStats(json.stats);
           const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
           if (filtered.length > 0) {
             setDefibrillateurs(filtered);
+            persistDefibCache(activeTenant, filtered, json.stats);
+          } else if (json.stats) {
+            setDefibSheetStats(json.stats);
           }
           const tot = json.totalCount || filtered.length;
           setDefibLoadingProgress({
@@ -2034,6 +2075,7 @@ export default function App() {
           const filtered = allItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
           if (filtered.length > 0) {
             setDefibrillateurs(filtered);
+            persistDefibCache(activeTenant, filtered);
           }
           setDefibLoadingProgress({
             current: filtered.length,
@@ -2041,7 +2083,8 @@ export default function App() {
             percent: totalCount > 0 ? Math.min(100, Math.round((filtered.length / totalCount) * 100)) : 100,
             message: `Chargement ${filtered.length.toLocaleString('en-US')}/${(totalCount || filtered.length).toLocaleString('en-US')}, Terminé.`,
           });
-        }
+        },
+        () => manualDefibRefreshRunIdRef.current !== runId
       );
 
       // Ensure Clients spreadsheet is also loaded if clients state is currently empty
@@ -2059,7 +2102,7 @@ export default function App() {
           'clients',
           clientSheetUrl,
           false,
-          (json, firstItems) => {
+          (_json, firstItems) => {
             const validClients = firstItems.filter(
               (cl: any) =>
                 cl &&
@@ -2091,51 +2134,14 @@ export default function App() {
     } catch (err) {
       console.warn('Manual refresh error:', err);
     } finally {
-      isManualDefibRefreshInFlightRef.current = false;
-      setTimeout(() => {
-        setIsRefreshingDefibs(false);
-        setIsDefibLoading(false);
-      }, 500);
+      if (manualDefibRefreshRunIdRef.current === runId) {
+        setTimeout(() => {
+          setIsRefreshingDefibs(false);
+          setIsDefibLoading(false);
+        }, 400);
+      }
     }
   };
-
-  // Auto-trigger "Actualiser les données" when accessing the Défibrillateurs tab after login or browser reload (not on tab transitions)
-  useEffect(() => {
-    if (!isLoggedIn) {
-      hasAutoRefreshedDefibTabRef.current = '';
-      return;
-    }
-    const role = localStorage.getItem('defib_logged_user_role') || '';
-    const emailLower = (loggedUser?.email || '').trim().toLowerCase();
-    if (
-      role === 'technicien' ||
-      role === 'client' ||
-      emailLower === 'tech.ouest@defibeo.com' ||
-      emailLower === 'client@demo.com' ||
-      isClientPortalOpen ||
-      isPublicPortalOpen ||
-      isBlockedByPrez
-    ) {
-      return;
-    }
-    if (activeTab !== 'defibrillateurs') {
-      return;
-    }
-    const sessionKey = `${tenantId || 'demo'}_${emailLower || 'admin'}_${envReloadTrigger}`;
-    if (hasAutoRefreshedDefibTabRef.current !== sessionKey) {
-      hasAutoRefreshedDefibTabRef.current = sessionKey;
-      handleManualRefreshDefibs();
-    }
-  }, [
-    isLoggedIn,
-    activeTab,
-    tenantId,
-    loggedUser?.email,
-    envReloadTrigger,
-    isClientPortalOpen,
-    isPublicPortalOpen,
-    isBlockedByPrez,
-  ]);
 
   const handleManualRefreshAutresMateriels = async () => {
     setIsRefreshingAutresMateriels(true);
@@ -2329,8 +2335,10 @@ export default function App() {
       const isSameTenant = prevLoaded.tenant.toLowerCase() === activeTid.toLowerCase();
       const skipDefibs =
         !force &&
-        (isManualDefibRefreshInFlightRef.current ||
-          (defibrillateurs.length > 0 && isSameTenant && prevLoaded.defibs && (!urlDefibs || prevLoaded.defibs === urlDefibs)));
+        defibrillateurs.length > 0 &&
+        isSameTenant &&
+        Boolean(prevLoaded.defibs) &&
+        (!urlDefibs || prevLoaded.defibs === urlDefibs);
       const skipAutres = !force && otherEquipments.length > 0 && isSameTenant && prevLoaded.autres && (!urlAutres || prevLoaded.autres === urlAutres);
       const skipClients = !force && clients.length > 0 && isSameTenant && prevLoaded.clients && (!urlClients || prevLoaded.clients === urlClients);
 
@@ -2434,16 +2442,21 @@ export default function App() {
                   resolvedDefibSheetUrl = json.spreadsheetUrl;
                   persistResolvedUrl('spreadsheetDefibrillateurs', 'spreadsheet_defibrillateurs', json.spreadsheetUrl, !json.hasMore);
                 }
-                if (json.stats) {
+                const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
+                if (filtered.length > 0) {
+                  setDefibrillateurs(filtered);
+                  persistDefibCache(activeTid, filtered, json.stats);
+                } else if (json.stats) {
                   setDefibSheetStats(json.stats);
                 }
-                const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
-                setDefibrillateurs(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
                 setIsDefibLoading(false);
               },
               (allItems, loadedCount, totalCount) => {
                 const filtered = allItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
-                setDefibrillateurs(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
+                if (filtered.length > 0) {
+                  setDefibrillateurs(filtered);
+                  persistDefibCache(activeTid, filtered);
+                }
                 if (loadedCount >= totalCount && resolvedDefibSheetUrl) {
                   persistResolvedUrl('spreadsheetDefibrillateurs', 'spreadsheet_defibrillateurs', resolvedDefibSheetUrl, true);
                 }
@@ -6211,6 +6224,24 @@ export default function App() {
 
         let baseDefibrillateurs: Defibrillateur[] = [];
         setDefibrillateurs(prev => (loadedTenantIdState && loadedTenantIdState !== activeRunTenantId ? [] : prev));
+        try {
+          const rawStats = localStorage.getItem(`defib_${activeRunTenantId}_defib_sheet_stats`);
+          if (rawStats) {
+            setDefibSheetStats(JSON.parse(rawStats));
+          }
+        } catch (_) {}
+        idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`)
+          .then(cachedDefibs => {
+            if (Array.isArray(cachedDefibs) && cachedDefibs.length > 0) {
+              const delSet = new Set(getDeletedDefibKeys(activeRunTenantId));
+              const validDefibs = cachedDefibs.filter((df: any) => !isDefibInDeletedList(df, delSet));
+              if (validDefibs.length > 0) {
+                setDefibrillateurs(prev => (prev.length === 0 ? validDefibs : prev));
+                setIsDefibLoading(false);
+              }
+            }
+          })
+          .catch(() => {});
 
         const matchedInitTenant = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], activeRunTenantId) as any;
         const defaultInfo: CompanyInfo = {
