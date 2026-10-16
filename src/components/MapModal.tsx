@@ -127,18 +127,55 @@ function hasPlannedMission(item: any, fsmTours: any[]): boolean {
   });
 }
 
+function canonicalizeRegionName(raw: string): string {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return '';
+  const norm = trimmed
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  const map: Record<string, string> = {
+    'ile de france': 'Île-de-France',
+    'auvergne rhone alpes': 'Auvergne-Rhône-Alpes',
+    'bourgogne franche comte': 'Bourgogne-Franche-Comté',
+    'bretagne': 'Bretagne',
+    'centre val de loire': 'Centre-Val de Loire',
+    'corse': 'Corse',
+    'grand est': 'Grand Est',
+    'hauts de france': 'Hauts-de-France',
+    'normandie': 'Normandie',
+    'nouvelle aquitaine': 'Nouvelle-Aquitaine',
+    'occitanie': 'Occitanie',
+    'pays de la loire': 'Pays de la Loire',
+    'provence alpes cote d azur': "Provence-Alpes-Côte d'Azur",
+    'guadeloupe': 'Guadeloupe',
+    'martinique': 'Martinique',
+    'guyane': 'Guyane',
+    'la reunion': 'La Réunion',
+    'reunion': 'La Réunion',
+    'mayotte': 'Mayotte',
+  };
+  return map[norm] || trimmed;
+}
+
 // Helper to determine the region of an item
 function getItemRegion(item: any, clientMap: Map<string, Client>): string {
   if (item.region && item.region.trim()) {
-    return item.region.trim();
+    return canonicalizeRegionName(item.region);
   }
   const client = item.clientId ? clientMap.get(item.clientId) : null;
   if (client?.region && client.region.trim()) {
-    return client.region.trim();
+    return canonicalizeRegionName(client.region);
   }
-  const cp = (item.cp || item.codePostal || client?.codePostal || '').trim();
+  const rawCp = String(item.cp || item.codePostal || client?.codePostal || '').trim().replace(/\s+/g, '');
+  const cp = /^\d{4}$/.test(rawCp) ? '0' + rawCp : rawCp;
   if (cp.length >= 2) {
-    const dept = cp.startsWith('97') ? cp.substring(0, 3) : cp.substring(0, 2);
+    let dept = cp.startsWith('97') ? cp.substring(0, 3) : cp.substring(0, 2).toUpperCase();
+    if (dept === '20') {
+      dept = cp.startsWith('200') || cp.startsWith('201') ? '2A' : '2B';
+    }
     if (DEPT_TO_REGION[dept]) {
       return DEPT_TO_REGION[dept];
     }
@@ -528,13 +565,112 @@ export default function MapModal({
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
   };
 
+  const tenantId = typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') || 'demo' : 'demo';
+  const [sheetMainOuiDefibs, setSheetMainOuiDefibs] = useState<any[]>([]);
+  const [isFetchingSheetPlan, setIsFetchingSheetPlan] = useState<boolean>(false);
+
+  // Directly ensure 100% of MAIN OUI defibrillators from the tenant's Spreadsheet are loaded when MapModal opens
+  useEffect(() => {
+    if (!isOpen || items) return;
+    let cancelled = false;
+    setIsFetchingSheetPlan(true);
+    const spreadsheetUrl =
+      typeof window !== 'undefined'
+        ? localStorage.getItem(`defib_${tenantId}_spreadsheet_defibrillateurs`) ||
+          localStorage.getItem(`defib_${tenantId.toUpperCase()}_spreadsheet_defibrillateurs`) ||
+          localStorage.getItem(`defib_${tenantId.toLowerCase()}_spreadsheet_defibrillateurs`) ||
+          ''
+        : '';
+
+    (async () => {
+      try {
+        const res = await fetch('/api/sheets/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId,
+            spreadsheetUrl,
+            type: 'defibrillateurs',
+            maintenanceFilter: 'oui',
+            limit: 25000,
+          }),
+        });
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (!cancelled && Array.isArray(json.items) && json.items.length > 0) {
+          setSheetMainOuiDefibs(json.items);
+        }
+      } catch (_) {
+      } finally {
+        if (!cancelled) setIsFetchingSheetPlan(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, tenantId, items]);
+
   // Sur l'affichage Plan, base active list (avec toggle Inclure Autres Matériels)
   const baseActiveList = useMemo(() => {
-    const rawList = items || defibrillateurs || [];
+    let rawList: any[] = [];
+    if (items) {
+      rawList = items;
+    } else {
+      const deletedSet = new Set<string>();
+      if (typeof window !== 'undefined') {
+        for (const t of [tenantId, tenantId.toUpperCase(), tenantId.toLowerCase()]) {
+          try {
+            const rawLocal = localStorage.getItem(`defib_${t}_deleted_defib_keys`);
+            if (rawLocal) {
+              const arr = JSON.parse(rawLocal);
+              if (Array.isArray(arr)) arr.forEach((s: any) => s && deletedSet.add(String(s).trim().toLowerCase()));
+            }
+          } catch (_) {}
+          try {
+            const rawSession = sessionStorage.getItem(`defib_${t}_deleted_defib_keys`);
+            if (rawSession) {
+              const arr = JSON.parse(rawSession);
+              if (Array.isArray(arr)) arr.forEach((s: any) => s && deletedSet.add(String(s).trim().toLowerCase()));
+            }
+          } catch (_) {}
+        }
+      }
+
+      const byKey = new Map<string, any>();
+      const merged: any[] = [];
+      for (const source of [defibrillateurs || [], sheetMainOuiDefibs]) {
+        for (const df of source) {
+          if (!df) continue;
+          const idLow = String(df.id || '').trim().toLowerCase();
+          const identLow = String(df.identifiant || '').trim().toLowerCase();
+          const snLow = String(df.numeroSerie || df.num_serie || '').trim().toLowerCase();
+          if (
+            (idLow && deletedSet.has(idLow)) ||
+            (identLow && deletedSet.has(identLow)) ||
+            (snLow && deletedSet.has(snLow))
+          ) {
+            continue;
+          }
+          const k = idLow || identLow;
+          if (!k) continue;
+          const existing = byKey.get(k);
+          if (!existing) {
+            byKey.set(k, df);
+            merged.push(df);
+          } else if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
+            const idx = merged.indexOf(existing);
+            if (idx >= 0) merged[idx] = { ...existing, ...df };
+          }
+        }
+      }
+      rawList = merged;
+    }
+
     let list = rawList.filter((item: any) => {
       // Pour les défibrillateurs ou tout équipement avec statut de maintenance autorisée
-      if (defibrillateurs || item?.fsmAutorise !== undefined || item?.maintenanceAutorisee !== undefined || item?.maintenance_autorisee !== undefined) {
-        const rawFsm = (item?.fsmAutorise ?? item?.maintenanceAutorisee ?? item?.maintenance_autorisee ?? '').toString().trim().toLowerCase();
+      if (defibrillateurs || !items || item?.fsmAutorise !== undefined || item?.maintenanceAutorisee !== undefined || item?.maintenance_autorisee !== undefined) {
+        const rawFsm = (item?.fsmAutorise ?? item?.maintenanceAutorisee ?? item?.maintenance_autorisee ?? item?.fsm_autorise ?? '').toString().trim().toLowerCase();
         if (rawFsm === 'non' || rawFsm === 'false' || rawFsm === '0') return false;
         return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || (!rawFsm && (item?.fsmAutorise || 'Oui') === 'Oui');
       }
@@ -553,7 +689,7 @@ export default function MapModal({
     }
 
     return list;
-  }, [items, defibrillateurs, otherEquipments, activeFilters.includeAutresMateriels]);
+  }, [items, defibrillateurs, sheetMainOuiDefibs, otherEquipments, activeFilters.includeAutresMateriels, tenantId]);
 
   // Filtrage selon situation et région
   const activeList = useMemo(() => {
@@ -568,7 +704,7 @@ export default function MapModal({
       // 2. Region filter
       if (activeFilters.region !== 'Tous') {
         const itemReg = getItemRegion(item, clientMap);
-        if (itemReg.toLowerCase() !== activeFilters.region.toLowerCase()) {
+        if (canonicalizeRegionName(itemReg).toLowerCase() !== canonicalizeRegionName(activeFilters.region).toLowerCase()) {
           return false;
         }
       }
@@ -581,7 +717,7 @@ export default function MapModal({
   const availableRegions = useMemo(() => {
     const regionSet = new Set<string>();
     (REGIONS_BY_COUNTRY["France"] || []).forEach(r => regionSet.add(r));
-    (defibrillateurs || []).forEach((d: any) => {
+    baseActiveList.forEach((d: any) => {
       const r = getItemRegion(d, clientMap);
       if (r) regionSet.add(r);
     });
@@ -590,13 +726,10 @@ export default function MapModal({
       if (r) regionSet.add(r);
     });
     return Array.from(regionSet).sort((a, b) => a.localeCompare(b, 'fr'));
-  }, [defibrillateurs, otherEquipments, clientMap]);
+  }, [baseActiveList, otherEquipments, clientMap]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [isTourDropdownOpen, setIsTourDropdownOpen] = useState(false);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
-
-  // User session isolation for map info popup dismissal
-  const tenantId = typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') || 'demo' : 'demo';
   let userEmail = '';
   if (typeof window !== 'undefined') {
     try {
@@ -663,7 +796,7 @@ export default function MapModal({
     '80': [49.890, 2.300], '81': [43.920, 2.140], '82': [44.010, 1.350], '83': [43.120, 5.930], '84': [43.950, 4.810],
     '85': [46.670, -1.420], '86': [46.580, 0.340], '87': [45.830, 1.260], '88': [48.170, 6.450], '89': [47.790, 3.570],
     '90': [47.630, 6.860], '91': [48.500, 2.200], '92': [48.880, 2.230], '93': [48.910, 2.480], '94': [48.790, 2.450],
-    '95': [49.040, 2.100]
+    '95': [49.040, 2.100], '971': [16.250, -61.550], '972': [14.650, -61.000], '973': [3.900, -53.100], '974': [-21.100, 55.500], '976': [-12.800, 45.100]
   }), []);
 
   // Extract / resolve coordinates for 100% of items with jittering to prevent stacked hidden points
@@ -673,28 +806,41 @@ export default function MapModal({
 
     for (let i = 0; i < activeList.length; i++) {
       const item = activeList[i];
-      let lat = parseFloat(item.latitude || item.lat || '');
-      let lng = parseFloat(item.longitude || item.lng || item.lon || '');
+      const rawLatStr = String(item.latitude ?? item.lat ?? '').trim().replace(',', '.');
+      const rawLngStr = String(item.longitude ?? item.lng ?? item.lon ?? '').trim().replace(',', '.');
+      let lat = parseFloat(rawLatStr);
+      let lng = parseFloat(rawLngStr);
       let baseCoords: [number, number] | null = null;
 
-      // 1. Check if direct coordinates are valid (ignoring placeholder defaults if there are better address details)
-      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+      const clientObj = item.clientId ? clientMap.get(item.clientId) : null;
+      const rawCp = String(item.cp || item.codePostal || clientObj?.codePostal || '').trim().replace(/\s+/g, '');
+      const cp = /^\d{4}$/.test(rawCp) ? '0' + rawCp : rawCp;
+      let dept = cp.startsWith('97') ? cp.substring(0, 3) : cp.substring(0, 2).toUpperCase();
+      if (dept === '20') {
+        dept = cp.startsWith('200') || cp.startsWith('201') ? '2A' : '2B';
+      }
+      const isMetroDept = Boolean(dept && DEPT_COORDS[dept] && !dept.startsWith('97'));
+
+      // Normalize longitudes/latitudes where Google Sheets omitted the decimal point (e.g. 685228 -> 2.35 or department fallback)
+      const isValidLatLng =
+        !isNaN(lat) &&
+        !isNaN(lng) &&
+        lat !== 0 &&
+        lng !== 0 &&
+        lat >= -90 &&
+        lat <= 90 &&
+        lng >= -180 &&
+        lng <= 180 &&
+        (!isMetroDept || (lat >= 41 && lat <= 51.6 && lng >= -5.5 && lng <= 10.0));
+
+      if (isValidLatLng) {
         baseCoords = [lat, lng];
       } else if (geocodedCoords[item.id]) {
         baseCoords = geocodedCoords[item.id];
+      } else if (dept && DEPT_COORDS[dept]) {
+        baseCoords = DEPT_COORDS[dept];
       } else {
-        // 2. Check if client associated with item has address/department
-        const clientObj = item.clientId ? clientMap.get(item.clientId) : null;
-        const cp = (item.cp || item.codePostal || clientObj?.codePostal || '').trim();
-        const dept = cp.substring(0, 2);
-
-        if (dept && DEPT_COORDS[dept]) {
-          baseCoords = DEPT_COORDS[dept];
-        } else if (clientObj?.adresse || item.ville || clientObj?.ville) {
-          baseCoords = [46.603354, 1.888334]; // France center default
-        } else {
-          baseCoords = [46.603354, 1.888334]; // Fallback
-        }
+        baseCoords = [46.603354, 1.888334]; // France center default
       }
 
       // Apply deterministic spatial offset for co-located items so all items are individually visible
@@ -717,50 +863,22 @@ export default function MapModal({
     return list;
   }, [activeList, geocodedCoords, clientMap, DEPT_COORDS]);
 
-  // Progressive batch loading state for high performance
-  const [renderedCount, setRenderedCount] = useState<number>(0);
-  const [isMapBatchLoading, setIsMapBatchLoading] = useState<boolean>(true);
+  const [isMapBatchLoading, setIsMapBatchLoading] = useState<boolean>(false);
+  const renderedCount = itemsWithCoords.length;
 
-  // Progressive loading animation effect
   useEffect(() => {
     if (!isOpen) {
-      setRenderedCount(0);
       setIsMapBatchLoading(false);
       return;
     }
-
-    setRenderedCount(0);
     setIsMapBatchLoading(true);
+    const timer = setTimeout(() => {
+      setIsMapBatchLoading(false);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
 
-    const total = itemsWithCoords.length;
-    if (total === 0) {
-      const timer = setTimeout(() => setIsMapBatchLoading(false), 500);
-      return () => clearTimeout(timer);
-    }
-
-    const batchSize = Math.max(1, Math.ceil(total / 12));
-    const intervalTime = 40; // ms per tick
-
-    let current = 0;
-    const interval = setInterval(() => {
-      current = Math.min(current + batchSize, total);
-      setRenderedCount(current);
-
-      if (current >= total) {
-        clearInterval(interval);
-        // Keep banner visible for 700ms at 100% so user can easily read complete count
-        setTimeout(() => {
-          setIsMapBatchLoading(false);
-        }, 700);
-      }
-    }, intervalTime);
-
-    return () => clearInterval(interval);
-  }, [isOpen, activeList, itemsWithCoords.length]);
-
-  const displayedItems = useMemo(() => {
-    return itemsWithCoords.slice(0, renderedCount);
-  }, [itemsWithCoords, renderedCount]);
+  const displayedItems = itemsWithCoords;
 
   // Keep refs for itemsWithCoords and clientMap so background updates don't cause map view target resets
   const itemsWithCoordsRef = useRef(itemsWithCoords);
@@ -964,7 +1082,7 @@ export default function MapModal({
             const isFocused = item.id === selectedItemId;
             const isChecked = selectedIds.includes(item.id);
             const statusColor = getSafetyStatusColor(item);
-            const clientDenomination = clientMap.get(item.clientId)?.denomination || '';
+            const clientDenomination = clientMap.get(item.clientId)?.denomination || item.clientNom || item.nomSite || '';
 
             return (
               <DefibMarker
@@ -983,7 +1101,7 @@ export default function MapModal({
         </MapContainer>
 
         {/* Top-Center Non-Intrusive Floating Loading Pill */}
-        {isMapBatchLoading && isOpen && (
+        {(isMapBatchLoading || isFetchingSheetPlan) && isOpen && (
           <div 
             className="absolute top-4 left-1/2 -translate-x-1/2 z-[3500] py-2 px-5 rounded-full shadow-lg flex items-center justify-center gap-2.5 pointer-events-none transition-all animate-fadeIn"
             style={{

@@ -3,6 +3,7 @@ import { t } from '../utils/translate';
 import { Variable, StockRecord, DistributedStockLocation, Member } from '../types';
 import { getLocationCustomName } from '../utils';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
 import { logDeleteDistributedStock } from '../services/suspiciousActivityService';
 
@@ -904,6 +905,11 @@ export default function StocksDistribuesTab({
               );
             })}
           </div>
+
+          <TableSubHeaderButtons
+            spreadsheetKey="spreadsheetStocks"
+            idSuffix="stocks-distribues"
+          />
 
           {/* Distributed Stock Table List - identical to Centrale des stocks table */}
           <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

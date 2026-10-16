@@ -976,9 +976,59 @@ export interface SuspiciousActivityLog {
   details?: Record<string, any>;
 }
 
+export function getTenantSpreadsheetUrl(
+  fieldKey: SpreadsheetFieldKey,
+  companyInfo?: Partial<CompanyInfo> | null
+): string {
+  const urlKey = `${fieldKey}Url` as keyof CompanyInfo;
+  if (companyInfo) {
+    const direct = companyInfo[fieldKey] || companyInfo[urlKey];
+    if (direct && String(direct).trim()) return String(direct).trim();
+  }
+  if (typeof window === 'undefined') return '';
+  const activeTenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+  const extraMeta = EXTRA_SPREADSHEET_FIELDS.find((f) => f.key === fieldKey);
+  const storageSuffix =
+    extraMeta?.storageSuffix ||
+    (fieldKey === 'spreadsheetDefibrillateurs'
+      ? 'spreadsheet_defibrillateurs'
+      : fieldKey === 'spreadsheetAutresMateriels'
+      ? 'spreadsheet_autres_materiels'
+      : fieldKey === 'spreadsheetClients'
+      ? 'spreadsheet_clients'
+      : '');
 
+  if (storageSuffix) {
+    const fromStorage =
+      localStorage.getItem(`defib_${activeTenantId}_${storageSuffix}`) ||
+      localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_${storageSuffix}`) ||
+      localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_${storageSuffix}`);
+    if (fromStorage && fromStorage.trim()) return fromStorage.trim();
+  }
 
+  try {
+    const cachedCompanyRaw =
+      localStorage.getItem(`defib_company_info_${activeTenantId}`) ||
+      localStorage.getItem(`defib_company_info_${activeTenantId.toUpperCase()}`) ||
+      localStorage.getItem(`defib_company_info_${activeTenantId.toLowerCase()}`);
+    if (cachedCompanyRaw) {
+      const parsed = JSON.parse(cachedCompanyRaw);
+      const val = parsed?.[fieldKey] || parsed?.[urlKey];
+      if (val && String(val).trim()) return String(val).trim();
+    }
+  } catch (_) {}
 
+  return '';
+}
 
-
-
+export function openTenantSpreadsheetUrl(url: string): void {
+  const trimmed = String(url || '').trim();
+  if (!trimmed || typeof document === 'undefined') return;
+  const link = document.createElement('a');
+  link.href = trimmed;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}

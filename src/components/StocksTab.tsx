@@ -4,6 +4,7 @@ import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockL
 import { getLocationCustomName, generateRandomShortCode } from '../utils';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { Check, X } from 'lucide-react';
 import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
 import { logDeleteStockCenter } from '../services/suspiciousActivityService';
@@ -1558,6 +1559,11 @@ export default function StocksTab({
               );
             })}
           </div>
+
+          <TableSubHeaderButtons
+            spreadsheetKey="spreadsheetStocks"
+            idSuffix="stocks"
+          />
 
           {/* Stock Table List */}
           <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

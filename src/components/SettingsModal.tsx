@@ -22,7 +22,7 @@ import {
   Activity,
   FileSpreadsheet
 } from 'lucide-react';
-import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, EXTRA_SPREADSHEET_FIELDS, SpreadsheetFieldKey } from '../types';
+import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, EXTRA_SPREADSHEET_FIELDS, SpreadsheetFieldKey, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile, auth, findTenantInList, KNOWN_TENANTS_REGISTRY, ensureTenantMembersClient, ensureTenantCustomLocationNames } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { getAppsScriptUrl, saveAppsScriptUrl, triggerEmail2TechnicianConnexion, triggerEmail3AdminConnexion, triggerEmailNewMemberAdded, sendScriptEmail } from '../utils/emailService';
@@ -1236,11 +1236,38 @@ export default function SettingsModal({
     { entity: 'Mission / ADV', slug: 'commentaire', type: 'string', label: 'Consignes d\'accès ou d\'intervention technicien', example: 'Badge à demander à l\'accueil RDC' }
   ];
 
+  const persistApiDefibeoConnectorState = async (active: boolean, apiKey: string, secretKey: string) => {
+    const tId = activeTenantId || 'demo';
+    const docId = `${tId}_connectors`;
+    const payload = {
+      id: docId,
+      tenantId: tId,
+      envId: envIdDisplay || tId,
+      apiDefibeoActive: active,
+      apiDefibeoApiKey: apiKey,
+      apiDefibeoSecretKey: secretKey,
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      await setDoc(doc(db, 'api_connectors', docId), payload, { merge: true });
+    } catch (_) {}
+    try {
+      await fetch('/api/collection/api_connectors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: tId, items: [payload] })
+      });
+    } catch (_) {}
+  };
+
   const generateApiDefibeoKeys = () => {
     const rand1 = Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
     const rand2 = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    setApiDefibeoApiKey(`dfb_live_${rand1}`);
-    setApiDefibeoSecretKey(`dfb_sec_${rand2}`);
+    const newApiKey = `dfb_live_${rand1}`;
+    const newSecretKey = `dfb_sec_${rand2}`;
+    setApiDefibeoApiKey(newApiKey);
+    setApiDefibeoSecretKey(newSecretKey);
+    persistApiDefibeoConnectorState(apiDefibeoActive, newApiKey, newSecretKey);
   };
 
   const copyToClipboard = (text: string, fieldName: string) => {
@@ -5008,7 +5035,13 @@ export default function SettingsModal({
                             const isChecked = e.target.checked;
                             setApiDefibeoActive(isChecked);
                             if (isChecked && (!apiDefibeoApiKey || !apiDefibeoSecretKey)) {
-                              generateApiDefibeoKeys();
+                              const newApiKey = 'dfb_live_' + Array.from({ length: 24 }, () => Math.random().toString(36)[2] || '0').join('');
+                              const newSecretKey = 'dfb_sec_' + Array.from({ length: 32 }, () => Math.random().toString(36)[2] || '0').join('');
+                              setApiDefibeoApiKey(newApiKey);
+                              setApiDefibeoSecretKey(newSecretKey);
+                              persistApiDefibeoConnectorState(isChecked, newApiKey, newSecretKey);
+                            } else {
+                              persistApiDefibeoConnectorState(isChecked, apiDefibeoApiKey, apiDefibeoSecretKey);
                             }
                           }}
                           className="sr-only peer"
@@ -5072,7 +5105,11 @@ export default function SettingsModal({
                             <input
                               type="text"
                               value={apiDefibeoApiKey}
-                              onChange={(e) => setApiDefibeoApiKey(e.target.value)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setApiDefibeoApiKey(val);
+                                persistApiDefibeoConnectorState(apiDefibeoActive, val, apiDefibeoSecretKey);
+                              }}
                               className="w-full text-black font-mono text-xs bg-white p-2 rounded-lg border border-slate-300"
                               placeholder="dfb_live_..."
                             />
@@ -5094,7 +5131,11 @@ export default function SettingsModal({
                             <input
                               type="text"
                               value={apiDefibeoSecretKey}
-                              onChange={(e) => setApiDefibeoSecretKey(e.target.value)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setApiDefibeoSecretKey(val);
+                                persistApiDefibeoConnectorState(apiDefibeoActive, apiDefibeoApiKey, val);
+                              }}
                               className="w-full text-black font-mono text-xs bg-white p-2 rounded-lg border border-slate-300"
                               placeholder="dfb_sec_..."
                             />
@@ -5986,6 +6027,70 @@ export default function SettingsModal({
             )}
           </div>
         )}
+
+        {/* BOUTONS 50%/50% ACTUALISER LES DONNÉES & OUVRIR ÉDITEUR SPREADSHEETS */}
+        {activeSection !== null &&
+          ['reglages', 'pdf', 'emplacements', 'membres', 'communication', 'actions_suspectes'].includes(activeSection) && (() => {
+            const sectionSheetKey: SpreadsheetFieldKey =
+              activeSection === 'emplacements'
+                ? 'spreadsheetIntituleEmplacements'
+                : activeSection === 'membres'
+                ? 'spreadsheetMembresEnvironnement'
+                : 'spreadsheetReglages';
+            const resolvedUrl =
+              extraSpreadsheets[sectionSheetKey] ||
+              getTenantSpreadsheetUrl(sectionSheetKey, companyInfo);
+            return (
+              <div className="pt-2 w-full grid grid-cols-2 gap-3 animate-fadeIn" style={{ order: 98 }}>
+                <button
+                  type="button"
+                  id={`btn-settings-refresh-${activeSection}`}
+                  onClick={() => {}}
+                  style={{
+                    ...rowActionButtonStyle,
+                    backgroundColor: '#000000',
+                    color: '#ffffff',
+                    width: '100%',
+                    fontSize: '18px',
+                    padding: '14px 22px',
+                    borderRadius: '13px',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: 'none',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                  }}
+                  className="transition-all hover:opacity-90 active:scale-[0.99] text-white flex items-center justify-center gap-2"
+                >
+                  {t("Actualiser les données")}
+                </button>
+                <button
+                  type="button"
+                  id={`btn-settings-open-spreadsheet-${activeSection}`}
+                  onClick={() => {
+                    if (resolvedUrl) openTenantSpreadsheetUrl(resolvedUrl);
+                  }}
+                  style={{
+                    ...rowActionButtonStyle,
+                    backgroundColor: '#000000',
+                    color: '#ffffff',
+                    width: '100%',
+                    fontSize: '18px',
+                    padding: '14px 22px',
+                    borderRadius: '13px',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: 'none',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                  }}
+                  className="transition-all hover:opacity-90 active:scale-[0.99] text-white flex items-center justify-center gap-2"
+                >
+                  {t("Ouvrir éditeur SpreadSheets")}
+                </button>
+              </div>
+            );
+          })()}
 
         {/* BOUTON TERMINÉ PLEINE LARGEUR */}
         {activeSection !== null && (

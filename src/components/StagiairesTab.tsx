@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StagiaireRecord } from '../types';
 import { getRegionsForCountry } from '../utils/regions';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 
 interface StagiairesTabProps {
   stagiaires: StagiaireRecord[];
@@ -245,6 +246,11 @@ export default function StagiairesTab({
               </div>
             </div>
           </div>
+
+          <TableSubHeaderButtons
+            spreadsheetKey="spreadsheetStagiaires"
+            idSuffix="stagiaires"
+          />
 
           {/* Main Records Table Sheet - Full Width */}
           <div className="bg-white overflow-hidden rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

@@ -1659,32 +1659,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
         </div>
       )}
 
-      {/* Floating Buttons "Actualiser" & "Remonter" when header is not visible (>200px scroll) */}
+      {/* Floating Button "Remonter" when header is not visible (>200px scroll) */}
       {showScrollTop && (
         <div className="fixed bottom-4 right-4 sm:bottom-4 sm:right-6 z-40 animate-fade-in flex items-center gap-2.5 sm:gap-3">
-          <button
-            type="button"
-            onClick={handleRefreshCalendar}
-            disabled={isRefreshing}
-            className="text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none hover:opacity-95 active:scale-95 disabled:opacity-75"
-            style={{
-              backgroundColor: "#000000",
-              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
-              borderRadius: "13px",
-              padding: "10px 20px",
-              fontSize: "18px",
-              border: "none",
-            }}
-          >
-            {isRefreshing ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                {t("Actualisation...") || "Actualisation..."}
-              </span>
-            ) : (
-              t("Actualiser")
-            )}
-          </button>
           <button
             type="button"
             onClick={handleScrollToTop}

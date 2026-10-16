@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PointageLog, Member, CttModelSetting, CttColumnTarget, CompanyInfo, CttGlobalRules, DEFAULT_CTT_GLOBAL_RULES } from '../types';
 import { loadCttGlobalRules } from '../utils/cttRules';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { t } from '../utils/translate';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
 
@@ -1614,6 +1615,12 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           ))}
         </div>
       )}
+
+      <TableSubHeaderButtons
+        spreadsheetKey="spreadsheetTemps"
+        idSuffix="temps"
+        companyInfo={companyInfo}
+      />
 
       {/* CTT Monthly Table */}
       <div

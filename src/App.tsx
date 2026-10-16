@@ -6,7 +6,8 @@ import { idbSet, idbGet } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
-import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, TeamWorkGroup, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, TenantMessage, EXTRA_SPREADSHEET_FIELDS } from './types';
+import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, TeamWorkGroup, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, TenantMessage, EXTRA_SPREADSHEET_FIELDS, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from './types';
+import { TableSubHeaderButtons } from './components/TableSubHeaderButtons';
 import {
   INITIAL_CLIENTS,
   INITIAL_VARIABLES,
@@ -1894,7 +1895,7 @@ export default function App() {
     onBatchAppended: (allAccumulatedItems: any[], loadedCount: number, totalCount: number) => void,
     isCancelledFn?: () => boolean
   ) => {
-    const CHUNK_SIZE = 2500;
+    const CHUNK_SIZE = 10000;
     let offset = 0;
     let hasMore = true;
     const accumulated: any[] = [];
@@ -2089,7 +2090,6 @@ export default function App() {
     const role = localStorage.getItem('defib_logged_user_role') || '';
     const emailLower = (loggedUser?.email || '').trim().toLowerCase();
     if (
-      role === 'megaadmin' ||
       role === 'technicien' ||
       role === 'client' ||
       emailLower === 'tech.ouest@defibeo.com' ||
@@ -2370,36 +2370,42 @@ export default function App() {
       const persistResolvedUrl = (
         field: 'spreadsheetDefibrillateurs' | 'spreadsheetAutresMateriels' | 'spreadsheetClients',
         localKeySuffix: string,
-        resolvedUrl?: string
+        resolvedUrl?: string,
+        markFullyLoaded = false
       ) => {
         const clean = sanitizeSheetUrl(resolvedUrl);
         if (!clean) return;
-        if (field === 'spreadsheetDefibrillateurs') lastLoadedSheetUrlsRef.current.defibs = clean;
-        if (field === 'spreadsheetAutresMateriels') lastLoadedSheetUrlsRef.current.autres = clean;
-        if (field === 'spreadsheetClients') lastLoadedSheetUrlsRef.current.clients = clean;
+        if (markFullyLoaded) {
+          if (field === 'spreadsheetDefibrillateurs') lastLoadedSheetUrlsRef.current.defibs = clean;
+          if (field === 'spreadsheetAutresMateriels') lastLoadedSheetUrlsRef.current.autres = clean;
+          if (field === 'spreadsheetClients') lastLoadedSheetUrlsRef.current.clients = clean;
+        }
         try {
           for (const k of [activeTid, activeTid.toUpperCase(), activeTid.toLowerCase()]) {
             localStorage.setItem(`defib_${k}_${localKeySuffix}`, clean);
           }
         } catch (_) {}
-        setCompanyInfo(prev => {
-          if (prev[field] === clean) return prev;
-          const updated = {
-            ...prev,
-            [field]: clean,
-            [`${field}Url`]: clean,
-          };
-          try {
-            localStorage.setItem(`defib_${activeTid}_company_info`, JSON.stringify(updated));
-          } catch (_) {}
-          return updated;
-        });
+        if (markFullyLoaded) {
+          setCompanyInfo(prev => {
+            if (prev[field] === clean) return prev;
+            const updated = {
+              ...prev,
+              [field]: clean,
+              [`${field}Url`]: clean,
+            };
+            try {
+              localStorage.setItem(`defib_${activeTid}_company_info`, JSON.stringify(updated));
+            } catch (_) {}
+            return updated;
+          });
+        }
       };
 
       await Promise.all([
         (async () => {
           if (skipDefibs) return;
           try {
+            let resolvedDefibSheetUrl = urlDefibs;
             await fetchSheetCollectionInBatches(
               activeTid,
               'defibrillateurs',
@@ -2407,7 +2413,8 @@ export default function App() {
               force,
               (json, firstItems) => {
                 if (json.spreadsheetUrl) {
-                  persistResolvedUrl('spreadsheetDefibrillateurs', 'spreadsheet_defibrillateurs', json.spreadsheetUrl);
+                  resolvedDefibSheetUrl = json.spreadsheetUrl;
+                  persistResolvedUrl('spreadsheetDefibrillateurs', 'spreadsheet_defibrillateurs', json.spreadsheetUrl, !json.hasMore);
                 }
                 if (json.stats) {
                   setDefibSheetStats(json.stats);
@@ -2416,9 +2423,12 @@ export default function App() {
                 setDefibrillateurs(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
                 setIsDefibLoading(false);
               },
-              (allItems) => {
+              (allItems, loadedCount, totalCount) => {
                 const filtered = allItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
                 setDefibrillateurs(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
+                if (loadedCount >= totalCount && resolvedDefibSheetUrl) {
+                  persistResolvedUrl('spreadsheetDefibrillateurs', 'spreadsheet_defibrillateurs', resolvedDefibSheetUrl, true);
+                }
               },
               () => isCancelled
             );
@@ -6810,11 +6820,41 @@ export default function App() {
       }
     };
 
+    const handleWebappRefresh = () => {
+      handleFocusSync();
+      const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      const syncOne = <T,>(col: string, suffix: string, setter: (v: T) => void) => {
+        fetchCollectionFromFirestore<T>(col, activeTid)
+          .then((data) => {
+            if (data !== null && data !== undefined) {
+              const strVal = JSON.stringify(data);
+              loadedDataRef.current[suffix] = strVal;
+              loadedDataRef.current[col] = strVal;
+              safeSetLocalStorage(`defib_${activeTid}_${suffix}`, strVal);
+              setter(data);
+            }
+          })
+          .catch(() => {});
+      };
+      syncOne<StockRecord[]>('stocks', 'stocks', setStocks);
+      syncOne<DistributedStockLocation[]>('distributed_stocks', 'distributed_stocks', setDistributedStocks);
+      syncOne<Member[]>('members', 'members', setMembers);
+      syncOne<any[]>('fsmTours', 'fsm_tours', setFsmTours);
+      syncOne<any[]>('generatedReports', 'generated_reports', setGeneratedReports);
+      syncOne<PointageLog[]>('pointages', 'pointages_history', setPointages);
+      syncOne<FormationRecord[]>('formations', 'formations', setFormations);
+      syncOne<StagiaireRecord[]>('stagiaires', 'stagiaires', setStagiaires);
+      syncOne<EmargementRecord[]>('emargements', 'emargements', setEmargements);
+      syncOne<CommercialDoc[]>('commercialDocs', 'commercial_docs', setCommercialDocs);
+    };
+
     window.addEventListener('focus', handleFocusSync);
+    window.addEventListener('defib_refresh_webapp_data', handleWebappRefresh);
     // Also run once on mount
     handleFocusSync();
     return () => {
       window.removeEventListener('focus', handleFocusSync);
+      window.removeEventListener('defib_refresh_webapp_data', handleWebappRefresh);
     };
   }, [tenantId, isFirebaseLoaded]);
 
@@ -11452,7 +11492,7 @@ export default function App() {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-start">
+                  <div className="flex items-center justify-start gap-4 flex-wrap">
                     <button
                       type="button"
                       onClick={() => {
@@ -11488,6 +11528,96 @@ export default function App() {
                         {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer les statistiques")}
                       </span>
                     </button>
+
+                    <button
+                      type="button"
+                      id="btn-refresh-data-fsm"
+                      onClick={() => {}}
+                      style={{
+                        fontSize: '9px',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        fontWeight: 100,
+                        cursor: 'pointer',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '2px 4px',
+                        color: '#000000',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        textDecoration: 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                      className="hover:opacity-80 transition-all select-none cursor-pointer"
+                      title={translate("Actualiser les données")}
+                    >
+                      <RefreshCw size={10} className="shrink-0 text-black" color="#000000" />
+                      <span style={{ color: '#000000' }}>{translate("Actualiser les données")}</span>
+                    </button>
+
+                    {(() => {
+                      const tourneesUrl = getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo);
+                      const missionsUrl = getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo);
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            id="btn-open-spreadsheet-editor-tournees"
+                            onClick={() => openTenantSpreadsheetUrl(tourneesUrl)}
+                            disabled={!tourneesUrl}
+                            style={{
+                              fontSize: '9px',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              fontWeight: 100,
+                              cursor: tourneesUrl ? 'pointer' : 'not-allowed',
+                              opacity: tourneesUrl ? 1 : 0.4,
+                              background: 'transparent',
+                              border: 'none',
+                              padding: '2px 4px',
+                              color: '#000000',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              textDecoration: 'none',
+                              transition: 'all 0.15s ease'
+                            }}
+                            className={tourneesUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
+                            title={translate("Ouvrir l’éditeur Spreadsheets Tournées")}
+                          >
+                            <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
+                            <span style={{ color: '#000000' }}>{translate("Ouvrir l’éditeur Spreadsheets Tournées")}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            id="btn-open-spreadsheet-editor-missions"
+                            onClick={() => openTenantSpreadsheetUrl(missionsUrl)}
+                            disabled={!missionsUrl}
+                            style={{
+                              fontSize: '9px',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              fontWeight: 100,
+                              cursor: missionsUrl ? 'pointer' : 'not-allowed',
+                              opacity: missionsUrl ? 1 : 0.4,
+                              background: 'transparent',
+                              border: 'none',
+                              padding: '2px 4px',
+                              color: '#000000',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              textDecoration: 'none',
+                              transition: 'all 0.15s ease'
+                            }}
+                            className={missionsUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
+                            title={translate("Ouvrir l’éditeur Spreadsheets Missions")}
+                          >
+                            <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
+                            <span style={{ color: '#000000' }}>{translate("Ouvrir l’éditeur Spreadsheets Missions")}</span>
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -16088,7 +16218,7 @@ export default function App() {
 
                 {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard */}
                 <div 
-                  className="flex items-center justify-start"
+                  className="flex items-center justify-start gap-4 flex-wrap"
                   style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
                 >
                   <button
@@ -16120,6 +16250,65 @@ export default function App() {
                     )}
                     <span style={{ color: '#000000' }}>{gmaoIsTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
                   </button>
+
+                  <button
+                    type="button"
+                    id="btn-refresh-data-rapports-pdf"
+                    onClick={() => {}}
+                    style={{
+                      fontSize: '9px',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      fontWeight: 100,
+                      cursor: 'pointer',
+                      background: 'transparent',
+                      border: 'none',
+                      padding: '2px 4px',
+                      color: '#000000',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      textDecoration: 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                    className="hover:opacity-80 transition-all select-none cursor-pointer"
+                    title={t("Actualiser les données")}
+                  >
+                    <RefreshCw size={10} className="shrink-0 text-black" color="#000000" />
+                    <span style={{ color: '#000000' }}>{t("Actualiser les données")}</span>
+                  </button>
+
+                  {(() => {
+                    const rapportsSheetUrl = getTenantSpreadsheetUrl('spreadsheetRapportsPdf', companyInfo);
+                    return (
+                      <button
+                        type="button"
+                        id="btn-open-spreadsheet-editor-rapports-pdf"
+                        onClick={() => openTenantSpreadsheetUrl(rapportsSheetUrl)}
+                        disabled={!rapportsSheetUrl}
+                        style={{
+                          fontSize: '9px',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          fontWeight: 100,
+                          cursor: rapportsSheetUrl ? 'pointer' : 'not-allowed',
+                          opacity: rapportsSheetUrl ? 1 : 0.4,
+                          background: 'transparent',
+                          border: 'none',
+                          padding: '2px 4px',
+                          color: '#000000',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          textDecoration: 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                        className={rapportsSheetUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
+                        title={t("Ouvrir l'éditeur SpreadSheets")}
+                      >
+                        <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
+                        <span style={{ color: '#000000' }}>{t("Ouvrir l'éditeur SpreadSheets")}</span>
+                      </button>
+                    );
+                  })()}
                 </div>
 
                 {/* Main Table Records Sheet */}
@@ -18199,6 +18388,12 @@ export default function App() {
                         );
                       })}
                     </div>
+
+                    <TableSubHeaderButtons
+                      spreadsheetKey="spreadsheetCommandes"
+                      idSuffix="commandes"
+                      companyInfo={companyInfo}
+                    />
 
                     {/* Main Table Records Sheet */}
                     <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

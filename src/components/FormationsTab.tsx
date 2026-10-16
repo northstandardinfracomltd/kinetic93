@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FormationRecord, Variable, Member, Client, AppTab } from '../types';
 import { getRegionsForCountry } from '../utils/regions';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 
 interface FormationsTabProps {
   formations: FormationRecord[];
@@ -579,6 +580,11 @@ export default function FormationsTab({
               </div>
             </div>
           </div>
+
+          <TableSubHeaderButtons
+            spreadsheetKey="spreadsheetFormations"
+            idSuffix="formations"
+          />
 
           {/* Main Records Table Sheet - Full Width */}
           <div className="bg-white overflow-hidden rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

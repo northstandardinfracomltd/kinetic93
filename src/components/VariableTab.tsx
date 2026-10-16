@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Variable, VariableCategory, Defibrillateur, StockRecord, DistributedStockLocation, OtherEquipment, AchatFournisseur } from '../types';
 import { Plus, Search, Trash2, Edit2, X, Sliders, Box, Image as ImageIcon, Sparkles, Check } from 'lucide-react';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { t } from '../utils/translate';
 
 // Custom Radio Component with exact design styling (representing white gap, rose border and pink dot)
@@ -1265,6 +1266,11 @@ export default function VariableTab({
           );
         })}
       </div>
+
+      <TableSubHeaderButtons
+        spreadsheetKey="spreadsheetVariables"
+        idSuffix="variables"
+      />
 
       {/* Main Table Records Sheet */}
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

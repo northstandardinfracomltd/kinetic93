@@ -576,6 +576,7 @@ export default function DefibTab({
 }: DefibTabProps) {
   const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
   const [remoteQueriedDefibs, setRemoteQueriedDefibs] = useState<Defibrillateur[]>([]);
+  const [planSheetDefibs, setPlanSheetDefibs] = useState<Defibrillateur[]>([]);
   const [remoteFilteredTotal, setRemoteFilteredTotal] = useState<number | null>(null);
   const [fallbackSheetClients, setFallbackSheetClients] = useState<Client[]>([]);
 
@@ -978,7 +979,7 @@ export default function DefibTab({
 
   const stableDefibsRef = useRef<{ tenant: string; items: Defibrillateur[] }>({ tenant: '', items: [] });
 
-  // Merge local loaded defibrillateurs with any on-demand rows returned from /api/sheets/query
+  // Merge local loaded defibrillateurs with any on-demand rows returned from /api/sheets/query and planSheetDefibs
   const mergedDefibrillateurs = useMemo(() => {
     let baseList = defibrillateurs;
     if (baseList.length > 0) {
@@ -987,7 +988,7 @@ export default function DefibTab({
       baseList = stableDefibsRef.current.items;
     }
 
-    if (remoteQueriedDefibs.length === 0) return baseList;
+    if (remoteQueriedDefibs.length === 0 && planSheetDefibs.length === 0) return baseList;
     const byKey = new Map<string, Defibrillateur>();
     const out: Defibrillateur[] = [];
 
@@ -997,22 +998,24 @@ export default function DefibTab({
       if (k) byKey.set(k, df);
       out.push(df);
     }
-    for (const df of remoteQueriedDefibs) {
-      if (!df) continue;
-      const k = String(df.id || df.identifiant || '').trim().toLowerCase();
-      if (k) {
-        const existing = byKey.get(k);
-        if (!existing) {
-          byKey.set(k, df);
-          out.push(df);
-        } else if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
-          const idx = out.indexOf(existing);
-          if (idx >= 0) out[idx] = { ...existing, ...df };
+    for (const sourceList of [planSheetDefibs, remoteQueriedDefibs]) {
+      for (const df of sourceList) {
+        if (!df) continue;
+        const k = String(df.id || df.identifiant || '').trim().toLowerCase();
+        if (k) {
+          const existing = byKey.get(k);
+          if (!existing) {
+            byKey.set(k, df);
+            out.push(df);
+          } else if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
+            const idx = out.indexOf(existing);
+            if (idx >= 0) out[idx] = { ...existing, ...df };
+          }
         }
       }
     }
     return out;
-  }, [defibrillateurs, remoteQueriedDefibs, activeTenantId]);
+  }, [defibrillateurs, planSheetDefibs, remoteQueriedDefibs, activeTenantId]);
 
   const mergedDefibByIdMap = useMemo(() => {
     const map = new Map<string, Defibrillateur>();
@@ -2025,14 +2028,34 @@ export default function DefibTab({
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('all');
 
-  // Défibrillateurs avec Maintenance Autorisée = Oui ("Avec.Main") pour l'affichage Plan
-  const planDefibrillateurs = useMemo(() => {
-    return defibrillateurs.filter(df => {
-      const rawFsm = (df.fsmAutorise ?? (df as any).maintenanceAutorisee ?? (df as any).maintenance_autorisee ?? '').toString().trim().toLowerCase();
-      if (rawFsm === 'non' || rawFsm === 'false' || rawFsm === '0') return false;
-      return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || (!rawFsm && (df.fsmAutorise || 'Oui') === 'Oui');
-    });
-  }, [defibrillateurs]);
+  // Ensure 100% of MAIN OUI defibrillators from the tenant's Spreadsheet are loaded for the Plan map
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/sheets/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: activeTenantId,
+            spreadsheetUrl: resolvedSpreadsheetUrl,
+            type: 'defibrillateurs',
+            maintenanceFilter: 'oui',
+            limit: 25000,
+            forceRefresh: refreshTrigger > 0,
+          }),
+        });
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (!cancelled && Array.isArray(json.items) && json.items.length > 0) {
+          setPlanSheetDefibs(json.items);
+        }
+      } catch (_) {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTenantId, resolvedSpreadsheetUrl, refreshTrigger, isMapOpen]);
 
   // --- LOOKUP INDEXES ---
   const clientMap = useMemo(() => {
@@ -2399,6 +2422,16 @@ export default function DefibTab({
       );
     });
   }, [mergedDefibrillateurs, deletedDefibSet]);
+
+  // Défibrillateurs avec Maintenance Autorisée = Oui ("Avec.Main") pour l'affichage Plan (depuis activeDefibrillateurs lié au Spreadsheet du tenant)
+  const planDefibrillateurs = useMemo(() => {
+    return activeDefibrillateurs.filter(df => {
+      const anyDf = df as any;
+      const rawFsm = (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
+      if (rawFsm === 'non' || rawFsm === 'false' || rawFsm === '0') return false;
+      return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || (!rawFsm && (df.fsmAutorise || 'Oui') === 'Oui');
+    });
+  }, [activeDefibrillateurs]);
 
   const effectiveTotalDefibsCount = useMemo(() => {
     const localLen = activeDefibrillateurs.length;

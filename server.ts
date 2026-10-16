@@ -1759,10 +1759,10 @@ async function resolveTenant(sanitizedTenantId: string): Promise<any | null> {
 }
 
 // Helper function to read tenant API connector credentials from Firestore
-async function getTenantApiCredentials(tenantId: string, extraAliases: (string | undefined | null)[] = []): Promise<{ active: boolean; apiKey?: string; secretKey?: string }> {
+async function getTenantApiCredentials(tenantId: string, extraAliases: (string | undefined | null)[] = []): Promise<{ active: boolean; apiKey?: string; secretKey?: string; matchedTenantId?: string }> {
   const candidateKeys: string[] = [];
   if (tenantId === 'demo') {
-    candidateKeys.push('api_connectors');
+    candidateKeys.push('api_connectors', 'demo_api_connectors');
   } else {
     candidateKeys.push(
       `${tenantId}_api_connectors`,
@@ -1787,6 +1787,11 @@ async function getTenantApiCredentials(tenantId: string, extraAliases: (string |
 
   const uniqueKeys = Array.from(new Set(candidateKeys.filter(Boolean)));
 
+  const extractTenantFromKey = (k: string): string => {
+    const m = k.match(/^(.+)_api_connectors$/i);
+    return m && m[1] ? m[1] : tenantId;
+  };
+
   for (const cKey of uniqueKeys) {
     if (serverMemoryStore.has(cKey)) {
       const rawData = serverMemoryStore.get(cKey);
@@ -1796,7 +1801,7 @@ async function getTenantApiCredentials(tenantId: string, extraAliases: (string |
         const secretKey = typeof connData.apiDefibeoSecretKey === 'string' ? connData.apiDefibeoSecretKey.trim() : '';
         const active = connData.apiDefibeoActive !== false;
         if (apiKey || secretKey) {
-          return { active, apiKey, secretKey };
+          return { active, apiKey, secretKey, matchedTenantId: connData.tenantId || connData.envId || extractTenantFromKey(cKey) };
         }
       }
     }
@@ -1814,7 +1819,7 @@ async function getTenantApiCredentials(tenantId: string, extraAliases: (string |
           const active = connData.apiDefibeoActive !== false;
           if (apiKey || secretKey) {
             serverMemoryStore.set(cKey, connData);
-            return { active, apiKey, secretKey };
+            return { active, apiKey, secretKey, matchedTenantId: connData.tenantId || connData.envId || extractTenantFromKey(cKey) };
           }
         }
       } catch (_) {}
@@ -1842,7 +1847,7 @@ async function getTenantApiCredentials(tenantId: string, extraAliases: (string |
         const secretKey = typeof payload?.apiDefibeoSecretKey === 'string' ? payload.apiDefibeoSecretKey.trim() : '';
         const active = payload?.apiDefibeoActive !== false;
         if (apiKey || secretKey) {
-          return { active, apiKey, secretKey };
+          return { active, apiKey, secretKey, matchedTenantId: payload?.tenantId || payload?.envId || extractTenantFromKey(cKey) };
         }
       }
     } catch (e) {
@@ -1851,6 +1856,58 @@ async function getTenantApiCredentials(tenantId: string, extraAliases: (string |
   }
 
   return { active: false };
+}
+
+// Helper to find which tenant has the API DEFIBEO connector ON matching the provided API/Secret key
+async function findActiveConnectorTenantByKeys(keysToCheck: string[]): Promise<{ tenantId: string; active: boolean; apiKey?: string; secretKey?: string } | null> {
+  if (!Array.isArray(keysToCheck) || keysToCheck.length === 0) return null;
+  const inspectedKeys = new Set<string>();
+
+  const checkPayload = (rawPayload: any, keyName: string): { tenantId: string; active: boolean; apiKey?: string; secretKey?: string } | null => {
+    const connData = (rawPayload && typeof rawPayload === 'object' && 'value' in rawPayload) ? rawPayload.value : rawPayload;
+    if (!connData || typeof connData !== 'object' || Array.isArray(connData)) return null;
+    const apiKey = typeof connData.apiDefibeoApiKey === 'string' ? connData.apiDefibeoApiKey.trim() : '';
+    const secretKey = typeof connData.apiDefibeoSecretKey === 'string' ? connData.apiDefibeoSecretKey.trim() : '';
+    if (!apiKey && !secretKey) return null;
+    if ((apiKey && keysToCheck.includes(apiKey)) || (secretKey && keysToCheck.includes(secretKey))) {
+      const m = keyName.match(/^(.+)_api_connectors$/i);
+      const tid = String(connData.tenantId || connData.envId || (m && m[1] ? m[1] : 'D27')).trim();
+      return {
+        tenantId: tid,
+        active: connData.apiDefibeoActive !== false,
+        apiKey,
+        secretKey,
+      };
+    }
+    return null;
+  };
+
+  for (const [k, v] of serverMemoryStore.entries()) {
+    if (k === 'api_connectors' || k.toLowerCase().endsWith('_api_connectors')) {
+      inspectedKeys.add(k);
+      const matched = checkPayload(v, k);
+      if (matched) return matched;
+    }
+  }
+
+  if (fs.existsSync(COLLECTIONS_DIR)) {
+    try {
+      const files = fs.readdirSync(COLLECTIONS_DIR).filter(f => f.toLowerCase().endsWith('api_connectors.json'));
+      for (const f of files) {
+        const k = f.replace(/\.json$/i, '');
+        if (inspectedKeys.has(k)) continue;
+        inspectedKeys.add(k);
+        try {
+          const parsed = JSON.parse(fs.readFileSync(path.join(COLLECTIONS_DIR, f), 'utf-8'));
+          serverMemoryStore.set(k, parsed);
+          const matched = checkPayload(parsed, k);
+          if (matched) return matched;
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  return null;
 }
 
 function getCollectionNameAliases(collectionName: string): string[] {
@@ -2850,7 +2907,7 @@ function deleteDefibrillateursFromStore(
   return { deletedCount: totalDeletedFromChunks, deletedKeys: deletedKeysList };
 }
 
-// Fast lookup for a single defibrillator strictly scoped to the tenant
+// Fast lookup for a single defibrillator strictly scoped to the tenant (prioritizing Tenant Google Spreadsheet)
 async function findSingleDefibrillateur(
   rawSubId: string,
   tenantId: string = 'demo',
@@ -2866,7 +2923,26 @@ async function findSingleDefibrillateur(
   const tAliases = getTenantAliasesSync(normTenant);
   const isD27OrD58 = tAliases.has('d27') || tAliases.has('d58');
 
-  // 0. FASTEST PATH: Check fastDefibIndex ONLY if tenant matches
+  // 0a. AUTHORITATIVE GOOGLE SPREADSHEET PATH: Always check the tenant's configured Défibrillateurs Spreadsheet first
+  try {
+    const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId || 'demo', 'defibrillateurs');
+    if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
+      const sheetData = await fetchTenantSheetCollection(sheetUrl, tenantId || 'demo', 'defibrillateurs', false);
+      if (sheetData.fromSpreadsheet && Array.isArray(sheetData.items)) {
+        const foundInSheet = sheetData.items.find(matcher);
+        if (foundInSheet) {
+          indexDefibrillateur(foundInSheet, tenantId || 'demo');
+          return { defib: foundInSheet, tenant: tenantId || 'demo' };
+        }
+        // Strictly return null when the tenant has a live Google Spreadsheet and the ID does not exist in it
+        return null;
+      }
+    }
+  } catch (sheetErr) {
+    console.warn(`[findSingleDefibrillateur] Warning reading spreadsheet for ${tenantId}:`, sheetErr);
+  }
+
+  // 0b. Check fastDefibIndex ONLY if tenant matches
   const normKey = normalizeDefibLookupKey(cleanSubId);
   const normUnescaped = normalizeDefibLookupKey(unescaped);
   const lowerKey = cleanSubId.toLowerCase();
@@ -3198,17 +3274,31 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     };
   };
 
-  // 0. GOOGLE SHEETS DATABASE OVERRIDE (for defibrillateurs, otherEquipments, clients)
-  const sheetTabMap: Record<string, SheetTabType> = {
+  // 0. GOOGLE SHEETS DATABASE OVERRIDE (for defibrillateurs, otherEquipments/materiels, clients, and any configured optional tenant spreadsheet)
+  const strictSheetTabMap: Record<string, SheetTabType> = {
     defibrillateurs: 'defibrillateurs',
     defibs: 'defibrillateurs',
     devices: 'defibrillateurs',
     otherEquipments: 'autresMateriels',
     other_equipments: 'autresMateriels',
     autresMateriels: 'autresMateriels',
+    materiels: 'autresMateriels',
     clients: 'clients',
   };
-  const mappedSheetTab = sheetTabMap[colName];
+  const optionalSheetTabMap: Record<string, SheetTabType> = {
+    fsm_tours: 'tournees',
+    tournees: 'tournees',
+    missions: 'missionsTournees',
+    generated_reports: 'rapportsPdf',
+    rapports: 'rapportsPdf',
+    tickets: 'crm',
+    crm: 'crm',
+    commandes: 'commandes',
+    stocks: 'stocks',
+    formations: 'formations',
+    variables: 'variables',
+  };
+  const mappedSheetTab = strictSheetTabMap[colName];
   if (mappedSheetTab) {
     const sheetUrl = await resolveTenantSpreadsheetUrl(activeTenant, mappedSheetTab);
     if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
@@ -3223,6 +3313,21 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     }
     // Strictly return empty array if no Google Spreadsheet is configured for this tenant/tab (never fall back to Firebase/chunks)
     return [];
+  }
+
+  const optionalTab = optionalSheetTabMap[colName];
+  if (optionalTab) {
+    const optSheetUrl = await resolveTenantSpreadsheetUrl(activeTenant, optionalTab);
+    if (optSheetUrl && extractSpreadsheetIdAndGid(optSheetUrl)) {
+      try {
+        const optSheetData = await fetchTenantSheetCollection(optSheetUrl, activeTenant, optionalTab, false);
+        if (optSheetData.fromSpreadsheet && Array.isArray(optSheetData.items) && optSheetData.items.length > 0) {
+          return optSheetData.items;
+        }
+      } catch (optErr) {
+        console.warn(`[GoogleSheetsDB] Warning reading optional sheet ${optionalTab} for tenant ${activeTenant}:`, optErr);
+      }
+    }
   }
 
   // 1. FAST PATH: Check in-memory store and disk files for this tenant across all collection name aliases
@@ -4202,6 +4307,37 @@ async function warmupDefibrillateursStore() {
     }
   });
 
+  const SHEET_TAB_FIELD_MAP: Record<SheetTabType, string> = {
+    defibrillateurs: 'spreadsheetDefibrillateurs',
+    autresMateriels: 'spreadsheetAutresMateriels',
+    clients: 'spreadsheetClients',
+    tournees: 'spreadsheetTournees',
+    missionsTournees: 'spreadsheetMissionsTournees',
+    rapportsPdf: 'spreadsheetRapportsPdf',
+    crm: 'spreadsheetCrm',
+    satisfaction: 'spreadsheetSatisfaction',
+    commandes: 'spreadsheetCommandes',
+    stocks: 'spreadsheetStocks',
+    achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
+    temps: 'spreadsheetTemps',
+    ticketsCaisse: 'spreadsheetTicketsCaisse',
+    releveConcurrentiel: 'spreadsheetReleveConcurrentiel',
+    formations: 'spreadsheetFormations',
+    stagiaires: 'spreadsheetStagiaires',
+    emargements: 'spreadsheetEmargements',
+    messagesInternes: 'spreadsheetMessagesInternes',
+    variables: 'spreadsheetVariables',
+    ged: 'spreadsheetGed',
+    reglages: 'spreadsheetReglages',
+    intituleEmplacements: 'spreadsheetIntituleEmplacements',
+    membresEnvironnement: 'spreadsheetMembresEnvironnement',
+  };
+
+  function getSheetTabFieldCandidates(tabType: SheetTabType): string[] {
+    const base = SHEET_TAB_FIELD_MAP[tabType] || 'spreadsheetDefibrillateurs';
+    return [base, `${base}Url`];
+  }
+
   // Helper to resolve tenant spreadsheet URL synchronously from memory or disk
   function getTenantSpreadsheetUrlSync(tenantId: string, tabType: SheetTabType): string {
     const isInvalidPlaceholder = (u?: string) => !u || u.includes('1tB1e41') || u.includes('2mX5O6r9hD0i3Z9m');
@@ -4218,12 +4354,7 @@ async function warmupDefibrillateursStore() {
       ...Array.from(tAliases).flatMap(a => [a, a.toUpperCase(), a.toLowerCase()]),
     ]));
 
-    const fieldMap: Record<SheetTabType, string[]> = {
-      defibrillateurs: ['spreadsheetDefibrillateurs', 'spreadsheetDefibrillateursUrl'],
-      autresMateriels: ['spreadsheetAutresMateriels', 'spreadsheetAutresMaterielsUrl'],
-      clients: ['spreadsheetClients', 'spreadsheetClientsUrl'],
-    };
-    const fields = fieldMap[tabType];
+    const fields = getSheetTabFieldCandidates(tabType);
 
     for (const cand of candidateTenants) {
       for (const suffix of ['companyInfo', 'tenantDatabases', 'company_info']) {
@@ -4291,12 +4422,7 @@ async function warmupDefibrillateursStore() {
     if (!url || !url.trim()) return;
     const cleanUrl = url.trim();
     const activeTenant = (tenantId || 'demo').trim();
-    const fieldMap: Record<SheetTabType, string> = {
-      defibrillateurs: 'spreadsheetDefibrillateurs',
-      autresMateriels: 'spreadsheetAutresMateriels',
-      clients: 'spreadsheetClients',
-    };
-    const field = fieldMap[tabType];
+    const field = SHEET_TAB_FIELD_MAP[tabType] || 'spreadsheetDefibrillateurs';
     const tAliases = getTenantAliasesSync(activeTenant);
     const tenantTargets = Array.from(new Set([
       activeTenant,
@@ -4355,12 +4481,7 @@ async function warmupDefibrillateursStore() {
     try {
       const activeTenant = (tenantId || 'demo').trim();
       const tAliases = getTenantAliasesSync(activeTenant);
-      const fieldMap: Record<SheetTabType, string[]> = {
-        defibrillateurs: ['spreadsheetDefibrillateurs', 'spreadsheetDefibrillateursUrl'],
-        autresMateriels: ['spreadsheetAutresMateriels', 'spreadsheetAutresMaterielsUrl'],
-        clients: ['spreadsheetClients', 'spreadsheetClientsUrl'],
-      };
-      const fields = fieldMap[tabType];
+      const fields = getSheetTabFieldCandidates(tabType);
       const isDNum = /^d\d+$/i.test(activeTenant);
       const isNum = /^\d+$/.test(activeTenant);
       const numOnly = (isDNum || isNum) ? activeTenant.replace(/^d/i, '') : '';
@@ -4450,7 +4571,7 @@ async function warmupDefibrillateursStore() {
       const mode = String(req.query.mode || '').trim();
       const hasLimit = req.query.limit !== undefined && req.query.limit !== '';
       const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
-      const limit = hasLimit ? Math.max(1, Math.min(4500, parseInt(String(req.query.limit), 10) || 2500)) : 0;
+      const limit = hasLimit ? Math.max(1, Math.min(25000, parseInt(String(req.query.limit), 10) || 2500)) : 0;
 
       const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, tabType, explicitUrl);
 
@@ -5811,18 +5932,23 @@ async function warmupDefibrillateursStore() {
         }
 
         const reqTenant = (
+          (req as any)._resolvedApiTenantId ||
+          (req.headers['x-environnement'] as string) ||
           (req.headers['x-defibeo-tenant-id'] as string) ||
           (req.headers['x-tenant-id'] as string) ||
           (req.query.tenant_id as string) ||
+          (req.query.tenant as string) ||
           (req.query.env as string) ||
           'demo'
         ).replace(/[^a-zA-Z0-9_-]/g, '') || 'demo';
+
+        const reqShortEnv = ((req as any)._resolvedApiShortEnvId || reqTenant).replace(/[^a-zA-Z0-9_-]/g, '') || reqTenant;
 
         const entry: ApiActivityLog = {
           id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
           timestamp: new Date().toISOString(),
           tenantId: reqTenant,
-          shortEnvId: reqTenant,
+          shortEnvId: reqShortEnv,
           direction: 'Entrante',
           method: req.method,
           endpoint: req.originalUrl || req.url,
@@ -5849,9 +5975,10 @@ async function warmupDefibrillateursStore() {
       const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
       const apiKey = ((req.headers['x-defibeo-api-key'] as string) || (req.headers['x-api-key'] as string) || (req.headers['api-key'] as string) || (req.query.api_key as string) || (req.query.apikey as string) || bearerToken || '').trim();
       const secretKey = ((req.headers['x-defibeo-secret-key'] as string) || (req.headers['x-defibeo-secret-token'] as string) || (req.headers['x-secret-key'] as string) || (req.query.secret_key as string) || (req.query.secret as string) || '').trim();
+      const keysToCheck = [apiKey, secretKey].filter(Boolean);
 
       // Extract requested tenant ID from multiple header / query formats
-      const rawTenantId = (
+      const explicitRawTenantId = (
         (req.headers['x-environnement'] as string) ||
         (req.headers['x-defibeo-tenant-id'] as string) ||
         (req.headers['x-defibeo-tenant'] as string) ||
@@ -5865,14 +5992,27 @@ async function warmupDefibrillateursStore() {
         (req.query.tenant as string) ||
         (req.query.env_id as string) ||
         (req.query.env as string) ||
-        'D58'
+        ''
       ).trim();
+
+      // Check if the provided API/Secret key directly matches an active API DEFIBEO connector for a tenant
+      const keyMatchedConnector = await findActiveConnectorTenantByKeys(keysToCheck);
+
+      const rawTenantId = explicitRawTenantId || keyMatchedConnector?.tenantId || 'D58';
 
       // 1. Sanitize tenant ID format
       const sanitizedTenantId = rawTenantId.replace(/[^a-zA-Z0-9_-]/g, '') || 'D58';
 
       // 2. Look up tenant in database using comprehensive resolver (with automatic creation / normalization)
       let targetTenant = await resolveTenant(sanitizedTenantId);
+
+      // If no explicit tenant header was sent (or explicit header didn't match a registered tenant) and key matched a tenant's connector, bind to that connector's tenant
+      if (keyMatchedConnector && (!explicitRawTenantId || !targetTenant)) {
+        const connectorTenant = await resolveTenant(keyMatchedConnector.tenantId);
+        if (connectorTenant) {
+          targetTenant = connectorTenant;
+        }
+      }
 
       if (!targetTenant) {
         // Safe auto-instantiation of tenant so requests never fail with ENV_NOT_FOUND
@@ -5893,11 +6033,9 @@ async function warmupDefibrillateursStore() {
         });
       }
 
-      // 3. Strict API Key Authentication & Multi-Tenant Isolation
+      // 3. Strict API Key Authentication & Multi-Tenant Isolation (linked to API Connector ON)
       const masterKey = process.env.DEFIBEO_MASTER_KEY || process.env.DEFIBEO_API_KEY;
       let isAuthorized = false;
-
-      const keysToCheck = [apiKey, secretKey].filter(Boolean);
 
       if (keysToCheck.length === 0) {
         return res.status(401).json({
@@ -5913,22 +6051,51 @@ async function warmupDefibrillateursStore() {
         isAuthorized = true;
       }
       // Option B: Demo environment
-      else if (targetTenant.id === 'demo') {
-        if (keysToCheck.some(k => ['demo', 'defibeo_demo', 'public_demo_key', 'demo_key'].includes(k.toLowerCase()))) {
+      else if (targetTenant.id === 'demo' || keysToCheck.some(k => ['demo', 'defibeo_demo', 'public_demo_key', 'demo_key'].includes(k.toLowerCase()))) {
+        if (targetTenant.id === 'demo' && keysToCheck.some(k => ['demo', 'defibeo_demo', 'public_demo_key', 'demo_key'].includes(k.toLowerCase()))) {
           isAuthorized = true;
         }
       }
-      // Option C: Strict Per-Tenant API Keys from Firestore (e.g. D27_api_connectors / D58_api_connectors)
-      else {
+
+      // Option C: Strict Per-Tenant API Keys from Firestore / Memory (API Connecteur ON)
+      if (!isAuthorized) {
         const tenantAliases = [targetTenant.id, targetTenant.shortEnvId, sanitizedTenantId].filter(Boolean);
         const creds = await getTenantApiCredentials(targetTenant.id, tenantAliases);
 
-        if (creds && creds.active) {
-          if (creds.apiKey && keysToCheck.includes(creds.apiKey)) {
+        if (creds && (creds.apiKey || creds.secretKey)) {
+          const keyMatches = (creds.apiKey && keysToCheck.includes(creds.apiKey)) || (creds.secretKey && keysToCheck.includes(creds.secretKey));
+          if (keyMatches) {
+            if (!creds.active) {
+              return res.status(403).json({
+                status: "error",
+                error: `Le connecteur API DEFIBEO est actuellement désactivé (OFF) pour l'environnement '${targetTenant.shortEnvId || targetTenant.id}'.`,
+                code: "API_CONNECTOR_DISABLED",
+                environnement_demande: targetTenant.shortEnvId || targetTenant.id
+              });
+            }
             isAuthorized = true;
+            // If the matched credential belongs to a specific tenant (and no conflicting explicit tenant was forced), ensure targetTenant is synced
+            if (creds.matchedTenantId && !explicitRawTenantId) {
+              const resolvedMatched = await resolveTenant(creds.matchedTenantId);
+              if (resolvedMatched) targetTenant = resolvedMatched;
+            }
           }
-          if (creds.secretKey && keysToCheck.includes(creds.secretKey)) {
-            isAuthorized = true;
+        }
+
+        // Also check if keyMatchedConnector matched an active tenant connector across the platform
+        if (!isAuthorized && keyMatchedConnector) {
+          if (!keyMatchedConnector.active) {
+            return res.status(403).json({
+              status: "error",
+              error: `Le connecteur API DEFIBEO est actuellement désactivé (OFF) pour l'environnement '${keyMatchedConnector.tenantId}'.`,
+              code: "API_CONNECTOR_DISABLED",
+              environnement_demande: keyMatchedConnector.tenantId
+            });
+          }
+          isAuthorized = true;
+          const resolvedMatched = await resolveTenant(keyMatchedConnector.tenantId);
+          if (resolvedMatched) {
+            targetTenant = resolvedMatched;
           }
         }
 
@@ -5951,11 +6118,15 @@ async function warmupDefibrillateursStore() {
 
       const effectiveStorageTenant = (targetTenant.id === 'demo' || sanitizedTenantId === 'demo')
         ? 'demo'
-        : ((sanitizedTenantId && /^d\d+$/i.test(sanitizedTenantId)) 
-            ? sanitizedTenantId.toUpperCase() 
-            : (targetTenant.shortEnvId || targetTenant.id || 'demo'));
+        : (targetTenant.id
+            ? String(targetTenant.id).toUpperCase()
+            : ((sanitizedTenantId && /^d\d+$/i.test(sanitizedTenantId))
+                ? sanitizedTenantId.toUpperCase()
+                : (targetTenant.shortEnvId || 'demo')));
       const tenantId = effectiveStorageTenant;
-      const tenantAliases = [targetTenant.shortEnvId, targetTenant.id, sanitizedTenantId, rawTenantId].filter(Boolean);
+      const tenantAliases = Array.from(new Set([targetTenant.id, targetTenant.shortEnvId, sanitizedTenantId, rawTenantId].filter(Boolean)));
+      (req as any)._resolvedApiTenantId = tenantId;
+      (req as any)._resolvedApiShortEnvId = targetTenant.shortEnvId || tenantId;
 
       // Perform comprehensive sensitivity and compliance security check
       const secCheck = checkSensitiveOrNonCompliantRequest(req, targetTenant, cleanPath);
@@ -5969,7 +6140,7 @@ async function warmupDefibrillateursStore() {
         });
       }
 
-      // 1. Variables Endpoint (Read-only via API)
+      // 1. Variables Endpoint (Read-only via API, backed by Tenant Spreadsheet if configured)
       if (cleanPath.startsWith('variables')) {
         if (req.method !== 'GET') {
           return res.status(403).json({
@@ -5995,21 +6166,16 @@ async function warmupDefibrillateursStore() {
         });
       }
 
-      // 2. CRM Tickets Endpoint
+      // 2. CRM Tickets Endpoint (backed by Tenant CRM Spreadsheet + Server Collection)
       if (cleanPath.startsWith('crm/tickets')) {
-        if (req.method === 'POST') {
+        if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           const body = req.body || {};
-          const randomId = `#${Math.floor(100000 + Math.random() * 900000)}`;
-          
-          const collectionKey = tenantId === "demo" ? "tickets" : `${tenantId}_tickets`;
-          const docRef = doc(db, 'appData', collectionKey);
-          const snap = await getDoc(docRef);
-          let tickets: any[] = [];
-          if (snap.exists()) {
-            tickets = snap.data().value || [];
-          }
+          const randomId = body.id || `#${Math.floor(100000 + Math.random() * 900000)}`;
+          let tickets = await fetchServerCollection('tickets', tenantId, tenantAliases);
+          if (!Array.isArray(tickets)) tickets = [];
 
           const newTicket = {
+            ...body,
             id: randomId,
             identifiant: body.client_id || body.identifiant || "",
             objet: body.objet || "Ticket API Defibeo",
@@ -6018,13 +6184,25 @@ async function warmupDefibrillateursStore() {
             criticite: body.criticite || "Normale",
             categorie: body.categorie || "Technique",
             collaborateur: body.collaborateur || "",
-            date: new Date().toISOString().replace('T', ' ').substring(0, 19),
+            date: body.date || new Date().toISOString().replace('T', ' ').substring(0, 19),
             envId: targetTenant.shortEnvId || tenantId,
             tenantId: tenantId
           };
 
-          tickets.unshift(newTicket);
-          await setDoc(docRef, { value: tickets });
+          const crmSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'crm');
+          if (crmSheetUrl && extractSpreadsheetIdAndGid(crmSheetUrl)) {
+            await upsertRecordsToTenantSheet(crmSheetUrl, tenantId, 'crm', [newTicket]).catch(e =>
+              console.warn('[API v1] CRM sheet upsert warning:', e)
+            );
+          }
+
+          const existingIdx = tickets.findIndex((t: any) => t && t.id === randomId);
+          if (existingIdx >= 0) {
+            tickets[existingIdx] = { ...tickets[existingIdx], ...newTicket };
+          } else {
+            tickets.unshift(newTicket);
+          }
+          await saveServerCollection('tickets', tenantId, tickets, tenantAliases);
 
           return res.status(201).json({
             status: "success",
@@ -6033,7 +6211,7 @@ async function warmupDefibrillateursStore() {
             ticket: newTicket
           });
         } else {
-          // GET tickets strictly isolated for tenantId
+          // GET tickets strictly isolated for tenantId (reads from CRM Spreadsheet if configured)
           const tickets = await fetchServerCollection('tickets', tenantId, tenantAliases);
           return res.json({
             status: "success",
@@ -6044,14 +6222,30 @@ async function warmupDefibrillateursStore() {
         }
       }
 
-      // 3. Clients Endpoint
+      // 3. Clients Endpoint (strictly backed by Tenant Clients Spreadsheet)
       if (cleanPath.startsWith('clients') || cleanPath.startsWith('client')) {
         const subId = cleanPath.split('/')[1] || (req.query.client_id as string) || (req.query.id as string) || (req.query.reference as string) || '';
         let clients = await fetchServerCollection('clients', tenantId, tenantAliases);
 
-        if (req.method === 'POST') {
+        const matchesClientWith = (targetStr: string) => (c: any): boolean => {
+          if (!c || typeof c !== 'object') return false;
+          const raw = decodeURIComponent(targetStr).trim();
+          const lower = raw.toLowerCase();
+          return [
+            c.id,
+            c.clientIdField,
+            c.reference,
+            c.identifiantUnique,
+            c.clientCode,
+            c.siret,
+            c.nom,
+            c.denomination,
+          ].some(v => v !== undefined && v !== null && String(v).trim().toLowerCase() === lower);
+        };
+
+        if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           const body = req.body || {};
-          const targetClientId = (subId || body.id || body.reference || body.identifiantUnique || '').trim();
+          const targetClientId = (subId || body.id || body.clientIdField || body.reference || body.identifiantUnique || body.client_id || '').trim();
 
           if (!targetClientId) {
             return res.status(403).json({
@@ -6063,15 +6257,14 @@ async function warmupDefibrillateursStore() {
             });
           }
 
-          const existingIdx = clients.findIndex((c: any) => 
-            c && (c.id === targetClientId || c.reference === targetClientId || c.identifiantUnique === targetClientId)
-          );
+          const existingIdx = clients.findIndex(matchesClientWith(targetClientId));
+          const clientSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'clients');
 
           if (existingIdx >= 0) {
             const existing = clients[existingIdx];
 
             // Strict sensitive checks: Block unauthorized alterations of identifiers
-            if (body.id && String(body.id).trim() !== String(existing.id).trim()) {
+            if (body.id && existing.id && String(body.id).trim().toLowerCase() !== String(existing.id).trim().toLowerCase() && String(body.id).trim().toLowerCase() !== String(existing.clientIdField || '').trim().toLowerCase()) {
               return res.status(403).json({
                 status: "error",
                 error: SENSITIVE_REQUEST_ERROR,
@@ -6080,7 +6273,7 @@ async function warmupDefibrillateursStore() {
                 environnement: targetTenant.shortEnvId || tenantId
               });
             }
-            if (body.reference && String(body.reference).trim() !== String(existing.reference).trim()) {
+            if (body.reference && existing.reference && String(body.reference).trim().toLowerCase() !== String(existing.reference).trim().toLowerCase()) {
               return res.status(403).json({
                 status: "error",
                 error: SENSITIVE_REQUEST_ERROR,
@@ -6099,43 +6292,71 @@ async function warmupDefibrillateursStore() {
               });
             }
 
-            // Safe merge locking sensitive fields & envId
-            const updatedClient = {
+            // Safe merge locking sensitive fields & envId + preserving _sheetRowNumber
+            let updatedClient: any = {
               ...existing,
               ...body,
               id: existing.id,
-              reference: existing.reference || existing.id,
-              identifiantUnique: existing.identifiantUnique || existing.id,
+              clientIdField: existing.clientIdField || existing.id,
+              reference: existing.reference || existing.clientIdField || existing.id,
+              identifiantUnique: existing.identifiantUnique || existing.clientIdField || existing.id,
+              denomination: body.denomination || body.nom || existing.denomination || existing.nom || '',
+              nom: body.nom || body.denomination || existing.nom || existing.denomination || '',
               id_record: existing.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${existing.id}`,
               envId: targetTenant.shortEnvId || tenantId,
               tenantId: tenantId,
               updatedAt: new Date().toISOString(),
-              _lastSource: 'api'
+              _lastSource: 'api',
+              ...(typeof existing._sheetRowNumber === 'number' ? { _sheetRowNumber: existing._sheetRowNumber } : {}),
+              ...(existing._rawSheetRow ? { _rawSheetRow: existing._rawSheetRow } : {}),
             };
-            clients[existingIdx] = updatedClient;
 
+            if (clientSheetUrl && extractSpreadsheetIdAndGid(clientSheetUrl)) {
+              const upsertRes = await upsertRecordsToTenantSheet(clientSheetUrl, tenantId, 'clients', [updatedClient]);
+              if (Array.isArray(upsertRes.records) && upsertRes.records[0]) {
+                updatedClient = { ...updatedClient, ...upsertRes.records[0] };
+              }
+            }
+
+            clients[existingIdx] = updatedClient;
             await saveServerCollection('clients', tenantId, clients, tenantAliases);
             return res.status(200).json({
               status: "success",
               message: "Client mis à jour avec succès",
               environnement: targetTenant.shortEnvId || tenantId,
-              id: existing.id,
+              id: existing.clientIdField || existing.id,
               client: updatedClient,
               data: updatedClient
             });
+          } else if (req.method === 'PUT' || req.method === 'PATCH') {
+            return res.status(404).json({
+              status: "error",
+              error: `Client '${targetClientId}' non trouvé dans l'environnement ${targetTenant.shortEnvId || tenantId}`
+            });
           } else {
-            // Creation of a new client
-            const newClient = {
+            // Creation of a new client (POST) -> write directly to Tenant Clients Spreadsheet
+            let newClient: any = {
               ...body,
               id: targetClientId,
+              clientIdField: body.clientIdField || targetClientId,
               reference: body.reference || targetClientId,
               identifiantUnique: targetClientId,
               nom: body.nom || body.denomination || body.name || "Nouveau Client",
-              denomination: body.denomination || body.nom || "Nouveau Client",
+              denomination: body.denomination || body.nom || body.name || "Nouveau Client",
               id_record: body.id_record || `record_${(targetTenant.shortEnvId || tenantId).toLowerCase()}_${targetClientId}`,
               envId: targetTenant.shortEnvId || tenantId,
-              tenantId: tenantId
+              tenantId: tenantId,
+              updatedAt: new Date().toISOString(),
+              _lastSource: 'api'
             };
+
+            if (clientSheetUrl && extractSpreadsheetIdAndGid(clientSheetUrl)) {
+              const upsertRes = await upsertRecordsToTenantSheet(clientSheetUrl, tenantId, 'clients', [newClient]);
+              if (Array.isArray(upsertRes.records) && upsertRes.records[0]) {
+                newClient = { ...newClient, ...upsertRes.records[0] };
+              }
+            }
+
             clients = [newClient, ...clients];
             await saveServerCollection('clients', tenantId, clients, tenantAliases);
 
@@ -6151,7 +6372,7 @@ async function warmupDefibrillateursStore() {
         }
 
         if (subId) {
-          const found = clients.find((c: any) => c && (c.id === subId || c.identifiantUnique === subId || c.nom === subId || c.reference === subId));
+          const found = clients.find(matchesClientWith(subId));
           if (found) {
             return sendOptimizedJson(req, res, { status: "success", environnement: targetTenant.shortEnvId || tenantId, client: found, data: found });
           }
@@ -6162,8 +6383,8 @@ async function warmupDefibrillateursStore() {
         const limitParam = req.query.limit || req.query.per_page || req.query.max || req.query.count;
         const isPaginated = !!(limitParam || req.query.page);
         const limit = limitParam === 'all' 
-          ? clients.length 
-          : Math.max(1, parseInt(limitParam as string, 10) || (isPaginated ? 100 : clients.length));
+          ? Math.max(1, clients.length)
+          : Math.max(1, parseInt(limitParam as string, 10) || (isPaginated ? 100 : Math.max(1, clients.length)));
 
         let filteredClients = clients;
         const q = (req.query.search as string || req.query.q as string || '').trim().toLowerCase();
@@ -6171,6 +6392,8 @@ async function warmupDefibrillateursStore() {
           filteredClients = filteredClients.filter((c: any) => 
             (c.denomination && String(c.denomination).toLowerCase().includes(q)) ||
             (c.nom && String(c.nom).toLowerCase().includes(q)) ||
+            (c.clientIdField && String(c.clientIdField).toLowerCase().includes(q)) ||
+            (c.id && String(c.id).toLowerCase().includes(q)) ||
             (c.clientCode && String(c.clientCode).toLowerCase().includes(q)) ||
             (c.email && String(c.email).toLowerCase().includes(q)) ||
             (c.ville && String(c.ville).toLowerCase().includes(q))
@@ -7324,19 +7547,40 @@ async function warmupDefibrillateursStore() {
             updatedDefib.updatedAt = new Date().toISOString();
             updatedDefib._lastSource = 'api';
 
-            const formatted = formatDefibrillateurOutput(updatedDefib);
+            let formatted: any = formatDefibrillateurOutput(updatedDefib);
 
-            const locKey = normalizeDefibLookupKey(targetId);
-            const tuple = defibLocationIndex.get(locKey);
-            const chunkIdx = (tuple && typeof tuple[3] === 'number') ? tuple[3] : singleLookup.chunkIdx;
-            if (typeof chunkIdx === 'number') {
-              saveSingleDefibrillateurToChunk(formatted, chunkIdx);
-            } else {
-              let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
-              const idx = defibs.findIndex(matchesDefibWith(targetId));
-              if (idx >= 0) defibs[idx] = formatted; else defibs.push(formatted);
-              await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
+            // Sync directly to the tenant's Défibrillateurs Google Spreadsheet
+            const defibSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'defibrillateurs');
+            if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
+              try {
+                const upsertRes = await upsertRecordsToTenantSheet(defibSheetUrl, tenantId, 'defibrillateurs', [formatted]);
+                if (Array.isArray(upsertRes.records) && upsertRes.records[0]) {
+                  formatted = formatDefibrillateurOutput({ ...formatted, ...upsertRes.records[0] });
+                }
+              } catch (sheetErr) {
+                console.warn('[API v1] Defibrillateur update spreadsheet warning:', sheetErr);
+              }
             }
+
+            indexDefibrillateur(formatted, tenantId);
+            serverDefibVersion = Date.now();
+
+            // Mirror to local/chunk cache in background without blocking API response
+            setImmediate(async () => {
+              try {
+                const locKey = normalizeDefibLookupKey(targetId);
+                const tuple = defibLocationIndex.get(locKey);
+                const chunkIdx = (tuple && typeof tuple[3] === 'number') ? tuple[3] : singleLookup.chunkIdx;
+                if (typeof chunkIdx === 'number') {
+                  saveSingleDefibrillateurToChunk(formatted, chunkIdx);
+                } else {
+                  let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
+                  const idx = defibs.findIndex(matchesDefibWith(targetId));
+                  if (idx >= 0) defibs[idx] = formatted; else defibs.push(formatted);
+                  await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
+                }
+              } catch (_) {}
+            });
 
             return res.status(200).json({
               status: "success",
@@ -7355,7 +7599,7 @@ async function warmupDefibrillateursStore() {
               code: "DEFIBRILLATEUR_NOT_FOUND"
             });
           } else {
-            // Creation of a new defibrillator (POST)
+            // Creation of a new defibrillator (POST) -> write directly to Tenant Défibrillateurs Spreadsheet
             const coffretRaw = (body.modeleCoffretId || body.modeleCoffret || body.boitier_modele || body.modele_coffret || '').trim();
             const resolvedCoffret = coffretRaw ? await resolveOrCreateVariable('Modèle Coffret', coffretRaw) : null;
 
@@ -7413,11 +7657,30 @@ async function warmupDefibrillateursStore() {
               newDefib.modele_b = resolvedBat.nom;
             }
 
-            const formattedNew = formatDefibrillateurOutput(newDefib);
-            let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
-            defibs = [formattedNew, ...defibs];
+            let formattedNew: any = formatDefibrillateurOutput(newDefib);
 
-            await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
+            const defibSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'defibrillateurs');
+            if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
+              try {
+                const upsertRes = await upsertRecordsToTenantSheet(defibSheetUrl, tenantId, 'defibrillateurs', [formattedNew]);
+                if (Array.isArray(upsertRes.records) && upsertRes.records[0]) {
+                  formattedNew = formatDefibrillateurOutput({ ...formattedNew, ...upsertRes.records[0] });
+                }
+              } catch (sheetErr) {
+                console.warn('[API v1] Defibrillateur create spreadsheet warning:', sheetErr);
+              }
+            }
+
+            indexDefibrillateur(formattedNew, tenantId);
+            serverDefibVersion = Date.now();
+
+            setImmediate(async () => {
+              try {
+                let defibs = await fetchServerCollection('defibrillateurs', tenantId, tenantAliases);
+                defibs = [formattedNew, ...defibs.filter((d: any) => !matchesDefibWith(targetId)(d))];
+                await saveServerCollection('defibrillateurs', tenantId, defibs, tenantAliases);
+              } catch (_) {}
+            });
 
             return res.status(201).json({
               status: "success",
@@ -7485,11 +7748,7 @@ async function warmupDefibrillateursStore() {
         const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
         const limitParam = req.query.limit || req.query.per_page || req.query.max || req.query.count;
         const DEFAULT_LIMIT = 50;
-        const MAX_SAFE_LIMIT = 250;
         const isExplicitlyAll = limitParam === 'all';
-        const limit = isExplicitlyAll 
-          ? MAX_SAFE_LIMIT 
-          : Math.min(MAX_SAFE_LIMIT, Math.max(1, parseInt(limitParam as string, 10) || DEFAULT_LIMIT));
 
         let filteredDefibs = defibs;
         const q = cleanQ.toLowerCase();
@@ -7503,7 +7762,9 @@ async function warmupDefibrillateursStore() {
             (d.modele && String(d.modele).toLowerCase().includes(q)) ||
             (d.marque && String(d.marque).toLowerCase().includes(q)) ||
             (d.client_nom && String(d.client_nom).toLowerCase().includes(q)) ||
+            (d.clientNom && String(d.clientNom).toLowerCase().includes(q)) ||
             (d.siteMission && String(d.siteMission).toLowerCase().includes(q)) ||
+            (d.nomSite && String(d.nomSite).toLowerCase().includes(q)) ||
             (d.ville && String(d.ville).toLowerCase().includes(q))
           );
         }
@@ -7513,7 +7774,9 @@ async function warmupDefibrillateursStore() {
           filteredDefibs = filteredDefibs.filter((d: any) => 
             (d.client_id && String(d.client_id).toLowerCase() === clientFilter) ||
             (d.clientId && String(d.clientId).toLowerCase() === clientFilter) ||
-            (d.client_nom && String(d.client_nom).toLowerCase().includes(clientFilter))
+            (d.clientIdField && String(d.clientIdField).toLowerCase() === clientFilter) ||
+            (d.client_nom && String(d.client_nom).toLowerCase().includes(clientFilter)) ||
+            (d.clientNom && String(d.clientNom).toLowerCase().includes(clientFilter))
           );
         }
 
@@ -7526,6 +7789,9 @@ async function warmupDefibrillateursStore() {
         }
 
         const total = filteredDefibs.length;
+        const limit = isExplicitlyAll
+          ? Math.max(1, total)
+          : Math.max(1, parseInt(limitParam as string, 10) || DEFAULT_LIMIT);
         const totalPages = Math.max(1, Math.ceil(total / limit));
         const startIndex = (page - 1) * limit;
         const returnedDefibs = filteredDefibs.slice(startIndex, startIndex + limit);
@@ -7549,85 +7815,137 @@ async function warmupDefibrillateursStore() {
         });
       }
 
-      // 5. Matériels Endpoint
-      if (cleanPath.startsWith('materiels')) {
-        const subId = cleanPath.split('/')[1] || '';
-        let materiels = await fetchServerCollection('materiels', tenantId, tenantAliases);
+      // 5. Matériels Endpoint (strictly backed by Tenant Autres Matériels Spreadsheet)
+      if (cleanPath.startsWith('materiels') || cleanPath.startsWith('materiel') || cleanPath.startsWith('autres-materiels') || cleanPath.startsWith('other-equipments')) {
+        const subId = cleanPath.split('/')[1] || (req.query.id as string) || (req.query.identifiant as string) || '';
+        let materiels = await fetchServerCollection('autresMateriels', tenantId, tenantAliases);
 
-        if (req.method === 'POST') {
+        const matchesMatWith = (targetStr: string) => (m: any): boolean => {
+          if (!m || typeof m !== 'object') return false;
+          const lower = decodeURIComponent(targetStr).trim().toLowerCase();
+          return [m.id, m.identifiant, m.numeroSerie, m.specifiques?.numSerie, m.denomination].some(
+            v => v !== undefined && v !== null && String(v).trim().toLowerCase() === lower
+          );
+        };
+
+        if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           const body = req.body || {};
-          const targetId = (subId || body.identifiant || body.id || '').trim();
+          const targetId = (subId || body.identifiant || body.id || body.numeroSerie || '').trim();
           if (!targetId) {
             return res.status(403).json({ status: "error", error: SENSITIVE_REQUEST_ERROR, message: SENSITIVE_REQUEST_ERROR, code: "SENSITIVE_REQUEST_BLOCKED" });
           }
 
-          const existingIdx = materiels.findIndex((m: any) => m && (m.id === targetId || m.identifiant === targetId));
+          const matSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'autresMateriels');
+          const existingIdx = materiels.findIndex(matchesMatWith(targetId));
           if (existingIdx >= 0) {
             const existing = materiels[existingIdx];
-            const updatedMat = {
+            let updatedMat: any = {
               ...existing,
               ...body,
               id: existing.id,
-              identifiant: existing.identifiant,
+              identifiant: existing.identifiant || existing.id,
               id_record: existing.id_record || `record_mat_${targetId}`,
               envId: targetTenant.shortEnvId || tenantId,
-              tenantId: tenantId
+              tenantId: tenantId,
+              updatedAt: new Date().toISOString(),
+              _lastSource: 'api',
+              ...(typeof existing._sheetRowNumber === 'number' ? { _sheetRowNumber: existing._sheetRowNumber } : {}),
+              ...(existing._rawSheetRow ? { _rawSheetRow: existing._rawSheetRow } : {}),
             };
+            if (matSheetUrl && extractSpreadsheetIdAndGid(matSheetUrl)) {
+              const upsertRes = await upsertRecordsToTenantSheet(matSheetUrl, tenantId, 'autresMateriels', [updatedMat]);
+              if (Array.isArray(upsertRes.records) && upsertRes.records[0]) {
+                updatedMat = { ...updatedMat, ...upsertRes.records[0] };
+              }
+            }
             materiels[existingIdx] = updatedMat;
-            await saveServerCollection('materiels', tenantId, materiels, tenantAliases);
-            return res.json({ status: "success", message: "Matériel mis à jour avec succès", environnement: targetTenant.shortEnvId || tenantId, materiel: updatedMat });
+            await saveServerCollection('autresMateriels', tenantId, materiels, tenantAliases);
+            return res.json({ status: "success", message: "Matériel mis à jour avec succès", environnement: targetTenant.shortEnvId || tenantId, materiel: updatedMat, data: updatedMat });
+          } else if (req.method === 'PUT' || req.method === 'PATCH') {
+            return res.status(404).json({ status: "error", error: `Matériel '${targetId}' non trouvé.` });
           } else {
-            const newMat = {
+            let newMat: any = {
               ...body,
               id: targetId,
-              identifiant: targetId,
+              identifiant: body.identifiant || targetId,
+              denomination: body.denomination || body.nom || body.modele || targetId,
               id_record: body.id_record || `record_mat_${targetId}`,
               envId: targetTenant.shortEnvId || tenantId,
-              tenantId: tenantId
+              tenantId: tenantId,
+              updatedAt: new Date().toISOString(),
+              _lastSource: 'api'
             };
+            if (matSheetUrl && extractSpreadsheetIdAndGid(matSheetUrl)) {
+              const upsertRes = await upsertRecordsToTenantSheet(matSheetUrl, tenantId, 'autresMateriels', [newMat]);
+              if (Array.isArray(upsertRes.records) && upsertRes.records[0]) {
+                newMat = { ...newMat, ...upsertRes.records[0] };
+              }
+            }
             materiels = [newMat, ...materiels];
-            await saveServerCollection('materiels', tenantId, materiels, tenantAliases);
-            return res.status(201).json({ status: "success", message: "Matériel créé avec succès", environnement: targetTenant.shortEnvId || tenantId, materiel: newMat });
+            await saveServerCollection('autresMateriels', tenantId, materiels, tenantAliases);
+            return res.status(201).json({ status: "success", message: "Matériel créé avec succès", environnement: targetTenant.shortEnvId || tenantId, materiel: newMat, data: newMat });
           }
         }
 
         if (subId) {
-          const found = materiels.find((m: any) => m && (m.id === subId || m.identifiant === subId));
+          const found = materiels.find(matchesMatWith(subId));
           if (found) {
-            return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, materiel: found });
+            return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, materiel: found, data: found });
           }
           return res.status(404).json({ status: "error", error: `Matériel '${subId}' non trouvé.` });
         }
 
-        return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, count: materiels.length, materiels });
+        return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, count: materiels.length, materiels, data: materiels });
       }
 
-      // 6. Commandes Endpoint
+      // 6. Commandes Endpoint (backed by Tenant Commandes Spreadsheet + Server Collection)
       if (cleanPath.startsWith('commandes')) {
-        if (req.method === 'POST') {
+        let cmds = await fetchServerCollection('commandes', tenantId, tenantAliases);
+        if (!Array.isArray(cmds)) cmds = [];
+        if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           const body = req.body || {};
-          const cmdId = body.numeroCommande || `CMD-${Date.now().toString().slice(-6)}`;
+          const cmdId = body.numeroCommande || body.id || `CMD-${Date.now().toString().slice(-6)}`;
           const newCmd = {
             ...body,
             id: cmdId,
             numeroCommande: cmdId,
-            date: new Date().toISOString(),
+            date: body.date || new Date().toISOString(),
             envId: targetTenant.shortEnvId || tenantId,
             tenantId: tenantId
           };
-          let cmds = await fetchServerCollection('commandes', tenantId, tenantAliases);
-          cmds = [newCmd, ...cmds];
+          const cmdSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'commandes');
+          if (cmdSheetUrl && extractSpreadsheetIdAndGid(cmdSheetUrl)) {
+            await upsertRecordsToTenantSheet(cmdSheetUrl, tenantId, 'commandes', [newCmd]).catch(e =>
+              console.warn('[API v1] Commandes sheet upsert warning:', e)
+            );
+          }
+          cmds = [newCmd, ...cmds.filter((c: any) => c && c.id !== cmdId && c.numeroCommande !== cmdId)];
           await saveServerCollection('commandes', tenantId, cmds, tenantAliases);
-          return res.status(201).json({ status: "success", message: "Commande enregistrée avec succès", environnement: targetTenant.shortEnvId || tenantId, commande: newCmd });
+          return res.status(201).json({ status: "success", message: "Commande enregistrée avec succès", environnement: targetTenant.shortEnvId || tenantId, commande: newCmd, data: newCmd });
+        } else {
+          return res.json({ status: "success", environnement: targetTenant.shortEnvId || tenantId, count: cmds.length, commandes: cmds, data: cmds });
         }
       }
 
-      // 7. Tournées & Missions Endpoints
+      // 7. Tournées & Missions Endpoints (backed by Tenant Missions / Tournées Spreadsheets + Server Collection)
       if (cleanPath.startsWith('missions')) {
         let tours = await fetchServerCollection('fsm_tours', tenantId, tenantAliases);
         let aTrierTour = tours.find((t: any) => t && (t.id === 'a-trier' || t.id === 'A trier' || t.startDate === 'A trier' || (t.title && String(t.title).toLowerCase().includes('trier'))));
 
         if (req.method === 'GET') {
+          const missionsSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'missionsTournees');
+          if (missionsSheetUrl && extractSpreadsheetIdAndGid(missionsSheetUrl)) {
+            const mSheetData = await fetchTenantSheetCollection(missionsSheetUrl, tenantId, 'missionsTournees', false).catch(() => null);
+            if (mSheetData && mSheetData.fromSpreadsheet && Array.isArray(mSheetData.items) && mSheetData.items.length > 0) {
+              return res.json({
+                status: "success",
+                environnement: targetTenant.shortEnvId || tenantId,
+                destination: "TOURNÉES & MISSIONS > À trier / Ordres ADV",
+                count: mSheetData.items.length,
+                missions: mSheetData.items
+              });
+            }
+          }
           const missions = aTrierTour && Array.isArray(aTrierTour.missions) ? aTrierTour.missions : [];
           return res.json({
             status: "success",
@@ -7638,7 +7956,7 @@ async function warmupDefibrillateursStore() {
           });
         }
 
-        if (req.method === 'POST') {
+        if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           const body = req.body || {};
           let rawMissions: any[] = [];
           if (Array.isArray(body)) {
@@ -7716,6 +8034,20 @@ async function warmupDefibrillateursStore() {
             tours = tours.map((t: any) => (t.id === aTrierTour.id ? aTrierTour : t));
           }
 
+          const missionsSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'missionsTournees');
+          if (missionsSheetUrl && extractSpreadsheetIdAndGid(missionsSheetUrl)) {
+            await upsertRecordsToTenantSheet(missionsSheetUrl, tenantId, 'missionsTournees', newMissions).catch(e =>
+              console.warn('[API v1] Missions sheet upsert warning:', e)
+            );
+          }
+
+          const tourneesSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'tournees');
+          if (tourneesSheetUrl && extractSpreadsheetIdAndGid(tourneesSheetUrl)) {
+            await upsertRecordsToTenantSheet(tourneesSheetUrl, tenantId, 'tournees', [aTrierTour]).catch(e =>
+              console.warn('[API v1] Tournees sheet upsert warning:', e)
+            );
+          }
+
           await saveServerCollection('fsm_tours', tenantId, tours, tenantAliases);
 
           return res.status(201).json({
@@ -7740,9 +8072,10 @@ async function warmupDefibrillateursStore() {
           });
         }
 
-        if (req.method === 'POST') {
+        if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           const body = req.body || {};
           let tours = await fetchServerCollection('fsm_tours', tenantId, tenantAliases);
+          const tourneesSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'tournees');
           
           const isTrierDest = body.id === 'a-trier' || body.startDate === 'A trier' || body.destination === 'a-trier' || String(body.title || '').toLowerCase().includes('trier');
           
@@ -7752,7 +8085,7 @@ async function warmupDefibrillateursStore() {
               aTrierTour.missions = [...(aTrierTour.missions || []), ...body.missions];
               tours = tours.map((t: any) => (t.id === aTrierTour.id ? aTrierTour : t));
             } else {
-              const newTrierTour = {
+              aTrierTour = {
                 id: 'a-trier',
                 title: 'Missions à trier / Ordres ADV',
                 techName: '',
@@ -7764,7 +8097,10 @@ async function warmupDefibrillateursStore() {
                 envId: targetTenant.shortEnvId || tenantId,
                 tenantId: tenantId
               };
-              tours = [newTrierTour, ...tours];
+              tours = [aTrierTour, ...tours];
+            }
+            if (tourneesSheetUrl && extractSpreadsheetIdAndGid(tourneesSheetUrl)) {
+              await upsertRecordsToTenantSheet(tourneesSheetUrl, tenantId, 'tournees', [aTrierTour]).catch(() => {});
             }
             await saveServerCollection('fsm_tours', tenantId, tours, tenantAliases);
             return res.status(201).json({
@@ -7784,13 +8120,16 @@ async function warmupDefibrillateursStore() {
             envId: targetTenant.shortEnvId || tenantId,
             tenantId: tenantId
           };
-          tours = [newTour, ...tours];
+          if (tourneesSheetUrl && extractSpreadsheetIdAndGid(tourneesSheetUrl)) {
+            await upsertRecordsToTenantSheet(tourneesSheetUrl, tenantId, 'tournees', [newTour]).catch(() => {});
+          }
+          tours = [newTour, ...tours.filter((t: any) => t && t.id !== tourId)];
           await saveServerCollection('fsm_tours', tenantId, tours, tenantAliases);
           return res.status(201).json({ status: "success", message: "Tournée enregistrée avec succès", environnement: targetTenant.shortEnvId || tenantId, tournee: newTour });
         }
       }
 
-      // 8. Rapports & Interventions Endpoints (Supports Real-Time Digital Report Uploads & Fast Lookups)
+      // 8. Rapports & Interventions Endpoints (Supports Real-Time Digital Report Uploads & Fast Lookups + Spreadsheet Sync)
       if (cleanPath.startsWith('rapport') || cleanPath.startsWith('intervention')) {
         const pathSegments = cleanPath.split('/').map(s => s.trim()).filter(Boolean);
         let subId = pathSegments[1] || (req.query.id as string) || (req.query.identifiant as string) || (req.query.numeroSerie as string) || '';
@@ -7799,7 +8138,7 @@ async function warmupDefibrillateursStore() {
         }
 
         // Real-Time Digital Report Remontée (POST /v1/rapports, POST /v1/interventions, POST /v1/rapports/:id)
-        if (req.method === 'POST' || req.method === 'PUT') {
+        if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           const body = req.body || {};
           const targetDeviceKey = (subId || body.equipement || body.identifiant || body.id || body.numeroSerie || body.num_serie || body.serial || body.defibrillateurId || body.defibrillateur_id || '').trim();
 
@@ -7838,12 +8177,12 @@ async function warmupDefibrillateursStore() {
             remarques: body.remarques || body.observations || body.commentaire || "",
             rapportUrl: pdfUrl,
             envId: targetEnv,
-            tenantId: targetEnv,
+            tenantId: tenantId,
             timestamp: new Date().toISOString(),
             createdAt: new Date().toISOString()
           };
 
-          // If defibrillator was found, update its live state and persist
+          // If defibrillator was found, update its live state and persist directly to the Tenant Défibrillateurs Spreadsheet
           if (targetDefib) {
             targetDefib.derniereMaintenance = maintDate;
             targetDefib.derniere_maintenance = maintDate;
@@ -7876,16 +8215,42 @@ async function warmupDefibrillateursStore() {
             }
             targetDefib.updatedAt = new Date().toISOString();
 
-            // Re-index into in-memory index & save directly to chunk
-            indexDefibrillateur(targetDefib, targetEnv);
-            const locKey = normalizeDefibLookupKey(targetDeviceKey);
-            const tuple = defibLocationIndex.get(locKey);
-            if (tuple && typeof tuple[3] === 'number') {
-              saveSingleDefibrillateurToChunk(targetDefib, tuple[3]);
+            let formattedTargetDefib: any = formatDefibrillateurOutput(targetDefib);
+            const defibSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'defibrillateurs');
+            if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
+              try {
+                const upsertRes = await upsertRecordsToTenantSheet(defibSheetUrl, tenantId, 'defibrillateurs', [formattedTargetDefib]);
+                if (Array.isArray(upsertRes.records) && upsertRes.records[0]) {
+                  formattedTargetDefib = formatDefibrillateurOutput({ ...formattedTargetDefib, ...upsertRes.records[0] });
+                }
+              } catch (sheetErr) {
+                console.warn('[API v1] Report defib sheet update warning:', sheetErr);
+              }
             }
+            targetDefib = formattedTargetDefib;
+
+            // Re-index into in-memory index & save directly to chunk
+            indexDefibrillateur(targetDefib, tenantId);
+            serverDefibVersion = Date.now();
+            setImmediate(() => {
+              try {
+                const locKey = normalizeDefibLookupKey(targetDeviceKey);
+                const tuple = defibLocationIndex.get(locKey);
+                if (tuple && typeof tuple[3] === 'number') {
+                  saveSingleDefibrillateurToChunk(targetDefib, tuple[3]);
+                }
+              } catch (_) {}
+            });
           }
 
-          // Save report to generated_reports
+          // Save report to Tenant Rapports PDF Spreadsheet (if configured) and generated_reports
+          const reportsSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'rapportsPdf');
+          if (reportsSheetUrl && extractSpreadsheetIdAndGid(reportsSheetUrl)) {
+            await upsertRecordsToTenantSheet(reportsSheetUrl, tenantId, 'rapportsPdf', [savedReport]).catch(e =>
+              console.warn('[API v1] Rapports PDF sheet upsert warning:', e)
+            );
+          }
+
           let existingReports = await fetchServerCollection('generated_reports', tenantId, tenantAliases);
           if (!Array.isArray(existingReports)) existingReports = [];
           existingReports = [savedReport, ...existingReports.filter((r: any) => r && r.id !== reportId)];
@@ -7939,11 +8304,11 @@ async function warmupDefibrillateursStore() {
         });
       }
 
-      // 9. Stocks Endpoint
+      // 9. Stocks Endpoint (backed by Tenant Stocks Spreadsheet + Server Collection)
       if (cleanPath.startsWith('stocks')) {
-        const subPath = cleanPath.replace(/^stocks\/?/, '');
         let stocks = await fetchServerCollection('stocks', tenantId, tenantAliases);
-        if (req.method === 'POST') {
+        if (!Array.isArray(stocks)) stocks = [];
+        if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           const body = req.body || {};
           const ugs = (body.ugs || body.id || cleanPath.split('/')[2] || `UGS-${Date.now()}`).trim();
           const newStock = {
@@ -7953,7 +8318,11 @@ async function warmupDefibrillateursStore() {
             envId: targetTenant.shortEnvId || tenantId,
             tenantId: tenantId
           };
-          stocks = [newStock, ...stocks.filter((s: any) => s && s.ugs !== ugs)];
+          const stocksSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'stocks');
+          if (stocksSheetUrl && extractSpreadsheetIdAndGid(stocksSheetUrl)) {
+            await upsertRecordsToTenantSheet(stocksSheetUrl, tenantId, 'stocks', [newStock]).catch(() => {});
+          }
+          stocks = [newStock, ...stocks.filter((s: any) => s && s.ugs !== ugs && s.id !== ugs)];
           await saveServerCollection('stocks', tenantId, stocks, tenantAliases);
           return res.status(201).json({ status: "success", message: "Stock mis à jour avec succès", environnement: targetTenant.shortEnvId || tenantId, stock: newStock });
         } else {
@@ -7961,10 +8330,11 @@ async function warmupDefibrillateursStore() {
         }
       }
 
-      // 10. Formations Endpoint
+      // 10. Formations Endpoint (backed by Tenant Formations Spreadsheet + Server Collection)
       if (cleanPath.startsWith('formations')) {
         let formations = await fetchServerCollection('formations', tenantId, tenantAliases);
-        if (req.method === 'POST') {
+        if (!Array.isArray(formations)) formations = [];
+        if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
           const body = req.body || {};
           const fId = body.id || `FORM-${Date.now().toString().slice(-5)}`;
           const newFormation = {
@@ -7974,7 +8344,11 @@ async function warmupDefibrillateursStore() {
             envId: targetTenant.shortEnvId || tenantId,
             tenantId: tenantId
           };
-          formations = [newFormation, ...formations];
+          const formSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'formations');
+          if (formSheetUrl && extractSpreadsheetIdAndGid(formSheetUrl)) {
+            await upsertRecordsToTenantSheet(formSheetUrl, tenantId, 'formations', [newFormation]).catch(() => {});
+          }
+          formations = [newFormation, ...formations.filter((f: any) => f && f.id !== fId)];
           await saveServerCollection('formations', tenantId, formations, tenantAliases);
           return res.status(201).json({ status: "success", message: "Formation enregistrée avec succès", environnement: targetTenant.shortEnvId || tenantId, formation: newFormation });
         } else {

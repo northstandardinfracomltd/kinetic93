@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Member } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { t } from '../utils/translate';
 
 interface Expense {
@@ -300,6 +301,11 @@ export default function TicketsCaisseTab({
               </div>
             </div>
           </div>
+
+          <TableSubHeaderButtons
+            spreadsheetKey="spreadsheetTicketsCaisse"
+            idSuffix="tickets-caisse"
+          />
 
           {/* Main Table Records Sheet */}
           <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

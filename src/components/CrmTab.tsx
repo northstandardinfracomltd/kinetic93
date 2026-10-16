@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Maximize2, Minimize2, BarChart3, Calendar, Trash2, Upload, Eye, RefreshCw } from 'lucide-react';
-import { SupportTicket, Member, Client, CompanyInfo, CommercialEvent, SupportMessage, CommercialFileAttachment } from '../types';
+import { Maximize2, Minimize2, BarChart3, Calendar, Trash2, Upload, Eye, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { SupportTicket, Member, Client, CompanyInfo, CommercialEvent, SupportMessage, CommercialFileAttachment, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
 import { INITIAL_TICKETS } from '../utils';
@@ -2177,6 +2177,39 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           <RefreshCw size={10} className={`shrink-0 text-black ${effectiveRefreshing ? 'animate-spin' : ''}`} color="#000000" />
           <span style={{ color: '#000000' }}>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
         </button>
+
+        {(() => {
+          const resolvedSpreadsheetUrl = getTenantSpreadsheetUrl('spreadsheetCrm', companyInfo);
+          return (
+            <button
+              type="button"
+              id="btn-open-spreadsheet-editor-crm"
+              onClick={() => openTenantSpreadsheetUrl(resolvedSpreadsheetUrl)}
+              disabled={!resolvedSpreadsheetUrl}
+              style={{
+                fontSize: '9px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                fontWeight: 100,
+                cursor: resolvedSpreadsheetUrl ? 'pointer' : 'not-allowed',
+                opacity: resolvedSpreadsheetUrl ? 1 : 0.4,
+                background: 'transparent',
+                border: 'none',
+                padding: '2px 4px',
+                color: '#000000',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                textDecoration: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className={resolvedSpreadsheetUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
+              title={t("Ouvrir l'éditeur SpreadSheets")}
+            >
+              <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
+              <span style={{ color: '#000000' }}>{t("Ouvrir l'éditeur SpreadSheets")}</span>
+            </button>
+          );
+        })()}
       </div>
 
       {/* Bulk selection status bar if at least 1 ticket selected */}

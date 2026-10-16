@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 
 interface Review {
   id: string;
@@ -932,6 +933,11 @@ export default function SatisfactionTab({
           )}
         </div>
       </div>
+
+      <TableSubHeaderButtons
+        spreadsheetKey="spreadsheetSatisfaction"
+        idSuffix="satisfaction"
+      />
 
       {/* Main Table Content */}
       <div className="bg-white overflow-hidden mt-3 rounded-none animate-fadeIn" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

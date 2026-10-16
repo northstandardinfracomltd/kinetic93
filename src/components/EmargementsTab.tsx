@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { EmargementRecord, EmargementStagiaireItem, FormationRecord, StagiaireRecord, Member, CompanyInfo } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 
 interface EmargementsTabProps {
   emargements: EmargementRecord[];
@@ -721,6 +722,12 @@ export default function EmargementsTab({
               </div>
             </div>
           </div>
+
+          <TableSubHeaderButtons
+            spreadsheetKey="spreadsheetEmargements"
+            idSuffix="emargements"
+            companyInfo={companyInfo}
+          />
 
           {/* Main Records Table Sheet - Full Width */}
           <div className="bg-white overflow-hidden rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>

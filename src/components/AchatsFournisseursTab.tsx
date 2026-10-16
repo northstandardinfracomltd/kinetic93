@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AchatFournisseur, Variable } from '../types';
 import { ShoppingBag, Eye, Trash2, Edit, Plus, FileText, Upload, Search, X } from 'lucide-react';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { t } from '../utils/translate';
 
 interface AchatsFournisseursTabProps {
@@ -353,6 +354,11 @@ export default function AchatsFournisseursTab({
               </div>
             </div>
           </div>
+
+          <TableSubHeaderButtons
+            spreadsheetKey="spreadsheetAchatsFournisseurs"
+            idSuffix="achats-fournisseurs"
+          />
 
           {/* MAIN RECORDS TABLE */}
           <div className="bg-white overflow-hidden mt-6 rounded-none">

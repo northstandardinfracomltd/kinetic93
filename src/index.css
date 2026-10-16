@@ -234,6 +234,28 @@ html.is-edge [style*="font-weight:100"] {
   animation: complianceBlueWave 5s infinite linear;
 }
 
+@keyframes webappRefreshWave {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.animate-webapp-refresh-wave {
+  background: linear-gradient(
+    90deg,
+    #2e54ff 0%,
+    #0023c1 25%,
+    rgba(147, 197, 253, 0.85) 50%,
+    #0023c1 75%,
+    #2e54ff 100%
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: webappRefreshWave 1.6s infinite linear !important;
+}
+
 @keyframes matSlide1 {
   0% {
     left: -35%;

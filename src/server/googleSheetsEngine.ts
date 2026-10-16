@@ -2,7 +2,30 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
-export type SheetTabType = 'defibrillateurs' | 'autresMateriels' | 'clients';
+export type SheetTabType =
+  | 'defibrillateurs'
+  | 'autresMateriels'
+  | 'clients'
+  | 'tournees'
+  | 'missionsTournees'
+  | 'rapportsPdf'
+  | 'crm'
+  | 'satisfaction'
+  | 'commandes'
+  | 'stocks'
+  | 'achatsFournisseurs'
+  | 'temps'
+  | 'ticketsCaisse'
+  | 'releveConcurrentiel'
+  | 'formations'
+  | 'stagiaires'
+  | 'emargements'
+  | 'messagesInternes'
+  | 'variables'
+  | 'ged'
+  | 'reglages'
+  | 'intituleEmplacements'
+  | 'membresEnvironnement';
 
 export interface GlobalGoogleSheetsConfig {
   apiKey?: string;
@@ -1040,6 +1063,107 @@ export function mapClientToRow(headers: string[], client: any, existingRow?: str
   return outRow;
 }
 
+function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = []): string[] {
+  const presets: Partial<Record<SheetTabType, string[]>> = {
+    tournees: ['id', 'tourCode', 'title', 'techName', 'startDate', 'status', 'vehicule', 'missions', 'envId', 'tenantId', 'updatedAt'],
+    missionsTournees: ['id', 'clientName', 'clientId', 'defibIdentifiant', 'equipmentType', 'modele', 'reason', 'reasons', 'requiredParts', 'status', 'priority', 'time', 'bonDeCommande', 'commentaire', 'numVoie', 'cp', 'ville', 'telephone', 'contact', 'latitude', 'longitude', 'createdAt'],
+    rapportsPdf: ['id', 'reportId', 'defibrillateurId', 'equipement', 'identifiant', 'numeroSerie', 'date', 'dateMaintenance', 'derniereMaintenance', 'technicien', 'typeIntervention', 'statut', 'conforme', 'remarques', 'rapportUrl', 'envId', 'tenantId', 'timestamp', 'createdAt'],
+    crm: ['id', 'identifiant', 'objet', 'message', 'status', 'criticite', 'categorie', 'collaborateur', 'date', 'envId', 'tenantId'],
+    commandes: ['id', 'numeroCommande', 'clientId', 'clientNom', 'date', 'statut', 'totalHT', 'totalTTC', 'items', 'envId', 'tenantId'],
+    stocks: ['id', 'ugs', 'nom', 'categorie', 'quantite', 'stockage', 'seuilAlerte', 'envId', 'tenantId'],
+    formations: ['id', 'titre', 'date', 'formateur', 'lieu', 'statut', 'stagiaires', 'envId', 'tenantId'],
+    variables: ['id', 'category', 'nom', 'marque', 'description', 'envId', 'tenantId'],
+  };
+  const base = presets[tabType] ? [...presets[tabType]!] : ['id', 'identifiant', 'nom', 'date', 'statut', 'envId', 'tenantId'];
+  const seen = new Set(base.map(h => h.toLowerCase()));
+  for (const rec of sampleRecords) {
+    if (!rec || typeof rec !== 'object') continue;
+    for (const k of Object.keys(rec)) {
+      if (k.startsWith('_')) continue;
+      if (!seen.has(k.toLowerCase())) {
+        seen.add(k.toLowerCase());
+        base.push(k);
+      }
+    }
+  }
+  if (!seen.has('_json')) base.push('_json');
+  return base;
+}
+
+function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBased: number, tenantId: string, tabType: SheetTabType): any {
+  const rawByHeader: Record<string, string> = {};
+  const obj: Record<string, any> = {};
+  let parsedJsonFallback: Record<string, any> = {};
+
+  headers.forEach((h, i) => {
+    const val = row[i] !== undefined ? String(row[i]).trim() : '';
+    if (!h) return;
+    rawByHeader[h] = val;
+    if (h.toLowerCase() === '_json' && val.startsWith('{')) {
+      try {
+        parsedJsonFallback = JSON.parse(val);
+      } catch (_) {}
+      return;
+    }
+    if (val === '') return;
+    if ((val.startsWith('[') && val.endsWith(']')) || (val.startsWith('{') && val.endsWith('}'))) {
+      try {
+        obj[h] = JSON.parse(val);
+        return;
+      } catch (_) {}
+    }
+    obj[h] = val;
+  });
+
+  const merged: any = {
+    ...parsedJsonFallback,
+    ...obj,
+    envId: obj.envId || parsedJsonFallback.envId || tenantId,
+    tenantId: obj.tenantId || parsedJsonFallback.tenantId || tenantId,
+    _sheetRowNumber: rowIndexZeroBased + 2,
+    _rawSheetRow: rawByHeader,
+  };
+  if (!merged.id) {
+    merged.id =
+      merged.identifiant ||
+      merged.reportId ||
+      merged.numeroCommande ||
+      merged.ugs ||
+      merged.tourCode ||
+      `sheet_gen_${tabType}_${tenantId}_${rowIndexZeroBased + 2}`;
+  }
+  return merged;
+}
+
+function mapGenericRecordToRow(headers: string[], record: any): string[] {
+  const rawExisting: Record<string, string> = record._rawSheetRow || {};
+  const outRow: string[] = headers.map(h => (rawExisting[h] !== undefined ? String(rawExisting[h]) : ''));
+  const normHeaderMap = new Map<string, number>();
+  headers.forEach((h, i) => {
+    if (h) normHeaderMap.set(h.trim().toLowerCase(), i);
+  });
+
+  for (const [k, v] of Object.entries(record || {})) {
+    if (k.startsWith('_') || v === undefined || v === null) continue;
+    const colIdx = normHeaderMap.get(k.trim().toLowerCase());
+    if (colIdx !== undefined) {
+      outRow[colIdx] = typeof v === 'object' ? JSON.stringify(v) : String(v);
+    }
+  }
+
+  const jsonColIdx = normHeaderMap.get('_json');
+  if (jsonColIdx !== undefined) {
+    const cleanCopy: Record<string, any> = {};
+    for (const [k, v] of Object.entries(record || {})) {
+      if (!k.startsWith('_')) cleanCopy[k] = v;
+    }
+    try {
+      outRow[jsonColIdx] = JSON.stringify(cleanCopy);
+    } catch (_) {}
+  }
+  return outRow;
+}
+
 // ==========================================
 // 4. MIRROR OVERLAY MANAGEMENT (Disk Persistence)
 // ==========================================
@@ -1089,6 +1213,11 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
   }
   if (tabType === 'autresMateriels') {
     return [item.id, item.identifiant, item.numeroSerie, item.specifiques?.numSerie, item.denomination]
+      .filter(Boolean)
+      .map(s => String(s).trim().toLowerCase());
+  }
+  if (tabType !== 'defibrillateurs') {
+    return [item.id, item.identifiant, item.reportId, item.numeroCommande, item.ugs, item.tourCode, item.reference, item.nom]
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
@@ -1509,7 +1638,9 @@ export async function fetchTenantSheetCollection(
           ? DEFIB_CANONICAL_HEADERS.map(d => d.header)
           : tabType === 'autresMateriels'
           ? AUTRES_CANONICAL_HEADERS.map(d => d.header)
-          : CLIENTS_CANONICAL_HEADERS.map(d => d.header);
+          : tabType === 'clients'
+          ? CLIENTS_CANONICAL_HEADERS.map(d => d.header)
+          : getDefaultGenericHeaders(tabType);
 
       const headers = hasRemoteHeaders
         ? rawMatrix!.headers
@@ -1528,8 +1659,10 @@ export async function fetchTenantSheetCollection(
           ? DEFIB_CANONICAL_HEADERS
           : tabType === 'autresMateriels'
           ? AUTRES_CANONICAL_HEADERS
-          : CLIENTS_CANONICAL_HEADERS;
-      const precomputedMatches = buildColumnMatches(headers, canonicalDefs);
+          : tabType === 'clients'
+          ? CLIENTS_CANONICAL_HEADERS
+          : [];
+      const precomputedMatches = canonicalDefs.length > 0 ? buildColumnMatches(headers, canonicalDefs) : [];
 
       if (rawMatrix && Array.isArray(rawMatrix.rows)) {
         for (let i = 0; i < rawMatrix.rows.length; i++) {
@@ -1541,7 +1674,9 @@ export async function fetchTenantSheetCollection(
               ? mapRowToDefib(headers, r, i, tenantId, precomputedMatches)
               : tabType === 'autresMateriels'
               ? mapRowToAutreMateriel(headers, r, i, tenantId, precomputedMatches)
-              : mapRowToClient(headers, r, i, tenantId, precomputedMatches);
+              : tabType === 'clients'
+              ? mapRowToClient(headers, r, i, tenantId, precomputedMatches)
+              : mapRowToGenericRecord(headers, r, i, tenantId, tabType);
 
           // Ignore phantom rows where primary identifying columns were cleared in Google Sheets
           if (tabType === 'defibrillateurs') {
@@ -1962,7 +2097,7 @@ function columnIndexToLetter(colIdxZeroBased: number): string {
 
 function extractRowNumFromSyntheticId(idVal?: string): number | undefined {
   if (!idVal) return undefined;
-  const m = String(idVal).trim().match(/^sheet_(?:df|am|cli)_[^_]+_(\d+)$/i);
+  const m = String(idVal).trim().match(/^sheet_(?:df|am|cli|gen_[a-z0-9]+)_[^_]+_(\d+)$/i);
   if (m && m[1]) {
     const rn = parseInt(m[1], 10);
     if (!isNaN(rn) && rn >= 2) return rn;
@@ -2010,7 +2145,9 @@ async function fetchLightweightSheetContextForColdUpsert(
       ? DEFIB_CANONICAL_HEADERS.map(d => d.header)
       : tabType === 'autresMateriels'
       ? AUTRES_CANONICAL_HEADERS.map(d => d.header)
-      : CLIENTS_CANONICAL_HEADERS.map(d => d.header);
+      : tabType === 'clients'
+      ? CLIENTS_CANONICAL_HEADERS.map(d => d.header)
+      : getDefaultGenericHeaders(tabType, records);
 
   const matchedByRecordIdx = new Map<number, any>();
   if (!accessToken) {
@@ -2074,15 +2211,19 @@ async function fetchLightweightSheetContextForColdUpsert(
         ? DEFIB_CANONICAL_HEADERS
         : tabType === 'autresMateriels'
         ? AUTRES_CANONICAL_HEADERS
-        : CLIENTS_CANONICAL_HEADERS;
-    const precomputedMatches = buildColumnMatches(effectiveHeaders, canonicalDefs);
+        : tabType === 'clients'
+        ? CLIENTS_CANONICAL_HEADERS
+        : [];
+    const precomputedMatches = canonicalDefs.length > 0 ? buildColumnMatches(effectiveHeaders, canonicalDefs) : [];
 
     const mapSingleRow = (rowArr: string[], rowNumber: number) =>
       tabType === 'defibrillateurs'
         ? mapRowToDefib(effectiveHeaders, rowArr, rowNumber - 2, tenantId, precomputedMatches)
         : tabType === 'autresMateriels'
         ? mapRowToAutreMateriel(effectiveHeaders, rowArr, rowNumber - 2, tenantId, precomputedMatches)
-        : mapRowToClient(effectiveHeaders, rowArr, rowNumber - 2, tenantId, precomputedMatches);
+        : tabType === 'clients'
+        ? mapRowToClient(effectiveHeaders, rowArr, rowNumber - 2, tenantId, precomputedMatches)
+        : mapRowToGenericRecord(effectiveHeaders, rowArr, rowNumber - 2, tenantId, tabType);
 
     // Verify candidate rows
     for (const [recIdx, rn] of candidateRowNums.entries()) {
@@ -2294,7 +2435,9 @@ export async function upsertRecordsToTenantSheet(
           ? mapDefibToRow(headers, mergedItem)
           : tabType === 'autresMateriels'
           ? mapAutreMaterielToRow(headers, mergedItem)
-          : mapClientToRow(headers, mergedItem);
+          : tabType === 'clients'
+          ? mapClientToRow(headers, mergedItem)
+          : mapGenericRecordToRow(headers, mergedItem);
 
       const rawByHeader: Record<string, string> = {};
       headers.forEach((h, i) => {
@@ -2339,7 +2482,7 @@ export async function upsertRecordsToTenantSheet(
         const lastColLetter = columnIndexToLetter(headers.length - 1);
 
         // If remote sheet was completely blank (no header row), write the canonical header row first
-        if (!hasRemoteHeaders && warmCached && warmCached.items.length === 0) {
+        if (!hasRemoteHeaders && (!warmCached || warmCached.items.length === 0)) {
           await fetchWithRetry(
             `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchUpdate`,
             {

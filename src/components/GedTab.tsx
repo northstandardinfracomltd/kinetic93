@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GedDocument } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { t } from '../utils/translate';
 import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from '../utils/googleDrive';
 import { AlertCircle, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
@@ -403,6 +404,11 @@ export default function GedTab({
               </div>
             </div>
           </div>
+
+          <TableSubHeaderButtons
+            spreadsheetKey="spreadsheetGed"
+            idSuffix="ged"
+          />
 
           {/* Main Table Records Sheet */}
           <div

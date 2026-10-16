@@ -79,7 +79,7 @@ import {
   sendScriptEmail,
   getActiveTenantCommercialName,
 } from "../utils/emailService";
-import { auth, saveCollectionToFirestore } from "../firebase";
+import { auth, saveCollectionToFirestore, fetchCollectionFromFirestore } from "../firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from "../utils/fsmOptimizer";
 import { loadCttGlobalRules } from "../utils/cttRules";
@@ -2404,6 +2404,74 @@ export default function PublicPortal({
       }
     } catch (e) {
       console.warn("Could not refresh tours from server:", e);
+    }
+  };
+
+  const [isRefreshingWebappData, setIsRefreshingWebappData] = useState(false);
+
+  const handleRefreshWebappData = async () => {
+    if (isRefreshingWebappData) return;
+    setIsRefreshingWebappData(true);
+    const startMs = Date.now();
+    try {
+      const tid = techTenantId || localStorage.getItem("defib_tenant_id") || "demo";
+      await Promise.allSettled([
+        handleRefreshCalendarFromPlanning(),
+        fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(tid)}&_=${Date.now()}`)
+          .then(async (resp) => {
+            if (resp.ok) {
+              const data = await resp.json();
+              const remoteList: TenantMessage[] = Array.isArray(data?.value) ? data.value : (Array.isArray(data) ? data : []);
+              if (Array.isArray(remoteList)) {
+                setTenantMessages(remoteList);
+                try {
+                  localStorage.setItem(`defib_${tid}_tenant_messages`, JSON.stringify(remoteList));
+                } catch (_) {}
+              }
+            }
+          }),
+        fetchCollectionFromFirestore<GeneratedReport[]>("generatedReports", tid)
+          .then((remoteReports) => {
+            if (Array.isArray(remoteReports)) {
+              setGeneratedReports(remoteReports);
+              try {
+                localStorage.setItem(`defib_${tid}_generated_reports`, JSON.stringify(remoteReports));
+                localStorage.setItem("defib_generated_reports", JSON.stringify(remoteReports));
+              } catch (_) {}
+            }
+          }),
+        fetchCollectionFromFirestore<PointageLog[]>("pointages", tid)
+          .then((remotePts) => {
+            if (Array.isArray(remotePts)) {
+              setPointages(remotePts);
+              try {
+                localStorage.setItem(`defib_${tid}_pointages_history`, JSON.stringify(remotePts));
+              } catch (_) {}
+            }
+          }),
+        fetchCollectionFromFirestore<any[]>("spontaneous_events", tid)
+          .then((remoteEvts) => {
+            if (Array.isArray(remoteEvts)) {
+              try {
+                localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(remoteEvts));
+                localStorage.setItem("defib_spontaneous_events", JSON.stringify(remoteEvts));
+                window.dispatchEvent(new Event("defib_spontaneous_events_updated"));
+              } catch (_) {}
+            }
+          }),
+      ]);
+      window.dispatchEvent(new CustomEvent("defib_refresh_webapp_data", { detail: { tenantId: tid } }));
+      window.dispatchEvent(new CustomEvent("defib_reload_tours"));
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("storage"));
+      const elapsed = Date.now() - startMs;
+      if (elapsed < 900) {
+        await new Promise((r) => setTimeout(r, 900 - elapsed));
+      }
+    } catch (e) {
+      console.warn("Could not refresh webapp data:", e);
+    } finally {
+      setIsRefreshingWebappData(false);
     }
   };
 
@@ -7696,6 +7764,29 @@ export default function PublicPortal({
               </div>
             )}
 
+            {/* Fixed top bar "Actualiser les données" on Interventions, Rapports, Messages, Planning, Temps, Stocks, Réglages */}
+            {["interventions", "rapports", "messages", "planning", "temps", "stocks", "localisation"].includes(activeTab) && (
+              <button
+                type="button"
+                disabled={isRefreshingWebappData}
+                onClick={handleRefreshWebappData}
+                className={`w-full text-white text-center font-semibold select-none shadow-xs font-sans shrink-0 transition-all border-0 focus:outline-none ${
+                  isRefreshingWebappData
+                    ? "animate-webapp-refresh-wave cursor-not-allowed"
+                    : "cursor-pointer hover:opacity-95 active:scale-[0.99]"
+                }`}
+                style={{
+                  background: "linear-gradient(90deg, #2e54ff, #0023c1, #2e54ff)",
+                  color: "#ffffff",
+                  fontSize: "14px",
+                  padding: "12px 0px",
+                  cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
+                }}
+              >
+                {isRefreshingWebappData ? t("Actualisation...") : t("Actualiser les données")}
+              </button>
+            )}
+
             {/* Alert banner if no ongoing pointage for connected technician session */}
             {!hidePointage && !pointages.some((p) => p.isOngoing && p.techName?.trim().toLowerCase() === (authenticatedUser?.name || "").trim().toLowerCase()) && (
               <div
@@ -7706,6 +7797,7 @@ export default function PublicPortal({
                   fontSize: "14px",
                   padding: "12px 0px",
                   cursor: "pointer",
+                  borderTop: "1px solid white",
                 }}
                 role="button"
                 tabIndex={0}
