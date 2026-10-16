@@ -25,7 +25,10 @@ export type SheetTabType =
   | 'ged'
   | 'reglages'
   | 'intituleEmplacements'
-  | 'membresEnvironnement';
+  | 'membresEnvironnement'
+  | 'apparenceRapportsPdf'
+  | 'communicationPortailClient'
+  | 'observateurActionsSuspectes';
 
 export interface GlobalGoogleSheetsConfig {
   apiKey?: string;

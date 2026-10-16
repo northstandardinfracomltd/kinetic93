@@ -993,7 +993,7 @@ export default function SettingsModal({
       }
 
       // 5. Remote fetch from Firestore / Server for both companyInfo and tenantDatabases
-      if (activeTid && activeTid !== 'demo') {
+      if (activeTid) {
         Promise.all([
           fetchCollectionFromFirestore<CompanyInfo>('companyInfo', activeTid).catch(() => null),
           fetchCollectionFromFirestore<any>('tenantDatabases', activeTid).catch(() => null),
@@ -1849,7 +1849,7 @@ export default function SettingsModal({
           explicitDatabaseSave: true,
         }),
       }).catch(() => {}),
-      ...(effectiveTenantId && effectiveTenantId !== 'demo'
+      ...(effectiveTenantId
         ? [
             saveCollectionToFirestore('companyInfo', companyObj, effectiveTenantId).catch(() => {}),
             saveCollectionToFirestore('tenantDatabases', dbPayload, effectiveTenantId).catch(() => {}),
@@ -2650,7 +2650,7 @@ export default function SettingsModal({
       localStorage.setItem(`defib_${myTenantId}_${f.storageSuffix}`, extraSaveFields[f.key] || '');
     }
 
-    if (effectiveTenantId && effectiveTenantId !== 'demo') {
+    if (effectiveTenantId) {
       promises.push(
         saveCollectionToFirestore('tenantDatabases', {
           spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
@@ -6036,8 +6036,16 @@ export default function SettingsModal({
                 ? 'spreadsheetIntituleEmplacements'
                 : activeSection === 'membres'
                 ? 'spreadsheetMembresEnvironnement'
+                : activeSection === 'pdf'
+                ? 'spreadsheetApparenceRapportsPdf'
+                : activeSection === 'communication'
+                ? 'spreadsheetCommunicationPortailClient'
+                : activeSection === 'actions_suspectes'
+                ? 'spreadsheetObservateurActionsSuspectes'
                 : 'spreadsheetReglages';
             const resolvedUrl =
+              (localCompany as any)[sectionSheetKey] ||
+              (localCompany as any)[`${sectionSheetKey}Url`] ||
               extraSpreadsheets[sectionSheetKey] ||
               getTenantSpreadsheetUrl(sectionSheetKey, companyInfo);
             return (

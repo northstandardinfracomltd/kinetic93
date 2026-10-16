@@ -140,7 +140,8 @@ import {
   Minimize2,
   Maximize2,
   ChartNoAxesColumn,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 
 export type AppTab = 

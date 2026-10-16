@@ -550,6 +550,12 @@ export interface CompanyInfo {
   spreadsheetIntituleEmplacementsUrl?: string;
   spreadsheetMembresEnvironnement?: string;
   spreadsheetMembresEnvironnementUrl?: string;
+  spreadsheetApparenceRapportsPdf?: string;
+  spreadsheetApparenceRapportsPdfUrl?: string;
+  spreadsheetCommunicationPortailClient?: string;
+  spreadsheetCommunicationPortailClientUrl?: string;
+  spreadsheetObservateurActionsSuspectes?: string;
+  spreadsheetObservateurActionsSuspectesUrl?: string;
 }
 
 export type SpreadsheetFieldKey =
@@ -573,9 +579,12 @@ export type SpreadsheetFieldKey =
   | 'spreadsheetMessagesInternes'
   | 'spreadsheetVariables'
   | 'spreadsheetGed'
-  | 'spreadsheetReglages'
   | 'spreadsheetIntituleEmplacements'
-  | 'spreadsheetMembresEnvironnement';
+  | 'spreadsheetMembresEnvironnement'
+  | 'spreadsheetReglages'
+  | 'spreadsheetApparenceRapportsPdf'
+  | 'spreadsheetCommunicationPortailClient'
+  | 'spreadsheetObservateurActionsSuspectes';
 
 export const EXTRA_SPREADSHEET_FIELDS: {
   key: SpreadsheetFieldKey;
@@ -601,9 +610,12 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetMessagesInternes', urlKey: 'spreadsheetMessagesInternesUrl', storageSuffix: 'spreadsheet_messages_internes', label: 'Spreadsheet Messages internes.', id: 'settings-db-spreadsheet-messages-internes' },
   { key: 'spreadsheetVariables', urlKey: 'spreadsheetVariablesUrl', storageSuffix: 'spreadsheet_variables', label: 'Spreadsheet Variables.', id: 'settings-db-spreadsheet-variables' },
   { key: 'spreadsheetGed', urlKey: 'spreadsheetGedUrl', storageSuffix: 'spreadsheet_ged', label: 'Spreadsheet GED.', id: 'settings-db-spreadsheet-ged' },
-  { key: 'spreadsheetReglages', urlKey: 'spreadsheetReglagesUrl', storageSuffix: 'spreadsheet_reglages', label: 'Spreadsheet Réglages.', id: 'settings-db-spreadsheet-reglages' },
   { key: 'spreadsheetIntituleEmplacements', urlKey: 'spreadsheetIntituleEmplacementsUrl', storageSuffix: 'spreadsheet_intitule_emplacements', label: 'Spreadsheet Intitulé des emplacements.', id: 'settings-db-spreadsheet-intitule-emplacements' },
   { key: 'spreadsheetMembresEnvironnement', urlKey: 'spreadsheetMembresEnvironnementUrl', storageSuffix: 'spreadsheet_membres_environnement', label: 'Spreadsheet Membres de l’environnement.', id: 'settings-db-spreadsheet-membres-environnement' },
+  { key: 'spreadsheetReglages', urlKey: 'spreadsheetReglagesUrl', storageSuffix: 'spreadsheet_reglages', label: 'Spreadsheet Réglages.', id: 'settings-db-spreadsheet-reglages' },
+  { key: 'spreadsheetApparenceRapportsPdf', urlKey: 'spreadsheetApparenceRapportsPdfUrl', storageSuffix: 'spreadsheet_apparence_rapports_pdf', label: 'Spreadsheet Apparence des rapports PDF.', id: 'settings-db-spreadsheet-apparence-rapports-pdf' },
+  { key: 'spreadsheetCommunicationPortailClient', urlKey: 'spreadsheetCommunicationPortailClientUrl', storageSuffix: 'spreadsheet_communication_portail_client', label: 'Spreadsheet Communication portail client.', id: 'settings-db-spreadsheet-communication-portail-client' },
+  { key: 'spreadsheetObservateurActionsSuspectes', urlKey: 'spreadsheetObservateurActionsSuspectesUrl', storageSuffix: 'spreadsheet_observateur_actions_suspectes', label: 'Spreadsheet Observateur des actions suspectes.', id: 'settings-db-spreadsheet-observateur-actions-suspectes' },
 ];
 
 export interface PointageLog {

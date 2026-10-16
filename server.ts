@@ -4331,6 +4331,9 @@ async function warmupDefibrillateursStore() {
     reglages: 'spreadsheetReglages',
     intituleEmplacements: 'spreadsheetIntituleEmplacements',
     membresEnvironnement: 'spreadsheetMembresEnvironnement',
+    apparenceRapportsPdf: 'spreadsheetApparenceRapportsPdf',
+    communicationPortailClient: 'spreadsheetCommunicationPortailClient',
+    observateurActionsSuspectes: 'spreadsheetObservateurActionsSuspectes',
   };
 
   function getSheetTabFieldCandidates(tabType: SheetTabType): string[] {
@@ -5042,6 +5045,9 @@ async function warmupDefibrillateursStore() {
             'spreadsheetReglages',
             'spreadsheetIntituleEmplacements',
             'spreadsheetMembresEnvironnement',
+            'spreadsheetApparenceRapportsPdf',
+            'spreadsheetCommunicationPortailClient',
+            'spreadsheetObservateurActionsSuspectes',
           ];
 
           const existingInMem = serverMemoryStore.get(collectionKey);
