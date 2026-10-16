@@ -235,20 +235,36 @@ export default function App() {
     }
   }, [tenantId]);
 
+  const [shortEnvId, setShortEnvId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('defib_short_env_id') || 'D18';
+    }
+    return 'D18';
+  });
+
   useEffect(() => {
     if (tenantId === 'demo') {
       localStorage.setItem('defib_short_env_id', 'D18');
+      setShortEnvId('D18');
       setIsBlockedByPrez(false);
       setIsSubscriptionInactive(false);
       setPaymentUrl('');
     } else {
+      // Immediately resolve from known registry or local cache so visual ID is never stale
+      const immediateKnown = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], tenantId) as any;
+      if (immediateKnown?.shortEnvId) {
+        localStorage.setItem('defib_short_env_id', immediateKnown.shortEnvId);
+        setShortEnvId(immediateKnown.shortEnvId);
+      }
       getRegisteredTenants().then(tenants => {
-        const found = tenants.find(t => t.id === tenantId);
+        const found = (findTenantInList(tenants, tenantId) || findTenantInList(KNOWN_TENANTS_REGISTRY as any[], tenantId)) as any;
         if (found) {
           if (found.shortEnvId) {
             localStorage.setItem('defib_short_env_id', found.shortEnvId);
+            setShortEnvId(found.shortEnvId);
           } else {
             localStorage.setItem('defib_short_env_id', 'D18');
+            setShortEnvId('D18');
           }
           if (found.lang) {
             setLanguage(found.lang);
@@ -277,6 +293,7 @@ export default function App() {
           });
         } else {
           localStorage.setItem('defib_short_env_id', 'D18');
+          setShortEnvId('D18');
           setIsBlockedByPrez(false);
           setIsSubscriptionInactive(false);
           setPaymentUrl('');
@@ -2727,17 +2744,34 @@ export default function App() {
   const getTenantTourPrefix = useCallback((tid?: string): string => {
     const clean = (tid || tenantId || '').trim();
     if (!clean || clean.toLowerCase() === 'demo') {
-      const shortId = (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || 'D10';
-      return shortId.trim().toUpperCase();
+      return 'D18';
     }
-    if (/^d\d+$/i.test(clean)) {
-      return clean.toUpperCase();
+    if (typeof window !== 'undefined') {
+      try {
+        const cachedRaw = localStorage.getItem('fs_cache_registered_tenants');
+        if (cachedRaw) {
+          const cachedTenants = JSON.parse(cachedRaw);
+          if (Array.isArray(cachedTenants)) {
+            const matchedCached = findTenantInList(cachedTenants, clean) as any;
+            if (matchedCached?.shortEnvId) {
+              return String(matchedCached.shortEnvId).trim().toUpperCase();
+            }
+          }
+        }
+      } catch (_) {}
     }
-    const matched = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], clean) as any;
-    if (matched?.id && /^d\d+$/i.test(matched.id)) return matched.id.toUpperCase();
-    if (matched?.shortEnvId) return String(matched.shortEnvId).trim().toUpperCase();
-    return clean.toUpperCase();
-  }, [tenantId]);
+    const matchedKnown = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], clean) as any;
+    if (matchedKnown?.shortEnvId) {
+      return String(matchedKnown.shortEnvId).trim().toUpperCase();
+    }
+    if (!tid || clean.toLowerCase() === (tenantId || '').trim().toLowerCase()) {
+      const storedShort = (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || shortEnvId;
+      if (storedShort && storedShort.trim()) {
+        return storedShort.trim().toUpperCase();
+      }
+    }
+    return 'D18';
+  }, [tenantId, shortEnvId]);
 
   const ensureFsmTourIdentifiers = useCallback((toursList: any[], activeTid?: string): { tours: any[]; changed: boolean } => {
     if (!Array.isArray(toursList) || toursList.length === 0) {
@@ -2751,19 +2785,28 @@ export default function App() {
       if (!isNaN(savedSeq) && savedSeq > maxSeq) maxSeq = savedSeq;
     } catch (_) {}
 
-    for (const t of toursList) {
-      if (!t || t.id === 'a-trier') continue;
+    let prefixUpdated = false;
+    const normalizedList = toursList.map((t) => {
+      if (!t || t.id === 'a-trier') return t;
       const existingId = String(t.tourIdentifiant || t.identifiant || '').trim();
       const match = existingId.match(seqRegex);
       if (match) {
         const num = parseInt(match[2], 10);
         if (!isNaN(num) && num > maxSeq) maxSeq = num;
+        if (match[1].toUpperCase() !== prefix.toUpperCase() || t.tourIdentifiant !== `${prefix}-TOUR-${match[2]}`) {
+          prefixUpdated = true;
+          return {
+            ...t,
+            tourIdentifiant: `${prefix}-TOUR-${match[2]}`
+          };
+        }
       }
-    }
+      return t;
+    });
 
     // Assign missing identifiers from oldest to newest (bottom to top since new tours are prepended)
     const indicesNeedingId: number[] = [];
-    toursList.forEach((t, idx) => {
+    normalizedList.forEach((t, idx) => {
       if (!t || t.id === 'a-trier') return;
       const existingId = String(t.tourIdentifiant || '').trim();
       if (!seqRegex.test(existingId)) {
@@ -2772,10 +2815,10 @@ export default function App() {
     });
 
     if (indicesNeedingId.length === 0) {
-      return { tours: toursList, changed: false };
+      return { tours: normalizedList, changed: prefixUpdated };
     }
 
-    const updated = [...toursList];
+    const updated = [...normalizedList];
     for (let i = indicesNeedingId.length - 1; i >= 0; i--) {
       const idx = indicesNeedingId[i];
       maxSeq += 1;
@@ -10111,7 +10154,7 @@ export default function App() {
               const techMatch = (tour.techName || '').toLowerCase().includes(query);
               const plannerMatch = (tour.plannerName || tour.planner || '').toLowerCase().includes(query);
               const regionMatch = (tour.region || '').toLowerCase().includes(query);
-              const idMatch = (tour.id || '').toLowerCase().includes(query);
+              const idMatch = (tour.id || '').toLowerCase().includes(query) || (tour.tourIdentifiant || '').toLowerCase().includes(query);
               const statusMatch = (tour.status || '').toLowerCase().includes(query);
               const dateMatch = (tour.startDate || '').toLowerCase().includes(query);
               const vehiculeMatch = (tour.vehicule || '').toLowerCase().includes(query);
@@ -13051,7 +13094,13 @@ export default function App() {
                               <label className="block mb-1.5 fsm-label-style whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Identifiant de la tournée.</label>
                               <input
                                 type="text"
-                                value={t.tourIdentifiant || `${getTenantTourPrefix(tenantId)}-TOUR-0001`}
+                                value={(() => {
+                                  const visualPrefix = getTenantTourPrefix(tenantId);
+                                  const rawId = String(t.tourIdentifiant || '').trim();
+                                  const m = rawId.match(/^([A-Z0-9_-]+)-TOUR-(\d{4,})$/i);
+                                  if (m) return `${visualPrefix}-TOUR-${m[2]}`;
+                                  return rawId || `${visualPrefix}-TOUR-0001`;
+                                })()}
                                 disabled
                                 readOnly
                                 style={{

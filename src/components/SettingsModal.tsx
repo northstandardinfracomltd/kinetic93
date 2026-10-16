@@ -6046,7 +6046,6 @@ export default function SettingsModal({
             const resolvedUrl =
               (localCompany as any)[sectionSheetKey] ||
               (localCompany as any)[`${sectionSheetKey}Url`] ||
-              extraSpreadsheets[sectionSheetKey] ||
               getTenantSpreadsheetUrl(sectionSheetKey, companyInfo);
             return (
               <div className="pt-2 w-full grid grid-cols-2 gap-3 animate-fadeIn" style={{ order: 98 }}>
