@@ -1,5 +1,5 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, isFirestoreQuotaExhausted, saveCollectionToFirestore } from '../firebase';
 
 // Default Apps Script URL provided by the developer
 const DEFAULT_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzx6ElCSC7A5dWvE5fdBJMAQOmYbsnjVs1ttQ0g9ktrJtln7ei9Pl3Em3ine99CrI0/exec';
@@ -27,7 +27,7 @@ export async function getAppsScriptUrl(): Promise<string> {
     cachedUrl = localSaved.trim();
     
     // Trigger a background silent update of Firestore cache without blocking
-    if (typeof navigator !== 'undefined' && navigator.onLine) {
+    if (typeof navigator !== 'undefined' && navigator.onLine && !isFirestoreQuotaExhausted()) {
       const docRef = doc(db, 'appData', 'global_email_config');
       getDoc(docRef).then(snap => {
         if (snap.exists()) {
@@ -45,7 +45,7 @@ export async function getAppsScriptUrl(): Promise<string> {
   }
   
   // 3. Fallback to quick server check with a 2-second timeout
-  if (typeof navigator !== 'undefined' && navigator.onLine) {
+  if (typeof navigator !== 'undefined' && navigator.onLine && !isFirestoreQuotaExhausted()) {
     try {
       const docRef = doc(db, 'appData', 'global_email_config');
       const docPromise = getDoc(docRef);
@@ -78,10 +78,9 @@ export async function saveAppsScriptUrl(url: string): Promise<void> {
   localStorage.setItem('defib_global_apps_script_url', cleanUrl);
 
   try {
-    const docRef = doc(db, 'appData', 'global_email_config');
-    await setDoc(docRef, { url: cleanUrl });
+    await saveCollectionToFirestore('global_email_config', { url: cleanUrl }, 'demo');
   } catch (error) {
-    console.warn('Error saving global_email_config to firestore:', error);
+    console.warn('Error saving global_email_config:', error);
   }
 }
 

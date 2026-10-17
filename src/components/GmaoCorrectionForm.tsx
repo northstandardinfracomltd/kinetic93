@@ -793,8 +793,10 @@ export default function GmaoCorrectionForm({
       ...(report?.pourcentageBatterie ? { pourcentageBatterie: report.pourcentageBatterie } : {}),
       ...(report?.commentaireBatterie ? { commentaireBatterie: report.commentaireBatterie } : {}),
       ...(report?.conforme !== undefined ? { conforme: report.conforme } : {}),
-      ...(report?.commentaire ? { commentaire: report.commentaire } : {}),
-      ...(report?.commentaireInterne ? { commentaireInterne: report.commentaireInterne } : {}),
+      ...((report?.defibSnapshot?.commentaire || report?.diagnosticCommentaire || report?.remarques)
+        ? { commentaire: report?.defibSnapshot?.commentaire || report?.diagnosticCommentaire || report?.remarques }
+        : (report?.commentaire && !report?.internalComment ? { commentaire: report.commentaire } : {})),
+      ...(report?.commentaireInterne || report?.internalComment ? { commentaireInterne: report.commentaireInterne || report.internalComment } : {}),
     };
     if (isNew && !report) {
       base.conforme = '' as any; // Par défaut à l’arrivée deselect
@@ -806,14 +808,15 @@ export default function GmaoCorrectionForm({
   const [snapshot, setSnapshot] = useState<Defibrillateur>(() => getInitialSnapshot());
 
   // Report fields
-  const [clientPinCode, setClientPinCode] = useState(report?.clientPinCode || '');
+  const [clientPinCode, setClientPinCode] = useState(report?.clientPinCode || report?.defibSnapshot?.clientPinCode || '');
   const [reportTitle, setReportTitle] = useState(() => {
-    if (!report?.title) return 'RAPPORT D’INTERVENTION';
-    if (report.title === 'RAPPORT TECHNIQUE DÉFIBRILLATEUR') return 'RAPPORT D’INTERVENTION';
-    return report.title;
+    const rawTitle = report?.reportTitle || report?.title;
+    if (!rawTitle) return 'RAPPORT D’INTERVENTION';
+    if (rawTitle === 'RAPPORT TECHNIQUE DÉFIBRILLATEUR') return 'RAPPORT D’INTERVENTION';
+    return rawTitle;
   });
   const [techName, setTechName] = useState(() => {
-    if (report?.techName) return report.techName;
+    if (report?.techName || report?.technicien) return report.techName || report.technicien;
     try {
       const activeTechRaw = localStorage.getItem('defib_active_tech_session');
       if (activeTechRaw) {
@@ -824,7 +827,7 @@ export default function GmaoCorrectionForm({
     return 'Technicien connecté';
   });
   const [interventionDate, setInterventionDate] = useState(() => {
-    if (report?.date) return report.date;
+    if (report?.date || report?.dateStr || report?.interventionDate) return report.date || report.dateStr || report.interventionDate;
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -835,7 +838,7 @@ export default function GmaoCorrectionForm({
     return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
   });
   const [missionSite, setMissionSite] = useState<'DÉPLACEMENT' | 'ATELIER SAV'>(
-    report?.siteMission === 'ATELIER SAV' ? 'ATELIER SAV' : 'DÉPLACEMENT'
+    (report?.missionSite === 'ATELIER SAV' || report?.siteMission === 'ATELIER SAV') ? 'ATELIER SAV' : 'DÉPLACEMENT'
   );
   const [currentLang, setCurrentLang] = useState(() => localStorage.getItem('defib_lang') || 'Français, France');
 
@@ -2300,12 +2303,58 @@ export default function GmaoCorrectionForm({
     const savedReportPayload = {
       ...report,
       title: reportTitle,
+      reportTitle,
       techName: techName,
+      technicien: techName,
       date: interventionDate || new Date().toLocaleString('fr-FR'),
       defibId: finalSnapshot.id || selectedDefibId,
       defibIdentifiant: finalSnapshot.identifiant.toUpperCase(),
+      identifiant: finalSnapshot.identifiant.toUpperCase(),
+      numeroSerie: finalSnapshot.numeroSerie || '',
+      categorie: finalSnapshot.categorie || 'Défibrillateur',
+      modele: finalSnapshot.modele || finalSnapshot.modeleId || '',
+      denomination: finalSnapshot.nomSite || finalSnapshot.denomination || '',
+      emplacement: finalSnapshot.commentaireAdresse || finalSnapshot.emplacement || '',
+      clientId: finalSnapshot.clientId || '',
+      nomPrenomSite: finalSnapshot.nomPrenomSite || '',
+      telephoneSite: finalSnapshot.telephoneSite || '',
+      emailSite: finalSnapshot.emailSite || '',
+      contrat: finalSnapshot.contrat || 'Non',
+      referenceContrat: finalSnapshot.referenceContrat || '',
+      nomContrat: finalSnapshot.nomContrat || '',
+      modeleCoffret: finalSnapshot.modeleCoffret || finalSnapshot.modeleCoffretId || '',
+      numeroLotCoffret: finalSnapshot.numeroLotCoffret || '',
+      commentaireCoffret: finalSnapshot.commentaireCoffret || '',
+      numVoie: finalSnapshot.numVoie || '',
+      ville: finalSnapshot.ville || '',
+      cp: finalSnapshot.cp || '',
+      region: finalSnapshot.region || '',
+      pays: finalSnapshot.pays || 'France',
+      latitude: finalSnapshot.latitude || '',
+      longitude: finalSnapshot.longitude || '',
+      fabrication: finalSnapshot.fabrication || '',
+      miseEnService: finalSnapshot.miseEnService || '',
+      finGarantie: finalSnapshot.finGarantie || '',
+      modeleElectrodeA: finalSnapshot.modeleElectrodeA || finalSnapshot.modeleElectrodeAId || '',
+      lotElectrodeA: finalSnapshot.lotElectrodeA || '',
+      peremptionElectrodeA: finalSnapshot.peremptionElectrodeA || '',
+      modeleElectrodeP: finalSnapshot.modeleElectrodeP || finalSnapshot.modeleElectrodePId || '',
+      lotElectrodeP: finalSnapshot.lotElectrodeP || '',
+      peremptionElectrodeP: finalSnapshot.peremptionElectrodeP || '',
+      modeleBatterie: finalSnapshot.modeleBatterie || finalSnapshot.modeleBatterieId || '',
+      lotBatterie: finalSnapshot.lotBatterie || '',
+      fabricationBatterie: finalSnapshot.fabricationBatterie || '',
+      miseEnServiceBatterie: finalSnapshot.insertionBatterie || finalSnapshot.miseEnServiceBatterie || '',
+      peremptionBatterie: finalSnapshot.peremptionBatterie || '',
+      pourcentageBatterie: finalSnapshot.pourcentageBatterie || '',
+      conforme: finalSnapshot.conforme || 'Oui',
+      diagnosticCommentaire: finalSnapshot.commentaire || '',
+      internalComment: snapshot.commentaireInterne || '',
       siteMission: missionSite,
+      missionSite,
       photoUrl: photoUrl || undefined,
+      photo2Url: photoArriereUrl || undefined,
+      photo3Url: photoResultatTestUrl || undefined,
       defibSnapshot: finalSnapshot,
       commentaireInterne: snapshot.commentaireInterne || '',
       techSignature: techSignature,

@@ -282,6 +282,19 @@ export async function recordSuspiciousActivity(
     });
   }
 
+  // Sync to Google Sheets (observateurActionsSuspectes) if configured
+  if (typeof window !== 'undefined') {
+    fetch('/api/sheets/upsert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenantId: effectiveTenantId,
+        type: 'observateurActionsSuspectes',
+        record: newLog,
+      }),
+    }).catch(() => {});
+  }
+
   // Emit event for reactive UI updates
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
@@ -306,6 +319,15 @@ export async function recordSuspiciousActivity(
             if (effectiveTenantId && effectiveTenantId !== 'demo') {
               saveCollectionToFirestore('suspicious_activity_logs', patched, effectiveTenantId).catch(() => {});
             }
+            fetch('/api/sheets/upsert', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tenantId: effectiveTenantId,
+                type: 'observateurActionsSuspectes',
+                record: newLog,
+              }),
+            }).catch(() => {});
             if (onLogsUpdated) onLogsUpdated(patched);
           }
         } catch (_) {}
@@ -314,6 +336,29 @@ export async function recordSuspiciousActivity(
   }
 
   return newLog;
+}
+
+export function mergeSuspiciousLogsFromSheet(tenantId: string, sheetItems: any[]): SuspiciousActivityLog[] {
+  const effectiveTenantId = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+  const key = `defib_${effectiveTenantId}_suspicious_activity_logs`;
+  const existing = getTenantSuspiciousLogs(effectiveTenantId);
+  const normalizedFromSheet: SuspiciousActivityLog[] = (Array.isArray(sheetItems) ? sheetItems : [])
+    .filter(item => item && typeof item === 'object' && (item.message || item.actionType || item.userName))
+    .map((item, idx) => ({
+      id: item.id || `sus_sheet_${idx + 2}`,
+      tenantId: item.tenantId || effectiveTenantId,
+      timestamp: item.timestamp || new Date().toISOString(),
+      userName: item.userName || 'Utilisateur',
+      userIp: item.userIp || 'Non renseignée',
+      actionType: (item.actionType as SuspiciousActionType) || 'CONNEXION',
+      message: item.message || '',
+      details: item.details,
+    }));
+  const merged = deduplicateSuspiciousLogs([...normalizedFromSheet, ...existing]);
+  try {
+    localStorage.setItem(key, JSON.stringify(merged));
+  } catch (_) {}
+  return merged;
 }
 
 // -------------------------------------------------------------

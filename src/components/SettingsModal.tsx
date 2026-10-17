@@ -37,7 +37,8 @@ import {
   exportSuspiciousActivityToCsv,
   getTenantSuspiciousLogs,
   logDeleteMember,
-  logUpdateSetting
+  logUpdateSetting,
+  mergeSuspiciousLogsFromSheet
 } from '../services/suspiciousActivityService';
 
 interface SettingsModalProps {
@@ -1249,7 +1250,7 @@ export default function SettingsModal({
       updatedAt: new Date().toISOString()
     };
     try {
-      await setDoc(doc(db, 'api_connectors', docId), payload, { merge: true });
+      await saveCollectionToFirestore('api_connectors', [payload], tId);
     } catch (_) {}
     try {
       await fetch('/api/collection/api_connectors', {
@@ -2083,6 +2084,7 @@ export default function SettingsModal({
     setLocalMembers(prev => {
       const updated = [...prev];
       const current = updated[index].semaineTypique || [];
+      if (current.length >= 2) return prev;
       const newSchedule: MemberSchedule = {
         days: [],
         fermetureMidi: false,
@@ -2147,6 +2149,7 @@ export default function SettingsModal({
     setLocalMembers(prev => {
       const updated = [...prev];
       const current = updated[index].absences || [];
+      if (current.length >= 2) return prev;
       const newAbsence: MemberAbsence = {
         startDate: new Date().toISOString().split('T')[0],
         endDate: new Date().toISOString().split('T')[0],
@@ -2205,6 +2208,18 @@ export default function SettingsModal({
     if (m) {
       const activeTenant = myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
       logDeleteMember(activeTenant, m.name || m.email).catch(() => {});
+      const delKeys = [m.email, m.name, (m as any).id].filter(Boolean);
+      if (delKeys.length > 0) {
+        await fetch('/api/sheets/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: activeTenant,
+            type: 'membresEnvironnement',
+            keys: delKeys,
+          }),
+        }).catch(() => {});
+      }
     }
     const updatedList = localMembers.filter((_, idx) => idx !== index);
     setLocalMembers(updatedList);
@@ -2683,6 +2698,123 @@ export default function SettingsModal({
       onUpdateLocationNames(localLocationNames);
     }
 
+    // Synchronize all Settings compartments to their configured Google Spreadsheets
+    const targetSheetTenant = effectiveTenantId || myTenantId || 'demo';
+    try {
+      // 1. Réglages (spreadsheetReglages)
+      promises.push(
+        fetch('/api/sheets/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: targetSheetTenant,
+            type: 'reglages',
+            record: {
+              ...companyToSave,
+              id: 'tenant_reglages',
+              language: selectedLang,
+              enableAutoEmails,
+              enableSatisfactionAvis,
+              enableDevisFactures,
+              enableOtherEquipments: localEnableOtherEquipments,
+              disableHelpsAndTutorials,
+            },
+          }),
+        }).catch(() => {})
+      );
+
+      // 2. Apparence des rapports PDF (spreadsheetApparenceRapportsPdf)
+      promises.push(
+        fetch('/api/sheets/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: targetSheetTenant,
+            type: 'apparenceRapportsPdf',
+            record: {
+              ...companyToSave,
+              id: 'tenant_pdf_template',
+            },
+          }),
+        }).catch(() => {})
+      );
+
+      // 3. Communication portail client (spreadsheetCommunicationPortailClient)
+      promises.push(
+        fetch('/api/sheets/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: targetSheetTenant,
+            type: 'communicationPortailClient',
+            record: {
+              id: 'tenant_portal_com',
+              communicationPortailClient: communicationPortailClient || '',
+              message: communicationPortailClient || '',
+            },
+          }),
+        }).catch(() => {})
+      );
+
+      // 4. Intitulé des emplacements (spreadsheetIntituleEmplacements)
+      promises.push(
+        fetch('/api/sheets/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: targetSheetTenant,
+            type: 'intituleEmplacements',
+            record: {
+              id: 'emplacements_config',
+              ...(localLocationNames || {}),
+            },
+          }),
+        }).catch(() => {})
+      );
+
+      // 5. Membres de l'environnement (spreadsheetMembresEnvironnement)
+      const currentEmailsLower = new Set(
+        membersToSave.map(m => (m.email || '').trim().toLowerCase()).filter(Boolean)
+      );
+      const removedKeys: string[] = [];
+      for (const oldM of members || []) {
+        const oldEmail = (oldM.email || '').trim().toLowerCase();
+        if (oldEmail && !currentEmailsLower.has(oldEmail)) {
+          if (oldM.email) removedKeys.push(oldM.email);
+          if (oldM.name) removedKeys.push(oldM.name);
+          if ((oldM as any).id) removedKeys.push((oldM as any).id);
+        }
+      }
+      if (removedKeys.length > 0) {
+        promises.push(
+          fetch('/api/sheets/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: targetSheetTenant,
+              type: 'membresEnvironnement',
+              keys: removedKeys,
+            }),
+          }).catch(() => {})
+        );
+      }
+      if (membersToSave.length > 0) {
+        promises.push(
+          fetch('/api/sheets/upsert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: targetSheetTenant,
+              type: 'membresEnvironnement',
+              records: membersToSave,
+            }),
+          }).catch(() => {})
+        );
+      }
+    } catch (sheetSyncErr) {
+      console.warn('Error syncing settings compartments to Google Sheets:', sheetSyncErr);
+    }
+
     // Save language and super-admin profile to the master tenant list in Firestore
     if (myTenantId && myTenantId !== 'demo') {
       promises.push(
@@ -2728,8 +2860,8 @@ export default function SettingsModal({
       localStorage.setItem('settings_active_section', activeSection);
     }
 
-    // Wait at most 800ms for all writes to hit offline/network layer, then reload the page
-    const timeoutPromise = new Promise<void>(resolve => setTimeout(resolve, 800));
+    // Wait up to 2200ms for all writes to hit Google Sheets & Firestore layer, then reload the page
+    const timeoutPromise = new Promise<void>(resolve => setTimeout(resolve, 2200));
     await Promise.race([
       Promise.allSettled(promises),
       timeoutPromise
@@ -4571,7 +4703,7 @@ export default function SettingsModal({
                                   </span>
                                   <button
                                     type="button"
-                                    disabled={!canEditThisMember}
+                                    disabled={!canEditThisMember || (m.semaineTypique || []).length >= 2}
                                     onClick={() => handleAddMemberSchedule(idx)}
                                     style={{
                                       backgroundColor: '#000000',
@@ -4581,7 +4713,7 @@ export default function SettingsModal({
                                       borderRadius: '13px',
                                       padding: '10px 20px',
                                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                      cursor: 'pointer'
+                                      cursor: (!canEditThisMember || (m.semaineTypique || []).length >= 2) ? 'not-allowed' : 'pointer'
                                     }}
                                     className="font-bold transition-all disabled:opacity-50"
                                   >
@@ -4590,7 +4722,7 @@ export default function SettingsModal({
                                 </div>
 
                                 {m.semaineTypique && m.semaineTypique.length > 0 && (
-                                  (m.semaineTypique || []).map((sch, schIdx) => (
+                                  (m.semaineTypique || []).slice(0, 2).map((sch, schIdx) => (
                                     <div key={schIdx} style={{ borderRadius: '13px', border: '1px solid #d5D5D5' }} className="p-3 bg-white relative space-y-3">
                                       <button
                                         type="button"
@@ -4781,7 +4913,7 @@ export default function SettingsModal({
                                   </span>
                                   <button
                                     type="button"
-                                    disabled={!canEditThisMember}
+                                    disabled={!canEditThisMember || (m.absences || []).length >= 2}
                                     onClick={() => handleAddMemberAbsence(idx)}
                                     style={{
                                       backgroundColor: '#000000',
@@ -4791,7 +4923,7 @@ export default function SettingsModal({
                                       borderRadius: '13px',
                                       padding: '10px 20px',
                                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                      cursor: 'pointer'
+                                      cursor: (!canEditThisMember || (m.absences || []).length >= 2) ? 'not-allowed' : 'pointer'
                                     }}
                                     className="font-bold transition-all disabled:opacity-50"
                                   >
@@ -4800,7 +4932,7 @@ export default function SettingsModal({
                                 </div>
 
                                 {m.absences && m.absences.length > 0 && (
-                                  (m.absences || []).map((abs, absIdx) => (
+                                  (m.absences || []).slice(0, 2).map((abs, absIdx) => (
                                     <div key={absIdx} style={{ borderRadius: '13px', border: '1px solid #d5D5D5' }} className="p-3 bg-white relative space-y-2 pt-6">
                                       <button
                                         type="button"
@@ -6052,7 +6184,85 @@ export default function SettingsModal({
                 <button
                   type="button"
                   id={`btn-settings-refresh-${activeSection}`}
-                  onClick={() => {}}
+                  onClick={async () => {
+                    const targetTenant = myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+                    const tabType =
+                      activeSection === 'emplacements'
+                        ? 'intituleEmplacements'
+                        : activeSection === 'membres'
+                        ? 'membresEnvironnement'
+                        : activeSection === 'pdf'
+                        ? 'apparenceRapportsPdf'
+                        : activeSection === 'communication'
+                        ? 'communicationPortailClient'
+                        : activeSection === 'actions_suspectes'
+                        ? 'observateurActionsSuspectes'
+                        : 'reglages';
+                    try {
+                      const qUrl = resolvedUrl ? `&spreadsheetUrl=${encodeURIComponent(resolvedUrl)}` : '';
+                      const res = await fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(targetTenant)}&type=${encodeURIComponent(tabType)}&refresh=true${qUrl}`);
+                      if (!res.ok) return;
+                      const data = await res.json();
+                      if (!data?.fromSpreadsheet || !Array.isArray(data.items)) return;
+
+                      if (activeSection === 'emplacements') {
+                        const nextLocs = { ...(localLocationNames || {}) };
+                        for (const row of data.items) {
+                          if (!row || typeof row !== 'object') continue;
+                          if (row.emplacement && row.intitule !== undefined) {
+                            nextLocs[String(row.emplacement).trim()] = String(row.intitule);
+                          }
+                          for (const [k, v] of Object.entries(row)) {
+                            if (/^(?:Entrepôt|Véhicule)\s+[A-J]$/i.test(k) && v !== undefined && v !== null && String(v).trim() !== '') {
+                              nextLocs[k] = String(v).trim();
+                            }
+                          }
+                        }
+                        setLocalLocationNames(nextLocs);
+                        localStorage.setItem(`defib_${targetTenant}_custom_location_names`, JSON.stringify(nextLocs));
+                        if (onUpdateLocationNames) onUpdateLocationNames(nextLocs);
+                      } else if (activeSection === 'membres') {
+                        const validMembers = data.items.filter((m: any) => m && (m.name || m.email));
+                        if (validMembers.length > 0) {
+                          const ensured = ensureTenantMembersClient(validMembers, targetTenant, currentUser?.email, currentUser?.name);
+                          setLocalMembers(ensured);
+                          onUpdateMembers(ensured);
+                          localStorage.setItem(`defib_${targetTenant}_members`, JSON.stringify(ensured));
+                        }
+                      } else if (activeSection === 'reglages' || activeSection === 'pdf') {
+                        const firstRow = data.items[0];
+                        if (firstRow && typeof firstRow === 'object') {
+                          const cleanPatch: Record<string, any> = {};
+                          for (const [k, v] of Object.entries(firstRow)) {
+                            if (!k.startsWith('_') && k !== 'id' && v !== undefined && v !== '') {
+                              cleanPatch[k] = v;
+                            }
+                          }
+                          const nextCompany = { ...localCompany, ...cleanPatch } as CompanyInfo;
+                          setLocalCompany(nextCompany);
+                          onUpdateCompanyInfo(nextCompany);
+                          localStorage.setItem(`defib_${targetTenant}_company_info`, JSON.stringify(nextCompany));
+                        }
+                      } else if (activeSection === 'communication') {
+                        const firstRow = data.items[0];
+                        if (firstRow && typeof firstRow === 'object') {
+                          const nextMsg = String(firstRow.communicationPortailClient ?? firstRow.message ?? '');
+                          setCommunicationPortailClient(nextMsg);
+                          localStorage.setItem(`defib_${targetTenant}_communication_portail_client`, nextMsg);
+                        }
+                      } else if (activeSection === 'actions_suspectes') {
+                        const mergedLogs = mergeSuspiciousLogsFromSheet(targetTenant, data.items);
+                        setSuspiciousLogs(mergedLogs);
+                      }
+                      window.dispatchEvent(
+                        new CustomEvent('defib-manual-refresh-spreadsheet', {
+                          detail: { spreadsheetKey: sectionSheetKey, idSuffix: activeSection },
+                        })
+                      );
+                    } catch (err) {
+                      console.warn('Settings manual refresh error:', err);
+                    }
+                  }}
                   style={{
                     ...rowActionButtonStyle,
                     backgroundColor: '#000000',

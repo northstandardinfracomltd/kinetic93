@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   getRegisteredTenants, 
-  db, 
+  saveCollectionToFirestore,
   Tenant,
   seedTenantDemoData
 } from '../firebase';
-import { doc, setDoc } from 'firebase/firestore';
 import { 
   ShieldAlert, 
   Power, 
@@ -111,9 +110,8 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
     setTenants(updatedList);
 
     try {
-      // Sync to Firestore
-      const docRef = doc(db, 'appData', 'registered_tenants');
-      await setDoc(docRef, { value: updatedList });
+      // Sync to server & cache
+      await saveCollectionToFirestore('registered_tenants', updatedList, 'demo');
       
       // Sync to local cache so other reads are coherent immediately
       localStorage.setItem('fs_cache_registered_tenants', JSON.stringify(updatedList));
@@ -161,9 +159,8 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
     setTenants(updatedList);
 
     try {
-      // Sync to Firestore
-      const docRef = doc(db, 'appData', 'registered_tenants');
-      await setDoc(docRef, { value: updatedList });
+      // Sync to server & cache
+      await saveCollectionToFirestore('registered_tenants', updatedList, 'demo');
       
       // Sync to local cache so other reads are coherent immediately
       localStorage.setItem('fs_cache_registered_tenants', JSON.stringify(updatedList));
@@ -191,9 +188,8 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
     setTenants(updatedList);
 
     try {
-      // Sync to Firestore
-      const docRef = doc(db, 'appData', 'registered_tenants');
-      await setDoc(docRef, { value: updatedList });
+      // Sync to server & cache
+      await saveCollectionToFirestore('registered_tenants', updatedList, 'demo');
       
       // Sync to local cache so other reads are coherent immediately
       localStorage.setItem('fs_cache_registered_tenants', JSON.stringify(updatedList));
@@ -219,8 +215,7 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
     setTenants(updatedList);
 
     try {
-      const docRef = doc(db, 'appData', 'registered_tenants');
-      await setDoc(docRef, { value: updatedList });
+      await saveCollectionToFirestore('registered_tenants', updatedList, 'demo');
       localStorage.setItem('fs_cache_registered_tenants', JSON.stringify(updatedList));
       console.log(`Successfully toggled subscriptionActive for ${tenantId} to ${!currentActiveStatus}`);
     } catch (err) {
@@ -244,8 +239,7 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
     setTenants(updatedList);
 
     try {
-      const docRef = doc(db, 'appData', 'registered_tenants');
-      await setDoc(docRef, { value: updatedList });
+      await saveCollectionToFirestore('registered_tenants', updatedList, 'demo');
       localStorage.setItem('fs_cache_registered_tenants', JSON.stringify(updatedList));
       alert('URL de paiement mise à jour avec succès !');
     } catch (err) {

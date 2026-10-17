@@ -89,7 +89,8 @@ import {
   logBulkEditDefib,
   logDeleteDefib,
   logDeleteClient,
-  logDeleteTour
+  logDeleteTour,
+  mergeSuspiciousLogsFromSheet
 } from './services/suspiciousActivityService';
 
 
@@ -1029,6 +1030,95 @@ export default function App() {
 
   const [distributedStocks, setDistributedStocks] = useState<DistributedStockLocation[]>([]);
 
+  const syncCompartmentToGoogleSheets = useCallback(
+    (
+      tabType: string,
+      oldItems: any[],
+      newItems: any[],
+      keyFields: string[] = ['id'],
+      tenantIdOverride?: string
+    ) => {
+      const effectiveTid =
+        tenantIdOverride ||
+        tenantId ||
+        (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) ||
+        'demo';
+
+      const extractKeys = (item: any): string[] => {
+        if (!item || typeof item !== 'object') return [];
+        const out: string[] = [];
+        for (const f of keyFields) {
+          const v = item[f];
+          if (v !== undefined && v !== null && String(v).trim() !== '') {
+            out.push(String(v).trim());
+          }
+        }
+        if (item.id && !out.includes(String(item.id).trim())) {
+          out.push(String(item.id).trim());
+        }
+        return out;
+      };
+
+      const safeOld = Array.isArray(oldItems) ? oldItems : [];
+      const safeNew = Array.isArray(newItems) ? newItems : [];
+
+      const newKeySet = new Set<string>();
+      for (const ni of safeNew) {
+        for (const k of extractKeys(ni)) {
+          newKeySet.add(k.toLowerCase());
+        }
+      }
+
+      const deletedKeys: string[] = [];
+      for (const oi of safeOld) {
+        const oKeys = extractKeys(oi);
+        if (oKeys.length > 0 && !oKeys.some(k => newKeySet.has(k.toLowerCase()))) {
+          deletedKeys.push(...oKeys);
+        }
+      }
+
+      if (deletedKeys.length > 0) {
+        fetch('/api/sheets/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: effectiveTid,
+            type: tabType,
+            keys: Array.from(new Set(deletedKeys)),
+          }),
+        }).catch(() => {});
+      }
+
+      const oldMap = new Map<string, any>();
+      for (const oi of safeOld) {
+        const pk = extractKeys(oi)[0];
+        if (pk) oldMap.set(pk.toLowerCase(), oi);
+      }
+
+      const changedRecords = safeNew.filter(ni => {
+        if (!ni || typeof ni !== 'object') return false;
+        const pk = extractKeys(ni)[0];
+        if (!pk) return true;
+        const prev = oldMap.get(pk.toLowerCase());
+        if (!prev) return true;
+        return JSON.stringify(prev) !== JSON.stringify(ni);
+      });
+
+      if (changedRecords.length > 0) {
+        fetch('/api/sheets/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: effectiveTid,
+            type: tabType,
+            records: changedRecords,
+          }),
+        }).catch(() => {});
+      }
+    },
+    [tenantId]
+  );
+
   const saveStocks = async (updated: StockRecord[], tenantIdOverride?: string): Promise<void> => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
@@ -1089,6 +1179,7 @@ export default function App() {
     loadedDataRef.current.stock = strS;
 
     try {
+      syncCompartmentToGoogleSheets('stocksGlobaux', stocks, updated, ['id', 'ugs'], effectiveTenantId);
       fetch('/api/sync-collection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1173,6 +1264,7 @@ export default function App() {
     loadedDataRef.current.distributedStocks = strDS;
 
     try {
+      syncCompartmentToGoogleSheets('stocksDistribues', distributedStocks, updated, ['id', 'ugs'], effectiveTenantId);
       fetch('/api/sync-collection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1491,6 +1583,7 @@ export default function App() {
   }, []);
 
   const saveLogisticsNotifications = (updated: LogisticsNotification[]) => {
+    syncCompartmentToGoogleSheets('historiqueNotifications', logisticsNotifications, updated, ['id', 'ugs']);
     setLogisticsNotifications(updated);
     localStorage.setItem(`defib_${tenantId}_logistics_notifications`, JSON.stringify(updated));
     if (isFirebaseLoaded && tenantId) {
@@ -1515,6 +1608,7 @@ export default function App() {
     };
     setLogisticsNotifications((prev) => {
       const updated = [newNotif, ...prev];
+      syncCompartmentToGoogleSheets('historiqueNotifications', prev, updated, ['id', 'ugs']);
       localStorage.setItem(`defib_${tenantId}_logistics_notifications`, JSON.stringify(updated));
       if (isFirebaseLoaded && tenantId) {
         saveCollectionToFirestore('logistics_notifications', updated, tenantId);
@@ -1583,6 +1677,7 @@ export default function App() {
   const [achatsFournisseurs, setAchatsFournisseurs] = useState<AchatFournisseur[]>([]);
 
   const saveAchatsFournisseurs = (updated: AchatFournisseur[]) => {
+    syncCompartmentToGoogleSheets('achatsFournisseurs', achatsFournisseurs, updated, ['id', 'reference', 'orderReference']);
     setAchatsFournisseurs(updated);
     localStorage.setItem(`defib_${tenantId}_achats_fournisseurs`, JSON.stringify(updated));
     if (isFirebaseLoaded && tenantId) {
@@ -1592,6 +1687,7 @@ export default function App() {
 
   const [formations, setFormations] = useState<FormationRecord[]>([]);
   const saveFormations = (updated: FormationRecord[]) => {
+    syncCompartmentToGoogleSheets('formations', formations, updated, ['id', 'identifiant']);
     setFormations(updated);
     localStorage.setItem(`defib_${tenantId}_formations`, JSON.stringify(updated));
     if (isFirebaseLoaded && tenantId) {
@@ -1601,6 +1697,7 @@ export default function App() {
 
   const [stagiaires, setStagiaires] = useState<StagiaireRecord[]>([]);
   const saveStagiaires = (updated: StagiaireRecord[]) => {
+    syncCompartmentToGoogleSheets('stagiaires', stagiaires, updated, ['id', 'identifiant']);
     setStagiaires(updated);
     localStorage.setItem(`defib_${tenantId}_stagiaires`, JSON.stringify(updated));
     if (isFirebaseLoaded && tenantId) {
@@ -1610,6 +1707,7 @@ export default function App() {
 
   const [emargements, setEmargements] = useState<EmargementRecord[]>([]);
   const saveEmargements = (updated: EmargementRecord[]) => {
+    syncCompartmentToGoogleSheets('emargements', emargements, updated, ['id', 'identifiant']);
     setEmargements(updated);
     localStorage.setItem(`defib_${tenantId}_emargements`, JSON.stringify(updated));
     if (isFirebaseLoaded && tenantId) {
@@ -2597,15 +2695,396 @@ export default function App() {
     };
   }, [tenantId]);
 
+  const refreshGenericSheetCompartment = useCallback(
+    async (tabType: string, forceRefresh = false) => {
+      const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      try {
+        if (tabType === 'tournees' || tabType === 'missionsTournees') {
+          const [resTours, resMissions] = await Promise.all([
+            fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=tournees&refresh=${forceRefresh}`).catch(() => null),
+            fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=missionsTournees&refresh=${forceRefresh}`).catch(() => null),
+          ]);
+          const dataTours = resTours && resTours.ok ? await resTours.json().catch(() => null) : null;
+          const dataMissions = resMissions && resMissions.ok ? await resMissions.json().catch(() => null) : null;
+
+          const hasToursFromSheet = Boolean(dataTours?.fromSpreadsheet && Array.isArray(dataTours.items) && (dataTours.items.length > 0 || dataTours.hasRemoteHeaders));
+          const hasMissionsFromSheet = Boolean(dataMissions?.fromSpreadsheet && Array.isArray(dataMissions.items) && (dataMissions.items.length > 0 || dataMissions.hasRemoteHeaders));
+          if (!hasToursFromSheet && !hasMissionsFromSheet) return;
+
+          setFsmTours((prevTours) => {
+            const baseTours = hasToursFromSheet
+              ? [
+                  prevTours.find((t: any) => t.id === 'a-trier') || {
+                    id: 'a-trier',
+                    name: 'Missions à trier',
+                    date: '-',
+                    techName: 'Non assigné',
+                    vehicule: '-',
+                    status: 'En attente',
+                    totalDistance: '-',
+                    totalDuration: '-',
+                    co2Saved: '-',
+                    missions: [],
+                  },
+                  ...dataTours.items.map((st: any) => {
+                    const existing = prevTours.find(
+                      (pt: any) =>
+                        pt.id !== 'a-trier' &&
+                        ((st.tourIdentifiant && pt.tourIdentifiant === st.tourIdentifiant) ||
+                          (st.id && pt.id === st.id) ||
+                          (st.tourIdentifiant && pt.id === st.tourIdentifiant))
+                    );
+                    return {
+                      ...(existing || {}),
+                      ...st,
+                      id: existing?.id || st.id || st.tourIdentifiant || `tour-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                      tourIdentifiant: st.tourIdentifiant || existing?.tourIdentifiant || st.id,
+                      name: st.name || st.title || existing?.name || 'Tournée',
+                      date: st.date || st.startDate || existing?.date || '',
+                      techName: st.techName || existing?.techName || 'Non assigné',
+                      vehicule: st.vehicule || existing?.vehicule || '-',
+                      status: st.status || existing?.status || 'Brouillon',
+                      missions: Array.isArray(st.missions) && st.missions.length > 0 ? st.missions : (existing?.missions || []),
+                    };
+                  }),
+                ]
+              : [...prevTours];
+
+            if (hasMissionsFromSheet) {
+              const sheetMissions: any[] = dataMissions.items;
+              // Group sheet missions by tourIdentifiant (or 'a-trier' if unassigned)
+              const byTourKey = new Map<string, any[]>();
+              for (const sm of sheetMissions) {
+                if (!sm || typeof sm !== 'object') continue;
+                const tid = String(sm.tourIdentifiant || sm.tourId || '').trim();
+                const matchedTour = tid
+                  ? baseTours.find(
+                      (bt: any) =>
+                        bt.id !== 'a-trier' &&
+                        (String(bt.tourIdentifiant || '').trim().toLowerCase() === tid.toLowerCase() ||
+                          String(bt.id || '').trim().toLowerCase() === tid.toLowerCase() ||
+                          String(bt.name || '').trim().toLowerCase() === tid.toLowerCase())
+                    )
+                  : null;
+                const targetTourId = matchedTour ? matchedTour.id : 'a-trier';
+                const list = byTourKey.get(targetTourId) || [];
+                list.push({
+                  ...sm,
+                  id: sm.id || sm.interventionReference || `fsm-m-${Date.now()}-${list.length}`,
+                  interventionReference: sm.interventionReference || sm.id,
+                });
+                byTourKey.set(targetTourId, list);
+              }
+
+              const mergedTours = baseTours.map((bt: any) => {
+                const logMissions = (bt.missions || []).filter((m: any) => String(m?.id || '').startsWith('log-'));
+                const assignedFromSheet = byTourKey.get(bt.id) || [];
+                return {
+                  ...bt,
+                  missions: [...logMissions, ...assignedFromSheet],
+                };
+              });
+              try {
+                localStorage.setItem(`defib_${activeTid}_fsm_tours`, JSON.stringify(mergedTours));
+              } catch (_) {}
+              return mergedTours;
+            }
+
+            try {
+              localStorage.setItem(`defib_${activeTid}_fsm_tours`, JSON.stringify(baseTours));
+            } catch (_) {}
+            return baseTours;
+          });
+          return;
+        }
+
+        const res = await fetch(
+          `/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=${encodeURIComponent(tabType)}&refresh=${forceRefresh}`
+        ).catch(() => null);
+        if (!res || !res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data?.fromSpreadsheet || !Array.isArray(data.items)) return;
+        if (data.items.length === 0 && !data.hasRemoteHeaders && !forceRefresh) return;
+
+        const items = data.items;
+        switch (tabType) {
+          case 'rapportsPdf':
+            setGeneratedReports(prev => {
+              const sheetIds = new Set(
+                items.flatMap((it: any) =>
+                  [it.id, it.reportNumber, it.interventionReference, it.reportId]
+                    .filter(Boolean)
+                    .map((k: string) => String(k).trim().toLowerCase())
+                )
+              );
+              const preservedUpcoming = (Array.isArray(prev) ? prev : []).filter(
+                (r: any) =>
+                  r &&
+                  r.isUpcoming &&
+                  !sheetIds.has(String(r.id || '').trim().toLowerCase()) &&
+                  !sheetIds.has(String(r.interventionReference || '').trim().toLowerCase())
+              );
+              const combined = [...items, ...preservedUpcoming];
+              safeSetLocalStorage(`defib_${activeTid}_generated_reports`, JSON.stringify(combined));
+              return combined;
+            });
+            break;
+          case 'crm':
+            setTickets(items);
+            safeSetLocalStorage(`defib_${activeTid}_support_tickets`, JSON.stringify(items));
+            break;
+          case 'satisfaction':
+            setCustomerReviews(items);
+            safeSetLocalStorage(`defib_${activeTid}_customer_reviews`, JSON.stringify(items));
+            break;
+          case 'commandes':
+          case 'devisFactures':
+            setCommercialDocs(items);
+            safeSetLocalStorage(`defib_${activeTid}_commercial_docs`, JSON.stringify(items));
+            break;
+          case 'stocksGlobaux':
+            setStocks(items);
+            safeSetLocalStorage(`defib_${activeTid}_stocks`, JSON.stringify(items));
+            break;
+          case 'stocksDistribues':
+            setDistributedStocks(items);
+            safeSetLocalStorage(`defib_${activeTid}_distributed_stocks`, JSON.stringify(items));
+            break;
+          case 'historiqueNotifications':
+            setLogisticsNotifications(items);
+            safeSetLocalStorage(`defib_${activeTid}_logistics_notifications`, JSON.stringify(items));
+            break;
+          case 'achatsFournisseurs':
+            setAchatsFournisseurs(items);
+            safeSetLocalStorage(`defib_${activeTid}_achats_fournisseurs`, JSON.stringify(items));
+            break;
+          case 'temps':
+            setPointages(items);
+            safeSetLocalStorage(`defib_${activeTid}_pointages_history`, JSON.stringify(items));
+            break;
+          case 'ticketsCaisse':
+            setExpenses(items);
+            safeSetLocalStorage(`defib_${activeTid}_expenses`, JSON.stringify(items));
+            break;
+          case 'releveConcurrentiel':
+            setVeilles(items);
+            safeSetLocalStorage(`defib_${activeTid}_veilles`, JSON.stringify(items));
+            break;
+          case 'formations':
+            setFormations(items);
+            safeSetLocalStorage(`defib_${activeTid}_formations`, JSON.stringify(items));
+            break;
+          case 'stagiaires':
+            setStagiaires(items);
+            safeSetLocalStorage(`defib_${activeTid}_stagiaires`, JSON.stringify(items));
+            break;
+          case 'emargements':
+            setEmargements(items);
+            safeSetLocalStorage(`defib_${activeTid}_emargements`, JSON.stringify(items));
+            break;
+          case 'messagesInternes': {
+            const mappedMsgs: TenantMessage[] = items
+              .filter((m: any) => m && (m.content || m.text))
+              .map((m: any, idx: number) => ({
+                id: m.id || `msg_sheet_${idx + 2}`,
+                authorName: m.authorName || m.sender || 'Membre',
+                authorEmail: m.authorEmail || '',
+                tag: m.tag || m.channel || 'Exploitation',
+                content: m.content || m.text || '',
+                createdAt: Number(m.createdAt) || Date.now(),
+                dateStr: m.dateStr || m.time || '',
+                tenantId: activeTid,
+                envId: activeTid,
+              }));
+            setTenantMessages(mappedMsgs);
+            safeSetLocalStorage(`defib_${activeTid}_tenant_messages`, JSON.stringify(mappedMsgs));
+            break;
+          }
+          case 'variables':
+            setVariables(items);
+            safeSetLocalStorage(`defib_${activeTid}_variables`, JSON.stringify(items));
+            break;
+          case 'ged':
+            setGedDocs(items);
+            safeSetLocalStorage(`defib_${activeTid}_ged_docs`, JSON.stringify(items));
+            break;
+          case 'intituleEmplacements': {
+            if (items.length > 0) {
+              setCustomLocationNames((prevLocs) => {
+                const nextLocs = { ...(prevLocs || {}) };
+                for (const row of items) {
+                  if (!row || typeof row !== 'object') continue;
+                  if (row.emplacement && row.intitule !== undefined) {
+                    nextLocs[String(row.emplacement).trim()] = String(row.intitule);
+                  }
+                  for (const [k, v] of Object.entries(row)) {
+                    if (/^(?:Entrepôt|Véhicule)\s+[A-J]$/i.test(k) && v !== undefined && v !== null && String(v).trim() !== '') {
+                      nextLocs[k] = String(v).trim();
+                    }
+                  }
+                }
+                safeSetLocalStorage(`defib_${activeTid}_custom_location_names`, JSON.stringify(nextLocs));
+                return nextLocs;
+              });
+            }
+            break;
+          }
+          case 'membresEnvironnement': {
+            const validMembers = items.filter((m: any) => m && (m.name || m.email));
+            if (validMembers.length > 0) {
+              const ensured = ensureTenantMembersClient(validMembers, activeTid, loggedUser?.email, loggedUser?.name);
+              setMembers(ensured);
+              safeSetLocalStorage(`defib_${activeTid}_members`, JSON.stringify(ensured));
+            }
+            break;
+          }
+          case 'reglages':
+          case 'apparenceRapportsPdf': {
+            const firstRow = items[0];
+            if (firstRow && typeof firstRow === 'object') {
+              const cleanPatch: Record<string, any> = {};
+              for (const [k, v] of Object.entries(firstRow)) {
+                if (!k.startsWith('_') && k !== 'id' && v !== undefined && v !== '') {
+                  cleanPatch[k] = v;
+                }
+              }
+              if (Object.keys(cleanPatch).length > 0) {
+                setCompanyInfo((prev) => {
+                  const next = { ...prev, ...cleanPatch };
+                  safeSetLocalStorage(`defib_${activeTid}_company_info`, JSON.stringify(next));
+                  return next;
+                });
+              }
+            }
+            break;
+          }
+          case 'communicationPortailClient': {
+            const firstRow = items[0];
+            if (firstRow && typeof firstRow === 'object') {
+              const nextMsg = String(firstRow.communicationPortailClient ?? firstRow.message ?? '');
+              if (nextMsg) {
+                safeSetLocalStorage(`defib_${activeTid}_communication_portail_client`, nextMsg);
+              }
+            }
+            break;
+          }
+          case 'observateurActionsSuspectes': {
+            const merged = mergeSuspiciousLogsFromSheet(activeTid, items);
+            setSuspiciousActivityLogs(merged);
+            break;
+          }
+          default:
+            break;
+        }
+      } catch (err) {
+        console.warn(`Error refreshing generic sheet compartment (${tabType}):`, err);
+      }
+    },
+    [tenantId, loggedUser?.email, loggedUser?.name]
+  );
+
+  // Listen to manual refresh events from TableSubHeaderButtons or SettingsModal
+  useEffect(() => {
+    const keyToTabMap: Record<string, string> = {
+      spreadsheetTournees: 'tournees',
+      spreadsheetMissionsTournees: 'missionsTournees',
+      spreadsheetRapportsPdf: 'rapportsPdf',
+      spreadsheetCrm: 'crm',
+      spreadsheetSatisfaction: 'satisfaction',
+      spreadsheetCommandes: 'commandes',
+      spreadsheetDevisFactures: 'devisFactures',
+      spreadsheetStocks: 'stocksGlobaux',
+      spreadsheetStocksGlobaux: 'stocksGlobaux',
+      spreadsheetStocksDistribues: 'stocksDistribues',
+      spreadsheetHistoriqueNotifications: 'historiqueNotifications',
+      spreadsheetAchatsFournisseurs: 'achatsFournisseurs',
+      spreadsheetTemps: 'temps',
+      spreadsheetTicketsCaisse: 'ticketsCaisse',
+      spreadsheetReleveConcurrentiel: 'releveConcurrentiel',
+      spreadsheetFormations: 'formations',
+      spreadsheetStagiaires: 'stagiaires',
+      spreadsheetEmargements: 'emargements',
+      spreadsheetMessagesInternes: 'messagesInternes',
+      spreadsheetVariables: 'variables',
+      spreadsheetGed: 'ged',
+      spreadsheetIntituleEmplacements: 'intituleEmplacements',
+      spreadsheetMembresEnvironnement: 'membresEnvironnement',
+      spreadsheetReglages: 'reglages',
+      spreadsheetApparenceRapportsPdf: 'apparenceRapportsPdf',
+      spreadsheetCommunicationPortailClient: 'communicationPortailClient',
+      spreadsheetObservateurActionsSuspectes: 'observateurActionsSuspectes',
+    };
+
+    const handleManualSheetRefresh = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      const spreadsheetKey = detail?.spreadsheetKey;
+      const tabType = spreadsheetKey ? keyToTabMap[spreadsheetKey] : detail?.tabType;
+      if (tabType) {
+        refreshGenericSheetCompartment(tabType, true);
+      }
+    };
+
+    window.addEventListener('defib-manual-refresh-spreadsheet', handleManualSheetRefresh);
+    return () => {
+      window.removeEventListener('defib-manual-refresh-spreadsheet', handleManualSheetRefresh);
+    };
+  }, [refreshGenericSheetCompartment]);
+
+  // Also load any configured secondary Google Spreadsheets for the active tenant on startup
+  useEffect(() => {
+    if (!tenantId) return;
+    const secondaryTabTypes = [
+      'tournees',
+      'rapportsPdf',
+      'crm',
+      'satisfaction',
+      'commandes',
+      'stocksGlobaux',
+      'stocksDistribues',
+      'historiqueNotifications',
+      'achatsFournisseurs',
+      'temps',
+      'ticketsCaisse',
+      'releveConcurrentiel',
+      'formations',
+      'stagiaires',
+      'emargements',
+      'messagesInternes',
+      'variables',
+      'ged',
+      'intituleEmplacements',
+      'membresEnvironnement',
+      'reglages',
+      'apparenceRapportsPdf',
+      'communicationPortailClient',
+      'observateurActionsSuspectes',
+    ];
+    const timer = setTimeout(() => {
+      secondaryTabTypes.forEach((tt) => {
+        refreshGenericSheetCompartment(tt, false);
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [tenantId, refreshGenericSheetCompartment]);
+
   const [isRefreshingCrm, setIsRefreshingCrm] = useState<boolean>(false);
   const handleManualRefreshCrm = async () => {
     if (!tenantId) return;
     setIsRefreshingCrm(true);
     try {
       const activeTenant = tenantId || 'demo';
-      // 1. Fetch tickets from Firestore
+      // 1. Refresh CRM and Membres from Google Spreadsheets if configured
+      await Promise.all([
+        refreshGenericSheetCompartment('crm', true),
+        refreshGenericSheetCompartment('membresEnvironnement', true),
+      ]);
+
+      // 2. Refresh clients from Google Spreadsheet
+      await handleManualRefreshClients();
+
+      // 3. Fallback / sync from Firestore if no spreadsheet overridden
       const rawTickets = await fetchCollectionFromFirestore<SupportTicket[]>('tickets', activeTenant);
-      if (Array.isArray(rawTickets)) {
+      if (Array.isArray(rawTickets) && rawTickets.length > 0) {
         let filteredTickets = rawTickets;
         if (activeTenant === 'demo') {
           filteredTickets = rawTickets.filter(t => {
@@ -2623,22 +3102,7 @@ export default function App() {
             return true;
           });
         }
-        setTickets(filteredTickets);
-        const str = JSON.stringify(filteredTickets);
-        safeSetLocalStorage(`defib_${activeTenant}_support_tickets`, str);
-        loadedDataRef.current.tickets = str;
-      }
-
-      // 2. Refresh clients from Google Spreadsheet
-      await handleManualRefreshClients();
-
-      // 3. Fetch members
-      const rawMembers = await fetchCollectionFromFirestore<Member[]>('members', activeTenant);
-      if (Array.isArray(rawMembers) && rawMembers.length > 0) {
-        setMembers(rawMembers);
-        const str = JSON.stringify(rawMembers);
-        safeSetLocalStorage(`defib_${activeTenant}_members`, str);
-        loadedDataRef.current.members = str;
+        setTickets(prev => (prev.length > 0 ? prev : filteredTickets));
       }
     } catch (err) {
       console.warn('Manual refresh error in CRM:', err);
@@ -2650,8 +3114,12 @@ export default function App() {
   };
 
   const saveReviews = (updated: any[]) => {
+    syncCompartmentToGoogleSheets('satisfaction', customerReviews, updated, ['id', 'missionRef']);
     setCustomerReviews(updated);
     localStorage.setItem(`defib_${tenantId}_customer_reviews`, JSON.stringify(updated));
+    if (isFirebaseLoaded && tenantId) {
+      saveCollectionToFirestore('customerReviews', updated, tenantId).catch(() => {});
+    }
   };
 
   const [editingPointageId, setEditingPointageId] = useState<string | null>(null);
@@ -2741,6 +3209,18 @@ export default function App() {
   }, [activeTab, gmaoIsTableFitView, gmaoFilter, gmaoSearchQuery, gmaoIncludeAutresMateriels, generatedReports]);
 
   const saveReports = (updated: any[]) => {
+    const oldReal = (Array.isArray(generatedReports) ? generatedReports : []).filter(
+      (r: any) => r && !r.isUpcoming && r.status !== 'À venir'
+    );
+    const newReal = (Array.isArray(updated) ? updated : []).filter(
+      (r: any) => r && !r.isUpcoming && r.status !== 'À venir'
+    );
+    syncCompartmentToGoogleSheets(
+      'rapportsPdf',
+      oldReal,
+      newReal,
+      ['interventionReference', 'reportNumber', 'id', 'reportId']
+    );
     setGeneratedReports(updated);
     try {
       localStorage.setItem(`defib_${tenantId}_generated_reports`, JSON.stringify(updated));
@@ -2855,6 +3335,38 @@ export default function App() {
       return;
     }
     const { tours: withIds } = ensureFsmTourIdentifiers(updated, tenantId);
+
+    // Synchronize Tournées (excluding 'a-trier') and Missions des tournées (all real missions) to Google Spreadsheets
+    try {
+      const oldRealTours = (fsmTours || []).filter((t: any) => t && t.id !== 'a-trier');
+      const newRealTours = (withIds || []).filter((t: any) => t && t.id !== 'a-trier');
+      syncCompartmentToGoogleSheets('tournees', oldRealTours, newRealTours, ['tourIdentifiant', 'id', 'tourCode']);
+
+      const extractFlatMissions = (toursList: any[]) => {
+        const list: any[] = [];
+        for (const t of toursList || []) {
+          if (!t || !Array.isArray(t.missions)) continue;
+          const tourIdent = t.id === 'a-trier' ? '' : (t.tourIdentifiant || t.id || '');
+          for (const m of t.missions) {
+            if (!m || String(m.id || '').startsWith('log-')) continue;
+            list.push({
+              ...m,
+              tourIdentifiant: tourIdent,
+              tourId: t.id === 'a-trier' ? '' : t.id,
+              techName: m.techName || (t.id !== 'a-trier' ? t.techName : ''),
+            });
+          }
+        }
+        return list;
+      };
+
+      const oldFlatMissions = extractFlatMissions(fsmTours || []);
+      const newFlatMissions = extractFlatMissions(withIds || []);
+      syncCompartmentToGoogleSheets('missionsTournees', oldFlatMissions, newFlatMissions, ['interventionReference', 'id']);
+    } catch (sheetErr) {
+      console.warn('Error syncing tours/missions to Google Sheets:', sheetErr);
+    }
+
     setFsmTours(withIds);
     try {
       localStorage.setItem(`defib_${tenantId}_fsm_tours`, JSON.stringify(withIds));
@@ -6051,6 +6563,7 @@ export default function App() {
   };
 
   const saveExpenses = (updated: any[]) => {
+    syncCompartmentToGoogleSheets('ticketsCaisse', expenses, updated, ['id']);
     setExpenses(updated);
     try {
       localStorage.setItem(`defib_${tenantId}_expenses`, JSON.stringify(updated));
@@ -6063,6 +6576,7 @@ export default function App() {
   };
 
   const saveVeilles = (updated: VeilleRecord[]) => {
+    syncCompartmentToGoogleSheets('releveConcurrentiel', veilles, updated, ['id', 'commune']);
     setVeilles(updated);
     try {
       localStorage.setItem(`defib_${tenantId}_veilles`, JSON.stringify(updated));
@@ -6075,6 +6589,7 @@ export default function App() {
   };
 
   const savePointages = (updated: PointageLog[]) => {
+    syncCompartmentToGoogleSheets('temps', pointages, updated, ['id']);
     setPointages(updated);
     try {
       localStorage.setItem(`defib_${tenantId}_pointages_history`, JSON.stringify(updated));
@@ -7265,6 +7780,7 @@ export default function App() {
   }, [tenantMessages, isFirebaseLoaded, tenantId, loadedTenantIdState]);
 
   const saveGedDocs = (newGed: GedDocument[]) => {
+    syncCompartmentToGoogleSheets('ged', gedDocs, newGed, ['id', 'title']);
     setGedDocs(newGed);
     localStorage.setItem(`defib_${tenantId}_ged_docs`, JSON.stringify(newGed));
     if (isFirebaseLoaded && tenantId) {
@@ -7279,6 +7795,8 @@ export default function App() {
       envId: d.envId || tenantId,
       tenantId: d.tenantId || tenantId
     }));
+    syncCompartmentToGoogleSheets('commandes', commercialDocs, stampedDocs, ['id', 'reference', 'number']);
+    syncCompartmentToGoogleSheets('devisFactures', commercialDocs, stampedDocs, ['id', 'reference', 'number']);
     setCommercialDocs(stampedDocs);
     localStorage.setItem(`defib_${tenantId}_commercial_docs`, JSON.stringify(stampedDocs));
     if (isFirebaseLoaded && tenantId) {
@@ -8370,6 +8888,7 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    syncCompartmentToGoogleSheets('variables', variables, newVariables, ['id', 'ugs', 'nom']);
     setVariables(newVariables);
     const str = JSON.stringify(newVariables);
     safeSetLocalStorage(`defib_${tenantId}_variables`, str);
@@ -8513,6 +9032,7 @@ export default function App() {
       tenantId: tenantId
     };
     const updated = [newTicket, ...tickets];
+    syncCompartmentToGoogleSheets('crm', tickets, updated, ['id']);
     setTickets(updated);
     safeSetLocalStorage(`defib_${tenantId}_support_tickets`, JSON.stringify(updated));
     loadedDataRef.current.tickets = JSON.stringify(updated);
@@ -8536,6 +9056,7 @@ export default function App() {
 
   const handleUpdateTicketStatus = (id: string, newStatus: SupportTicket['status']) => {
     const updated = tickets.map(t => t.id === id ? { ...t, status: newStatus } : t);
+    syncCompartmentToGoogleSheets('crm', tickets, updated, ['id']);
     setTickets(updated);
     safeSetLocalStorage(`defib_${tenantId}_support_tickets`, JSON.stringify(updated));
     loadedDataRef.current.tickets = JSON.stringify(updated);
@@ -8546,6 +9067,7 @@ export default function App() {
 
   const handleDeleteTicket = (id: string) => {
     const updated = tickets.filter(t => t.id !== id);
+    syncCompartmentToGoogleSheets('crm', tickets, updated, ['id']);
     setTickets(updated);
     safeSetLocalStorage(`defib_${tenantId}_support_tickets`, JSON.stringify(updated));
     loadedDataRef.current.tickets = JSON.stringify(updated);
@@ -8567,6 +9089,7 @@ export default function App() {
   const handleReplyToTicket = (id: string, responseText: string) => {
     const ticketObj = tickets.find(t => t.id === id);
     const updated = tickets.map(t => t.id === id ? { ...t, reponse: responseText } : t);
+    syncCompartmentToGoogleSheets('crm', tickets, updated, ['id']);
     setTickets(updated);
     safeSetLocalStorage(`defib_${tenantId}_support_tickets`, JSON.stringify(updated));
     loadedDataRef.current.tickets = JSON.stringify(updated);
@@ -8906,31 +9429,42 @@ export default function App() {
       }
     }
 
-    const existingMatch = defibrillateurs.find((df) => {
-      const idMatch = !!(df.id && updated.id && df.id === updated.id);
-      const identifiantMatch = !!(df.identifiant && updated.identifiant && df.identifiant.toUpperCase() === updated.identifiant.toUpperCase());
-      return idMatch || identifiantMatch;
-    });
+    const cleanMatchKey = (val: any) => String(val ?? '').trim().toUpperCase();
+    const uIdent = cleanMatchKey(updated.identifiant);
+    const uSerie = cleanMatchKey(updated.numeroSerie);
+    const uId = cleanMatchKey(updated.id);
+
+    const existingMatch =
+      (uIdent ? defibrillateurs.find((df) => cleanMatchKey(df.identifiant) === uIdent) : undefined) ||
+      (uSerie ? defibrillateurs.find((df) => cleanMatchKey(df.numeroSerie) === uSerie) : undefined) ||
+      (uId ? defibrillateurs.find((df) => cleanMatchKey(df.id) === uId) : undefined);
+
+    const sanitizedUpdated: any = { ...updated };
+    if (String(sanitizedUpdated.id || '').startsWith('sheet-rapportsPdf')) {
+      delete sanitizedUpdated.id;
+      delete sanitizedUpdated._sheetRowNumber;
+    }
 
     let finalMerged: Defibrillateur = existingMatch
       ? {
           ...existingMatch,
-          ...updated,
-          clientNom: effectiveClientNom || updated.clientNom || (existingMatch as any).clientNom || '',
+          ...sanitizedUpdated,
+          clientNom: effectiveClientNom || sanitizedUpdated.clientNom || (existingMatch as any).clientNom || '',
           envId: activeTid,
           tenantId: activeTid,
           updatedAt: nowIso,
           dateDerniereModification: nowIso,
           id: existingMatch.id,
+          _sheetRowNumber: (existingMatch as any)._sheetRowNumber,
         }
       : {
-          ...updated,
-          clientNom: effectiveClientNom || updated.clientNom || '',
+          ...sanitizedUpdated,
+          clientNom: effectiveClientNom || sanitizedUpdated.clientNom || '',
           envId: activeTid,
           tenantId: activeTid,
           updatedAt: nowIso,
           dateDerniereModification: nowIso,
-          id: updated.id || 'df_' + Date.now(),
+          id: sanitizedUpdated.id || 'df_' + Date.now(),
         };
 
     lastLocalSheetMutationRef.current = Date.now();
@@ -8950,7 +9484,8 @@ export default function App() {
       const nextList = defibrillateurs.map((df) => {
         const isMatch = !!(
           (df.id && finalMerged.id && df.id === finalMerged.id) ||
-          (df.identifiant && finalMerged.identifiant && df.identifiant.toUpperCase() === finalMerged.identifiant.toUpperCase())
+          (df.identifiant && finalMerged.identifiant && cleanMatchKey(df.identifiant) === cleanMatchKey(finalMerged.identifiant)) ||
+          (df.numeroSerie && finalMerged.numeroSerie && cleanMatchKey(df.numeroSerie) === cleanMatchKey(finalMerged.numeroSerie))
         );
         return isMatch ? finalMerged : df;
       });
@@ -8960,6 +9495,265 @@ export default function App() {
     }
 
     return true;
+  };
+
+  const syncEquipmentFromReportSnapshot = async (rep: any, isValidation: boolean = false): Promise<void> => {
+    if (!rep) return;
+    const rawSnap = rep.defibSnapshot || {};
+    const norm = (v: any) => String(v ?? '').trim().toUpperCase();
+
+    const candIdent = String(rawSnap.identifiant || rep.defibIdentifiant || rep.identifiant || '').trim();
+    const candSerie = String(
+      rawSnap.numeroSerie ||
+        rep.numeroSerie ||
+        rep.numSerie ||
+        rawSnap.specifiques?.numSerie ||
+        ''
+    ).trim();
+    const rawId = String(rawSnap.id || rep.defibId || '').trim();
+    const candId =
+      rawId && !rawId.startsWith('sheet-rapportsPdf') && rawId !== String(rep.id || '').trim()
+        ? rawId
+        : '';
+
+    const matchedDefib =
+      (candIdent ? defibrillateurs.find((df) => norm(df.identifiant) === norm(candIdent)) : undefined) ||
+      (candSerie ? defibrillateurs.find((df) => norm(df.numeroSerie) === norm(candSerie)) : undefined) ||
+      (candId ? defibrillateurs.find((df) => norm(df.id) === norm(candId)) : undefined);
+
+    const matchedOther =
+      (candIdent ? otherEquipments.find((o) => norm(o.identifiant) === norm(candIdent)) : undefined) ||
+      (candSerie
+        ? otherEquipments.find(
+            (o) =>
+              norm((o as any).numeroSerie) === norm(candSerie) ||
+              norm((o as any).specifiques?.numSerie) === norm(candSerie)
+          )
+        : undefined) ||
+      (candId ? otherEquipments.find((o) => norm(o.id) === norm(candId)) : undefined);
+
+    const catStr = String(rawSnap.categorie || rep.categorie || matchedOther?.categorie || matchedDefib?.categorie || '').trim();
+    const catNorm = norm(catStr);
+    const isDefibCategory =
+      !catNorm ||
+      catNorm.includes('DEFIBRILLATEUR') ||
+      catNorm.includes('DÉFIBRILLATEUR') ||
+      catNorm === 'DAE';
+
+    const shouldTreatAsOther =
+      (!matchedDefib && !!matchedOther) ||
+      (!matchedDefib && !matchedOther && (!isDefibCategory || rawSnap.isOtherEquipment === true));
+
+    const cleanSnap: any = { ...rawSnap };
+    delete cleanSnap._sheetRowNumber;
+    if (
+      String(cleanSnap.id || '').startsWith('sheet-rapportsPdf') ||
+      (rep.id && cleanSnap.id === rep.id && !matchedDefib && !matchedOther)
+    ) {
+      delete cleanSnap.id;
+    }
+
+    const effectiveDerniereMaint =
+      cleanSnap.derniereMaintenance ||
+      rep.derniereMaintenance ||
+      (isValidation
+        ? new Date().toISOString().split('T')[0]
+        : (matchedDefib as any)?.derniereMaintenance || (matchedOther as any)?.derniereMaintenance || '');
+
+    if (!shouldTreatAsOther) {
+      const mergedDefib: any = {
+        ...(matchedDefib || {}),
+        ...cleanSnap,
+        id: matchedDefib?.id || candId || cleanSnap.id || 'df_' + Date.now(),
+        _sheetRowNumber: matchedDefib ? (matchedDefib as any)._sheetRowNumber : undefined,
+        identifiant: candIdent || matchedDefib?.identifiant || '',
+        numeroSerie: candSerie || matchedDefib?.numeroSerie || '',
+        categorie: catStr || matchedDefib?.categorie || 'Défibrillateur',
+        marque: cleanSnap.marque || rep.marque || matchedDefib?.marque || '',
+        modele: cleanSnap.modele || rep.modele || matchedDefib?.modele || '',
+        etat: cleanSnap.etat || rep.etat || matchedDefib?.etat || '',
+        nomSite:
+          cleanSnap.nomSite ||
+          cleanSnap.denomination ||
+          rep.nomSite ||
+          rep.denomination ||
+          matchedDefib?.nomSite ||
+          '',
+        denomination:
+          cleanSnap.denomination ||
+          cleanSnap.nomSite ||
+          rep.denomination ||
+          rep.nomSite ||
+          (matchedDefib as any)?.denomination ||
+          matchedDefib?.nomSite ||
+          '',
+        emplacement:
+          cleanSnap.emplacement ||
+          cleanSnap.commentaireAdresse ||
+          rep.emplacement ||
+          matchedDefib?.emplacement ||
+          '',
+        adresse: cleanSnap.adresse || rep.adresse || matchedDefib?.adresse || '',
+        codePostal: cleanSnap.codePostal || rep.codePostal || matchedDefib?.codePostal || '',
+        ville: cleanSnap.ville || rep.ville || matchedDefib?.ville || '',
+        pays: cleanSnap.pays || rep.pays || matchedDefib?.pays || '',
+        latitude: cleanSnap.latitude || rep.latitude || matchedDefib?.latitude || '',
+        longitude: cleanSnap.longitude || rep.longitude || matchedDefib?.longitude || '',
+        fabrication:
+          cleanSnap.fabrication ||
+          cleanSnap.dateFabrication ||
+          rep.fabrication ||
+          rep.dateFabrication ||
+          matchedDefib?.fabrication ||
+          '',
+        miseEnService:
+          cleanSnap.miseEnService ||
+          cleanSnap.dateMiseEnService ||
+          rep.miseEnService ||
+          rep.dateMiseEnService ||
+          matchedDefib?.miseEnService ||
+          '',
+        derniereMaintenance: effectiveDerniereMaint,
+        prochaineMaintenance:
+          cleanSnap.prochaineMaintenance ||
+          rep.prochaineMaintenance ||
+          matchedDefib?.prochaineMaintenance ||
+          '',
+      };
+      await handleUpdateDefib(mergedDefib as Defibrillateur);
+    } else {
+      const mergedSpecifiques: Record<string, any> = {
+        ...((matchedOther as any)?.specifiques || {}),
+        ...(cleanSnap.specifiques || {}),
+      };
+      const effectiveSerie =
+        candSerie || mergedSpecifiques.numSerie || (matchedOther as any)?.numeroSerie || '';
+      if (effectiveSerie) {
+        mergedSpecifiques.numSerie = effectiveSerie;
+      }
+      if (cleanSnap.dateFabrication || cleanSnap.fabrication || rep.dateFabrication || rep.fabrication) {
+        mergedSpecifiques.dateFabrication =
+          cleanSnap.dateFabrication || cleanSnap.fabrication || rep.dateFabrication || rep.fabrication;
+      }
+      if (cleanSnap.dateMiseEnService || cleanSnap.miseEnService || rep.dateMiseEnService || rep.miseEnService) {
+        mergedSpecifiques.dateMiseEnService =
+          cleanSnap.dateMiseEnService || cleanSnap.miseEnService || rep.dateMiseEnService || rep.miseEnService;
+      }
+      if (cleanSnap.dateReepreuve || rep.dateReepreuve) {
+        mergedSpecifiques.dateReepreuve = cleanSnap.dateReepreuve || rep.dateReepreuve;
+      }
+      if (cleanSnap.dateRemplacement || cleanSnap.prochaineMaintenance || rep.prochaineMaintenance) {
+        mergedSpecifiques.dateRemplacement =
+          cleanSnap.dateRemplacement || cleanSnap.prochaineMaintenance || rep.prochaineMaintenance;
+      }
+
+      const mergedOther: any = {
+        ...(matchedOther || {}),
+        ...cleanSnap,
+        id: matchedOther?.id || candId || cleanSnap.id || 'eq_' + Date.now(),
+        _sheetRowNumber: matchedOther ? (matchedOther as any)._sheetRowNumber : undefined,
+        identifiant: candIdent || matchedOther?.identifiant || '',
+        numeroSerie: effectiveSerie,
+        categorie: catStr || matchedOther?.categorie || 'Autre matériel',
+        marque: cleanSnap.marque || rep.marque || matchedOther?.marque || '',
+        modele: cleanSnap.modele || rep.modele || matchedOther?.modele || '',
+        etat: cleanSnap.etat || rep.etat || matchedOther?.etat || '',
+        denomination:
+          cleanSnap.denomination ||
+          cleanSnap.nomSite ||
+          rep.denomination ||
+          rep.nomSite ||
+          matchedOther?.denomination ||
+          '',
+        nomSite:
+          cleanSnap.nomSite ||
+          cleanSnap.denomination ||
+          rep.nomSite ||
+          rep.denomination ||
+          (matchedOther as any)?.nomSite ||
+          matchedOther?.denomination ||
+          '',
+        adresse: cleanSnap.adresse || rep.adresse || matchedOther?.adresse || '',
+        codePostal: cleanSnap.codePostal || rep.codePostal || matchedOther?.codePostal || '',
+        ville: cleanSnap.ville || rep.ville || matchedOther?.ville || '',
+        pays: cleanSnap.pays || rep.pays || matchedOther?.pays || '',
+        commentaireAdresse:
+          cleanSnap.commentaireAdresse ||
+          cleanSnap.emplacement ||
+          rep.emplacement ||
+          matchedOther?.commentaireAdresse ||
+          '',
+        emplacement:
+          cleanSnap.emplacement ||
+          cleanSnap.commentaireAdresse ||
+          rep.emplacement ||
+          (matchedOther as any)?.emplacement ||
+          matchedOther?.commentaireAdresse ||
+          '',
+        latitude: cleanSnap.latitude || rep.latitude || matchedOther?.latitude || '',
+        longitude: cleanSnap.longitude || rep.longitude || matchedOther?.longitude || '',
+        fabrication:
+          cleanSnap.fabrication ||
+          cleanSnap.dateFabrication ||
+          rep.fabrication ||
+          rep.dateFabrication ||
+          mergedSpecifiques.dateFabrication ||
+          '',
+        miseEnService:
+          cleanSnap.miseEnService ||
+          cleanSnap.dateMiseEnService ||
+          rep.miseEnService ||
+          rep.dateMiseEnService ||
+          mergedSpecifiques.dateMiseEnService ||
+          '',
+        derniereMaintenance: effectiveDerniereMaint,
+        prochaineMaintenance:
+          cleanSnap.prochaineMaintenance ||
+          rep.prochaineMaintenance ||
+          (matchedOther as any)?.prochaineMaintenance ||
+          mergedSpecifiques.dateRemplacement ||
+          '',
+        observation:
+          cleanSnap.observation ||
+          cleanSnap.observationsGenerales ||
+          rep.observationsGenerales ||
+          matchedOther?.observation ||
+          '',
+        specifiques: mergedSpecifiques,
+      };
+
+      const updatedOtherList = matchedOther
+        ? otherEquipments.map((o) => {
+            const isMatch = !!(
+              (o.id && mergedOther.id && o.id === mergedOther.id) ||
+              (o.identifiant && mergedOther.identifiant && norm(o.identifiant) === norm(mergedOther.identifiant)) ||
+              (effectiveSerie &&
+                (norm((o as any).numeroSerie) === norm(effectiveSerie) ||
+                  norm((o as any).specifiques?.numSerie) === norm(effectiveSerie)))
+            );
+            return isMatch ? mergedOther : o;
+          })
+        : [...otherEquipments, mergedOther];
+
+      await saveOtherEquipments(updatedOtherList);
+
+      // Explicitly guarantee upsert to Autres Matériels spreadsheet even if local diff matched or list was cold
+      const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      const urlAutres =
+        companyInfo?.spreadsheetAutresMateriels ||
+        localStorage.getItem(`defib_${activeTid}_spreadsheet_autres_materiels`) ||
+        '';
+      fetch('/api/sheets/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: activeTid,
+          type: 'autresMateriels',
+          records: [mergedOther],
+          spreadsheetUrl: urlAutres,
+        }),
+      }).catch(() => {});
+    }
   };
 
   const handleDeleteDefib = (id: string) => {
@@ -11607,7 +12401,9 @@ export default function App() {
                     <button
                       type="button"
                       id="btn-refresh-data-fsm"
-                      onClick={() => {}}
+                      onClick={() => {
+                        refreshGenericSheetCompartment('tournees', true);
+                      }}
                       style={{
                         fontSize: '9px',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -16335,7 +17131,9 @@ export default function App() {
                   <button
                     type="button"
                     id="btn-refresh-data-rapports-pdf"
-                    onClick={() => {}}
+                    onClick={() => {
+                      refreshGenericSheetCompartment('rapportsPdf', true);
+                    }}
                     style={{
                       fontSize: '9px',
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -16505,7 +17303,7 @@ export default function App() {
                                 {/* Conforme Status Dot Banner column & Flag Voyants */}
                                 <td className="px-3 py-5 text-center whitespace-nowrap" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                                   <div className="inline-flex items-center justify-center gap-2">
-                                    {rep.drapeaux && rep.drapeaux.length > 0 && (
+                                    {Array.isArray(rep.drapeaux) && rep.drapeaux.length > 0 && (
                                       <div className="inline-flex items-center gap-2">
                                         {rep.drapeaux.map((flag: any, fIdx: number) => {
                                           const borderColor = flag.couleurHex?.trim() || '#000000';
@@ -16943,8 +17741,34 @@ export default function App() {
                                       type="button"
                                       disabled={rep.validated || !isGmaoController}
                                       onClick={() => {
-                                        const updatedReports = generatedReports.map(r => r.id === rep.id ? { ...r, validated: true } : r);
+                                        const validatedReport = {
+                                          ...rep,
+                                          validated: true,
+                                          statutRapport: 'Validé',
+                                          status: 'Validé',
+                                          _sheetRowNumber: rep._sheetRowNumber,
+                                        };
+                                        const updatedReports = generatedReports.map(r =>
+                                          r.id === rep.id ||
+                                          (rep.interventionReference && r.interventionReference === rep.interventionReference)
+                                            ? validatedReport
+                                            : r
+                                        );
                                         saveReports(updatedReports);
+
+                                        // Explicitly upsert the validated report row into the Rapports PDF spreadsheet
+                                        const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+                                        const rapportsSheetUrl = getTenantSpreadsheetUrl('spreadsheetRapportsPdf', companyInfo);
+                                        fetch('/api/sheets/upsert', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({
+                                            tenantId: activeTid,
+                                            type: 'rapportsPdf',
+                                            records: [validatedReport],
+                                            spreadsheetUrl: rapportsSheetUrl || undefined,
+                                          }),
+                                        }).catch(() => {});
 
                                         // Update "Centrale des stocks" (Volume=0, Situation=Utilisé, Commentaire=Ref intervention)
                                         const usedTraceIds = [
@@ -16988,37 +17812,11 @@ export default function App() {
                                           saveStocks(updatedStocksList);
                                         }
 
-                                        // Update the main equipment database and send validation email to the client
+                                        // Update the main equipment database & Spreadsheet (Défibrillateurs or Autres Matériels) and send validation email to the client
                                         const snap = rep.defibSnapshot;
+                                        syncEquipmentFromReportSnapshot(validatedReport, true);
+
                                         if (snap) {
-                                          const uuid = snap.id || rep.defibId;
-                                          const ident = snap.identifiant || rep.defibIdentifiant;
-
-                                          const isDefib = defibrillateurs.some(df => df.id === uuid || df.identifiant === ident);
-                                          if (isDefib) {
-                                            const updatedList = defibrillateurs.map(df => {
-                                              if (df.id === uuid || df.identifiant === ident) {
-                                                return {
-                                                  ...snap,
-                                                  derniereMaintenance: snap.derniereMaintenance || new Date().toISOString().split('T')[0]
-                                                };
-                                              }
-                                              return df;
-                                            });
-                                            saveDefibs(updatedList);
-                                          } else {
-                                            const isOther = otherEquipments.some(o => o.id === uuid || o.identifiant === ident);
-                                            if (isOther) {
-                                              const updatedList = otherEquipments.map(o => {
-                                                if (o.id === uuid || o.identifiant === ident) {
-                                                  return snap;
-                                                }
-                                                return o;
-                                              });
-                                              saveOtherEquipments(updatedList);
-                                            }
-                                          }
-
                                           // Trigger Email 6: RAPPORT DE MAINTENANCE AU CLIENT
                                           if (!rep.disableClientEmail) {
                                             try {
@@ -17212,7 +18010,7 @@ export default function App() {
                             </select>
 
                             {/* Selected Flags as Pills / Gélules */}
-                            {managingReport.drapeaux && managingReport.drapeaux.length > 0 ? (
+                            {Array.isArray(managingReport.drapeaux) && managingReport.drapeaux.length > 0 ? (
                               <div className="flex flex-wrap gap-2.5 pt-1">
                                 {managingReport.drapeaux.map((flag: any, idx: number) => {
                                   const hex = flag.couleurHex?.trim();
@@ -17380,6 +18178,18 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => {
+                              if (managingReport && !managingReport.isUpcoming && managingReport.status !== 'À venir') {
+                                const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+                                fetch('/api/sheets/upsert', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    tenantId: activeTid,
+                                    type: 'rapportsPdf',
+                                    records: [managingReport],
+                                  }),
+                                }).catch(() => {});
+                              }
                               saveReports(generatedReports);
                               setManagingReportId(null);
                             }}
@@ -17471,20 +18281,63 @@ export default function App() {
                             hideReduceAndTimer={true}
                             forceSmartphoneLayout={true}
                             onSave={(updatedReport) => {
-                              const updatedReports = generatedReports.map(r => r.id === editingReportId ? updatedReport : r);
+                              const mergedReport = {
+                                ...repToEdit,
+                                ...updatedReport,
+                                _sheetRowNumber: updatedReport._sheetRowNumber ?? (repToEdit as any)?._sheetRowNumber,
+                              };
+                              const updatedReports = generatedReports.map(r =>
+                                r.id === editingReportId ||
+                                r.id === mergedReport.id ||
+                                (mergedReport.interventionReference && r.interventionReference === mergedReport.interventionReference)
+                                  ? mergedReport
+                                  : r
+                              );
                               saveReports(updatedReports);
-                              if (updatedReport.autreReference !== undefined) {
-                                const targetMissionId = updatedReport.missionId;
-                                const targetRef = updatedReport.interventionReference;
+
+                              // Explicitly upsert the edited report row to the Rapports PDF spreadsheet
+                              const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+                              const rapportsSheetUrl = getTenantSpreadsheetUrl('spreadsheetRapportsPdf', companyInfo);
+                              fetch('/api/sheets/upsert', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  tenantId: activeTid,
+                                  type: 'rapportsPdf',
+                                  records: [mergedReport],
+                                  spreadsheetUrl: rapportsSheetUrl || undefined,
+                                }),
+                              })
+                                .then(res => (res.ok ? res.json() : null))
+                                .then(json => {
+                                  if (json && Array.isArray(json.records) && json.records.length > 0) {
+                                    const syncedRep = json.records[0];
+                                    if (syncedRep && syncedRep._sheetRowNumber) {
+                                      setGeneratedReports(prev =>
+                                        prev.map(r =>
+                                          r.id === mergedReport.id ||
+                                          (mergedReport.interventionReference && r.interventionReference === mergedReport.interventionReference)
+                                            ? { ...r, _sheetRowNumber: syncedRep._sheetRowNumber }
+                                            : r
+                                        )
+                                      );
+                                    }
+                                  }
+                                })
+                                .catch(() => {});
+
+                              if (mergedReport.autreReference !== undefined) {
+                                const targetMissionId = mergedReport.missionId;
+                                const targetRef = mergedReport.interventionReference;
                                 if (targetMissionId || targetRef) {
                                   let toursChanged = false;
                                   const updatedTours = fsmTours.map(t => {
                                     let missionChanged = false;
                                     const nextMissions = (t.missions || []).map((m: any) => {
                                       if ((targetMissionId && m.id === targetMissionId) || (targetRef && m.interventionReference === targetRef)) {
-                                        if (m.autreReference !== updatedReport.autreReference) {
+                                        if (m.autreReference !== mergedReport.autreReference) {
                                           missionChanged = true;
-                                          return { ...m, autreReference: updatedReport.autreReference };
+                                          return { ...m, autreReference: mergedReport.autreReference };
                                         }
                                       }
                                       return m;
@@ -17500,8 +18353,8 @@ export default function App() {
                                   }
                                 }
                               }
-                              if (updatedReport.defibSnapshot) {
-                                handleUpdateDefib(updatedReport.defibSnapshot);
+                              if (mergedReport.defibSnapshot) {
+                                syncEquipmentFromReportSnapshot(mergedReport, false);
                               }
                               
                               if (updatedReport.clientPinCode && updatedReport.defibSnapshot?.clientId) {
@@ -18130,6 +18983,7 @@ export default function App() {
                   envId: t.envId || tenantId,
                   tenantId: t.tenantId || tenantId,
                 }));
+                syncCompartmentToGoogleSheets('crm', tickets, stampedTickets, ['id']);
                 setTickets(stampedTickets);
                 const str = JSON.stringify(stampedTickets);
                 safeSetLocalStorage(`defib_${tenantId}_support_tickets`, str);

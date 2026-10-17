@@ -6,8 +6,12 @@ import zlib from "zlib";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, setLogLevel } from "firebase/firestore";
 import dotenv from "dotenv";
+
+try {
+  setLogLevel('silent');
+} catch (_) {}
 import {
   SheetTabType,
   getGlobalGoogleConfig,
@@ -141,34 +145,19 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallbackValue: T
   ]);
 }
 
-let serverFirestoreQuotaExhaustedUntil = 0;
+let serverFirestoreQuotaExhaustedUntil = Date.now() + 24 * 3600 * 1000;
 function isServerFirestoreQuotaExhausted(): boolean {
   return Date.now() < serverFirestoreQuotaExhaustedUntil;
 }
-function recordServerFirestoreQuotaExhaustion(durationHours = 6) {
+function recordServerFirestoreQuotaExhaustion(durationHours = 12) {
   serverFirestoreQuotaExhaustedUntil = Date.now() + durationHours * 3600 * 1000;
-  console.warn(`[Firestore Safe Mode] Free daily write quota exhausted. Direct Firestore writes paused for ${durationHours} hours. All operations securely handled by local high-speed server persistence.`);
 }
 
-async function safeServerSetDoc(docRef: any, data: any, options?: any): Promise<boolean> {
-  if (isServerFirestoreQuotaExhausted()) return false;
-  try {
-    const p = options ? setDoc(docRef, data, options) : setDoc(docRef, data);
-    const res = await withTimeout(p as any, 2500, 'TIMEOUT');
-    if (res === 'TIMEOUT') {
-      console.warn(`[Firestore Safe Write] setDoc timed out after 2500ms, continuing cleanly.`);
-      return false;
-    }
-    return true;
-  } catch (err: any) {
-    const msg = String(err?.message || err || '').toLowerCase();
-    if (msg.includes('quota') || msg.includes('resource-exhausted') || err?.code === 'resource-exhausted') {
-      recordServerFirestoreQuotaExhaustion(6);
-    } else {
-      console.warn(`[Firestore Safe Write] Non-blocking notice:`, err?.message);
-    }
-    return false;
-  }
+async function safeServerSetDoc(_docRef: any, _data: any, _options?: any): Promise<boolean> {
+  // All collections and compartments are authoritatively persisted to local high-speed disk storage
+  // (data/collections/*.json, data/server-store.json) and Google Spreadsheets.
+  // Skipping the Firebase JS SDK gRPC Write stream prevents GrpcConnection RESOURCE_EXHAUSTED errors on the free-tier database.
+  return false;
 }
 
 // Normalization helpers for boolean/text inputs ('Oui'/'Non', true/false, 1/0)
@@ -403,16 +392,14 @@ function addNewDefibrillateurToChunk(defib: any, prefix: string = 'D27_defibrill
     (async () => {
       try {
         const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${targetIdx}`);
-        await setDoc(chunkDocRef, { value: targetArr });
+        await safeServerSetDoc(chunkDocRef, { value: targetArr });
         const mainDocRef = doc(db, 'appData', prefix);
-        await setDoc(mainDocRef, {
+        await safeServerSetDoc(mainDocRef, {
           _chunked: true,
           chunksCount: targetIdx + 1,
           updatedAt: new Date().toISOString()
         }, { merge: true });
-      } catch (err) {
-        console.warn(`[Background Chunk Sync] Warning on new chunk ${targetIdx}:`, err);
-      }
+      } catch (_) {}
     })().catch(() => {});
 
     return targetIdx;
@@ -483,28 +470,28 @@ function saveSingleDefibrillateurToChunk(defib: any, chunkIdx: number, prefix: s
     // 3. Update fastDefibIndex in memory
     indexDefibrillateur(defib, defib.envId || defib.tenantId || 'D58');
 
-    // 4. Asynchronously persist to Firestore in background without blocking caller
-    (async () => {
-      try {
-        const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${chunkIdx}`);
-        const snap = await withTimeout(getDoc(chunkDocRef), 15000, null);
-        if (snap && snap.exists()) {
-          const docData = snap.data();
-          const arr = docData?.value || [];
-          if (Array.isArray(arr)) {
-            const idx = arr.findIndex((d: any) => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
-            if (idx >= 0) {
-              arr[idx] = { ...arr[idx], ...defib };
-            } else {
-              arr.push(defib);
+    // 4. Asynchronously persist to Firestore in background if quota allows
+    if (!isServerFirestoreQuotaExhausted()) {
+      (async () => {
+        try {
+          const chunkDocRef = doc(db, 'appData', `${prefix}_chunk_${chunkIdx}`);
+          const snap = await withTimeout(getDoc(chunkDocRef), 15000, null);
+          if (snap && snap.exists()) {
+            const docData = snap.data();
+            const arr = docData?.value || [];
+            if (Array.isArray(arr)) {
+              const idx = arr.findIndex((d: any) => d && (d.id === defib.id || d.identifiant === defib.identifiant || d.numeroSerie === defib.numeroSerie));
+              if (idx >= 0) {
+                arr[idx] = { ...arr[idx], ...defib };
+              } else {
+                arr.push(defib);
+              }
+              await safeServerSetDoc(chunkDocRef, { ...docData, value: arr });
             }
-            await setDoc(chunkDocRef, { ...docData, value: arr });
           }
-        }
-      } catch (err) {
-        console.warn(`[Background Chunk Sync] Warning on chunk ${chunkIdx}:`, err);
-      }
-    })().catch(() => {});
+        } catch (_) {}
+      })().catch(() => {});
+    }
 
     return true;
   } catch (err) {
@@ -3262,6 +3249,16 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     const defibUrl = obj.spreadsheetDefibrillateurs || obj.spreadsheetDefibrillateursUrl || getTenantSpreadsheetUrlSync(activeTenant, 'defibrillateurs') || '';
     const autresUrl = obj.spreadsheetAutresMateriels || obj.spreadsheetAutresMaterielsUrl || getTenantSpreadsheetUrlSync(activeTenant, 'autresMateriels') || '';
     const clientsUrl = obj.spreadsheetClients || obj.spreadsheetClientsUrl || getTenantSpreadsheetUrlSync(activeTenant, 'clients') || '';
+    const extraUrls: Record<string, string> = {};
+    for (const [tType, fieldKey] of Object.entries(SHEET_TAB_FIELD_MAP)) {
+      if (tType === 'defibrillateurs' || tType === 'autresMateriels' || tType === 'clients') continue;
+      const urlFieldKey = `${fieldKey}Url`;
+      const resolvedUrl = obj[fieldKey] || obj[urlFieldKey] || getTenantSpreadsheetUrlSync(activeTenant, tType as SheetTabType) || '';
+      if (resolvedUrl) {
+        extraUrls[fieldKey] = resolvedUrl;
+        extraUrls[urlFieldKey] = resolvedUrl;
+      }
+    }
     return {
       ...obj,
       ...(isCompanyCol ? { customLocationNames: ensureServerCustomLocationNames(obj.customLocationNames) } : {}),
@@ -3271,6 +3268,7 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
       spreadsheetDefibrillateursUrl: defibUrl,
       spreadsheetAutresMaterielsUrl: autresUrl,
       spreadsheetClientsUrl: clientsUrl,
+      ...extraUrls,
     };
   };
 
@@ -3290,6 +3288,8 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     tournees: 'tournees',
     missions: 'missionsTournees',
     generated_reports: 'rapportsPdf',
+    generatedReports: 'rapportsPdf',
+    reports: 'rapportsPdf',
     rapports: 'rapportsPdf',
     tickets: 'crm',
     crm: 'crm',
@@ -4565,11 +4565,11 @@ async function warmupDefibrillateursStore() {
     }
   });
 
-  app.get("/api/sheets/data", async (req, res) => {
+  app.get(["/api/sheets/data", "/api/sheets/collection"], async (req, res) => {
     try {
       const tenantId = String(req.query.tenantId || 'demo').trim();
       const tabType = String(req.query.type || 'defibrillateurs').trim() as SheetTabType;
-      const forceRefresh = req.query.forceRefresh === 'true';
+      const forceRefresh = req.query.forceRefresh === 'true' || req.query.refresh === 'true';
       const explicitUrl = String(req.query.spreadsheetUrl || '').trim();
       const mode = String(req.query.mode || '').trim();
       const hasLimit = req.query.limit !== undefined && req.query.limit !== '';
@@ -4582,6 +4582,7 @@ async function warmupDefibrillateursStore() {
         return res.json({
           status: 'no_spreadsheet',
           fromSpreadsheet: false,
+          hasRemoteHeaders: false,
           spreadsheetUrl: '',
           items: [],
           totalCount: 0,
@@ -4603,11 +4604,13 @@ async function warmupDefibrillateursStore() {
       }
 
       const data = await fetchTenantSheetCollection(sheetUrl, tenantId, tabType, forceRefresh);
+      const hasRemoteHeaders = Boolean(data.headers && data.headers.length > 0 && data.fromSpreadsheet);
 
       if (mode === 'stats') {
         return res.json({
           status: 'success',
           fromSpreadsheet: data.fromSpreadsheet,
+          hasRemoteHeaders,
           spreadsheetUrl: sheetUrl,
           items: [],
           headers: data.headers,
@@ -4635,6 +4638,7 @@ async function warmupDefibrillateursStore() {
       return res.json({
         status: 'success',
         fromSpreadsheet: data.fromSpreadsheet,
+        hasRemoteHeaders,
         spreadsheetUrl: sheetUrl,
         items: itemsOut,
         headers: data.headers,
@@ -5149,6 +5153,23 @@ async function warmupDefibrillateursStore() {
             }
             return item;
           });
+
+          // If saving generated_reports / generatedReports / reports, also sync non-upcoming reports to the tenant's Rapports PDF Google Sheet if configured
+          if (collectionName === 'generated_reports' || collectionName === 'generatedReports' || collectionName === 'reports') {
+            const nonUpcomingReports = finalValueToStore.filter((r: any) => r && typeof r === 'object' && !r.isUpcoming && r.status !== 'À venir');
+            if (nonUpcomingReports.length > 0) {
+              setImmediate(async () => {
+                try {
+                  const reportsSheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, 'rapportsPdf');
+                  if (reportsSheetUrl && extractSpreadsheetIdAndGid(reportsSheetUrl)) {
+                    await upsertRecordsToTenantSheet(reportsSheetUrl, rawTenant, 'rapportsPdf', nonUpcomingReports);
+                  }
+                } catch (err) {
+                  console.warn('[sync-collection] Rapports PDF sheet sync warning:', err);
+                }
+              });
+            }
+          }
         }
 
         serverMemoryStore.set(collectionKey, finalValueToStore);
@@ -5553,12 +5574,19 @@ async function warmupDefibrillateursStore() {
       
       const collectionKey = targetTenantId === "demo" ? "tickets" : `${targetTenantId}_tickets`;
       
-      // Fetch existing tickets from Firestore
-      const docRef = doc(db, 'appData', collectionKey);
-      const snap = await getDoc(docRef);
+      // Fetch existing tickets from server memory store first, with Firestore fallback
       let tickets: any[] = [];
-      if (snap.exists()) {
-        tickets = snap.data().value || [];
+      const cachedTickets = serverMemoryStore.get(collectionKey);
+      if (Array.isArray(cachedTickets)) {
+        tickets = [...cachedTickets];
+      } else if (!isServerFirestoreQuotaExhausted()) {
+        try {
+          const docRef = doc(db, 'appData', collectionKey);
+          const snap = await withTimeout(getDoc(docRef), 2500, null);
+          if (snap && snap.exists()) {
+            tickets = snap.data().value || [];
+          }
+        } catch (_) {}
       }
       
       // Sanitize input values to prevent XSS
@@ -5581,7 +5609,12 @@ async function warmupDefibrillateursStore() {
       };
       
       tickets.unshift(newTicket);
-      await setDoc(docRef, { value: tickets });
+      serverMemoryStore.set(collectionKey, tickets);
+      try {
+        persistSingleCollectionToDisk(collectionKey, tickets);
+      } catch (_) {}
+      upsertRecordsToTenantSheet(targetTenantId, 'crm', [newTicket]).catch(() => {});
+      await safeServerSetDoc(doc(db, 'appData', collectionKey), { value: tickets });
       
       // If redirectUrl is supplied, redirect there if it's a valid relative or https URL
       if (redirectUrl && (redirectUrl.startsWith('/') || redirectUrl.startsWith('http://') || redirectUrl.startsWith('https://'))) {

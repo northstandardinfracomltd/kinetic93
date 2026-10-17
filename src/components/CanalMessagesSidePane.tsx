@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db, saveCollectionToFirestore, getCollectionKey } from '../firebase';
+import { db, saveCollectionToFirestore, getCollectionKey, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion } from '../firebase';
 import { TenantMessage } from '../types';
 import { t } from '../utils/translate';
 
@@ -99,11 +99,45 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
 
     let isMounted = true;
 
-    // 1. Polling de secours périodique (toutes les 30s) avec timeout strict
+    // 1. Polling de secours périodique (toutes les 30s) avec timeout strict + Google Sheets sync
     const fetchLatestServerMessages = async () => {
       const controller = new AbortController();
       const timerId = setTimeout(() => controller.abort(), 6000);
       try {
+        // Check Google Spreadsheet first if configured
+        const sheetRes = await fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(tenantId)}&type=messagesInternes`, {
+          signal: controller.signal,
+        }).catch(() => null);
+        if (sheetRes && sheetRes.ok && isMounted) {
+          const sheetData = await sheetRes.json();
+          if (sheetData?.fromSpreadsheet && Array.isArray(sheetData.items) && (sheetData.items.length > 0 || sheetData.hasRemoteHeaders)) {
+            const mappedList: TenantMessage[] = sheetData.items
+              .filter((m: any) => m && (m.content || m.text))
+              .map((m: any, idx: number) => ({
+                id: m.id || `msg_sheet_${idx + 2}`,
+                authorName: m.authorName || m.sender || 'Membre',
+                authorEmail: m.authorEmail || '',
+                tag: m.tag || m.channel || 'Exploitation',
+                content: m.content || m.text || '',
+                createdAt: Number(m.createdAt) || Date.now(),
+                dateStr: m.dateStr || m.time || '',
+                tenantId,
+                envId: tenantId,
+              }));
+            clearTimeout(timerId);
+            setMessages((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(mappedList)) {
+                try {
+                  localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(mappedList));
+                } catch (_) {}
+                return mappedList;
+              }
+              return prev;
+            });
+            return;
+          }
+        }
+
         const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(tenantId)}&_=${Date.now()}`, {
           signal: controller.signal
         });
@@ -147,41 +181,51 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     // Timer auto-refresh fallback toutes les 30s
     const refreshTimer = setInterval(fetchLatestServerMessages, 30000);
 
-    // 3. Listener Firestore en complément
+    // 3. Listener Firestore en complément uniquement si le quota n'est pas épuisé
     let unsubscribeFirestore: (() => void) | undefined;
-    try {
-      const colKey = getCollectionKey('tenantMessages', tenantId);
-      const docRef = doc(db, 'appData', colKey);
-      unsubscribeFirestore = onSnapshot(
-        docRef,
-        (snapshot) => {
-          if (snapshot.exists() && isMounted) {
-            const data = snapshot.data();
-            let remoteList: TenantMessage[] = [];
-            if (Array.isArray(data?.value)) {
-              remoteList = data.value;
-            } else if (Array.isArray(data)) {
-              remoteList = data;
+    if (!isFirestoreQuotaExhausted()) {
+      try {
+        const colKey = getCollectionKey('tenantMessages', tenantId);
+        const docRef = doc(db, 'appData', colKey);
+        unsubscribeFirestore = onSnapshot(
+          docRef,
+          (snapshot) => {
+            if (snapshot.exists() && isMounted) {
+              const data = snapshot.data();
+              let remoteList: TenantMessage[] = [];
+              if (Array.isArray(data?.value)) {
+                remoteList = data.value;
+              } else if (Array.isArray(data)) {
+                remoteList = data;
+              }
+              if (remoteList && remoteList.length >= 0) {
+                setMessages((prev) => {
+                  if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
+                    try {
+                      localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
+                    } catch (_) {}
+                    return remoteList;
+                  }
+                  return prev;
+                });
+              }
             }
-            if (remoteList && remoteList.length >= 0) {
-              setMessages((prev) => {
-                if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
-                  try {
-                    localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
-                  } catch (_) {}
-                  return remoteList;
-                }
-                return prev;
-              });
+          },
+          (error) => {
+            const msg = String(error?.message || error || '').toLowerCase();
+            if (msg.includes('quota') || msg.includes('resource-exhausted') || (error as any)?.code === 'resource-exhausted') {
+              recordFirestoreQuotaExhaustion(6);
+              try {
+                if (unsubscribeFirestore) unsubscribeFirestore();
+                unsubscribeFirestore = undefined;
+              } catch (_) {}
             }
+            console.warn('Real-time listener on tenantMessages notice:', error);
           }
-        },
-        (error) => {
-          console.warn('Real-time listener on tenantMessages notice:', error);
-        }
-      );
-    } catch (e) {
-      console.warn('Error setting up onSnapshot for tenantMessages:', e);
+        );
+      } catch (e) {
+        console.warn('Error setting up onSnapshot for tenantMessages:', e);
+      }
     }
 
     return () => {
@@ -258,6 +302,15 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     localStorage.setItem(`defib_${tenantId}_messages_last_seen`, String(Date.now()));
 
     try {
+      fetch('/api/sheets/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId,
+          type: 'messagesInternes',
+          record: newMsg,
+        }),
+      }).catch(() => {});
       fetch('/api/sync-collection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -285,6 +338,15 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(updated));
 
     try {
+      fetch('/api/sheets/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId,
+          type: 'messagesInternes',
+          keys: [msgId],
+        }),
+      }).catch(() => {});
       fetch('/api/sync-collection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

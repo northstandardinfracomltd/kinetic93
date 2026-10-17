@@ -8,9 +8,8 @@ import {
   fetchRawCollectionFromFirestore,
   findTenantAndDefibGlobally,
   purgeAllLocalEnvironmentCaches,
-  db
+  saveCollectionToFirestore
 } from '../firebase';
-import { doc, setDoc } from 'firebase/firestore';
 import { triggerEmail1Inscription, triggerEmail4Signalement, triggerAuthCodeEmail } from '../utils/emailService';
 import { updateLoginSessionSlug } from '../utils/sessionSlug';
 import TopBarProgress from './TopBarProgress';
@@ -2008,17 +2007,17 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
                       const updatedList = [newTicket, ...existingTickets];
 
-                      // Persist the updated tickets to Firestore under the correct tenant partition
-                      const docRef = doc(db, 'appData', key);
-                      await setDoc(docRef, { value: updatedList });
-
-                      // Also persist under normalized D-prefixed key if applicable
-                      if (/^d\d+$/i.test(tenantId)) {
-                        const numOnly = tenantId.replace(/^d/i, '');
-                        try {
-                          await setDoc(doc(db, 'appData', `D${numOnly}_tickets`), { value: updatedList });
-                        } catch (_) {}
-                      }
+                      // Persist the updated tickets under the correct tenant partition & Google Sheets CRM
+                      await saveCollectionToFirestore('tickets', updatedList, tenantId);
+                      fetch('/api/sheets/upsert', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          tenantId,
+                          type: 'crm',
+                          records: [newTicket],
+                        }),
+                      }).catch(() => {});
 
                       // Also synchronize local storage if that same tenant is active in cached/demo mode
                       const currentActiveTenant = localStorage.getItem('defib_tenant_id') || 'demo';

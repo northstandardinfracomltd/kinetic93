@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
-import { findTenantByInterventionGlobally, fetchRawCollectionFromFirestore, saveCollectionToFirestore, db } from '../firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { findTenantByInterventionGlobally, fetchRawCollectionFromFirestore, saveCollectionToFirestore } from '../firebase';
 import { t } from '../utils/translate';
 import { getParisTimestamp } from '../utils/dateUtils';
 
@@ -148,21 +147,19 @@ export default function SatisfactionFormPage() {
 
       const updatedList = [newReview, ...existingReviews];
 
-      // Update firestore doc
-      await setDoc(doc(db, 'appData', key), { value: updatedList });
-
-      // Also persist under normalized D-prefixed and d-prefixed keys if applicable
-      if (/^d\d+$/i.test(tenantId)) {
-        const numOnly = tenantId.replace(/^d/i, '');
-        try {
-          await setDoc(doc(db, 'appData', `D${numOnly}_customerReviews`), { value: updatedList });
-          await setDoc(doc(db, 'appData', `d${numOnly}_customerReviews`), { value: updatedList });
-        } catch (_) {}
-      }
-
       try {
         await saveCollectionToFirestore('customerReviews', updatedList, tenantId);
       } catch (_) {}
+
+      fetch('/api/sheets/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId,
+          type: 'satisfaction',
+          records: [newReview],
+        }),
+      }).catch(() => {});
 
       // Generate a corresponding notification for the tenant
       try {
@@ -182,15 +179,7 @@ export default function SatisfactionFormPage() {
           tenantId: tenantId
         };
         const updatedNotifs = [newNotif, ...existingNotifications];
-        await setDoc(doc(db, 'appData', notifKey), { value: updatedNotifs });
-
-        // Also persist under normalized D-prefixed key if applicable
-        if (/^d\d+$/i.test(tenantId)) {
-          const numOnly = tenantId.replace(/^d/i, '');
-          try {
-            await setDoc(doc(db, 'appData', `D${numOnly}_notifications`), { value: updatedNotifs });
-          } catch (_) {}
-        }
+        await saveCollectionToFirestore('notifications', updatedNotifs, tenantId);
 
         const currentActiveTenant = localStorage.getItem('defib_tenant_id') || 'demo';
         if (currentActiveTenant === tenantId || currentActiveTenant.replace(/^d/i, '') === tenantId.replace(/^d/i, '')) {

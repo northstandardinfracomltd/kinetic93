@@ -42,11 +42,17 @@ export const TableSubHeaderButtons: React.FC<TableSubHeaderButtonsProps> = ({
     try {
       if (onRefreshData) {
         await onRefreshData();
+      } else {
+        window.dispatchEvent(
+          new CustomEvent('defib-manual-refresh-spreadsheet', {
+            detail: { spreadsheetKey, idSuffix },
+          })
+        );
       }
     } catch (err) {
       console.warn(`Manual refresh error (${idSuffix}):`, err);
     } finally {
-      setTimeout(() => setIsLocalRefreshing(false), 500);
+      setTimeout(() => setIsLocalRefreshing(false), 600);
     }
   };
 

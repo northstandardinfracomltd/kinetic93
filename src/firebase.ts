@@ -1,9 +1,13 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, doc, getDoc, setDoc, memoryLocalCache, getDocFromServer, getFirestore, getDocFromCache } from 'firebase/firestore';
+import { initializeFirestore, doc, getDoc, setDoc, memoryLocalCache, getDocFromServer, getFirestore, getDocFromCache, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { idbSet, idbGet, idbClear } from './idb';
 export { idbSet, idbGet, idbClear };
+
+try {
+  setLogLevel('silent');
+} catch (_) {}
 import {
   INITIAL_VARIABLES,
   INITIAL_CLIENTS,
@@ -1154,6 +1158,12 @@ export async function fetchCollectionFromFirestore<T>(
     autresMateriels: { type: 'autresMateriels', localKey: 'spreadsheet_autres_materiels', infoKey: 'spreadsheetAutresMateriels' },
     clients: { type: 'clients', localKey: 'spreadsheet_clients', infoKey: 'spreadsheetClients' },
   };
+  const optionalSheetTabMap: Record<string, { type: string; localKey: string; infoKey: string }> = {
+    generatedReports: { type: 'rapportsPdf', localKey: 'spreadsheet_rapports_pdf', infoKey: 'spreadsheetRapportsPdf' },
+    generated_reports: { type: 'rapportsPdf', localKey: 'spreadsheet_rapports_pdf', infoKey: 'spreadsheetRapportsPdf' },
+    reports: { type: 'rapportsPdf', localKey: 'spreadsheet_rapports_pdf', infoKey: 'spreadsheetRapportsPdf' },
+    rapports: { type: 'rapportsPdf', localKey: 'spreadsheet_rapports_pdf', infoKey: 'spreadsheetRapportsPdf' },
+  };
   const sheetInfo = sheetTabMap[collectionName];
   if (sheetInfo) {
     try {
@@ -1201,6 +1211,55 @@ export async function fetchCollectionFromFirestore<T>(
     }
     onProgress?.(0, 0, 'Terminé.');
     return [] as unknown as T;
+  }
+
+  const optSheetInfo = optionalSheetTabMap[collectionName];
+  if (optSheetInfo) {
+    try {
+      let localSheetUrl = '';
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localSheetUrl =
+          localStorage.getItem(`defib_${activeTenantId}_${optSheetInfo.localKey}`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_${optSheetInfo.localKey}`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_${optSheetInfo.localKey}`) ||
+          '';
+        if (!localSheetUrl) {
+          try {
+            const rawInfo =
+              localStorage.getItem(`defib_${activeTenantId}_company_info`) ||
+              localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_company_info`) ||
+              localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_company_info`);
+            if (rawInfo) {
+              const parsed = JSON.parse(rawInfo);
+              if (parsed && (parsed[optSheetInfo.infoKey] || parsed[`${optSheetInfo.infoKey}Url`])) {
+                localSheetUrl = String(parsed[optSheetInfo.infoKey] || parsed[`${optSheetInfo.infoKey}Url`]).trim();
+              }
+            }
+          } catch (_) {}
+        }
+      }
+      const res = await fetch(
+        `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=${encodeURIComponent(optSheetInfo.type)}&spreadsheetUrl=${encodeURIComponent(localSheetUrl)}&_t=${Date.now()}`,
+        { cache: 'no-store' }
+      );
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.fromSpreadsheet && json?.spreadsheetUrl) {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            try {
+              localStorage.setItem(`defib_${activeTenantId}_${optSheetInfo.localKey}`, json.spreadsheetUrl);
+              localStorage.setItem(`defib_${activeTenantId.toUpperCase()}_${optSheetInfo.localKey}`, json.spreadsheetUrl);
+              localStorage.setItem(`defib_${activeTenantId.toLowerCase()}_${optSheetInfo.localKey}`, json.spreadsheetUrl);
+            } catch (_) {}
+          }
+          const items = Array.isArray(json?.items) ? json.items : [];
+          onProgress?.(items.length, items.length, `Chargement ${items.length}/${items.length}, Terminé.`);
+          return items as unknown as T;
+        }
+      }
+    } catch (err) {
+      console.warn(`[GoogleSheets] Optional sheet check warning for ${collectionName}:`, err);
+    }
   }
 
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
@@ -1744,7 +1803,10 @@ export function sanitizeUndefined(obj: any): any {
 let firestoreQuotaExhaustedUntil = 0;
 try {
   if (typeof window !== 'undefined' && window.localStorage) {
-    localStorage.removeItem('firestore_quota_exhausted_until');
+    const savedQuotaUntil = Number(localStorage.getItem('defib_fs_quota_reset_ts') || '0');
+    if (savedQuotaUntil > Date.now()) {
+      firestoreQuotaExhaustedUntil = savedQuotaUntil;
+    }
   }
 } catch (_) {}
 
@@ -1752,8 +1814,13 @@ export function isFirestoreQuotaExhausted(): boolean {
   return Date.now() < firestoreQuotaExhaustedUntil;
 }
 
-export function recordFirestoreQuotaExhaustion(durationHours = 1) {
-  firestoreQuotaExhaustedUntil = Date.now() + Math.min(durationHours, 1) * 60 * 1000;
+export function recordFirestoreQuotaExhaustion(durationHours = 6) {
+  firestoreQuotaExhaustedUntil = Date.now() + Math.max(1, durationHours) * 3600 * 1000;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem('defib_fs_quota_reset_ts', String(firestoreQuotaExhaustedUntil));
+    }
+  } catch (_) {}
 }
 
 /**
@@ -1893,134 +1960,8 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
     console.warn(`[Sync Server Relay] Error syncing collection ${collectionName} to server:`, syncErr);
   }
 
-  const isCriticalMetadata =
-    collectionName === 'companyInfo' ||
-    collectionName === 'company_info' ||
-    collectionName === 'tenantDatabases' ||
-    collectionName === 'registered_tenants' ||
-    collectionName === 'members' ||
-    collectionName === 'variables' ||
-    collectionName === 'api_connectors';
-
-  if (isFirestoreQuotaExhausted() && !isCriticalMetadata) {
-    // Quota reached for today; data is already stored safely in local storage & server sync
-    return;
-  }
-
-  try {
-    const primaryKey = getCollectionKey(collectionName, activeTenantId);
-    const writeKeySet = new Set<string>([primaryKey]);
-    if (primaryKey.toLowerCase() !== primaryKey) {
-      writeKeySet.add(primaryKey.toLowerCase());
-    }
-    if (isCriticalMetadata && activeTenantId && activeTenantId !== 'demo') {
-      const tAliases = getTenantAliases(activeTenantId);
-      for (const al of tAliases) {
-        if (/^d\d+$/i.test(al)) {
-          writeKeySet.add(`${al.toUpperCase()}_${collectionName}`);
-          writeKeySet.add(`${al.toLowerCase()}_${collectionName}`);
-        }
-      }
-    }
-    const writeKeys = Array.from(writeKeySet);
-
-    const jsonStr = JSON.stringify(finalCleanValue);
-    // Firestore single doc limit is 1MB. If array and payload > 400 KB, chunk it!
-    if (Array.isArray(finalCleanValue) && jsonStr.length > 400000) {
-      const items = finalCleanValue;
-      const avgItemLen = Math.max(1, Math.ceil(jsonStr.length / items.length));
-      const chunkSize = Math.max(50, Math.floor(450000 / avgItemLen));
-      const chunksCount = Math.ceil(items.length / chunkSize);
-
-      // Write chunks sequentially or in small throttled batches with strict timeout to prevent freezing on quota limits
-      for (let i = 0; i < chunksCount; i += 2) {
-        if (isFirestoreQuotaExhausted()) break;
-        const batch: Promise<any>[] = [];
-        for (let j = i; j < Math.min(i + 2, chunksCount); j++) {
-          const chunkItems = items.slice(j * chunkSize, (j + 1) * chunkSize);
-          const chunkRef = doc(db, 'appData', `${primaryKey}_chunk_${j}`);
-          batch.push(setDoc(chunkRef, { value: chunkItems }));
-        }
-        await Promise.race([
-          Promise.all(batch),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 2500))
-        ]).catch(e => {
-          const msg = String(e?.message || e || '').toLowerCase();
-          if (msg.includes('quota') || msg.includes('resource-exhausted') || (e as any)?.code === 'resource-exhausted') {
-            recordFirestoreQuotaExhaustion(6);
-          }
-        });
-        if (isFirestoreQuotaExhausted()) break;
-        if (chunksCount > 4) {
-          await new Promise(r => setTimeout(r, 60));
-        }
-      }
-
-      // Write main metadata doc if quota was not reached
-      if (!isFirestoreQuotaExhausted()) {
-        const mainBatch = writeKeys.map(wk => {
-          const mainDocRef = doc(db, 'appData', wk);
-          return setDoc(mainDocRef, { 
-            _chunked: true, 
-            chunksCount, 
-            chunkPrefix: primaryKey,
-            totalItems: items.length,
-            updatedAt: new Date().toISOString() 
-          });
-        });
-        await Promise.race([
-          Promise.all(mainBatch),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 2500))
-        ]).catch(e => {
-          const msg = String(e?.message || e || '').toLowerCase();
-          if (msg.includes('quota') || msg.includes('resource-exhausted') || (e as any)?.code === 'resource-exhausted') {
-            recordFirestoreQuotaExhaustion(6);
-          }
-        });
-      }
-
-      console.log(`Successfully synced chunked collection ${primaryKey} (${chunksCount} chunks, ${items.length} items) to Firestore.`);
-    } else {
-      const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
-      if (isDefibCol && Array.isArray(finalCleanValue) && finalCleanValue.length < 5000) {
-        console.warn(`[Protection] Refusing to write non-chunked small defibrillateurs array (${finalCleanValue.length} items) to Firestore root document to protect catalog.`);
-        return;
-      }
-      const docBatch = writeKeys.map(wk => {
-        const docRef = doc(db, 'appData', wk);
-        return setDoc(docRef, { value: finalCleanValue, _chunked: false }).catch((err: any) => {
-          const msg = String(err?.message || err || '').toLowerCase();
-          if (msg.includes('quota') || msg.includes('resource-exhausted') || err?.code === 'resource-exhausted') {
-            recordFirestoreQuotaExhaustion(6);
-          }
-          throw err;
-        });
-      });
-      let writeSuccess = true;
-      await Promise.race([
-        Promise.all(docBatch),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 2000))
-      ]).catch(e => {
-        writeSuccess = false;
-        const msg = String(e?.message || e || '').toLowerCase();
-        if (msg.includes('quota') || msg.includes('resource-exhausted') || (e as any)?.code === 'resource-exhausted') {
-          recordFirestoreQuotaExhaustion(6);
-        } else {
-          console.warn(`[Firestore Safe Write] Non-blocking write notice for ${primaryKey}:`, e?.message);
-        }
-      });
-      if (writeSuccess) {
-        console.log(`Successfully synced ${primaryKey} to Firestore.`);
-      }
-    }
-  } catch (error: any) {
-    const msg = String(error?.message || error || '').toLowerCase();
-    if (msg.includes('quota') || msg.includes('resource-exhausted') || error?.code === 'resource-exhausted') {
-      recordFirestoreQuotaExhaustion(6);
-      return;
-    }
-    console.warn(`Error saving collection ${collectionName} to Firestore (kept in cache):`, error);
-  }
+  // All data is persisted in IndexedDB, localStorage, and the backend server store (/api/sync-collection).
+  // Skipping redundant client-side Firestore SDK setDoc prevents GrpcConnection Write stream RESOURCE_EXHAUSTED quota errors.
 }
 
 export function generateUniqueShortEnvId(existingCodes: string[]): string {
@@ -2070,39 +2011,7 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
     const cached = getFromLocalCache<Tenant[]>('registered_tenants') || [];
     return addDemoIfNeeded(cached);
   }
-  try {
-    const docRef = doc(db, 'appData', 'registered_tenants');
-    const snap = await getDocOptimistic(docRef, 'registered_tenants', 6000);
-    if (snap && snap.exists()) {
-      let tenants = (snap.data().value || []) as Tenant[];
-      tenants = addDemoIfNeeded(tenants);
-      let needsUpdate = false;
-      const existingShortCodes = tenants
-        .map(t => t.shortEnvId)
-        .filter((code): code is string => !!code);
-
-      const updatedTenants = tenants.map(t => {
-        if (!t.shortEnvId) {
-          const newCode = generateUniqueShortEnvId(existingShortCodes);
-          existingShortCodes.push(newCode);
-          needsUpdate = true;
-          return { ...t, shortEnvId: newCode };
-        }
-        return t;
-      });
-
-      if (needsUpdate) {
-        setDoc(docRef, { value: updatedTenants }).catch(console.warn);
-      }
-
-      saveToLocalCache('registered_tenants', updatedTenants);
-      return updatedTenants;
-    }
-  } catch (err) {
-    console.log('[Firestore Cache-First] Fallback to cache for registered_tenants:', err);
-  }
-
-  // Secondary strategy: fetch registered_tenants from server relay if available
+  // 1. Primary strategy: fetch registered_tenants from fast server relay if available
   try {
     if (typeof fetch !== 'undefined') {
       const resp = await fetch('/api/sync-collection?collectionName=registered_tenants&tenantId=demo', {
@@ -2111,13 +2020,54 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
       if (resp.ok) {
         const json = await resp.json();
         if (Array.isArray(json?.value) && json.value.length > 0) {
-          const mergedServer = addDemoIfNeeded(json.value as Tenant[]);
+          let mergedServer = addDemoIfNeeded(json.value as Tenant[]);
+          const existingIds = new Set(mergedServer.map(t => t.id?.toLowerCase()));
+          for (const kt of KNOWN_TENANTS_REGISTRY) {
+            if (!existingIds.has(kt.id.toLowerCase())) {
+              mergedServer.push(kt as Tenant);
+            }
+          }
           saveToLocalCache('registered_tenants', mergedServer);
           return mergedServer;
         }
       }
     }
   } catch (_) {}
+
+  // 2. Secondary strategy: Firestore fallback when quota is not exhausted
+  if (!isFirestoreQuotaExhausted()) {
+    try {
+      const docRef = doc(db, 'appData', 'registered_tenants');
+      const snap = await getDocOptimistic(docRef, 'registered_tenants', 6000);
+      if (snap && snap.exists()) {
+        let tenants = (snap.data().value || []) as Tenant[];
+        tenants = addDemoIfNeeded(tenants);
+        let needsUpdate = false;
+        const existingShortCodes = tenants
+          .map(t => t.shortEnvId)
+          .filter((code): code is string => !!code);
+
+        const updatedTenants = tenants.map(t => {
+          if (!t.shortEnvId) {
+            const newCode = generateUniqueShortEnvId(existingShortCodes);
+            existingShortCodes.push(newCode);
+            needsUpdate = true;
+            return { ...t, shortEnvId: newCode };
+          }
+          return t;
+        });
+
+        if (needsUpdate) {
+          saveCollectionToFirestore('registered_tenants', updatedTenants, 'demo').catch(() => {});
+        }
+
+        saveToLocalCache('registered_tenants', updatedTenants);
+        return updatedTenants;
+      }
+    } catch (err) {
+      console.log('[Firestore Cache-First] Fallback to cache for registered_tenants:', err);
+    }
+  }
 
   const cached = getFromLocalCache<Tenant[]>('registered_tenants') || [];
   const combined = [...cached];
@@ -2324,8 +2274,7 @@ export async function registerNewTenant(tenantData: Omit<Tenant, 'id' | 'created
 
   // 1. Save new tenant entry back to list
   tenants.push(newTenant);
-  const docRef = doc(db, 'appData', 'registered_tenants');
-  await setDoc(docRef, { value: tenants });
+  await saveCollectionToFirestore('registered_tenants', tenants, 'demo');
 
   // 2. Initialize the tenant's individual database partitions
   console.log(`Initializing collections partition for tenant: ${tenantId}`);
@@ -2355,8 +2304,8 @@ export async function registerNewTenant(tenantData: Omit<Tenant, 'id' | 'created
   ];
 
   // Store seeded partitions with clean, non-overwritten companyInfo and members
-  await setDoc(doc(db, 'appData', getCollectionKey('companyInfo', tenantId)), { value: customCompanyInfo });
-  await setDoc(doc(db, 'appData', getCollectionKey('members', tenantId)), { value: customMembers });
+  await saveCollectionToFirestore('companyInfo', customCompanyInfo, tenantId);
+  await saveCollectionToFirestore('members', customMembers, tenantId);
 
   // Custom function to attach envId and tenantId to records for security rules
   const addEnvFields = <T>(list: T[]): T[] => {
@@ -2368,7 +2317,7 @@ export async function registerNewTenant(tenantData: Omit<Tenant, 'id' | 'created
   };
 
   // Seed dynamic variables with initial default variables
-  await setDoc(doc(db, 'appData', getCollectionKey('variables', tenantId)), { value: addEnvFields(INITIAL_VARIABLES) });
+  await saveCollectionToFirestore('variables', addEnvFields(INITIAL_VARIABLES), tenantId);
 
   // Initialize all dynamic tables to completely empty arrays
   const cleanPartitions = [
@@ -2393,7 +2342,7 @@ export async function registerNewTenant(tenantData: Omit<Tenant, 'id' | 'created
 
   await Promise.all(
     cleanPartitions.map(tableName =>
-      setDoc(doc(db, 'appData', getCollectionKey(tableName, tenantId)), { value: [] })
+      saveCollectionToFirestore(tableName, [], tenantId)
     )
   );
 
@@ -2408,7 +2357,7 @@ export async function registerNewTenant(tenantData: Omit<Tenant, 'id' | 'created
     envId: tenantId,
     tenantId: tenantId
   };
-  await setDoc(doc(db, 'appData', getCollectionKey('notifications', tenantId)), { value: [welcomeNotification] });
+  await saveCollectionToFirestore('notifications', [welcomeNotification], tenantId);
 
   // Pre-populate client-side local storage with clean, empty data and the custom company/member profiles for this new environment
   try {
@@ -2486,7 +2435,7 @@ export async function seedTenantDemoData(tenantId: string): Promise<void> {
     phone: tenant ? tenant.companyPhone : "+33 1 47 20 00 01",
     nomLogiciel: tenant ? (tenant.nomLogiciel || tenant.companyName) : "Défibeo Suite"
   };
-  await setDoc(doc(db, 'appData', getCollectionKey('companyInfo', tenantId)), { value: customCompanyInfo });
+  await saveCollectionToFirestore('companyInfo', customCompanyInfo, tenantId);
 
   // Create brand-new, clean, completely customized client records specific to this tenant environment
   const seededClients: Client[] = [
@@ -2680,23 +2629,23 @@ export async function seedTenantDemoData(tenantId: string): Promise<void> {
     tenantId: tenantId
   };
 
-  // 3. Seed every partition with the custom, clean datasets using the exact collection keys from getCollectionKey
-  await setDoc(doc(db, 'appData', getCollectionKey('clients', tenantId)), { value: addEnvFields(seededClients) });
-  await setDoc(doc(db, 'appData', getCollectionKey('variables', tenantId)), { value: addEnvFields(INITIAL_VARIABLES) });
-  await setDoc(doc(db, 'appData', getCollectionKey('defibrillateurs', tenantId)), { value: addEnvFields(seededDefibrillateurs) });
-  await setDoc(doc(db, 'appData', getCollectionKey('otherEquipments', tenantId)), { value: addEnvFields(INITIAL_OTHER_EQUIPMENTS) });
-  await setDoc(doc(db, 'appData', getCollectionKey('tickets', tenantId)), { value: addEnvFields(INITIAL_TICKETS) });
-  await setDoc(doc(db, 'appData', getCollectionKey('commercialDocs', tenantId)), { value: addEnvFields(INITIAL_COMMERCIAL_DOCS) });
-  await setDoc(doc(db, 'appData', getCollectionKey('gedDocs', tenantId)), { value: addEnvFields(INITIAL_GED_DOCS) });
-  await setDoc(doc(db, 'appData', getCollectionKey('stocks', tenantId)), { value: addEnvFields(INITIAL_STOCKS) });
-  await setDoc(doc(db, 'appData', getCollectionKey('distributed_stocks', tenantId)), { value: addEnvFields(INITIAL_DISTRIBUTED_STOCKS) });
-  await setDoc(doc(db, 'appData', getCollectionKey('customerReviews', tenantId)), { value: addEnvFields(INITIAL_REVIEWS) });
-  await setDoc(doc(db, 'appData', getCollectionKey('expenses', tenantId)), { value: addEnvFields(INITIAL_EXPENSES) });
-  await setDoc(doc(db, 'appData', getCollectionKey('veilles', tenantId)), { value: addEnvFields(INITIAL_VEILLES) });
-  await setDoc(doc(db, 'appData', getCollectionKey('generatedReports', tenantId)), { value: addEnvFields(INITIAL_REPORTS) });
-  await setDoc(doc(db, 'appData', getCollectionKey('fsmTours', tenantId)), { value: addEnvFields(seededTours) });
-  await setDoc(doc(db, 'appData', getCollectionKey('members', tenantId)), { value: addEnvFields(seededMembers) });
-  await setDoc(doc(db, 'appData', getCollectionKey('notifications', tenantId)), { value: [dummyNotification] });
+  // 3. Seed every partition with the custom, clean datasets using saveCollectionToFirestore
+  await saveCollectionToFirestore('clients', addEnvFields(seededClients), tenantId);
+  await saveCollectionToFirestore('variables', addEnvFields(INITIAL_VARIABLES), tenantId);
+  await saveCollectionToFirestore('defibrillateurs', addEnvFields(seededDefibrillateurs), tenantId);
+  await saveCollectionToFirestore('otherEquipments', addEnvFields(INITIAL_OTHER_EQUIPMENTS), tenantId);
+  await saveCollectionToFirestore('tickets', addEnvFields(INITIAL_TICKETS), tenantId);
+  await saveCollectionToFirestore('commercialDocs', addEnvFields(INITIAL_COMMERCIAL_DOCS), tenantId);
+  await saveCollectionToFirestore('gedDocs', addEnvFields(INITIAL_GED_DOCS), tenantId);
+  await saveCollectionToFirestore('stocks', addEnvFields(INITIAL_STOCKS), tenantId);
+  await saveCollectionToFirestore('distributed_stocks', addEnvFields(INITIAL_DISTRIBUTED_STOCKS), tenantId);
+  await saveCollectionToFirestore('customerReviews', addEnvFields(INITIAL_REVIEWS), tenantId);
+  await saveCollectionToFirestore('expenses', addEnvFields(INITIAL_EXPENSES), tenantId);
+  await saveCollectionToFirestore('veilles', addEnvFields(INITIAL_VEILLES), tenantId);
+  await saveCollectionToFirestore('generatedReports', addEnvFields(INITIAL_REPORTS), tenantId);
+  await saveCollectionToFirestore('fsmTours', addEnvFields(seededTours), tenantId);
+  await saveCollectionToFirestore('members', addEnvFields(seededMembers), tenantId);
+  await saveCollectionToFirestore('notifications', [dummyNotification], tenantId);
 
   // Clear independent dynamic tables to complete reset
   const emptyTables = [
@@ -2708,7 +2657,7 @@ export async function seedTenantDemoData(tenantId: string): Promise<void> {
 
   await Promise.all(
     emptyTables.map(tableName => 
-      setDoc(doc(db, 'appData', getCollectionKey(tableName, tenantId)), { value: [] })
+      saveCollectionToFirestore(tableName, [], tenantId)
     )
   );
 
@@ -2893,10 +2842,9 @@ export async function updateTenantLanguage(tenantId: string, lang: string): Prom
       }
       return t;
     });
-    const docRef = doc(db, 'appData', 'registered_tenants');
-    await setDoc(docRef, { value: updated });
+    await saveCollectionToFirestore('registered_tenants', updated, 'demo');
     saveToLocalCache('registered_tenants', updated);
-    console.log(`Updated tenant ${tenantId} language to ${lang} in Firestore`);
+    console.log(`Updated tenant ${tenantId} language to ${lang}`);
   } catch (err) {
     console.warn(`Error updating language for tenant ${tenantId}:`, err);
   }
@@ -2922,8 +2870,7 @@ export async function updateTenantAdminProfile(tenantId: string, adminEmail: str
       return t;
     });
     if (changed) {
-      const docRef = doc(db, 'appData', 'registered_tenants');
-      await setDoc(docRef, { value: updated });
+      await saveCollectionToFirestore('registered_tenants', updated, 'demo');
       saveToLocalCache('registered_tenants', updated);
       console.log(`Successfully updated tenant ${tenantId} super-admin email to ${adminEmail} in registered_tenants.`);
     }
