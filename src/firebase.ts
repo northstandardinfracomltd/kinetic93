@@ -1147,8 +1147,8 @@ export async function fetchCollectionFromFirestore<T>(
 ): Promise<T | null> {
   const activeTenantId = tenantId || getTenantId();
 
-  // GOOGLE SHEETS EXCLUSIVE MODE for Défibrillateurs, Autres Matériels, and Clients:
-  // Never fetch from Firebase / Firestore / IndexedDB / localStorage for these 3 tabs!
+  // GOOGLE SHEETS EXCLUSIVE MODE for all spreadsheet-backed tabs:
+  // Never fetch from Firebase / Firestore / IndexedDB / localStorage for these tabs!
   const sheetTabMap: Record<string, { type: string; localKey: string; infoKey: string }> = {
     defibrillateurs: { type: 'defibrillateurs', localKey: 'spreadsheet_defibrillateurs', infoKey: 'spreadsheetDefibrillateurs' },
     defibs: { type: 'defibrillateurs', localKey: 'spreadsheet_defibrillateurs', infoKey: 'spreadsheetDefibrillateurs' },
@@ -1157,12 +1157,38 @@ export async function fetchCollectionFromFirestore<T>(
     other_equipments: { type: 'autresMateriels', localKey: 'spreadsheet_autres_materiels', infoKey: 'spreadsheetAutresMateriels' },
     autresMateriels: { type: 'autresMateriels', localKey: 'spreadsheet_autres_materiels', infoKey: 'spreadsheetAutresMateriels' },
     clients: { type: 'clients', localKey: 'spreadsheet_clients', infoKey: 'spreadsheetClients' },
-  };
-  const optionalSheetTabMap: Record<string, { type: string; localKey: string; infoKey: string }> = {
+    fsmTours: { type: 'tournees', localKey: 'spreadsheet_tournees', infoKey: 'spreadsheetTournees' },
+    fsm_tours: { type: 'tournees', localKey: 'spreadsheet_tournees', infoKey: 'spreadsheetTournees' },
+    tournees: { type: 'tournees', localKey: 'spreadsheet_tournees', infoKey: 'spreadsheetTournees' },
+    missionsTournees: { type: 'missionsTournees', localKey: 'spreadsheet_missions_tournees', infoKey: 'spreadsheetMissionsTournees' },
     generatedReports: { type: 'rapportsPdf', localKey: 'spreadsheet_rapports_pdf', infoKey: 'spreadsheetRapportsPdf' },
     generated_reports: { type: 'rapportsPdf', localKey: 'spreadsheet_rapports_pdf', infoKey: 'spreadsheetRapportsPdf' },
     reports: { type: 'rapportsPdf', localKey: 'spreadsheet_rapports_pdf', infoKey: 'spreadsheetRapportsPdf' },
     rapports: { type: 'rapportsPdf', localKey: 'spreadsheet_rapports_pdf', infoKey: 'spreadsheetRapportsPdf' },
+    tickets: { type: 'crm', localKey: 'spreadsheet_crm', infoKey: 'spreadsheetCrm' },
+    support_tickets: { type: 'crm', localKey: 'spreadsheet_crm', infoKey: 'spreadsheetCrm' },
+    crm: { type: 'crm', localKey: 'spreadsheet_crm', infoKey: 'spreadsheetCrm' },
+    customerReviews: { type: 'satisfaction', localKey: 'spreadsheet_satisfaction', infoKey: 'spreadsheetSatisfaction' },
+    customer_reviews: { type: 'satisfaction', localKey: 'spreadsheet_satisfaction', infoKey: 'spreadsheetSatisfaction' },
+    commercialDocs: { type: 'commandes', localKey: 'spreadsheet_commandes', infoKey: 'spreadsheetCommandes' },
+    commercial_docs: { type: 'commandes', localKey: 'spreadsheet_commandes', infoKey: 'spreadsheetCommandes' },
+    stocks: { type: 'stocksGlobaux', localKey: 'spreadsheet_stocks', infoKey: 'spreadsheetStocks' },
+    distributed_stocks: { type: 'stocksDistribues', localKey: 'spreadsheet_stocks', infoKey: 'spreadsheetStocks' },
+    distributedStocks: { type: 'stocksDistribues', localKey: 'spreadsheet_stocks', infoKey: 'spreadsheetStocks' },
+    logistics_notifications: { type: 'historiqueNotifications', localKey: 'spreadsheet_stocks', infoKey: 'spreadsheetStocks' },
+    achats_fournisseurs: { type: 'achatsFournisseurs', localKey: 'spreadsheet_achats_fournisseurs', infoKey: 'spreadsheetAchatsFournisseurs' },
+    pointages: { type: 'temps', localKey: 'spreadsheet_temps', infoKey: 'spreadsheetTemps' },
+    pointages_history: { type: 'temps', localKey: 'spreadsheet_temps', infoKey: 'spreadsheetTemps' },
+    expenses: { type: 'ticketsCaisse', localKey: 'spreadsheet_tickets_caisse', infoKey: 'spreadsheetTicketsCaisse' },
+    veilles: { type: 'releveConcurrentiel', localKey: 'spreadsheet_releve_concurrentiel', infoKey: 'spreadsheetReleveConcurrentiel' },
+    formations: { type: 'formations', localKey: 'spreadsheet_formations', infoKey: 'spreadsheetFormations' },
+    stagiaires: { type: 'stagiaires', localKey: 'spreadsheet_stagiaires', infoKey: 'spreadsheetStagiaires' },
+    emargements: { type: 'emargements', localKey: 'spreadsheet_emargements', infoKey: 'spreadsheetEmargements' },
+    tenantMessages: { type: 'messagesInternes', localKey: 'spreadsheet_messages_internes', infoKey: 'spreadsheetMessagesInternes' },
+    tenant_messages: { type: 'messagesInternes', localKey: 'spreadsheet_messages_internes', infoKey: 'spreadsheetMessagesInternes' },
+    gedDocs: { type: 'ged', localKey: 'spreadsheet_ged', infoKey: 'spreadsheetGed' },
+    ged_docs: { type: 'ged', localKey: 'spreadsheet_ged', infoKey: 'spreadsheetGed' },
+    suspicious_activity_logs: { type: 'observateurActionsSuspectes', localKey: 'spreadsheet_observateur_actions_suspectes', infoKey: 'spreadsheetObservateurActionsSuspectes' },
   };
   const sheetInfo = sheetTabMap[collectionName];
   if (sheetInfo) {
@@ -1182,74 +1208,28 @@ export async function fetchCollectionFromFirestore<T>(
               localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_company_info`);
             if (rawInfo) {
               const parsed = JSON.parse(rawInfo);
-              if (parsed && parsed[sheetInfo.infoKey]) {
-                localSheetUrl = String(parsed[sheetInfo.infoKey]).trim();
+              if (parsed && (parsed[sheetInfo.infoKey] || parsed[`${sheetInfo.infoKey}Url`])) {
+                localSheetUrl = String(parsed[sheetInfo.infoKey] || parsed[`${sheetInfo.infoKey}Url`]).trim();
               }
             }
           } catch (_) {}
         }
+        if (localSheetUrl.includes('1tB1e41') || localSheetUrl.includes('2mX5O6r9hD0i3Z9m')) {
+          localSheetUrl = '';
+        }
       }
       const res = await fetch(
-        `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=${encodeURIComponent(sheetInfo.type)}&spreadsheetUrl=${encodeURIComponent(localSheetUrl)}&_t=${Date.now()}`,
+        `/api/sheets/collection?tenantId=${encodeURIComponent(activeTenantId)}&type=${encodeURIComponent(sheetInfo.type)}&spreadsheetUrl=${encodeURIComponent(localSheetUrl)}&_t=${Date.now()}`,
         { cache: 'no-store' }
       );
       if (res.ok) {
         const json = await res.json();
-        if (json?.spreadsheetUrl && typeof window !== 'undefined' && window.localStorage) {
-          try {
-            localStorage.setItem(`defib_${activeTenantId}_${sheetInfo.localKey}`, json.spreadsheetUrl);
-            localStorage.setItem(`defib_${activeTenantId.toUpperCase()}_${sheetInfo.localKey}`, json.spreadsheetUrl);
-            localStorage.setItem(`defib_${activeTenantId.toLowerCase()}_${sheetInfo.localKey}`, json.spreadsheetUrl);
-          } catch (_) {}
-        }
-        const items = Array.isArray(json?.items) ? json.items : [];
-        onProgress?.(items.length, items.length, `Chargement ${items.length}/${items.length}, Terminé.`);
-        return items as unknown as T;
-      }
-    } catch (err) {
-      console.warn(`[GoogleSheets] Error fetching ${collectionName} for ${activeTenantId}:`, err);
-    }
-    onProgress?.(0, 0, 'Terminé.');
-    return [] as unknown as T;
-  }
-
-  const optSheetInfo = optionalSheetTabMap[collectionName];
-  if (optSheetInfo) {
-    try {
-      let localSheetUrl = '';
-      if (typeof window !== 'undefined' && window.localStorage) {
-        localSheetUrl =
-          localStorage.getItem(`defib_${activeTenantId}_${optSheetInfo.localKey}`) ||
-          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_${optSheetInfo.localKey}`) ||
-          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_${optSheetInfo.localKey}`) ||
-          '';
-        if (!localSheetUrl) {
-          try {
-            const rawInfo =
-              localStorage.getItem(`defib_${activeTenantId}_company_info`) ||
-              localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_company_info`) ||
-              localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_company_info`);
-            if (rawInfo) {
-              const parsed = JSON.parse(rawInfo);
-              if (parsed && (parsed[optSheetInfo.infoKey] || parsed[`${optSheetInfo.infoKey}Url`])) {
-                localSheetUrl = String(parsed[optSheetInfo.infoKey] || parsed[`${optSheetInfo.infoKey}Url`]).trim();
-              }
-            }
-          } catch (_) {}
-        }
-      }
-      const res = await fetch(
-        `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=${encodeURIComponent(optSheetInfo.type)}&spreadsheetUrl=${encodeURIComponent(localSheetUrl)}&_t=${Date.now()}`,
-        { cache: 'no-store' }
-      );
-      if (res.ok) {
-        const json = await res.json();
-        if (json?.fromSpreadsheet && json?.spreadsheetUrl) {
-          if (typeof window !== 'undefined' && window.localStorage) {
+        if (json?.fromSpreadsheet) {
+          if (json?.spreadsheetUrl && typeof window !== 'undefined' && window.localStorage) {
             try {
-              localStorage.setItem(`defib_${activeTenantId}_${optSheetInfo.localKey}`, json.spreadsheetUrl);
-              localStorage.setItem(`defib_${activeTenantId.toUpperCase()}_${optSheetInfo.localKey}`, json.spreadsheetUrl);
-              localStorage.setItem(`defib_${activeTenantId.toLowerCase()}_${optSheetInfo.localKey}`, json.spreadsheetUrl);
+              localStorage.setItem(`defib_${activeTenantId}_${sheetInfo.localKey}`, json.spreadsheetUrl);
+              localStorage.setItem(`defib_${activeTenantId.toUpperCase()}_${sheetInfo.localKey}`, json.spreadsheetUrl);
+              localStorage.setItem(`defib_${activeTenantId.toLowerCase()}_${sheetInfo.localKey}`, json.spreadsheetUrl);
             } catch (_) {}
           }
           const items = Array.isArray(json?.items) ? json.items : [];
@@ -1258,8 +1238,10 @@ export async function fetchCollectionFromFirestore<T>(
         }
       }
     } catch (err) {
-      console.warn(`[GoogleSheets] Optional sheet check warning for ${collectionName}:`, err);
+      console.warn(`[GoogleSheets] Error fetching ${collectionName} for ${activeTenantId}:`, err);
     }
+    onProgress?.(0, 0, 'Terminé.');
+    return [] as unknown as T;
   }
 
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);

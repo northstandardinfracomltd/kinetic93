@@ -3272,7 +3272,7 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     };
   };
 
-  // 0. GOOGLE SHEETS DATABASE OVERRIDE (for defibrillateurs, otherEquipments/materiels, clients, and any configured optional tenant spreadsheet)
+  // 0. GOOGLE SHEETS DATABASE OVERRIDE (strictly governed by configured tenant spreadsheets; returns [] if no spreadsheet configured)
   const strictSheetTabMap: Record<string, SheetTabType> = {
     defibrillateurs: 'defibrillateurs',
     defibs: 'defibrillateurs',
@@ -3281,25 +3281,156 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     other_equipments: 'autresMateriels',
     autresMateriels: 'autresMateriels',
     materiels: 'autresMateriels',
+    equipments: 'autresMateriels',
     clients: 'clients',
-  };
-  const optionalSheetTabMap: Record<string, SheetTabType> = {
+    clientList: 'clients',
+    client_list: 'clients',
+    customerList: 'clients',
+    customers: 'clients',
+    fsmTours: 'tournees',
     fsm_tours: 'tournees',
+    tours: 'tournees',
     tournees: 'tournees',
     missions: 'missionsTournees',
+    missionsTournees: 'missionsTournees',
+    missions_tournees: 'missionsTournees',
     generated_reports: 'rapportsPdf',
     generatedReports: 'rapportsPdf',
     reports: 'rapportsPdf',
     rapports: 'rapportsPdf',
+    rapportsPdf: 'rapportsPdf',
     tickets: 'crm',
+    support_tickets: 'crm',
     crm: 'crm',
+    customerReviews: 'satisfaction',
+    customer_reviews: 'satisfaction',
+    avis: 'satisfaction',
+    satisfaction: 'satisfaction',
+    commercialDocs: 'commandes',
+    commercial_docs: 'commandes',
+    devis: 'commandes',
+    factures: 'commandes',
     commandes: 'commandes',
-    stocks: 'stocks',
+    devisFactures: 'devisFactures',
+    stocks: 'stocksGlobaux',
+    stock: 'stocksGlobaux',
+    stockItems: 'stocksGlobaux',
+    stocksGlobaux: 'stocksGlobaux',
+    distributed_stocks: 'stocksDistribues',
+    distributedStocks: 'stocksDistribues',
+    stocksDistribues: 'stocksDistribues',
+    logistics_notifications: 'historiqueNotifications',
+    logisticsNotifications: 'historiqueNotifications',
+    historiqueNotifications: 'historiqueNotifications',
+    achats_fournisseurs: 'achatsFournisseurs',
+    achatsFournisseurs: 'achatsFournisseurs',
+    pointages: 'temps',
+    pointages_history: 'temps',
+    temps: 'temps',
+    expenses: 'ticketsCaisse',
+    ticketsCaisse: 'ticketsCaisse',
+    tickets_caisse: 'ticketsCaisse',
+    veilles: 'releveConcurrentiel',
+    releveConcurrentiel: 'releveConcurrentiel',
+    releve_concurrentiel: 'releveConcurrentiel',
     formations: 'formations',
+    stagiaires: 'stagiaires',
+    emargements: 'emargements',
+    tenantMessages: 'messagesInternes',
+    tenant_messages: 'messagesInternes',
+    canal_messages: 'messagesInternes',
+    messagesInternes: 'messagesInternes',
+    gedDocs: 'ged',
+    ged_docs: 'ged',
+    ged: 'ged',
+    suspicious_activity_logs: 'observateurActionsSuspectes',
+    observateurActionsSuspectes: 'observateurActionsSuspectes',
+  };
+  const optionalSheetTabMap: Record<string, SheetTabType> = {
     variables: 'variables',
+    variableList: 'variables',
+    vars: 'variables',
+    members: 'membresEnvironnement',
+    users: 'membresEnvironnement',
+    team: 'membresEnvironnement',
+    staff: 'membresEnvironnement',
   };
   const mappedSheetTab = strictSheetTabMap[colName];
   if (mappedSheetTab) {
+    if (mappedSheetTab === 'tournees') {
+      const [toursUrl, missionsUrl] = await Promise.all([
+        resolveTenantSpreadsheetUrl(activeTenant, 'tournees'),
+        resolveTenantSpreadsheetUrl(activeTenant, 'missionsTournees'),
+      ]);
+      const validToursUrl = toursUrl && extractSpreadsheetIdAndGid(toursUrl) ? toursUrl : '';
+      const validMissionsUrl = missionsUrl && extractSpreadsheetIdAndGid(missionsUrl) ? missionsUrl : '';
+      if (!validToursUrl && !validMissionsUrl) {
+        return [];
+      }
+      try {
+        const [toursData, missionsData] = await Promise.all([
+          validToursUrl ? fetchTenantSheetCollection(validToursUrl, activeTenant, 'tournees', false) : Promise.resolve(null),
+          validMissionsUrl ? fetchTenantSheetCollection(validMissionsUrl, activeTenant, 'missionsTournees', false) : Promise.resolve(null),
+        ]);
+        const sheetTours = toursData?.fromSpreadsheet && Array.isArray(toursData.items) ? toursData.items : [];
+        const sheetMissions = missionsData?.fromSpreadsheet && Array.isArray(missionsData.items) ? missionsData.items : [];
+        if (sheetTours.length === 0 && sheetMissions.length === 0) {
+          return [];
+        }
+        const baseTours = [
+          {
+            id: 'a-trier',
+            name: 'Missions à trier',
+            title: 'Missions à trier',
+            date: '-',
+            startDate: 'A trier',
+            techName: 'Non assigné',
+            vehicule: '-',
+            status: 'En attente',
+            missions: [] as any[],
+          },
+          ...sheetTours.map((st: any) => ({
+            ...st,
+            id: st.id || st.tourIdentifiant || `tour-${Date.now()}`,
+            tourIdentifiant: st.tourIdentifiant || st.id,
+            title: st.title || st.name || 'Tournée',
+            name: st.name || st.title || 'Tournée',
+            startDate: st.startDate || st.date || '',
+            date: st.date || st.startDate || '',
+            techName: st.techName || 'Non assigné',
+            vehicule: st.vehicule || '-',
+            status: st.status || 'Brouillon',
+            missions: Array.isArray(st.missions) ? [...st.missions] : [],
+          })),
+        ];
+        if (sheetMissions.length > 0) {
+          for (const sm of sheetMissions) {
+            if (!sm || typeof sm !== 'object') continue;
+            const tid = String(sm.tourIdentifiant || sm.tourId || '').trim();
+            const matchedTour = tid
+              ? baseTours.find(
+                  (bt: any) =>
+                    bt.id !== 'a-trier' &&
+                    (String(bt.tourIdentifiant || '').trim().toLowerCase() === tid.toLowerCase() ||
+                      String(bt.id || '').trim().toLowerCase() === tid.toLowerCase() ||
+                      String(bt.title || bt.name || '').trim().toLowerCase() === tid.toLowerCase())
+                )
+              : null;
+            const target = matchedTour || baseTours[0];
+            target.missions.push({
+              ...sm,
+              id: sm.id || sm.interventionReference || `fsm-m-${target.missions.length + 1}`,
+              interventionReference: sm.interventionReference || sm.id,
+            });
+          }
+        }
+        return baseTours;
+      } catch (sheetErr) {
+        console.warn(`[GoogleSheetsDB] Warning reading tournees/missionsTournees for tenant ${activeTenant}:`, sheetErr);
+        return [];
+      }
+    }
+
     const sheetUrl = await resolveTenantSpreadsheetUrl(activeTenant, mappedSheetTab);
     if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
       try {
@@ -5064,7 +5195,7 @@ async function warmupDefibrillateursStore() {
           for (const k of EXTRA_SERVER_SHEET_KEYS) {
             const urlKey = `${k}Url`;
             const effVal = explicitDatabaseSave
-              ? (value[k] ?? value[urlKey] ?? safeExisting[k] ?? safeExisting[urlKey] ?? '')
+              ? String(value[k] ?? value[urlKey] ?? '')
               : (value[k] || value[urlKey] || safeExisting[k] || safeExisting[urlKey] || '');
             extraEffectiveMap[k] = effVal;
             extraEffectiveMap[urlKey] = effVal;
@@ -5098,19 +5229,19 @@ async function warmupDefibrillateursStore() {
               for (const k of EXTRA_SERVER_SHEET_KEYS) {
                 const urlKey = `${k}Url`;
                 const v = explicitDatabaseSave
-                  ? (value[k] ?? value[urlKey] ?? existingCross[k] ?? existingCross[urlKey] ?? '')
+                  ? String(value[k] ?? value[urlKey] ?? '')
                   : (extraEffectiveMap[k] || existingCross[k] || existingCross[urlKey] || '');
                 crossExtra[k] = v;
                 crossExtra[urlKey] = v;
               }
               const updatedCross = {
                 ...existingCross,
-                spreadsheetDefibrillateurs: effDefibs || existingCross.spreadsheetDefibrillateurs || '',
-                spreadsheetAutresMateriels: effAutres || existingCross.spreadsheetAutresMateriels || '',
-                spreadsheetClients: effClients || existingCross.spreadsheetClients || '',
-                spreadsheetDefibrillateursUrl: effDefibs || existingCross.spreadsheetDefibrillateursUrl || '',
-                spreadsheetAutresMaterielsUrl: effAutres || existingCross.spreadsheetAutresMaterielsUrl || '',
-                spreadsheetClientsUrl: effClients || existingCross.spreadsheetClientsUrl || '',
+                spreadsheetDefibrillateurs: explicitDatabaseSave ? effDefibs : (effDefibs || existingCross.spreadsheetDefibrillateurs || ''),
+                spreadsheetAutresMateriels: explicitDatabaseSave ? effAutres : (effAutres || existingCross.spreadsheetAutresMateriels || ''),
+                spreadsheetClients: explicitDatabaseSave ? effClients : (effClients || existingCross.spreadsheetClients || ''),
+                spreadsheetDefibrillateursUrl: explicitDatabaseSave ? effDefibs : (effDefibs || existingCross.spreadsheetDefibrillateursUrl || ''),
+                spreadsheetAutresMaterielsUrl: explicitDatabaseSave ? effAutres : (effAutres || existingCross.spreadsheetAutresMaterielsUrl || ''),
+                spreadsheetClientsUrl: explicitDatabaseSave ? effClients : (effClients || existingCross.spreadsheetClientsUrl || ''),
                 ...crossExtra,
               };
               serverMemoryStore.set(crossKey, updatedCross);

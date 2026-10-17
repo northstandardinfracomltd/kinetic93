@@ -992,13 +992,32 @@ export function getTenantSpreadsheetUrl(
   fieldKey: SpreadsheetFieldKey,
   companyInfo?: Partial<CompanyInfo> | null
 ): string {
+  const isCleanUrl = (u?: any): string => {
+    if (!u || typeof u !== 'string') return '';
+    const trimmed = u.trim();
+    if (!trimmed || trimmed.includes('1tB1e41') || trimmed.includes('2mX5O6r9hD0i3Z9m')) return '';
+    return trimmed;
+  };
+
   const urlKey = `${fieldKey}Url` as keyof CompanyInfo;
   if (companyInfo) {
-    const direct = companyInfo[fieldKey] || companyInfo[urlKey];
-    if (direct && String(direct).trim()) return String(direct).trim();
+    const direct = isCleanUrl(companyInfo[fieldKey]) || isCleanUrl(companyInfo[urlKey]);
+    if (direct) return direct;
   }
   if (typeof window === 'undefined') return '';
   const activeTenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+  const numPart = activeTenantId.replace(/^d/i, '');
+  const tenantCandidates = Array.from(
+    new Set(
+      [
+        activeTenantId,
+        activeTenantId.toUpperCase(),
+        activeTenantId.toLowerCase(),
+        ...(numPart && /^\d+$/.test(numPart) ? [`D${numPart}`, `d${numPart}`, numPart] : []),
+      ].filter(Boolean)
+    )
+  );
+
   const extraMeta = EXTRA_SPREADSHEET_FIELDS.find((f) => f.key === fieldKey);
   const storageSuffix =
     extraMeta?.storageSuffix ||
@@ -1011,22 +1030,29 @@ export function getTenantSpreadsheetUrl(
       : '');
 
   if (storageSuffix) {
-    const fromStorage =
-      localStorage.getItem(`defib_${activeTenantId}_${storageSuffix}`) ||
-      localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_${storageSuffix}`) ||
-      localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_${storageSuffix}`);
-    if (fromStorage && fromStorage.trim()) return fromStorage.trim();
+    for (const t of tenantCandidates) {
+      const fromStorage = isCleanUrl(localStorage.getItem(`defib_${t}_${storageSuffix}`));
+      if (fromStorage) return fromStorage;
+    }
   }
 
   try {
-    const cachedCompanyRaw =
-      localStorage.getItem(`defib_company_info_${activeTenantId}`) ||
-      localStorage.getItem(`defib_company_info_${activeTenantId.toUpperCase()}`) ||
-      localStorage.getItem(`defib_company_info_${activeTenantId.toLowerCase()}`);
-    if (cachedCompanyRaw) {
-      const parsed = JSON.parse(cachedCompanyRaw);
-      const val = parsed?.[fieldKey] || parsed?.[urlKey];
-      if (val && String(val).trim()) return String(val).trim();
+    for (const t of tenantCandidates) {
+      const candidates = [
+        localStorage.getItem(`defib_${t}_company_info`),
+        localStorage.getItem(`fs_cache_${t}_tenantDatabases`),
+        localStorage.getItem(`fs_cache_${t}_companyInfo`),
+        localStorage.getItem(`fs_cache_${t}_company_info`),
+        localStorage.getItem(`defib_company_info_${t}`),
+      ];
+      for (const raw of candidates) {
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw);
+          const val = isCleanUrl(parsed?.[fieldKey]) || isCleanUrl(parsed?.[urlKey]);
+          if (val) return val;
+        } catch (_) {}
+      }
     }
   } catch (_) {}
 

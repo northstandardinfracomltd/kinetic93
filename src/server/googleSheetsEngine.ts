@@ -3239,9 +3239,9 @@ export async function fetchTenantSheetCollection(
         }
       }
 
-      // Never overwrite a warm non-empty cache with an empty result caused by a transient Google API timeout/rate-limit
+      // Never overwrite a warm non-empty cache with an empty result caused by a transient Google API timeout/rate-limit (when rawMatrix is null)
       const prevCached = sheetMemoryCache.get(cacheKey);
-      if (baseItems.length === 0 && prevCached && prevCached.items.length > 0 && (!rawMatrix || rawMatrix.rows.length === 0)) {
+      if (baseItems.length === 0 && prevCached && prevCached.items.length > 0 && !rawMatrix) {
         return {
           items: prevCached.items,
           headers: prevCached.headers,
@@ -3262,10 +3262,10 @@ export async function fetchTenantSheetCollection(
         spreadsheetUrl,
       };
 
-      if (baseItems.length > 0 || !prevCached) {
+      if (rawMatrix !== null || baseItems.length > 0 || !prevCached) {
         sheetMemoryCache.set(cacheKey, snapshotToStore);
       }
-      if (baseItems.length > 0) {
+      if (rawMatrix !== null || baseItems.length > 0) {
         saveDiskSnapshotAsync(cacheKey, snapshotToStore);
       }
 

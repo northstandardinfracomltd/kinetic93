@@ -2448,47 +2448,6 @@ export default function App() {
         lastLoadedSheetUrlsRef.current = { tenant: activeTid, defibs: '', autres: '', clients: '' };
       }
 
-      // If this browser already has spreadsheet URLs in localStorage, ensure they are pushed to server & Firestore for other PCs
-      if (urlDefibs || urlAutres || urlClients) {
-        const dbSyncPayload: Record<string, any> = { updatedAt: new Date().toISOString() };
-        if (urlDefibs) {
-          dbSyncPayload.spreadsheetDefibrillateurs = urlDefibs;
-          dbSyncPayload.spreadsheetDefibrillateursUrl = urlDefibs;
-        }
-        if (urlAutres) {
-          dbSyncPayload.spreadsheetAutresMateriels = urlAutres;
-          dbSyncPayload.spreadsheetAutresMaterielsUrl = urlAutres;
-        }
-        if (urlClients) {
-          dbSyncPayload.spreadsheetClients = urlClients;
-          dbSyncPayload.spreadsheetClientsUrl = urlClients;
-        }
-        for (const f of EXTRA_SPREADSHEET_FIELDS) {
-          const extraUrl =
-            sanitizeSheetUrl((customInfo as any)?.[f.key]) ||
-            sanitizeSheetUrl((customInfo as any)?.[f.urlKey]) ||
-            sanitizeSheetUrl((companyInfo as any)?.[f.key]) ||
-            sanitizeSheetUrl((companyInfo as any)?.[f.urlKey]) ||
-            sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid}_${f.storageSuffix}`));
-          if (extraUrl) {
-            dbSyncPayload[f.key] = extraUrl;
-            dbSyncPayload[f.urlKey as string] = extraUrl;
-          }
-        }
-        fetch('/api/sync-collection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            collectionName: 'tenantDatabases',
-            tenantId: activeTid,
-            value: dbSyncPayload,
-          }),
-        }).catch(() => {});
-        if (activeTid !== 'demo') {
-          saveCollectionToFirestore('tenantDatabases', dbSyncPayload, activeTid).catch(() => {});
-        }
-      }
-
       const delSet = new Set(getDeletedDefibKeys(activeTid));
 
       const persistResolvedUrl = (
@@ -2698,113 +2657,237 @@ export default function App() {
   const refreshGenericSheetCompartment = useCallback(
     async (tabType: string, forceRefresh = false) => {
       const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      const tabToFieldKeyMap: Record<string, any> = {
+        tournees: 'spreadsheetTournees',
+        missionsTournees: 'spreadsheetMissionsTournees',
+        rapportsPdf: 'spreadsheetRapportsPdf',
+        crm: 'spreadsheetCrm',
+        satisfaction: 'spreadsheetSatisfaction',
+        commandes: 'spreadsheetCommandes',
+        devisFactures: 'spreadsheetCommandes',
+        stocksGlobaux: 'spreadsheetStocks',
+        stocksDistribues: 'spreadsheetStocks',
+        historiqueNotifications: 'spreadsheetStocks',
+        achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
+        temps: 'spreadsheetTemps',
+        ticketsCaisse: 'spreadsheetTicketsCaisse',
+        releveConcurrentiel: 'spreadsheetReleveConcurrentiel',
+        formations: 'spreadsheetFormations',
+        stagiaires: 'spreadsheetStagiaires',
+        emargements: 'spreadsheetEmargements',
+        messagesInternes: 'spreadsheetMessagesInternes',
+        variables: 'spreadsheetVariables',
+        ged: 'spreadsheetGed',
+        intituleEmplacements: 'spreadsheetIntituleEmplacements',
+        membresEnvironnement: 'spreadsheetMembresEnvironnement',
+        reglages: 'spreadsheetReglages',
+        apparenceRapportsPdf: 'spreadsheetApparenceRapportsPdf',
+        communicationPortailClient: 'spreadsheetCommunicationPortailClient',
+        observateurActionsSuspectes: 'spreadsheetObservateurActionsSuspectes',
+      };
+
+      const clearCompartmentState = (tt: string) => {
+        switch (tt) {
+          case 'tournees':
+          case 'missionsTournees':
+            setFsmTours([]);
+            try { localStorage.removeItem(`defib_${activeTid}_fsm_tours`); } catch (_) {}
+            break;
+          case 'rapportsPdf':
+            setGeneratedReports([]);
+            try { localStorage.removeItem(`defib_${activeTid}_generated_reports`); } catch (_) {}
+            break;
+          case 'crm':
+            setTickets([]);
+            try { localStorage.removeItem(`defib_${activeTid}_support_tickets`); } catch (_) {}
+            break;
+          case 'satisfaction':
+            setCustomerReviews([]);
+            try { localStorage.removeItem(`defib_${activeTid}_customer_reviews`); } catch (_) {}
+            break;
+          case 'commandes':
+          case 'devisFactures':
+            setCommercialDocs([]);
+            try { localStorage.removeItem(`defib_${activeTid}_commercial_docs`); } catch (_) {}
+            break;
+          case 'stocksGlobaux':
+            setStocks([]);
+            try { localStorage.removeItem(`defib_${activeTid}_stocks`); } catch (_) {}
+            break;
+          case 'stocksDistribues':
+            setDistributedStocks([]);
+            try { localStorage.removeItem(`defib_${activeTid}_distributed_stocks`); } catch (_) {}
+            break;
+          case 'historiqueNotifications':
+            setLogisticsNotifications([]);
+            try { localStorage.removeItem(`defib_${activeTid}_logistics_notifications`); } catch (_) {}
+            break;
+          case 'achatsFournisseurs':
+            setAchatsFournisseurs([]);
+            try { localStorage.removeItem(`defib_${activeTid}_achats_fournisseurs`); } catch (_) {}
+            break;
+          case 'temps':
+            setPointages([]);
+            try { localStorage.removeItem(`defib_${activeTid}_pointages_history`); } catch (_) {}
+            break;
+          case 'ticketsCaisse':
+            setExpenses([]);
+            try { localStorage.removeItem(`defib_${activeTid}_expenses`); } catch (_) {}
+            break;
+          case 'releveConcurrentiel':
+            setVeilles([]);
+            try { localStorage.removeItem(`defib_${activeTid}_veilles`); } catch (_) {}
+            break;
+          case 'formations':
+            setFormations([]);
+            try { localStorage.removeItem(`defib_${activeTid}_formations`); } catch (_) {}
+            break;
+          case 'stagiaires':
+            setStagiaires([]);
+            try { localStorage.removeItem(`defib_${activeTid}_stagiaires`); } catch (_) {}
+            break;
+          case 'emargements':
+            setEmargements([]);
+            try { localStorage.removeItem(`defib_${activeTid}_emargements`); } catch (_) {}
+            break;
+          case 'messagesInternes':
+            setTenantMessages([]);
+            try { localStorage.removeItem(`defib_${activeTid}_tenant_messages`); } catch (_) {}
+            break;
+          case 'ged':
+            setGedDocs([]);
+            try { localStorage.removeItem(`defib_${activeTid}_ged_docs`); } catch (_) {}
+            break;
+          case 'observateurActionsSuspectes':
+            setSuspiciousActivityLogs([]);
+            try { localStorage.removeItem(`defib_${activeTid}_suspicious_activity_logs`); } catch (_) {}
+            break;
+          default:
+            break;
+        }
+      };
+
       try {
         if (tabType === 'tournees' || tabType === 'missionsTournees') {
+          const tourneesUrl = getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo);
+          const missionsUrl = getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo);
           const [resTours, resMissions] = await Promise.all([
-            fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=tournees&refresh=${forceRefresh}`).catch(() => null),
-            fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=missionsTournees&refresh=${forceRefresh}`).catch(() => null),
+            fetch(
+              `/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=tournees&refresh=${forceRefresh}${
+                tourneesUrl ? `&spreadsheetUrl=${encodeURIComponent(tourneesUrl)}` : ''
+              }`
+            ).catch(() => null),
+            fetch(
+              `/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=missionsTournees&refresh=${forceRefresh}${
+                missionsUrl ? `&spreadsheetUrl=${encodeURIComponent(missionsUrl)}` : ''
+              }`
+            ).catch(() => null),
           ]);
           const dataTours = resTours && resTours.ok ? await resTours.json().catch(() => null) : null;
           const dataMissions = resMissions && resMissions.ok ? await resMissions.json().catch(() => null) : null;
 
-          const hasToursFromSheet = Boolean(dataTours?.fromSpreadsheet && Array.isArray(dataTours.items) && (dataTours.items.length > 0 || dataTours.hasRemoteHeaders));
-          const hasMissionsFromSheet = Boolean(dataMissions?.fromSpreadsheet && Array.isArray(dataMissions.items) && (dataMissions.items.length > 0 || dataMissions.hasRemoteHeaders));
-          if (!hasToursFromSheet && !hasMissionsFromSheet) return;
+          const hasToursFromSheet = Boolean(dataTours?.fromSpreadsheet && Array.isArray(dataTours.items));
+          const hasMissionsFromSheet = Boolean(dataMissions?.fromSpreadsheet && Array.isArray(dataMissions.items));
+          if (!hasToursFromSheet && !hasMissionsFromSheet) {
+            clearCompartmentState('tournees');
+            return;
+          }
 
-          setFsmTours((prevTours) => {
-            const baseTours = hasToursFromSheet
-              ? [
-                  prevTours.find((t: any) => t.id === 'a-trier') || {
-                    id: 'a-trier',
-                    name: 'Missions à trier',
-                    date: '-',
-                    techName: 'Non assigné',
-                    vehicule: '-',
-                    status: 'En attente',
-                    totalDistance: '-',
-                    totalDuration: '-',
-                    co2Saved: '-',
-                    missions: [],
-                  },
-                  ...dataTours.items.map((st: any) => {
-                    const existing = prevTours.find(
-                      (pt: any) =>
-                        pt.id !== 'a-trier' &&
-                        ((st.tourIdentifiant && pt.tourIdentifiant === st.tourIdentifiant) ||
-                          (st.id && pt.id === st.id) ||
-                          (st.tourIdentifiant && pt.id === st.tourIdentifiant))
-                    );
-                    return {
-                      ...(existing || {}),
-                      ...st,
-                      id: existing?.id || st.id || st.tourIdentifiant || `tour-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                      tourIdentifiant: st.tourIdentifiant || existing?.tourIdentifiant || st.id,
-                      name: st.name || st.title || existing?.name || 'Tournée',
-                      date: st.date || st.startDate || existing?.date || '',
-                      techName: st.techName || existing?.techName || 'Non assigné',
-                      vehicule: st.vehicule || existing?.vehicule || '-',
-                      status: st.status || existing?.status || 'Brouillon',
-                      missions: Array.isArray(st.missions) && st.missions.length > 0 ? st.missions : (existing?.missions || []),
-                    };
-                  }),
-                ]
-              : [...prevTours];
+          const sheetTours: any[] = hasToursFromSheet ? dataTours.items : [];
+          const sheetMissions: any[] = hasMissionsFromSheet ? dataMissions.items : [];
 
-            if (hasMissionsFromSheet) {
-              const sheetMissions: any[] = dataMissions.items;
-              // Group sheet missions by tourIdentifiant (or 'a-trier' if unassigned)
-              const byTourKey = new Map<string, any[]>();
-              for (const sm of sheetMissions) {
-                if (!sm || typeof sm !== 'object') continue;
-                const tid = String(sm.tourIdentifiant || sm.tourId || '').trim();
-                const matchedTour = tid
-                  ? baseTours.find(
-                      (bt: any) =>
-                        bt.id !== 'a-trier' &&
-                        (String(bt.tourIdentifiant || '').trim().toLowerCase() === tid.toLowerCase() ||
-                          String(bt.id || '').trim().toLowerCase() === tid.toLowerCase() ||
-                          String(bt.name || '').trim().toLowerCase() === tid.toLowerCase())
-                    )
-                  : null;
-                const targetTourId = matchedTour ? matchedTour.id : 'a-trier';
-                const list = byTourKey.get(targetTourId) || [];
-                list.push({
-                  ...sm,
-                  id: sm.id || sm.interventionReference || `fsm-m-${Date.now()}-${list.length}`,
-                  interventionReference: sm.interventionReference || sm.id,
-                });
-                byTourKey.set(targetTourId, list);
-              }
+          if (sheetTours.length === 0 && sheetMissions.length === 0) {
+            clearCompartmentState('tournees');
+            return;
+          }
 
-              const mergedTours = baseTours.map((bt: any) => {
-                const logMissions = (bt.missions || []).filter((m: any) => String(m?.id || '').startsWith('log-'));
-                const assignedFromSheet = byTourKey.get(bt.id) || [];
-                return {
-                  ...bt,
-                  missions: [...logMissions, ...assignedFromSheet],
-                };
+          const baseTours: any[] = [
+            {
+              id: 'a-trier',
+              name: 'Missions à trier',
+              title: 'Missions à trier',
+              date: '-',
+              startDate: 'A trier',
+              techName: 'Non assigné',
+              vehicule: '-',
+              status: 'En attente',
+              totalDistance: '-',
+              totalDuration: '-',
+              co2Saved: '-',
+              missions: [],
+            },
+            ...sheetTours.map((st: any, idx: number) => ({
+              ...st,
+              id: st.id || st.tourIdentifiant || `tour-${idx + 1}`,
+              tourIdentifiant: st.tourIdentifiant || st.id || `TOUR-${String(idx + 1).padStart(4, '0')}`,
+              title: st.title || st.name || 'Tournée',
+              name: st.name || st.title || 'Tournée',
+              startDate: st.startDate || st.date || '',
+              date: st.date || st.startDate || '',
+              techName: st.techName || 'Non assigné',
+              vehicule: st.vehicule || '-',
+              status: st.status || 'Brouillon',
+              missions: Array.isArray(st.missions) ? [...st.missions] : [],
+            })),
+          ];
+
+          if (sheetMissions.length > 0) {
+            const byTourKey = new Map<string, any[]>();
+            for (const sm of sheetMissions) {
+              if (!sm || typeof sm !== 'object') continue;
+              const tid = String(sm.tourIdentifiant || sm.tourId || '').trim();
+              const matchedTour = tid
+                ? baseTours.find(
+                    (bt: any) =>
+                      bt.id !== 'a-trier' &&
+                      (String(bt.tourIdentifiant || '').trim().toLowerCase() === tid.toLowerCase() ||
+                        String(bt.id || '').trim().toLowerCase() === tid.toLowerCase() ||
+                        String(bt.title || bt.name || '').trim().toLowerCase() === tid.toLowerCase())
+                  )
+                : null;
+              const targetTourId = matchedTour ? matchedTour.id : 'a-trier';
+              const list = byTourKey.get(targetTourId) || [];
+              list.push({
+                ...sm,
+                id: sm.id || sm.interventionReference || `fsm-m-${Date.now()}-${list.length}`,
+                interventionReference: sm.interventionReference || sm.id,
               });
-              try {
-                localStorage.setItem(`defib_${activeTid}_fsm_tours`, JSON.stringify(mergedTours));
-              } catch (_) {}
-              return mergedTours;
+              byTourKey.set(targetTourId, list);
             }
 
-            try {
-              localStorage.setItem(`defib_${activeTid}_fsm_tours`, JSON.stringify(baseTours));
-            } catch (_) {}
-            return baseTours;
-          });
+            const mergedTours = baseTours.map((bt: any) => {
+              const assignedFromSheet = byTourKey.get(bt.id) || [];
+              return {
+                ...bt,
+                missions: assignedFromSheet.length > 0 ? assignedFromSheet : (Array.isArray(bt.missions) ? bt.missions : []),
+              };
+            });
+            setFsmTours(mergedTours);
+            safeSetLocalStorage(`defib_${activeTid}_fsm_tours`, JSON.stringify(mergedTours));
+            return;
+          }
+
+          setFsmTours(baseTours);
+          safeSetLocalStorage(`defib_${activeTid}_fsm_tours`, JSON.stringify(baseTours));
           return;
         }
 
+        const fieldKey = tabToFieldKeyMap[tabType];
+        const clientSheetUrl = fieldKey ? getTenantSpreadsheetUrl(fieldKey, companyInfo) : '';
         const res = await fetch(
-          `/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=${encodeURIComponent(tabType)}&refresh=${forceRefresh}`
+          `/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=${encodeURIComponent(tabType)}&refresh=${forceRefresh}${
+            clientSheetUrl ? `&spreadsheetUrl=${encodeURIComponent(clientSheetUrl)}` : ''
+          }`
         ).catch(() => null);
-        if (!res || !res.ok) return;
+        if (!res || !res.ok) {
+          if (!clientSheetUrl) clearCompartmentState(tabType);
+          return;
+        }
         const data = await res.json().catch(() => null);
-        if (!data?.fromSpreadsheet || !Array.isArray(data.items)) return;
-        if (data.items.length === 0 && !data.hasRemoteHeaders && !forceRefresh) return;
+        if (!data?.fromSpreadsheet || !Array.isArray(data.items)) {
+          clearCompartmentState(tabType);
+          return;
+        }
 
         const items = data.items;
         switch (tabType) {
@@ -2817,13 +2900,19 @@ export default function App() {
                     .map((k: string) => String(k).trim().toLowerCase())
                 )
               );
-              const preservedUpcoming = (Array.isArray(prev) ? prev : []).filter(
-                (r: any) =>
-                  r &&
-                  r.isUpcoming &&
-                  !sheetIds.has(String(r.id || '').trim().toLowerCase()) &&
-                  !sheetIds.has(String(r.interventionReference || '').trim().toLowerCase())
+              const hasToursSheet = Boolean(
+                getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo) ||
+                  getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo)
               );
+              const preservedUpcoming = hasToursSheet
+                ? (Array.isArray(prev) ? prev : []).filter(
+                    (r: any) =>
+                      r &&
+                      r.isUpcoming &&
+                      !sheetIds.has(String(r.id || '').trim().toLowerCase()) &&
+                      !sheetIds.has(String(r.interventionReference || '').trim().toLowerCase())
+                  )
+                : [];
               const combined = [...items, ...preservedUpcoming];
               safeSetLocalStorage(`defib_${activeTid}_generated_reports`, JSON.stringify(combined));
               return combined;
@@ -2901,8 +2990,10 @@ export default function App() {
             break;
           }
           case 'variables':
-            setVariables(items);
-            safeSetLocalStorage(`defib_${activeTid}_variables`, JSON.stringify(items));
+            if (items.length > 0) {
+              setVariables(items);
+              safeSetLocalStorage(`defib_${activeTid}_variables`, JSON.stringify(items));
+            }
             break;
           case 'ged':
             setGedDocs(items);
@@ -2969,8 +3060,8 @@ export default function App() {
             break;
           }
           case 'observateurActionsSuspectes': {
-            const merged = mergeSuspiciousLogsFromSheet(activeTid, items);
-            setSuspiciousActivityLogs(merged);
+            setSuspiciousActivityLogs(items);
+            safeSetLocalStorage(`defib_${activeTid}_suspicious_activity_logs`, JSON.stringify(items));
             break;
           }
           default:
@@ -2980,7 +3071,7 @@ export default function App() {
         console.warn(`Error refreshing generic sheet compartment (${tabType}):`, err);
       }
     },
-    [tenantId, loggedUser?.email, loggedUser?.name]
+    [tenantId, companyInfo, loggedUser?.email, loggedUser?.name]
   );
 
   // Listen to manual refresh events from TableSubHeaderButtons or SettingsModal
@@ -3030,7 +3121,7 @@ export default function App() {
     };
   }, [refreshGenericSheetCompartment]);
 
-  // Also load any configured secondary Google Spreadsheets for the active tenant on startup
+  // Also load any configured secondary Google Spreadsheets for the active tenant on startup and whenever spreadsheet URLs change
   useEffect(() => {
     if (!tenantId) return;
     const secondaryTabTypes = [
@@ -3059,13 +3150,23 @@ export default function App() {
       'communicationPortailClient',
       'observateurActionsSuspectes',
     ];
-    const timer = setTimeout(() => {
+    const runAll = (force = false) => {
       secondaryTabTypes.forEach((tt) => {
-        refreshGenericSheetCompartment(tt, false);
+        refreshGenericSheetCompartment(tt, force);
       });
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [tenantId, refreshGenericSheetCompartment]);
+    };
+    const timer = setTimeout(() => {
+      runAll(false);
+    }, 150);
+    const handleSheetsUpdated = () => {
+      runAll(true);
+    };
+    window.addEventListener('defib-tenant-spreadsheets-updated', handleSheetsUpdated);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('defib-tenant-spreadsheets-updated', handleSheetsUpdated);
+    };
+  }, [tenantId, isFirebaseLoaded, refreshGenericSheetCompartment]);
 
   const [isRefreshingCrm, setIsRefreshingCrm] = useState<boolean>(false);
   const handleManualRefreshCrm = async () => {
@@ -3380,7 +3481,19 @@ export default function App() {
 
   // Synchronize tour missions with pending report lines in GMAO "Rapports PDF"
   useEffect(() => {
-    if (!fsmTours || fsmTours.length === 0) return;
+    const rapportsSheetUrl = getTenantSpreadsheetUrl('spreadsheetRapportsPdf', companyInfo);
+    if (!rapportsSheetUrl) {
+      if (generatedReports.length > 0) {
+        setGeneratedReports([]);
+      }
+      return;
+    }
+    if (!fsmTours || fsmTours.length === 0) {
+      if (generatedReports.some((r: any) => r && (r.isUpcoming || r.status === 'À venir'))) {
+        setGeneratedReports(prev => prev.filter((r: any) => r && !r.isUpcoming && r.status !== 'À venir'));
+      }
+      return;
+    }
 
     // 1. Ensure all tours have a frozen tourIdentifiant and all missions have a unique interventionReference
     const { tours: toursWithIds, changed: idsChanged } = ensureFsmTourIdentifiers(fsmTours, tenantId);
@@ -3544,7 +3657,7 @@ export default function App() {
     if (reportsChanged) {
       saveReports(updatedReports);
     }
-  }, [fsmTours, generatedReports]);
+  }, [fsmTours, generatedReports, companyInfo]);
 
   // Helper to parse dates and timestamps in various standard and French formats
   const parseTimestampHelper = (str: any): Date | null => {
@@ -6781,104 +6894,33 @@ export default function App() {
         setLocationNames(resolvedInitLocs);
         setMembers(baseMembers);
 
-        const rawTickets = getLocalTenantValue<SupportTicket[]>('support_tickets', activeRunTenantId === 'demo' ? INITIAL_TICKETS : []);
-        let baseTickets: SupportTicket[] = [];
-        if (Array.isArray(rawTickets)) {
-          if (activeRunTenantId === 'demo') {
-            baseTickets = rawTickets.filter(t => {
-              const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
-              return !tEnv || tEnv === 'demo';
-            });
-          } else {
-            const cleanTenant = activeRunTenantId.trim().toLowerCase();
-            const numTenant = cleanTenant.replace(/^d/i, '');
-            baseTickets = rawTickets.filter(t => {
-              const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
-              const numEnv = tEnv.replace(/^d/i, '');
-              if (tEnv === 'demo') return false;
-              if (tEnv && tEnv !== cleanTenant && numEnv !== numTenant) return false;
-              if (!tEnv && (t.id === '#482910' || t.id === '#719203' || t.identifiant === 'DEF-75001' || t.identifiant === 'DEF-69002')) return false;
-              return true;
-            });
-          }
-        }
-        setTickets(baseTickets);
-
+        // Spreadsheet-backed tabs start empty and are populated exclusively by refreshGenericSheetCompartment if a spreadsheet is configured
+        setTickets([]);
         const baseMemos = getLocalTenantValue<any[]>('memos', []);
         setMemos(baseMemos);
-
-        const rawDocs = getLocalTenantValue<CommercialDoc[]>('commercial_docs', activeRunTenantId === 'demo' ? INITIAL_COMMERCIAL_DOCS : []);
-        let baseDocs: CommercialDoc[] = [];
-        if (Array.isArray(rawDocs)) {
-          baseDocs = rawDocs.filter(d => {
-            if (activeRunTenantId !== 'demo') {
-              const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
-              const cleanTenant = activeRunTenantId.trim().toLowerCase();
-              const numTenant = cleanTenant.replace(/^d/i, '');
-              if (dEnv === 'demo') return false;
-              if (dEnv && dEnv !== cleanTenant && dEnv.replace(/^d/i, '') !== numTenant) return false;
-              if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
-            }
-            return true;
-          });
-        }
-        setCommercialDocs(baseDocs);
-
-        const baseGed = getLocalTenantValue<GedDocument[]>('ged_docs', activeRunTenantId === 'demo' ? INITIAL_GED_DOCS : []);
-        setGedDocs(baseGed);
-
-        const rawOfflineStocks = getLocalTenantValue<StockRecord[]>('stocks', activeRunTenantId === 'demo' ? INITIAL_STOCKS : []);
-        const baseStocks = Array.isArray(rawOfflineStocks) ? filterCollectionForTenant(rawOfflineStocks, 'stocks', activeRunTenantId) : (activeRunTenantId === 'demo' ? INITIAL_STOCKS : []);
-        setStocks(baseStocks);
-
-        const rawOfflineDistrib = getLocalTenantValue<DistributedStockLocation[]>('distributed_stocks', activeRunTenantId === 'demo' ? INITIAL_DISTRIBUTED_STOCKS : []);
-        const baseDistrib = Array.isArray(rawOfflineDistrib) ? filterCollectionForTenant(rawOfflineDistrib, 'distributed_stocks', activeRunTenantId) : (activeRunTenantId === 'demo' ? INITIAL_DISTRIBUTED_STOCKS : []);
-        setDistributedStocks(baseDistrib);
-
-        const baseReviews = getLocalTenantValue<any[]>('customer_reviews', activeRunTenantId === 'demo' ? INITIAL_REVIEWS : []);
-        setCustomerReviews(baseReviews);
-
-        const baseReports = getLocalTenantValue<any[]>('generated_reports', activeRunTenantId === 'demo' ? INITIAL_REPORTS : []);
-        setGeneratedReports(baseReports);
-
-        const baseTours = getLocalTenantValue<any[]>('fsm_tours', activeRunTenantId === 'demo' ? INITIAL_TOURS : []);
-        setFsmTours(baseTours);
-
+        setCommercialDocs([]);
+        setGedDocs([]);
+        setStocks([]);
+        setDistributedStocks([]);
+        setCustomerReviews([]);
+        setGeneratedReports([]);
+        setFsmTours([]);
         const baseCo2History = getLocalTenantValue<any[]>('fsm_co2_history', []);
         setFsmCo2History(baseCo2History);
-
         const baseMissionCounts = getLocalTenantValue<any[]>('fsm_mission_counts', []);
         setFsmMissionCounts(baseMissionCounts);
-
-        const baseExpenses = getLocalTenantValue<any[]>('expenses', activeRunTenantId === 'demo' ? INITIAL_EXPENSES : []);
-        setExpenses(baseExpenses);
-
-        const baseOtherEquip: OtherEquipment[] = [];
+        setExpenses([]);
         setOtherEquipments([]);
-
-        const basePointages = getLocalTenantValue<PointageLog[]>('pointages_history', []);
-        setPointages(basePointages);
-
+        setPointages([]);
         const basePointagesAuto = getLocalTenantValue<PointageAutoVigilance[]>('pointages_auto_vigilance', []);
         setPointagesAutoVigilance(basePointagesAuto);
-
-        const baseAchats = getLocalTenantValue<AchatFournisseur[]>('achats_fournisseurs', []);
-        setAchatsFournisseurs(baseAchats);
-
-        const baseVeilles = getLocalTenantValue<VeilleRecord[]>('veilles', activeRunTenantId === 'demo' ? INITIAL_VEILLES : []);
-        setVeilles(baseVeilles);
-
-        const baseFormations = getLocalTenantValue<FormationRecord[]>('formations', []);
-        setFormations(baseFormations);
-
-        const baseStagiaires = getLocalTenantValue<StagiaireRecord[]>('stagiaires', []);
-        setStagiaires(baseStagiaires);
-
-        const baseEmargements = getLocalTenantValue<EmargementRecord[]>('emargements', []);
-        setEmargements(baseEmargements);
-
-        const baseTenantMessages = getLocalTenantValue<TenantMessage[]>('tenant_messages', activeRunTenantId === 'demo' ? INITIAL_TENANT_MESSAGES : []);
-        setTenantMessages(baseTenantMessages);
+        setAchatsFournisseurs([]);
+        setVeilles([]);
+        setFormations([]);
+        setStagiaires([]);
+        setEmargements([]);
+        setTenantMessages([]);
+        setLogisticsNotifications([]);
 
         let cleanedNotifications: AppNotification[] = [];
         const rawNotifs = getLocalTenantValue<AppNotification[]>('notifications', []);
@@ -6904,8 +6946,7 @@ export default function App() {
           }
         }
         setNotifications(cleanedNotifications);
-        const baseSuspicious = getLocalTenantValue<SuspiciousActivityLog[]>('suspicious_activity_logs', []);
-        setSuspiciousActivityLogs(baseSuspicious);
+        setSuspiciousActivityLogs([]);
 
         const savedEnable = localStorage.getItem(`defib_${activeRunTenantId}_enable_other_equipments`);
         setEnableOtherEquipments(savedEnable || baseCompanyInfo.enableOtherEquipments || 'Non');
@@ -7180,63 +7221,15 @@ export default function App() {
           return mems;
         }));
 
-        syncTasks.push(syncBackground<SupportTicket[]>('tickets', 'support_tickets', setTickets, (rawTickets) => {
-          if (!Array.isArray(rawTickets)) return [];
-          if (tenantId === 'demo') {
-            return rawTickets.filter(t => {
-              const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
-              return !tEnv || tEnv === 'demo';
-            });
-          }
-          const cleanTenant = tenantId.trim().toLowerCase();
-          const numTenant = cleanTenant.replace(/^d/i, '');
-          return rawTickets.filter(t => {
-            const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
-            const numEnv = tEnv.replace(/^d/i, '');
-            if (tEnv === 'demo') return false;
-            if (tEnv && tEnv !== cleanTenant && numEnv !== numTenant) return false;
-            if (!tEnv && (t.id === '#482910' || t.id === '#719203' || t.identifiant === 'DEF-75001' || t.identifiant === 'DEF-69002')) return false;
-            return true;
-          });
-        }));
-        syncTasks.push(syncBackground<CommercialDoc[]>('commercialDocs', 'commercial_docs', setCommercialDocs, (docs) => {
-          if (!Array.isArray(docs)) return [];
-          if (tenantId === 'demo') return docs;
-          const cleanTenant = tenantId.trim().toLowerCase();
-          const numTenant = cleanTenant.replace(/^d/i, '');
-          return docs.filter(d => {
-            const dEnv = (d.envId || d.tenantId || '').trim().toLowerCase();
-            if (dEnv === 'demo') return false;
-            if (dEnv && dEnv !== cleanTenant && dEnv.replace(/^d/i, '') !== numTenant) return false;
-            if (!dEnv && d.clientDenomination && (d.clientDenomination.includes('Medical360') || d.clientDenomination.includes('SecoursProOuest'))) return false;
-            return true;
-          });
-        }));
-        syncTasks.push(syncBackground<GedDocument[]>('gedDocs', 'ged_docs', setGedDocs));
-        syncTasks.push(syncBackground<StockRecord[]>('stocks', 'stocks', setStocks));
-        syncTasks.push(syncBackground<DistributedStockLocation[]>('distributed_stocks', 'distributed_stocks', setDistributedStocks));
-        syncTasks.push(syncBackground<any[]>('customerReviews', 'customer_reviews', setCustomerReviews));
-        syncTasks.push(syncBackground<PointageLog[]>('pointages', 'pointages_history', setPointages));
-        syncTasks.push(syncBackground<any[]>('expenses', 'expenses', setExpenses));
-        syncTasks.push(syncBackground<VeilleRecord[]>('veilles', 'veilles', setVeilles));
-        syncTasks.push(syncBackground<any[]>('generatedReports', 'generated_reports', setGeneratedReports));
-        syncTasks.push(syncBackground<any[]>('fsmTours', 'fsm_tours', setFsmTours, (tours) => {
-          if (!Array.isArray(tours)) return [];
-          if (tenantId === 'demo') return tours;
-          return tours.filter(t => t.id !== 'fsm-tour-demo' && t.techName !== 'Jakub Démo');
-        }));
-        syncTasks.push(syncBackground<any[]>('fsmCo2History', 'fsm_co2_history', setFsmCo2History));
+        // Spreadsheet-backed tabs (tickets, commercialDocs, gedDocs, stocks, distributed_stocks, customerReviews,
+        // pointages, expenses, veilles, generatedReports, fsmTours, achats_fournisseurs, logistics_notifications,
+        // formations, stagiaires, emargements, suspicious_activity_logs, tenantMessages) are loaded exclusively
+        // from their configured Google Spreadsheets via refreshGenericSheetCompartment.
+        syncTasks.push(syncBackground< any[]>('fsmCo2History', 'fsm_co2_history', setFsmCo2History));
         syncTasks.push(syncBackground<any[]>('fsmMissionCounts', 'fsm_mission_counts', setFsmMissionCounts));
         syncTasks.push(syncBackground<Memo[]>('memos', 'memos', setMemos));
         syncTasks.push(syncBackground<PointageAutoVigilance[]>('pointagesAutoVigilance', 'pointages_auto_vigilance', setPointagesAutoVigilance));
-        syncTasks.push(syncBackground<AchatFournisseur[]>('achats_fournisseurs', 'achats_fournisseurs', setAchatsFournisseurs));
-        syncTasks.push(syncBackground<LogisticsNotification[]>('logistics_notifications', 'logistics_notifications', setLogisticsNotifications));
-        syncTasks.push(syncBackground<FormationRecord[]>('formations', 'formations', setFormations));
-        syncTasks.push(syncBackground<StagiaireRecord[]>('stagiaires', 'stagiaires', setStagiaires));
-        syncTasks.push(syncBackground<EmargementRecord[]>('emargements', 'emargements', setEmargements));
         syncTasks.push(syncBackground<TeamWorkGroup[]>('teamWorkGroups', 'team_work_groups', setTeamWorkGroups));
-        syncTasks.push(syncBackground<SuspiciousActivityLog[]>('suspicious_activity_logs', 'suspicious_activity_logs', setSuspiciousActivityLogs));
-        syncTasks.push(syncBackground<TenantMessage[]>('tenantMessages', 'tenant_messages', setTenantMessages));
 
         const currentEmail = loggedUser?.email?.trim().toLowerCase();
         if (currentEmail && tenantId && tenantId !== 'demo') {
@@ -7412,30 +7405,16 @@ export default function App() {
 
     const handleWebappRefresh = () => {
       handleFocusSync();
-      const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
-      const syncOne = <T,>(col: string, suffix: string, setter: (v: T) => void) => {
-        fetchCollectionFromFirestore<T>(col, activeTid)
-          .then((data) => {
-            if (data !== null && data !== undefined) {
-              const strVal = JSON.stringify(data);
-              loadedDataRef.current[suffix] = strVal;
-              loadedDataRef.current[col] = strVal;
-              safeSetLocalStorage(`defib_${activeTid}_${suffix}`, strVal);
-              setter(data);
-            }
-          })
-          .catch(() => {});
-      };
-      syncOne<StockRecord[]>('stocks', 'stocks', setStocks);
-      syncOne<DistributedStockLocation[]>('distributed_stocks', 'distributed_stocks', setDistributedStocks);
-      syncOne<Member[]>('members', 'members', setMembers);
-      syncOne<any[]>('fsmTours', 'fsm_tours', setFsmTours);
-      syncOne<any[]>('generatedReports', 'generated_reports', setGeneratedReports);
-      syncOne<PointageLog[]>('pointages', 'pointages_history', setPointages);
-      syncOne<FormationRecord[]>('formations', 'formations', setFormations);
-      syncOne<StagiaireRecord[]>('stagiaires', 'stagiaires', setStagiaires);
-      syncOne<EmargementRecord[]>('emargements', 'emargements', setEmargements);
-      syncOne<CommercialDoc[]>('commercialDocs', 'commercial_docs', setCommercialDocs);
+      refreshGenericSheetCompartment('tournees', true);
+      refreshGenericSheetCompartment('rapportsPdf', true);
+      refreshGenericSheetCompartment('stocksGlobaux', true);
+      refreshGenericSheetCompartment('stocksDistribues', true);
+      refreshGenericSheetCompartment('temps', true);
+      refreshGenericSheetCompartment('formations', true);
+      refreshGenericSheetCompartment('stagiaires', true);
+      refreshGenericSheetCompartment('emargements', true);
+      refreshGenericSheetCompartment('commandes', true);
+      refreshGenericSheetCompartment('membresEnvironnement', true);
     };
 
     window.addEventListener('focus', handleFocusSync);
@@ -10816,7 +10795,7 @@ export default function App() {
               return Array.from(new Set(userGroups.flatMap(g => g.regions || []).filter(Boolean)));
             })();
 
-            const baseScheduledTours = fsmTours.filter((t: any) => t.id !== 'a-trier' && t.startDate && t.startDate !== 'A trier');
+            const baseScheduledTours = fsmTours.filter((t: any) => t.id !== 'a-trier' && t.startDate !== 'A trier');
             const scheduledTours = (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0)
               ? baseScheduledTours.filter((t: any) => t.region && currentUserZoneRegions.includes(t.region))
               : baseScheduledTours;
@@ -16606,12 +16585,21 @@ export default function App() {
               if (isFormation) return false;
 
               if (!gmaoIncludeAutresMateriels) {
-                const isOtherEquipment = 
-                  (rep.equipmentType && !['défibrillateur', 'defibrillateur'].includes(rep.equipmentType.toLowerCase())) ||
-                  (rep.defibSnapshot?.categorie && !['défibrillateur', 'defibrillateur'].includes(rep.defibSnapshot.categorie.toLowerCase())) ||
+                const otherCategoryKeywords = ['extincteur', 'alarme', 'éclairage', 'eclairage', 'ria', 'ssi', 'désenfumage', 'desenfumage', 'trousse', 'pharmacie', 'autre matériel', 'autre materiel'];
+                const eqTypeLower = String(rep.equipmentType || '').trim().toLowerCase();
+                const snapCatLower = String(rep.defibSnapshot?.categorie || '').trim().toLowerCase();
+                const isExplicitOtherCategory =
+                  otherCategoryKeywords.some(k => eqTypeLower.includes(k) || snapCatLower.includes(k));
+                const isKnownOtherEquipment =
+                  Boolean(rep.defibIdentifiant) &&
+                  Array.isArray(otherEquipments) &&
+                  otherEquipments.some((oe: any) => oe.identifiant && oe.identifiant === rep.defibIdentifiant) &&
+                  !(Array.isArray(defibrillateurs) && defibrillateurs.some((d: any) => d.identifiant && d.identifiant === rep.defibIdentifiant));
+                const isOtherEquipment =
+                  isExplicitOtherCategory ||
                   (rep.title && rep.title.trim().toUpperCase().startsWith("RAPPORT TECHNIQUE - ") && !rep.title.toUpperCase().includes("DÉFIBRILLATEUR") && !rep.title.toUpperCase().includes("DEFIBRILLATEUR")) ||
-                  (otherEquipments && otherEquipments.some((oe: any) => oe.identifiant && oe.identifiant === rep.defibIdentifiant));
-                
+                  isKnownOtherEquipment;
+
                 if (isOtherEquipment) return false;
               }
 
