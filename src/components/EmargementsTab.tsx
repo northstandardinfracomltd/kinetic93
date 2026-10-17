@@ -149,18 +149,70 @@ export default function EmargementsTab({
   const [statut, setStatut] = useState<'Brouillon' | 'Terminé'>('Brouillon');
   const [stagiairesItems, setStagiairesItems] = useState<EmargementStagiaireItem[]>([]);
 
+  const formatFormationLabel = (f: FormationRecord) => {
+    const formateurObj = members.find(
+      (m) =>
+        m.id === f.formateurId ||
+        m.name === f.formateurId ||
+        `${m.firstname || ''} ${m.lastname || ''}`.trim() === f.formateurId ||
+        m.email === f.formateurId
+    );
+    const formateurName = formateurObj
+      ? (formateurObj.name || `${formateurObj.firstname || ''} ${formateurObj.lastname || ''}`).trim() || formateurObj.email
+      : f.formateurId || 'Aucun';
+    const dateFormatted = f.dateHeure ? f.dateHeure.replace('T', ' ') : 'Date non définie';
+    return `${f.intitule || 'Formation'} - ${dateFormatted} - ${formateurName}`;
+  };
+
+  const formatStagiaireLabel = (s: StagiaireRecord) => {
+    const dateNaiss = s.dateNaissance ? s.dateNaissance : 'Date non renseignée';
+    return `${s.nomPrenom || 'Stagiaire'} - ${dateNaiss}`;
+  };
+
+  const resolveFormation = (fId: string) => {
+    if (!fId) return undefined;
+    return (
+      formations.find((item) => item.id === fId) ||
+      formations.find((item) => formatFormationLabel(item) === fId || item.intitule === fId)
+    );
+  };
+
+  const resolveStagiaire = (sId: string) => {
+    if (!sId) return undefined;
+    return (
+      stagiaires.find((item) => item.id === sId) ||
+      stagiaires.find(
+        (item) =>
+          formatStagiaireLabel(item) === sId ||
+          item.nomPrenom === sId ||
+          `${item.prenom || ''} ${item.nom || ''}`.trim() === sId
+      )
+    );
+  };
+
   useEffect(() => {
     if (initialEditingId) {
       const match = emargements.find((e) => e.id === initialEditingId);
       if (match) {
-        setFormationId(match.formationId || '');
-        setStatut(match.statut || 'Brouillon');
-        setStagiairesItems(match.stagiaires ? JSON.parse(JSON.stringify(match.stagiaires)) : []);
+        const resolvedF = resolveFormation(match.formationId || '');
+        setFormationId(resolvedF ? resolvedF.id : (match.formationId || ''));
+        setStatut((match.statut as any) || 'Brouillon');
+        const normalizedStags = (match.stagiaires ? JSON.parse(JSON.stringify(match.stagiaires)) : []).map(
+          (st: any, idx: number) => {
+            const resolvedS = resolveStagiaire(st.stagiaireId || '');
+            return {
+              ...st,
+              id: st.id || `item_${idx + 1}`,
+              stagiaireId: resolvedS ? resolvedS.id : (st.stagiaireId || ''),
+            };
+          }
+        );
+        setStagiairesItems(normalizedStags);
         setEditingId(match.id);
         setIsFormOpen(true);
       }
     }
-  }, [initialEditingId, emargements]);
+  }, [initialEditingId, emargements, formations, stagiaires]);
 
   // Search
   const [search, setSearch] = useState('');
@@ -168,15 +220,21 @@ export default function EmargementsTab({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const handleDownloadCertificat = (stItem: EmargementStagiaireItem) => {
-    const stagiaire = stagiaires.find((s) => s.id === stItem.stagiaireId);
+    const stagiaire = resolveStagiaire(stItem.stagiaireId);
     const stagiaireName = stagiaire ? stagiaire.nomPrenom : (stItem.stagiaireId || 'Stagiaire');
 
-    const formation = formations.find((f) => f.id === formationId);
-    const formationTitle = formation ? formation.intitule : 'Formation';
+    const formation = resolveFormation(formationId);
+    const formationTitle = formation ? formation.intitule : (formationId || 'Formation');
 
     const dateHorodatage = stItem.horodatage || (formation?.dateHeure ? formation.dateHeure.replace('T', ' ') : new Date().toLocaleDateString('fr-FR'));
 
-    const formateurObj = members.find((m) => m.id === formation?.formateurId || m.email === formation?.formateurId);
+    const formateurObj = members.find(
+      (m) =>
+        m.id === formation?.formateurId ||
+        m.name === formation?.formateurId ||
+        `${m.firstname || ''} ${m.lastname || ''}`.trim() === formation?.formateurId ||
+        m.email === formation?.formateurId
+    );
     const formateurName = formateurObj
       ? ((formateurObj.name || `${formateurObj.firstname || ''} ${formateurObj.lastname || ''}`).trim() || formateurObj.email || 'Non renseigné')
       : (formation?.formateurId || 'Non renseigné');
@@ -467,21 +525,15 @@ export default function EmargementsTab({
   };
 
   const getFormationDisplayLabel = (fId: string) => {
-    const f = formations.find((item) => item.id === fId);
+    const f = resolveFormation(fId);
     if (!f) return fId || '-';
-    const formateurObj = members.find((m) => m.id === f.formateurId);
-    const formateurName = formateurObj
-      ? (formateurObj.name || `${formateurObj.firstname || ''} ${formateurObj.lastname || ''}`).trim() || formateurObj.email
-      : f.formateurId || 'Aucun';
-    const dateFormatted = f.dateHeure ? f.dateHeure.replace('T', ' ') : 'Date non définie';
-    return `${f.intitule || 'Formation'} - ${dateFormatted} - ${formateurName}`;
+    return formatFormationLabel(f);
   };
 
   const getStagiaireDisplayLabel = (sId: string) => {
-    const s = stagiaires.find((item) => item.id === sId);
+    const s = resolveStagiaire(sId);
     if (!s) return sId || '-';
-    const dateNaiss = s.dateNaissance ? s.dateNaissance : 'Date non renseignée';
-    return `${s.nomPrenom || 'Stagiaire'} - ${dateNaiss}`;
+    return formatStagiaireLabel(s);
   };
 
   const startNewEmargement = () => {
@@ -493,9 +545,20 @@ export default function EmargementsTab({
   };
 
   const startEditEmargement = (e: EmargementRecord) => {
-    setFormationId(e.formationId || '');
-    setStatut(e.statut || 'Brouillon');
-    setStagiairesItems(e.stagiaires ? JSON.parse(JSON.stringify(e.stagiaires)) : []);
+    const resolvedF = resolveFormation(e.formationId || '');
+    setFormationId(resolvedF ? resolvedF.id : (e.formationId || ''));
+    setStatut((e.statut as any) || 'Brouillon');
+    const normalizedStags = (e.stagiaires ? JSON.parse(JSON.stringify(e.stagiaires)) : []).map(
+      (st: any, idx: number) => {
+        const resolvedS = resolveStagiaire(st.stagiaireId || '');
+        return {
+          ...st,
+          id: st.id || `item_${idx + 1}`,
+          stagiaireId: resolvedS ? resolvedS.id : (st.stagiaireId || ''),
+        };
+      }
+    );
+    setStagiairesItems(normalizedStags);
     setEditingId(e.id);
     setIsFormOpen(true);
   };

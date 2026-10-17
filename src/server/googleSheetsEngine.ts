@@ -12,7 +12,11 @@ export type SheetTabType =
   | 'crm'
   | 'satisfaction'
   | 'commandes'
+  | 'devisFactures'
   | 'stocks'
+  | 'stocksGlobaux'
+  | 'stocksDistribues'
+  | 'historiqueNotifications'
   | 'achatsFournisseurs'
   | 'temps'
   | 'ticketsCaisse'
@@ -1545,20 +1549,528 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Date et heure de validation', field: 'notifiedAt', aliases: ['dateetheuredevalidation', 'datevalidation', 'notifiedat'] },
     { header: 'Lien / URL du rapport PDF', field: 'pdfUrl', aliases: ['lienurldurapportpdf', 'urldurapportpdf', 'lienrapportpdf', 'rapporturl', 'pdfurl'] },
   ],
+  commandes: [
+    { header: 'Identifiant', field: 'id', aliases: ['identifiant', 'id', 'identifiantpiece', 'identifiantdelapiece', 'idpiece', 'identifiantdocument', 'identifiantcommande'] },
+    { header: 'Membre attribué', field: 'assignedMemberName', aliases: ['membreattribue', 'membre', 'collaborateur', 'attribuea', 'attribueaunmembre', 'commercial'] },
+    { header: 'Affecter au client', field: 'clientDenomination', aliases: ['affecterauclient', 'client', 'clientdenomination', 'nomclient', 'denominationclient', 'entreprise', 'selectionclient', 'selectionduclient', 'clientname'] },
+    { header: 'Intitulé du contrat', field: 'intituleContrat', aliases: ['intituleducontrat', 'intitulecontrat', 'nomducontrat', 'nomcontrat', 'categoriedecontrat'] },
+    { header: 'Référence du contrat', field: 'referenceContrat', aliases: ['referenceducontrat', 'referencecontrat', 'refcontrat', 'numerocontrat', 'attribueruncontrat', 'contrat'] },
+    { header: 'Type de pièce', field: 'type', aliases: ['typedepiece', 'typepiece', 'typededocument', 'typedocument', 'type', 'naturepiece'] },
+    { header: 'Référence', field: 'ref', aliases: ['reference', 'ref', 'referencepiece', 'referencedelapiece', 'referencedocument', 'numerodelapiece', 'numeropiece', 'numerocommande', 'numero'] },
+    { header: 'Date', field: 'dateStr', aliases: ['date', 'emission', 'datedemission', 'dateemission', 'datepiece', 'datestr', 'datecreation', 'datedudocument'], type: 'date' },
+    { header: 'Remarque', field: 'commentaire', aliases: ['remarque', 'commentaire', 'objetoucommentaire', 'remarqueentete', 'objet', 'intitule'] },
+    { header: 'Code Taxe', field: 'codeTaxe', aliases: ['codetaxe', 'tva', 'tauxtva', 'codetva'] },
+    { header: 'Payeur ID', field: 'payeurId', aliases: ['payeurid', 'idpayeur', 'payeur', 'selectiondupayeur'] },
+    { header: 'Client ID', field: 'clientIdField', aliases: ['clientid', 'idclient', 'clientidfield', 'codeclient'] },
+    { header: 'Commentaires', field: 'commentaires', aliases: ['commentaires', 'notes', 'notesconditions', 'observation', 'observations'] },
+    { header: 'Autre document (Url Source)', field: 'urlSource', aliases: ['autredocumenturlsource', 'autredocument', 'urlsource', 'liensource', 'lienurldudocumentsource', 'documentlie'] },
+    { header: 'Statut', field: 'status', aliases: ['statut', 'status', 'etat', 'statutpiece', 'statutdelapiece', 'situationdelapiece'] },
+    { header: 'Bon de commande', field: 'hasBonCommande', aliases: ['bondecommande', 'creerunbondecommande', 'associerunbondecommande', 'hasboncommande', 'avecbdc', 'bdc', 'bondecommandeouinon'], type: 'yesno' },
+    { header: 'Référence du bon de commande', field: 'bonCommandeReference', aliases: ['referencedubondecommande', 'referencebondecommande', 'refbondecommande', 'refboncomm', 'refbdc', 'referencebc', 'refbc', 'boncommandereference', 'numerobondecommande', 'numerobc'] },
+    { header: 'Livraison', field: 'bonCommandeLivraison', aliases: ['livraison', 'modedelivraison', 'modelivraison', 'datedelivraison', 'datelivraison', 'boncommandelivraison', 'livraisonbc'] },
+    { header: 'Situation', field: 'bonCommandeSituation', aliases: ['situation', 'situationbc', 'situationdubondecommande', 'situationbondecommande', 'boncommandesituation', 'etatlivrable'] },
+    { header: 'Entête', field: 'bonCommandeEntete', aliases: ['entete', 'entetebc', 'remarquebc', 'entetebondecommande', 'entetedubondecommande', 'notedelivraison', 'boncommandeentete'] },
+    { header: 'Total HT', field: 'totalHt', aliases: ['totalht', 'totalhteuro', 'totalhteur', 'montantht', 'ht', 'totalgeneralht'], type: 'number' },
+    { header: 'Total TVA (20%)', field: 'totalTva', aliases: ['totaltva20', 'totaltva', 'totaltvaeuro', 'totaltvaeur', 'montanttva', 'tva20'], type: 'number' },
+    { header: 'Total TTC', field: 'totalTtc', aliases: ['totalttc', 'totalttceuro', 'totalttceur', 'montantttc', 'ttc', 'totalgeneralttc'], type: 'number' },
+    ...Array.from({ length: 10 }, (_, idx) => {
+      const n = idx + 1;
+      return [
+        {
+          header: `Ligne #${n} - UGS`,
+          field: `_item${n}_ugs`,
+          aliases: [`ligne${n}ugs`, `ugs${n}`, `lignen${n}ugs`, `article${n}ugs`, `piece${n}ugs`, `prestation${n}ugs`, `section2ligne${n}ugs`, `section2piece${n}ugs`],
+        },
+        {
+          header: `Ligne #${n} - Pièce ou prestation`,
+          field: `_item${n}_nomPiece`,
+          aliases: [
+            `ligne${n}pieceouprestation`,
+            `pieceouprestation${n}`,
+            `ligne${n}piece`,
+            `piece${n}`,
+            `piece${n}nomdelapiece`,
+            `piece${n}piece`,
+            `ligne${n}nomdelapiece`,
+            `ligne${n}denomination`,
+            `denomination${n}`,
+            `ligne${n}description`,
+            `description${n}`,
+            `ligne${n}article`,
+            `article${n}`,
+            `ligne${n}libelle`,
+            `libelle${n}`,
+            `nompiece${n}`,
+            `section2ligne${n}pieceouprestation`,
+            `section2ligne${n}denomination`,
+          ],
+        },
+        {
+          header: `Ligne #${n} - Prix Vente HT`,
+          field: `_item${n}_prixVenteHt`,
+          aliases: [
+            `ligne${n}prixventeht`,
+            `prixventeht${n}`,
+            `piece${n}prixdeventeht`,
+            `piece${n}prixventeht`,
+            `piece${n}uniteht`,
+            `ligne${n}uniteht`,
+            `uniteht${n}`,
+            `tarifdevente${n}`,
+            `ligne${n}tarifdevente`,
+            `ligne${n}prixunitaireht`,
+            `prixunitaireht${n}`,
+            `ligne${n}prixunitaire`,
+            `prixunitaire${n}`,
+            `puht${n}`,
+            `ligne${n}puht`,
+            `section2ligne${n}prixventeht`,
+            `section2ligne${n}prixunitaireht`,
+          ],
+          type: 'number',
+        },
+        {
+          header: `Ligne #${n} - Quantité`,
+          field: `_item${n}_quantite`,
+          aliases: [
+            `ligne${n}quantite`,
+            `quantite${n}`,
+            `piece${n}quantite`,
+            `piece${n}volume`,
+            `ligne${n}volume`,
+            `volume${n}`,
+            `qte${n}`,
+            `ligne${n}qte`,
+            `section2ligne${n}quantite`,
+            `section2ligne${n}volume`,
+          ],
+          type: 'number',
+        },
+        {
+          header: `Ligne #${n} - Total HT`,
+          field: `_item${n}_totalHt`,
+          aliases: [
+            `ligne${n}totalht`,
+            `totalht${n}`,
+            `piece${n}totalht`,
+            `ligne${n}totalligneht`,
+            `totalligneht${n}`,
+            `ligne${n}totalligne`,
+            `totalligne${n}`,
+            `totalhtligne${n}`,
+            `soustotalht${n}`,
+            `section2ligne${n}totalht`,
+            `section2ligne${n}totalligneht`,
+          ],
+          type: 'number',
+        },
+      ] as GenericColumnDef[];
+    }).flat(),
+  ],
+  formations: [
+    { header: 'Identifiant', field: 'id', aliases: ['identifiant', 'id', 'identifiantformation', 'idformation', 'identifiantdelaformation', 'referenceformation', 'reference'] },
+    { header: 'Intitulé', field: 'intitule', aliases: ['intitule', 'intituledelaformation', 'intituleformation', 'titre', 'titredelaformation', 'titreformation', 'nomdelaformation', 'nomformation', 'formation', 'typedeformation'] },
+    { header: 'Date', field: 'date', aliases: ['date', 'datedelaformation', 'dateformation', 'datededebut', 'datedebut', 'jour'], type: 'date' },
+    { header: 'Créneau', field: 'creneau', aliases: ['creneau', 'creneauhoraire', 'horaire', 'heure', 'heurededebut', 'heuredebut'] },
+    { header: 'Date & Créneau', field: 'dateHeure', aliases: ['dateetcreneau', 'datecreneau', 'dateheure', 'dateetheure'] },
+    { header: 'Formateur', field: 'formateurId', aliases: ['formateur', 'formateurid', 'formateurassigne', 'formateurassign', 'intervenant', 'collaborateur', 'animateur', 'nomformateur'] },
+    { header: 'Statut', field: 'statut', aliases: ['statut', 'status', 'etat', 'statutdelaformation', 'statutformation', 'avancement', 'situation'] },
+    { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'notes', 'observation', 'observations', 'remarque', 'remarques'] },
+    { header: 'Raison/Prestation', field: 'reason', aliases: ['raisonprestation', 'raisons', 'raison', 'prestation', 'prestations', 'reasons', 'modeleraisonprestation', 'motif'] },
+    { header: 'Affecter au client', field: 'clientId', aliases: ['affecterauclient', 'client', 'clientassocie', 'clientname', 'nomclient', 'denominationclient', 'entreprise', 'selectionclient', 'clientid'] },
+    { header: 'Lieu de la formation', field: 'lieuFormation', aliases: ['lieudelaformation', 'lieuformation', 'lieu', 'typedelieu', 'modalite'] },
+    { header: 'Numéro et voie', field: 'adresse', aliases: ['numeroetvoie', 'numvoie', 'adresse', 'voie', 'rue', 'adressedelaformation', 'adresseformation'] },
+    { header: 'Ville', field: 'ville', aliases: ['ville', 'commune', 'localite', 'city'] },
+    { header: 'Code postal', field: 'codePostal', aliases: ['codepostal', 'cp', 'zip'] },
+    { header: 'Région', field: 'region', aliases: ['region', 'departement', 'province', 'etatregion'] },
+    { header: 'Pays', field: 'pays', aliases: ['pays', 'country'] },
+    { header: 'Bon de commande', field: 'bonCommandeId', aliases: ['bondecommande', 'boncommandeid', 'customboncommande', 'referencebondecommande', 'refbondecommande', 'bdc', 'commande'] },
+    { header: 'Durée (heures)', field: 'dureeHeures', aliases: ['dureeheures', 'dureetotaleheures', 'dureetotale', 'duree', 'nombreheures', 'nbheures'], type: 'number' },
+    ...Array.from({ length: 10 }, (_, idx) => {
+      const n = idx + 1;
+      return [
+        {
+          header: `Plage #${n} - Date de début`,
+          field: `_plage${n}_dateDebut`,
+          aliases: [
+            `plage${n}datededebut`,
+            `plage${n}datedebut`,
+            `datededebut${n}`,
+            `datedebut${n}`,
+            `plagehoraire${n}datededebut`,
+            `plagehoraire${n}datedebut`,
+            `creneau${n}datededebut`,
+            `creneau${n}datedebut`,
+            `jour${n}datededebut`,
+            `jour${n}datedebut`,
+            `section2plage${n}datededebut`,
+          ],
+          type: 'date',
+        },
+        {
+          header: `Plage #${n} - Heure de début`,
+          field: `_plage${n}_heureDebut`,
+          aliases: [
+            `plage${n}heurededebut`,
+            `plage${n}heuredebut`,
+            `heurededebut${n}`,
+            `heuredebut${n}`,
+            `plagehoraire${n}heurededebut`,
+            `plagehoraire${n}heuredebut`,
+            `creneau${n}heurededebut`,
+            `creneau${n}heuredebut`,
+            `jour${n}heurededebut`,
+            `jour${n}heuredebut`,
+            `section2plage${n}heurededebut`,
+          ],
+        },
+        {
+          header: `Plage #${n} - Date de fin`,
+          field: `_plage${n}_dateFin`,
+          aliases: [
+            `plage${n}datedefin`,
+            `plage${n}datefin`,
+            `datedefin${n}`,
+            `datefin${n}`,
+            `plagehoraire${n}datedefin`,
+            `plagehoraire${n}datefin`,
+            `creneau${n}datedefin`,
+            `creneau${n}datefin`,
+            `jour${n}datedefin`,
+            `jour${n}datefin`,
+            `section2plage${n}datedefin`,
+          ],
+          type: 'date',
+        },
+        {
+          header: `Plage #${n} - Heure de fin`,
+          field: `_plage${n}_heureFin`,
+          aliases: [
+            `plage${n}heuredefin`,
+            `plage${n}heurefin`,
+            `heuredefin${n}`,
+            `heurefin${n}`,
+            `plagehoraire${n}heuredefin`,
+            `plagehoraire${n}heurefin`,
+            `creneau${n}heuredefin`,
+            `creneau${n}heurefin`,
+            `jour${n}heuredefin`,
+            `jour${n}heurefin`,
+            `section2plage${n}heuredefin`,
+          ],
+        },
+      ] as GenericColumnDef[];
+    }).flat(),
+  ],
+  stagiaires: [
+    { header: 'Identifiant', field: 'id', aliases: ['identifiant', 'id', 'identifiantstagiaire', 'idstagiaire', 'identifiantdustagiaire', 'referencestagiaire', 'reference', 'code'] },
+    { header: 'Nom & Prénom', field: 'nomPrenom', aliases: ['nometprenom', 'nomprenom', 'nomcomplet', 'stagiaire', 'nomdustagiaire', 'apprenant', 'participant'] },
+    { header: 'Prénom', field: 'prenom', aliases: ['prenom', 'prenomdustagiaire', 'prenomstagiaire', 'firstname'] },
+    { header: 'Nom', field: 'nom', aliases: ['nom', 'nomdefamille', 'nomstagiaire', 'lastname'] },
+    { header: 'Date de naissance', field: 'dateNaissance', aliases: ['datedenaissance', 'datenaissance', 'naissance', 'nele', 'ddn'], type: 'date' },
+    { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'adresseemail', 'emaildustagiaire', 'emailducontact', 'emailcontact', 'contactemail'] },
+    { header: 'Téléphone', field: 'telephone', aliases: ['telephone', 'tel', 'phone', 'portable', 'mobile', 'telephonedustagiaire', 'telephoneducontact', 'telephonecontact', 'contacttelephone'] },
+    { header: 'Sexe', field: 'sexe', aliases: ['sexe', 'genre', 'civilite'] },
+    { header: 'Numéro et voie', field: 'adresse', aliases: ['numeroetvoie', 'numvoie', 'adresse', 'voie', 'rue', 'adressedustagiaire'] },
+    { header: 'Ville', field: 'ville', aliases: ['ville', 'commune', 'localite', 'city'] },
+    { header: 'Code postal', field: 'codePostal', aliases: ['codepostal', 'cp', 'zip'] },
+    { header: 'Région', field: 'region', aliases: ['region', 'departement', 'province', 'etatregion'] },
+    { header: 'Pays', field: 'pays', aliases: ['pays', 'country'] },
+    { header: 'Affecter au client', field: 'clientName', aliases: ['affecterauclient', 'client', 'clientname', 'entreprise', 'nomclient', 'denominationclient', 'societe', 'etablissement', 'clientid', 'selectionclient'] },
+    { header: 'Contact sur site', field: 'contactNomPrenom', aliases: ['contactsursite', 'contact', 'contactnomprenom', 'nometprenomducontact', 'nomprenomcontact', 'nometprenomsursite', 'nomprenomsite', 'interlocuteur', 'responsable'] },
+    { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'notes', 'note', 'observation', 'observations', 'remarque', 'remarques'] },
+  ],
+  emargements: [
+    { header: 'Identifiant', field: 'id', aliases: ['identifiant', 'id', 'identifiantemargement', 'idemargement', 'identifiantdelemargement', 'referenceemargement', 'reference'] },
+    { header: 'Sélection formation', field: 'formationId', aliases: ['selectionformation', 'selectionneruneformation', 'formationassociee', 'formation', 'formationid', 'idformation', 'identifiantformation', 'formationliee'] },
+    { header: 'Statut', field: 'statut', aliases: ['statut', 'status', 'etat', 'statutemargement', 'statutdelemargement', 'avancement', 'situation'] },
+    { header: 'Lieu de la formation', field: 'lieuFormation', aliases: ['lieudelaformation', 'lieuformation', 'lieu', 'typedelieu', 'modalite'] },
+    { header: 'Adresse', field: 'adresse', aliases: ['adresse', 'voie', 'numeroetvoie', 'numvoie', 'rue', 'adressedelaformation', 'adresseformation'] },
+    { header: 'Ville', field: 'ville', aliases: ['ville', 'commune', 'localite', 'city'] },
+    { header: 'Code postal', field: 'codePostal', aliases: ['codepostal', 'cp', 'zip'] },
+    { header: 'Pays', field: 'pays', aliases: ['pays', 'country'] },
+    { header: 'Intitulé de la formation', field: 'intituleFormation', aliases: ['intituledelaformation', 'intituleformation', 'intitule', 'titre', 'titredelaformation', 'titreformation', 'nomdelaformation', 'nomformation'] },
+    { header: 'Formateur assigné', field: 'formateurAssign', aliases: ['formateurassigne', 'formateur', 'formateurassign', 'intervenant', 'collaborateur', 'animateur', 'nomformateur'] },
+    { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'notes', 'observation', 'observations', 'remarque', 'remarques'] },
+    // Section 2 - Émargement du formateur
+    { header: 'Section 2 - Présent (Formateur)', field: 'formateurPresent', aliases: ['section2presentformateur', 'section2present', 'presentformateur', 'formateurpresent', 'emargementduformateurpresent'], type: 'yesno' },
+    { header: 'Section 2 - Signature (Formateur)', field: 'formateurSignature', aliases: ['section2signatureformateur', 'section2signature', 'signatureduformateur', 'signatureformateur', 'formateursignature', 'emargementduformateursignature'] },
+    { header: 'Section 2 - Horodatage (Formateur)', field: 'formateurHorodatage', aliases: ['section2horodatageformateur', 'section2horodatage', 'horodatageformateur', 'horodatageduformateur', 'formateurhorodatage', 'emargementduformateurhorodatage'] },
+    { header: 'Section 2 - Validation (Formateur)', field: 'formateurValidation', aliases: ['section2validationformateur', 'section2validation', 'validationformateur', 'validationduformateur', 'formateurvalidation', 'emargementduformateurvalidation'] },
+    // Section 2/3 - Liste des stagiaires (up to 50 stagiaires)
+    ...Array.from({ length: 50 }, (_, idx) => {
+      const n = idx + 1;
+      return [
+        {
+          header: `Stagiaire #${n} - Sélection stagiaire`,
+          field: `_stag${n}_stagiaire`,
+          aliases: [
+            `stagiaire${n}selectionstagiaire`,
+            `stagiaire${n}stagiaire`,
+            `stagiaire${n}nom`,
+            `selectionstagiaire${n}`,
+            `stagiaire${n}`,
+            `section2stagiaire${n}selectionstagiaire`,
+            `section2stagiaire${n}`,
+            `section2selectionstagiaire${n}`,
+            `section3stagiaire${n}selectionstagiaire`,
+            `section3stagiaire${n}`,
+            `section3selectionstagiaire${n}`,
+          ],
+        },
+        {
+          header: `Stagiaire #${n} - Présent`,
+          field: `_stag${n}_present`,
+          aliases: [
+            `stagiaire${n}present`,
+            `present${n}`,
+            `presentstagiaire${n}`,
+            `section2stagiaire${n}present`,
+            `section2present${n}`,
+            `section3stagiaire${n}present`,
+            `section3present${n}`,
+          ],
+          type: 'yesno',
+        },
+        {
+          header: `Stagiaire #${n} - Signature`,
+          field: `_stag${n}_signature`,
+          aliases: [
+            `stagiaire${n}signature`,
+            `signature${n}`,
+            `signaturestagiaire${n}`,
+            `section2stagiaire${n}signature`,
+            `section2signature${n}`,
+            `section3stagiaire${n}signature`,
+            `section3signature${n}`,
+          ],
+        },
+        {
+          header: `Stagiaire #${n} - Horodatage`,
+          field: `_stag${n}_horodatage`,
+          aliases: [
+            `stagiaire${n}horodatage`,
+            `horodatage${n}`,
+            `horodatagestagiaire${n}`,
+            `section2stagiaire${n}horodatage`,
+            `section2horodatage${n}`,
+            `section3stagiaire${n}horodatage`,
+            `section3horodatage${n}`,
+          ],
+        },
+        {
+          header: `Stagiaire #${n} - Validation`,
+          field: `_stag${n}_validation`,
+          aliases: [
+            `stagiaire${n}validation`,
+            `validation${n}`,
+            `validationstagiaire${n}`,
+            `section2stagiaire${n}validation`,
+            `section2validation${n}`,
+            `section3stagiaire${n}validation`,
+            `section3validation${n}`,
+          ],
+        },
+      ] as GenericColumnDef[];
+    }).flat(),
+  ],
+  stocksGlobaux: [
+    // Section 1 - Propriétés
+    { header: 'Identifiant', field: 'id', aliases: ['identifiant', 'id', 'idstock', 'identifiantstock', 'idcentralestock', 'identifiantcentralestock'] },
+    { header: 'Inventaire (UGS)', field: 'ugs', aliases: ['inventaireugs', 'ugs', 'codeugs', 'referenceugs', 'refugs', 'inventaire', 'sku', 'codebarre', 'reference'] },
+    { header: 'Sélection de la pièce ou service', field: 'denominationPieceId', aliases: ['selectiondelapieceouservice', 'selectiondelapiece', 'selectionpiece', 'pieceouservice', 'piece', 'denominationdelapiece', 'denominationpiece', 'denominationpieceid', 'nomdelapiece', 'nompiece', 'denomination', 'article', 'designation', 'libelle'] },
+    { header: 'Usage recommandé', field: 'usageRecommandeIds', aliases: ['usagerecommande', 'recommandationdusage', 'recommandationusage', 'recommandationdusagemodelescompatibles', 'usagerecommandeids', 'modelescompatibles', 'compatibilite', 'appareilscompatibles'] },
+    { header: 'Tarif fournisseur (€ HT)', field: 'valeurAchat', aliases: ['tariffournisseureuroht', 'tariffournisseurht', 'tariffournisseur', 'coutdachatunitaireht', 'coutdachatunitairehteuro', 'coutachatunitaireht', 'coutachatht', 'achatht', 'valeurachat', 'valeurdachat', 'valeurdachatht', 'prixachatht', 'prixdachatht', 'prixachat', 'paht'], type: 'number' },
+    { header: 'Marge (€ HT)', field: 'marge', aliases: ['margeeuroht', 'margeht', 'marge', 'margecommerciale', 'margepourcent', 'tauxmarge', 'tauxdemarge'], type: 'number' },
+    { header: 'Tarif de vente (€ HT)', field: 'prixVenteHt', aliases: ['tarifdeventeeuroht', 'tarifdeventeht', 'tarifdevente', 'tarifventeht', 'tarifdeventeunitaireht', 'tarifdeventeunitairehteuro', 'venteht', 'prixventeht', 'prixdeventeht', 'prixvente', 'pvht', 'prixunitaireht'], type: 'number' },
+    { header: 'Stockage', field: 'stockage', aliases: ['stockage', 'emplacementdestockage', 'emplacementstockage', 'zonestockage', 'rayon', 'casier', 'localisationstock'] },
+    { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentaireinterne', 'commentaires', 'notes', 'note', 'observation', 'observations', 'remarque', 'remarques'] },
+    // Section 2 - Volumes
+    { header: 'Quantité disponible', field: 'quantite', aliases: ['quantitedisponible', 'qtedisponible', 'volumedisponible', 'disponible', 'quantite', 'qte', 'stockdisponible', 'dispo'], type: 'number' },
+    { header: 'Quantité réservée', field: 'quantiteReservee', aliases: ['quantitereservee', 'qtereservee', 'volumereserve', 'reserve', 'stockreserve'], type: 'number' },
+    { header: 'Quantité entrante', field: 'volumeEntrant', aliases: ['quantiteentrante', 'qteentrante', 'volumeentrant', 'volumeentrantcommande', 'entrant', 'stockentrant', 'encommande'], type: 'number' },
+    { header: 'Date de livraison', field: 'livraisonDate', aliases: ['datedelivraison', 'datelivraison', 'livraisondate', 'prochainelivraisonprevue', 'prochainelivraison', 'livraison'], type: 'date' },
+    { header: 'Date de réapprovisionnement', field: 'reapprovisionnementDate', aliases: ['datedereapprovisionnement', 'datereapprovisionnement', 'reapprovisionnementdate', 'dernierreapprovisionnement', 'reapprovisionnement'], type: 'date' },
+    { header: 'Besoin projeté sous 2 mois', field: 'besoinProjete2Mois', aliases: ['besoinprojetesous2mois', 'besoinprojete2mois', 'besoinprojetemoinsde2mois', 'besoin2mois', 'besoinsous2mois', 'sortantcettesem', 'sortantcettesemaine', 'sortantsem'], type: 'number' },
+    { header: 'Besoin projeté de 2 à 6 mois', field: 'besoinProjete2a6Mois', aliases: ['besoinprojetede2a6mois', 'besoinprojete2a6mois', 'besoin2a6mois', 'besoinde2a6mois', 'sortantsempro', 'sortantsemaineprochaine'], type: 'number' },
+    { header: 'Total à commander', field: 'totalACommander', aliases: ['totalacommander', 'acommander', 'quantiteacommander', 'sortant7a30jours', 'sortant7a30j'], type: 'number' },
+    // Section 3 & 4 - JSON fallbacks + Toggle
+    { header: "Activer l'inventaire de traçabilité", field: 'traceabilityEnabled', aliases: ['activerlinventairedetracabilite', 'inventairedetracabiliteactif', 'invtracaactif', 'tracabiliteactivee', 'activertracabilite', 'traceabilityenabled', 'tracabilite'], type: 'bool' },
+    { header: 'Mouvements', field: 'mouvements', aliases: ['mouvements', 'historiquemouvements', 'listemouvements'], type: 'json' },
+    { header: 'Inventaire de traçabilité', field: 'traceabilities', aliases: ['inventairedetracabilite', 'tracabilites', 'traceabilities', 'listetracabilite'], type: 'json' },
+    // Section 3 - Mouvements (up to 20 movements)
+    ...Array.from({ length: 20 }, (_, idx) => {
+      const n = idx + 1;
+      return [
+        {
+          header: `Mouvement #${n} - ID`,
+          field: `_mv${n}_id`,
+          aliases: [`mouvement${n}id`, `mouvement${n}identifiant`, `idmouvement${n}`, `identifiantmouvement${n}`, `section3mouvement${n}id`, `section3id${n}`, `mvt${n}id`],
+        },
+        {
+          header: `Mouvement #${n} - Type de mouvement`,
+          field: `_mv${n}_type`,
+          aliases: [`mouvement${n}typedemouvement`, `mouvement${n}typemouvement`, `mouvement${n}type`, `typedemouvement${n}`, `typemouvement${n}`, `section3mouvement${n}type`, `section3typedemouvement${n}`, `mvt${n}type`],
+        },
+        {
+          header: `Mouvement #${n} - Volume`,
+          field: `_mv${n}_volume`,
+          aliases: [`mouvement${n}volume`, `mouvement${n}quantite`, `volumemouvement${n}`, `section3mouvement${n}volume`, `section3volume${n}`, `mvt${n}volume`],
+          type: 'number',
+        },
+        {
+          header: `Mouvement #${n} - Date`,
+          field: `_mv${n}_date`,
+          aliases: [`mouvement${n}date`, `datemouvement${n}`, `datedumouvement${n}`, `section3mouvement${n}date`, `section3date${n}`, `mvt${n}date`],
+          type: 'date',
+        },
+        {
+          header: `Mouvement #${n} - Statut`,
+          field: `_mv${n}_statut`,
+          aliases: [`mouvement${n}statut`, `statutmouvement${n}`, `section3mouvement${n}statut`, `section3statut${n}`, `mvt${n}statut`],
+        },
+        {
+          header: `Mouvement #${n} - Provenance / Destination`,
+          field: `_mv${n}_emplacement`,
+          aliases: [`mouvement${n}provenancedestination`, `mouvement${n}emplacement`, `mouvement${n}destination`, `mouvement${n}provenance`, `provenancedestination${n}`, `emplacementmouvement${n}`, `section3mouvement${n}emplacement`, `section3provenancedestination${n}`, `mvt${n}emplacement`],
+        },
+        {
+          header: `Mouvement #${n} - Bon de commande`,
+          field: `_mv${n}_bonCommande`,
+          aliases: [`mouvement${n}bondecommande`, `mouvement${n}provenanceachatsfournisseurs`, `bondecommandemouvement${n}`, `section3mouvement${n}bondecommande`, `section3bondecommande${n}`, `mvt${n}bondecommande`],
+        },
+        {
+          header: `Mouvement #${n} - Suivi colis`,
+          field: `_mv${n}_trackingLink`,
+          aliases: [`mouvement${n}suivicolis`, `mouvement${n}liendesuivicolis`, `suivicolis${n}`, `liendesuivicolis${n}`, `section3mouvement${n}suivicolis`, `section3suivicolis${n}`, `mvt${n}suivicolis`],
+        },
+      ] as GenericColumnDef[];
+    }).flat(),
+    // Section 4 - Inventaire de traçabilité (up to 50 items)
+    ...Array.from({ length: 50 }, (_, idx) => {
+      const n = idx + 1;
+      return [
+        {
+          header: `Traçabilité #${n} - ID`,
+          field: `_tr${n}_id`,
+          aliases: [`tracabilite${n}id`, `tracabilite${n}identifiant`, `inventaire${n}id`, `idtracabilite${n}`, `section4tracabilite${n}id`, `section4id${n}`, `traca${n}id`],
+        },
+        {
+          header: `Traçabilité #${n} - Mouvement`,
+          field: `_tr${n}_movementId`,
+          aliases: [`tracabilite${n}mouvement`, `tracabilite${n}selectiondumouvement`, `inventaire${n}mouvement`, `selectiondumouvement${n}`, `mouvementlie${n}`, `section4tracabilite${n}mouvement`, `section4mouvement${n}`, `traca${n}mouvement`],
+        },
+        {
+          header: `Traçabilité #${n} - Lot / Série`,
+          field: `_tr${n}_lotOrSerial`,
+          aliases: [`tracabilite${n}lotserie`, `tracabilite${n}numerodelotounumerodeserie`, `inventaire${n}lotserie`, `lotserie${n}`, `numerodelotounumerodeserie${n}`, `lotouserie${n}`, `section4tracabilite${n}lotserie`, `section4lotserie${n}`, `traca${n}lotserie`],
+        },
+        {
+          header: `Traçabilité #${n} - Expiration`,
+          field: `_tr${n}_expirationDate`,
+          aliases: [`tracabilite${n}expiration`, `tracabilite${n}datedexpiration`, `inventaire${n}expiration`, `expiration${n}`, `datedexpiration${n}`, `dateexpiration${n}`, `peremption${n}`, `section4tracabilite${n}expiration`, `section4expiration${n}`, `traca${n}expiration`],
+          type: 'date',
+        },
+        {
+          header: `Traçabilité #${n} - Volume`,
+          field: `_tr${n}_volume`,
+          aliases: [`tracabilite${n}volume`, `inventaire${n}volume`, `volumetracabilite${n}`, `section4tracabilite${n}volume`, `section4volume${n}`, `traca${n}volume`],
+          type: 'number',
+        },
+        {
+          header: `Traçabilité #${n} - Situation`,
+          field: `_tr${n}_situation`,
+          aliases: [`tracabilite${n}situation`, `inventaire${n}situation`, `situation${n}`, `situationtracabilite${n}`, `section4tracabilite${n}situation`, `section4situation${n}`, `traca${n}situation`],
+        },
+        {
+          header: `Traçabilité #${n} - Emplacement`,
+          field: `_tr${n}_emplacement`,
+          aliases: [`tracabilite${n}emplacement`, `inventaire${n}emplacement`, `emplacementtracabilite${n}`, `section4tracabilite${n}emplacement`, `section4emplacement${n}`, `traca${n}emplacement`],
+        },
+        {
+          header: `Traçabilité #${n} - Attribution des sorties`,
+          field: `_tr${n}_reservationInfo`,
+          aliases: [`tracabilite${n}attributiondessorties`, `inventaire${n}attributiondessorties`, `attributiondessorties${n}`, `attributionsorties${n}`, `reservation${n}`, `section4tracabilite${n}attributiondessorties`, `section4attributiondessorties${n}`, `traca${n}attributiondessorties`],
+        },
+        {
+          header: `Traçabilité #${n} - Bon de commande`,
+          field: `_tr${n}_bonCommande`,
+          aliases: [`tracabilite${n}bondecommande`, `inventaire${n}bondecommande`, `bondecommandetracabilite${n}`, `section4tracabilite${n}bondecommande`, `traca${n}bondecommande`],
+        },
+        {
+          header: `Traçabilité #${n} - Client`,
+          field: `_tr${n}_client`,
+          aliases: [`tracabilite${n}client`, `inventaire${n}client`, `clienttracabilite${n}`, `section4tracabilite${n}client`, `traca${n}client`],
+        },
+        {
+          header: `Traçabilité #${n} - Date estimée`,
+          field: `_tr${n}_dateEstimee`,
+          aliases: [`tracabilite${n}dateestimee`, `inventaire${n}dateestimee`, `dateestimee${n}`, `section4tracabilite${n}dateestimee`, `traca${n}dateestimee`],
+          type: 'date',
+        },
+        {
+          header: `Traçabilité #${n} - Commentaire`,
+          field: `_tr${n}_comment`,
+          aliases: [`tracabilite${n}commentaire`, `inventaire${n}commentaire`, `commentairetracabilite${n}`, `section4tracabilite${n}commentaire`, `section4commentaire${n}`, `traca${n}commentaire`],
+        },
+      ] as GenericColumnDef[];
+    }).flat(),
+  ],
+  stocksDistribues: [
+    // Section 1 - Propriétés
+    { header: 'Identifiant', field: 'id', aliases: ['identifiant', 'id', 'idstockdistribue', 'identifiantstockdistribue', 'idstock', 'reference'] },
+    { header: 'Inventaire (UGS)', field: 'ugs', aliases: ['inventaireugs', 'ugs', 'codeugs', 'referenceugs', 'refugs', 'inventaire', 'sku', 'codebarre'] },
+    { header: 'Sélection de la pièce ou service', field: 'denominationPieceId', aliases: ['selectiondelapieceouservice', 'selectiondelapiece', 'selectiondelapiececentraledesstocks', 'selectionpiece', 'pieceouservice', 'piece', 'denominationdelapiece', 'denominationpiece', 'denominationpieceid', 'nomdelapiece', 'nompiece', 'denomination', 'article', 'designation', 'libelle'] },
+    { header: 'ID Stock Centrale', field: 'stockId', aliases: ['idstockcentrale', 'stockid', 'identifiantstockcentrale', 'idcentralestock'] },
+    { header: "Sélection de l'emplacement", field: 'locationName', aliases: ['selectiondelemplacement', 'selectionemplacement', 'emplacement', 'emplacementattribue', 'locationname', 'lieu', 'entrepotouvehicule', 'vehiculeouentrepot', 'affectation', 'localisation'] },
+    { header: 'Collaborateur', field: 'collaborateur', aliases: ['collaborateur', 'technicien', 'membre', 'collaborateurassigne', 'responsable'] },
+    // Section 2 - Volumes
+    { header: 'Quantité disponible', field: 'volumeDisponible', aliases: ['quantitedisponible', 'qtedisponible', 'volumedisponible', 'disponible', 'quantite', 'qte', 'stockdisponible', 'dispo'], type: 'number' },
+    { header: 'Quantité réservée', field: 'volumeReserve', aliases: ['quantitereservee', 'qtereservee', 'volumereserve', 'reserve', 'stockreserve'], type: 'number' },
+    { header: 'Quantité entrante', field: 'volumeEntrant', aliases: ['quantiteentrante', 'qteentrante', 'volumeentrant', 'entrant', 'stockentrant', 'encommande'], type: 'number' },
+    { header: 'Sortant Sem.', field: 'sortantSemaine1', aliases: ['sortantsem', 'sortantcettesem', 'sortantcettesemaine', 'sortantsemaine1', 'sortant7jours', 'besoinprojetesous2mois', 'besoin2mois'], type: 'number' },
+    { header: 'Sortant Sem. Pro.', field: 'sortantSemaine2', aliases: ['sortantsempro', 'sortantsemaineprochaine', 'sortantsemaine2', 'besoinprojetede2a6mois', 'besoin2a6mois'], type: 'number' },
+    { header: 'Sortant 7 à 30 jours', field: 'sortant30Jours', aliases: ['sortant7a30jours', 'sortant7a30j', 'sortant30jours', 'totalacommander'], type: 'number' },
+    { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentaireinterne', 'commentaires', 'notes', 'note', 'observation'] },
+  ],
 };
+GENERIC_CANONICAL_HEADERS.devisFactures = GENERIC_CANONICAL_HEADERS.commandes;
+GENERIC_CANONICAL_HEADERS.stocks = GENERIC_CANONICAL_HEADERS.stocksGlobaux;
 
 function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = []): string[] {
   const canonical = GENERIC_CANONICAL_HEADERS[tabType];
   if (canonical && canonical.length > 0) {
-    if (tabType === 'rapportsPdf') {
+    if (
+      tabType === 'rapportsPdf' ||
+      tabType === 'commandes' ||
+      tabType === 'devisFactures' ||
+      tabType === 'formations' ||
+      tabType === 'stagiaires' ||
+      tabType === 'emargements' ||
+      tabType === 'stocksGlobaux' ||
+      tabType === 'stocks' ||
+      tabType === 'stocksDistribues'
+    ) {
+      if (tabType === 'stocksGlobaux' || tabType === 'stocks') {
+        return canonical
+          .filter(c => {
+            if (!c.field.startsWith('_')) return c.field !== 'mouvements' && c.field !== 'traceabilities';
+            const mvMatch = c.field.match(/^_mv(\d+)_/);
+            if (mvMatch) return parseInt(mvMatch[1], 10) <= 5;
+            const trMatch = c.field.match(/^_tr(\d+)_/);
+            if (trMatch) return parseInt(trMatch[1], 10) <= 10;
+            return true;
+          })
+          .map(c => c.header);
+      }
+      if (tabType === 'stocksDistribues') {
+        return canonical.filter(c => !c.field.startsWith('_')).map(c => c.header);
+      }
       return canonical.map(c => c.header);
     }
     return canonical.filter(c => !c.field.startsWith('_')).map(c => c.header);
   }
   const presets: Partial<Record<SheetTabType, string[]>> = {
-    commandes: ['id', 'numeroCommande', 'clientId', 'clientNom', 'date', 'statut', 'totalHT', 'totalTTC', 'items', 'envId', 'tenantId'],
-    stocks: ['id', 'ugs', 'nom', 'categorie', 'quantite', 'stockage', 'seuilAlerte', 'envId', 'tenantId'],
-    formations: ['id', 'titre', 'date', 'formateur', 'lieu', 'statut', 'stagiaires', 'envId', 'tenantId'],
     variables: ['id', 'category', 'nom', 'marque', 'description', 'envId', 'tenantId'],
   };
   const base = presets[tabType] ? [...presets[tabType]!] : ['id', 'identifiant', 'nom', 'date', 'statut', 'envId', 'tenantId'];
@@ -1578,16 +2090,341 @@ function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = 
 }
 
 function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType): Map<number, GenericColumnDef> {
-  const defs = GENERIC_CANONICAL_HEADERS[tabType];
+  const effectiveTabType =
+    tabType === 'devisFactures' ? 'commandes' : tabType === 'stocks' ? 'stocksGlobaux' : tabType;
+  const defs = GENERIC_CANONICAL_HEADERS[effectiveTabType];
   const colToDef = new Map<number, GenericColumnDef>();
   if (!defs || defs.length === 0) return colToDef;
+
+  const defByField = new Map<string, GenericColumnDef>();
+  for (const d of defs) {
+    defByField.set(d.field, d);
+  }
 
   const normFullHeaders = headers.map(normalizeHeaderKey);
   const normStrippedHeaders = headers.map(normalizeHeaderKeyStripSubSection);
   const usedCols = new Set<number>();
 
+  // Pass 0: Sequential & numbered multi-slot matching for commandes, formations, emargements, and stocksGlobaux
+  if (effectiveTabType === 'commandes') {
+    const slotCounts = { ugs: 0, nomPiece: 0, prixVenteHt: 0, quantite: 0, totalHt: 0 };
+    for (let i = 0; i < headers.length; i++) {
+      const rawH = String(headers[i] || '').trim();
+      if (!rawH) continue;
+      const strippedSection = rawH.replace(/^Section\s*\d+\s*[^:—–\-]*[—–\-:]\s*/i, '').trim();
+      const numMatch = strippedSection.match(/(?:ligne|article|piece|pièce|prestation|#|\s|^)\s*#?(\d{1,2})(?:\b|$)/i) || rawH.match(/#(\d{1,2})\b/i);
+      const explicitIdx = numMatch ? parseInt(numMatch[1], 10) : 0;
+      const baseConcept = strippedSection
+        .replace(/^(?:Ligne|Article|Pi[eè]ce|Prestation)\s*#?\d*\s*[—–\-:]?\s*/i, '')
+        .replace(/\s*#?\d+\s*$/, '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+      const prevStripped = i > 0
+        ? String(headers[i - 1] || '')
+            .replace(/^Section\s*\d+\s*[^:—–\-]*[—–\-:]\s*/i, '')
+            .replace(/^(?:Ligne|Article|Pi[eè]ce|Prestation)\s*#?\d*\s*[—–\-:]?\s*/i, '')
+            .replace(/\s*#?\d+\s*$/, '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '')
+        : '';
+
+      let slotType: keyof typeof slotCounts | null = null;
+      if (baseConcept === 'ugs' || baseConcept === 'codeugs' || baseConcept === 'referenceugs') {
+        slotType = 'ugs';
+      } else if (
+        ['pieceouprestation', 'pieceouservice', 'piece', 'nomdelapiece', 'denomination', 'description', 'article', 'prestation', 'nompiece', 'libelle', 'designation'].includes(baseConcept)
+      ) {
+        slotType = 'nomPiece';
+      } else if (
+        ['prixventeht', 'prixdeventeht', 'uniteht', 'tarifdevente', 'prixunitaireht', 'prixunitaire', 'puht', 'prixhtunitaire', 'tarifht'].includes(baseConcept)
+      ) {
+        slotType = 'prixVenteHt';
+      } else if (['quantite', 'volume', 'qte'].includes(baseConcept)) {
+        slotType = 'quantite';
+      } else if (
+        ['totalligneht', 'totalligne', 'totalhtligne', 'soustotalht', 'montantligneht'].includes(baseConcept) ||
+        (baseConcept === 'totalht' && (explicitIdx >= 1 || ['quantite', 'volume', 'qte', 'prixventeht', 'prixdeventeht', 'uniteht', 'prixunitaireht'].includes(prevStripped)))
+      ) {
+        slotType = 'totalHt';
+      }
+
+      if (slotType) {
+        slotCounts[slotType] += 1;
+        const targetIdx = explicitIdx >= 1 && explicitIdx <= 10 ? explicitIdx : slotCounts[slotType];
+        if (targetIdx >= 1 && targetIdx <= 10) {
+          const targetDef = defByField.get(`_item${targetIdx}_${slotType}`);
+          if (targetDef && !Array.from(colToDef.values()).some(d => d.field === targetDef.field)) {
+            colToDef.set(i, targetDef);
+            usedCols.add(i);
+          }
+        }
+      }
+    }
+  } else if (effectiveTabType === 'formations') {
+    const slotCounts = { dateDebut: 0, heureDebut: 0, dateFin: 0, heureFin: 0 };
+    for (let i = 0; i < headers.length; i++) {
+      const rawH = String(headers[i] || '').trim();
+      if (!rawH) continue;
+      const strippedSection = rawH.replace(/^Section\s*\d+\s*[^:—–\-]*[—–\-:]\s*/i, '').trim();
+      const numMatch = strippedSection.match(/(?:plage|creneau|jour|horaire|#|\s|^)\s*#?(\d{1,2})(?:\b|$)/i) || rawH.match(/#(\d{1,2})\b/i);
+      const explicitIdx = numMatch ? parseInt(numMatch[1], 10) : 0;
+      const baseConcept = strippedSection
+        .replace(/^(?:Plage(?:\s*horaire)?|Cr[eé]neau|Jour|Horaire)\s*#?\d*\s*[—–\-:]?\s*/i, '')
+        .replace(/\s*#?\d+\s*$/, '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+      let slotType: keyof typeof slotCounts | null = null;
+      if (['datededebut', 'datedebut', 'debutdate'].includes(baseConcept)) {
+        slotType = 'dateDebut';
+      } else if (['heurededebut', 'heuredebut', 'debutheure'].includes(baseConcept)) {
+        slotType = 'heureDebut';
+      } else if (['datedefin', 'datefin', 'findate'].includes(baseConcept)) {
+        slotType = 'dateFin';
+      } else if (['heuredefin', 'heurefin', 'finheure'].includes(baseConcept)) {
+        slotType = 'heureFin';
+      }
+
+      if (slotType) {
+        slotCounts[slotType] += 1;
+        const targetIdx = explicitIdx >= 1 && explicitIdx <= 10 ? explicitIdx : slotCounts[slotType];
+        if (targetIdx >= 1 && targetIdx <= 10) {
+          const targetDef = defByField.get(`_plage${targetIdx}_${slotType}`);
+          if (targetDef && !Array.from(colToDef.values()).some(d => d.field === targetDef.field)) {
+            colToDef.set(i, targetDef);
+            usedCols.add(i);
+          }
+        }
+      }
+    }
+  } else if (effectiveTabType === 'emargements') {
+    let currentStagiaireSlot = 0;
+    const slotCounts = { stagiaire: 0, present: 0, signature: 0, horodatage: 0, validation: 0 };
+    for (let i = 0; i < headers.length; i++) {
+      const rawH = String(headers[i] || '').trim();
+      if (!rawH) continue;
+      const fullNorm = normFullHeaders[i];
+      const isExplicitFormateur =
+        fullNorm.includes('formateur') &&
+        !fullNorm.includes('formateurassign') &&
+        !fullNorm.includes('nomformateur');
+      const strippedSection = rawH.replace(/^Section\s*\d+\s*[^:—–\-]*[—–\-:]\s*/i, '').trim();
+      const numMatch = strippedSection.match(/(?:stagiaire|participant|apprenant|#|\s|^)\s*#?(\d{1,2})(?:\b|$)/i) || rawH.match(/#(\d{1,2})\b/i);
+      const explicitIdx = numMatch ? parseInt(numMatch[1], 10) : 0;
+      const baseConcept = strippedSection
+        .replace(/^(?:Stagiaire|Participant|Apprenant)\s*#?\d*\s*[—–\-:]?\s*/i, '')
+        .replace(/\s*\((?:Formateur|Stagiaire[^)]*)\)\s*/gi, '')
+        .replace(/\s*#?\d+\s*$/, '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+      if (
+        ['selectionstagiaire', 'selectionnerunstagiaire', 'stagiaire', 'nomdustagiaire', 'nomstagiaire', 'participant'].includes(baseConcept) &&
+        !isExplicitFormateur
+      ) {
+        slotCounts.stagiaire += 1;
+        currentStagiaireSlot = explicitIdx >= 1 && explicitIdx <= 50 ? explicitIdx : slotCounts.stagiaire;
+        if (currentStagiaireSlot >= 1 && currentStagiaireSlot <= 50) {
+          const targetDef = defByField.get(`_stag${currentStagiaireSlot}_stagiaire`);
+          if (targetDef) {
+            colToDef.set(i, targetDef);
+            usedCols.add(i);
+          }
+        }
+        continue;
+      }
+
+      let subField: 'present' | 'signature' | 'horodatage' | 'validation' | null = null;
+      if (['present', 'presence', 'presentouinon', 'formateurpresent', 'presentformateur'].includes(baseConcept)) {
+        subField = 'present';
+      } else if (['signature', 'signaturemanuelle', 'signatureduformateur', 'signatureformateur', 'formateursignature'].includes(baseConcept)) {
+        subField = 'signature';
+      } else if (['horodatage', 'dateetheure', 'timestamp', 'horodatageformateur', 'horodatageduformateur', 'formateurhorodatage'].includes(baseConcept)) {
+        subField = 'horodatage';
+      } else if (['validation', 'modevalidation', 'modedevalidation', 'validationformateur', 'validationduformateur', 'formateurvalidation'].includes(baseConcept)) {
+        subField = 'validation';
+      }
+
+      if (subField) {
+        if (isExplicitFormateur || (currentStagiaireSlot === 0 && explicitIdx === 0 && slotCounts[subField] === 0)) {
+          const formateurFieldMap = {
+            present: 'formateurPresent',
+            signature: 'formateurSignature',
+            horodatage: 'formateurHorodatage',
+            validation: 'formateurValidation',
+          };
+          const fDef = defByField.get(formateurFieldMap[subField]);
+          if (fDef && !Array.from(colToDef.values()).some(d => d.field === fDef.field)) {
+            colToDef.set(i, fDef);
+            usedCols.add(i);
+            continue;
+          }
+        }
+        slotCounts[subField] += 1;
+        const targetIdx =
+          explicitIdx >= 1 && explicitIdx <= 50
+            ? explicitIdx
+            : currentStagiaireSlot >= 1 && currentStagiaireSlot <= 50
+            ? currentStagiaireSlot
+            : slotCounts[subField];
+        if (targetIdx >= 1 && targetIdx <= 50) {
+          const targetDef = defByField.get(`_stag${targetIdx}_${subField}`);
+          if (targetDef) {
+            colToDef.set(i, targetDef);
+            usedCols.add(i);
+          }
+        }
+      }
+    }
+  } else if (effectiveTabType === 'stocksGlobaux') {
+    let currentSection: 1 | 2 | 3 | 4 = 1;
+    const mvCounts = { id: 0, type: 0, volume: 0, date: 0, statut: 0, emplacement: 0, bonCommande: 0, trackingLink: 0 };
+    const trCounts = { id: 0, movementId: 0, lotOrSerial: 0, expirationDate: 0, volume: 0, situation: 0, emplacement: 0, reservationInfo: 0, bonCommande: 0, client: 0, dateEstimee: 0, comment: 0 };
+
+    const getStrippedConcept = (h: string): string =>
+      String(h || '')
+        .replace(/^Section\s*\d+\s*[^:—–\-]*[—–\-:]\s*/i, '')
+        .replace(/^(?:Mouvement|Mvt|Tra[cç]abilit[eé]|Inventaire|Traca|Lot)\s*#?\d*\s*[—–\-:]?\s*/i, '')
+        .replace(/\s*#?\d+\s*$/, '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+    for (let i = 0; i < headers.length; i++) {
+      const rawH = String(headers[i] || '').trim();
+      if (!rawH) continue;
+      const fullNorm = normFullHeaders[i];
+      const baseConcept = getStrippedConcept(rawH);
+      const nextConcept = i + 1 < headers.length ? getStrippedConcept(headers[i + 1]) : '';
+
+      // Check if this column is the traceabilityEnabled toggle
+      if (
+        ['activerlinventairedetracabilite', 'inventairedetracabiliteactif', 'invtracaactif', 'tracabiliteactivee', 'activertracabilite', 'traceabilityenabled'].includes(fullNorm) ||
+        ['activerlinventairedetracabilite', 'inventairedetracabiliteactif', 'invtracaactif', 'tracabiliteactivee', 'activertracabilite', 'traceabilityenabled'].includes(baseConcept)
+      ) {
+        const toggleDef = defByField.get('traceabilityEnabled');
+        if (toggleDef) {
+          colToDef.set(i, toggleDef);
+          usedCols.add(i);
+        }
+        continue;
+      }
+
+      // Detect section transitions
+      if (
+        /^section3/.test(fullNorm) ||
+        /^(?:mouvement|mvt)\d/.test(fullNorm) ||
+        ['typedemouvement', 'typemouvement', 'provenancedestination', 'suivicolis', 'liendesuivicolis', 'provenanceachatsfournisseurs'].includes(baseConcept) ||
+        (['id', 'identifiant'].includes(baseConcept) && ['type', 'typedemouvement', 'typemouvement'].includes(nextConcept))
+      ) {
+        currentSection = 3;
+      } else if (
+        /^section4/.test(fullNorm) ||
+        /^(?:tracabilite|traca|inventaire)\d/.test(fullNorm) ||
+        ['selectiondumouvement', 'selectionmouvement', 'mouvementlie', 'lotserie', 'lotouserie', 'numerodelotounumerodeserie', 'numerodelot', 'datedexpiration', 'dateexpiration', 'expiration', 'attributiondessorties', 'attributionsorties'].includes(baseConcept) ||
+        (['id', 'identifiant'].includes(baseConcept) && ['mouvement', 'selectiondumouvement', 'selectionmouvement', 'lotserie', 'numerodelotounumerodeserie'].includes(nextConcept))
+      ) {
+        currentSection = 4;
+      } else if (
+        /^section2/.test(fullNorm) ||
+        ['quantitedisponible', 'qtedisponible', 'volumedisponible', 'quantitereservee', 'qtereservee', 'quantiteentrante', 'datedelivraison', 'datedereapprovisionnement', 'besoinprojetesous2mois', 'besoinprojetede2a6mois', 'totalacommander'].includes(baseConcept)
+      ) {
+        if (currentSection < 3) currentSection = 2;
+      }
+
+      const strippedSection = rawH.replace(/^Section\s*\d+\s*[^:—–\-]*[—–\-:]\s*/i, '').trim();
+      const numMatch =
+        strippedSection.match(/(?:mouvement|mvt|tra[cç]abilit[eé]|inventaire|traca|lot|#|\s|^)\s*#?(\d{1,2})(?:\b|$)/i) ||
+        rawH.match(/#(\d{1,2})\b/i);
+      const explicitIdx = numMatch ? parseInt(numMatch[1], 10) : 0;
+
+      if (currentSection === 3) {
+        let mvSlot: keyof typeof mvCounts | null = null;
+        if (['id', 'identifiant', 'idmouvement', 'identifiantmouvement'].includes(baseConcept)) {
+          mvSlot = 'id';
+        } else if (['type', 'typedemouvement', 'typemouvement', 'naturemouvement'].includes(baseConcept)) {
+          mvSlot = 'type';
+        } else if (['volume', 'quantite', 'qte', 'volumemouvement'].includes(baseConcept)) {
+          mvSlot = 'volume';
+        } else if (['date', 'datemouvement', 'datedumouvement'].includes(baseConcept)) {
+          mvSlot = 'date';
+        } else if (['statut', 'status', 'etat', 'statutmouvement'].includes(baseConcept)) {
+          mvSlot = 'statut';
+        } else if (['provenancedestination', 'emplacement', 'destination', 'provenance', 'lieu'].includes(baseConcept)) {
+          mvSlot = 'emplacement';
+        } else if (['bondecommande', 'provenanceachatsfournisseurs', 'achatsfournisseurs', 'commande', 'bdc', 'refcommande', 'referencecommande'].includes(baseConcept)) {
+          mvSlot = 'bonCommande';
+        } else if (['suivicolis', 'liendesuivicolis', 'liensuivicolis', 'suivi', 'tracking', 'trackinglink', 'urlsuivi'].includes(baseConcept)) {
+          mvSlot = 'trackingLink';
+        }
+
+        if (mvSlot) {
+          mvCounts[mvSlot] += 1;
+          const targetIdx = explicitIdx >= 1 && explicitIdx <= 20 ? explicitIdx : mvCounts[mvSlot];
+          if (targetIdx >= 1 && targetIdx <= 20) {
+            const targetDef = defByField.get(`_mv${targetIdx}_${mvSlot}`);
+            if (targetDef) {
+              colToDef.set(i, targetDef);
+              usedCols.add(i);
+            }
+          }
+        }
+      } else if (currentSection === 4) {
+        let trSlot: keyof typeof trCounts | null = null;
+        if (['id', 'identifiant', 'codebarre', 'codebarres', 'idtracabilite', 'identifianttracabilite'].includes(baseConcept)) {
+          trSlot = 'id';
+        } else if (['mouvement', 'selectiondumouvement', 'selectionmouvement', 'mouvementlie', 'idmouvement', 'movementid', 'mouvementdentree'].includes(baseConcept)) {
+          trSlot = 'movementId';
+        } else if (['lotserie', 'lotouserie', 'numerodelotounumerodeserie', 'numerodelot', 'numeroserie', 'lot', 'serie', 'lotorserial', 'nlotserie'].includes(baseConcept)) {
+          trSlot = 'lotOrSerial';
+        } else if (['expiration', 'datedexpiration', 'dateexpiration', 'peremption', 'datedeperemption', 'dateperemption', 'expirationdate'].includes(baseConcept)) {
+          trSlot = 'expirationDate';
+        } else if (['volume', 'quantite', 'qte'].includes(baseConcept)) {
+          trSlot = 'volume';
+        } else if (['situation', 'statut', 'etat', 'disponibilite'].includes(baseConcept)) {
+          trSlot = 'situation';
+        } else if (['emplacement', 'localisation', 'lieu', 'entrepotouvehicule'].includes(baseConcept)) {
+          trSlot = 'emplacement';
+        } else if (['attributiondessorties', 'attributionsorties', 'attribution', 'reservation', 'reservationinfo', 'affectation'].includes(baseConcept)) {
+          trSlot = 'reservationInfo';
+        } else if (['bondecommande', 'bdc', 'referencecommande'].includes(baseConcept)) {
+          trSlot = 'bonCommande';
+        } else if (['client', 'nomclient', 'entreprise'].includes(baseConcept)) {
+          trSlot = 'client';
+        } else if (['dateestimee', 'dateprevue'].includes(baseConcept)) {
+          trSlot = 'dateEstimee';
+        } else if (['commentaire', 'commentaires', 'comment', 'note', 'notes', 'observation'].includes(baseConcept)) {
+          trSlot = 'comment';
+        }
+
+        if (trSlot) {
+          trCounts[trSlot] += 1;
+          const targetIdx = explicitIdx >= 1 && explicitIdx <= 50 ? explicitIdx : trCounts[trSlot];
+          if (targetIdx >= 1 && targetIdx <= 50) {
+            const targetDef = defByField.get(`_tr${targetIdx}_${trSlot}`);
+            if (targetDef) {
+              colToDef.set(i, targetDef);
+              usedCols.add(i);
+            }
+          }
+        }
+      }
+    }
+  }
+
   // Pass 1: Match full normalized header (preserving numbered prefixes like plage1, plage2, section6, section7)
   for (const def of defs) {
+    if (Array.from(colToDef.values()).some(d => d.field === def.field)) continue;
     const allAliases = new Set([
       normalizeHeaderKey(def.header),
       normalizeHeaderKey(def.field),
@@ -1606,6 +2443,7 @@ function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType):
   // Pass 2: Match stripped header (stripping "Section X — SubSection : " prefix) for non-numbered fields
   for (const def of defs) {
     if (def.field.startsWith('_')) continue;
+    if (Array.from(colToDef.values()).some(d => d.field === def.field)) continue;
     const allAliases = new Set([
       normalizeHeaderKey(def.header),
       normalizeHeaderKey(def.field),
@@ -1626,14 +2464,18 @@ function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType):
 
 function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBased: number, tenantId: string, tabType: SheetTabType): any {
   const rawByHeader: Record<string, string> = {};
+  const rawRowArray: string[] = [];
   const obj: Record<string, any> = {};
   let parsedJsonFallback: Record<string, any> = {};
   const colToDef = resolveGenericColumnFieldMap(headers, tabType);
 
   headers.forEach((h, i) => {
     const val = row[i] !== undefined ? String(row[i]).trim() : '';
+    rawRowArray[i] = val;
     if (!h) return;
-    rawByHeader[h] = val;
+    if (rawByHeader[h] === undefined) {
+      rawByHeader[h] = val;
+    }
     if (h.toLowerCase() === '_json' && val.startsWith('{')) {
       try {
         parsedJsonFallback = JSON.parse(val);
@@ -1650,7 +2492,6 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       try {
         const parsed = JSON.parse(val);
         obj[targetField] = parsed;
-        if (targetField !== h) obj[h] = parsed;
         return;
       } catch (_) {}
     }
@@ -1668,9 +2509,6 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     }
 
     obj[targetField] = coercedVal;
-    if (targetField !== h && !targetField.startsWith('_')) {
-      obj[h] = val;
-    }
   });
 
   const merged: any = {
@@ -2201,6 +3039,514 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       }
       if (absList.length > 0) merged.absences = absList;
     }
+  } else if (tabType === 'commandes' || tabType === 'devisFactures') {
+    const rawRef = String(merged.ref || merged.numeroPiece || merged.id || '').trim();
+    const docRef = rawRef || `DOC-${rowIndexZeroBased + 2}`;
+    merged.id = String(merged.id || docRef).trim();
+    merged.ref = docRef;
+    merged.numeroPiece = docRef;
+
+    const rawType = String(merged.type || '').trim();
+    const normType = rawType
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    if (normType.includes('devis')) merged.type = 'DEVIS';
+    else if (normType.includes('facture')) merged.type = 'FACTURE';
+    else if (normType.includes('avoir')) merged.type = 'AVOIR';
+    else if (normType.includes('bon') || normType.includes('commande')) merged.type = 'BON DE COMMANDE';
+    else if (rawType) merged.type = rawType.toUpperCase();
+    else merged.type = tabType === 'devisFactures' ? 'FACTURE' : 'DEVIS';
+
+    merged.assignedMemberName = String(merged.assignedMemberName || '').trim();
+    merged.clientDenomination = String(merged.clientDenomination || merged.clientName || merged.clientId || '').trim();
+    merged.clientId = String(merged.clientId || merged.clientDenomination || merged.clientIdField || '').trim();
+    merged.clientIdField = String(merged.clientIdField || merged.clientId || '').trim();
+    merged.payeurId = String(merged.payeurId || merged.clientId || '').trim();
+    merged.intituleContrat = String(merged.intituleContrat || merged.intitule || '').trim();
+    merged.referenceContrat = String(merged.referenceContrat || merged.contrat || '').trim();
+    merged.dateStr = normalizeDateStr(merged.dateStr || merged.date || '');
+    merged.date = merged.dateStr;
+    merged.commentaire = String(merged.commentaire || '').trim();
+    merged.codeTaxe = String(merged.codeTaxe || 'TVA 20%').trim();
+    merged.commentaires = String(merged.commentaires || merged.notes || '').trim();
+    merged.urlSource = String(merged.urlSource || '').trim();
+
+    const rawStatus = String(merged.status || '').trim();
+    const normStat = rawStatus
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    if (normStat === 'paye' || normStat === 'payee' || normStat === 'acquitte' || normStat === 'regle') {
+      merged.status = 'Payé';
+      merged.payment = true;
+    } else if (normStat.includes('facture')) {
+      merged.status = 'Facturé';
+      merged.payment = Boolean(merged.payment);
+    } else if (normStat.includes('refus') || normStat.includes('annul')) {
+      merged.status = 'Refusé';
+      merged.payment = false;
+    } else if (normStat.includes('accept') || normStat.includes('valid') || normStat.includes('sign')) {
+      merged.status = 'Accepté';
+      merged.payment = Boolean(merged.payment);
+    } else if (rawStatus) {
+      merged.status = rawStatus;
+      merged.payment = Boolean(merged.payment);
+    } else {
+      merged.status = 'En attente';
+      merged.payment = Boolean(merged.payment);
+    }
+
+    const parseMoney = (val: any): number => {
+      if (val === undefined || val === null || val === '') return 0;
+      if (typeof val === 'number') return isNaN(val) ? 0 : val;
+      const cleaned = String(val)
+        .replace(/\s+/g, '')
+        .replace(/[€$£%]/g, '')
+        .replace(',', '.');
+      const num = parseFloat(cleaned);
+      return isNaN(num) ? 0 : num;
+    };
+
+    const itemsList: any[] = [];
+    for (let idx = 1; idx <= 10; idx++) {
+      const pItem = `_item${idx}_`;
+      const pLine = `_l${idx}_`;
+      const ugs = String(merged[`${pItem}ugs`] ?? merged[`${pLine}ugs`] ?? '').trim();
+      const nomPiece = String(merged[`${pItem}nomPiece`] ?? merged[`${pLine}nomPiece`] ?? merged[`${pItem}description`] ?? '').trim();
+      const prixVenteHtRaw = merged[`${pItem}prixVenteHt`] ?? merged[`${pItem}unitPrice`] ?? merged[`${pLine}prixVenteHt`];
+      const quantiteRaw = merged[`${pItem}quantite`] ?? merged[`${pItem}quantity`] ?? merged[`${pLine}quantite`];
+      const totalHtRaw = merged[`${pItem}totalHt`] ?? merged[`${pLine}totalHt`];
+      if (ugs || nomPiece || prixVenteHtRaw !== undefined || quantiteRaw !== undefined || totalHtRaw !== undefined) {
+        const prixVenteHt = parseMoney(prixVenteHtRaw);
+        const quantite = quantiteRaw !== undefined && quantiteRaw !== '' ? parseMoney(quantiteRaw) : 1;
+        const totalHt =
+          totalHtRaw !== undefined && totalHtRaw !== ''
+            ? parseMoney(totalHtRaw)
+            : Number((prixVenteHt * (quantite || 1)).toFixed(2));
+        itemsList.push({
+          ugs,
+          nomPiece: nomPiece || ugs,
+          prixVenteHt,
+          quantite: quantite || 1,
+          totalHt,
+        });
+      }
+    }
+    if (itemsList.length > 0 || !Array.isArray(merged.items)) {
+      merged.items = itemsList;
+    } else if (Array.isArray(merged.items)) {
+      merged.items = merged.items.map((it: any) => {
+        const prixVenteHt = parseMoney(it.prixVenteHt ?? it.unitPrice ?? 0);
+        const quantite = parseMoney(it.quantite ?? it.quantity ?? 1) || 1;
+        const totalHt =
+          it.totalHt !== undefined && it.totalHt !== ''
+            ? parseMoney(it.totalHt)
+            : Number((prixVenteHt * quantite).toFixed(2));
+        return {
+          ...it,
+          ugs: String(it.ugs || '').trim(),
+          nomPiece: String(it.nomPiece || it.description || it.ugs || '').trim(),
+          prixVenteHt,
+          quantite,
+          totalHt,
+        };
+      });
+    }
+
+    const computedHt = Array.isArray(merged.items)
+      ? Number(merged.items.reduce((acc: number, it: any) => acc + (Number(it.totalHt) || 0), 0).toFixed(2))
+      : 0;
+    const taxRateNum = merged.codeTaxe.includes('0%') || merged.codeTaxe.toLowerCase().includes('exon') ? 0 : 0.2;
+    const computedTva = Number((computedHt * taxRateNum).toFixed(2));
+
+    merged.totalHt =
+      merged.totalHt !== undefined && merged.totalHt !== ''
+        ? parseMoney(merged.totalHt)
+        : merged.amountHT !== undefined && merged.amountHT !== ''
+        ? parseMoney(merged.amountHT)
+        : computedHt;
+    merged.totalTva =
+      merged.totalTva !== undefined && merged.totalTva !== ''
+        ? parseMoney(merged.totalTva)
+        : merged.tva !== undefined && merged.tva !== ''
+        ? parseMoney(merged.tva)
+        : Number((merged.totalHt * taxRateNum).toFixed(2)) || computedTva;
+    merged.totalTtc =
+      merged.totalTtc !== undefined && merged.totalTtc !== ''
+        ? parseMoney(merged.totalTtc)
+        : merged.amountTTC !== undefined && merged.amountTTC !== ''
+        ? parseMoney(merged.amountTTC)
+        : Number((merged.totalHt + merged.totalTva).toFixed(2));
+
+    const hasBcFlag = normalizeBool(merged.hasBonCommande, false);
+    const bcRef = String(merged.bonCommandeReference || '').trim();
+    const bcLiv = String(merged.bonCommandeLivraison || '').trim();
+    const bcSit = String(merged.bonCommandeSituation || '').trim();
+    const bcEnt = String(merged.bonCommandeEntete || '').trim();
+    merged.hasBonCommande = Boolean(hasBcFlag || bcRef || bcLiv || bcSit || bcEnt || merged.type === 'BON DE COMMANDE');
+    merged.bonCommandeReference = bcRef;
+    merged.bonCommandeLivraison = bcLiv;
+    merged.bonCommandeSituation = bcSit;
+    merged.bonCommandeEntete = bcEnt;
+  } else if (tabType === 'formations') {
+    const rawId = String(merged.id || merged.identifiant || '').trim();
+    const formId = rawId || `FOR-${rowIndexZeroBased + 2}`;
+    merged.id = formId;
+    merged.identifiant = formId;
+    merged.intitule = String(merged.intitule || merged.typeDeFormation || '').trim();
+    merged.formateurId = String(merged.formateurId || merged.formateur || '').trim();
+    merged.statut = String(merged.statut || 'Planifié').trim();
+    merged.commentaire = String(merged.commentaire || '').trim();
+
+    if (Array.isArray(merged.reasons) && merged.reasons.length > 0) {
+      merged.reason = merged.reason || merged.reasons.join(', ');
+    } else if (typeof merged.reason === 'string' && merged.reason.trim()) {
+      merged.reasons = merged.reason
+        .split(/[,;|]/)
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+    } else {
+      merged.reason = String(merged.reason || '').trim();
+      merged.reasons = [];
+    }
+
+    merged.clientId = String(merged.clientId || merged.clientName || merged.client || '').trim();
+    merged.clientName = String(merged.clientName || merged.clientId || '').trim();
+    merged.lieuFormation = String(merged.lieuFormation || 'Sur le site du client').trim();
+    merged.adresse = String(merged.adresse || merged.numVoie || '').trim();
+    merged.ville = String(merged.ville || '').trim();
+    merged.codePostal = String(merged.codePostal || '').trim();
+    merged.region = String(merged.region || '').trim();
+    merged.pays = String(merged.pays || merged.Pays || 'France').trim();
+    merged.bonCommandeId = String(merged.bonCommandeId || merged.customBonCommande || '').trim();
+    merged.customBonCommande = String(merged.customBonCommande || merged.bonCommandeId || '').trim();
+
+    const plages: any[] = [];
+    for (let idx = 1; idx <= 10; idx++) {
+      const p = `_plage${idx}_`;
+      const pOld = `_slot${idx}_`;
+      const dDeb = normalizeDateStr(merged[`${p}dateDebut`] || merged[`${pOld}date`] || '');
+      const hDeb = String(merged[`${p}heureDebut`] || merged[`${pOld}heureDebut`] || '').trim();
+      const dFin = normalizeDateStr(merged[`${p}dateFin`] || dDeb || '');
+      const hFin = String(merged[`${p}heureFin`] || merged[`${pOld}heureFin`] || '').trim();
+      if (dDeb || hDeb || dFin || hFin) {
+        plages.push({
+          dateDebut: dDeb,
+          heureDebut: hDeb || '09:00',
+          dateFin: dFin || dDeb,
+          heureFin: hFin || '17:00',
+        });
+      }
+    }
+    if (plages.length > 0) {
+      merged.plagesHoraires = plages;
+    } else if (Array.isArray(merged.plagesHoraires) && merged.plagesHoraires.length > 0) {
+      merged.plagesHoraires = merged.plagesHoraires.map((pl: any) => ({
+        dateDebut: normalizeDateStr(pl.dateDebut || pl.date || ''),
+        heureDebut: String(pl.heureDebut || '09:00').trim(),
+        dateFin: normalizeDateStr(pl.dateFin || pl.dateDebut || pl.date || ''),
+        heureFin: String(pl.heureFin || '17:00').trim(),
+      }));
+    } else {
+      const fallbackDate = normalizeDateStr(merged.date || merged.dateDeDebut || '');
+      const fallbackCreneau = String(merged.creneau || merged.heureDeDebut || '').trim();
+      if (fallbackDate) {
+        merged.plagesHoraires = [
+          {
+            dateDebut: fallbackDate,
+            heureDebut: fallbackCreneau || '09:00',
+            dateFin: normalizeDateStr(merged.dateDeFin || fallbackDate),
+            heureFin: String(merged.heureDeFin || '17:00').trim(),
+          },
+        ];
+      } else {
+        merged.plagesHoraires = [];
+      }
+    }
+
+    const firstPlage = merged.plagesHoraires[0];
+    merged.date = normalizeDateStr(merged.date || firstPlage?.dateDebut || merged.dateDeDebut || '');
+    merged.creneau = String(merged.creneau || firstPlage?.heureDebut || merged.heureDeDebut || '').trim();
+    merged.dateHeure = String(
+      merged.dateHeure || [merged.date, merged.creneau].filter(Boolean).join(' ')
+    ).trim();
+
+    if (merged.dureeHeures !== undefined && merged.dureeHeures !== '') {
+      const parsedDuree = parseFloat(String(merged.dureeHeures).replace(',', '.'));
+      merged.dureeHeures = isNaN(parsedDuree) ? 0 : parsedDuree;
+    } else {
+      merged.dureeHeures = 0;
+    }
+  } else if (tabType === 'stagiaires') {
+    const rawId = String(merged.id || merged.identifiant || '').trim();
+    const stagId = rawId || `STG-${rowIndexZeroBased + 2}`;
+    merged.id = stagId;
+    merged.identifiant = stagId;
+    const rawPrenom = String(merged.prenom || '').trim();
+    const rawNom = String(merged.nom || '').trim();
+    const rawNomPrenom = String(merged.nomPrenom || '').trim();
+    if (rawNomPrenom && (!rawPrenom || !rawNom)) {
+      const parts = rawNomPrenom.split(/\s+/);
+      merged.prenom = rawPrenom || parts[0] || '';
+      merged.nom = rawNom || parts.slice(1).join(' ') || '';
+      merged.nomPrenom = rawNomPrenom;
+    } else {
+      merged.prenom = rawPrenom;
+      merged.nom = rawNom;
+      merged.nomPrenom = [rawPrenom, rawNom].filter(Boolean).join(' ') || rawNomPrenom;
+    }
+    merged.dateNaissance = normalizeDateStr(merged.dateNaissance || merged.dateDeNaissance || '');
+    merged.email = String(merged.email || merged.contactEmail || '').trim();
+    merged.contactEmail = String(merged.contactEmail || merged.email || '').trim();
+    merged.telephone = String(merged.telephone || merged.contactTelephone || '').trim();
+    merged.contactTelephone = String(merged.contactTelephone || merged.telephone || '').trim();
+    merged.sexe = String(merged.sexe || '').trim();
+    merged.adresse = String(merged.adresse || '').trim();
+    merged.ville = String(merged.ville || '').trim();
+    merged.codePostal = String(merged.codePostal || '').trim();
+    merged.region = String(merged.region || merged.Departement || '').trim();
+    merged.pays = String(merged.pays || 'France').trim();
+    merged.clientName = String(merged.clientName || merged.affecterAuClient || merged.clientId || '').trim();
+    merged.clientId = String(merged.clientId || merged.clientName || '').trim();
+    merged.contactNomPrenom = String(merged.contactNomPrenom || '').trim();
+    merged.commentaire = String(merged.commentaire || '').trim();
+  } else if (tabType === 'emargements') {
+    const rawId = String(merged.id || merged.identifiant || '').trim();
+    const emId = rawId || `EMA-${rowIndexZeroBased + 2}`;
+    merged.id = emId;
+    merged.identifiant = emId;
+    merged.formationId = String(merged.formationId || merged.affecterSession || '').trim();
+    merged.statut = String(merged.statut || 'Brouillon').trim();
+    merged.lieuFormation = String(merged.lieuFormation || merged.lieu || 'Sur le site du client').trim();
+    merged.adresse = String(merged.adresse || '').trim();
+    merged.ville = String(merged.ville || '').trim();
+    merged.codePostal = String(merged.codePostal || '').trim();
+    merged.pays = String(merged.pays || 'France').trim();
+    merged.intituleFormation = String(merged.intituleFormation || merged.typeDeFormation || '').trim();
+    merged.formateurAssign = String(merged.formateurAssign || merged.formateurNom || '').trim();
+    merged.commentaire = String(merged.commentaire || '').trim();
+    merged.formateurPresent = normalizeYesNo(merged.formateurPresent, 'Non');
+    merged.formateurSignature = String(merged.formateurSignature || '').trim();
+    merged.formateurHorodatage = String(merged.formateurHorodatage || '').trim();
+    merged.formateurValidation = String(merged.formateurValidation || '').trim();
+
+    const stagList: any[] = [];
+    for (let idx = 1; idx <= 50; idx++) {
+      const p = `_stag${idx}_`;
+      const sel = String(merged[`${p}stagiaire`] || merged[`${p}id`] || merged[`${p}nom`] || '').trim();
+      const sPresentRaw = merged[`${p}present`];
+      const sSig = String(merged[`${p}signature`] || '').trim();
+      const sHorodatage = String(merged[`${p}horodatage`] || '').trim();
+      const sValidation = String(merged[`${p}validation`] || '').trim();
+      if (sel || sSig || sHorodatage || sValidation || (sPresentRaw !== undefined && sPresentRaw !== '')) {
+        stagList.push({
+          id: `item_${idx}`,
+          stagiaireId: sel,
+          present: normalizeYesNo(sPresentRaw ?? (sSig ? 'Oui' : 'Non'), 'Non'),
+          signature: sSig,
+          horodatage: sHorodatage,
+          validation: sValidation || (sSig ? 'Oui' : 'Non'),
+        });
+      }
+    }
+    if (stagList.length > 0 || !Array.isArray(merged.stagiaires)) {
+      merged.stagiaires = stagList;
+    } else if (Array.isArray(merged.stagiaires)) {
+      merged.stagiaires = merged.stagiaires.map((st: any, idx: number) => ({
+        id: String(st.id || `item_${idx + 1}`),
+        stagiaireId: String(st.stagiaireId || st.stagiaireNom || '').trim(),
+        present: normalizeYesNo(st.present, 'Non'),
+        signature: String(st.signature || st.signatureDataUrl || '').trim(),
+        horodatage: String(st.horodatage || '').trim(),
+        validation: String(st.validation || st.modeValidation || 'Non').trim(),
+      }));
+    }
+  } else if (tabType === 'stocksGlobaux' || tabType === 'stocks') {
+    const parseNum = (v: any, def = 0): number => {
+      if (v === undefined || v === null || v === '') return def;
+      if (typeof v === 'number') return isNaN(v) ? def : v;
+      const n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.').replace(/[^0-9.-]/g, ''));
+      return isNaN(n) ? def : n;
+    };
+
+    const rawUgs = String(merged.ugs || '').trim();
+    const rawDenom = String(merged.denominationPieceId || merged.nom || merged.piece || '').trim();
+    const rawId = String(merged.id || merged.identifiant || '').trim();
+
+    if (rawDenom || rawUgs || rawId) {
+      merged.ugs = rawUgs || String(rowIndexZeroBased + 1).padStart(4, '0');
+      merged.id = rawId || (merged.ugs ? `stk_${merged.ugs}` : `stk_${rowIndexZeroBased + 2}`);
+      merged.identifiant = merged.id;
+    } else {
+      merged.ugs = '';
+      merged.id = '';
+    }
+
+    merged.denominationPieceId = rawDenom;
+    if (Array.isArray(merged.usageRecommandeIds)) {
+      merged.usageRecommandeIds = merged.usageRecommandeIds.map((x: any) => String(x || '').trim()).filter(Boolean);
+    } else if (typeof merged.usageRecommandeIds === 'string' && merged.usageRecommandeIds.trim()) {
+      merged.usageRecommandeIds = merged.usageRecommandeIds
+        .split(/[,;|]/)
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+    } else {
+      merged.usageRecommandeIds = [];
+    }
+
+    merged.valeurAchat = Number(parseNum(merged.valeurAchat, 0).toFixed(2));
+    merged.marge = Number(parseNum(merged.marge, 0).toFixed(2));
+    merged.prixVenteHt =
+      merged.prixVenteHt !== undefined && merged.prixVenteHt !== ''
+        ? Number(parseNum(merged.prixVenteHt, 0).toFixed(2))
+        : Number((merged.valeurAchat + merged.marge).toFixed(2));
+    merged.stockage = String(merged.stockage || 'Entrepôt A').trim();
+    merged.commentaire = String(merged.commentaire || '').trim();
+    merged.quantite = Math.round(parseNum(merged.quantite, 0));
+    merged.quantiteReservee = Math.round(parseNum(merged.quantiteReservee, 0));
+    merged.livraisonDate = normalizeDateStr(merged.livraisonDate || '');
+    merged.reapprovisionnementDate = normalizeDateStr(merged.reapprovisionnementDate || '');
+    merged.besoinProjete2Mois = Math.round(parseNum(merged.besoinProjete2Mois, 0));
+    merged.besoinProjete2a6Mois = Math.round(parseNum(merged.besoinProjete2a6Mois, 0));
+    merged.totalACommander = Math.round(parseNum(merged.totalACommander, 0));
+
+    const mvList: any[] = [];
+    for (let idx = 1; idx <= 20; idx++) {
+      const p = `_mv${idx}_`;
+      const mvId = String(merged[`${p}id`] || '').trim();
+      const mvType = String(merged[`${p}type`] || '').trim();
+      const mvVolRaw = merged[`${p}volume`];
+      const mvDate = normalizeDateStr(merged[`${p}date`] || '');
+      const mvStatut = String(merged[`${p}statut`] || '').trim();
+      const mvEmp = String(merged[`${p}emplacement`] || '').trim();
+      const mvBc = String(merged[`${p}bonCommande`] || '').trim();
+      const mvTrack = String(merged[`${p}trackingLink`] || '').trim();
+
+      if (mvId || mvType || mvDate || mvEmp || mvBc || mvTrack || (mvVolRaw !== undefined && mvVolRaw !== '')) {
+        const stClean = mvStatut || 'Terminé';
+        const tpClean = mvType || 'Distribution';
+        mvList.push({
+          id: mvId || `mv_${merged.id || rowIndexZeroBased + 2}_${idx}`,
+          type: tpClean,
+          volume: mvVolRaw !== undefined && mvVolRaw !== '' ? Math.round(parseNum(mvVolRaw, 1)) : 1,
+          date: mvDate,
+          statut: stClean,
+          emplacement: mvEmp || 'Centrale des stocks',
+          bonCommande: mvBc,
+          trackingLink: mvTrack,
+          isCanceled: stClean.toLowerCase().includes('annul') || tpClean.toLowerCase().includes('annul'),
+        });
+      }
+    }
+    if (mvList.length > 0 || !Array.isArray(merged.mouvements)) {
+      merged.mouvements = mvList;
+    }
+
+    const trList: any[] = [];
+    for (let idx = 1; idx <= 50; idx++) {
+      const p = `_tr${idx}_`;
+      const trId = String(merged[`${p}id`] || '').trim();
+      const trMvId = String(merged[`${p}movementId`] || '').trim();
+      const trLot = String(merged[`${p}lotOrSerial`] || '').trim();
+      const trExp = normalizeDateStr(merged[`${p}expirationDate`] || '');
+      const trVolRaw = merged[`${p}volume`];
+      const trSit = String(merged[`${p}situation`] || '').trim();
+      const trEmp = String(merged[`${p}emplacement`] || '').trim();
+      const trRes = String(merged[`${p}reservationInfo`] || '').trim();
+      const trBc = String(merged[`${p}bonCommande`] || '').trim();
+      const trCli = String(merged[`${p}client`] || '').trim();
+      const trDateEst = normalizeDateStr(merged[`${p}dateEstimee`] || '');
+      const trCom = String(merged[`${p}comment`] || '').trim();
+
+      if (trId || trLot || trMvId || trExp || trSit || trEmp || trRes || trBc || trCli || trCom) {
+        trList.push({
+          id: trId || `TR-${merged.ugs || rowIndexZeroBased + 2}-${idx}`,
+          movementId: trMvId || (merged.mouvements?.[0]?.id || ''),
+          lotOrSerial: trLot,
+          expirationDate: trExp,
+          volume: trVolRaw !== undefined && trVolRaw !== '' ? Math.round(parseNum(trVolRaw, 1)) || 1 : 1,
+          situation: trSit || 'Disponible',
+          emplacement: trEmp || 'Centrale des stocks',
+          reservationInfo: trRes,
+          bonCommande: trBc,
+          client: trCli,
+          dateEstimee: trDateEst,
+          comment: trCom,
+        });
+      }
+    }
+    if (trList.length > 0 || !Array.isArray(merged.traceabilities)) {
+      merged.traceabilities = trList;
+    }
+
+    merged.traceabilityEnabled =
+      merged.traceabilityEnabled !== undefined
+        ? normalizeBool(merged.traceabilityEnabled, false)
+        : merged.traceabilities.length > 0;
+  } else if (tabType === 'stocksDistribues') {
+    const parseNum = (v: any, def = 0): number => {
+      if (v === undefined || v === null || v === '') return def;
+      if (typeof v === 'number') return isNaN(v) ? def : v;
+      const n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.').replace(/[^0-9.-]/g, ''));
+      return isNaN(n) ? def : n;
+    };
+
+    const rawLoc = String(merged.locationName || merged.emplacement || '').trim();
+    const canonicalLocations = [
+      'Centrale des stocks',
+      'Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E',
+      'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J',
+      'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E',
+      'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J',
+    ];
+    let resolvedLoc = rawLoc || 'Entrepôt A';
+    if (rawLoc) {
+      const candidateParts = rawLoc.split(/\s*[—–\-:]\s*/).map(s => s.trim()).filter(Boolean);
+      const allPartsToCheck = [rawLoc, ...candidateParts];
+      for (const part of allPartsToCheck) {
+        const lower = part.toLowerCase();
+        if (lower === 'centrale' || lower === 'centrale des stocks') {
+          resolvedLoc = 'Centrale des stocks';
+          break;
+        }
+        const matchedCanon = canonicalLocations.find(c => c.toLowerCase() === lower);
+        if (matchedCanon) {
+          resolvedLoc = matchedCanon;
+          break;
+        }
+      }
+    }
+    merged.locationName = resolvedLoc;
+    merged.ugs = String(merged.ugs || '').trim();
+    merged.denominationPieceId = String(merged.denominationPieceId || merged.piece || merged.nom || merged.ugs || '').trim();
+    merged.stockId = String(merged.stockId || '').trim();
+    merged.volumeDisponible = Math.round(parseNum(merged.volumeDisponible ?? merged.quantite, 0));
+    merged.volumeReserve = Math.round(parseNum(merged.volumeReserve ?? merged.quantiteReservee, 0));
+    merged.volumeEntrant = Math.round(parseNum(merged.volumeEntrant, 0));
+
+    const rawId = String(merged.id || merged.identifiant || '').trim();
+    if (rawId) {
+      merged.id = rawId;
+      merged.identifiant = rawId;
+    } else if (merged.ugs || merged.denominationPieceId || merged.stockId) {
+      const slugPiece = (merged.ugs || merged.denominationPieceId || merged.stockId)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      const slugLoc = resolvedLoc
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      merged.id = `ds_${slugPiece}_${slugLoc}`;
+      merged.identifiant = merged.id;
+    } else {
+      merged.id = '';
+    }
   } else if (tabType === 'reglages') {
     merged.id = merged.id || 'tenant_reglages';
     if (merged.name) merged.nomCommercial = merged.name;
@@ -2229,6 +3575,8 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
   if (!merged.id) {
     merged.id =
       merged.identifiant ||
+      merged.numeroPiece ||
+      merged.ref ||
       merged.interventionReference ||
       merged.tourIdentifiant ||
       merged.reportId ||
@@ -2250,7 +3598,7 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     if (h) normHeaderMap.set(h.trim().toLowerCase(), i);
   });
 
-  // Prepare an enriched record with derived flat fields (e.g. for membresEnvironnement, tournees, missionsTournees, rapportsPdf)
+  // Prepare an enriched record with derived flat fields (e.g. for membresEnvironnement, tournees, missionsTournees, rapportsPdf, commandes, formations, stagiaires, emargements)
   const enriched: Record<string, any> = { ...(record || {}) };
   if (tabType === 'tournees') {
     enriched.tourIdentifiant = enriched.tourIdentifiant || enriched.identifiant || enriched.tourCode || enriched.id || '';
@@ -2458,6 +3806,278 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.destockKit ||
       snap.destockKit ||
       '';
+  } else if (tabType === 'commandes' || tabType === 'devisFactures') {
+    const docRef = enriched.ref || enriched.numeroPiece || enriched.id || '';
+    enriched.id = enriched.id || docRef;
+    enriched.ref = docRef;
+    enriched.numeroPiece = docRef;
+    enriched.assignedMemberName = enriched.assignedMemberName || '';
+    enriched.clientDenomination = enriched.clientDenomination || enriched.clientName || enriched.clientId || '';
+    enriched.clientIdField = enriched.clientIdField || enriched.clientId || '';
+    enriched.payeurId = enriched.payeurId || '';
+    enriched.intituleContrat = enriched.intituleContrat || enriched.intitule || '';
+    enriched.referenceContrat = enriched.referenceContrat || enriched.contrat || '';
+    enriched.type = enriched.type || (tabType === 'devisFactures' ? 'FACTURE' : 'DEVIS');
+    enriched.dateStr = enriched.dateStr || enriched.date || '';
+    enriched.commentaire = enriched.commentaire || '';
+    enriched.codeTaxe = enriched.codeTaxe || 'TVA 20%';
+    enriched.commentaires = enriched.commentaires || enriched.notes || '';
+    enriched.urlSource = enriched.urlSource || '';
+    enriched.status = enriched.payment ? 'Payé' : (enriched.status || 'En attente');
+    enriched.hasBonCommande = enriched.hasBonCommande ? 'Oui' : 'Non';
+    enriched.bonCommandeReference = enriched.bonCommandeReference || '';
+    enriched.bonCommandeLivraison = enriched.bonCommandeLivraison || '';
+    enriched.bonCommandeSituation = enriched.bonCommandeSituation || '';
+    enriched.bonCommandeEntete = enriched.bonCommandeEntete || '';
+    enriched.totalHt =
+      enriched.totalHt !== undefined && enriched.totalHt !== null
+        ? String(enriched.totalHt)
+        : enriched.amountHT !== undefined
+        ? String(enriched.amountHT)
+        : '0';
+    enriched.totalTva =
+      enriched.totalTva !== undefined && enriched.totalTva !== null
+        ? String(enriched.totalTva)
+        : enriched.tva !== undefined
+        ? String(enriched.tva)
+        : '0';
+    enriched.totalTtc =
+      enriched.totalTtc !== undefined && enriched.totalTtc !== null
+        ? String(enriched.totalTtc)
+        : enriched.amountTTC !== undefined
+        ? String(enriched.amountTTC)
+        : '0';
+
+    const itemsArr = Array.isArray(enriched.items) ? enriched.items : [];
+    for (let idx = 1; idx <= 10; idx++) {
+      const pItem = `_item${idx}_`;
+      const it = itemsArr[idx - 1];
+      if (it) {
+        const pHt = it.prixVenteHt ?? it.unitPrice ?? '';
+        const qte = it.quantite ?? it.quantity ?? '';
+        const tHt =
+          it.totalHt !== undefined && it.totalHt !== null && it.totalHt !== ''
+            ? it.totalHt
+            : pHt !== '' && qte !== ''
+            ? Number((Number(pHt) * Number(qte)).toFixed(2))
+            : '';
+        enriched[`${pItem}ugs`] = it.ugs || '';
+        enriched[`${pItem}nomPiece`] = it.nomPiece || it.description || '';
+        enriched[`${pItem}prixVenteHt`] = pHt !== '' ? String(pHt) : '';
+        enriched[`${pItem}quantite`] = qte !== '' ? String(qte) : '';
+        enriched[`${pItem}totalHt`] = tHt !== '' ? String(tHt) : '';
+      } else {
+        enriched[`${pItem}ugs`] = '';
+        enriched[`${pItem}nomPiece`] = '';
+        enriched[`${pItem}prixVenteHt`] = '';
+        enriched[`${pItem}quantite`] = '';
+        enriched[`${pItem}totalHt`] = '';
+      }
+    }
+  } else if (tabType === 'formations') {
+    enriched.id = enriched.id || enriched.identifiant || '';
+    enriched.identifiant = enriched.id;
+    enriched.intitule = enriched.intitule || enriched.typeDeFormation || '';
+    const plages = Array.isArray(enriched.plagesHoraires) ? enriched.plagesHoraires : [];
+    for (let idx = 1; idx <= 10; idx++) {
+      const pl = plages[idx - 1];
+      const p = `_plage${idx}_`;
+      if (pl) {
+        enriched[`${p}dateDebut`] = pl.dateDebut || pl.date || (idx === 1 ? enriched.date || '' : '');
+        enriched[`${p}heureDebut`] = pl.heureDebut || (idx === 1 ? enriched.creneau || '' : '');
+        enriched[`${p}dateFin`] = pl.dateFin || pl.dateDebut || pl.date || '';
+        enriched[`${p}heureFin`] = pl.heureFin || '';
+      } else {
+        enriched[`${p}dateDebut`] = idx === 1 ? enriched.date || '' : '';
+        enriched[`${p}heureDebut`] = idx === 1 ? enriched.creneau || '' : '';
+        enriched[`${p}dateFin`] = idx === 1 ? enriched.date || '' : '';
+        enriched[`${p}heureFin`] = '';
+      }
+    }
+    if (plages.length > 0) {
+      enriched.date = enriched.date || plages[0]?.dateDebut || plages[0]?.date || '';
+      enriched.creneau = enriched.creneau || plages[0]?.heureDebut || '';
+    }
+    enriched.dateHeure = enriched.dateHeure || [enriched.date, enriched.creneau].filter(Boolean).join(' ');
+    enriched.formateurId = enriched.formateurId || enriched.formateur || '';
+    enriched.statut = enriched.statut || 'Planifié';
+    enriched.commentaire = enriched.commentaire || '';
+    if (Array.isArray(enriched.reasons) && enriched.reasons.length > 0) {
+      enriched.reason = enriched.reasons.join(', ');
+    } else {
+      enriched.reason = enriched.reason || '';
+    }
+    enriched.clientId = enriched.clientName || enriched.clientId || '';
+    enriched.lieuFormation = enriched.lieuFormation || 'Sur le site du client';
+    enriched.adresse = enriched.adresse || '';
+    enriched.ville = enriched.ville || '';
+    enriched.codePostal = enriched.codePostal || '';
+    enriched.region = enriched.region || '';
+    enriched.pays = enriched.pays || 'France';
+    enriched.bonCommandeId = enriched.customBonCommande || enriched.bonCommandeId || '';
+    enriched.dureeHeures =
+      enriched.dureeHeures !== undefined && enriched.dureeHeures !== null ? String(enriched.dureeHeures) : '';
+  } else if (tabType === 'stagiaires') {
+    enriched.id = enriched.id || enriched.identifiant || '';
+    enriched.identifiant = enriched.id;
+    enriched.prenom = enriched.prenom || '';
+    enriched.nom = enriched.nom || '';
+    enriched.nomPrenom = enriched.nomPrenom || [enriched.prenom, enriched.nom].filter(Boolean).join(' ');
+    enriched.dateNaissance = enriched.dateNaissance || enriched.dateDeNaissance || '';
+    enriched.email = enriched.email || enriched.contactEmail || '';
+    enriched.telephone = enriched.telephone || enriched.contactTelephone || '';
+    enriched.sexe = enriched.sexe || '';
+    enriched.adresse = enriched.adresse || '';
+    enriched.ville = enriched.ville || '';
+    enriched.codePostal = enriched.codePostal || '';
+    enriched.region = enriched.region || '';
+    enriched.pays = enriched.pays || 'France';
+    enriched.clientName = enriched.clientName || enriched.clientId || '';
+    enriched.contactNomPrenom = enriched.contactNomPrenom || '';
+    enriched.commentaire = enriched.commentaire || '';
+  } else if (tabType === 'emargements') {
+    enriched.id = enriched.id || enriched.identifiant || '';
+    enriched.identifiant = enriched.id;
+    enriched.formationId = enriched.formationId || '';
+    enriched.statut = enriched.statut || 'En attente';
+    enriched.lieuFormation = enriched.lieuFormation || 'Sur le site du client';
+    enriched.adresse = enriched.adresse || '';
+    enriched.ville = enriched.ville || '';
+    enriched.codePostal = enriched.codePostal || '';
+    enriched.pays = enriched.pays || 'France';
+    enriched.intituleFormation = enriched.intituleFormation || '';
+    enriched.formateurAssign = enriched.formateurAssign || '';
+    enriched.commentaire = enriched.commentaire || '';
+    enriched.formateurPresent = normalizeYesNo(enriched.formateurPresent, 'Non');
+    enriched.formateurSignature = enriched.formateurSignature || '';
+    enriched.formateurHorodatage = enriched.formateurHorodatage || '';
+    enriched.formateurValidation = enriched.formateurValidation || '';
+
+    const stagList = Array.isArray(enriched.stagiaires) ? enriched.stagiaires : [];
+    for (let idx = 1; idx <= 50; idx++) {
+      const p = `_stag${idx}_`;
+      const st = stagList[idx - 1];
+      if (st) {
+        enriched[`${p}stagiaire`] = st.stagiaireId || st.stagiaireNom || '';
+        enriched[`${p}present`] = normalizeYesNo(st.present, 'Non');
+        enriched[`${p}signature`] = st.signature || st.signatureDataUrl || '';
+        enriched[`${p}horodatage`] = st.horodatage || '';
+        enriched[`${p}validation`] = st.validation || st.modeValidation || '';
+      } else {
+        enriched[`${p}stagiaire`] = '';
+        enriched[`${p}present`] = '';
+        enriched[`${p}signature`] = '';
+        enriched[`${p}horodatage`] = '';
+        enriched[`${p}validation`] = '';
+      }
+    }
+  } else if (tabType === 'stocksGlobaux' || tabType === 'stocks') {
+    enriched.id = enriched.id || enriched.identifiant || '';
+    enriched.identifiant = enriched.id;
+    enriched.ugs = enriched.ugs || '';
+    enriched.denominationPieceId = enriched.denominationPieceNom || enriched.denominationPieceId || '';
+    if (Array.isArray(enriched.usageRecommandeNoms) && enriched.usageRecommandeNoms.length > 0) {
+      enriched.usageRecommandeIds = enriched.usageRecommandeNoms.join(', ');
+    } else if (Array.isArray(enriched.usageRecommandeIds)) {
+      enriched.usageRecommandeIds = enriched.usageRecommandeIds.join(', ');
+    } else {
+      enriched.usageRecommandeIds = enriched.usageRecommandeIds || '';
+    }
+    enriched.valeurAchat = enriched.valeurAchat !== undefined && enriched.valeurAchat !== null ? String(enriched.valeurAchat) : '0';
+    enriched.marge = enriched.marge !== undefined && enriched.marge !== null ? String(enriched.marge) : '0';
+    enriched.prixVenteHt = enriched.prixVenteHt !== undefined && enriched.prixVenteHt !== null ? String(enriched.prixVenteHt) : '0';
+    enriched.stockage = enriched.stockage || 'Entrepôt A';
+    enriched.commentaire = enriched.commentaire || '';
+    enriched.quantite = enriched.quantite !== undefined && enriched.quantite !== null ? String(enriched.quantite) : '0';
+    enriched.quantiteReservee = enriched.quantiteReservee !== undefined && enriched.quantiteReservee !== null ? String(enriched.quantiteReservee) : '0';
+
+    const mvList = Array.isArray(enriched.mouvements) ? enriched.mouvements : [];
+    const computedEntrant = mvList
+      .filter((m: any) => m && !m.isCanceled && m.statut !== 'Annulé' && m.statut !== 'Terminé' && m.type === 'Réapprovisionnement fournisseur')
+      .reduce((acc: number, m: any) => acc + (Number(m.volume) || 0), 0);
+    enriched.volumeEntrant =
+      enriched.volumeEntrant !== undefined && enriched.volumeEntrant !== null
+        ? String(enriched.volumeEntrant)
+        : String(computedEntrant);
+
+    enriched.livraisonDate = enriched.livraisonDate || '';
+    enriched.reapprovisionnementDate = enriched.reapprovisionnementDate || '';
+    enriched.besoinProjete2Mois = enriched.besoinProjete2Mois !== undefined && enriched.besoinProjete2Mois !== null ? String(enriched.besoinProjete2Mois) : '0';
+    enriched.besoinProjete2a6Mois = enriched.besoinProjete2a6Mois !== undefined && enriched.besoinProjete2a6Mois !== null ? String(enriched.besoinProjete2a6Mois) : '0';
+    enriched.totalACommander = enriched.totalACommander !== undefined && enriched.totalACommander !== null ? String(enriched.totalACommander) : '0';
+    enriched.traceabilityEnabled = enriched.traceabilityEnabled ? 'Oui' : 'Non';
+
+    for (let idx = 1; idx <= 20; idx++) {
+      const p = `_mv${idx}_`;
+      const mv = mvList[idx - 1];
+      if (mv) {
+        enriched[`${p}id`] = mv.id || '';
+        enriched[`${p}type`] = mv.type || '';
+        enriched[`${p}volume`] = mv.volume !== undefined && mv.volume !== null ? String(mv.volume) : '';
+        enriched[`${p}date`] = mv.date || '';
+        enriched[`${p}statut`] = mv.statut || '';
+        enriched[`${p}emplacement`] = mv.emplacement || '';
+        enriched[`${p}bonCommande`] = mv.bonCommande || '';
+        enriched[`${p}trackingLink`] = mv.trackingLink || '';
+      } else {
+        enriched[`${p}id`] = '';
+        enriched[`${p}type`] = '';
+        enriched[`${p}volume`] = '';
+        enriched[`${p}date`] = '';
+        enriched[`${p}statut`] = '';
+        enriched[`${p}emplacement`] = '';
+        enriched[`${p}bonCommande`] = '';
+        enriched[`${p}trackingLink`] = '';
+      }
+    }
+
+    const trList = Array.isArray(enriched.traceabilities) ? enriched.traceabilities : [];
+    for (let idx = 1; idx <= 50; idx++) {
+      const p = `_tr${idx}_`;
+      const tr = trList[idx - 1];
+      if (tr) {
+        enriched[`${p}id`] = tr.id || '';
+        enriched[`${p}movementId`] = tr.movementId || '';
+        enriched[`${p}lotOrSerial`] = tr.lotOrSerial || '';
+        enriched[`${p}expirationDate`] = tr.expirationDate || '';
+        enriched[`${p}volume`] = tr.volume !== undefined && tr.volume !== null ? String(tr.volume) : '1';
+        enriched[`${p}situation`] = tr.situation || 'Disponible';
+        enriched[`${p}emplacement`] = tr.emplacement || 'Centrale des stocks';
+        enriched[`${p}reservationInfo`] = tr.reservationInfo || '';
+        enriched[`${p}bonCommande`] = tr.bonCommande || '';
+        enriched[`${p}client`] = tr.client || '';
+        enriched[`${p}dateEstimee`] = tr.dateEstimee || '';
+        enriched[`${p}comment`] = tr.comment || '';
+      } else {
+        enriched[`${p}id`] = '';
+        enriched[`${p}movementId`] = '';
+        enriched[`${p}lotOrSerial`] = '';
+        enriched[`${p}expirationDate`] = '';
+        enriched[`${p}volume`] = '';
+        enriched[`${p}situation`] = '';
+        enriched[`${p}emplacement`] = '';
+        enriched[`${p}reservationInfo`] = '';
+        enriched[`${p}bonCommande`] = '';
+        enriched[`${p}client`] = '';
+        enriched[`${p}dateEstimee`] = '';
+        enriched[`${p}comment`] = '';
+      }
+    }
+  } else if (tabType === 'stocksDistribues') {
+    enriched.id = enriched.id || enriched.identifiant || '';
+    enriched.identifiant = enriched.id;
+    enriched.ugs = enriched.ugs || '';
+    enriched.denominationPieceId = enriched.denominationPieceNom || enriched.denominationPieceId || '';
+    enriched.stockId = enriched.stockId || '';
+    enriched.locationName = enriched.locationName || 'Entrepôt A';
+    enriched.collaborateur = enriched.collaborateur || '';
+    enriched.volumeDisponible = enriched.volumeDisponible !== undefined && enriched.volumeDisponible !== null ? String(enriched.volumeDisponible) : '0';
+    enriched.volumeReserve = enriched.volumeReserve !== undefined && enriched.volumeReserve !== null ? String(enriched.volumeReserve) : '0';
+    enriched.volumeEntrant = enriched.volumeEntrant !== undefined && enriched.volumeEntrant !== null ? String(enriched.volumeEntrant) : '0';
+    enriched.sortantSemaine1 = enriched.sortantSemaine1 !== undefined && enriched.sortantSemaine1 !== null ? String(enriched.sortantSemaine1) : '0';
+    enriched.sortantSemaine2 = enriched.sortantSemaine2 !== undefined && enriched.sortantSemaine2 !== null ? String(enriched.sortantSemaine2) : '0';
+    enriched.sortant30Jours = enriched.sortant30Jours !== undefined && enriched.sortant30Jours !== null ? String(enriched.sortant30Jours) : '0';
+    enriched.commentaire = enriched.commentaire || '';
   } else if (tabType === 'achatsFournisseurs') {
     enriched.orderRef = enriched.orderRef || enriched.orderReference || '';
     enriched.date = enriched.date || enriched.dateStr || '';
@@ -2507,21 +4127,23 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
   }
 
   // 1. Map via canonical definitions if tabType is known
+  const mappedColIndices = new Set<number>();
   if (tabType && GENERIC_CANONICAL_HEADERS[tabType]) {
     const colToDef = resolveGenericColumnFieldMap(headers, tabType);
     for (const [colIdx, def] of colToDef.entries()) {
       const v = enriched[def.field];
       if (v !== undefined && v !== null) {
         outRow[colIdx] = typeof v === 'object' ? JSON.stringify(v) : String(v);
+        mappedColIndices.add(colIdx);
       }
     }
   }
 
-  // 2. Also map any direct key matches
+  // 2. Also map any direct key matches for columns not already mapped by canonical definitions
   for (const [k, v] of Object.entries(enriched)) {
     if (k.startsWith('_') || v === undefined || v === null) continue;
     const colIdx = normHeaderMap.get(k.trim().toLowerCase());
-    if (colIdx !== undefined) {
+    if (colIdx !== undefined && !mappedColIndices.has(colIdx)) {
       outRow[colIdx] = typeof v === 'object' ? JSON.stringify(v) : String(v);
     }
   }
@@ -2606,6 +4228,36 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
+  if (tabType === 'commandes' || tabType === 'devisFactures') {
+    return [item.numeroPiece, item.ref, item.id, item.reference, item.numeroCommande]
+      .filter(Boolean)
+      .map(s => String(s).trim().toLowerCase());
+  }
+  if (tabType === 'formations' || tabType === 'stagiaires' || tabType === 'emargements') {
+    return [item.identifiant, item.id, item.reference]
+      .filter(Boolean)
+      .map(s => String(s).trim().toLowerCase());
+  }
+  if (tabType === 'stocksGlobaux' || tabType === 'stocks') {
+    return [item.id, item.identifiant, item.ugs, item.denominationPieceId, item.denominationPieceNom]
+      .filter(Boolean)
+      .map(s => String(s).trim().toLowerCase());
+  }
+  if (tabType === 'stocksDistribues') {
+    const loc = String(item.locationName || '').trim().toLowerCase();
+    const ugs = String(item.ugs || '').trim().toLowerCase();
+    const denom = String(item.denominationPieceId || '').trim().toLowerCase();
+    const denomNom = String(item.denominationPieceNom || '').trim().toLowerCase();
+    const compositeKeys: string[] = [];
+    if (loc) {
+      if (ugs) compositeKeys.push(`${ugs}@@${loc}`);
+      if (denom) compositeKeys.push(`${denom}@@${loc}`);
+      if (denomNom) compositeKeys.push(`${denomNom}@@${loc}`);
+    }
+    return [item.id, item.identifiant, ...compositeKeys]
+      .filter(Boolean)
+      .map(s => String(s).trim().toLowerCase());
+  }
   if (tabType === 'membresEnvironnement') {
     return [item.email, item.id, item.name]
       .filter(Boolean)
@@ -2622,7 +4274,7 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
       .map(s => String(s).trim().toLowerCase());
   }
   if (tabType !== 'defibrillateurs') {
-    return [item.id, item.identifiant, item.interventionReference, item.tourIdentifiant, item.reportId, item.numeroCommande, item.ugs, item.tourCode, item.reference, item.orderRef, item.email, item.nom]
+    return [item.id, item.identifiant, item.interventionReference, item.tourIdentifiant, item.reportId, item.numeroPiece, item.ref, item.numeroCommande, item.ugs, item.tourCode, item.reference, item.orderRef]
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
@@ -3119,6 +4771,12 @@ export async function fetchTenantSheetCollection(
               Boolean(mapped.denomination) ||
               Boolean(mapped.specifiques?.numSerie);
             if (!hasRealAutreIdentity) continue;
+          } else if (tabType === 'stocksGlobaux' || tabType === 'stocks') {
+            const hasRealStockIdentity = Boolean(mapped.denominationPieceId) || Boolean(mapped.ugs);
+            if (!hasRealStockIdentity) continue;
+          } else if (tabType === 'stocksDistribues') {
+            const hasRealDistIdentity = Boolean(mapped.denominationPieceId) || Boolean(mapped.ugs) || Boolean(mapped.stockId);
+            if (!hasRealDistIdentity) continue;
           }
 
           if (deletedSet.size > 0) {
@@ -3130,9 +4788,10 @@ export async function fetchTenantSheetCollection(
         }
       }
 
-      // Merge upserted records from overlay (matching by ID / Identifiant / SIRET / _sheetRowNumber)
+      // Merge upserted records from overlay only if rawMatrix failed (offline fallback) or overlay was written very recently (< 2 min ago)
       const upsertedEntries = Object.values(overlay.upsertedById || {});
-      if (upsertedEntries.length > 0) {
+      const isOverlayFreshOrOffline = !rawMatrix || (overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - 120000);
+      if (upsertedEntries.length > 0 && isOverlayFreshOrOffline) {
         for (const upItem of upsertedEntries) {
           if (!upItem || typeof upItem !== 'object') continue;
           if (
@@ -3183,6 +4842,9 @@ export async function fetchTenantSheetCollection(
             baseItems.push(cleanUp);
           }
         }
+      } else if (rawMatrix && upsertedEntries.length > 0 && !isOverlayFreshOrOffline) {
+        overlay.upsertedById = {};
+        saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
       }
 
       // Also merge any in-memory recent upserts that occurred during or shortly before this fetch
@@ -3682,7 +5344,8 @@ async function fetchLightweightSheetContextForColdUpsert(
         const mapped = mapSingleRow(rowArr, rn);
         const recKeys = getRecordLookupKeys(records[recIdx], tabType);
         const mappedKeys = getRecordLookupKeys(mapped, tabType);
-        if (isSingletonTab || recKeys.length === 0 || mappedKeys.some(mk => recKeys.includes(mk))) {
+        const explicitRn = typeof records[recIdx]?._sheetRowNumber === 'number' && records[recIdx]._sheetRowNumber === rn;
+        if (isSingletonTab || explicitRn || recKeys.length === 0 || mappedKeys.some(mk => recKeys.includes(mk))) {
           matchedByRecordIdx.set(recIdx, mapped);
         } else {
           anyMissingRowNum = true;
@@ -3692,9 +5355,9 @@ async function fetchLightweightSheetContextForColdUpsert(
       }
     }
 
-    // Step 2: If any record lacked a verified _sheetRowNumber, scan identifier/serial columns A2:Z50000 (~180ms)
+    // Step 2: If any record lacked a verified _sheetRowNumber, scan identifier/serial columns A2:AZ50000 (~180ms)
     if (anyMissingRowNum && hasRemoteHeaders) {
-      const idRange = encodeURIComponent(`${rangePrefix}A2:Z50000`);
+      const idRange = encodeURIComponent(`${rangePrefix}A2:AZ50000`);
       const idRes = await fetchWithRetry(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${idRange}`,
         {
@@ -3790,6 +5453,38 @@ export async function upsertRecordsToTenantSheet(
     if (warmCached && warmCached.headers.length > 0) {
       headers = warmCached.headers;
       hasRemoteHeaders = true;
+      // Check if any record is missing from warmCached so we can verify against the remote sheet before appending a duplicate
+      const isSingletonCheck =
+        tabType === 'reglages' ||
+        tabType === 'apparenceRapportsPdf' ||
+        tabType === 'communicationPortailClient' ||
+        (tabType === 'intituleEmplacements' && records.length === 1 && !records[0]?.emplacement);
+      const hasUnmatchedInWarmCache = records.some((rec, rIdx) => {
+        if (!rec || typeof rec !== 'object') return false;
+        const candidateRn =
+          (typeof rec._sheetRowNumber === 'number' && rec._sheetRowNumber >= 2 ? rec._sheetRowNumber : undefined) ||
+          extractRowNumFromSyntheticId(rec.id) ||
+          extractRowNumFromSyntheticId(rec.identifiant) ||
+          (isSingletonCheck && rIdx === 0 ? 2 : undefined);
+        if (candidateRn && warmCached.items.some(b => b && b._sheetRowNumber === candidateRn)) return false;
+        const recKeys = getRecordLookupKeys(rec, tabType);
+        if (warmCached.items.some(b => b && getRecordLookupKeys(b, tabType).some(bk => recKeys.includes(bk)))) return false;
+        return true;
+      });
+      if (hasUnmatchedInWarmCache && accessToken) {
+        const lightCtx = await fetchLightweightSheetContextForColdUpsert(
+          extracted.spreadsheetId,
+          extracted.gid,
+          tabType,
+          tenantId,
+          records,
+          accessToken
+        );
+        if (lightCtx.hasRemoteHeaders && lightCtx.headers.length > 0) {
+          headers = lightCtx.headers;
+        }
+        coldMatchedByRecordIdx = lightCtx.matchedByRecordIdx;
+      }
     } else {
       // FAST PATH: Never block on downloading 18,000+ rows when cache is cold!
       // Fetch only the header row + target row(s) directly from Google Sheets in ~150-300ms.
@@ -3856,6 +5551,11 @@ export async function upsertRecordsToTenantSheet(
         }
         if (existingIdx >= 0) {
           existingItem = updatedItemsList[existingIdx];
+        } else if (coldMatchedByRecordIdx.has(rIdx)) {
+          existingItem = coldMatchedByRecordIdx.get(rIdx);
+          if (existingItem?._sheetRowNumber) {
+            existingIdx = updatedItemsList.findIndex(b => b && b._sheetRowNumber === existingItem._sheetRowNumber);
+          }
         }
       } else {
         existingItem = coldMatchedByRecordIdx.get(rIdx);

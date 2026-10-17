@@ -942,6 +942,14 @@ export default function SettingsModal({
             const isPlaceholderName = !prev.name || prev.name === 'Mon Cabinet' || (activeTid !== 'demo' && prev.name === 'Défibeo Solutions');
             const isPlaceholderEmail = !prev.email || (activeTid !== 'demo' && prev.email === 'contact@defibeo-solutions.com');
             const isPlaceholderPhone = !prev.phone || (activeTid !== 'demo' && prev.phone === '+33 1 47 20 00 01');
+            const extraFromFound: Record<string, string> = {};
+            for (const f of EXTRA_SPREADSHEET_FIELDS) {
+              const val = (prev as any)[f.key] || (prev as any)[f.urlKey] || found[f.key] || found[f.urlKey] || '';
+              if (val) {
+                extraFromFound[f.key] = val;
+                extraFromFound[f.urlKey as string] = val;
+              }
+            }
             return {
               ...prev,
               name: isPlaceholderName && found.companyName ? found.companyName : prev.name,
@@ -952,6 +960,7 @@ export default function SettingsModal({
               spreadsheetDefibrillateurs: prev.spreadsheetDefibrillateurs || found.spreadsheetDefibrillateurs || '',
               spreadsheetAutresMateriels: prev.spreadsheetAutresMateriels || found.spreadsheetAutresMateriels || '',
               spreadsheetClients: prev.spreadsheetClients || found.spreadsheetClients || '',
+              ...extraFromFound,
             };
           });
         }
@@ -1854,6 +1863,23 @@ export default function SettingsModal({
         ? [
             saveCollectionToFirestore('companyInfo', companyObj, effectiveTenantId).catch(() => {}),
             saveCollectionToFirestore('tenantDatabases', dbPayload, effectiveTenantId).catch(() => {}),
+            getRegisteredTenants(true)
+              .then((tenantsList) => {
+                if (!Array.isArray(tenantsList)) return;
+                const matched = findTenantInList(tenantsList, effectiveTenantId);
+                if (!matched) return;
+                const updatedTenants = tenantsList.map((t) => {
+                  if (t.id === matched.id || (t.shortEnvId && t.shortEnvId === matched.shortEnvId)) {
+                    return {
+                      ...t,
+                      ...dbPayload,
+                    };
+                  }
+                  return t;
+                });
+                return saveCollectionToFirestore('registered_tenants', updatedTenants, 'demo');
+              })
+              .catch(() => {}),
           ]
         : []),
     ]);

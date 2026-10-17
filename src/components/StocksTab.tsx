@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { t } from '../utils/translate';
-import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, StockTraceability, Member, LogisticsNotification } from '../types';
+import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, StockTraceability, Member, LogisticsNotification, CompanyInfo } from '../types';
 import { getLocationCustomName, generateRandomShortCode } from '../utils';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
@@ -126,6 +126,7 @@ interface StocksTabProps {
   saveLogisticsNotifications?: (updated: LogisticsNotification[]) => void;
   isDeveloper?: boolean;
   isReadOnly?: boolean;
+  companyInfo?: Partial<CompanyInfo> | null;
 }
 
 export default function StocksTab({
@@ -150,6 +151,7 @@ export default function StocksTab({
   saveLogisticsNotifications,
   isDeveloper = false,
   isReadOnly = false,
+  companyInfo,
 }: StocksTabProps) {
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState<boolean>(false);
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
@@ -1563,6 +1565,7 @@ export default function StocksTab({
           <TableSubHeaderButtons
             spreadsheetKey="spreadsheetStocks"
             idSuffix="stocks"
+            companyInfo={companyInfo}
           />
 
           {/* Stock Table List */}
@@ -1593,10 +1596,19 @@ export default function StocksTab({
                     </tr>
                   ) : (
                     filteredStocks.map((st) => {
-                      const vObj = variables.find(v => v.id === st.denominationPieceId);
-                      const rawName = vObj ? vObj.nom : 'Modèle inconnu';
+                      const vObj = variables.find(
+                        v => v.id === st.denominationPieceId || (v.nom && st.denominationPieceId && v.nom.trim().toLowerCase() === String(st.denominationPieceId).trim().toLowerCase())
+                      );
+                      const rawName = vObj ? vObj.nom : (st.denominationPieceId || 'Modèle inconnu');
+                      const resolvedDenomId = vObj ? vObj.id : st.denominationPieceId;
+                      const resolvedUsageIds = (st.usageRecommandeIds ?? []).map(uid => {
+                        const vm = variables.find(
+                          v => v.id === uid || (v.nom && uid && v.nom.trim().toLowerCase() === String(uid).trim().toLowerCase())
+                        );
+                        return vm ? vm.id : uid;
+                      });
                       
-                      const prev = getPrevoianceForVariable(st.denominationPieceId, st.quantite);
+                      const prev = getPrevoianceForVariable(resolvedDenomId, st.quantite);
                       const besoin2M = st.besoinProjete2Mois !== undefined ? Math.max(st.besoinProjete2Mois, prev.bis2M) : prev.bis2M;
                       const besoin2to6M = st.besoinProjete2a6Mois !== undefined ? Math.max(st.besoinProjete2a6Mois, prev.bis2to6M) : prev.bis2to6M;
 
@@ -1607,7 +1619,7 @@ export default function StocksTab({
                           onClick={(e) => {
                             if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
                             setEditingStockId(st.id);
-                            setNewDenomStr(st.denominationPieceId);
+                            setNewDenomStr(resolvedDenomId);
                             setNewQty(st.quantite);
                             setNewQtyReservee(st.quantiteReservee ?? 0);
                             setNewLivDate(st.livraisonDate || '');
@@ -1617,7 +1629,7 @@ export default function StocksTab({
                             setNewPrixHt((st.prixVenteHt ?? 0).toString());
                             setNewStorage(st.stockage);
                             setNewCommentaire(st.commentaire || '');
-                            setNewUsageRecommandeIds(st.usageRecommandeIds ?? []);
+                            setNewUsageRecommandeIds(resolvedUsageIds);
                             setMouvements(st.mouvements || []);
                             setNewUgs(st.ugs || '');
                             setTraceabilityEnabled(st.traceabilityEnabled ?? false);

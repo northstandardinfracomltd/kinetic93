@@ -1179,7 +1179,27 @@ export default function App() {
     loadedDataRef.current.stock = strS;
 
     try {
-      syncCompartmentToGoogleSheets('stocksGlobaux', stocks, updated, ['id', 'ugs'], effectiveTenantId);
+      const enrichStockForSheet = (s: StockRecord) => {
+        const varMatch = variables.find(
+          v => v.id === s.denominationPieceId || (v.nom && s.denominationPieceId && v.nom.trim().toLowerCase() === String(s.denominationPieceId).trim().toLowerCase())
+        );
+        const recNames = Array.isArray(s.usageRecommandeIds)
+          ? s.usageRecommandeIds.map(uid => {
+              const vm = variables.find(
+                v => v.id === uid || (v.nom && uid && v.nom.trim().toLowerCase() === String(uid).trim().toLowerCase())
+              );
+              return vm ? vm.nom : uid;
+            })
+          : [];
+        return {
+          ...s,
+          denominationPieceNom: varMatch ? varMatch.nom : (s as any).denominationPieceNom || s.denominationPieceId || '',
+          usageRecommandeNoms: recNames,
+        };
+      };
+      const prevEnriched = (Array.isArray(stocks) ? stocks : []).map(enrichStockForSheet);
+      const nextEnriched = (Array.isArray(updated) ? updated : []).map(enrichStockForSheet);
+      syncCompartmentToGoogleSheets('stocksGlobaux', prevEnriched, nextEnriched, ['id', 'ugs'], effectiveTenantId);
       fetch('/api/sync-collection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1264,7 +1284,31 @@ export default function App() {
     loadedDataRef.current.distributedStocks = strDS;
 
     try {
-      syncCompartmentToGoogleSheets('stocksDistribues', distributedStocks, updated, ['id', 'ugs'], effectiveTenantId);
+      const enrichDistStockForSheet = (ds: DistributedStockLocation) => {
+        const linkedStock = stocks.find(
+          s =>
+            (ds.stockId && s.id === ds.stockId) ||
+            (ds.ugs && s.ugs && s.ugs.trim().toLowerCase() === ds.ugs.trim().toLowerCase()) ||
+            (ds.denominationPieceId && s.denominationPieceId === ds.denominationPieceId)
+        );
+        const effectiveDenomId = ds.denominationPieceId || linkedStock?.denominationPieceId || '';
+        const varMatch = variables.find(
+          v => v.id === effectiveDenomId || (v.nom && effectiveDenomId && v.nom.trim().toLowerCase() === String(effectiveDenomId).trim().toLowerCase())
+        );
+        const effectiveUgs = ds.ugs || linkedStock?.ugs || '';
+        const customCollab = customLocationNames?.[ds.locationName] || (ds as any).collaborateur || '';
+        return {
+          ...ds,
+          stockId: ds.stockId || linkedStock?.id || '',
+          ugs: effectiveUgs,
+          denominationPieceId: effectiveDenomId,
+          denominationPieceNom: varMatch ? varMatch.nom : (ds as any).denominationPieceNom || effectiveDenomId || '',
+          collaborateur: customCollab,
+        };
+      };
+      const prevEnrichedDS = (Array.isArray(distributedStocks) ? distributedStocks : []).map(enrichDistStockForSheet);
+      const nextEnrichedDS = (Array.isArray(updated) ? updated : []).map(enrichDistStockForSheet);
+      syncCompartmentToGoogleSheets('stocksDistribues', prevEnrichedDS, nextEnrichedDS, ['id'], effectiveTenantId);
       fetch('/api/sync-collection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2666,7 +2710,7 @@ export default function App() {
         commandes: 'spreadsheetCommandes',
         devisFactures: 'spreadsheetCommandes',
         stocksGlobaux: 'spreadsheetStocks',
-        stocksDistribues: 'spreadsheetStocks',
+        stocksDistribues: 'spreadsheetStocksDistribues',
         historiqueNotifications: 'spreadsheetStocks',
         achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
         temps: 'spreadsheetTemps',
@@ -20095,6 +20139,7 @@ export default function App() {
               saveLogisticsNotifications={saveLogisticsNotifications}
               isDeveloper={isDeveloper}
               isReadOnly={isDeveloper}
+              companyInfo={companyInfo}
             />
           )}
 
@@ -20116,6 +20161,7 @@ export default function App() {
                 setStockSearchQuery(ugs);
                 setActiveTab('stocks');
               }}
+              companyInfo={companyInfo}
             />
           )}
 

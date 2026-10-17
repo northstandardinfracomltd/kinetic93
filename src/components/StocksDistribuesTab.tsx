@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { t } from '../utils/translate';
-import { Variable, StockRecord, DistributedStockLocation, Member } from '../types';
+import { Variable, StockRecord, DistributedStockLocation, Member, CompanyInfo } from '../types';
 import { getLocationCustomName } from '../utils';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
@@ -111,6 +111,7 @@ interface StocksDistribuesTabProps {
   searchQuery?: string;
   setSearchQuery?: (q: string) => void;
   onNavigateToCentraleStocks?: (ugs: string) => void;
+  companyInfo?: Partial<CompanyInfo> | null;
 }
 
 export default function StocksDistribuesTab({
@@ -124,6 +125,7 @@ export default function StocksDistribuesTab({
   searchQuery: externalSearchQuery,
   setSearchQuery: externalSetSearchQuery,
   onNavigateToCentraleStocks,
+  companyInfo,
 }: StocksDistribuesTabProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -510,7 +512,15 @@ export default function StocksDistribuesTab({
 
   const handleEditClick = (item: DistributedStockLocation) => {
     setEditingId(item.id);
-    const linkedStockId = item.stockId || stocks.find(s => s.denominationPieceId === item.denominationPieceId)?.id || '';
+    const matchedSt = stocks.find(
+      s =>
+        (item.stockId && s.id === item.stockId) ||
+        (item.ugs && s.ugs && s.ugs.trim().toLowerCase() === item.ugs.trim().toLowerCase()) ||
+        (item.denominationPieceId &&
+          (s.denominationPieceId === item.denominationPieceId ||
+            String(s.denominationPieceId || '').trim().toLowerCase() === String(item.denominationPieceId).trim().toLowerCase()))
+    );
+    const linkedStockId = matchedSt?.id || item.stockId || '';
     setSelectedStockId(linkedStockId);
     setLocationName(item.locationName);
     setVolumeDisponible(item.volumeDisponible);
@@ -627,11 +637,21 @@ export default function StocksDistribuesTab({
   const filteredItems = useMemo(() => {
     return distributedStocks.filter(item => {
       // Find matching Stock Central Record to check UGS too
-      const matchedStock = stocks.find(s => s.id === item.stockId || s.denominationPieceId === item.denominationPieceId);
-      const ugsVal = matchedStock?.ugs || '';
+      const matchedStock = stocks.find(
+        s =>
+          (item.stockId && s.id === item.stockId) ||
+          (item.ugs && s.ugs && s.ugs.trim().toLowerCase() === item.ugs.trim().toLowerCase()) ||
+          (item.denominationPieceId &&
+            (s.denominationPieceId === item.denominationPieceId ||
+              String(s.denominationPieceId || '').trim().toLowerCase() === String(item.denominationPieceId).trim().toLowerCase()))
+      );
+      const ugsVal = matchedStock?.ugs || item.ugs || '';
+      const targetDenom = item.denominationPieceId || matchedStock?.denominationPieceId || '';
       
-      const vObj = variables.find(v => v.id === item.denominationPieceId);
-      const pieceName = vObj ? vObj.nom.toLowerCase() : '';
+      const vObj = variables.find(
+        v => v.id === targetDenom || (v.nom && targetDenom && v.nom.trim().toLowerCase() === String(targetDenom).trim().toLowerCase())
+      );
+      const pieceName = vObj ? vObj.nom.toLowerCase() : String(targetDenom).toLowerCase();
       const cat = vObj ? vObj.category.toLowerCase() : '';
       const query = searchQuery.trim().toLowerCase();
       
@@ -907,8 +927,9 @@ export default function StocksDistribuesTab({
           </div>
 
           <TableSubHeaderButtons
-            spreadsheetKey="spreadsheetStocks"
+            spreadsheetKey="spreadsheetStocksDistribues"
             idSuffix="stocks-distribues"
+            companyInfo={companyInfo}
           />
 
           {/* Distributed Stock Table List - identical to Centrale des stocks table */}
@@ -939,14 +960,24 @@ export default function StocksDistribuesTab({
                     </tr>
                   ) : (
                     filteredItems.map((item) => {
-                      const matchedStock = stocks.find(s => s.id === item.stockId || s.denominationPieceId === item.denominationPieceId);
-                      const ugsCode = matchedStock?.ugs || '';
+                      const matchedStock = stocks.find(
+                        s =>
+                          (item.stockId && s.id === item.stockId) ||
+                          (item.ugs && s.ugs && s.ugs.trim().toLowerCase() === item.ugs.trim().toLowerCase()) ||
+                          (item.denominationPieceId &&
+                            (s.denominationPieceId === item.denominationPieceId ||
+                              String(s.denominationPieceId || '').trim().toLowerCase() === String(item.denominationPieceId).trim().toLowerCase()))
+                      );
+                      const ugsCode = matchedStock?.ugs || item.ugs || '';
+                      const targetDenom = item.denominationPieceId || matchedStock?.denominationPieceId || '';
                       
-                      const vObj = variables.find(v => v.id === item.denominationPieceId);
-                      const pieceName = vObj ? vObj.nom : 'Dénomination inconnue';
+                      const vObj = variables.find(
+                        v => v.id === targetDenom || (v.nom && targetDenom && v.nom.trim().toLowerCase() === String(targetDenom).trim().toLowerCase())
+                      );
+                      const pieceName = vObj ? vObj.nom : (targetDenom || 'Dénomination inconnue');
                       const pieceCat = vObj ? vObj.category : '-';
 
-                      const rowStats = getPieceOutgoingStats(item.denominationPieceId);
+                      const rowStats = getPieceOutgoingStats(vObj ? vObj.id : targetDenom);
 
                       const hasTraceabilitiesInThisLocation = (() => {
                         if (!matchedStock || !matchedStock.traceabilities) return false;

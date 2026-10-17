@@ -4448,7 +4448,11 @@ async function warmupDefibrillateursStore() {
     crm: 'spreadsheetCrm',
     satisfaction: 'spreadsheetSatisfaction',
     commandes: 'spreadsheetCommandes',
+    devisFactures: 'spreadsheetCommandes',
     stocks: 'spreadsheetStocks',
+    stocksGlobaux: 'spreadsheetStocks',
+    stocksDistribues: 'spreadsheetStocksDistribues',
+    historiqueNotifications: 'spreadsheetStocks',
     achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
     temps: 'spreadsheetTemps',
     ticketsCaisse: 'spreadsheetTicketsCaisse',
@@ -5167,6 +5171,7 @@ async function warmupDefibrillateursStore() {
             'spreadsheetSatisfaction',
             'spreadsheetCommandes',
             'spreadsheetStocks',
+            'spreadsheetStocksDistribues',
             'spreadsheetAchatsFournisseurs',
             'spreadsheetTemps',
             'spreadsheetTicketsCaisse',
@@ -5273,6 +5278,48 @@ async function warmupDefibrillateursStore() {
               } catch (_) {}
             }
           }
+
+          // Also keep registered_tenants in sync with tenant spreadsheet URLs
+          try {
+            const memTenants = serverMemoryStore.get('registered_tenants');
+            if (Array.isArray(memTenants) && memTenants.length > 0) {
+              let tenantsUpdated = false;
+              const nextTenants = memTenants.map((t: any) => {
+                if (!t || typeof t !== 'object') return t;
+                const tidLower = String(t.id || t.tenantId || '').trim().toLowerCase();
+                const shortLower = String(t.shortEnvId || '').trim().toLowerCase();
+                if (
+                  tidLower === rawTenant.toLowerCase() ||
+                  shortLower === rawTenant.toLowerCase() ||
+                  allTenantAliases.has(tidLower) ||
+                  (shortLower && allTenantAliases.has(shortLower))
+                ) {
+                  tenantsUpdated = true;
+                  return {
+                    ...t,
+                    spreadsheetDefibrillateurs: effDefibs,
+                    spreadsheetAutresMateriels: effAutres,
+                    spreadsheetClients: effClients,
+                    spreadsheetDefibrillateursUrl: effDefibs,
+                    spreadsheetAutresMaterielsUrl: effAutres,
+                    spreadsheetClientsUrl: effClients,
+                    ...extraEffectiveMap,
+                  };
+                }
+                return t;
+              });
+              if (tenantsUpdated) {
+                serverMemoryStore.set('registered_tenants', nextTenants);
+                try {
+                  persistSingleCollectionToDisk('registered_tenants', nextTenants);
+                } catch (_) {}
+                try {
+                  const regDocRef = doc(db, 'appData', 'registered_tenants');
+                  safeServerSetDoc(regDocRef, { value: nextTenants, _chunked: false }).catch(() => {});
+                } catch (_) {}
+              }
+            }
+          } catch (_) {}
         } else if (Array.isArray(value) && !isMassive) {
           finalValueToStore = value.map((item: any) => {
             if (item && typeof item === 'object') {

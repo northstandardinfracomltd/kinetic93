@@ -110,14 +110,28 @@ export default function FormationsTab({
     setDate(pDate);
     setCreneau(pSlot);
     setDateHeure(f.dateHeure || '');
-    setFormateurId(f.formateurId || '');
+    const matchedMember = members.find(
+      (m) =>
+        m.id === f.formateurId ||
+        m.name === f.formateurId ||
+        `${m.firstname || ''} ${m.lastname || ''}`.trim() === f.formateurId ||
+        m.email === f.formateurId
+    );
+    setFormateurId(matchedMember ? matchedMember.id : (f.formateurId || ''));
     setStatut(f.statut || 'Brouillon');
     setCommentaire(f.commentaire || '');
     const currentReasons = Array.isArray(f.reasons)
       ? f.reasons
       : (f.reason ? f.reason.split(', ').map((s) => s.trim()).filter(Boolean) : []);
     setReasons(currentReasons);
-    setClientId(f.clientId || '');
+    const rawClientRef = f.clientId || f.clientName || '';
+    const matchedClient = clients.find(
+      (c) =>
+        c.id === rawClientRef ||
+        c.denomination === rawClientRef ||
+        (c as any).clientIdField === rawClientRef
+    );
+    setClientId(matchedClient ? matchedClient.id : rawClientRef);
     setAdresse(f.adresse || '');
     setVille(f.ville || '');
     setCodePostal(f.codePostal || '');
@@ -346,12 +360,23 @@ export default function FormationsTab({
   const filteredFormations = formations.filter((f) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
-    const formateurObj = members.find((m) => m.id === f.formateurId);
+    const formateurObj = members.find(
+      (m) =>
+        m.id === f.formateurId ||
+        m.name === f.formateurId ||
+        `${m.firstname || ''} ${m.lastname || ''}`.trim() === f.formateurId ||
+        m.email === f.formateurId
+    );
     const formateurName = formateurObj
       ? (formateurObj.name || `${formateurObj.firstname || ''} ${formateurObj.lastname || ''}`).trim() || formateurObj.email
-      : '';
-    const clientObj = clients.find((c) => c.id === f.clientId);
-    const clientName = clientObj ? clientObj.denomination : '';
+      : (f.formateurId || '');
+    const clientObj = clients.find(
+      (c) =>
+        c.id === f.clientId ||
+        c.denomination === f.clientId ||
+        (c as any).clientIdField === f.clientId
+    );
+    const clientName = clientObj ? clientObj.denomination : (f.clientName || f.clientId || '');
     return (
       f.intitule?.toLowerCase().includes(q) ||
       formateurName.toLowerCase().includes(q) ||
@@ -639,13 +664,24 @@ export default function FormationsTab({
                     </tr>
                   ) : (
                     filteredFormations.map((f) => {
-                      const formateurObj = members.find((m) => m.id === f.formateurId);
+                      const formateurObj = members.find(
+                        (m) =>
+                          m.id === f.formateurId ||
+                          m.name === f.formateurId ||
+                          `${m.firstname || ''} ${m.lastname || ''}`.trim() === f.formateurId ||
+                          m.email === f.formateurId
+                      );
                       const formateurName = formateurObj
                         ? (formateurObj.name || `${formateurObj.firstname || ''} ${formateurObj.lastname || ''}`).trim() || formateurObj.email
                         : f.formateurId || '-';
 
-                      const clientObj = clients.find((c) => c.id === f.clientId);
-                      const clientName = clientObj ? clientObj.denomination : f.clientId || '-';
+                      const clientObj = clients.find(
+                        (c) =>
+                          c.id === f.clientId ||
+                          c.denomination === f.clientId ||
+                          (c as any).clientIdField === f.clientId
+                      );
+                      const clientName = clientObj ? clientObj.denomination : (f.clientName || f.clientId || '-');
                       const loc = [f.ville, f.codePostal].filter(Boolean).join(', ') || '-';
                       const formattedDate = f.date && f.creneau 
                         ? `${f.date} ${f.creneau}` 

@@ -524,6 +524,8 @@ export interface CompanyInfo {
   spreadsheetCommandesUrl?: string;
   spreadsheetStocks?: string;
   spreadsheetStocksUrl?: string;
+  spreadsheetStocksDistribues?: string;
+  spreadsheetStocksDistribuesUrl?: string;
   spreadsheetAchatsFournisseurs?: string;
   spreadsheetAchatsFournisseursUrl?: string;
   spreadsheetTemps?: string;
@@ -569,6 +571,7 @@ export type SpreadsheetFieldKey =
   | 'spreadsheetSatisfaction'
   | 'spreadsheetCommandes'
   | 'spreadsheetStocks'
+  | 'spreadsheetStocksDistribues'
   | 'spreadsheetAchatsFournisseurs'
   | 'spreadsheetTemps'
   | 'spreadsheetTicketsCaisse'
@@ -599,7 +602,8 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetCrm', urlKey: 'spreadsheetCrmUrl', storageSuffix: 'spreadsheet_crm', label: 'Spreadsheet CRM.', id: 'settings-db-spreadsheet-crm' },
   { key: 'spreadsheetSatisfaction', urlKey: 'spreadsheetSatisfactionUrl', storageSuffix: 'spreadsheet_satisfaction', label: 'Spreadsheet Satisfaction.', id: 'settings-db-spreadsheet-satisfaction' },
   { key: 'spreadsheetCommandes', urlKey: 'spreadsheetCommandesUrl', storageSuffix: 'spreadsheet_commandes', label: 'Spreadsheet Commandes.', id: 'settings-db-spreadsheet-commandes' },
-  { key: 'spreadsheetStocks', urlKey: 'spreadsheetStocksUrl', storageSuffix: 'spreadsheet_stocks', label: 'Spreadsheet Stocks.', id: 'settings-db-spreadsheet-stocks' },
+  { key: 'spreadsheetStocks', urlKey: 'spreadsheetStocksUrl', storageSuffix: 'spreadsheet_stocks', label: 'Spreadsheet Centrale des Stocks.', id: 'settings-db-spreadsheet-stocks' },
+  { key: 'spreadsheetStocksDistribues', urlKey: 'spreadsheetStocksDistribuesUrl', storageSuffix: 'spreadsheet_stocks_distribues', label: 'Spreadsheet Stocks Distribués.', id: 'settings-db-spreadsheet-stocks-distribues' },
   { key: 'spreadsheetAchatsFournisseurs', urlKey: 'spreadsheetAchatsFournisseursUrl', storageSuffix: 'spreadsheet_achats_fournisseurs', label: 'Spreadsheet Achats fournisseurs.', id: 'settings-db-spreadsheet-achats-fournisseurs' },
   { key: 'spreadsheetTemps', urlKey: 'spreadsheetTempsUrl', storageSuffix: 'spreadsheet_temps', label: 'Spreadsheet Temps.', id: 'settings-db-spreadsheet-temps' },
   { key: 'spreadsheetTicketsCaisse', urlKey: 'spreadsheetTicketsCaisseUrl', storageSuffix: 'spreadsheet_tickets_caisse', label: 'Spreadsheet Tickets Caisse.', id: 'settings-db-spreadsheet-tickets-caisse' },
