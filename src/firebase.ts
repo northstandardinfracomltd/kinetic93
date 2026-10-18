@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore, doc, getDoc, setDoc, memoryLocalCache, getDocFromServer, getFirestore, getDocFromCache, setLogLevel } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 import { idbSet, idbGet, idbClear } from './idb';
 export { idbSet, idbGet, idbClear };
@@ -1188,6 +1189,10 @@ export async function fetchCollectionFromFirestore<T>(
     tenant_messages: { type: 'messagesInternes', localKey: 'spreadsheet_messages_internes', infoKey: 'spreadsheetMessagesInternes' },
     gedDocs: { type: 'ged', localKey: 'spreadsheet_ged', infoKey: 'spreadsheetGed' },
     ged_docs: { type: 'ged', localKey: 'spreadsheet_ged', infoKey: 'spreadsheetGed' },
+    members: { type: 'membresEnvironnement', localKey: 'spreadsheet_membres_environnement', infoKey: 'spreadsheetMembresEnvironnement' },
+    environment_members: { type: 'membresEnvironnement', localKey: 'spreadsheet_membres_environnement', infoKey: 'spreadsheetMembresEnvironnement' },
+    importExportRecords: { type: 'exportations', localKey: 'spreadsheet_exportations', infoKey: 'spreadsheetExportations' },
+    exportations: { type: 'exportations', localKey: 'spreadsheet_exportations', infoKey: 'spreadsheetExportations' },
     suspicious_activity_logs: { type: 'observateurActionsSuspectes', localKey: 'spreadsheet_observateur_actions_suspectes', infoKey: 'spreadsheetObservateurActionsSuspectes' },
   };
   const sheetInfo = sheetTabMap[collectionName];
@@ -3060,5 +3065,132 @@ export async function updateMissionStatusByIntervention(
     return { success: false };
   }
 }
+
+function fileOrBlobToDataUrl(file: File | Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || ''));
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Uploads an image or signature (Data URL, File, or Blob) to Firebase (Storage + Firestore + Server mirror)
+ * and returns the full https://... source URL to be saved in the tenant's Google Spreadsheet.
+ */
+export async function uploadMediaToFirebase(
+  dataUrlOrFile: string | File | Blob | undefined | null,
+  category: string = 'uploads',
+  fileName?: string
+): Promise<string> {
+  if (!dataUrlOrFile) return '';
+  if (typeof dataUrlOrFile === 'string') {
+    const trimmed = dataUrlOrFile.trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('https://') || trimmed.startsWith('http://')) {
+      return trimmed.replace(/^http:\/\//i, 'https://');
+    }
+  }
+
+  let dataUrl = '';
+  let resolvedName = fileName || `${category}_${Date.now()}.png`;
+  if (typeof dataUrlOrFile === 'string') {
+    dataUrl = dataUrlOrFile.trim();
+  } else {
+    if ('name' in dataUrlOrFile && dataUrlOrFile.name) {
+      resolvedName = dataUrlOrFile.name;
+    }
+    try {
+      dataUrl = await fileOrBlobToDataUrl(dataUrlOrFile);
+    } catch (err) {
+      console.warn('Error converting file to DataURL:', err);
+      return '';
+    }
+  }
+
+  if (!dataUrl) return '';
+  if (dataUrl.startsWith('https://') || dataUrl.startsWith('http://')) {
+    return dataUrl.replace(/^http:\/\//i, 'https://');
+  }
+
+  const tenantId = getTenantId() || 'demo';
+  const cleanCat = (category || 'media').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const extMatch = dataUrl.match(/^data:image\/([a-zA-Z0-9+]+);/i);
+  const ext = extMatch ? (extMatch[1].toLowerCase() === 'jpeg' ? 'jpg' : extMatch[1].toLowerCase()) : 'png';
+  const mediaId = `${tenantId}_${cleanCat}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const fullMediaFileName = `${mediaId}.${ext}`;
+
+  // 1. Try uploading to Firebase Storage if bucket is available
+  let firebaseStorageDownloadUrl = '';
+  try {
+    if (firebaseConfig.storageBucket) {
+      const storage = getStorage(app);
+      const sRef = storageRef(storage, `tenants/${tenantId}/${cleanCat}/${fullMediaFileName}`);
+      const uploadPromise = (async () => {
+        await uploadString(sRef, dataUrl, 'data_url');
+        return await getDownloadURL(sRef);
+      })();
+      const timeoutPromise = new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error('Storage upload timeout')), 2200)
+      );
+      const url = await Promise.race([uploadPromise, timeoutPromise]);
+      if (url && url.startsWith('http')) {
+        firebaseStorageDownloadUrl = url.replace(/^http:\/\//i, 'https://');
+      }
+    }
+  } catch (_) {
+    // Fallback to Firestore + Server media URL below
+  }
+
+  // 2. Store in Firestore appData collection (media_<mediaId>) so it is persisted in Firebase
+  try {
+    if (!isFirestoreQuotaExhausted()) {
+      const mediaDocRef = doc(db, 'appData', `media_${mediaId}`);
+      setDoc(mediaDocRef, {
+        id: mediaId,
+        tenantId,
+        category: cleanCat,
+        fileName: resolvedName,
+        dataUrl,
+        storageUrl: firebaseStorageDownloadUrl || null,
+        createdAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
+  } catch (_) {}
+
+  // 3. Persist to server endpoint /api/firebase-media so the https://.../api/firebase-media/<mediaId>.<ext> URL serves the binary image directly
+  let serverHttpsUrl = '';
+  try {
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin.replace(/^http:\/\//i, 'https://');
+      serverHttpsUrl = `${origin}/api/firebase-media/${fullMediaFileName}`;
+    }
+    if (typeof fetch !== 'undefined') {
+      const res = await fetch('/api/firebase-media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mediaId,
+          tenantId,
+          category: cleanCat,
+          fileName: resolvedName,
+          ext,
+          dataUrl,
+          storageUrl: firebaseStorageDownloadUrl || undefined,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.url && typeof json.url === 'string' && json.url.startsWith('http')) {
+          serverHttpsUrl = json.url.replace(/^http:\/\//i, 'https://');
+        }
+      }
+    }
+  } catch (_) {}
+
+  return firebaseStorageDownloadUrl || serverHttpsUrl || dataUrl;
+}
+
 
 

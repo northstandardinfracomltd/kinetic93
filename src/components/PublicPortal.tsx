@@ -79,7 +79,7 @@ import {
   sendScriptEmail,
   getActiveTenantCommercialName,
 } from "../utils/emailService";
-import { auth, saveCollectionToFirestore, fetchCollectionFromFirestore } from "../firebase";
+import { auth, saveCollectionToFirestore, fetchCollectionFromFirestore, uploadMediaToFirebase } from "../firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from "../utils/fsmOptimizer";
 import { loadCttGlobalRules } from "../utils/cttRules";
@@ -2769,38 +2769,202 @@ export default function PublicPortal({
     return `${pad(mins)}:${pad(secs)}`;
   };
 
-  const handleDownloadReport = (report: any) => {
-    const snapshot =
-      report.defibSnapshot ||
-      defibrillateurs.find(
-        (d) =>
-          d.id === report.defibId || d.identifiant === report.defibIdentifiant,
-      ) ||
-      {};
+  const handleDownloadReport = async (rawReport: any) => {
+    const printWin = typeof window !== 'undefined' ? window.open('', '_blank') : null;
+    let report = { ...(rawReport || {}) };
+    let effectiveCompanyInfo = { ...(companyInfo || {}) };
+    let effectiveClients = Array.isArray(clients) ? [...clients] : [];
+    let effectiveVariables = Array.isArray(variables) ? [...variables] : [];
+    let effectiveStocks = Array.isArray(stocks) ? [...stocks] : [];
+    let effectiveDefibs = Array.isArray(defibrillateurs) ? [...defibrillateurs] : [];
+    let effectiveAutresMateriels = Array.isArray(autresMateriels) ? [...autresMateriels] : [];
+
+    try {
+      const tenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
+      const [
+        sheetsReportsRes,
+        sheetsAppearanceRes,
+        sheetsReglagesRes,
+        sheetsDefibsRes,
+        sheetsAutresRes,
+        sheetsClientsRes,
+        sheetsVarsRes,
+        sheetsStocksRes,
+      ] = await Promise.all([
+        fetch(`/api/tenants/${tenantId}/sheets/generatedReports`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/tenants/${tenantId}/sheets/pdfAppearanceSettings`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/tenants/${tenantId}/sheets/companyInfo`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/tenants/${tenantId}/sheets/defibs`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/tenants/${tenantId}/sheets/autresMateriels`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/tenants/${tenantId}/sheets/clients`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/tenants/${tenantId}/sheets/variables`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/tenants/${tenantId}/sheets/stocks`).then(r => r.ok ? r.json() : null).catch(() => null),
+      ]);
+
+      if (sheetsReportsRes && Array.isArray(sheetsReportsRes.items)) {
+        const freshReport = sheetsReportsRes.items.find((r: any) =>
+          (report.id && String(r.id) === String(report.id)) ||
+          (report.interventionReference && String(r.interventionReference) === String(report.interventionReference)) ||
+          (report.defibIdentifiant && r.defibIdentifiant === report.defibIdentifiant && r.date === report.date)
+        );
+        if (freshReport) {
+          report = {
+            ...report,
+            ...freshReport,
+            defibSnapshot: {
+              ...(report.defibSnapshot || {}),
+              ...(freshReport.defibSnapshot || {}),
+            },
+          };
+        }
+      }
+
+      if (sheetsReglagesRes && Array.isArray(sheetsReglagesRes.items) && sheetsReglagesRes.items.length > 0) {
+        const reg = sheetsReglagesRes.items.find((i: any) => i.id === 'reglages_1') || sheetsReglagesRes.items[0];
+        if (reg) {
+          effectiveCompanyInfo = {
+            ...effectiveCompanyInfo,
+            ...reg,
+            name: reg.nom || reg.name || effectiveCompanyInfo.name,
+            address: reg.adresse || reg.address || effectiveCompanyInfo.address,
+            siret: reg.siret || effectiveCompanyInfo.siret,
+            email: reg.email || effectiveCompanyInfo.email,
+            phone: reg.telephone || reg.phone || effectiveCompanyInfo.phone,
+            logo: reg.logoUrl || reg.logo || effectiveCompanyInfo.logo,
+            logoUrl: reg.logoUrl || reg.logo || (effectiveCompanyInfo as any).logoUrl,
+            cachetSignatureUrl: reg.cachetSignatureUrl || (effectiveCompanyInfo as any).cachetSignatureUrl,
+          };
+        }
+      }
+
+      if (sheetsAppearanceRes && Array.isArray(sheetsAppearanceRes.items) && sheetsAppearanceRes.items.length > 0) {
+        const app = sheetsAppearanceRes.items.find((i: any) => i.id === 'pdf_appearance_1') || sheetsAppearanceRes.items[0];
+        if (app) {
+          effectiveCompanyInfo = {
+            ...effectiveCompanyInfo,
+            ...app,
+            pdfHeaderBgColor: app.pdfHeaderBgColor || effectiveCompanyInfo.pdfHeaderBgColor,
+            pdfCardBorderColor: app.pdfCardBorderColor || effectiveCompanyInfo.pdfCardBorderColor,
+            pdfCardBgColor: app.pdfCardBgColor || effectiveCompanyInfo.pdfCardBgColor,
+            pdfLabelTextColor: app.pdfLabelTextColor || effectiveCompanyInfo.pdfLabelTextColor,
+            pdfHideElectrodeSecoursA: app.pdfHideElectrodeSecoursA || effectiveCompanyInfo.pdfHideElectrodeSecoursA,
+            pdfHideElectrodeSecoursP: app.pdfHideElectrodeSecoursP || effectiveCompanyInfo.pdfHideElectrodeSecoursP,
+            pdfHideKitSecours: app.pdfHideKitSecours || effectiveCompanyInfo.pdfHideKitSecours,
+            pdfSimplifyCoffret: app.pdfSimplifyCoffret || effectiveCompanyInfo.pdfSimplifyCoffret,
+            pdfHideVerificationsTechniques: app.pdfHideVerificationsTechniques || effectiveCompanyInfo.pdfHideVerificationsTechniques,
+            pdfHideHorodatagesDiagnostic: app.pdfHideHorodatagesDiagnostic || effectiveCompanyInfo.pdfHideHorodatagesDiagnostic,
+            pdfShowDemandeDevisDetails: app.pdfShowDemandeDevisDetails || effectiveCompanyInfo.pdfShowDemandeDevisDetails,
+            pdfLastPageInfoText: app.pdfLastPageInfoText !== undefined ? app.pdfLastPageInfoText : effectiveCompanyInfo.pdfLastPageInfoText,
+          };
+        }
+      }
+
+      if (sheetsDefibsRes && Array.isArray(sheetsDefibsRes.items) && sheetsDefibsRes.items.length > 0) {
+        effectiveDefibs = sheetsDefibsRes.items;
+      }
+      if (sheetsAutresRes && Array.isArray(sheetsAutresRes.items) && sheetsAutresRes.items.length > 0) {
+        effectiveAutresMateriels = sheetsAutresRes.items;
+      }
+      if (sheetsClientsRes && Array.isArray(sheetsClientsRes.items) && sheetsClientsRes.items.length > 0) {
+        effectiveClients = sheetsClientsRes.items;
+      }
+      if (sheetsVarsRes && Array.isArray(sheetsVarsRes.items) && sheetsVarsRes.items.length > 0) {
+        effectiveVariables = sheetsVarsRes.items;
+      }
+      if (sheetsStocksRes && Array.isArray(sheetsStocksRes.items) && sheetsStocksRes.items.length > 0) {
+        effectiveStocks = sheetsStocksRes.items;
+      }
+    } catch (err) {
+      console.warn("Could not pull fresh Spreadsheet data before PDF generation, using cached state:", err);
+    }
+
+    const baseSnap = report.defibSnapshot || {};
+    const targetIdent = String(report.defibIdentifiant || report.identifiant || baseSnap.identifiant || '').trim();
+    const matchedEquipment = targetIdent
+      ? (effectiveDefibs.find((d: any) => String(d.identifiant || '').trim() === targetIdent || String(d.id || '').trim() === targetIdent) ||
+         effectiveAutresMateriels.find((m: any) => String(m.identifiant || '').trim() === targetIdent || String(m.id || '').trim() === targetIdent))
+      : null;
+
+    const snapshot: any = {
+      ...(matchedEquipment || {}),
+      ...baseSnap,
+      identifiant: report.defibIdentifiant || report.identifiant || baseSnap.identifiant || matchedEquipment?.identifiant || '',
+      categorie: report.typeMateriel || baseSnap.categorie || matchedEquipment?.categorie || 'Défibrillateur',
+      numeroSerie: report.numeroSerie || baseSnap.numeroSerie || matchedEquipment?.numeroSerie || '',
+      modeleId: report.modeleDefib || report.modeleId || baseSnap.modeleId || matchedEquipment?.modeleId || '',
+      typeDefibrillateur: report.typeDefib || report.typeDefibrillateur || baseSnap.typeDefibrillateur || matchedEquipment?.typeDefibrillateur || '',
+      versionLogiciel: report.versionLogiciel || baseSnap.versionLogiciel || matchedEquipment?.versionLogiciel || '',
+      fabrication: report._s5_fabrication || report.fabrication || baseSnap.fabrication || matchedEquipment?.fabrication || '',
+      miseEnService: report._s5_miseEnService || report.miseEnService || baseSnap.miseEnService || matchedEquipment?.miseEnService || '',
+      nomPrenomSite: report.contactSite || report.nomPrenomSite || baseSnap.nomPrenomSite || matchedEquipment?.nomPrenomSite || '',
+      telephoneSite: report.telephoneContact || report.telephoneSite || baseSnap.telephoneSite || matchedEquipment?.telephoneSite || '',
+      emailSite: report.emailContact || report.emailSite || baseSnap.emailSite || matchedEquipment?.emailSite || '',
+      numVoie: report.voie || report.numVoie || baseSnap.numVoie || matchedEquipment?.numVoie || '',
+      ville: report.ville || baseSnap.ville || matchedEquipment?.ville || '',
+      cp: report.cp || baseSnap.cp || matchedEquipment?.cp || '',
+      region: report.region || baseSnap.region || matchedEquipment?.region || '',
+      pays: report.pays || baseSnap.pays || matchedEquipment?.pays || '',
+      latitude: report.latitude || baseSnap.latitude || matchedEquipment?.latitude || '',
+      longitude: report.longitude || baseSnap.longitude || matchedEquipment?.longitude || '',
+      clientId: report.clientId || baseSnap.clientId || matchedEquipment?.clientId || '',
+      payeurId: report.payeurId || baseSnap.payeurId || matchedEquipment?.payeurId || '',
+      autreReference: report.autreReference || baseSnap.autreReference || matchedEquipment?.autreReference || '',
+      modeleElectrodeAId: report._s6_modeleElectrodeA || report.modeleElectrodeAId || baseSnap.modeleElectrodeAId || matchedEquipment?.modeleElectrodeAId || '',
+      lotElectrodeA: report._s6_lotElectrodeA || report.lotElectrodeA || baseSnap.lotElectrodeA || matchedEquipment?.lotElectrodeA || '',
+      insertionElectrodeA: report.insertionElectrodeA || report._s6_fabricationElectrodeA || baseSnap.insertionElectrodeA || baseSnap.fabricationElectrodeA || matchedEquipment?.insertionElectrodeA || '',
+      peremptionElectrodeA: report._s6_peremptionElectrodeA || report.peremptionElectrodeA || baseSnap.peremptionElectrodeA || matchedEquipment?.peremptionElectrodeA || '',
+      modeleElectrodeASecoursId: report._s6_modeleElectrodeASecours || report.modeleElectrodeASecoursId || baseSnap.modeleElectrodeASecoursId || matchedEquipment?.modeleElectrodeASecoursId || '',
+      lotElectrodeASecours: report._s6_lotElectrodeASecours || report.lotElectrodeASecours || baseSnap.lotElectrodeASecours || matchedEquipment?.lotElectrodeASecours || '',
+      peremptionSecoursElectrodeA: report._s6_peremptionElectrodeASecours || report.peremptionSecoursElectrodeA || baseSnap.peremptionSecoursElectrodeA || matchedEquipment?.peremptionSecoursElectrodeA || '',
+      commentaireElectrodeA: report._s6_commentaireElectrodeA || report.commentaireElectrodeA || baseSnap.commentaireElectrodeA || '',
+      modeleElectrodePId: report._s7_modeleElectrodeP || report.modeleElectrodePId || baseSnap.modeleElectrodePId || matchedEquipment?.modeleElectrodePId || '',
+      lotElectrodeP: report._s7_lotElectrodeP || report.lotElectrodeP || baseSnap.lotElectrodeP || matchedEquipment?.lotElectrodeP || '',
+      insertionElectrodeP: report.insertionElectrodeP || report._s7_fabricationElectrodeP || baseSnap.insertionElectrodeP || baseSnap.fabricationElectrodeP || matchedEquipment?.insertionElectrodeP || '',
+      peremptionElectrodeP: report._s7_peremptionElectrodeP || report.peremptionElectrodeP || baseSnap.peremptionElectrodeP || matchedEquipment?.peremptionElectrodeP || '',
+      modeleElectrodePSecoursId: report._s7_modeleElectrodePSecours || report.modeleElectrodePSecoursId || baseSnap.modeleElectrodePSecoursId || matchedEquipment?.modeleElectrodePSecoursId || '',
+      lotElectrodePSecours: report._s7_lotElectrodePSecours || report.lotElectrodePSecours || baseSnap.lotElectrodePSecours || matchedEquipment?.lotElectrodePSecours || '',
+      peremptionSecoursElectrodeP: report._s7_peremptionElectrodePSecours || report.peremptionSecoursElectrodeP || baseSnap.peremptionSecoursElectrodeP || matchedEquipment?.peremptionSecoursElectrodeP || '',
+      commentaireElectrodeP: report._s7_commentaireElectrodeP || report.commentaireElectrodeP || baseSnap.commentaireElectrodeP || '',
+      modeleBatterieId: report._s8_modeleBatterie || report.modeleBatterieId || baseSnap.modeleBatterieId || matchedEquipment?.modeleBatterieId || '',
+      lotBatterie: report._s8_lotBatterie || report.lotBatterie || baseSnap.lotBatterie || matchedEquipment?.lotBatterie || '',
+      peremptionBatterie: report._s8_peremptionBatterie || report.peremptionBatterie || baseSnap.peremptionBatterie || matchedEquipment?.peremptionBatterie || '',
+      fabricationBatterie: report._s8_fabricationBatterie || report.fabricationBatterie || baseSnap.fabricationBatterie || matchedEquipment?.fabricationBatterie || '',
+      insertionBatterie: report._s8_insertionBatterie || report.insertionBatterie || baseSnap.insertionBatterie || matchedEquipment?.insertionBatterie || '',
+      pourcentageBatterie: report.chargeBatterie || report.pourcentageBatterie || baseSnap.pourcentageBatterie || matchedEquipment?.pourcentageBatterie || '',
+      pourcentageChargeNouvelleBatterie: report.pourcentageChargeNouvelleBatterie || report.chargeNouvelleBatterie || baseSnap.pourcentageChargeNouvelleBatterie || '',
+      commentaireBatterie: report._s8_commentaireBatterie || report.commentaireBatterie || baseSnap.commentaireBatterie || '',
+      modeleCoffretId: report._s9_modeleCoffret || report.modeleCoffretId || baseSnap.modeleCoffretId || matchedEquipment?.modeleCoffretId || '',
+      numeroLotCoffret: report._s9_lotCoffret || report.numeroLotCoffret || baseSnap.numeroLotCoffret || matchedEquipment?.numeroLotCoffret || '',
+      installeExterieur: report.installeExterieur || baseSnap.installeExterieur || '',
+      commentaireCoffret: report._s9_commentaireCoffret || report.commentaireCoffret || baseSnap.commentaireCoffret || '',
+      peremptionTrousse: report.kitPeremption || report._s10_peremptionKit || baseSnap.peremptionTrousse || matchedEquipment?.peremptionTrousse || '',
+      conforme: report._s12_defibConforme || report.conforme || baseSnap.conforme || 'Oui',
+      commentaire: report._s12_commentaireGlobal || report.commentaireGlobal || baseSnap.commentaire || '',
+    };
 
     if (snapshot.categorie && snapshot.categorie !== "Défibrillateur") {
-      let clientFound = clients.find((c) => c.id === snapshot.clientId);
+      let clientFound = effectiveClients.find((c) => c.id === snapshot.clientId);
       if (!clientFound && snapshot.clientId) {
-        clientFound = clients.find((c) => c.denomination === snapshot.clientId || c.id === snapshot.clientId);
+        clientFound = effectiveClients.find((c) => c.denomination === snapshot.clientId || c.id === snapshot.clientId);
       }
       if (!clientFound && report.clientId) {
-        clientFound = clients.find((c) => c.id === report.clientId);
+        clientFound = effectiveClients.find((c) => c.id === report.clientId);
       }
       if (!clientFound) {
         const siteEmail = snapshot.emailSite || report.emailSite || "";
         if (siteEmail) {
-          clientFound = clients.find((c) => c.email && c.email.toLowerCase().trim() === siteEmail.toLowerCase().trim());
+          clientFound = effectiveClients.find((c) => c.email && c.email.toLowerCase().trim() === siteEmail.toLowerCase().trim());
         }
       }
       if (!clientFound) {
         const siteNom = snapshot.nomPrenomSite || "";
         if (siteNom) {
-          clientFound = clients.find((c) => c.denomination === siteNom || c.nomPrenomSite === siteNom);
+          clientFound = effectiveClients.find((c) => c.denomination === siteNom || c.nomPrenomSite === siteNom);
         }
       }
-      const clientName = clientFound
-        ? clientFound.denomination
-        : snapshot.nomPrenomSite || "Non rattaché";
+      const clientName =
+        report.clientName ||
+        (clientFound ? clientFound.denomination : snapshot.nomPrenomSite || "Non rattaché");
 
       // Filter out typical top-level keys to get custom equipment properties!
       const topLevelKeys = [
@@ -3205,34 +3369,40 @@ export default function PublicPortal({
         </body>
         </html>
       `;
-      const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
+      if (printWin) {
+        printWin.document.open();
+        printWin.document.write(htmlContent);
+        printWin.document.close();
+      } else {
+        const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+      }
       return;
     }
 
     // Resolve CompanyInfo
-    const compLogo = companyInfo.logo || "";
-    const compName = companyInfo.name || "Défibeo Solutions";
-    const compEmail = companyInfo.email || "";
-    const compPhone = companyInfo.phone || "";
-    const compWebsite = companyInfo.website || "";
+    const compLogo = effectiveCompanyInfo.logo || (effectiveCompanyInfo as any).logoUrl || "";
+    const compName = effectiveCompanyInfo.name || "Défibeo Solutions";
+    const compEmail = effectiveCompanyInfo.email || "";
+    const compPhone = effectiveCompanyInfo.phone || "";
+    const compWebsite = effectiveCompanyInfo.website || "";
 
-    const docTitle = report.title || "Rapport d’intervention GMAO";
-    const pdfLastPageInfoText = companyInfo.pdfLastPageInfoText || "";
+    const docTitle = report.title || report.reportTitle || "Rapport d’intervention GMAO";
+    const pdfLastPageInfoText = effectiveCompanyInfo.pdfLastPageInfoText || "";
     const hasLastPage = pdfLastPageInfoText && pdfLastPageInfoText.trim().length > 0;
-    const pdfHeaderBgColor = companyInfo.pdfHeaderBgColor || '#7c2882';
-    const pdfCardBorderColor = companyInfo.pdfCardBorderColor || '#7d2882';
-    const pdfCardBgColor = companyInfo.pdfCardBgColor || '#fef2ff';
-    const pdfLabelTextColor = companyInfo.pdfLabelTextColor || '#9f71a2';
+    const pdfHeaderBgColor = effectiveCompanyInfo.pdfHeaderBgColor || '#7c2882';
+    const pdfCardBorderColor = effectiveCompanyInfo.pdfCardBorderColor || '#7d2882';
+    const pdfCardBgColor = effectiveCompanyInfo.pdfCardBgColor || '#fef2ff';
+    const pdfLabelTextColor = effectiveCompanyInfo.pdfLabelTextColor || '#9f71a2';
     const totalPages = hasLastPage ? 6 : 5;
 
     const renderHeader = (title: string) => {
-      const showHeaderImg = companyInfo.pdfHeaderImg ? `<img src="${companyInfo.pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
-      const showHeaderLogo = companyInfo.logo ? `<img src="${companyInfo.logo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
-      const showHeaderInfoText = companyInfo.pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${formatPdfHeaderText(companyInfo.pdfPageHeaderText)}</div>` : '';
-      const showEmail = companyInfo.email ? `<div>${companyInfo.email}</div>` : '';
-      const showPhone = companyInfo.phone ? `<div>${companyInfo.phone}</div>` : '';
+      const showHeaderImg = effectiveCompanyInfo.pdfHeaderImg ? `<img src="${effectiveCompanyInfo.pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
+      const showHeaderLogo = compLogo ? `<img src="${compLogo}" style="max-height: 80px; object-fit: contain;" alt="Logo" referrerPolicy="no-referrer" />` : '';
+      const showHeaderInfoText = effectiveCompanyInfo.pdfPageHeaderText ? `<div style="font-size: 14px; color: #000000; text-align: left; font-family: 'Civilprom', sans-serif !important;">${formatPdfHeaderText(effectiveCompanyInfo.pdfPageHeaderText)}</div>` : '';
+      const showEmail = compEmail ? `<div>${compEmail}</div>` : '';
+      const showPhone = compPhone ? `<div>${compPhone}</div>` : '';
 
       return `
         <div class="pdf-global-header" style="display: flex; flex-direction: row; width: calc(100% - 30mm); margin: 10mm 15mm 15px 15mm; padding-bottom: 10px; font-family: 'Civilprom', 'Inter', sans-serif !important; align-items: center; box-sizing: border-box;">
@@ -3258,7 +3428,7 @@ export default function PublicPortal({
     };
 
     const renderFooter = (pageIndex: number, pagesTotal: number) => {
-      const footerText = companyInfo.pdfPageFooterText || "Rapport d’intervention original - Document certifié conforme";
+      const footerText = effectiveCompanyInfo.pdfPageFooterText || "Rapport d’intervention original - Document certifié conforme";
       return `
         <div class="pdf-footer" style="position: absolute; bottom: 15mm; left: 15mm; right: 15mm; display: flex; flex-direction: row; justify-content: space-between; align-items: flex-end; font-size: 13px; color: #000000; padding-top: 8px; font-family: 'Civilprom', 'Inter', sans-serif !important; box-sizing: border-box; width: calc(100% - 30mm); border-top: none;">
           <div style="flex: 1; text-align: left; padding-right: 20px; color: #000000; font-size: 13px;">
@@ -3272,34 +3442,51 @@ export default function PublicPortal({
     };
 
     // Resolving Client Name
-    let clientFound = clients.find((c) => c.id === snapshot.clientId);
+    let clientFound = effectiveClients.find((c) => c.id === snapshot.clientId);
     if (!clientFound && snapshot.clientId) {
-      clientFound = clients.find((c) => c.denomination === snapshot.clientId || c.id === snapshot.clientId);
+      clientFound = effectiveClients.find((c) => c.denomination === snapshot.clientId || c.id === snapshot.clientId);
     }
     if (!clientFound && report.clientId) {
-      clientFound = clients.find((c) => c.id === report.clientId);
+      clientFound = effectiveClients.find((c) => c.id === report.clientId);
     }
     if (!clientFound) {
       const siteEmail = snapshot.emailSite || report.emailSite || "";
       if (siteEmail) {
-        clientFound = clients.find((c) => c.email && c.email.toLowerCase().trim() === siteEmail.toLowerCase().trim());
+        clientFound = effectiveClients.find((c) => c.email && c.email.toLowerCase().trim() === siteEmail.toLowerCase().trim());
       }
     }
     if (!clientFound) {
       const siteNom = snapshot.nomPrenomSite || "";
       if (siteNom) {
-        clientFound = clients.find((c) => c.denomination === siteNom || c.nomPrenomSite === siteNom);
+        clientFound = effectiveClients.find((c) => c.denomination === siteNom || c.nomPrenomSite === siteNom);
       }
     }
-    const clientName = clientFound
-      ? clientFound.denomination
-      : snapshot.nomPrenomSite || "Non rattaché";
-    const clientIdField = clientFound?.clientIdField || snapshot.clientIdField || '';
-    const payeurId = clientFound?.payeurId || snapshot.payeurId || '';
-    const autreReferenceVal = report.autreReference || report.customReference || '';
+    const clientName =
+      report.clientName ||
+      (clientFound
+        ? (clientFound.denomination || (clientFound as any).nomEntreprise)
+        : snapshot.nomPrenomSite || "Non rattaché");
+    const clientIdField = report.clientId || clientFound?.clientIdField || (clientFound as any)?.codeAffaire || snapshot.clientIdField || snapshot.clientId || '';
+    const payeurId = report.payeurId || clientFound?.payeurId || snapshot.payeurId || '';
+    const autreReferenceVal = report.autreReference || report.customReference || snapshot.autreReference || '';
+
+    const findVariableByRef = (refValue: any) => {
+      if (!refValue) return undefined;
+      const val = String(refValue).trim();
+      const valLower = val.toLowerCase();
+      return effectiveVariables.find(
+        (v: any) =>
+          String(v.id || '').trim() === val ||
+          String(v.identifiant || '').trim() === val ||
+          String(v.ugs || '').trim() === val ||
+          String(v.nom || '').trim().toLowerCase() === valLower ||
+          `${v.marque || ''} ${v.nom || ''}`.trim().toLowerCase() === valLower ||
+          `${v.nom || ''} (${v.marque || ''})`.trim().toLowerCase() === valLower
+      );
+    };
 
     // Resolving Model names from Variable list
-    const defibModel = variables.find((v) => v.id === snapshot.modeleId);
+    const defibModel = findVariableByRef(snapshot.modeleId);
     const selectedModelVar = defibModel;
 
     const isVisibleNumeroAtlasante = selectedModelVar ? (selectedModelVar.visibiliteNumeroAtlasante !== 'Non') : true;
@@ -3336,44 +3523,32 @@ export default function PublicPortal({
       ? (defibModel.marque && defibModel.marque !== "Standard" ? `${defibModel.marque} ${defibModel.nom}` : defibModel.nom)
       : snapshot.modeleId || "Non spécifié";
 
-    const coffretModel = variables.find(
-      (v) => v.id === snapshot.modeleCoffretId,
-    );
+    const coffretModel = findVariableByRef(snapshot.modeleCoffretId);
     const coffretModelName = coffretModel
       ? (coffretModel.marque && coffretModel.marque !== "Standard" ? `${coffretModel.marque} ${coffretModel.nom}` : coffretModel.nom)
       : snapshot.modeleCoffretId || "Non spécifié";
 
-    const electrodeAModel = variables.find(
-      (v) => v.id === snapshot.modeleElectrodeAId,
-    );
+    const electrodeAModel = findVariableByRef(snapshot.modeleElectrodeAId);
     const electrodeAModelName = electrodeAModel
       ? (electrodeAModel.marque && electrodeAModel.marque !== "Standard" ? `${electrodeAModel.marque} ${electrodeAModel.nom}` : electrodeAModel.nom)
       : snapshot.modeleElectrodeAId || "Non spécifié";
 
-    const electrodeASecoursModel = variables.find(
-      (v) => v.id === snapshot.modeleElectrodeASecoursId,
-    );
+    const electrodeASecoursModel = findVariableByRef(snapshot.modeleElectrodeASecoursId);
     const electrodeASecoursModelName = electrodeASecoursModel
       ? (electrodeASecoursModel.marque && electrodeASecoursModel.marque !== "Standard" ? `${electrodeASecoursModel.marque} ${electrodeASecoursModel.nom}` : electrodeASecoursModel.nom)
-      : "";
+      : snapshot.modeleElectrodeASecoursId || "";
 
-    const electrodePModel = variables.find(
-      (v) => v.id === snapshot.modeleElectrodePId,
-    );
+    const electrodePModel = findVariableByRef(snapshot.modeleElectrodePId);
     const electrodePModelName = electrodePModel
       ? (electrodePModel.marque && electrodePModel.marque !== "Standard" ? `${electrodePModel.marque} ${electrodePModel.nom}` : electrodePModel.nom)
       : snapshot.modeleElectrodePId || "Non spécifié";
 
-    const electrodePSecoursModel = variables.find(
-      (v) => v.id === snapshot.modeleElectrodePSecoursId,
-    );
+    const electrodePSecoursModel = findVariableByRef(snapshot.modeleElectrodePSecoursId);
     const electrodePSecoursModelName = electrodePSecoursModel
       ? (electrodePSecoursModel.marque && electrodePSecoursModel.marque !== "Standard" ? `${electrodePSecoursModel.marque} ${electrodePSecoursModel.nom}` : electrodePSecoursModel.nom)
-      : "";
+      : snapshot.modeleElectrodePSecoursId || "";
 
-    const batterieModel = variables.find(
-      (v) => v.id === snapshot.modeleBatterieId,
-    );
+    const batterieModel = findVariableByRef(snapshot.modeleBatterieId);
     const batterieModelName = batterieModel
       ? (batterieModel.marque && batterieModel.marque !== "Standard" ? `${batterieModel.marque} ${batterieModel.nom}` : batterieModel.nom)
       : snapshot.modeleBatterieId || "Non spécifié";
@@ -3381,26 +3556,40 @@ export default function PublicPortal({
     // Helper to resolve stock pieces
     const getStockPieceLabel = (stockId: string) => {
       if (!stockId) return "-";
-      const stockItem = stocks.find((s: any) => s.id === stockId);
-      if (!stockItem) return stockId;
-      const variableItem = variables.find(
-        (v: any) => v.id === stockItem.denominationPieceId,
+      const sVal = String(stockId).trim();
+      const stockItem = effectiveStocks.find(
+        (s: any) =>
+          String(s.id || '').trim() === sVal ||
+          String(s.identifiant || '').trim() === sVal ||
+          String(s.ugs || '').trim() === sVal ||
+          String(s.denominationPieceId || '').trim() === sVal ||
+          String(s.denominationPieceNom || '').trim() === sVal
       );
-      if (!variableItem) return `Pièce (${stockItem.denominationPieceId})`;
+      if (!stockItem) {
+        const directVar = findVariableByRef(sVal);
+        if (directVar) return `${directVar.nom} (${directVar.marque})`;
+        return stockId;
+      }
+      const variableItem = findVariableByRef(stockItem.denominationPieceId || stockItem.denominationPieceNom);
+      if (!variableItem) return stockItem.denominationPieceNom || `Pièce (${stockItem.denominationPieceId})`;
       return `${variableItem.nom} (${variableItem.marque})`;
     };
 
     // Helper to resolve service label
     const getServiceLabel = (serviceId: string) => {
       if (!serviceId) return "";
-      const stockItem = stocks.find((s: any) => s.id === serviceId);
+      const sVal = String(serviceId).trim();
+      const stockItem = effectiveStocks.find(
+        (s: any) =>
+          String(s.id || '').trim() === sVal ||
+          String(s.identifiant || '').trim() === sVal ||
+          String(s.ugs || '').trim() === sVal
+      );
       if (stockItem) {
-        const variable = variables.find(
-          (v: any) => v.id === stockItem.denominationPieceId,
-        );
-        return variable ? `${variable.nom} (${variable.marque})` : "Service";
+        const variable = findVariableByRef(stockItem.denominationPieceId || stockItem.denominationPieceNom);
+        return variable ? `${variable.nom} (${variable.marque})` : (stockItem.denominationPieceNom || "Service");
       }
-      const variable = variables.find((v: any) => v.id === serviceId);
+      const variable = findVariableByRef(sVal);
       if (variable) {
         return `${variable.nom} (${variable.marque})`;
       }
@@ -3424,13 +3613,13 @@ export default function PublicPortal({
       report.selectionKitSecoursRemplace,
     );
 
-    const pdfHideElectrodeSecoursA = companyInfo?.pdfHideElectrodeSecoursA === 'Oui';
-    const pdfHideElectrodeSecoursP = companyInfo?.pdfHideElectrodeSecoursP === 'Oui';
-    const pdfHideKitSecours = companyInfo?.pdfHideKitSecours === 'Oui';
-    const pdfSimplifyCoffret = companyInfo?.pdfSimplifyCoffret === 'Oui';
-    const pdfHideVerificationsTechniques = companyInfo?.pdfHideVerificationsTechniques === 'Oui';
-    const pdfHideHorodatagesDiagnostic = companyInfo?.pdfHideHorodatagesDiagnostic === 'Oui';
-    const pdfShowDemandeDevisDetails = companyInfo?.pdfShowDemandeDevisDetails === 'Oui';
+    const pdfHideElectrodeSecoursA = effectiveCompanyInfo?.pdfHideElectrodeSecoursA === 'Oui';
+    const pdfHideElectrodeSecoursP = effectiveCompanyInfo?.pdfHideElectrodeSecoursP === 'Oui';
+    const pdfHideKitSecours = effectiveCompanyInfo?.pdfHideKitSecours === 'Oui';
+    const pdfSimplifyCoffret = effectiveCompanyInfo?.pdfSimplifyCoffret === 'Oui';
+    const pdfHideVerificationsTechniques = effectiveCompanyInfo?.pdfHideVerificationsTechniques === 'Oui';
+    const pdfHideHorodatagesDiagnostic = effectiveCompanyInfo?.pdfHideHorodatagesDiagnostic === 'Oui';
+    const pdfShowDemandeDevisDetails = effectiveCompanyInfo?.pdfShowDemandeDevisDetails === 'Oui';
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -3906,27 +4095,34 @@ export default function PublicPortal({
 
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
-                          <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                          ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                            <div style="font-size: 11px; margin-bottom: 2px; font-family: 'Civilprom', sans-serif !important;">
-                              <span class="pdf-label" style="font-size:11px; color:rgb(138, 138, 138); font-family: 'Civilprom', sans-serif !important;">Code validation :</span> 
-                              <span class="pdf-bold" style="font-size:11px; font-family: 'Civilprom', sans-serif !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
-                            </div>
-                          ` : ''}
-                          ${clientFound && clientFound.clientSignatureImage ? `
-                            <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
-                              <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
-                            </div>
-                          ` : `
-                            ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                              <div style="font-size: 11px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
-                                Signé électroniquement par PIN (${report.clientPinCode})
+                        ${(() => {
+                          const pinVal = (report.clientPinCode || "").trim();
+                          const pinIsImg = pinVal.startsWith("data:image") || pinVal.startsWith("http");
+                          const sigImg = (clientFound && clientFound.clientSignatureImage) || (pinIsImg ? pinVal : "");
+                          const displayPin = !pinIsImg ? pinVal : "";
+                          if (!sigImg && !displayPin) return "";
+                          return `
+                            <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
+                            ${displayPin ? `
+                              <div style="font-size: 11px; margin-bottom: 2px; font-family: 'Civilprom', sans-serif !important;">
+                                <span class="pdf-label" style="font-size:11px; color:rgb(138, 138, 138); font-family: 'Civilprom', sans-serif !important;">Code validation :</span> 
+                                <span class="pdf-bold" style="font-size:11px; font-family: 'Civilprom', sans-serif !important; font-weight: bold !important; color:#000;">${displayPin}</span>
                               </div>
                             ` : ''}
-                          `}
-                        ` : ''}
+                            ${sigImg ? `
+                              <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
+                                <img src="${sigImg}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                                <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
+                              </div>
+                            ` : `
+                              ${displayPin ? `
+                                <div style="font-size: 11px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
+                                  Signé électroniquement par PIN (${displayPin})
+                                </div>
+                              ` : ''}
+                            `}
+                          `;
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -3967,9 +4163,15 @@ export default function PublicPortal({
       </body>
       </html>
     `;
-    const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
+    if (printWin) {
+      printWin.document.open();
+      printWin.document.write(htmlContent);
+      printWin.document.close();
+    } else {
+      const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    }
   };
 
   // TIME WORK tracking state variables
@@ -4486,7 +4688,7 @@ export default function PublicPortal({
         const rawBase64 = reader.result as string;
         // Check if image format can be loaded into an Image object
         const img = new Image();
-        img.onload = () => {
+        img.onload = async () => {
           const MAX_WIDTH = 800;
           const MAX_HEIGHT = 800;
           let width = img.width;
@@ -4512,12 +4714,36 @@ export default function PublicPortal({
             ctx.drawImage(img, 0, 0, width, height);
             const compressedBase64 = canvas.toDataURL("image/jpeg", 0.6); // 60% quality is perfect & extremely light
             setter(compressedBase64);
+            const uploadedUrl = await uploadMediaToFirebase(
+              compressedBase64,
+              "photos",
+              file.name || `photo_${Date.now()}.jpg`
+            );
+            if (uploadedUrl && uploadedUrl.startsWith("http")) {
+              setter(uploadedUrl);
+            }
           } else {
             setter(rawBase64);
+            const uploadedUrl = await uploadMediaToFirebase(
+              rawBase64,
+              "photos",
+              file.name || `photo_${Date.now()}.jpg`
+            );
+            if (uploadedUrl && uploadedUrl.startsWith("http")) {
+              setter(uploadedUrl);
+            }
           }
         };
-        img.onerror = () => {
+        img.onerror = async () => {
           setter(rawBase64);
+          const uploadedUrl = await uploadMediaToFirebase(
+            rawBase64,
+            "photos",
+            file.name || `photo_${Date.now()}.jpg`
+          );
+          if (uploadedUrl && uploadedUrl.startsWith("http")) {
+            setter(uploadedUrl);
+          }
         };
         img.src = rawBase64;
       };
@@ -4965,23 +5191,39 @@ export default function PublicPortal({
   };
 
   // Submit EXPENSE Receipt (Tab 4)
-  const handleSaveExpense = (e: React.FormEvent) => {
+  const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!expenseTitle.trim() || !expenseTtc) {
       alert("Veuillez remplir au minimum l'Objet et le Total TTC. (€).");
       return;
     }
 
+    let finalPhotoUrl = expensePhotoUrl || undefined;
+    if (finalPhotoUrl && finalPhotoUrl.startsWith("data:")) {
+      finalPhotoUrl = await uploadMediaToFirebase(
+        finalPhotoUrl,
+        "photos",
+        `ticket_caisse_${Date.now()}.jpg`
+      );
+    }
+
     const newExpense: Expense = {
       id: "exp-" + Date.now(),
       techName: authenticatedUser?.name || "Technicien connecté",
+      user: authenticatedUser?.name || "Technicien connecté",
       title: expenseTitle.trim(),
+      merchant: expenseTitle.trim(),
       amountTtc: parseFloat(expenseTtc) || 0,
+      amount: parseFloat(expenseTtc) || 0,
       amountHt: parseFloat(expenseHt) || 0,
+      amountHT: parseFloat(expenseHt) || 0,
       amountTva: parseFloat(expenseTva) || 0,
+      tva: parseFloat(expenseTva) || 0,
       dateStr: expenseDate,
-      photoUrl: expensePhotoUrl || undefined,
-    };
+      date: expenseDate,
+      photoUrl: finalPhotoUrl,
+      receiptUrl: finalPhotoUrl,
+    } as any;
 
     saveExpenses([newExpense, ...expenses]);
 
@@ -5002,9 +5244,19 @@ export default function PublicPortal({
   };
 
   // Save Location configurations (Tab 5)
-  const handleSaveLocalisation = (e: React.FormEvent) => {
+  const handleSaveLocalisation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authenticatedUser) return;
+
+    let finalTechSig = techSignature;
+    if (finalTechSig && finalTechSig.startsWith("data:")) {
+      finalTechSig = await uploadMediaToFirebase(
+        finalTechSig,
+        "signatures",
+        `signature_tech_${authenticatedUser.id || authenticatedUser.email || "user"}.png`
+      );
+      setTechSignature(finalTechSig);
+    }
 
     // Compose flat startAddress for legacy support
     const composedAddress = `${techStartStreet}, ${techStartZip} ${techStartCity}, ${techStartCountry}`.trim();
@@ -5024,7 +5276,7 @@ export default function PublicPortal({
           startAddressLat: techStartLat ? parseFloat(techStartLat) : undefined,
           startAddressLng: techStartLng ? parseFloat(techStartLng) : undefined,
           optimizationPreference: (routeOptimization.includes("loin") ? "loin" : "proche") as "loin" | "proche",
-          signature: techSignature,
+          signature: finalTechSig,
           hidePointage: hidePointage,
         };
         return updatedM;
@@ -5047,7 +5299,7 @@ export default function PublicPortal({
       startAddressLat: techStartLat ? parseFloat(techStartLat) : undefined,
       startAddressLng: techStartLng ? parseFloat(techStartLng) : undefined,
       optimizationPreference: (routeOptimization.includes("loin") ? "loin" : "proche") as "loin" | "proche",
-      signature: techSignature,
+      signature: finalTechSig,
       hidePointage: hidePointage,
     };
     setAuthenticatedUser(updatedUser);
@@ -5118,22 +5370,28 @@ export default function PublicPortal({
     setActiveSettingsSection(null);
   };
 
-  const handleSaveSignature = () => {
+  const handleSaveSignature = async () => {
     if (sigCanvasRef.current && authenticatedUser) {
-      const dataUrl = sigCanvasRef.current.toDataURL();
-      setTechSignature(dataUrl);
+      const rawDataUrl = sigCanvasRef.current.toDataURL("image/png");
+      const uploadedUrl = await uploadMediaToFirebase(
+        rawDataUrl,
+        "signatures",
+        `signature_tech_${authenticatedUser.id || authenticatedUser.email || authenticatedUser.name || "user"}.png`
+      );
+      setTechSignature(uploadedUrl);
       const updatedMembers = members.map((m) => {
         if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
-          return { ...m, signature: dataUrl };
+          return { ...m, signature: uploadedUrl };
         }
         return m;
       });
       onUpdateMembers(updatedMembers);
-      const updatedUser = { ...authenticatedUser, signature: dataUrl };
+      const updatedUser = { ...authenticatedUser, signature: uploadedUrl };
       setAuthenticatedUser(updatedUser);
       localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
       const envId = localStorage.getItem("defib_tenant_id") || "demo";
-      localStorage.setItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`, dataUrl);
+      localStorage.setItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`, uploadedUrl);
+      saveCollectionToFirestore(envId, "members", updatedMembers);
     }
     setActiveSettingsSection(null);
   };

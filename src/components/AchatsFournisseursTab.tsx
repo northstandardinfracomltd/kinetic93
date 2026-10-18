@@ -1,20 +1,23 @@
-import React, { useState } from 'react';
-import { AchatFournisseur, Variable } from '../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { AchatFournisseur, Variable, CompanyInfo } from '../types';
 import { ShoppingBag, Eye, Trash2, Edit, Plus, FileText, Upload, Search, X } from 'lucide-react';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { t } from '../utils/translate';
+import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from '../utils/googleDrive';
 
 interface AchatsFournisseursTabProps {
   achatsFournisseurs: AchatFournisseur[];
   saveAchatsFournisseurs: (updated: AchatFournisseur[]) => void;
   variables: Variable[];
+  companyInfo?: CompanyInfo;
 }
 
 export default function AchatsFournisseursTab({
   achatsFournisseurs,
   saveAchatsFournisseurs,
   variables,
+  companyInfo,
 }: AchatsFournisseursTabProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAchatId, setEditingAchatId] = useState<string | null>(null);
@@ -26,6 +29,25 @@ export default function AchatsFournisseursTab({
   const [comment, setComment] = useState('');
   const [pdfUrl, setPdfUrl] = useState<string | undefined>(undefined);
   const [pdfName, setPdfName] = useState<string | undefined>(undefined);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(false);
+  const [googleDriveAccessToken, setGoogleDriveAccessToken] = useState<string>('');
+
+  const refreshGoogleDriveStatus = useCallback(async () => {
+    try {
+      const status = await fetchGoogleDriveStatus();
+      setGoogleDriveActive(Boolean(status.active || companyInfo?.googleDriveConnected));
+      setGoogleDriveAccessToken(status.accessToken || '');
+    } catch (e) {
+      console.error('Erreur de lecture du statut Google Drive :', e);
+    }
+  }, [companyInfo?.googleDriveConnected]);
+
+  useEffect(() => {
+    refreshGoogleDriveStatus();
+    window.addEventListener('google-drive-status-changed', refreshGoogleDriveStatus);
+    return () => window.removeEventListener('google-drive-status-changed', refreshGoogleDriveStatus);
+  }, [refreshGoogleDriveStatus]);
 
   // Search & Filters
   const [search, setSearch] = useState('');
@@ -70,25 +92,33 @@ export default function AchatsFournisseursTab({
 
   const startEditAchat = (achat: AchatFournisseur) => {
     setReference(achat.reference);
-    setOrderReference(achat.orderReference);
+    setOrderReference(achat.orderReference || achat.orderRef || '');
     setSupplierId(achat.supplierId);
     setComment(achat.comment);
-    setPdfUrl(achat.pdfUrl);
-    setPdfName(achat.pdfName);
+    setPdfUrl(achat.pdfUrl || achat.pdfDataUrl);
+    setPdfName(achat.pdfName || achat.pdfFileName);
     setEditingAchatId(achat.id);
     setIsFormOpen(true);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!googleDriveActive) {
+      alert("Le connecteur Google Drive n'est pas activé dans les paramètres du tenant.");
+      return;
+    }
 
     setPdfName(file.name);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPdfUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    setIsUploadingFile(true);
+    try {
+      const sharedDriveUrl = await uploadFileToGoogleDrive(googleDriveAccessToken, file);
+      setPdfUrl(sharedDriveUrl);
+    } catch (err: any) {
+      alert(err?.message || "Erreur lors de l'envoi sur Google Drive.");
+    } finally {
+      setIsUploadingFile(false);
+    }
   };
 
   const handleSaveAchat = (e: React.FormEvent) => {
@@ -101,6 +131,7 @@ export default function AchatsFournisseursTab({
 
     const selectedSup = supplierVariables.find((s) => s.id === supplierId);
     const supplierName = selectedSup ? selectedSup.nom : 'Fournisseur inconnu';
+    const currentDateStr = new Date().toLocaleDateString('fr-FR');
 
     if (editingAchatId) {
       const updated = achatsFournisseurs.map((a) =>
@@ -108,11 +139,14 @@ export default function AchatsFournisseursTab({
           ? {
               ...a,
               orderReference,
+              orderRef: orderReference,
               supplierId,
               supplierName,
               comment,
               pdfUrl,
+              pdfDataUrl: pdfUrl,
               pdfName,
+              pdfFileName: pdfName,
             }
           : a
       );
@@ -122,12 +156,16 @@ export default function AchatsFournisseursTab({
         id: 'achat-' + Date.now(),
         reference,
         orderReference,
+        orderRef: orderReference,
         supplierId,
         supplierName,
         comment,
         pdfUrl,
+        pdfDataUrl: pdfUrl,
         pdfName,
-        dateStr: new Date().toLocaleDateString('fr-FR'),
+        pdfFileName: pdfName,
+        dateStr: currentDateStr,
+        date: currentDateStr,
       };
       saveAchatsFournisseurs([newAchat, ...achatsFournisseurs]);
     }
@@ -626,15 +664,30 @@ export default function AchatsFournisseursTab({
                 {t("Fichier de la commande. (PDF)")}
               </label>
 
-              <div className="border border-solid border-[#D5D5D5] hover:border-[#fa53d5]/50 transition-colors rounded-2xl p-6 text-center cursor-pointer bg-white relative">
+              <div
+                className={`border border-solid border-[#D5D5D5] transition-colors rounded-2xl p-6 text-center relative ${
+                  !googleDriveActive || isUploadingFile
+                    ? 'bg-slate-100 opacity-60 cursor-not-allowed'
+                    : 'hover:border-[#fa53d5]/50 cursor-pointer bg-white'
+                }`}
+              >
                 <input
                   type="file"
                   accept=".pdf"
+                  disabled={!googleDriveActive || isUploadingFile}
                   onChange={handleFileUpload}
-                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                  className={`absolute inset-0 opacity-0 w-full h-full ${
+                    !googleDriveActive || isUploadingFile ? 'cursor-not-allowed' : 'cursor-pointer'
+                  }`}
                 />
                 <p className="font-sans font-medium" style={{ fontSize: '18px', color: '#000000' }}>
-                  {pdfName ? pdfName : t("Sélection d'un fichier PDF.")}
+                  {isUploadingFile
+                    ? t("Envoi vers Google Drive en cours...")
+                    : !googleDriveActive
+                    ? t("Connecteur Google Drive désactivé (Activez-le dans Réglages)")
+                    : pdfName
+                    ? pdfName
+                    : t("Sélection d'un fichier PDF.")}
                 </p>
               </div>
             </div>

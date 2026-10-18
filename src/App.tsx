@@ -5644,33 +5644,199 @@ export default function App() {
     return `${pad(mins)}:${pad(secs)}`;
   };
 
-  const handleDownloadReport = (report: any) => {
-    const snapshot = report.defibSnapshot || {};
-    const pdfLogo = companyInfo.logo || '';
-    const pdfHeaderImg = companyInfo.pdfHeaderImg || '';
-    const pdfPageHeaderText = companyInfo.pdfPageHeaderText || '';
-    const pdfPageFooterText = companyInfo.pdfPageFooterText || '';
-    const pdfLastPageInfoText = companyInfo.pdfLastPageInfoText || '';
+  const handleDownloadReport = async (rawReport: any) => {
+    const printWin = typeof window !== 'undefined' ? window.open('', '_blank') : null;
+    let report = { ...(rawReport || {}) };
+    let effectiveCompanyInfo: CompanyInfo = { ...companyInfo };
+
+    // Pull latest data directly from configured Spreadsheets (rapportsPdf, apparenceRapportsPdf, reglages) before generating the PDF
+    try {
+      const activeTenant = tenantId || 'demo';
+      const sheetRapportsUrl =
+        (companyInfo as any).spreadsheetRapportsPdf ||
+        (companyInfo as any).spreadsheetRapportsPdfUrl ||
+        localStorage.getItem(`defib_${activeTenant}_spreadsheet_rapports_pdf`) ||
+        '';
+      const sheetApparenceUrl =
+        (companyInfo as any).spreadsheetApparenceRapportsPdf ||
+        (companyInfo as any).spreadsheetApparenceRapportsPdfUrl ||
+        localStorage.getItem(`defib_${activeTenant}_spreadsheet_apparence_rapports_pdf`) ||
+        '';
+      const sheetReglagesUrl =
+        (companyInfo as any).spreadsheetReglages ||
+        (companyInfo as any).spreadsheetReglagesUrl ||
+        localStorage.getItem(`defib_${activeTenant}_spreadsheet_reglages`) ||
+        '';
+
+      const syncPromises: Promise<void>[] = [];
+      if (sheetRapportsUrl && sheetRapportsUrl.trim()) {
+        syncPromises.push(
+          fetch(
+            `/api/sheets/sync?tenantId=${encodeURIComponent(activeTenant)}&tabType=rapportsPdf&spreadsheetUrl=${encodeURIComponent(sheetRapportsUrl.trim())}`,
+            { signal: AbortSignal.timeout(3000) }
+          )
+            .then(r => (r.ok ? r.json() : null))
+            .then(data => {
+              if (data && Array.isArray(data.items) && data.items.length > 0) {
+                const targetKeys = [
+                  report.interventionReference,
+                  report.reportNumber,
+                  report.id,
+                  report.reportId,
+                ]
+                  .filter(Boolean)
+                  .map(s => String(s).trim().toLowerCase());
+                const matchedSheetReport = data.items.find((it: any) => {
+                  const itKeys = [it.interventionReference, it.reportNumber, it.id, it.reportId]
+                    .filter(Boolean)
+                    .map(s => String(s).trim().toLowerCase());
+                  return itKeys.some(k => targetKeys.includes(k));
+                });
+                if (matchedSheetReport) {
+                  report = {
+                    ...report,
+                    ...matchedSheetReport,
+                    defibSnapshot: {
+                      ...(report.defibSnapshot || {}),
+                      ...(matchedSheetReport.defibSnapshot || {}),
+                    },
+                  };
+                }
+              }
+            })
+            .catch(() => {})
+        );
+      }
+      if (sheetApparenceUrl && sheetApparenceUrl.trim()) {
+        syncPromises.push(
+          fetch(
+            `/api/sheets/sync?tenantId=${encodeURIComponent(activeTenant)}&tabType=apparenceRapportsPdf&spreadsheetUrl=${encodeURIComponent(sheetApparenceUrl.trim())}`,
+            { signal: AbortSignal.timeout(2500) }
+          )
+            .then(r => (r.ok ? r.json() : null))
+            .then(data => {
+              if (data && Array.isArray(data.items) && data.items.length > 0) {
+                const appRow = data.items[0];
+                effectiveCompanyInfo = {
+                  ...effectiveCompanyInfo,
+                  pdfHeaderBgColor: appRow.pdfHeaderBgColor ?? effectiveCompanyInfo.pdfHeaderBgColor,
+                  pdfCardBorderColor: appRow.pdfCardBorderColor ?? effectiveCompanyInfo.pdfCardBorderColor,
+                  pdfCardBgColor: appRow.pdfCardBgColor ?? effectiveCompanyInfo.pdfCardBgColor,
+                  pdfLabelTextColor: appRow.pdfLabelTextColor ?? effectiveCompanyInfo.pdfLabelTextColor,
+                  pdfHeaderImg: appRow.pdfHeaderImg ?? effectiveCompanyInfo.pdfHeaderImg,
+                  pdfPageHeaderText: appRow.pdfPageHeaderText ?? effectiveCompanyInfo.pdfPageHeaderText,
+                  pdfPageFooterText: appRow.pdfPageFooterText ?? effectiveCompanyInfo.pdfPageFooterText,
+                  pdfLastPageInfoText: appRow.pdfLastPageInfoText ?? effectiveCompanyInfo.pdfLastPageInfoText,
+                  pdfHideElectrodeSecoursA: appRow.pdfHideElectrodeSecoursA ?? effectiveCompanyInfo.pdfHideElectrodeSecoursA,
+                  pdfHideElectrodeSecoursP: appRow.pdfHideElectrodeSecoursP ?? effectiveCompanyInfo.pdfHideElectrodeSecoursP,
+                  pdfHideKitSecours: appRow.pdfHideKitSecours ?? effectiveCompanyInfo.pdfHideKitSecours,
+                  pdfSimplifyCoffret: appRow.pdfSimplifyCoffret ?? effectiveCompanyInfo.pdfSimplifyCoffret,
+                  pdfHideVerificationsTechniques: appRow.pdfHideVerificationsTechniques ?? effectiveCompanyInfo.pdfHideVerificationsTechniques,
+                  pdfHideHorodatagesDiagnostic: appRow.pdfHideHorodatagesDiagnostic ?? effectiveCompanyInfo.pdfHideHorodatagesDiagnostic,
+                  pdfShowDemandeDevisDetails: appRow.pdfShowDemandeDevisDetails ?? effectiveCompanyInfo.pdfShowDemandeDevisDetails,
+                };
+              }
+            })
+            .catch(() => {})
+        );
+      }
+      if (sheetReglagesUrl && sheetReglagesUrl.trim()) {
+        syncPromises.push(
+          fetch(
+            `/api/sheets/sync?tenantId=${encodeURIComponent(activeTenant)}&tabType=reglages&spreadsheetUrl=${encodeURIComponent(sheetReglagesUrl.trim())}`,
+            { signal: AbortSignal.timeout(2500) }
+          )
+            .then(r => (r.ok ? r.json() : null))
+            .then(data => {
+              if (data && Array.isArray(data.items) && data.items.length > 0) {
+                const regRow = data.items[0];
+                effectiveCompanyInfo = {
+                  ...effectiveCompanyInfo,
+                  name: regRow.name || effectiveCompanyInfo.name,
+                  logo: regRow.logo !== undefined ? regRow.logo : effectiveCompanyInfo.logo,
+                  email: regRow.email || effectiveCompanyInfo.email,
+                  phone: regRow.phone || effectiveCompanyInfo.phone,
+                  website: regRow.website || effectiveCompanyInfo.website,
+                };
+              }
+            })
+            .catch(() => {})
+        );
+      }
+      if (syncPromises.length > 0) {
+        await Promise.all(syncPromises);
+      }
+    } catch (_) {}
+
+    const rawSnap = report.defibSnapshot || {};
+    const equipIdent = String(rawSnap.identifiant || report.identifiant || report.defibIdentifiant || '').trim().toLowerCase();
+    const equipSn = String(rawSnap.numeroSerie || report.numeroSerie || '').trim().toLowerCase();
+    const matchedDefib =
+      defibrillateurs.find(d => {
+        const dIdent = String(d.identifiant || '').trim().toLowerCase();
+        const dSn = String(d.numeroSerie || '').trim().toLowerCase();
+        return (equipIdent && (dIdent === equipIdent || String(d.id || '').trim().toLowerCase() === equipIdent)) || (equipSn && dSn === equipSn);
+      }) ||
+      (otherEquipments || []).find((oe: any) => {
+        const oeIdent = String(oe.identifiant || '').trim().toLowerCase();
+        return equipIdent && (oeIdent === equipIdent || String(oe.id || '').trim().toLowerCase() === equipIdent);
+      });
+
+    // Build snapshot: matchedDefib (from defibrillateurs/autresMateriels Spreadsheet) as fallback, overridden by report.defibSnapshot & top-level report Spreadsheet fields
+    const nonEmptyReportFields: Record<string, any> = {};
+    for (const [rk, rv] of Object.entries(report)) {
+      if (rk !== 'id' && rk !== 'defibSnapshot' && rv !== undefined && rv !== null && rv !== '') {
+        nonEmptyReportFields[rk] = rv;
+      }
+    }
+    const snapshot: Record<string, any> = {
+      ...(matchedDefib || {}),
+      ...rawSnap,
+      ...nonEmptyReportFields,
+      modeleId: rawSnap.modeleId || report.modele || matchedDefib?.modeleId || '',
+      modeleCoffretId: rawSnap.modeleCoffretId || report.modeleCoffret || (matchedDefib as any)?.modeleCoffretId || '',
+      modeleElectrodeAId: rawSnap.modeleElectrodeAId || report.modeleElectrodeA || (matchedDefib as any)?.modeleElectrodeAId || '',
+      modeleElectrodeASecoursId: rawSnap.modeleElectrodeASecoursId || report.modeleElectrodeSecoursA || (matchedDefib as any)?.modeleElectrodeASecoursId || '',
+      modeleElectrodePId: rawSnap.modeleElectrodePId || report.modeleElectrodeP || (matchedDefib as any)?.modeleElectrodePId || '',
+      modeleElectrodePSecoursId: rawSnap.modeleElectrodePSecoursId || report.modeleElectrodeSecoursP || (matchedDefib as any)?.modeleElectrodePSecoursId || '',
+      modeleBatterieId: rawSnap.modeleBatterieId || report.modeleBatterie || (matchedDefib as any)?.modeleBatterieId || '',
+      insertionElectrodeA: rawSnap.insertionElectrodeA || rawSnap.fabricationElectrodeA || report.fabricationElectrodeA || (matchedDefib as any)?.insertionElectrodeA || '',
+      insertionBatterie: rawSnap.insertionBatterie || rawSnap.miseEnServiceBatterie || report.miseEnServiceBatterie || (matchedDefib as any)?.insertionBatterie || '',
+      peremptionSecoursElectrodeA: rawSnap.peremptionSecoursElectrodeA || rawSnap.peremptionElectrodeSecoursA || report.peremptionElectrodeSecoursA || (matchedDefib as any)?.peremptionSecoursElectrodeA || '',
+      lotElectrodeASecours: rawSnap.lotElectrodeASecours || rawSnap.lotElectrodeSecoursA || report.lotElectrodeSecoursA || (matchedDefib as any)?.lotElectrodeASecours || '',
+      peremptionSecoursElectrodeP: rawSnap.peremptionSecoursElectrodeP || rawSnap.peremptionElectrodeSecoursP || report.peremptionElectrodeSecoursP || (matchedDefib as any)?.peremptionSecoursElectrodeP || '',
+      lotElectrodePSecours: rawSnap.lotElectrodePSecours || rawSnap.lotElectrodeSecoursP || report.lotElectrodeSecoursP || (matchedDefib as any)?.lotElectrodePSecours || '',
+      peremptionTrousse: report.kitPeremption || report.peremptionKit || rawSnap.peremptionTrousse || rawSnap.peremptionKit || (matchedDefib as any)?.peremptionTrousse || '',
+      commentaire: report.diagnosticCommentaire || rawSnap.commentaire || report.remarques || (matchedDefib as any)?.commentaire || '',
+    };
+
+    const pdfLogo = effectiveCompanyInfo.logo || '';
+    const pdfHeaderImg = effectiveCompanyInfo.pdfHeaderImg || '';
+    const pdfPageHeaderText = effectiveCompanyInfo.pdfPageHeaderText || '';
+    const pdfPageFooterText = effectiveCompanyInfo.pdfPageFooterText || '';
+    const pdfLastPageInfoText = effectiveCompanyInfo.pdfLastPageInfoText || '';
     const hasLastPage = !!pdfLastPageInfoText.trim();
-    const pdfHeaderBgColor = companyInfo.pdfHeaderBgColor || '#7c2882';
-    const pdfCardBorderColor = companyInfo.pdfCardBorderColor || '#7d2882';
-    const pdfCardBgColor = companyInfo.pdfCardBgColor || '#fef2ff';
-    const pdfLabelTextColor = companyInfo.pdfLabelTextColor || '#9f71a2';
+    const pdfHeaderBgColor = effectiveCompanyInfo.pdfHeaderBgColor || '#7c2882';
+    const pdfCardBorderColor = effectiveCompanyInfo.pdfCardBorderColor || '#7d2882';
+    const pdfCardBgColor = effectiveCompanyInfo.pdfCardBgColor || '#fef2ff';
+    const pdfLabelTextColor = effectiveCompanyInfo.pdfLabelTextColor || '#9f71a2';
 
-    const compLogo = companyInfo.logo || '';
-    const compName = companyInfo.name || 'Défibeo Solutions';
-    const compEmail = companyInfo.email || '';
-    const compPhone = companyInfo.phone || '';
-    const compWebsite = companyInfo.website || '';
+    const compLogo = effectiveCompanyInfo.logo || '';
+    const compName = effectiveCompanyInfo.name || 'Défibeo Solutions';
+    const compEmail = effectiveCompanyInfo.email || '';
+    const compPhone = effectiveCompanyInfo.phone || '';
+    const compWebsite = effectiveCompanyInfo.website || '';
 
-    // Unified client lookup
-    let clientFound = clients.find(c => c.id === snapshot.clientId);
-    if (!clientFound && snapshot.clientId) {
-      clientFound = clients.find(c => c.denomination === snapshot.clientId || c.id === snapshot.clientId);
-    }
-    if (!clientFound && report.clientId) {
-      clientFound = clients.find(c => c.id === report.clientId);
-    }
+    // Unified client lookup from clients Spreadsheet (matching ID, clientIdField, denomination, contact name, or email)
+    const clientCandidates = [snapshot.clientId, report.clientId, report.clientName, report.entreprise]
+      .filter(Boolean)
+      .map(s => String(s).trim().toLowerCase());
+    let clientFound = clients.find(c => {
+      const cKeys = [c.id, c.clientIdField, c.denomination]
+        .filter(Boolean)
+        .map(s => String(s).trim().toLowerCase());
+      return cKeys.some(k => clientCandidates.includes(k));
+    });
     if (!clientFound) {
       const siteEmail = snapshot.emailSite || report.emailSite || "";
       if (siteEmail) {
@@ -5683,21 +5849,23 @@ export default function App() {
         clientFound = clients.find(c => c.denomination === siteNom || c.nomPrenomSite === siteNom);
       }
     }
-    const clientName = clientFound ? clientFound.denomination : (snapshot.nomPrenomSite || 'Non rattaché');
+    const clientName = clientFound
+      ? clientFound.denomination
+      : (report.clientName || report.entreprise || snapshot.clientId || snapshot.nomPrenomSite || 'Non rattaché');
 
-    const clientIdField = clientFound?.clientIdField || snapshot.clientIdField || '';
-    const payeurId = clientFound?.payeurId || snapshot.payeurId || '';
+    const clientIdField = clientFound?.clientIdField || report.clientIdField || snapshot.clientIdField || '';
+    const payeurId = clientFound?.payeurId || report.payeurId || snapshot.payeurId || '';
 
     // Unified purchase order (bonCommande) lookup
     const matchedMission = (fsmTours || [])
       .flatMap((t: any) => t.missions || [])
       .find((m: any) => m.defibIdentifiant === (snapshot.identifiant || report.defibIdentifiant));
-    const bonCommandeId = report.bonCommandeId || matchedMission?.bonCommandeId;
-    const bcDoc = bonCommandeId && bonCommandeId !== 'custom' ? (commercialDocs || []).find((doc: any) => doc.id === bonCommandeId) : null;
-    const bonCommandeEntete = bcDoc?.bonCommandeEntete || (bonCommandeId === 'custom' ? matchedMission?.customBonCommande : '') || '';
+    const bonCommandeId = report.bonCommandeId || report.bonDeCommande || matchedMission?.bonCommandeId;
+    const bcDoc = bonCommandeId && bonCommandeId !== 'custom' ? (commercialDocs || []).find((doc: any) => doc.id === bonCommandeId || doc.ref === bonCommandeId || doc.numeroPiece === bonCommandeId) : null;
+    const bonCommandeEntete = bcDoc?.bonCommandeEntete || (bonCommandeId === 'custom' ? matchedMission?.customBonCommande : report.bonDeCommande) || '';
 
     // Unified « Autre référence » lookup (identique au parcours Tournées > Rapports)
-    let autreReferenceVal = report.autreReference || report.customReference || '';
+    let autreReferenceVal = report.autreReference || report.customReference || snapshot.autreReference || '';
     if (!autreReferenceVal) {
       for (const tour of (fsmTours || [])) {
         for (const m of (tour.missions || [])) {
@@ -6077,12 +6245,36 @@ export default function App() {
       `;
       const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      if (printWin) {
+        printWin.location.href = url;
+      } else {
+        window.open(url, '_blank');
+      }
       return;
     }
 
+    // Helper to resolve model variable by ID, name, or "Marque Nom" from the variables Spreadsheet
+    const findVariableByModelRef = (ref: any) => {
+      if (!ref) return undefined;
+      const clean = String(ref).trim().toLowerCase();
+      if (!clean) return undefined;
+      return variables.find(v => {
+        const vId = String(v.id || '').trim().toLowerCase();
+        const vNom = String(v.nom || '').trim().toLowerCase();
+        const vMarqueNom = `${v.marque || ''} ${v.nom || ''}`.trim().toLowerCase();
+        const vNomMarque = `${v.nom || ''} (${v.marque || ''})`.trim().toLowerCase();
+        return vId === clean || vNom === clean || vMarqueNom === clean || vNomMarque === clean;
+      });
+    };
+    const formatModelDisplayName = (modelVar: any, fallbackRef: any, emptyFallback = 'Non spécifié') => {
+      if (modelVar) {
+        return `${modelVar.marque ? modelVar.marque + ' ' : ''}${modelVar.nom || ''}`.trim();
+      }
+      return fallbackRef ? String(fallbackRef) : emptyFallback;
+    };
+
     // Resolving Model names from Variable list
-    const defibModel = variables.find(v => v.id === snapshot.modeleId);
+    const defibModel = findVariableByModelRef(snapshot.modeleId || snapshot.modele);
     const selectedModelVar = defibModel;
 
     const isVisibleNumeroAtlasante = selectedModelVar ? (selectedModelVar.visibiliteNumeroAtlasante !== 'Non') : true;
@@ -6115,68 +6307,71 @@ export default function App() {
     const isVisibleNettoyage = selectedModelVar ? (selectedModelVar.visibiliteNettoyage !== 'Non') : true;
     const isVisiblePiecesJointes = selectedModelVar ? (selectedModelVar.visibilitePiecesJointes !== 'Non') : true;
 
-    const defibModelName = defibModel ? `${defibModel.marque} ${defibModel.nom}` : (snapshot.modeleId || 'Non spécifié');
+    const defibModelName = formatModelDisplayName(defibModel, snapshot.modeleId || snapshot.modele);
 
-    const coffretModel = variables.find(v => v.id === snapshot.modeleCoffretId);
-    const coffretModelName = coffretModel ? `${coffretModel.marque} ${coffretModel.nom}` : (snapshot.modeleCoffretId || 'Non spécifié');
+    const coffretModel = findVariableByModelRef(snapshot.modeleCoffretId || snapshot.modeleCoffret);
+    const coffretModelName = formatModelDisplayName(coffretModel, snapshot.modeleCoffretId || snapshot.modeleCoffret);
 
-    const electrodeAModel = variables.find(v => v.id === snapshot.modeleElectrodeAId);
-    const electrodeAModelName = electrodeAModel ? `${electrodeAModel.marque} ${electrodeAModel.nom}` : (snapshot.modeleElectrodeAId || 'Non spécifié');
+    const electrodeAModel = findVariableByModelRef(snapshot.modeleElectrodeAId || snapshot.modeleElectrodeA);
+    const electrodeAModelName = formatModelDisplayName(electrodeAModel, snapshot.modeleElectrodeAId || snapshot.modeleElectrodeA);
 
-    const electrodeASecoursModel = variables.find(v => v.id === snapshot.modeleElectrodeASecoursId);
-    const electrodeASecoursModelName = electrodeASecoursModel ? `${electrodeASecoursModel.marque} ${electrodeASecoursModel.nom}` : '';
+    const electrodeASecoursModel = findVariableByModelRef(snapshot.modeleElectrodeASecoursId || snapshot.modeleElectrodeSecoursA);
+    const electrodeASecoursModelName = formatModelDisplayName(electrodeASecoursModel, snapshot.modeleElectrodeASecoursId || snapshot.modeleElectrodeSecoursA, '');
 
-    const electrodePModel = variables.find(v => v.id === snapshot.modeleElectrodePId);
-    const electrodePModelName = electrodePModel ? `${electrodePModel.marque} ${electrodePModel.nom}` : (snapshot.modeleElectrodePId || 'Non spécifié');
+    const electrodePModel = findVariableByModelRef(snapshot.modeleElectrodePId || snapshot.modeleElectrodeP);
+    const electrodePModelName = formatModelDisplayName(electrodePModel, snapshot.modeleElectrodePId || snapshot.modeleElectrodeP);
 
-    const electrodePSecoursModel = variables.find(v => v.id === snapshot.modeleElectrodePSecoursId);
-    const electrodePSecoursModelName = electrodePSecoursModel ? `${electrodePSecoursModel.marque} ${electrodePSecoursModel.nom}` : '';
+    const electrodePSecoursModel = findVariableByModelRef(snapshot.modeleElectrodePSecoursId || snapshot.modeleElectrodeSecoursP);
+    const electrodePSecoursModelName = formatModelDisplayName(electrodePSecoursModel, snapshot.modeleElectrodePSecoursId || snapshot.modeleElectrodeSecoursP, '');
 
-    const batterieModel = variables.find(v => v.id === snapshot.modeleBatterieId);
-    const batterieModelName = batterieModel ? `${batterieModel.marque} ${batterieModel.nom}` : (snapshot.modeleBatterieId || 'Non spécifié');
+    const batterieModel = findVariableByModelRef(snapshot.modeleBatterieId || snapshot.modeleBatterie);
+    const batterieModelName = formatModelDisplayName(batterieModel, snapshot.modeleBatterieId || snapshot.modeleBatterie);
 
-    // Helper to resolve stock pieces
+    // Helper to resolve stock pieces from Centrale des Stocks (stocksGlobaux) and Variables Spreadsheets
     const getStockPieceLabel = (stockId: string) => {
       if (!stockId) return '-';
-      const stockItem = stocks.find((s: any) => s.id === stockId);
-      if (!stockItem) return stockId;
-      const variableItem = variables.find((v: any) => v.id === stockItem.denominationPieceId);
-      if (!variableItem) return `Pièce (${stockItem.denominationPieceId})`;
-      return `${variableItem.nom} (${variableItem.marque})`;
+      const cleanRef = String(stockId).trim().toLowerCase();
+      const stockItem = stocks.find((s: any) => {
+        const sKeys = [s.id, s.identifiant, s.ugs, s.denominationPieceId, s.denominationPieceNom]
+          .filter(Boolean)
+          .map(x => String(x).trim().toLowerCase());
+        return sKeys.includes(cleanRef);
+      });
+      if (!stockItem) {
+        const directVar = findVariableByModelRef(stockId);
+        if (directVar) return `${directVar.nom}${directVar.marque ? ` (${directVar.marque})` : ''}`;
+        return stockId;
+      }
+      const variableItem = findVariableByModelRef(stockItem.denominationPieceId || stockItem.denominationPieceNom);
+      if (!variableItem) {
+        return stockItem.denominationPieceNom || stockItem.denominationPieceId || stockId;
+      }
+      return `${variableItem.nom}${variableItem.marque ? ` (${variableItem.marque})` : ''}`;
     };
 
     // Helper to resolve service label
     const getServiceLabel = (serviceId: string) => {
       if (!serviceId) return '';
-      const stockItem = stocks.find((s: any) => s.id === serviceId);
-      if (stockItem) {
-        const variable = variables.find((v: any) => v.id === stockItem.denominationPieceId);
-        return variable ? `${variable.nom} (${variable.marque})` : 'Service';
-      }
-      const variable = variables.find((v: any) => v.id === serviceId);
-      if (variable) {
-        return `${variable.nom} (${variable.marque})`;
-      }
-      return serviceId;
+      return getStockPieceLabel(serviceId);
     };
 
-    const selElectrodeA = getStockPieceLabel(report.selectionElectrodeARemplacee);
-    const selElectrodeASecours = getStockPieceLabel(report.selectionElectrodeASecoursRemplacee);
-    const selElectrodeP = getStockPieceLabel(report.selectionElectrodePRemplacee);
-    const selElectrodePSecours = getStockPieceLabel(report.selectionElectrodePSecoursRemplacee);
-    const selBatterie = getStockPieceLabel(report.selectionBatterieRemplacee);
-    const selKitSecours = getStockPieceLabel(report.selectionKitSecoursRemplace);
+    const selElectrodeA = getStockPieceLabel(report.selectionElectrodeARemplacee || report.destockElectrodeA || snapshot.destockElectrodeA);
+    const selElectrodeASecours = getStockPieceLabel(report.selectionElectrodeASecoursRemplacee || report.destockElectrodeSecoursA || snapshot.destockElectrodeSecoursA);
+    const selElectrodeP = getStockPieceLabel(report.selectionElectrodePRemplacee || report.destockElectrodeP || snapshot.destockElectrodeP);
+    const selElectrodePSecours = getStockPieceLabel(report.selectionElectrodePSecoursRemplacee || report.destockElectrodeSecoursP || snapshot.destockElectrodeSecoursP);
+    const selBatterie = getStockPieceLabel(report.selectionBatterieRemplacee || report.destockBatterie || snapshot.destockBatterie);
+    const selKitSecours = getStockPieceLabel(report.selectionKitSecoursRemplace || report.destockKit || snapshot.destockKit);
 
-    const pdfHideElectrodeSecoursA = companyInfo.pdfHideElectrodeSecoursA === 'Oui';
-    const pdfHideElectrodeSecoursP = companyInfo.pdfHideElectrodeSecoursP === 'Oui';
-    const pdfHideKitSecours = companyInfo.pdfHideKitSecours === 'Oui';
-    const pdfSimplifyCoffret = companyInfo.pdfSimplifyCoffret === 'Oui';
-    const pdfHideVerificationsTechniques = companyInfo.pdfHideVerificationsTechniques === 'Oui';
-    const pdfHideHorodatagesDiagnostic = companyInfo.pdfHideHorodatagesDiagnostic === 'Oui';
-    const pdfShowDemandeDevisDetails = companyInfo.pdfShowDemandeDevisDetails === 'Oui';
+    const pdfHideElectrodeSecoursA = effectiveCompanyInfo.pdfHideElectrodeSecoursA === 'Oui';
+    const pdfHideElectrodeSecoursP = effectiveCompanyInfo.pdfHideElectrodeSecoursP === 'Oui';
+    const pdfHideKitSecours = effectiveCompanyInfo.pdfHideKitSecours === 'Oui';
+    const pdfSimplifyCoffret = effectiveCompanyInfo.pdfSimplifyCoffret === 'Oui';
+    const pdfHideVerificationsTechniques = effectiveCompanyInfo.pdfHideVerificationsTechniques === 'Oui';
+    const pdfHideHorodatagesDiagnostic = effectiveCompanyInfo.pdfHideHorodatagesDiagnostic === 'Oui';
+    const pdfShowDemandeDevisDetails = effectiveCompanyInfo.pdfShowDemandeDevisDetails === 'Oui';
 
     const totalPages = hasLastPage ? 6 : 5;
-    const docTitle = report.title ? report.title : 'Rapport d’intervention GMAO';
+    const docTitle = report.reportTitle || report.title || 'Rapport d’intervention GMAO';
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -6386,12 +6581,12 @@ export default function App() {
                     <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Autre référence :</span> <span class="pdf-bold">${autreReferenceVal || '—'}</span></div>
                   </div>
                   <div style="display: flex; flex-direction: row; gap: 20px; width: 100%;">
-                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Identifiant :</span> <span class="pdf-bold">${snapshot.identifiant || ''}</span></div>
-                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Série :</span> <span class="pdf-bold">${snapshot.numeroSerie || ''}</span></div>
+                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Identifiant :</span> <span class="pdf-bold">${snapshot.identifiant || report.defibIdentifiant || ''}</span></div>
+                    <div class="pdf-line" style="flex: 1;"><span class="pdf-label">Série :</span> <span class="pdf-bold">${snapshot.numeroSerie || report.numeroSerie || ''}</span></div>
                   </div>
-                  <div class="pdf-line"><span class="pdf-label">Modèle :</span> <span class="pdf-bold">${snapshot.modeleId ? defibModelName : ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Modèle :</span> <span class="pdf-bold">${(snapshot.modeleId || snapshot.modele) ? defibModelName : ''}</span></div>
                   ${isVisibleVersionLogiciel ? `<div class="pdf-line"><span class="pdf-label">Version du logiciel :</span> <span class="pdf-bold">${snapshot.versionLogiciel || '—'}</span></div>` : ''}
-                  <div class="pdf-line"><span class="pdf-label">Type Défibrillateur :</span> <span class="pdf-bold">${defibModel?.typeDefibrillateur || snapshot.typeDefibrillateur || 'DSA'}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Type Défibrillateur :</span> <span class="pdf-bold">${defibModel?.typeDefibrillateur || snapshot.typeDefibrillateur || (snapshot.dea === 'Oui' || report.dea === 'Oui' ? 'DEA' : 'DSA')}</span></div>
                   <div class="pdf-line" style="margin-top: 10px;"><span class="pdf-label">Date Fabrication :</span> <span class="pdf-bold">${snapshot.fabrication || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Date Mise en service :</span> <span class="pdf-bold">${snapshot.miseEnService || ''}</span></div>
                 </div>
@@ -6411,15 +6606,15 @@ export default function App() {
                 <div class="pdf-card-header">2 — Batterie (B).</div>
                 <div class="pdf-card-body">
                   <div class="pdf-line"><span class="pdf-label">Référence de batterie :</span> <span class="pdf-bold">${batterieModelName || ''}</span></div>
-                  ${isVisiblePourcentageBatterie ? `<div class="pdf-line"><span class="pdf-label">Pourcentage de charge :</span> <span class="pdf-bold">${snapshot.pourcentageBatterie ? snapshot.pourcentageBatterie + '%' : ''}</span></div>` : ''}
+                  ${isVisiblePourcentageBatterie ? `<div class="pdf-line"><span class="pdf-label">Pourcentage de charge :</span> <span class="pdf-bold">${snapshot.pourcentageBatterie ? (String(snapshot.pourcentageBatterie).includes('%') ? snapshot.pourcentageBatterie : snapshot.pourcentageBatterie + '%') : ''}</span></div>` : ''}
                   <div class="pdf-line"><span class="pdf-label">Lot B :</span> <span class="pdf-bold">${snapshot.lotBatterie || ''}</span></div>
                   ${isVisiblePeremptionBatterie ? `<div class="pdf-line"><span class="pdf-label">Péremption :</span> <span class="pdf-bold">${snapshot.peremptionBatterie || ''}</span></div>` : ''}
                   ${isVisibleFabricationBatterie ? `<div class="pdf-line"><span class="pdf-label">Fabrication :</span> <span class="pdf-bold">${snapshot.fabricationBatterie || ''}</span></div>` : ''}
-                  ${isVisibleInsertionBatterie ? `<div class="pdf-line"><span class="pdf-label">Insertion :</span> <span class="pdf-bold">${snapshot.insertionBatterie || ''}</span></div>` : ''}
-                  <div class="pdf-line"><span class="pdf-label">Batterie remplacée :</span> <span class="pdf-bold">${report.batterieRemplacee || ''}</span></div>
+                  ${isVisibleInsertionBatterie ? `<div class="pdf-line"><span class="pdf-label">Insertion :</span> <span class="pdf-bold">${snapshot.insertionBatterie || snapshot.miseEnServiceBatterie || ''}</span></div>` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Batterie remplacée :</span> <span class="pdf-bold">${report.batterieRemplacee || report.remplaceBatterie || snapshot.remplaceBatterie || 'Non'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection de la batterie remplacée :</span> <span class="pdf-bold">${selBatterie || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Pourcentage de charge nouvelle batterie :</span> <span class="pdf-bold">${(report.pourcentageChargeNouvelleBatterie || snapshot.pourcentageChargeNouvelleBatterie) ? (String(report.pourcentageChargeNouvelleBatterie || snapshot.pourcentageChargeNouvelleBatterie).includes('%') ? (report.pourcentageChargeNouvelleBatterie || snapshot.pourcentageChargeNouvelleBatterie) : (report.pourcentageChargeNouvelleBatterie || snapshot.pourcentageChargeNouvelleBatterie) + '%') : ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Batterie conforme et fonctionnelle :</span> <span class="pdf-bold">${report.batterieConformeSante || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Batterie conforme et fonctionnelle :</span> <span class="pdf-bold">${report.batterieConformeSante || snapshot.batterieConformeSante || report.conforme || snapshot.conforme || 'Oui'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Commentaire concernant la batterie :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireBatterie || ''}</span></div>
                 </div>
               </div>
@@ -6429,14 +6624,14 @@ export default function App() {
               <div class="pdf-card">
                 <div class="pdf-card-header">3 — Vérifications techniques.</div>
                 <div class="pdf-card-body" style="gap: 3px;">
-                  <div class="pdf-line"><span class="pdf-label">Conforme à mon arrivée :</span> <span class="pdf-bold">${report.techConformeArrivee || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Conforme à mon arrivée :</span> <span class="pdf-bold">${report.techConformeArrivee || report.verificationsConformes || snapshot.verificationsConformes || 'Oui'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Commentaire sur l’état à mon arrivée :</span> <span class="pdf-bold">${report.techCommentaireArrivee || ''}</span></div>
-                  ${isVisibleNettoyage ? `<div class="pdf-line"><span class="pdf-label">Nettoyage :</span> <span class="pdf-bold">${report.techNettoyage || ''}</span></div>` : ''}
-                  ${isVisibleVoyantConforme ? `<div class="pdf-line"><span class="pdf-label">Voyant conforme :</span> <span class="pdf-bold">${report.techVoyantConforme || ''}</span></div>` : ''}
-                  ${isVisibleEquipeMessageNumerique ? `<div class="pdf-line"><span class="pdf-label">Équipé d’un message numérique :</span> <span class="pdf-bold">${report.techEquipeMessageNumerique || ''}</span></div>` : ''}
-                  ${isVisibleEquipeMessageNumerique && isVisibleMessageNumeriqueConforme ? `<div class="pdf-line"><span class="pdf-label">Message numérique conforme :</span> <span class="pdf-bold">${report.techMessageNumeroConforme || ''}</span></div>` : ''}
-                  ${isVisibleGuidesVocaux ? `<div class="pdf-line"><span class="pdf-label">Guides vocaux conformes :</span> <span class="pdf-bold">${report.techGuidesVocauxConformes || ''}</span></div>` : ''}
-                  ${isVisibleBranchementElectrodes ? `<div class="pdf-line"><span class="pdf-label">Branchement conforme des électrodes :</span> <span class="pdf-bold">${report.techBranchementElectrodesConforme || ''}</span></div>` : ''}
+                  ${isVisibleNettoyage ? `<div class="pdf-line"><span class="pdf-label">Nettoyage :</span> <span class="pdf-bold">${report.techNettoyage || report.verificationsConformes || snapshot.verificationsConformes || 'Oui'}</span></div>` : ''}
+                  ${isVisibleVoyantConforme ? `<div class="pdf-line"><span class="pdf-label">Voyant conforme :</span> <span class="pdf-bold">${report.techVoyantConforme || report.verificationsConformes || snapshot.verificationsConformes || 'Oui'}</span></div>` : ''}
+                  ${isVisibleEquipeMessageNumerique ? `<div class="pdf-line"><span class="pdf-label">Équipé d’un message numérique :</span> <span class="pdf-bold">${report.techEquipeMessageNumerique || report.ecran || snapshot.ecran || 'Non'}</span></div>` : ''}
+                  ${isVisibleEquipeMessageNumerique && isVisibleMessageNumeriqueConforme ? `<div class="pdf-line"><span class="pdf-label">Message numérique conforme :</span> <span class="pdf-bold">${report.techMessageNumeroConforme || ((report.techEquipeMessageNumerique || report.ecran || snapshot.ecran) === 'Oui' ? (report.verificationsConformes || snapshot.verificationsConformes || 'Oui') : 'Non')}</span></div>` : ''}
+                  ${isVisibleGuidesVocaux ? `<div class="pdf-line"><span class="pdf-label">Guides vocaux conformes :</span> <span class="pdf-bold">${report.techGuidesVocauxConformes || report.verificationsConformes || snapshot.verificationsConformes || 'Oui'}</span></div>` : ''}
+                  ${isVisibleBranchementElectrodes ? `<div class="pdf-line"><span class="pdf-label">Branchement conforme des électrodes :</span> <span class="pdf-bold">${report.techBranchementElectrodesConforme || report.verificationsConformes || snapshot.verificationsConformes || 'Oui'}</span></div>` : ''}
                 </div>
               </div>
               ` : ''}
@@ -6456,22 +6651,22 @@ export default function App() {
                 <div class="pdf-card-body">
                   <div class="pdf-line"><span class="pdf-label">Modèle d'électrode A :</span> <span class="pdf-bold">${electrodeAModelName || ''}</span></div>
                   ${isVisibleLotPadPakA ? `<div class="pdf-line"><span class="pdf-label">Lot A :</span> <span class="pdf-bold">${snapshot.lotElectrodeA || ''}</span></div>` : ''}
-                  ${isVisiblePadPakAdulte ? `<div class="pdf-line"><span class="pdf-label">Insertion :</span> <span class="pdf-bold">${snapshot.insertionElectrodeA || ''}</span></div>` : ''}
+                  ${isVisiblePadPakAdulte ? `<div class="pdf-line"><span class="pdf-label">Insertion :</span> <span class="pdf-bold">${snapshot.insertionElectrodeA || snapshot.fabricationElectrodeA || ''}</span></div>` : ''}
                   ${isVisiblePeremptionPadPakA ? `<div class="pdf-line"><span class="pdf-label">Péremption :</span> <span class="pdf-bold">${snapshot.peremptionElectrodeA || ''}</span></div>` : ''}
                   
                   <div class="pdf-line"><span class="pdf-label">Modèle électrode secours :</span> <span class="pdf-bold">${electrodeASecoursModelName || 'Aucun'}</span></div>
-                  ${isVisibleLotPadPakA ? `<div class="pdf-line"><span class="pdf-label">Lot de secours :</span> <span class="pdf-bold">${snapshot.lotElectrodeASecours || ''}</span></div>` : ''}
-                  ${isVisiblePeremptionPadPakA ? `<div class="pdf-line"><span class="pdf-label">Péremption de secours :</span> <span class="pdf-bold">${snapshot.peremptionSecoursElectrodeA || ''}</span></div>` : ''}
+                  ${isVisibleLotPadPakA ? `<div class="pdf-line"><span class="pdf-label">Lot de secours :</span> <span class="pdf-bold">${snapshot.lotElectrodeASecours || snapshot.lotElectrodeSecoursA || ''}</span></div>` : ''}
+                  ${isVisiblePeremptionPadPakA ? `<div class="pdf-line"><span class="pdf-label">Péremption de secours :</span> <span class="pdf-bold">${snapshot.peremptionSecoursElectrodeA || snapshot.peremptionElectrodeSecoursA || ''}</span></div>` : ''}
                   
-                  <div class="pdf-line"><span class="pdf-label">Électrode A remplacée :</span> <span class="pdf-bold">${report.electrodeARemplacee || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Électrode A remplacée :</span> <span class="pdf-bold">${report.electrodeARemplacee || report.remplaceElectrodeA || snapshot.remplaceElectrodeA || 'Non'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection de l'électrode remplacée :</span> <span class="pdf-bold">${selElectrodeA || ''}</span></div>
                   
                   ${!pdfHideElectrodeSecoursA ? `
-                  <div class="pdf-line"><span class="pdf-label">Électrode A Secours remplacée :</span> <span class="pdf-bold">${report.electrodeASecoursRemplacee || 'Non'}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Électrode A Secours remplacée :</span> <span class="pdf-bold">${report.electrodeASecoursRemplacee || report.remplaceElectrodeSecoursA || snapshot.remplaceElectrodeSecoursA || 'Non'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection de l'électrode Secours A remplacée :</span> <span class="pdf-bold">${selElectrodeASecours || ''}</span></div>
                   ` : ''}
                   
-                  <div class="pdf-line"><span class="pdf-label">Électrode A conforme et fonctionnelle :</span> <span class="pdf-bold">${report.electrodeAConformeSante || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Électrode A conforme et fonctionnelle :</span> <span class="pdf-bold">${report.electrodeAConformeSante || snapshot.electrodeAConformeSante || report.conforme || snapshot.conforme || 'Oui'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Commentaire :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireElectrodeA || ''}</span></div>
                 </div>
               </div>
@@ -6485,18 +6680,18 @@ export default function App() {
                   ${isVisiblePeremptionPadPakP ? `<div class="pdf-line"><span class="pdf-label">Péremption :</span> <span class="pdf-bold">${snapshot.peremptionElectrodeP || ''}</span></div>` : ''}
                   
                   <div class="pdf-line"><span class="pdf-label">Modèle électrode secours :</span> <span class="pdf-bold">${electrodePSecoursModelName || 'Aucun'}</span></div>
-                  ${isVisibleLotP ? `<div class="pdf-line"><span class="pdf-label">Lot de secours :</span> <span class="pdf-bold">${snapshot.lotElectrodePSecours || ''}</span></div>` : ''}
-                  ${isVisiblePeremptionPadPakP ? `<div class="pdf-line"><span class="pdf-label">Péremption de secours :</span> <span class="pdf-bold">${snapshot.peremptionSecoursElectrodeP || ''}</span></div>` : ''}
+                  ${isVisibleLotP ? `<div class="pdf-line"><span class="pdf-label">Lot de secours :</span> <span class="pdf-bold">${snapshot.lotElectrodePSecours || snapshot.lotElectrodeSecoursP || ''}</span></div>` : ''}
+                  ${isVisiblePeremptionPadPakP ? `<div class="pdf-line"><span class="pdf-label">Péremption de secours :</span> <span class="pdf-bold">${snapshot.peremptionSecoursElectrodeP || snapshot.peremptionElectrodeSecoursP || ''}</span></div>` : ''}
                   
-                  <div class="pdf-line"><span class="pdf-label">Électrode P remplacée :</span> <span class="pdf-bold">${report.electrodePRemplacee || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Électrode P remplacée :</span> <span class="pdf-bold">${report.electrodePRemplacee || report.remplaceElectrodeP || snapshot.remplaceElectrodeP || 'Non'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection de l'électrode remplacée :</span> <span class="pdf-bold">${selElectrodeP || ''}</span></div>
                   
                   ${!pdfHideElectrodeSecoursP ? `
-                  <div class="pdf-line"><span class="pdf-label">Électrode P Secours remplacée :</span> <span class="pdf-bold">${report.electrodePSecoursRemplacee || 'Non'}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Électrode P Secours remplacée :</span> <span class="pdf-bold">${report.electrodePSecoursRemplacee || report.remplaceElectrodeSecoursP || snapshot.remplaceElectrodeSecoursP || 'Non'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection de l'électrode Secours P remplacée :</span> <span class="pdf-bold">${selElectrodePSecours || ''}</span></div>
                   ` : ''}
                   
-                  <div class="pdf-line"><span class="pdf-label">Électrode P conforme et fonctionnelle :</span> <span class="pdf-bold">${report.electrodePConformeSante || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Électrode P conforme et fonctionnelle :</span> <span class="pdf-bold">${report.electrodePConformeSante || snapshot.electrodePConformeSante || report.conforme || snapshot.conforme || 'Oui'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Commentaire concernant l’électrode P :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireElectrodeP || ''}</span></div>
                 </div>
               </div>
@@ -6517,13 +6712,13 @@ export default function App() {
                   <div class="pdf-line"><span class="pdf-label">Modèle de boîtier :</span> <span class="pdf-bold">${coffretModelName || ''}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Lot de boîtier :</span> <span class="pdf-bold">${snapshot.numeroLotCoffret || ''}</span></div>
                   ${!pdfSimplifyCoffret ? `
-                  <div class="pdf-line"><span class="pdf-label">Équipé d’une alarme :</span> <span class="pdf-bold">${report.equipeAlarme || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Alarme fonctionnelle :</span> <span class="pdf-bold">${report.alarme || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Dispositif d’armoire connectée :</span> <span class="pdf-bold">${report.armoireConnectee || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Dispositif handicap :</span> <span class="pdf-bold">${report.dispositifHandicap || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Équipé d’une alarme :</span> <span class="pdf-bold">${report.equipeAlarme || snapshot.equipeAlarme || 'Oui'}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Alarme fonctionnelle :</span> <span class="pdf-bold">${report.alarme || snapshot.alarme || snapshot.alarmeCoffret || 'Oui'}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Dispositif d’armoire connectée :</span> <span class="pdf-bold">${report.armoireConnectee || snapshot.armoireConnectee || 'Non'}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Dispositif handicap :</span> <span class="pdf-bold">${report.dispositifHandicap || snapshot.dispositifHandicap || 'Non'}</span></div>
                   ` : ''}
-                  <div class="pdf-line"><span class="pdf-label">Signalétique conforme :</span> <span class="pdf-bold">${report.signaletiqueConforme || ''}</span></div>
-                  <div class="pdf-line"><span class="pdf-label">Installé en extérieur :</span> <span class="pdf-bold">${report.installeExterieur || snapshot.installeExterieur || (report.exterieur !== undefined ? (report.exterieur ? 'Oui' : 'Non') : '') || (snapshot.exterieur !== undefined ? (snapshot.exterieur ? 'Oui' : 'Non') : '') || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Signalétique conforme :</span> <span class="pdf-bold">${report.signaletiqueConforme || snapshot.signaletiqueConforme || snapshot.signaletiqueBoitier || 'Oui'}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Installé en extérieur :</span> <span class="pdf-bold">${report.installeExterieur || snapshot.installeExterieur || (report.exterieur !== undefined ? (report.exterieur ? 'Oui' : 'Non') : '') || (snapshot.exterieur !== undefined ? (snapshot.exterieur ? 'Oui' : 'Non') : '') || 'Non'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Commentaire :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaireCoffret || ''}</span></div>
                 </div>
               </div>
@@ -6532,18 +6727,18 @@ export default function App() {
               <div class="pdf-card">
                 <div class="pdf-card-header">7 — Vérifications du kit de secours.</div>
                 <div class="pdf-card-body" style="gap: 3px;">
-                  <div class="pdf-line"><span class="pdf-label">Trousse de secours présente :</span> <span class="pdf-bold">${report.kitTrousseSecoursPresent || ''}</span></div>
-                  ${isVisiblePeremptionTrousse ? `<div class="pdf-line"><span class="pdf-label">Péremption de la trousse :</span> <span class="pdf-bold">${report.kitPeremption || snapshot.peremptionTrousse || ''}</span></div>` : ''}
-                  <div class="pdf-line"><span class="pdf-label">Kit de secours remplacé ou ajouté :</span> <span class="pdf-bold">${report.kitSecoursRemplaceOuAjoute || ''}</span></div>
+                  <div class="pdf-line"><span class="pdf-label">Trousse de secours présente :</span> <span class="pdf-bold">${report.kitTrousseSecoursPresent || snapshot.kitTrousseSecoursPresent || 'Oui'}</span></div>
+                  ${isVisiblePeremptionTrousse ? `<div class="pdf-line"><span class="pdf-label">Péremption de la trousse :</span> <span class="pdf-bold">${report.kitPeremption || report.peremptionKit || snapshot.peremptionTrousse || snapshot.peremptionKit || ''}</span></div>` : ''}
+                  <div class="pdf-line"><span class="pdf-label">Kit de secours remplacé ou ajouté :</span> <span class="pdf-bold">${report.kitSecoursRemplaceOuAjoute || report.remplaceKit || snapshot.remplaceKit || 'Non'}</span></div>
                   <div class="pdf-line"><span class="pdf-label">Sélection d’un kit de secours :</span> <span class="pdf-bold">${selKitSecours || ''}</span></div>
                   ${!pdfHideKitSecours ? `
-                  ${isVisibleCiseauxPresents ? `<div class="pdf-line"><span class="pdf-label">Ciseaux présents :</span> <span class="pdf-bold">${report.kitCiseauxPresents || ''}</span></div>` : ''}
-                  ${isVisibleMasquePresent ? `<div class="pdf-line"><span class="pdf-label">Masque présent :</span> <span class="pdf-bold">${report.kitMasquePresent || ''}</span></div>` : ''}
-                  ${isVisibleMasquePresent && isVisiblePeremptionMasque ? `<div class="pdf-line"><span class="pdf-label">Péremption du masque :</span> <span class="pdf-bold">${report.kitPeremptionMasque || ''}</span></div>` : ''}
-                  ${isVisibleServiettesPresentes ? `<div class="pdf-line"><span class="pdf-label">Serviettes présentes :</span> <span class="pdf-bold">${report.kitServiettesPresentes || ''}</span></div>` : ''}
-                  ${isVisibleServiettesPresentes && isVisiblePeremptionServiettes ? `<div class="pdf-line"><span class="pdf-label">Péremption des serviettes :</span> <span class="pdf-bold">${report.kitPeremptionServiettes || ''}</span></div>` : ''}
-                  ${isVisibleGantsPresents ? `<div class="pdf-line"><span class="pdf-label">Paires de gants présents :</span> <span class="pdf-bold">${report.kitGantsPresents || ''}</span></div>` : ''}
-                  ${isVisibleRasoir ? `<div class="pdf-line"><span class="pdf-label">Rasoir :</span> <span class="pdf-bold">${report.kitRasoirPresent || ''}</span></div>` : ''}
+                  ${isVisibleCiseauxPresents ? `<div class="pdf-line"><span class="pdf-label">Ciseaux présents :</span> <span class="pdf-bold">${report.kitCiseauxPresents || report.kitCiseaux || snapshot.kitCiseauxPresents || 'Oui'}</span></div>` : ''}
+                  ${isVisibleMasquePresent ? `<div class="pdf-line"><span class="pdf-label">Masque présent :</span> <span class="pdf-bold">${report.kitMasquePresent || report.kitMasque || snapshot.kitMasquePresent || 'Oui'}</span></div>` : ''}
+                  ${isVisibleMasquePresent && isVisiblePeremptionMasque ? `<div class="pdf-line"><span class="pdf-label">Péremption du masque :</span> <span class="pdf-bold">${report.kitPeremptionMasque || snapshot.kitPeremptionMasque || report.kitPeremption || snapshot.peremptionTrousse || ''}</span></div>` : ''}
+                  ${isVisibleServiettesPresentes ? `<div class="pdf-line"><span class="pdf-label">Serviettes présentes :</span> <span class="pdf-bold">${report.kitServiettesPresentes || report.kitCompresses || snapshot.kitServiettesPresentes || 'Oui'}</span></div>` : ''}
+                  ${isVisibleServiettesPresentes && isVisiblePeremptionServiettes ? `<div class="pdf-line"><span class="pdf-label">Péremption des serviettes :</span> <span class="pdf-bold">${report.kitPeremptionServiettes || snapshot.kitPeremptionServiettes || report.kitPeremption || snapshot.peremptionTrousse || ''}</span></div>` : ''}
+                  ${isVisibleGantsPresents ? `<div class="pdf-line"><span class="pdf-label">Paires de gants présents :</span> <span class="pdf-bold">${report.kitGantsPresents || report.kitGants || snapshot.kitGantsPresents || 'Oui'}</span></div>` : ''}
+                  ${isVisibleRasoir ? `<div class="pdf-line"><span class="pdf-label">Rasoir :</span> <span class="pdf-bold">${report.kitRasoirPresent || report.kitRasoir || snapshot.kitRasoirPresent || 'Oui'}</span></div>` : ''}
                   ` : ''}
                 </div>
               </div>
@@ -6562,17 +6757,17 @@ export default function App() {
                 <div class="pdf-card-header">8 — Diagnostic et clôture.</div>
                 <div class="pdf-card-body" style="display: flex; flex-direction: column; gap: 6px;">
                   <div class="pdf-line">
-                    <span class="pdf-label">Défibrillateur conforme et prêt à l’usage :</span> <span class="pdf-bold">${snapshot.conforme === 'Oui' || report.conforme === 'Oui' ? 'Oui' : 'Non'}</span>
+                    <span class="pdf-label">Défibrillateur conforme et prêt à l’usage :</span> <span class="pdf-bold">${(snapshot.conforme === 'Non' || report.conforme === 'Non') ? 'Non' : 'Oui'}</span>
                   </div>
                   ${!pdfHideHorodatagesDiagnostic ? `
                   <div class="pdf-line" style="margin-top: 15px;">
                     <span class="pdf-label">Horodatage entrant :</span> <span class="pdf-bold">${report.date || '-'}</span>
                   </div>
                   <div class="pdf-line">
-                    <span class="pdf-label">Horodatage clôture :</span> <span class="pdf-bold">${report.endTimeStamp || '-'}</span>
+                    <span class="pdf-label">Horodatage clôture :</span> <span class="pdf-bold">${report.endTimeStamp || snapshot.endTimeStamp || '-'}</span>
                   </div>
                   <div class="pdf-line">
-                    <span class="pdf-label">Durée :</span> <span class="pdf-bold">${computeDurationText(report.date, report.endTimeStamp)}</span>
+                    <span class="pdf-label">Durée :</span> <span class="pdf-bold">${computeDurationText(report.date, report.endTimeStamp || snapshot.endTimeStamp)}</span>
                   </div>
                   ` : ''}
                   ${(pdfShowDemandeDevisDetails && (report.demandeDevis === true || report.demandeDevis === 'Oui' || snapshot.demandeDevis === true || snapshot.demandeDevis === 'Oui')) ? `
@@ -6589,19 +6784,19 @@ export default function App() {
                         ? report.devisArticlesSelectionnes.join(', ')
                         : (Array.isArray(snapshot.devisArticlesSelectionnes) && snapshot.devisArticlesSelectionnes.length > 0)
                         ? snapshot.devisArticlesSelectionnes.join(', ')
-                        : (report.devisAutreInfo || snapshot.devisAutreInfo || 'Aucun')
+                        : (report.motifDemandeDevis || snapshot.motifDemandeDevis || report.devisAutreInfo || snapshot.devisAutreInfo || report.descriptionDemandeDevis || snapshot.descriptionDemandeDevis || 'Aucun')
                     }</span>
                   </div>
                   ` : ''}
                   <div class="pdf-line" style="margin-top: 15px;">
-                    <span class="pdf-label">Commentaire :</span> <span class="pdf-bold" style="white-space: pre-line;">${snapshot.commentaire || report.defibSnapshot?.commentaire || '-'}</span>
+                    <span class="pdf-label">Commentaire :</span> <span class="pdf-bold" style="white-space: pre-line;">${report.diagnosticCommentaire || snapshot.commentaire || report.defibSnapshot?.commentaire || '-'}</span>
                   </div>
                   <div class="pdf-line" style="margin-top: 6px;">
                     <span class="pdf-label">Fichier(s) :</span>
                     <span class="pdf-bold">
                       ${report.attachments && report.attachments.length > 0
                         ? report.attachments.map((file: any) => `<a href="${file.url}" target="_blank" style="color: #772a7e; text-decoration: underline; margin-right: 8px;">${file.name}</a>`).join(', ')
-                        : '-'}
+                        : (report.pieceJointeDevisName || snapshot.pieceJointeDevisName || '-')}
                     </span>
                   </div>
                   <div class="pdf-line" style="margin-top: 6px; margin-bottom: 4px;">
@@ -6614,28 +6809,28 @@ export default function App() {
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
                       <div class="pdf-line" style="font-size: 16px; font-weight: bold !important;">Photographies de l'intervention.</div>
                       
-                      ${report.photoUrl ? `
+                      ${(report.photoUrl || snapshot.photoUrl) ? `
                         <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
                           <div style="border: none; border-radius: 11px; overflow: hidden; background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 100px; max-width: 200px;">
-                            <img src="${report.photoUrl}" style="max-height: 100px; border-radius: 11px; max-width: 200px; object-fit: contain;" alt="Photo" referrerPolicy="no-referrer" />
+                            <img src="${report.photoUrl || snapshot.photoUrl}" style="max-height: 100px; border-radius: 11px; max-width: 200px; object-fit: contain;" alt="Photo" referrerPolicy="no-referrer" />
                           </div>
                           <span class="pdf-label" style="font-size: 8px; color: #000000; font-family: 'Civilprom', sans-serif !important;">Photographie globale du défibrillateur.</span>
                         </div>
                       ` : ''}
 
-                      ${report.photoArriereUrl ? `
+                      ${(report.photoArriereUrl || report.photo2Url || snapshot.photo2Url) ? `
                         <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
                           <div style="border: none; border-radius: 11px; overflow: hidden; background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 100px; max-width: 200px;">
-                            <img src="${report.photoArriereUrl}" style="max-height: 100px; border-radius: 11px; max-width: 200px; object-fit: contain;" alt="Photo Arrière" referrerPolicy="no-referrer" />
+                            <img src="${report.photoArriereUrl || report.photo2Url || snapshot.photo2Url}" style="max-height: 100px; border-radius: 11px; max-width: 200px; object-fit: contain;" alt="Photo Arrière" referrerPolicy="no-referrer" />
                           </div>
                           <span class="pdf-label" style="font-size: 8px; color: #000000; font-family: 'Civilprom', sans-serif !important;">Photographie arrière / étiquette.</span>
                         </div>
                       ` : ''}
 
-                      ${report.photoResultatTestUrl ? `
+                      ${(report.photoResultatTestUrl || report.photo3Url || snapshot.photo3Url) ? `
                         <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
                           <div style="border: none; border-radius: 11px; overflow: hidden; background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 100px; max-width: 200px;">
-                            <img src="${report.photoResultatTestUrl}" style="max-height: 100px; border-radius: 11px; max-width: 200px; object-fit: contain;" alt="Photo Resultat Test" referrerPolicy="no-referrer" />
+                            <img src="${report.photoResultatTestUrl || report.photo3Url || snapshot.photo3Url}" style="max-height: 100px; border-radius: 11px; max-width: 200px; object-fit: contain;" alt="Photo Resultat Test" referrerPolicy="no-referrer" />
                           </div>
                           <span class="pdf-label" style="font-size: 8px; color: #000000; font-family: 'Civilprom', sans-serif !important;">Résultat du test.</span>
                         </div>
@@ -6646,30 +6841,37 @@ export default function App() {
 
                     <!-- Signature Technicien -->
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                      ${report.techSignature ? `
+                      ${(report.techSignature || snapshot.techSignature) ? `
                         <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
                         <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
-                          <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
+                          <img src="${report.techSignature || snapshot.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
                         </div>
                       ` : ''}
                     </div>
 
                     <!-- Signature Client -->
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                      ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
-                        <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                        ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                          <div style="font-size: 11px; margin-bottom: 2px;">
-                            <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
-                            <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
-                          </div>
-                        ` : ''}
-                        ${clientFound && clientFound.clientSignatureImage ? `
-                          <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; margin-top: 4px;">
-                            <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                          </div>
-                        ` : ''}
-                      ` : ''}
+                      ${(() => {
+                        const rawClientSig = String(report.clientPinCode || snapshot.clientPinCode || '').trim();
+                        const isSigImg = rawClientSig.startsWith('data:image') || rawClientSig.startsWith('http');
+                        const sigImgUrl = isSigImg ? rawClientSig : (clientFound?.clientSignatureImage || '');
+                        const pinCodeVal = !isSigImg ? rawClientSig : '';
+                        if (!sigImgUrl && !pinCodeVal) return '';
+                        return `
+                          <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
+                          ${pinCodeVal ? `
+                            <div style="font-size: 11px; margin-bottom: 2px;">
+                              <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
+                              <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${pinCodeVal}</span>
+                            </div>
+                          ` : ''}
+                          ${sigImgUrl ? `
+                            <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; margin-top: 4px;">
+                              <img src="${sigImgUrl}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                            </div>
+                          ` : ''}
+                        `;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -6711,7 +6913,11 @@ export default function App() {
     `;
     const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+    if (printWin) {
+      printWin.location.href = url;
+    } else {
+      window.open(url, '_blank');
+    }
   };
 
   const handleCorrectReport = (id: string, updatedFields: Partial<any>) => {
@@ -7385,21 +7591,21 @@ export default function App() {
                 enableDevisFactures: data.enableDevisFactures !== undefined ? data.enableDevisFactures : prev?.enableDevisFactures,
                 disableHelpsAndTutorials: data.disableHelpsAndTutorials !== undefined ? data.disableHelpsAndTutorials : prev?.disableHelpsAndTutorials,
                 communicationPortailClient: data.communicationPortailClient !== undefined ? data.communicationPortailClient : prev?.communicationPortailClient,
-                pdfHeaderBgColor: data.pdfHeaderBgColor !== undefined ? data.pdfHeaderBgColor : prev?.pdfHeaderBgColor,
-                pdfCardBorderColor: data.pdfCardBorderColor !== undefined ? data.pdfCardBorderColor : prev?.pdfCardBorderColor,
-                pdfCardBgColor: data.pdfCardBgColor !== undefined ? data.pdfCardBgColor : prev?.pdfCardBgColor,
-                pdfLabelTextColor: data.pdfLabelTextColor !== undefined ? data.pdfLabelTextColor : prev?.pdfLabelTextColor,
-                pdfHeaderImg: data.pdfHeaderImg !== undefined ? data.pdfHeaderImg : prev?.pdfHeaderImg,
-                pdfPageHeaderText: data.pdfPageHeaderText !== undefined ? data.pdfPageHeaderText : prev?.pdfPageHeaderText,
-                pdfPageFooterText: data.pdfPageFooterText !== undefined ? data.pdfPageFooterText : prev?.pdfPageFooterText,
-                pdfLastPageInfoText: data.pdfLastPageInfoText !== undefined ? data.pdfLastPageInfoText : prev?.pdfLastPageInfoText,
-                pdfHideElectrodeSecoursA: data.pdfHideElectrodeSecoursA !== undefined ? data.pdfHideElectrodeSecoursA : prev?.pdfHideElectrodeSecoursA,
-                pdfHideElectrodeSecoursP: data.pdfHideElectrodeSecoursP !== undefined ? data.pdfHideElectrodeSecoursP : prev?.pdfHideElectrodeSecoursP,
-                pdfHideKitSecours: data.pdfHideKitSecours !== undefined ? data.pdfHideKitSecours : prev?.pdfHideKitSecours,
-                pdfSimplifyCoffret: data.pdfSimplifyCoffret !== undefined ? data.pdfSimplifyCoffret : prev?.pdfSimplifyCoffret,
-                pdfHideVerificationsTechniques: data.pdfHideVerificationsTechniques !== undefined ? data.pdfHideVerificationsTechniques : prev?.pdfHideVerificationsTechniques,
-                pdfHideHorodatagesDiagnostic: data.pdfHideHorodatagesDiagnostic !== undefined ? data.pdfHideHorodatagesDiagnostic : prev?.pdfHideHorodatagesDiagnostic,
-                pdfShowDemandeDevisDetails: data.pdfShowDemandeDevisDetails !== undefined ? data.pdfShowDemandeDevisDetails : prev?.pdfShowDemandeDevisDetails,
+                pdfHeaderBgColor: prev?.pdfHeaderBgColor ?? data.pdfHeaderBgColor,
+                pdfCardBorderColor: prev?.pdfCardBorderColor ?? data.pdfCardBorderColor,
+                pdfCardBgColor: prev?.pdfCardBgColor ?? data.pdfCardBgColor,
+                pdfLabelTextColor: prev?.pdfLabelTextColor ?? data.pdfLabelTextColor,
+                pdfHeaderImg: prev?.pdfHeaderImg ?? data.pdfHeaderImg,
+                pdfPageHeaderText: prev?.pdfPageHeaderText ?? data.pdfPageHeaderText,
+                pdfPageFooterText: prev?.pdfPageFooterText ?? data.pdfPageFooterText,
+                pdfLastPageInfoText: prev?.pdfLastPageInfoText ?? data.pdfLastPageInfoText,
+                pdfHideElectrodeSecoursA: prev?.pdfHideElectrodeSecoursA ?? data.pdfHideElectrodeSecoursA,
+                pdfHideElectrodeSecoursP: prev?.pdfHideElectrodeSecoursP ?? data.pdfHideElectrodeSecoursP,
+                pdfHideKitSecours: prev?.pdfHideKitSecours ?? data.pdfHideKitSecours,
+                pdfSimplifyCoffret: prev?.pdfSimplifyCoffret ?? data.pdfSimplifyCoffret,
+                pdfHideVerificationsTechniques: prev?.pdfHideVerificationsTechniques ?? data.pdfHideVerificationsTechniques,
+                pdfHideHorodatagesDiagnostic: prev?.pdfHideHorodatagesDiagnostic ?? data.pdfHideHorodatagesDiagnostic,
+                pdfShowDemandeDevisDetails: prev?.pdfShowDemandeDevisDetails ?? data.pdfShowDemandeDevisDetails,
                 spreadsheetDefibrillateurs:
                   [
                     data.spreadsheetDefibrillateurs,
@@ -10346,7 +10552,7 @@ export default function App() {
               { id: 'stagiaires', label: t('Stagiaires'), icon: User },
               { id: 'emargements', label: t('Émargements'), icon: ClipboardList },
               { id: 'variables', label: t('Variables'), icon: Layers },
-              { id: 'import-export', label: t('Importer Exporter'), icon: Download },
+              { id: 'import-export', label: t('Exportations'), icon: Download },
               { id: 'ged', label: t('GED'), icon: ClipboardList },
             ];
 
@@ -10365,7 +10571,7 @@ export default function App() {
                 localisations: "Localisations",
                 tickets: "Tickets Caisse",
                 variables: "Variables",
-                "import-export": "Importer Exporter",
+                "import-export": "Exportations",
                 satisfaction: "Satisfaction",
                 veilles: "Relevé Concurrentiel",
                 formations: "Formations",
@@ -10375,7 +10581,8 @@ export default function App() {
               const label = tabToLabelMap[tab.id];
               const isHiddenByNewName = label ? companyInfo.hiddenTabs.includes(label) : false;
               const isHiddenByOldName = (tab.id === 'fsm' && companyInfo.hiddenTabs.includes("FSM (Tournées)")) ||
-                                        (tab.id === 'gmao' && companyInfo.hiddenTabs.includes("GMAO (Rapports)"));
+                                        (tab.id === 'gmao' && companyInfo.hiddenTabs.includes("GMAO (Rapports)")) ||
+                                        (tab.id === 'import-export' && companyInfo.hiddenTabs.includes("Importer Exporter"));
 
               const isFormationHidden = companyInfo.hiddenTabs.includes("Formations");
               const isStagiairesHidden = companyInfo.hiddenTabs.includes("Stagiaires");
@@ -20173,6 +20380,7 @@ export default function App() {
               achatsFournisseurs={achatsFournisseurs}
               saveAchatsFournisseurs={saveAchatsFournisseurs}
               variables={variables}
+              companyInfo={companyInfo}
             />
           )}
 
@@ -20323,6 +20531,7 @@ export default function App() {
               setActiveTab={setActiveTab}
               dropboxActive={dropboxActive}
               dropboxAccessToken={dropboxAccessToken}
+              companyInfo={companyInfo}
             />
           )}
 

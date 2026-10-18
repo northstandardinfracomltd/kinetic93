@@ -98,7 +98,26 @@ export const makeFilePubliclyReadable = async (accessToken: string, fileId: stri
   }
 };
 
-export const uploadFileToGoogleDrive = async (accessToken: string, file: File): Promise<string> => {
+export const uploadFileToGoogleDrive = async (
+  accessTokenOrFile: string | File,
+  fileOrFolder?: File | string
+): Promise<string> => {
+  let accessToken = '';
+  let file: File;
+
+  if (typeof accessTokenOrFile !== 'string') {
+    file = accessTokenOrFile;
+    const status = await fetchGoogleDriveStatus();
+    accessToken = status.accessToken;
+  } else {
+    accessToken = accessTokenOrFile;
+    file = fileOrFolder as File;
+    if (!accessToken) {
+      const status = await fetchGoogleDriveStatus();
+      accessToken = status.accessToken;
+    }
+  }
+
   if (!accessToken) {
     throw new Error("Le connecteur Google Drive n'est pas configuré ou est inactif. Veuillez l'activer dans les réglages.");
   }

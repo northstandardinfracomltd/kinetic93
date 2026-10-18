@@ -388,16 +388,10 @@ export default function GedTab({
 
                 <button
                   type="button"
-                  onClick={googleDriveActive ? startNewGed : undefined}
-                  disabled={!googleDriveActive}
-                  style={{
-                    ...customButtonStyle,
-                    opacity: !googleDriveActive ? 0.45 : 1,
-                    cursor: !googleDriveActive ? 'not-allowed' : 'pointer',
-                  }}
+                  onClick={startNewGed}
+                  style={customButtonStyle}
                   className="font-sans"
                   id="btn-new-ged-doc"
-                  title={!googleDriveActive ? t("Connecteur Google Drive inactif. Activez-le dans les paramètres pour ajouter un document.") : undefined}
                 >
                   {t('Nouveau')}
                 </button>
@@ -800,22 +794,37 @@ export default function GedTab({
                   {t('Téléchargement du fichier.')}
                 </label>
                 <div
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                  }}
                   onDrop={(e) => {
                     e.preventDefault();
+                    if (!googleDriveActive || isUploading) return;
                     const file = e.dataTransfer.files?.[0];
                     if (!file) return;
                     handleFilePicked(file);
                   }}
-                  onClick={() => document.getElementById('ged-file-upload-input')?.click()}
-                  className="p-8 text-center space-y-4 hover:bg-[#ffecf8]/20 transition-all cursor-pointer border border-dashed border-[#df92d4]"
-                  style={{ borderRadius: '13px', backgroundColor: '#fdecff' }}
+                  onClick={() => {
+                    if (!googleDriveActive || isUploading) return;
+                    document.getElementById('ged-file-upload-input')?.click();
+                  }}
+                  className={`p-8 text-center space-y-4 transition-all border border-dashed border-[#df92d4] ${
+                    !googleDriveActive || isUploading
+                      ? 'opacity-60 cursor-not-allowed'
+                      : 'hover:bg-[#ffecf8]/20 cursor-pointer'
+                  }`}
+                  style={{
+                    borderRadius: '13px',
+                    backgroundColor: !googleDriveActive ? '#f1f5f9' : '#fdecff',
+                  }}
                 >
                   <input
                     type="file"
                     id="ged-file-upload-input"
+                    disabled={!googleDriveActive || isUploading}
                     className="hidden"
                     onChange={(e) => {
+                      if (!googleDriveActive || isUploading) return;
                       const file = e.target.files?.[0];
                       if (!file) return;
                       handleFilePicked(file);

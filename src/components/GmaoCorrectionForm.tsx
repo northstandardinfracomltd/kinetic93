@@ -8,7 +8,7 @@ import { getRegionsForCountry } from '../utils/regions';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { fetchCollectionFromFirestore } from '../firebase';
+import { fetchCollectionFromFirestore, uploadMediaToFirebase } from '../firebase';
 import { generateReportModerationComment } from '../utils/moderationComment';
 import { playTechSound3 } from '../utils/technicianAudio';
 
@@ -1676,7 +1676,7 @@ export default function GmaoCorrectionForm({
         const base64Str = reader.result as string;
         const img = new Image();
         img.src = base64Str;
-        img.onload = () => {
+        img.onload = async () => {
           const canvas = document.createElement('canvas');
           const max_size = 500; // max width/height
           let width = img.width;
@@ -1699,12 +1699,36 @@ export default function GmaoCorrectionForm({
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6); // 60% quality is perfect and very small
             setPhotoUrl(compressedBase64);
+            const uploadedUrl = await uploadMediaToFirebase(
+              compressedBase64,
+              'photos',
+              file.name || `rapport_photo_globale_${Date.now()}.jpg`
+            );
+            if (uploadedUrl && uploadedUrl.startsWith('http')) {
+              setPhotoUrl(uploadedUrl);
+            }
           } else {
             setPhotoUrl(base64Str);
+            const uploadedUrl = await uploadMediaToFirebase(
+              base64Str,
+              'photos',
+              file.name || `rapport_photo_globale_${Date.now()}.jpg`
+            );
+            if (uploadedUrl && uploadedUrl.startsWith('http')) {
+              setPhotoUrl(uploadedUrl);
+            }
           }
         };
-        img.onerror = () => {
+        img.onerror = async () => {
           setPhotoUrl(base64Str);
+          const uploadedUrl = await uploadMediaToFirebase(
+            base64Str,
+            'photos',
+            file.name || `rapport_photo_globale_${Date.now()}.jpg`
+          );
+          if (uploadedUrl && uploadedUrl.startsWith('http')) {
+            setPhotoUrl(uploadedUrl);
+          }
         };
       };
       reader.readAsDataURL(file);
@@ -1719,7 +1743,7 @@ export default function GmaoCorrectionForm({
         const base64Str = reader.result as string;
         const img = new Image();
         img.src = base64Str;
-        img.onload = () => {
+        img.onload = async () => {
           const canvas = document.createElement('canvas');
           const max_size = 500;
           let width = img.width;
@@ -1742,12 +1766,36 @@ export default function GmaoCorrectionForm({
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
             setPhotoArriereUrl(compressedBase64);
+            const uploadedUrl = await uploadMediaToFirebase(
+              compressedBase64,
+              'photos',
+              file.name || `rapport_photo_arriere_${Date.now()}.jpg`
+            );
+            if (uploadedUrl && uploadedUrl.startsWith('http')) {
+              setPhotoArriereUrl(uploadedUrl);
+            }
           } else {
             setPhotoArriereUrl(base64Str);
+            const uploadedUrl = await uploadMediaToFirebase(
+              base64Str,
+              'photos',
+              file.name || `rapport_photo_arriere_${Date.now()}.jpg`
+            );
+            if (uploadedUrl && uploadedUrl.startsWith('http')) {
+              setPhotoArriereUrl(uploadedUrl);
+            }
           }
         };
-        img.onerror = () => {
+        img.onerror = async () => {
           setPhotoArriereUrl(base64Str);
+          const uploadedUrl = await uploadMediaToFirebase(
+            base64Str,
+            'photos',
+            file.name || `rapport_photo_arriere_${Date.now()}.jpg`
+          );
+          if (uploadedUrl && uploadedUrl.startsWith('http')) {
+            setPhotoArriereUrl(uploadedUrl);
+          }
         };
       };
       reader.readAsDataURL(file);
@@ -1762,7 +1810,7 @@ export default function GmaoCorrectionForm({
         const base64Str = reader.result as string;
         const img = new Image();
         img.src = base64Str;
-        img.onload = () => {
+        img.onload = async () => {
           const canvas = document.createElement('canvas');
           const max_size = 500;
           let width = img.width;
@@ -1785,12 +1833,36 @@ export default function GmaoCorrectionForm({
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
             setPhotoResultatTestUrl(compressedBase64);
+            const uploadedUrl = await uploadMediaToFirebase(
+              compressedBase64,
+              'photos',
+              file.name || `rapport_photo_test_${Date.now()}.jpg`
+            );
+            if (uploadedUrl && uploadedUrl.startsWith('http')) {
+              setPhotoResultatTestUrl(uploadedUrl);
+            }
           } else {
             setPhotoResultatTestUrl(base64Str);
+            const uploadedUrl = await uploadMediaToFirebase(
+              base64Str,
+              'photos',
+              file.name || `rapport_photo_test_${Date.now()}.jpg`
+            );
+            if (uploadedUrl && uploadedUrl.startsWith('http')) {
+              setPhotoResultatTestUrl(uploadedUrl);
+            }
           }
         };
-        img.onerror = () => {
+        img.onerror = async () => {
           setPhotoResultatTestUrl(base64Str);
+          const uploadedUrl = await uploadMediaToFirebase(
+            base64Str,
+            'photos',
+            file.name || `rapport_photo_test_${Date.now()}.jpg`
+          );
+          if (uploadedUrl && uploadedUrl.startsWith('http')) {
+            setPhotoResultatTestUrl(uploadedUrl);
+          }
         };
       };
       reader.readAsDataURL(file);
@@ -2355,6 +2427,9 @@ export default function GmaoCorrectionForm({
       photoUrl: photoUrl || undefined,
       photo2Url: photoArriereUrl || undefined,
       photo3Url: photoResultatTestUrl || undefined,
+      pieceJointeDevisName: Array.isArray(attachments) && attachments.length > 0
+        ? attachments.map(a => a.url || a.name).filter(Boolean).join(', ')
+        : undefined,
       defibSnapshot: finalSnapshot,
       commentaireInterne: snapshot.commentaireInterne || '',
       techSignature: techSignature,
@@ -2369,6 +2444,7 @@ export default function GmaoCorrectionForm({
       fournitureMaterielPret,
       selectionMaterielPrete,
       attachments,
+      piecesJointes: attachments,
       kitPeremption,
       photoArriereUrl,
       photoResultatTestUrl,

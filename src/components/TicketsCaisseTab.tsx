@@ -3,6 +3,7 @@ import { Member } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { t } from '../utils/translate';
+import { uploadMediaToFirebase } from '../firebase';
 
 interface Expense {
   id: string;
@@ -80,7 +81,7 @@ export default function TicketsCaisseTab({
     setAmountTva(calculatedTva.toFixed(2));
   };
 
-  const handleSaveExpense = (e: React.FormEvent) => {
+  const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !amountTtc) {
       alert('Veuillez remplir les informations obligatoires (Désignation et Montant TTC).');
@@ -91,22 +92,41 @@ export default function TicketsCaisseTab({
     const h = parseFloat(amountHt) || (t * 0.80);
     const v = parseFloat(amountTva) || (t * 0.20);
 
-    // Simulate standard template attachment url if they dragged a file
     let finalPhotoUrl = photoUrl;
-    if (selectedPhotoFile && !finalPhotoUrl) {
-      finalPhotoUrl = 'https://picsum.photos/800/600?random=' + Date.now();
+    if (selectedPhotoFile) {
+      finalPhotoUrl = await uploadMediaToFirebase(
+        selectedPhotoFile,
+        'photos',
+        selectedPhotoFile.name || `ticket_caisse_${Date.now()}.jpg`
+      );
+    } else if (finalPhotoUrl && finalPhotoUrl.startsWith('data:')) {
+      finalPhotoUrl = await uploadMediaToFirebase(
+        finalPhotoUrl,
+        'photos',
+        `ticket_caisse_${Date.now()}.jpg`
+      );
     }
+
+    const finalDate = dateStr || new Date().toISOString().split('T')[0];
+    const finalUser = techName.trim() || 'Thierry Martin';
 
     const newExpense: Expense = {
       id: 'exp-' + Date.now(),
-      techName: techName.trim() || 'Thierry Martin',
+      techName: finalUser,
+      user: finalUser,
       title: title.trim(),
+      merchant: title.trim(),
       amountTtc: t,
+      amount: t,
       amountHt: h,
+      amountHT: h,
       amountTva: v,
-      dateStr: dateStr || new Date().toISOString().split('T')[0],
-      photoUrl: finalPhotoUrl || undefined
-    };
+      tva: v,
+      dateStr: finalDate,
+      date: finalDate,
+      photoUrl: finalPhotoUrl || undefined,
+      receiptUrl: finalPhotoUrl || undefined,
+    } as any;
 
     onUpdateExpenses([newExpense, ...expenses]);
     

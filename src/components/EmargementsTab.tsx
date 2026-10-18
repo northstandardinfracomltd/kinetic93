@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { EmargementRecord, EmargementStagiaireItem, FormationRecord, StagiaireRecord, Member, CompanyInfo } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
+import { uploadMediaToFirebase } from '../firebase';
 
 interface EmargementsTabProps {
   emargements: EmargementRecord[];
@@ -607,7 +608,7 @@ export default function EmargementsTab({
     );
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formationId) {
@@ -623,6 +624,25 @@ export default function EmargementsTab({
       return;
     }
 
+    const uploadedStagiaires = await Promise.all(
+      stagiairesItems.map(async (st, idx) => {
+        const resolvedS = resolveStagiaire(st.stagiaireId);
+        let sigUrl = st.signatureDataUrl || '';
+        if (sigUrl && sigUrl.startsWith('data:')) {
+          sigUrl = await uploadMediaToFirebase(
+            sigUrl,
+            'signatures',
+            `signature_stagiaire_${resolvedS ? resolvedS.id : st.stagiaireId || idx + 1}.png`
+          );
+        }
+        return {
+          ...st,
+          stagiaireId: resolvedS ? resolvedS.id : st.stagiaireId,
+          signatureDataUrl: sigUrl,
+        };
+      })
+    );
+
     const now = new Date().toISOString();
     let updatedList: EmargementRecord[];
 
@@ -633,7 +653,7 @@ export default function EmargementsTab({
             ...item,
             formationId,
             statut,
-            stagiaires: stagiairesItems,
+            stagiaires: uploadedStagiaires,
             updatedAt: now,
           };
         }
@@ -644,7 +664,7 @@ export default function EmargementsTab({
         id: `emarg_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         formationId,
         statut,
-        stagiaires: stagiairesItems,
+        stagiaires: uploadedStagiaires,
         createdAt: now,
         updatedAt: now,
       };

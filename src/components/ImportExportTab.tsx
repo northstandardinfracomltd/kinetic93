@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertCircle } from 'lucide-react';
-import { Client, Defibrillateur, StockRecord, PointageLog, Variable } from '../types';
+import { AlertCircle, CheckCircle } from 'lucide-react';
+import { Client, Defibrillateur, StockRecord, PointageLog, Variable, CompanyInfo } from '../types';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore, idbGet, isFirestoreQuotaExhausted, mergeCollectionItems } from '../firebase';
 import { generateRandomShortCode, computeProchaineMaintenance } from '../utils';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
+import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { logBulkExport } from '../services/suspiciousActivityService';
+import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from '../utils/googleDrive';
 
 export type ImportExportCategory = 
   | 'Défibrillateurs.' 
@@ -35,6 +37,14 @@ export interface ImportExportRecord {
   expirationDate?: string;
   envId?: string;
   tenantId?: string;
+  fileUrl?: string;
+  fileName?: string;
+  name?: string;
+  transferType?: string;
+  targetElement?: string;
+  fileType?: string;
+  status?: string;
+  createdAt?: string;
 }
 
 const INITIAL_RECORDS: ImportExportRecord[] = [
@@ -282,6 +292,7 @@ interface ImportExportTabProps {
   setActiveTab?: (tab: any) => void;
   dropboxActive?: boolean;
   dropboxAccessToken?: string;
+  companyInfo?: CompanyInfo;
 }
 
 // Helper function to robustly build the exact invalid file message with precise column identification
@@ -1449,7 +1460,25 @@ export default function ImportExportTab({
   setActiveTab,
   dropboxActive = false,
   dropboxAccessToken = '',
+  companyInfo,
 }: ImportExportTabProps) {
+  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(false);
+  const [googleDriveAccessToken, setGoogleDriveAccessToken] = useState<string>('');
+
+  useEffect(() => {
+    const refreshStatus = async () => {
+      try {
+        const status = await fetchGoogleDriveStatus(tenantId);
+        setGoogleDriveActive(Boolean(status.active || companyInfo?.googleDriveConnected));
+        setGoogleDriveAccessToken(status.accessToken || '');
+      } catch (e) {
+        console.error('Erreur de lecture du statut Google Drive :', e);
+      }
+    };
+    refreshStatus();
+    window.addEventListener('google-drive-status-changed', refreshStatus);
+    return () => window.removeEventListener('google-drive-status-changed', refreshStatus);
+  }, [tenantId, companyInfo?.googleDriveConnected]);
   const isRecordExpired = (r: ImportExportRecord): boolean => {
     if (r.expiresAt) {
       return Date.now() > r.expiresAt;
@@ -1492,7 +1521,7 @@ export default function ImportExportTab({
   // Form states
   const [formDate, setFormDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [formExpirationDate, setFormExpirationDate] = useState('');
-  const [formType, setFormType] = useState<'Importation.' | 'Exportation.'>('Importation.');
+  const [formType, setFormType] = useState<'Importation.' | 'Exportation.'>('Exportation.');
   const [formCategorie, setFormCategorie] = useState<ImportExportCategory>('Défibrillateurs.');
   const [formFormat, setFormFormat] = useState<'CSV.'>('CSV.');
 
@@ -1926,6 +1955,12 @@ export default function ImportExportTab({
       return;
     }
 
+    if (!googleDriveActive) {
+      setIsSaving(false);
+      setValidationError("Veuillez activer le connecteur Google Drive dans les paramètres du tenant pour générer une exportation.");
+      return;
+    }
+
     setIsSaving(true);
 
     setTimeout(async () => {
@@ -1949,6 +1984,16 @@ export default function ImportExportTab({
           variables: variables || []
         });
 
+        const sanitizedCat = formCategorie.replace(/\./g, '').toLowerCase().replace(/é/g, 'e').replace(/\s+/g, '_');
+        const exportFileName = `export_${sanitizedCat}_${formDate}.csv`;
+        const exportFile = new File([csv], exportFileName, { type: 'text/csv;charset=utf-8;' });
+        let sharedDriveUrl = '';
+        try {
+          sharedDriveUrl = await uploadFileToGoogleDrive(googleDriveAccessToken, exportFile);
+        } catch (driveErr: any) {
+          console.warn('Google Drive upload warning during export:', driveErr);
+        }
+
         const newRecord: ImportExportRecord = {
           id: 'rec_' + Date.now(),
           date: formDate,
@@ -1957,7 +2002,15 @@ export default function ImportExportTab({
           format: 'CSV.',
           csvData: csv,
           expiresAt: expiresTime,
-          expirationDate: expDateStr
+          expirationDate: expDateStr,
+          fileUrl: sharedDriveUrl,
+          fileName: exportFileName,
+          name: exportFileName,
+          transferType: formType,
+          targetElement: formCategorie,
+          fileType: 'CSV.',
+          status: 'Terminé',
+          createdAt: formDate,
         };
 
         const updated = [newRecord, ...records];
@@ -1973,9 +2026,7 @@ export default function ImportExportTab({
           return;
         }
 
-        if (isFirebaseLoaded) {
-          await saveCollectionToFirestore('importExportRecords', updated);
-        }
+        await saveCollectionToFirestore(tenantId, 'importExportRecords', updated);
 
         // Only commit to records in UI state once storage successfully accepted the file
         setRecords(updated);
@@ -2007,7 +2058,7 @@ export default function ImportExportTab({
 
         // Reset fields to today and defaults
         setFormDate(new Date().toISOString().split('T')[0]);
-        setFormType('Importation.');
+        setFormType('Exportation.');
         setFormCategorie('Défibrillateurs.');
       } catch (err: any) {
         console.error(err);
@@ -2176,7 +2227,7 @@ export default function ImportExportTab({
             }}
           >
             <div className="flex items-center gap-2">
-              <h3 className="text-2xl font-bold text-black font-gochi cursor-default" style={{ cursor: 'default' }}>Importer Exporter</h3>
+              <h3 className="text-2xl font-bold text-black font-gochi cursor-default" style={{ cursor: 'default' }}>{t("Exportations")}</h3>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -2198,7 +2249,10 @@ export default function ImportExportTab({
 
               {/* Nouveau Button */}
               <button
-                onClick={() => setShowForm(true)}
+                onClick={() => {
+                  setFormType('Exportation.');
+                  setShowForm(true);
+                }}
                 style={{
                   ...roundedButton18Style,
                   backgroundColor: 'rgb(53, 86, 236)',
@@ -2215,6 +2269,10 @@ export default function ImportExportTab({
 
         {!showForm && (
           <>
+            <TableSubHeaderButtons
+              spreadsheetKey="spreadsheetExportations"
+              idSuffix="exportations"
+            />
             <HelpBubble 
               cacheKey="help_dismissed_import_export" 
               text="Astuce : Vous souhaitez importer un fichier de données et vous avez besoin d’un fichier d’exemple, il vous suffit de télécharger un fichier d’exportation pour obtenir les entêtes des colonnes (ne les changez pas) ainsi qu’un jeu de données exemple avec les lignes exportées." 
@@ -2282,14 +2340,14 @@ export default function ImportExportTab({
                   form="import-export-creation-form"
                   style={{
                     ...roundedButton18Style,
-                    backgroundColor: isSaving ? '#6b7280' : 'rgb(53, 86, 236)',
+                    backgroundColor: (isSaving || !googleDriveActive) ? '#6b7280' : 'rgb(53, 86, 236)',
                     color: '#ffffff',
-                    opacity: isSaving ? 0.6 : 1,
-                    cursor: isSaving ? 'not-allowed' : 'pointer',
-                    boxShadow: isSaving ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                    opacity: (isSaving || !googleDriveActive) ? 0.6 : 1,
+                    cursor: (isSaving || !googleDriveActive) ? 'not-allowed' : 'pointer',
+                    boxShadow: (isSaving || !googleDriveActive) ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                   }}
                   className="transition-all"
-                  disabled={isSaving}
+                  disabled={isSaving || !googleDriveActive}
                 >
                   {isSaving ? (formType === 'Importation.' ? 'Importation...' : 'Exportation...') : 'Enregistrer'}
                 </button>
@@ -2371,6 +2429,7 @@ export default function ImportExportTab({
                       <select
                         id="form-ie-type"
                         value={formType}
+                        disabled
                         onChange={(e) => {
                           const val = e.target.value as 'Importation.' | 'Exportation.';
                           setFormType(val);
@@ -2378,10 +2437,10 @@ export default function ImportExportTab({
                             setFormCategorie('Défibrillateurs.');
                           }
                         }}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white text-black cursor-pointer"
+                        className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-sm text-slate-500 cursor-not-allowed"
                       >
-                        <option value="Importation.">{t("Importation.")}</option>
                         <option value="Exportation.">{t("Exportation.")}</option>
+                        <option value="Importation.">{t("Importation.")}</option>
                       </select>
                     </div>
 
@@ -2393,8 +2452,13 @@ export default function ImportExportTab({
                       <select
                         id="form-ie-cat"
                         value={formCategorie}
+                        disabled={!googleDriveActive}
                         onChange={(e) => setFormCategorie(e.target.value as any)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white text-black cursor-pointer"
+                        className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm ${
+                          !googleDriveActive
+                            ? 'bg-slate-50 text-slate-500 cursor-not-allowed'
+                            : 'bg-white text-black cursor-pointer'
+                        }`}
                       >
                         <option value="Défibrillateurs.">{t("Défibrillateurs.")}</option>
                         <option value="Clients.">{t("Clients.")}</option>

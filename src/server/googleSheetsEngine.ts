@@ -32,7 +32,8 @@ export type SheetTabType =
   | 'membresEnvironnement'
   | 'apparenceRapportsPdf'
   | 'communicationPortailClient'
-  | 'observateurActionsSuspectes';
+  | 'observateurActionsSuspectes'
+  | 'exportations';
 
 export interface GlobalGoogleSheetsConfig {
   apiKey?: string;
@@ -1216,7 +1217,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Date relance / Échéance', field: 'dateRelance', aliases: ['daterelanceecheance', 'daterelance', 'echeance', 'relance', 'prochainerelance'], type: 'date' },
     { header: 'Source Opportunité', field: 'sourceOpportunite', aliases: ['sourceopportunite', 'source', 'origine', 'canal'] },
     { header: 'Référence Devis', field: 'referenceDevis', aliases: ['referencedevis', 'refdevis', 'numerodevis', 'devislie'] },
-    { header: 'Photographie / Pièce jointe', field: 'photoDataUrl', aliases: ['photographiepiecejointe', 'photodataurl', 'photo', 'piecejointe', 'image', 'fichier'] },
+    { header: 'Photographie / Pièce jointe', field: 'photoDataUrl', aliases: ['photographiepiecejointe', 'photodataurl', 'photo', 'piecejointe', 'image', 'fichier', 'telechargerunfichier', 'liengoogledrive', 'urlfichier', 'lienstockagepartagedevis'] },
   ],
   satisfaction: [
     { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'reference', 'idavis'] },
@@ -1364,6 +1365,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Indisponibilité 2 - Date début', field: '_abs2_startDate', aliases: ['indisponibilite2datedebut', 'periodeindisponibilite2datedebut', 'periodedindisponibilite2datedebut', 'absence2datedebut', 'periode2datedebut'] },
     { header: 'Indisponibilité 2 - Date fin', field: '_abs2_endDate', aliases: ['indisponibilite2datefin', 'periodeindisponibilite2datefin', 'periodedindisponibilite2datefin', 'absence2datefin', 'periode2datefin'] },
     { header: 'Indisponibilité 2 - Commentaire court', field: '_abs2_commentaire', aliases: ['indisponibilite2commentairecourt', 'indisponibilite2commentaire', 'periodeindisponibilite2commentairecourt', 'periodedindisponibilite2commentairecourt', 'absence2commentaire', 'periode2commentairecourt'] },
+    { header: 'Signature Technicien (URL)', field: 'signature', aliases: ['signaturetechnicienurl', 'signaturetechnicien', 'signature', 'urlsignature', 'signatureurl', 'signaturecollaborateur'] },
   ],
   reglages: [
     { header: 'Langue et région du logiciel', field: 'langue', aliases: ['langueetregiondulogiciel', 'langueetregion', 'langue', 'language', 'localisation', 'regionlogiciel'] },
@@ -1411,6 +1413,17 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Type d’action', field: 'actionType', aliases: ['typedaction', 'typeaction', 'actiontype', 'categorie', 'type', 'action'] },
     { header: 'Observateur - Événement', field: 'message', aliases: ['evenement', 'message', 'description', 'trace', 'detail', 'details', 'intitule', 'actioneffectuee'] },
   ],
+  exportations: [
+    { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idexport', 'reference'] },
+    { header: 'Nom', field: 'name', aliases: ['nom', 'name', 'titre', 'intitule', 'nomexportation'] },
+    { header: 'Type de transfert', field: 'transferType', aliases: ['typedetransfert', 'typetransfert', 'transfertype', 'type'] },
+    { header: 'Élément ciblé', field: 'targetElement', aliases: ['elementcible', 'targetelement', 'cible', 'module', 'compartiment'] },
+    { header: 'Type de fichier', field: 'fileType', aliases: ['typedefichier', 'filetype', 'format', 'extension'] },
+    { header: 'Statut', field: 'status', aliases: ['statut', 'status', 'etat'] },
+    { header: 'Date de création', field: 'createdAt', aliases: ['datedecreation', 'datecreation', 'createdat', 'date', 'horodatage'] },
+    { header: 'URL Google Drive du fichier (Lien partagé)', field: 'fileUrl', aliases: ['urlgoogledrivedufichierlienpartage', 'urlgoogledrive', 'fileurl', 'urldufichier', 'urlfichier', 'lienpartage', 'lien', 'url', 'fichier'] },
+    { header: 'Nom du fichier', field: 'fileName', aliases: ['nomdufichier', 'filename', 'fichiernom'] },
+  ],
   rapportsPdf: [
     // Section 0 - Configuration
     { header: 'Section 0 - Référence intervention', field: 'interventionReference', aliases: ['section0referenceintervention', 'referenceintervention', 'interventionreference', 'reportnumber', 'numerorapport', 'idrapport', 'reference', 'id'] },
@@ -1437,8 +1450,8 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Section 1 - Appareil de prêt sélectionné', field: 'pretId', aliases: ['section1appareildepretselectionne', 'appareildepretselectionne', 'pretid'] },
     { header: 'Section 1 - Dénomination du site', field: 'denomination', aliases: ['section1denominationdusite', 'denominationdusite', 'denominationsite', 'denomination', 'site'] },
     { header: 'Section 1 - Emplacement précis', field: 'emplacement', aliases: ['section1emplacementprecis', 'emplacementprecis', 'emplacement'] },
-    { header: 'Section 1 - Photographie 1 (Appareil / Coffret)', field: 'photoUrl', aliases: ['section1photographie1appareilcoffret', 'photographie1appareilcoffret', 'photographie1', 'photourl'] },
-    { header: 'Section 1 - Photographie 2 (Environnement / Électrodes)', field: 'photo2Url', aliases: ['section1photographie2environnementelectrodes', 'photographie2environnementelectrodes', 'photographie2', 'photo2url'] },
+    { header: 'Section 1 - Photographie 1 (Appareil / Coffret)', field: 'photoUrl', aliases: ['section1photographie1appareilcoffret', 'photographie1appareilcoffret', 'photographie1', 'photourl', 'preuvephotoglobaleurl', 'preuvephotoglobale', 'photoglobale', 'photo1', 'photographieglobaledudefibrillateur', 'photographieglobale'] },
+    { header: 'Section 1 - Photographie 2 (Environnement / Électrodes)', field: 'photo2Url', aliases: ['section1photographie2environnementelectrodes', 'photographie2environnementelectrodes', 'photographie2', 'photo2url', 'preuvephotoarriereetiquetteurl', 'preuvephotoarriere', 'photoarriere', 'photo2', 'photographiearriereetiquette', 'photographiearriere', 'photoarriereurl'] },
     // Section 2 - Client
     { header: 'Section 2 - Client', field: 'clientName', aliases: ['section2client', 'client', 'clientname', 'entreprise', 'clientid'] },
     { header: 'Section 2 - Contact sur site', field: 'nomPrenomSite', aliases: ['section2contactsursite', 'contactsursite', 'nomprenomsite'] },
@@ -1530,14 +1543,14 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Section 11 - Demande de devis', field: 'demandeDevis', aliases: ['section11demandededevis', 'demandededevis', 'demandedevis'], type: 'yesno' },
     { header: 'Section 11 - Motif de la demande de devis', field: 'motifDemandeDevis', aliases: ['section11motifdelademandededevis', 'motifdelademandededevis', 'motifdemandedevis'] },
     { header: "Section 11 - Description pour l'élaboration du devis", field: 'descriptionDemandeDevis', aliases: ['section11descriptionpourlelaborationdudevis', 'descriptionpourlelaborationdudevis', 'descriptiondemandedevis'] },
-    { header: 'Section 11 - Pièce jointe (Devis)', field: 'pieceJointeDevisName', aliases: ['section11piecejointedevis', 'piecejointedevis', 'piecejointedevisname'] },
+    { header: 'Section 11 - Pièce jointe (Devis)', field: 'pieceJointeDevisName', aliases: ['section11piecejointedevis', 'piecejointedevis', 'piecejointedevisname', 'piecejointedevisfichier', 'fichierjoint', 'piecesjointes1a3fichiers', 'piecesjointes', 'attachments', 'urlpiecesjointes'] },
     { header: "Section 11 - Défibrillateur conforme et prêt à l'usage", field: 'conforme', aliases: ['section11defibrillateurconformeetpretalusage', 'defibrillateurconformeetpretalusage', 'conforme', 'isconforme'], type: 'yesno' },
     { header: 'Section 11 - Commentaire de diagnostic et de clôture', field: 'diagnosticCommentaire', aliases: ['section11commentairedediagnosticetdecloture', 'commentairedediagnosticetdecloture', 'diagnosticcommentaire', 'remarques'] },
     { header: 'Section 11 - Signature du technicien', field: 'techSignature', aliases: ['section11signaturedutechnicien', 'signaturedutechnicien', 'techsignature'] },
     { header: 'Section 11 - Horodatage de clôture', field: 'endTimeStamp', aliases: ['section11horodatagedecloture', 'horodatagedecloture', 'endtimestamp'] },
     { header: 'Section 11 - Code PIN client (Validation sur site)', field: 'clientPinCode', aliases: ['section11codepinclientvalidationsursite', 'codepinclientvalidationsursite', 'codepinclient', 'clientpincode'] },
     // Section 12 - Pièces jointes, Étiquettes & Modération
-    { header: 'Section 12 - Photographie 3 / Pièce jointe interne', field: 'photo3Url', aliases: ['section12photographie3piecejointeinterne', 'photographie3piecejointeinterne', 'photographie3', 'photo3url'] },
+    { header: 'Section 12 - Photographie 3 / Pièce jointe interne', field: 'photo3Url', aliases: ['section12photographie3piecejointeinterne', 'photographie3piecejointeinterne', 'photographie3', 'photo3url', 'preuvephotoresultattesturl', 'preuvephotoresultattest', 'photoresultattest', 'photo3', 'resultatdutest', 'photoresultattesturl', 'phototest'] },
     { header: 'Section 12 - Étiquette de maintenance conforme et complétée', field: 'etiquetteConforme', aliases: ['section12etiquettedemaintenanceconformeetcompletee', 'etiquettedemaintenanceconformeetcompletee', 'etiquetteconforme'], type: 'yesno' },
     { header: 'Section 12 - Scellé de sécurité posé', field: 'scellePose', aliases: ['section12scelledesecuritepose', 'scelledesecuritepose', 'scellepose'], type: 'yesno' },
     { header: 'Section 12 - Autocollant posé ou existant conforme', field: 'autocollantConforme', aliases: ['section12autocollantposeouexistantconforme', 'autocollantposeouexistantconforme', 'autocollantconforme'], type: 'yesno' },
@@ -2698,29 +2711,71 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.commentaire = merged.internalComment;
     merged.remarques = merged.diagnosticCommentaire || merged.remarques || '';
 
-    // Synchronize GmaoCorrectionForm top-level state aliases
+    // Synchronize GmaoCorrectionForm & PDF template top-level state aliases (prioritizing Spreadsheet columns over stale _json)
     merged.title = merged.reportTitle || merged.title || 'RAPPORT D’INTERVENTION';
     merged.siteMission = merged.missionSite || merged.siteMission || 'DÉPLACEMENT';
-    merged.photoArriereUrl = merged.photoArriereUrl || merged.photo2Url || '';
-    merged.photoResultatTestUrl = merged.photoResultatTestUrl || merged.photo3Url || '';
-    merged.electrodeARemplacee = merged.electrodeARemplacee || merged.remplaceElectrodeA || 'Non';
-    merged.selectionElectrodeARemplacee = merged.selectionElectrodeARemplacee || merged.destockElectrodeA || '';
-    merged.electrodeASecoursRemplacee = merged.electrodeASecoursRemplacee || merged.remplaceElectrodeSecoursA || 'Non';
-    merged.selectionElectrodeASecoursRemplacee = merged.selectionElectrodeASecoursRemplacee || merged.destockElectrodeSecoursA || '';
-    merged.electrodePRemplacee = merged.electrodePRemplacee || merged.remplaceElectrodeP || 'Non';
-    merged.selectionElectrodePRemplacee = merged.selectionElectrodePRemplacee || merged.destockElectrodeP || '';
-    merged.electrodePSecoursRemplacee = merged.electrodePSecoursRemplacee || merged.remplaceElectrodeSecoursP || 'Non';
-    merged.selectionElectrodePSecoursRemplacee = merged.selectionElectrodePSecoursRemplacee || merged.destockElectrodeSecoursP || '';
-    merged.batterieRemplacee = merged.batterieRemplacee || merged.remplaceBatterie || 'Non';
-    merged.selectionBatterieRemplacee = merged.selectionBatterieRemplacee || merged.destockBatterie || '';
-    merged.kitPeremption = merged.kitPeremption || merged.peremptionKit || '';
-    merged.kitSecoursRemplaceOuAjoute = merged.kitSecoursRemplaceOuAjoute || merged.remplaceKit || 'Non';
-    merged.selectionKitSecoursRemplace = merged.selectionKitSecoursRemplace || merged.destockKit || '';
-    merged.kitCiseauxPresents = merged.kitCiseauxPresents || merged.kitCiseaux || 'Oui';
-    merged.kitServiettesPresentes = merged.kitServiettesPresentes || merged.kitCompresses || 'Oui';
-    merged.kitRasoirPresent = merged.kitRasoirPresent || merged.kitRasoir || 'Oui';
-    merged.kitGantsPresents = merged.kitGantsPresents || merged.kitGants || 'Oui';
-    merged.kitMasquePresent = merged.kitMasquePresent || merged.kitMasque || 'Oui';
+    merged.photoArriereUrl = merged.photo2Url || merged.photoArriereUrl || '';
+    merged.photoResultatTestUrl = merged.photo3Url || merged.photoResultatTestUrl || '';
+    merged.electrodeARemplacee = merged.remplaceElectrodeA || merged.electrodeARemplacee || 'Non';
+    merged.selectionElectrodeARemplacee = merged.destockElectrodeA || merged.selectionElectrodeARemplacee || '';
+    merged.electrodeASecoursRemplacee = merged.remplaceElectrodeSecoursA || merged.electrodeASecoursRemplacee || 'Non';
+    merged.selectionElectrodeASecoursRemplacee = merged.destockElectrodeSecoursA || merged.selectionElectrodeASecoursRemplacee || '';
+    merged.electrodePRemplacee = merged.remplaceElectrodeP || merged.electrodePRemplacee || 'Non';
+    merged.selectionElectrodePRemplacee = merged.destockElectrodeP || merged.selectionElectrodePRemplacee || '';
+    merged.electrodePSecoursRemplacee = merged.remplaceElectrodeSecoursP || merged.electrodePSecoursRemplacee || 'Non';
+    merged.selectionElectrodePSecoursRemplacee = merged.destockElectrodeSecoursP || merged.selectionElectrodePSecoursRemplacee || '';
+    merged.batterieRemplacee = merged.remplaceBatterie || merged.batterieRemplacee || 'Non';
+    merged.selectionBatterieRemplacee = merged.destockBatterie || merged.selectionBatterieRemplacee || '';
+    merged.kitPeremption = merged.peremptionKit || merged.kitPeremption || '';
+    merged.kitSecoursRemplaceOuAjoute = merged.remplaceKit || merged.kitSecoursRemplaceOuAjoute || 'Non';
+    merged.selectionKitSecoursRemplace = merged.destockKit || merged.selectionKitSecoursRemplace || '';
+    merged.kitCiseauxPresents = merged.kitCiseaux || merged.kitCiseauxPresents || 'Oui';
+    merged.kitServiettesPresentes = merged.kitCompresses || merged.kitServiettesPresentes || 'Oui';
+    merged.kitRasoirPresent = merged.kitRasoir || merged.kitRasoirPresent || 'Oui';
+    merged.kitGantsPresents = merged.kitGants || merged.kitGantsPresents || 'Oui';
+    merged.kitMasquePresent = merged.kitMasque || merged.kitMasquePresent || 'Oui';
+
+    const existingSnap = merged.defibSnapshot && typeof merged.defibSnapshot === 'object' ? merged.defibSnapshot : {};
+    const verifConf = merged.verificationsConformes || existingSnap.verificationsConformes || 'Oui';
+    merged.verificationsConformes = verifConf;
+
+    // Ensure PDF Section 2, 3, 4, 5, 6, 7 technical verification fields are populated from Spreadsheet columns
+    merged.techConformeArrivee = merged.conformeArrivee || merged.techConformeArrivee || existingSnap.techConformeArrivee || verifConf || 'Oui';
+    merged.techCommentaireArrivee = merged.commentaireArrivee || merged.techCommentaireArrivee || existingSnap.techCommentaireArrivee || '';
+    merged.techNettoyage = merged.techNettoyage || existingSnap.techNettoyage || verifConf || 'Oui';
+    merged.techVoyantConforme = merged.techVoyantConforme || existingSnap.techVoyantConforme || verifConf || 'Oui';
+    merged.techEquipeMessageNumerique = merged.ecran || merged.techEquipeMessageNumerique || existingSnap.ecran || existingSnap.techEquipeMessageNumerique || 'Non';
+    merged.techMessageNumeroConforme =
+      merged.techMessageNumeroConforme ||
+      existingSnap.techMessageNumeroConforme ||
+      (merged.techEquipeMessageNumerique === 'Oui' ? (verifConf || 'Oui') : 'Non');
+    merged.techGuidesVocauxConformes = merged.techGuidesVocauxConformes || existingSnap.techGuidesVocauxConformes || verifConf || 'Oui';
+    merged.techBranchementElectrodesConforme = merged.techBranchementElectrodesConforme || existingSnap.techBranchementElectrodesConforme || verifConf || 'Oui';
+
+    merged.batterieConformeSante = merged.batterieConformeSante || existingSnap.batterieConformeSante || merged.conforme || 'Oui';
+    merged.electrodeAConformeSante = merged.electrodeAConformeSante || existingSnap.electrodeAConformeSante || merged.conforme || 'Oui';
+    merged.electrodePConformeSante = merged.electrodePConformeSante || existingSnap.electrodePConformeSante || merged.conforme || 'Oui';
+    merged.pourcentageChargeNouvelleBatterie =
+      merged.chargeNouvelleBatterie || merged.pourcentageChargeNouvelleBatterie || existingSnap.pourcentageChargeNouvelleBatterie || '';
+    merged.pourcentageBatterie =
+      merged.pourcentageBatterie !== undefined && merged.pourcentageBatterie !== ''
+        ? String(merged.pourcentageBatterie)
+        : (merged.chargeBatterie || existingSnap.pourcentageBatterie || '');
+
+    merged.equipeAlarme = merged.equipeAlarme || existingSnap.equipeAlarme || 'Oui';
+    merged.alarme = merged.alarme || existingSnap.alarme || existingSnap.alarmeCoffret || 'Oui';
+    merged.armoireConnectee = merged.armoireConnectee || existingSnap.armoireConnectee || 'Non';
+    merged.dispositifHandicap = merged.dispositifHandicap || existingSnap.dispositifHandicap || 'Non';
+    merged.signaletiqueConforme = merged.signaletiqueConforme || existingSnap.signaletiqueConforme || existingSnap.signaletiqueBoitier || 'Oui';
+    merged.installeExterieur = merged.installeExterieur || existingSnap.installeExterieur || 'Non';
+
+    merged.kitTrousseSecoursPresent =
+      merged.kitTrousseSecoursPresent ||
+      existingSnap.kitTrousseSecoursPresent ||
+      ((merged.modeleKit || merged.lotKit || merged.peremptionKit || existingSnap.modeleKit || existingSnap.peremptionTrousse) ? 'Oui' : 'Oui');
+    merged.kitPeremptionMasque = merged.kitPeremptionMasque || existingSnap.kitPeremptionMasque || merged.kitPeremption || '';
+    merged.kitPeremptionServiettes = merged.kitPeremptionServiettes || existingSnap.kitPeremptionServiettes || merged.kitPeremption || '';
+
     if (merged.etiquetteObligatoireConforme === undefined) {
       merged.etiquetteObligatoireConforme = merged.etiquetteConforme ? merged.etiquetteConforme === 'Oui' : true;
     }
@@ -2739,9 +2794,17 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         .map((s: string) => s.trim())
         .filter(Boolean);
     }
-    merged.devisAutreInfo = merged.devisAutreInfo || merged.descriptionDemandeDevis || '';
+    merged.devisAutreInfo = merged.descriptionDemandeDevis || merged.devisAutreInfo || '';
+    if (merged.pieceJointeDevisName && (!Array.isArray(merged.attachments) || merged.attachments.length === 0)) {
+      const rawParts = String(merged.pieceJointeDevisName).split(/\s*,\s*/).filter(Boolean);
+      merged.attachments = rawParts.map((part: string, idx: number) => ({
+        name: part.startsWith('http') ? `Pièce jointe ${idx + 1}` : part,
+        url: part,
+        type: 'application/octet-stream',
+      }));
+      if (!merged.piecesJointes) merged.piecesJointes = merged.attachments;
+    }
 
-    const existingSnap = merged.defibSnapshot && typeof merged.defibSnapshot === 'object' ? merged.defibSnapshot : {};
     merged.defibSnapshot = {
       ...existingSnap,
       id: existingSnap.id || merged.defibId || merged.defibrillateurId || merged.identifiant || '',
@@ -2749,7 +2812,8 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       numeroSerie: merged.numeroSerie || existingSnap.numeroSerie || '',
       categorie: merged.categorie || existingSnap.categorie || 'Défibrillateur',
       modele: merged.modele || existingSnap.modele || '',
-      modeleId: existingSnap.modeleId || merged.modele || '',
+      modeleId: merged.modele || existingSnap.modeleId || '',
+      typeDefibrillateur: existingSnap.typeDefibrillateur || (merged.dea === 'Oui' ? 'DEA' : merged.dea === 'Non' ? 'DSA' : 'DSA'),
       dea: merged.dea || existingSnap.dea || 'Non',
       ecran: merged.ecran || existingSnap.ecran || 'Non',
       chocs: merged.chocs !== undefined ? String(merged.chocs) : (existingSnap.chocs || '0'),
@@ -2774,7 +2838,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       emettreFactureBrouillon: merged.emettreFactureBrouillon || existingSnap.emettreFactureBrouillon || 'Non',
       serviceEmettreId: merged.serviceEmettreId || existingSnap.serviceEmettreId || '',
       modeleCoffret: merged.modeleCoffret || existingSnap.modeleCoffret || '',
-      modeleCoffretId: existingSnap.modeleCoffretId || merged.modeleCoffret || '',
+      modeleCoffretId: merged.modeleCoffret || existingSnap.modeleCoffretId || '',
       numeroLotCoffret: merged.numeroLotCoffret || existingSnap.numeroLotCoffret || '',
       equipeAlarme: merged.equipeAlarme || existingSnap.equipeAlarme || 'Oui',
       alarme: merged.alarme || existingSnap.alarme || 'Oui',
@@ -2803,15 +2867,16 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       miseEnService: merged.miseEnService || existingSnap.miseEnService || '',
       finGarantie: merged.finGarantie || existingSnap.finGarantie || '',
       modeleElectrodeA: merged.modeleElectrodeA || existingSnap.modeleElectrodeA || '',
-      modeleElectrodeAId: existingSnap.modeleElectrodeAId || merged.modeleElectrodeA || '',
+      modeleElectrodeAId: merged.modeleElectrodeA || existingSnap.modeleElectrodeAId || '',
       lotElectrodeA: merged.lotElectrodeA || existingSnap.lotElectrodeA || '',
-      fabricationElectrodeA: merged.fabricationElectrodeA || existingSnap.fabricationElectrodeA || '',
+      fabricationElectrodeA: merged.fabricationElectrodeA || existingSnap.fabricationElectrodeA || existingSnap.insertionElectrodeA || '',
+      insertionElectrodeA: merged.fabricationElectrodeA || merged.insertionElectrodeA || existingSnap.insertionElectrodeA || existingSnap.fabricationElectrodeA || '',
       peremptionElectrodeA: merged.peremptionElectrodeA || existingSnap.peremptionElectrodeA || '',
       remplaceElectrodeA: merged.remplaceElectrodeA || existingSnap.remplaceElectrodeA || 'Non',
       destockElectrodeA: merged.destockElectrodeA || existingSnap.destockElectrodeA || '',
       modeleElectrodeSecoursA: merged.modeleElectrodeSecoursA || existingSnap.modeleElectrodeSecoursA || existingSnap.modeleElectrodeASecoursId || '',
-      modeleElectrodeSecoursAId: existingSnap.modeleElectrodeSecoursAId || existingSnap.modeleElectrodeASecoursId || merged.modeleElectrodeSecoursA || '',
-      modeleElectrodeASecoursId: existingSnap.modeleElectrodeASecoursId || existingSnap.modeleElectrodeSecoursAId || merged.modeleElectrodeSecoursA || '',
+      modeleElectrodeSecoursAId: merged.modeleElectrodeSecoursA || existingSnap.modeleElectrodeSecoursAId || existingSnap.modeleElectrodeASecoursId || '',
+      modeleElectrodeASecoursId: merged.modeleElectrodeSecoursA || existingSnap.modeleElectrodeASecoursId || existingSnap.modeleElectrodeSecoursAId || '',
       lotElectrodeSecoursA: merged.lotElectrodeSecoursA || existingSnap.lotElectrodeSecoursA || existingSnap.lotElectrodeASecours || '',
       lotElectrodeASecours: merged.lotElectrodeSecoursA || existingSnap.lotElectrodeASecours || existingSnap.lotElectrodeSecoursA || '',
       peremptionElectrodeSecoursA: merged.peremptionElectrodeSecoursA || existingSnap.peremptionElectrodeSecoursA || existingSnap.peremptionSecoursElectrodeA || '',
@@ -2819,15 +2884,16 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       remplaceElectrodeSecoursA: merged.remplaceElectrodeSecoursA || existingSnap.remplaceElectrodeSecoursA || 'Non',
       destockElectrodeSecoursA: merged.destockElectrodeSecoursA || existingSnap.destockElectrodeSecoursA || '',
       modeleElectrodeP: merged.modeleElectrodeP || existingSnap.modeleElectrodeP || '',
-      modeleElectrodePId: existingSnap.modeleElectrodePId || merged.modeleElectrodeP || '',
+      modeleElectrodePId: merged.modeleElectrodeP || existingSnap.modeleElectrodePId || '',
       lotElectrodeP: merged.lotElectrodeP || existingSnap.lotElectrodeP || '',
-      fabricationElectrodeP: merged.fabricationElectrodeP || existingSnap.fabricationElectrodeP || '',
+      fabricationElectrodeP: merged.fabricationElectrodeP || existingSnap.fabricationElectrodeP || existingSnap.insertionElectrodeP || '',
+      insertionElectrodeP: merged.fabricationElectrodeP || merged.insertionElectrodeP || existingSnap.insertionElectrodeP || existingSnap.fabricationElectrodeP || '',
       peremptionElectrodeP: merged.peremptionElectrodeP || existingSnap.peremptionElectrodeP || '',
       remplaceElectrodeP: merged.remplaceElectrodeP || existingSnap.remplaceElectrodeP || 'Non',
       destockElectrodeP: merged.destockElectrodeP || existingSnap.destockElectrodeP || '',
       modeleElectrodeSecoursP: merged.modeleElectrodeSecoursP || existingSnap.modeleElectrodeSecoursP || existingSnap.modeleElectrodePSecoursId || '',
-      modeleElectrodeSecoursPId: existingSnap.modeleElectrodeSecoursPId || existingSnap.modeleElectrodePSecoursId || merged.modeleElectrodeSecoursP || '',
-      modeleElectrodePSecoursId: existingSnap.modeleElectrodePSecoursId || existingSnap.modeleElectrodeSecoursPId || merged.modeleElectrodeSecoursP || '',
+      modeleElectrodeSecoursPId: merged.modeleElectrodeSecoursP || existingSnap.modeleElectrodeSecoursPId || existingSnap.modeleElectrodePSecoursId || '',
+      modeleElectrodePSecoursId: merged.modeleElectrodeSecoursP || existingSnap.modeleElectrodePSecoursId || existingSnap.modeleElectrodeSecoursPId || '',
       lotElectrodeSecoursP: merged.lotElectrodeSecoursP || existingSnap.lotElectrodeSecoursP || existingSnap.lotElectrodePSecours || '',
       lotElectrodePSecours: merged.lotElectrodeSecoursP || existingSnap.lotElectrodePSecours || existingSnap.lotElectrodeSecoursP || '',
       peremptionElectrodeSecoursP: merged.peremptionElectrodeSecoursP || existingSnap.peremptionElectrodeSecoursP || existingSnap.peremptionSecoursElectrodeP || '',
@@ -2835,7 +2901,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       remplaceElectrodeSecoursP: merged.remplaceElectrodeSecoursP || existingSnap.remplaceElectrodeSecoursP || 'Non',
       destockElectrodeSecoursP: merged.destockElectrodeSecoursP || existingSnap.destockElectrodeSecoursP || '',
       modeleBatterie: merged.modeleBatterie || existingSnap.modeleBatterie || '',
-      modeleBatterieId: existingSnap.modeleBatterieId || merged.modeleBatterie || '',
+      modeleBatterieId: merged.modeleBatterie || existingSnap.modeleBatterieId || '',
       lotBatterie: merged.lotBatterie || existingSnap.lotBatterie || '',
       fabricationBatterie: merged.fabricationBatterie || existingSnap.fabricationBatterie || '',
       miseEnServiceBatterie: merged.miseEnServiceBatterie || existingSnap.miseEnServiceBatterie || existingSnap.insertionBatterie || '',
@@ -2845,7 +2911,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       remplaceBatterie: merged.remplaceBatterie || existingSnap.remplaceBatterie || 'Non',
       destockBatterie: merged.destockBatterie || existingSnap.destockBatterie || '',
       modelePile: merged.modelePile || existingSnap.modelePile || '',
-      modelePileId: existingSnap.modelePileId || merged.modelePile || '',
+      modelePileId: merged.modelePile || existingSnap.modelePileId || '',
       lotPile: merged.lotPile || existingSnap.lotPile || '',
       fabricationPile: merged.fabricationPile || existingSnap.fabricationPile || '',
       miseEnServicePile: merged.miseEnServicePile || existingSnap.miseEnServicePile || '',
@@ -2853,7 +2919,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       remplacePile: merged.remplacePile || existingSnap.remplacePile || 'Non',
       destockPile: merged.destockPile || existingSnap.destockPile || '',
       modeleKit: merged.modeleKit || existingSnap.modeleKit || '',
-      modeleKitId: existingSnap.modeleKitId || merged.modeleKit || '',
+      modeleKitId: merged.modeleKit || existingSnap.modeleKitId || '',
       lotKit: merged.lotKit || existingSnap.lotKit || '',
       peremptionKit: merged.peremptionKit || existingSnap.peremptionKit || existingSnap.peremptionTrousse || '',
       peremptionTrousse: merged.peremptionKit || existingSnap.peremptionTrousse || existingSnap.peremptionKit || '',
@@ -2869,7 +2935,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       kitGantsPresents: merged.kitGants || existingSnap.kitGantsPresents || existingSnap.kitGants || 'Oui',
       kitMasque: merged.kitMasque || existingSnap.kitMasque || existingSnap.kitMasquePresent || 'Oui',
       kitMasquePresent: merged.kitMasque || existingSnap.kitMasquePresent || existingSnap.kitMasque || 'Oui',
-      verificationsConformes: merged.verificationsConformes || existingSnap.verificationsConformes || 'Oui',
+      verificationsConformes: verifConf,
       demandeDevis: merged.demandeDevis ? 'Oui' : (existingSnap.demandeDevis || 'Non'),
       motifDemandeDevis: merged.motifDemandeDevis || existingSnap.motifDemandeDevis || '',
       descriptionDemandeDevis: merged.descriptionDemandeDevis || existingSnap.descriptionDemandeDevis || '',
@@ -2895,6 +2961,9 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.objet = merged.objet || '';
     merged.message = merged.message || '';
     merged.date = merged.date || new Date().toLocaleDateString('fr-FR');
+    if (merged.photoDataUrl && !merged.lienStockagePartageDevis) {
+      merged.lienStockagePartageDevis = merged.photoDataUrl;
+    }
   } else if (tabType === 'satisfaction') {
     merged.id = merged.id || `rev_${rowIndexZeroBased + 2}`;
     merged.clientName = merged.clientName || '';
@@ -3700,8 +3769,10 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.motifDemandeDevis = enriched.motifDemandeDevis || snap.motifDemandeDevis || '';
     }
     enriched.descriptionDemandeDevis = enriched.devisAutreInfo || enriched.descriptionDemandeDevis || snap.descriptionDemandeDevis || '';
-    if (Array.isArray(enriched.attachments) && enriched.attachments.length > 0 && !enriched.pieceJointeDevisName) {
-      enriched.pieceJointeDevisName = enriched.attachments.map((a: any) => a?.name || a?.url || '').filter(Boolean).join(', ');
+    if (Array.isArray(enriched.attachments) && enriched.attachments.length > 0) {
+      enriched.pieceJointeDevisName = enriched.attachments.map((a: any) => a?.url || a?.name || '').filter(Boolean).join(', ');
+    } else if (Array.isArray(enriched.piecesJointes) && enriched.piecesJointes.length > 0) {
+      enriched.pieceJointeDevisName = enriched.piecesJointes.map((a: any) => a?.url || a?.name || '').filter(Boolean).join(', ');
     }
     if (enriched.etiquetteObligatoireConforme !== undefined) {
       enriched.etiquetteConforme = enriched.etiquetteObligatoireConforme ? 'Oui' : 'Non';
@@ -3713,12 +3784,20 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.autocollantConforme = enriched.stickerEntrepriseApplique ? 'Oui' : 'Non';
     }
 
+    enriched.ecran = enriched.ecran || enriched.techEquipeMessageNumerique || snap.ecran || 'Non';
+    enriched.verificationsConformes =
+      enriched.verificationsConformes ||
+      snap.verificationsConformes ||
+      ((enriched.techVoyantConforme === 'Non' || enriched.techGuidesVocauxConformes === 'Non' || enriched.techBranchementElectrodesConforme === 'Non')
+        ? 'Non'
+        : 'Oui');
+
     // Populate prefixed section keys for canonical mapping
     enriched._s5_fabrication = snap.fabrication || enriched.fabrication || '';
     enriched._s5_miseEnService = snap.miseEnService || enriched.miseEnService || '';
     enriched._s6_modeleElectrodeA = snap.modeleElectrodeA || snap.modeleElectrodeAId || enriched.modeleElectrodeA || '';
     enriched._s6_lotElectrodeA = snap.lotElectrodeA || enriched.lotElectrodeA || '';
-    enriched._s6_fabricationElectrodeA = snap.fabricationElectrodeA || enriched.fabricationElectrodeA || '';
+    enriched._s6_fabricationElectrodeA = snap.fabricationElectrodeA || snap.insertionElectrodeA || enriched.fabricationElectrodeA || enriched.insertionElectrodeA || '';
     enriched._s6_peremptionElectrodeA = snap.peremptionElectrodeA || enriched.peremptionElectrodeA || '';
     enriched._s6_remplaceElectrodeA = enriched.electrodeARemplacee || enriched.remplaceElectrodeA || snap.remplaceElectrodeA || '';
     enriched._s6_destockElectrodeA =
@@ -3749,7 +3828,7 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       '';
     enriched._s7_modeleElectrodeP = snap.modeleElectrodeP || snap.modeleElectrodePId || enriched.modeleElectrodeP || '';
     enriched._s7_lotElectrodeP = snap.lotElectrodeP || enriched.lotElectrodeP || '';
-    enriched._s7_fabricationElectrodeP = snap.fabricationElectrodeP || enriched.fabricationElectrodeP || '';
+    enriched._s7_fabricationElectrodeP = snap.fabricationElectrodeP || snap.insertionElectrodeP || enriched.fabricationElectrodeP || enriched.insertionElectrodeP || '';
     enriched._s7_peremptionElectrodeP = snap.peremptionElectrodeP || enriched.peremptionElectrodeP || '';
     enriched._s7_remplaceElectrodeP = enriched.electrodePRemplacee || enriched.remplaceElectrodeP || snap.remplaceElectrodeP || '';
     enriched._s7_destockElectrodeP =
@@ -3806,6 +3885,21 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.destockKit ||
       snap.destockKit ||
       '';
+  } else if (tabType === 'achatsFournisseurs') {
+    enriched.orderRef = enriched.orderRef || enriched.orderReference || '';
+    enriched.date = enriched.date || enriched.dateStr || '';
+    enriched.pdfFileName = enriched.pdfFileName || enriched.pdfName || '';
+    enriched.pdfDataUrl = enriched.pdfDataUrl || enriched.pdfUrl || '';
+  } else if (tabType === 'crm') {
+    if (!enriched.photoDataUrl && enriched.lienStockagePartageDevis) {
+      enriched.photoDataUrl = enriched.lienStockagePartageDevis;
+    }
+    if (!enriched.photoDataUrl && Array.isArray(enriched.fichiersDevis) && enriched.fichiersDevis.length > 0) {
+      enriched.photoDataUrl = enriched.fichiersDevis.map((f: any) => f?.url || f?.name || '').filter(Boolean).join(', ');
+    }
+  } else if (tabType === 'exportations') {
+    enriched.transferType = enriched.transferType || 'export';
+    enriched.fileUrl = enriched.fileUrl || enriched.driveFileUrl || enriched.url || '';
   } else if (tabType === 'commandes' || tabType === 'devisFactures') {
     const docRef = enriched.ref || enriched.numeroPiece || enriched.id || '';
     enriched.id = enriched.id || docRef;

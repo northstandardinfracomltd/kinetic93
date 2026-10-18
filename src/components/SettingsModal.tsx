@@ -23,6 +23,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, EXTRA_SPREADSHEET_FIELDS, SpreadsheetFieldKey, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
+import { uploadMediaToFirebase } from '../firebase';
 import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile, auth, findTenantInList, KNOWN_TENANTS_REGISTRY, ensureTenantMembersClient, ensureTenantCustomLocationNames } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { getAppsScriptUrl, saveAppsScriptUrl, triggerEmail2TechnicianConnexion, triggerEmail3AdminConnexion, triggerEmailNewMemberAdded, sendScriptEmail } from '../utils/emailService';
@@ -1403,13 +1404,24 @@ export default function SettingsModal({
     isSigDrawing.current = false;
     const canvas = sigCanvasRef.current;
     if (canvas) {
-      const dataUrl = canvas.toDataURL();
+      const dataUrl = canvas.toDataURL('image/png');
+      const targetEmail = selectedSigMemberEmail;
       setLocalMembers(prev => prev.map(m => {
-        if (m.email === selectedSigMemberEmail) {
+        if (m.email === targetEmail) {
           return { ...m, signature: dataUrl };
         }
         return m;
       }));
+      uploadMediaToFirebase(dataUrl, 'signatures', `signature_tech_${targetEmail || 'user'}.png`).then(uploadedUrl => {
+        if (uploadedUrl && uploadedUrl.startsWith('http')) {
+          setLocalMembers(prev => prev.map(m => {
+            if (m.email === targetEmail) {
+              return { ...m, signature: uploadedUrl };
+            }
+            return m;
+          }));
+        }
+      }).catch(() => {});
     }
   };
 
@@ -1986,6 +1998,11 @@ export default function SettingsModal({
         // Unhide Émargements -> unhide Émargements, Formations, and Stagiaires
         newHidden = currentHidden.filter(t => !['Formations', 'Stagiaires', 'Émargements'].includes(t));
       }
+    } else if (tabLabel === 'Exportations') {
+      const isHiddenEither = currentHidden.includes('Exportations') || currentHidden.includes('Importer Exporter');
+      newHidden = isHiddenEither
+        ? currentHidden.filter(t => t !== 'Exportations' && t !== 'Importer Exporter')
+        : [...currentHidden.filter(t => t !== 'Importer Exporter'), 'Exportations'];
     } else {
       newHidden = isCurrentlyHidden
         ? currentHidden.filter(t => t !== tabLabel)
@@ -2394,8 +2411,18 @@ export default function SettingsModal({
         }
       }
 
+      let finalSig = m.signature;
+      if (finalSig && finalSig.startsWith('data:')) {
+        finalSig = await uploadMediaToFirebase(
+          finalSig,
+          'signatures',
+          `signature_tech_${m.id || m.email || 'user'}.png`
+        );
+      }
+
       return {
         ...m,
+        signature: finalSig,
         startAddressLat: lat,
         startAddressLng: lng
       };
@@ -3690,12 +3717,12 @@ export default function SettingsModal({
                 "Relevé Concurrentiel",
                 "Relevé Concurrentiel (Webapp)",
                 "Frais (Webapp)",
-                "Importer Exporter",
+                "Exportations",
                 "Formations",
                 "Stagiaires",
                 "Émargements"
               ].map((pillLabel) => {
-                const isHidden = localCompany?.hiddenTabs?.includes(pillLabel);
+                const isHidden = localCompany?.hiddenTabs?.includes(pillLabel) || (pillLabel === "Exportations" && localCompany?.hiddenTabs?.includes("Importer Exporter"));
                 return (
                   <button
                     key={pillLabel}

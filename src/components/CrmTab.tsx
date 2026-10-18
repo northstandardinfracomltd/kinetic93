@@ -941,6 +941,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       telephone: formTelephone.trim(),
     };
 
+    const sharedFileUrls = formFichiersDevis.length > 0
+      ? formFichiersDevis.map((f) => f.url).filter(Boolean).join(', ')
+      : formLienDevis.trim();
+
     const commercialData = formCategorie === 'Commercial' ? {
       marchePublic: formMarchePublic,
       situationDevis: formSituationDevis,
@@ -956,10 +960,15 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       dateDevis: formDateDevis.trim(),
       dateProchaineRelance: formDateProchaineRelance.trim(),
       dateCommande: formDateCommande.trim(),
-      lienStockagePartageDevis: formFichiersDevis.length > 0 ? formFichiersDevis[0].url : formLienDevis.trim(),
+      lienStockagePartageDevis: sharedFileUrls,
+      photoDataUrl: sharedFileUrls || undefined,
       fichiersDevis: formFichiersDevis,
       evenementsCommercial: formCommercialEvents,
-    } : {};
+    } : {
+      lienStockagePartageDevis: sharedFileUrls || undefined,
+      photoDataUrl: sharedFileUrls || undefined,
+      fichiersDevis: formFichiersDevis.length > 0 ? formFichiersDevis : undefined,
+    };
 
     if (editingTicketId) {
       // Update existing ticket

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Client, Defibrillateur, CommercialDoc, CompanyInfo, Variable, OtherEquipment, PointageAutoVigilance, formatPdfHeaderText } from '../types';
 import { formatDateToFR, computeProchaineMaintenance, formatDateToMonthYear } from '../utils';
 import { t } from '../utils/translate';
+import { uploadMediaToFirebase } from '../firebase';
 
 interface ClientPortalProps {
   clients: Client[];
@@ -395,7 +396,7 @@ export default function ClientPortal({
     setPortalSignatureClientContratImage('');
   };
 
-  const handleSavePortalContract = () => {
+  const handleSavePortalContract = async () => {
     if (!authenticatedClient || !onUpdateClient) return;
     if (!portalSigneParContrat.trim()) {
       alert("Veuillez renseigner le champ 'Signé par' avant d'enregistrer.");
@@ -406,20 +407,28 @@ export default function ClientPortal({
       return;
     }
 
+    const uploadedUrl = await uploadMediaToFirebase(
+      portalSignatureClientContratImage,
+      'signatures',
+      `signature_client_${authenticatedClient.id || 'contrat'}.png`
+    );
+
     const updated: Client = {
       ...authenticatedClient,
       dateSignatureContrat: portalDateSignatureContrat,
       signeParContrat: portalSigneParContrat.trim(),
-      signatureClientContratImage: portalSignatureClientContratImage,
-      clientSignatureImage: portalSignatureClientContratImage,
-    };
+      signatureClientContratImage: uploadedUrl,
+      clientSignatureImage: uploadedUrl,
+      signatureClient: uploadedUrl,
+    } as any;
 
     onUpdateClient(updated);
+    setClientSignature(uploadedUrl);
+    setPortalSignatureClientContratImage(uploadedUrl);
     setContractSaveSuccess(true);
     setTimeout(() => {
       setContractSaveSuccess(false);
-      window.location.reload();
-    }, 500);
+    }, 3000);
   };
 
   const handleDownloadContractPDF = () => {
@@ -729,30 +738,36 @@ export default function ClientPortal({
     };
   };
 
-  const handleSaveSignature = () => {
+  const handleSaveSignature = async () => {
     if (!authenticatedClient) return;
     const canvas = clientCanvasRef.current;
-    const sigImg = canvas ? canvas.toDataURL() : clientSignature;
+    const sigImg = canvas ? canvas.toDataURL('image/png') : clientSignature;
     if (!sigImg || sigImg.trim() === '') {
       alert("Veuillez dessiner votre signature avant d'enregistrer.");
       return;
     }
 
+    const uploadedUrl = await uploadMediaToFirebase(
+      sigImg,
+      'signatures',
+      `signature_client_${authenticatedClient.id || 'portail'}.png`
+    );
+
     if (onUpdateClient) {
       const updated: Client = {
         ...authenticatedClient,
-        clientSignatureImage: sigImg,
-        signatureClientContratImage: sigImg,
+        clientSignatureImage: uploadedUrl,
+        signatureClientContratImage: uploadedUrl,
+        signatureClient: uploadedUrl,
         dateSignatureContrat: authenticatedClient.dateSignatureContrat || new Date().toISOString().split('T')[0],
-      };
+      } as any;
       onUpdateClient(updated);
-      setClientSignature(sigImg);
-      setPortalSignatureClientContratImage(sigImg);
+      setClientSignature(uploadedUrl);
+      setPortalSignatureClientContratImage(uploadedUrl);
       setSaveSuccess(true);
       setTimeout(() => {
         setSaveSuccess(false);
-        window.location.reload();
-      }, 500);
+      }, 3000);
     }
   };
 
@@ -1461,24 +1476,181 @@ export default function ClientPortal({
     return `${pad(mins)}:${pad(secs)}`;
   };
 
-  const handleDownloadReport = (report: any) => {
-    const snapshot = report.defibSnapshot || defibrillateurs.find(d => d.id === report.defibId || d.identifiant === report.defibIdentifiant) || {};
-    const pdfLogo = companyInfo.logo || '';
-    const pdfHeaderImg = companyInfo.pdfHeaderImg || '';
-    const pdfPageHeaderText = companyInfo.pdfPageHeaderText || '';
-    const pdfPageFooterText = companyInfo.pdfPageFooterText || '';
-    const pdfLastPageInfoText = companyInfo.pdfLastPageInfoText || '';
-    const pdfHeaderBgColor = companyInfo.pdfHeaderBgColor || '#7c2882';
-    const pdfCardBorderColor = companyInfo.pdfCardBorderColor || '#7d2882';
-    const pdfCardBgColor = companyInfo.pdfCardBgColor || '#fef2ff';
-    const pdfLabelTextColor = companyInfo.pdfLabelTextColor || '#9f71a2';
+  const handleDownloadReport = async (rawReport: any) => {
+    const printWin = typeof window !== 'undefined' ? window.open('', '_blank') : null;
+    let report = { ...(rawReport || {}) };
+    let effectiveCompanyInfo: CompanyInfo = { ...companyInfo };
+
+    try {
+      const activeTenant = (companyInfo as any)?.tenantId || (companyInfo as any)?.envId || localStorage.getItem('defib_tenant_id') || 'demo';
+      const sheetRapportsUrl =
+        (companyInfo as any)?.spreadsheetRapportsPdf ||
+        (companyInfo as any)?.spreadsheetRapportsPdfUrl ||
+        localStorage.getItem(`defib_${activeTenant}_spreadsheet_rapports_pdf`) ||
+        '';
+      const sheetApparenceUrl =
+        (companyInfo as any)?.spreadsheetApparenceRapportsPdf ||
+        (companyInfo as any)?.spreadsheetApparenceRapportsPdfUrl ||
+        localStorage.getItem(`defib_${activeTenant}_spreadsheet_apparence_rapports_pdf`) ||
+        '';
+      const sheetReglagesUrl =
+        (companyInfo as any)?.spreadsheetReglages ||
+        (companyInfo as any)?.spreadsheetReglagesUrl ||
+        localStorage.getItem(`defib_${activeTenant}_spreadsheet_reglages`) ||
+        '';
+
+      const syncPromises: Promise<void>[] = [];
+      if (sheetRapportsUrl && sheetRapportsUrl.trim()) {
+        syncPromises.push(
+          fetch(
+            `/api/sheets/sync?tenantId=${encodeURIComponent(activeTenant)}&tabType=rapportsPdf&spreadsheetUrl=${encodeURIComponent(sheetRapportsUrl.trim())}`,
+            { signal: AbortSignal.timeout(3000) }
+          )
+            .then(r => (r.ok ? r.json() : null))
+            .then(data => {
+              if (data && Array.isArray(data.items) && data.items.length > 0) {
+                const targetKeys = [report.interventionReference, report.reportNumber, report.id, report.reportId]
+                  .filter(Boolean)
+                  .map(s => String(s).trim().toLowerCase());
+                const matchedSheetReport = data.items.find((it: any) => {
+                  const itKeys = [it.interventionReference, it.reportNumber, it.id, it.reportId]
+                    .filter(Boolean)
+                    .map(s => String(s).trim().toLowerCase());
+                  return itKeys.some(k => targetKeys.includes(k));
+                });
+                if (matchedSheetReport) {
+                  report = {
+                    ...report,
+                    ...matchedSheetReport,
+                    defibSnapshot: {
+                      ...(report.defibSnapshot || {}),
+                      ...(matchedSheetReport.defibSnapshot || {}),
+                    },
+                  };
+                }
+              }
+            })
+            .catch(() => {})
+        );
+      }
+      if (sheetApparenceUrl && sheetApparenceUrl.trim()) {
+        syncPromises.push(
+          fetch(
+            `/api/sheets/sync?tenantId=${encodeURIComponent(activeTenant)}&tabType=apparenceRapportsPdf&spreadsheetUrl=${encodeURIComponent(sheetApparenceUrl.trim())}`,
+            { signal: AbortSignal.timeout(2500) }
+          )
+            .then(r => (r.ok ? r.json() : null))
+            .then(data => {
+              if (data && Array.isArray(data.items) && data.items.length > 0) {
+                const appRow = data.items[0];
+                effectiveCompanyInfo = {
+                  ...effectiveCompanyInfo,
+                  pdfHeaderBgColor: appRow.pdfHeaderBgColor ?? effectiveCompanyInfo.pdfHeaderBgColor,
+                  pdfCardBorderColor: appRow.pdfCardBorderColor ?? effectiveCompanyInfo.pdfCardBorderColor,
+                  pdfCardBgColor: appRow.pdfCardBgColor ?? effectiveCompanyInfo.pdfCardBgColor,
+                  pdfLabelTextColor: appRow.pdfLabelTextColor ?? effectiveCompanyInfo.pdfLabelTextColor,
+                  pdfHeaderImg: appRow.pdfHeaderImg ?? effectiveCompanyInfo.pdfHeaderImg,
+                  pdfPageHeaderText: appRow.pdfPageHeaderText ?? effectiveCompanyInfo.pdfPageHeaderText,
+                  pdfPageFooterText: appRow.pdfPageFooterText ?? effectiveCompanyInfo.pdfPageFooterText,
+                  pdfLastPageInfoText: appRow.pdfLastPageInfoText ?? effectiveCompanyInfo.pdfLastPageInfoText,
+                  pdfHideElectrodeSecoursA: appRow.pdfHideElectrodeSecoursA ?? effectiveCompanyInfo.pdfHideElectrodeSecoursA,
+                  pdfHideElectrodeSecoursP: appRow.pdfHideElectrodeSecoursP ?? effectiveCompanyInfo.pdfHideElectrodeSecoursP,
+                  pdfHideKitSecours: appRow.pdfHideKitSecours ?? effectiveCompanyInfo.pdfHideKitSecours,
+                  pdfSimplifyCoffret: appRow.pdfSimplifyCoffret ?? effectiveCompanyInfo.pdfSimplifyCoffret,
+                  pdfHideVerificationsTechniques: appRow.pdfHideVerificationsTechniques ?? effectiveCompanyInfo.pdfHideVerificationsTechniques,
+                  pdfHideHorodatagesDiagnostic: appRow.pdfHideHorodatagesDiagnostic ?? effectiveCompanyInfo.pdfHideHorodatagesDiagnostic,
+                  pdfShowDemandeDevisDetails: appRow.pdfShowDemandeDevisDetails ?? effectiveCompanyInfo.pdfShowDemandeDevisDetails,
+                };
+              }
+            })
+            .catch(() => {})
+        );
+      }
+      if (sheetReglagesUrl && sheetReglagesUrl.trim()) {
+        syncPromises.push(
+          fetch(
+            `/api/sheets/sync?tenantId=${encodeURIComponent(activeTenant)}&tabType=reglages&spreadsheetUrl=${encodeURIComponent(sheetReglagesUrl.trim())}`,
+            { signal: AbortSignal.timeout(2500) }
+          )
+            .then(r => (r.ok ? r.json() : null))
+            .then(data => {
+              if (data && Array.isArray(data.items) && data.items.length > 0) {
+                const regRow = data.items[0];
+                effectiveCompanyInfo = {
+                  ...effectiveCompanyInfo,
+                  name: regRow.name || effectiveCompanyInfo.name,
+                  logo: regRow.logo !== undefined ? regRow.logo : effectiveCompanyInfo.logo,
+                  email: regRow.email || effectiveCompanyInfo.email,
+                  phone: regRow.phone || effectiveCompanyInfo.phone,
+                  website: regRow.website || effectiveCompanyInfo.website,
+                };
+              }
+            })
+            .catch(() => {})
+        );
+      }
+      if (syncPromises.length > 0) {
+        await Promise.all(syncPromises);
+      }
+    } catch (_) {}
+
+    const rawSnap = report.defibSnapshot || {};
+    const equipIdent = String(rawSnap.identifiant || report.identifiant || report.defibIdentifiant || '').trim().toLowerCase();
+    const equipSn = String(rawSnap.numeroSerie || report.numeroSerie || '').trim().toLowerCase();
+    const matchedDefib =
+      defibrillateurs.find(d => {
+        const dIdent = String(d.identifiant || '').trim().toLowerCase();
+        const dSn = String(d.numeroSerie || '').trim().toLowerCase();
+        return (equipIdent && (dIdent === equipIdent || String(d.id || '').trim().toLowerCase() === equipIdent)) || (equipSn && dSn === equipSn);
+      }) ||
+      (otherEquipments || []).find((oe: any) => {
+        const oeIdent = String(oe.identifiant || '').trim().toLowerCase();
+        return equipIdent && (oeIdent === equipIdent || String(oe.id || '').trim().toLowerCase() === equipIdent);
+      });
+
+    const nonEmptyReportFields: Record<string, any> = {};
+    for (const [rk, rv] of Object.entries(report)) {
+      if (rk !== 'id' && rk !== 'defibSnapshot' && rv !== undefined && rv !== null && rv !== '') {
+        nonEmptyReportFields[rk] = rv;
+      }
+    }
+    const snapshot: Record<string, any> = {
+      ...(matchedDefib || {}),
+      ...rawSnap,
+      ...nonEmptyReportFields,
+      modeleId: rawSnap.modeleId || report.modele || matchedDefib?.modeleId || '',
+      modeleCoffretId: rawSnap.modeleCoffretId || report.modeleCoffret || (matchedDefib as any)?.modeleCoffretId || '',
+      modeleElectrodeAId: rawSnap.modeleElectrodeAId || report.modeleElectrodeA || (matchedDefib as any)?.modeleElectrodeAId || '',
+      modeleElectrodeASecoursId: rawSnap.modeleElectrodeASecoursId || report.modeleElectrodeSecoursA || (matchedDefib as any)?.modeleElectrodeASecoursId || '',
+      modeleElectrodePId: rawSnap.modeleElectrodePId || report.modeleElectrodeP || (matchedDefib as any)?.modeleElectrodePId || '',
+      modeleElectrodePSecoursId: rawSnap.modeleElectrodePSecoursId || report.modeleElectrodeSecoursP || (matchedDefib as any)?.modeleElectrodePSecoursId || '',
+      modeleBatterieId: rawSnap.modeleBatterieId || report.modeleBatterie || (matchedDefib as any)?.modeleBatterieId || '',
+      insertionElectrodeA: rawSnap.insertionElectrodeA || rawSnap.fabricationElectrodeA || report.fabricationElectrodeA || (matchedDefib as any)?.insertionElectrodeA || '',
+      insertionBatterie: rawSnap.insertionBatterie || rawSnap.miseEnServiceBatterie || report.miseEnServiceBatterie || (matchedDefib as any)?.insertionBatterie || '',
+      peremptionSecoursElectrodeA: rawSnap.peremptionSecoursElectrodeA || rawSnap.peremptionElectrodeSecoursA || report.peremptionElectrodeSecoursA || (matchedDefib as any)?.peremptionSecoursElectrodeA || '',
+      lotElectrodeASecours: rawSnap.lotElectrodeASecours || rawSnap.lotElectrodeSecoursA || report.lotElectrodeSecoursA || (matchedDefib as any)?.lotElectrodeASecours || '',
+      peremptionSecoursElectrodeP: rawSnap.peremptionSecoursElectrodeP || rawSnap.peremptionElectrodeSecoursP || report.peremptionElectrodeSecoursP || (matchedDefib as any)?.peremptionSecoursElectrodeP || '',
+      lotElectrodePSecours: rawSnap.lotElectrodePSecours || rawSnap.lotElectrodeSecoursP || report.lotElectrodeSecoursP || (matchedDefib as any)?.lotElectrodePSecours || '',
+      peremptionTrousse: report.kitPeremption || report.peremptionKit || rawSnap.peremptionTrousse || rawSnap.peremptionKit || (matchedDefib as any)?.peremptionTrousse || '',
+      commentaire: report.diagnosticCommentaire || rawSnap.commentaire || report.remarques || (matchedDefib as any)?.commentaire || '',
+    };
+
+    const pdfLogo = effectiveCompanyInfo.logo || '';
+    const pdfHeaderImg = effectiveCompanyInfo.pdfHeaderImg || '';
+    const pdfPageHeaderText = effectiveCompanyInfo.pdfPageHeaderText || '';
+    const pdfPageFooterText = effectiveCompanyInfo.pdfPageFooterText || '';
+    const pdfLastPageInfoText = effectiveCompanyInfo.pdfLastPageInfoText || '';
+    const pdfHeaderBgColor = effectiveCompanyInfo.pdfHeaderBgColor || '#7c2882';
+    const pdfCardBorderColor = effectiveCompanyInfo.pdfCardBorderColor || '#7d2882';
+    const pdfCardBgColor = effectiveCompanyInfo.pdfCardBgColor || '#fef2ff';
+    const pdfLabelTextColor = effectiveCompanyInfo.pdfLabelTextColor || '#9f71a2';
     const hasLastPage = !!pdfLastPageInfoText.trim();
 
-    const compLogo = companyInfo.logo || '';
-    const compName = companyInfo.name || 'Défibeo Solutions';
-    const compEmail = companyInfo.email || '';
-    const compPhone = companyInfo.phone || '';
-    const compWebsite = companyInfo.website || '';
+    const compLogo = effectiveCompanyInfo.logo || '';
+    const compName = effectiveCompanyInfo.name || 'Défibeo Solutions';
+    const compEmail = effectiveCompanyInfo.email || '';
+    const compPhone = effectiveCompanyInfo.phone || '';
+    const compWebsite = effectiveCompanyInfo.website || '';
 
     let htmlContent = '';
     const isOther = snapshot.categorie && snapshot.categorie !== 'Défibrillateur';
@@ -1495,17 +1667,18 @@ export default function ClientPortal({
         return !topLevelKeys.includes(k) && v !== undefined && v !== null && v !== '' && typeof v !== 'object';
       });
 
-      let clientFound = clients.find(c => c.id === snapshot.clientId) || authenticatedClient;
-      if (!clientFound && snapshot.clientId) {
-        clientFound = clients.find(c => c.denomination === snapshot.clientId || c.id === snapshot.clientId);
-      }
-      if (!clientFound && report.clientId) {
-        clientFound = clients.find(c => c.id === report.clientId);
-      }
-      const clientName = clientFound ? clientFound.denomination : (snapshot.nomPrenomSite || 'Non rattaché');
+      const clientCandidates = [snapshot.clientId, report.clientId, report.clientName, report.entreprise]
+        .filter(Boolean)
+        .map(s => String(s).trim().toLowerCase());
+      let clientFound =
+        clients.find(c => {
+          const cKeys = [c.id, c.clientIdField, c.denomination].filter(Boolean).map(s => String(s).trim().toLowerCase());
+          return cKeys.some(k => clientCandidates.includes(k));
+        }) || authenticatedClient;
+      const clientName = clientFound ? clientFound.denomination : (report.clientName || report.entreprise || snapshot.nomPrenomSite || 'Non rattaché');
 
       const totalPages = hasLastPage ? 3 : 2;
-      const docTitle = report.title ? report.title : `Rapport d’intervention - ${snapshot.categorie || ''}`;
+      const docTitle = report.reportTitle || report.title ? (report.reportTitle || report.title) : `Rapport d’intervention - ${snapshot.categorie || ''}`;
 
       const renderHeader = (title: string) => {
         const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
@@ -1852,24 +2025,50 @@ export default function ClientPortal({
       `;
       const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      if (printWin) {
+        printWin.location.href = url;
+      } else {
+        window.open(url, '_blank');
+      }
       return;
     } else {
       // Resolving Client Name
-      let clientFound = clients.find(c => c.id === snapshot.clientId) || authenticatedClient;
-      if (!clientFound && snapshot.clientId) {
-        clientFound = clients.find(c => c.denomination === snapshot.clientId || c.id === snapshot.clientId);
-      }
-      if (!clientFound && report.clientId) {
-        clientFound = clients.find(c => c.id === report.clientId);
-      }
-      const clientName = clientFound ? clientFound.denomination : (snapshot.nomPrenomSite || 'Non rattaché');
-      const clientIdField = clientFound?.clientIdField || snapshot.clientIdField || authenticatedClient?.clientIdField || '';
-      const payeurId = clientFound?.payeurId || snapshot.payeurId || authenticatedClient?.payeurId || '';
-      const autreReferenceVal = report.autreReference || report.customReference || '';
+      const clientCandidates = [snapshot.clientId, report.clientId, report.clientName, report.entreprise]
+        .filter(Boolean)
+        .map(s => String(s).trim().toLowerCase());
+      let clientFound =
+        clients.find(c => {
+          const cKeys = [c.id, c.clientIdField, c.denomination].filter(Boolean).map(s => String(s).trim().toLowerCase());
+          return cKeys.some(k => clientCandidates.includes(k));
+        }) || authenticatedClient;
+      const clientName = clientFound
+        ? clientFound.denomination
+        : (report.clientName || report.entreprise || snapshot.clientId || snapshot.nomPrenomSite || 'Non rattaché');
+      const clientIdField = clientFound?.clientIdField || report.clientIdField || snapshot.clientIdField || authenticatedClient?.clientIdField || '';
+      const payeurId = clientFound?.payeurId || report.payeurId || snapshot.payeurId || authenticatedClient?.payeurId || '';
+      const autreReferenceVal = report.autreReference || report.customReference || snapshot.autreReference || '';
+
+      const findVariableByModelRef = (ref: any) => {
+        if (!ref) return undefined;
+        const clean = String(ref).trim().toLowerCase();
+        if (!clean) return undefined;
+        return variables.find(v => {
+          const vId = String(v.id || '').trim().toLowerCase();
+          const vNom = String(v.nom || '').trim().toLowerCase();
+          const vMarqueNom = `${v.marque || ''} ${v.nom || ''}`.trim().toLowerCase();
+          const vNomMarque = `${v.nom || ''} (${v.marque || ''})`.trim().toLowerCase();
+          return vId === clean || vNom === clean || vMarqueNom === clean || vNomMarque === clean;
+        });
+      };
+      const formatModelDisplayName = (modelVar: any, fallbackRef: any, emptyFallback = 'Non spécifié') => {
+        if (modelVar) {
+          return `${modelVar.marque ? modelVar.marque + ' ' : ''}${modelVar.nom || ''}`.trim();
+        }
+        return fallbackRef ? String(fallbackRef) : emptyFallback;
+      };
 
       // Resolving Model names from Variable list
-      const defibModel = variables.find(v => v.id === snapshot.modeleId);
+      const defibModel = findVariableByModelRef(snapshot.modeleId || snapshot.modele);
       const selectedModelVar = defibModel;
 
       const isVisibleNumeroAtlasante = selectedModelVar ? (selectedModelVar.visibiliteNumeroAtlasante !== 'Non') : true;
@@ -1902,68 +2101,70 @@ export default function ClientPortal({
       const isVisibleNettoyage = selectedModelVar ? (selectedModelVar.visibiliteNettoyage !== 'Non') : true;
       const isVisiblePiecesJointes = selectedModelVar ? (selectedModelVar.visibilitePiecesJointes !== 'Non') : true;
 
-      const defibModelName = defibModel ? `${defibModel.marque} ${defibModel.nom}` : (snapshot.modeleId || 'Non spécifié');
+      const defibModelName = formatModelDisplayName(defibModel, snapshot.modeleId || snapshot.modele);
 
-      const coffretModel = variables.find(v => v.id === snapshot.modeleCoffretId);
-      const coffretModelName = coffretModel ? `${coffretModel.marque} ${coffretModel.nom}` : (snapshot.modeleCoffretId || 'Non spécifié');
+      const coffretModel = findVariableByModelRef(snapshot.modeleCoffretId || snapshot.modeleCoffret);
+      const coffretModelName = formatModelDisplayName(coffretModel, snapshot.modeleCoffretId || snapshot.modeleCoffret);
 
-      const electrodeAModel = variables.find(v => v.id === snapshot.modeleElectrodeAId);
-      const electrodeAModelName = electrodeAModel ? `${electrodeAModel.marque} ${electrodeAModel.nom}` : (snapshot.modeleElectrodeAId || 'Non spécifié');
+      const electrodeAModel = findVariableByModelRef(snapshot.modeleElectrodeAId || snapshot.modeleElectrodeA);
+      const electrodeAModelName = formatModelDisplayName(electrodeAModel, snapshot.modeleElectrodeAId || snapshot.modeleElectrodeA);
 
-      const electrodeASecoursModel = variables.find(v => v.id === snapshot.modeleElectrodeASecoursId);
-      const electrodeASecoursModelName = electrodeASecoursModel ? `${electrodeASecoursModel.marque} ${electrodeASecoursModel.nom}` : '';
+      const electrodeASecoursModel = findVariableByModelRef(snapshot.modeleElectrodeASecoursId || snapshot.modeleElectrodeSecoursA);
+      const electrodeASecoursModelName = formatModelDisplayName(electrodeASecoursModel, snapshot.modeleElectrodeASecoursId || snapshot.modeleElectrodeSecoursA, '');
 
-      const electrodePModel = variables.find(v => v.id === snapshot.modeleElectrodePId);
-      const electrodePModelName = electrodePModel ? `${electrodePModel.marque} ${electrodePModel.nom}` : (snapshot.modeleElectrodePId || 'Non spécifié');
+      const electrodePModel = findVariableByModelRef(snapshot.modeleElectrodePId || snapshot.modeleElectrodeP);
+      const electrodePModelName = formatModelDisplayName(electrodePModel, snapshot.modeleElectrodePId || snapshot.modeleElectrodeP);
 
-      const electrodePSecoursModel = variables.find(v => v.id === snapshot.modeleElectrodePSecoursId);
-      const electrodePSecoursModelName = electrodePSecoursModel ? `${electrodePSecoursModel.marque} ${electrodePSecoursModel.nom}` : '';
+      const electrodePSecoursModel = findVariableByModelRef(snapshot.modeleElectrodePSecoursId || snapshot.modeleElectrodeSecoursP);
+      const electrodePSecoursModelName = formatModelDisplayName(electrodePSecoursModel, snapshot.modeleElectrodePSecoursId || snapshot.modeleElectrodeSecoursP, '');
 
-      const batterieModel = variables.find(v => v.id === snapshot.modeleBatterieId);
-      const batterieModelName = batterieModel ? `${batterieModel.marque} ${batterieModel.nom}` : (snapshot.modeleBatterieId || 'Non spécifié');
+      const batterieModel = findVariableByModelRef(snapshot.modeleBatterieId || snapshot.modeleBatterie);
+      const batterieModelName = formatModelDisplayName(batterieModel, snapshot.modeleBatterieId || snapshot.modeleBatterie);
 
       // Helper to resolve stock pieces
       const getStockPieceLabel = (stockId: string) => {
         if (!stockId) return '-';
-        const stockItem = stocks ? stocks.find((s: any) => s.id === stockId) : null;
-        if (!stockItem) return stockId;
-        const variableItem = variables.find((v: any) => v.id === stockItem.denominationPieceId);
-        if (!variableItem) return `Pièce (${stockItem.denominationPieceId})`;
-        return `${variableItem.nom} (${variableItem.marque})`;
+        const cleanRef = String(stockId).trim().toLowerCase();
+        const stockItem = stocks
+          ? stocks.find((s: any) => {
+              const sKeys = [s.id, s.identifiant, s.ugs, s.denominationPieceId, s.denominationPieceNom]
+                .filter(Boolean)
+                .map(x => String(x).trim().toLowerCase());
+              return sKeys.includes(cleanRef);
+            })
+          : null;
+        if (!stockItem) {
+          const directVar = findVariableByModelRef(stockId);
+          if (directVar) return `${directVar.nom}${directVar.marque ? ` (${directVar.marque})` : ''}`;
+          return stockId;
+        }
+        const variableItem = findVariableByModelRef(stockItem.denominationPieceId || stockItem.denominationPieceNom);
+        if (!variableItem) return stockItem.denominationPieceNom || stockItem.denominationPieceId || stockId;
+        return `${variableItem.nom}${variableItem.marque ? ` (${variableItem.marque})` : ''}`;
       };
 
-      // Helper to resolve service label
       const getServiceLabel = (serviceId: string) => {
         if (!serviceId) return '';
-        const stockItem = stocks ? stocks.find((s: any) => s.id === serviceId) : null;
-        if (stockItem) {
-          const variable = variables.find((v: any) => v.id === stockItem.denominationPieceId);
-          return variable ? `${variable.nom} (${variable.marque})` : 'Service';
-        }
-        const variable = variables.find((v: any) => v.id === serviceId);
-        if (variable) {
-          return `${variable.nom} (${variable.marque})`;
-        }
-        return serviceId;
+        return getStockPieceLabel(serviceId);
       };
 
-      const selElectrodeA = getStockPieceLabel(report.selectionElectrodeARemplacee);
-      const selElectrodeASecours = getStockPieceLabel(report.selectionElectrodeASecoursRemplacee);
-      const selElectrodeP = getStockPieceLabel(report.selectionElectrodePRemplacee);
-      const selElectrodePSecours = getStockPieceLabel(report.selectionElectrodePSecoursRemplacee);
-      const selBatterie = getStockPieceLabel(report.selectionBatterieRemplacee);
-      const selKitSecours = getStockPieceLabel(report.selectionKitSecoursRemplace);
+      const selElectrodeA = getStockPieceLabel(report.selectionElectrodeARemplacee || report.destockElectrodeA || snapshot.destockElectrodeA);
+      const selElectrodeASecours = getStockPieceLabel(report.selectionElectrodeASecoursRemplacee || report.destockElectrodeSecoursA || snapshot.destockElectrodeSecoursA);
+      const selElectrodeP = getStockPieceLabel(report.selectionElectrodePRemplacee || report.destockElectrodeP || snapshot.destockElectrodeP);
+      const selElectrodePSecours = getStockPieceLabel(report.selectionElectrodePSecoursRemplacee || report.destockElectrodeSecoursP || snapshot.destockElectrodeSecoursP);
+      const selBatterie = getStockPieceLabel(report.selectionBatterieRemplacee || report.destockBatterie || snapshot.destockBatterie);
+      const selKitSecours = getStockPieceLabel(report.selectionKitSecoursRemplace || report.destockKit || snapshot.destockKit);
 
-      const pdfHideElectrodeSecoursA = companyInfo?.pdfHideElectrodeSecoursA === 'Oui';
-      const pdfHideElectrodeSecoursP = companyInfo?.pdfHideElectrodeSecoursP === 'Oui';
-      const pdfHideKitSecours = companyInfo?.pdfHideKitSecours === 'Oui';
-      const pdfSimplifyCoffret = companyInfo?.pdfSimplifyCoffret === 'Oui';
-      const pdfHideVerificationsTechniques = companyInfo?.pdfHideVerificationsTechniques === 'Oui';
-      const pdfHideHorodatagesDiagnostic = companyInfo?.pdfHideHorodatagesDiagnostic === 'Oui';
-      const pdfShowDemandeDevisDetails = companyInfo?.pdfShowDemandeDevisDetails === 'Oui';
+      const pdfHideElectrodeSecoursA = effectiveCompanyInfo?.pdfHideElectrodeSecoursA === 'Oui';
+      const pdfHideElectrodeSecoursP = effectiveCompanyInfo?.pdfHideElectrodeSecoursP === 'Oui';
+      const pdfHideKitSecours = effectiveCompanyInfo?.pdfHideKitSecours === 'Oui';
+      const pdfSimplifyCoffret = effectiveCompanyInfo?.pdfSimplifyCoffret === 'Oui';
+      const pdfHideVerificationsTechniques = effectiveCompanyInfo?.pdfHideVerificationsTechniques === 'Oui';
+      const pdfHideHorodatagesDiagnostic = effectiveCompanyInfo?.pdfHideHorodatagesDiagnostic === 'Oui';
+      const pdfShowDemandeDevisDetails = effectiveCompanyInfo?.pdfShowDemandeDevisDetails === 'Oui';
 
       const totalPages = hasLastPage ? 6 : 5;
-      const docTitle = report.title ? report.title : 'Rapport d’intervention GMAO';
+      const docTitle = report.reportTitle || report.title || 'Rapport d’intervention GMAO';
 
       const renderHeader = (title: string) => {
         const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';
@@ -2542,10 +2743,14 @@ export default function ClientPortal({
       `;
     }
 
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-  };
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      if (printWin) {
+        printWin.location.href = url;
+      } else {
+        window.open(url, '_blank');
+      }
+    };
 
   // Loading state if client information is currently initializing
   if (!authenticatedClient) {

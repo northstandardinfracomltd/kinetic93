@@ -558,6 +558,8 @@ export interface CompanyInfo {
   spreadsheetCommunicationPortailClientUrl?: string;
   spreadsheetObservateurActionsSuspectes?: string;
   spreadsheetObservateurActionsSuspectesUrl?: string;
+  spreadsheetExportations?: string;
+  spreadsheetExportationsUrl?: string;
 }
 
 export type SpreadsheetFieldKey =
@@ -587,7 +589,8 @@ export type SpreadsheetFieldKey =
   | 'spreadsheetReglages'
   | 'spreadsheetApparenceRapportsPdf'
   | 'spreadsheetCommunicationPortailClient'
-  | 'spreadsheetObservateurActionsSuspectes';
+  | 'spreadsheetObservateurActionsSuspectes'
+  | 'spreadsheetExportations';
 
 export const EXTRA_SPREADSHEET_FIELDS: {
   key: SpreadsheetFieldKey;
@@ -614,6 +617,7 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetMessagesInternes', urlKey: 'spreadsheetMessagesInternesUrl', storageSuffix: 'spreadsheet_messages_internes', label: 'Spreadsheet Messages internes.', id: 'settings-db-spreadsheet-messages-internes' },
   { key: 'spreadsheetVariables', urlKey: 'spreadsheetVariablesUrl', storageSuffix: 'spreadsheet_variables', label: 'Spreadsheet Variables.', id: 'settings-db-spreadsheet-variables' },
   { key: 'spreadsheetGed', urlKey: 'spreadsheetGedUrl', storageSuffix: 'spreadsheet_ged', label: 'Spreadsheet GED.', id: 'settings-db-spreadsheet-ged' },
+  { key: 'spreadsheetExportations', urlKey: 'spreadsheetExportationsUrl', storageSuffix: 'spreadsheet_exportations', label: 'Spreadsheet Exportations.', id: 'settings-db-spreadsheet-exportations' },
   { key: 'spreadsheetIntituleEmplacements', urlKey: 'spreadsheetIntituleEmplacementsUrl', storageSuffix: 'spreadsheet_intitule_emplacements', label: 'Spreadsheet Intitulé des emplacements.', id: 'settings-db-spreadsheet-intitule-emplacements' },
   { key: 'spreadsheetMembresEnvironnement', urlKey: 'spreadsheetMembresEnvironnementUrl', storageSuffix: 'spreadsheet_membres_environnement', label: 'Spreadsheet Membres de l’environnement.', id: 'settings-db-spreadsheet-membres-environnement' },
   { key: 'spreadsheetReglages', urlKey: 'spreadsheetReglagesUrl', storageSuffix: 'spreadsheet_reglages', label: 'Spreadsheet Réglages.', id: 'settings-db-spreadsheet-reglages' },
@@ -864,12 +868,16 @@ export interface AchatFournisseur {
   id: string;
   reference: string; // generated code e.g. BL-2026-1
   orderReference: string; // Commander Ref (free input)
+  orderRef?: string;
   supplierId: string; // lookup of Variable of type 'Fournisseur'
   supplierName: string; // name cache or name lookup
   comment: string; // free text one line
-  pdfUrl?: string; // base64 or file/fake url
+  pdfUrl?: string; // shared Google Drive URL
+  pdfDataUrl?: string; // alias for Spreadsheet column 'URL du fichier'
   pdfName?: string; // filename of PDF if uploaded
+  pdfFileName?: string; // alias for Spreadsheet column 'Fichier de la commande (PDF)'
   dateStr: string; // date of order
+  date?: string;
 }
 
 export interface AppNotification {

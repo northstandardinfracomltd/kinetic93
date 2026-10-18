@@ -4469,6 +4469,7 @@ async function warmupDefibrillateursStore() {
     apparenceRapportsPdf: 'spreadsheetApparenceRapportsPdf',
     communicationPortailClient: 'spreadsheetCommunicationPortailClient',
     observateurActionsSuspectes: 'spreadsheetObservateurActionsSuspectes',
+    exportations: 'spreadsheetExportations',
   };
 
   function getSheetTabFieldCandidates(tabType: SheetTabType): string[] {
@@ -4887,6 +4888,86 @@ async function warmupDefibrillateursStore() {
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Firebase media asset endpoints (stores signatures & photos and serves a full https:// URL for Spreadsheets)
+  const MEDIA_ASSETS_DIR = path.join(DATA_DIR, 'media_assets');
+  if (!fs.existsSync(MEDIA_ASSETS_DIR)) {
+    try { fs.mkdirSync(MEDIA_ASSETS_DIR, { recursive: true }); } catch (_) {}
+  }
+
+  app.post("/api/firebase-media", (req, res) => {
+    try {
+      const { mediaId, category, fileName, dataUrl, createdAt } = req.body || {};
+      if (!mediaId || !dataUrl) {
+        return res.status(400).json({ error: "mediaId et dataUrl sont requis." });
+      }
+      const safeId = String(mediaId).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const payload = {
+        mediaId: safeId,
+        category: category || 'photos',
+        fileName: fileName || safeId,
+        dataUrl,
+        createdAt: createdAt || new Date().toISOString()
+      };
+      try {
+        fs.writeFileSync(path.join(MEDIA_ASSETS_DIR, `${safeId}.json`), JSON.stringify(payload), 'utf-8');
+      } catch (_) {}
+      serverMemoryStore.set(`media_asset_${safeId}`, payload);
+      return res.json({ status: "success", mediaId: safeId });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/firebase-media/:mediaId", async (req, res) => {
+    try {
+      const safeId = String(req.params.mediaId || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+      if (!safeId) return res.status(400).send("Invalid mediaId");
+
+      let asset: any = serverMemoryStore.get(`media_asset_${safeId}`);
+      if (!asset) {
+        const diskPath = path.join(MEDIA_ASSETS_DIR, `${safeId}.json`);
+        if (fs.existsSync(diskPath)) {
+          try {
+            asset = JSON.parse(fs.readFileSync(diskPath, 'utf-8'));
+            serverMemoryStore.set(`media_asset_${safeId}`, asset);
+          } catch (_) {}
+        }
+      }
+      if (!asset && firebaseDb) {
+        try {
+          const snap = await withTimeout(getDoc(doc(firebaseDb, 'media_assets', safeId)), 3000, null);
+          if (snap && snap.exists()) {
+            asset = snap.data();
+            serverMemoryStore.set(`media_asset_${safeId}`, asset);
+          }
+        } catch (_) {}
+      }
+
+      if (!asset || !asset.dataUrl) {
+        return res.status(404).send("Media not found");
+      }
+
+      const dataUrlStr = String(asset.dataUrl);
+      if (dataUrlStr.startsWith('http://') || dataUrlStr.startsWith('https://')) {
+        return res.redirect(dataUrlStr);
+      }
+
+      const match = dataUrlStr.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        const mimeType = match[1];
+        const base64Data = match[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return res.send(buffer);
+      }
+
+      return res.status(400).send("Invalid media format");
+    } catch (err: any) {
+      return res.status(500).send(err.message);
     }
   });
 
