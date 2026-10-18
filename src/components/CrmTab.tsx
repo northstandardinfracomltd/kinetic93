@@ -191,18 +191,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
   const effectiveRefreshing = Boolean(isRefreshing || isLocalRefreshing);
 
+  const hasCrmSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetCrm', companyInfo));
+
   const handleRefreshCrmClick = async () => {
-    if (effectiveRefreshing) return;
+    if (effectiveRefreshing || !hasCrmSpreadsheet) return;
     setIsLocalRefreshing(true);
     try {
       if (onRefreshData) {
         await onRefreshData();
-      } else {
-        const activeTenant = tenantId || 'demo';
-        const rawTickets = await fetchCollectionFromFirestore<SupportTicket[]>('tickets', activeTenant);
-        if (Array.isArray(rawTickets)) {
-          onSaveTickets(rawTickets);
-        }
       }
     } catch (err) {
       console.warn("Manual refresh error in CRM:", err);
@@ -563,13 +559,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       };
     }
   }, [formDescription, isPaneOpen]);
-
-  // Ensure default demo tickets exist if list is empty so the CRM table and Gérer sidepane can be viewed immediately
-  useEffect(() => {
-    if (tickets.length === 0 && INITIAL_TICKETS && INITIAL_TICKETS.length > 0) {
-      onSaveTickets(INITIAL_TICKETS);
-    }
-  }, [tickets.length, onSaveTickets]);
 
   const getTodayFormatted = (): string => {
     const d = new Date();
@@ -1975,10 +1964,19 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             {/* Nouveau Button (renamed from Nouveau Ticket) */}
             <button
               type="button"
-              onClick={openNewTicketPane}
+              disabled={!hasCrmSpreadsheet}
+              onClick={() => {
+                if (!hasCrmSpreadsheet) return;
+                openNewTicketPane();
+              }}
               id="btn-new-ticket"
-              style={customButtonStyle}
-              className="hover:bg-[#2b48cc] transition-colors"
+              style={{
+                ...customButtonStyle,
+                opacity: !hasCrmSpreadsheet ? 0.45 : 1,
+                cursor: !hasCrmSpreadsheet ? 'not-allowed' : 'pointer',
+              }}
+              className={!hasCrmSpreadsheet ? 'opacity-50 cursor-not-allowed transition-colors' : 'hover:bg-[#2b48cc] transition-colors'}
+              title={!hasCrmSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet CRM dans les paramètres du tenant." : undefined}
             >
               Nouveau
             </button>

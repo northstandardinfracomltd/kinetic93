@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Variable, VariableCategory, Defibrillateur, StockRecord, DistributedStockLocation, OtherEquipment, AchatFournisseur } from '../types';
+import { Variable, VariableCategory, Defibrillateur, StockRecord, DistributedStockLocation, OtherEquipment, AchatFournisseur, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
 import { Plus, Search, Trash2, Edit2, X, Sliders, Box, Image as ImageIcon, Sparkles, Check } from 'lucide-react';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
@@ -67,6 +67,7 @@ interface VariableTabProps {
   fsmTours?: any[];
   isDeveloper?: boolean;
   isReadOnly?: boolean;
+  companyInfo?: CompanyInfo;
 }
 
 // Visual presets of premium defibrillator photos to select instantly
@@ -166,7 +167,9 @@ export default function VariableTab({
   fsmTours = [],
   isDeveloper = false,
   isReadOnly = false,
+  companyInfo,
 }: VariableTabProps) {
+  const hasVariablesSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetVariables', companyInfo));
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('Tous');
 
@@ -1216,14 +1219,22 @@ export default function VariableTab({
             </div>
 
             <button
-              onClick={openAddModal}
+              type="button"
+              disabled={!hasVariablesSpreadsheet}
+              onClick={() => {
+                if (!hasVariablesSpreadsheet) return;
+                openAddModal();
+              }}
               id="btn-add-variable"
               className="font-sans"
               style={{
                 ...customButtonStyle,
                 backgroundColor: 'rgb(53, 86, 236)',
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                opacity: !hasVariablesSpreadsheet ? 0.45 : 1,
+                cursor: !hasVariablesSpreadsheet ? 'not-allowed' : 'pointer',
               }}
+              title={!hasVariablesSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Variables dans les paramètres du tenant." : undefined}
             >
               Nouveau
             </button>
@@ -1269,6 +1280,7 @@ export default function VariableTab({
 
       <TableSubHeaderButtons
         spreadsheetKey="spreadsheetVariables"
+        companyInfo={companyInfo}
         idSuffix="variables"
       />
 

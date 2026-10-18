@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { EmargementRecord, EmargementStagiaireItem, FormationRecord, StagiaireRecord, Member, CompanyInfo } from '../types';
+import { EmargementRecord, EmargementStagiaireItem, FormationRecord, StagiaireRecord, Member, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { uploadMediaToFirebase } from '../firebase';
@@ -799,9 +799,27 @@ export default function EmargementsTab({
                   />
                 </div>
 
-                <button onClick={startNewEmargement} style={blueButtonStyle}>
-                  Nouveau
-                </button>
+                {(() => {
+                  const hasEmargementsSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetEmargements', companyInfo));
+                  return (
+                    <button
+                      type="button"
+                      disabled={!hasEmargementsSpreadsheet}
+                      onClick={() => {
+                        if (!hasEmargementsSpreadsheet) return;
+                        startNewEmargement();
+                      }}
+                      style={{
+                        ...blueButtonStyle,
+                        opacity: !hasEmargementsSpreadsheet ? 0.45 : 1,
+                        cursor: !hasEmargementsSpreadsheet ? 'not-allowed' : 'pointer',
+                      }}
+                      title={!hasEmargementsSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Émargements dans les paramètres du tenant." : undefined}
+                    >
+                      Nouveau
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>

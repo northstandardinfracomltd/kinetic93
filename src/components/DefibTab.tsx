@@ -592,8 +592,68 @@ export default function DefibTab({
     }
   }, [isRefreshing]);
 
+  const resolvedSpreadsheetUrl = useMemo(() => {
+    const raw =
+      companyInfo?.spreadsheetDefibrillateurs ||
+      companyInfo?.spreadsheetDefibrillateursUrl ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_defibrillateurs`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_defibrillateurs`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_defibrillateurs`)
+        : '') ||
+      '';
+    const trimmed = String(raw).trim();
+    return (trimmed.includes('1tB1e41') || trimmed.includes('2mX5O6r9hD0i3Z9m')) ? '' : trimmed;
+  }, [companyInfo?.spreadsheetDefibrillateurs, companyInfo?.spreadsheetDefibrillateursUrl, activeTenantId]);
+
+  const resolvedClientsSpreadsheetUrl = useMemo(() => {
+    const raw =
+      companyInfo?.spreadsheetClients ||
+      companyInfo?.spreadsheetClientsUrl ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_clients`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_clients`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_clients`)
+        : '') ||
+      '';
+    const trimmed = String(raw).trim();
+    return (trimmed.includes('1tB1e41') || trimmed.includes('2mX5O6r9hD0i3Z9m')) ? '' : trimmed;
+  }, [companyInfo?.spreadsheetClients, companyInfo?.spreadsheetClientsUrl, activeTenantId]);
+
+  const hasFsmSpreadsheet = useMemo(() => {
+    const raw =
+      companyInfo?.spreadsheetTournees ||
+      companyInfo?.spreadsheetTourneesUrl ||
+      companyInfo?.spreadsheetMissionsTournees ||
+      companyInfo?.spreadsheetMissionsTourneesUrl ||
+      companyInfo?.spreadsheetTourneesMissions ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_tournees`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_tournees`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_tournees`) ||
+          localStorage.getItem(`defib_${activeTenantId}_spreadsheet_missions_tournees`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_missions_tournees`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_missions_tournees`)
+        : '') ||
+      '';
+    return Boolean(String(raw).trim());
+  }, [
+    companyInfo?.spreadsheetTournees,
+    companyInfo?.spreadsheetTourneesUrl,
+    companyInfo?.spreadsheetMissionsTournees,
+    companyInfo?.spreadsheetMissionsTourneesUrl,
+    companyInfo?.spreadsheetTourneesMissions,
+    activeTenantId,
+  ]);
+
   // Instant IndexedDB hydration & fast first-chunk fallback for Défibrillateurs on browser reload
   useEffect(() => {
+    if (!resolvedSpreadsheetUrl) {
+      setFallbackSheetDefibs([]);
+      setPlanSheetDefibs([]);
+      setRemoteQueriedDefibs([]);
+      return;
+    }
     if (Array.isArray(defibrillateurs) && defibrillateurs.length > 0) {
       return;
     }
@@ -609,16 +669,7 @@ export default function DefibTab({
 
     (async () => {
       try {
-        const rawUrl =
-          companyInfo?.spreadsheetDefibrillateurs ||
-          companyInfo?.spreadsheetDefibrillateursUrl ||
-          (typeof window !== 'undefined'
-            ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_defibrillateurs`) ||
-              localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_defibrillateurs`) ||
-              localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_defibrillateurs`)
-            : '') ||
-          '';
-        const sheetUrl = (rawUrl.includes('1tB1e41') || rawUrl.includes('2mX5O6r9hD0i3Z9m')) ? '' : rawUrl.trim();
+        const sheetUrl = resolvedSpreadsheetUrl;
         const res = await fetch(
           `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=defibrillateurs&forceRefresh=false&offset=0&limit=2500&spreadsheetUrl=${encodeURIComponent(sheetUrl)}`
         );
@@ -636,10 +687,14 @@ export default function DefibTab({
     return () => {
       cancelled = true;
     };
-  }, [activeTenantId, defibrillateurs?.length, companyInfo?.spreadsheetDefibrillateurs, refreshTrigger]);
+  }, [activeTenantId, defibrillateurs?.length, resolvedSpreadsheetUrl, refreshTrigger]);
 
   // Direct lookup & cache fallback for Clients Spreadsheet (Col 1: "Section 1 - Entreprise.")
   useEffect(() => {
+    if (!resolvedClientsSpreadsheetUrl) {
+      setFallbackSheetClients([]);
+      return;
+    }
     if (Array.isArray(clientsProp) && clientsProp.length > 0) {
       return;
     }
@@ -655,16 +710,7 @@ export default function DefibTab({
 
     (async () => {
       try {
-        const rawUrl =
-          companyInfo?.spreadsheetClients ||
-          companyInfo?.spreadsheetClientsUrl ||
-          (typeof window !== 'undefined'
-            ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_clients`) ||
-              localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_clients`) ||
-              localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_clients`)
-            : '') ||
-          '';
-        const sheetUrl = (rawUrl.includes('1tB1e41') || rawUrl.includes('2mX5O6r9hD0i3Z9m')) ? '' : rawUrl.trim();
+        const sheetUrl = resolvedClientsSpreadsheetUrl;
         let offset = 0;
         let hasMore = true;
         const acc: Client[] = [];
@@ -711,9 +757,10 @@ export default function DefibTab({
     return () => {
       cancelled = true;
     };
-  }, [activeTenantId, clientsProp?.length, companyInfo?.spreadsheetClients, refreshTrigger]);
+  }, [activeTenantId, clientsProp?.length, resolvedClientsSpreadsheetUrl, refreshTrigger]);
 
   const clients = useMemo(() => {
+    if (!resolvedClientsSpreadsheetUrl) return [];
     const source = Array.isArray(clientsProp) && clientsProp.length > 0 ? clientsProp : fallbackSheetClients;
     const normalized: Client[] = [];
     for (const c of source || []) {
@@ -731,20 +778,7 @@ export default function DefibTab({
       normalized.push(denom === c.denomination ? c : { ...c, denomination: denom });
     }
     return normalized;
-  }, [clientsProp, fallbackSheetClients]);
-
-  const resolvedSpreadsheetUrl = useMemo(() => {
-    const raw =
-      companyInfo?.spreadsheetDefibrillateurs ||
-      companyInfo?.spreadsheetDefibrillateursUrl ||
-      (typeof window !== 'undefined'
-        ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_defibrillateurs`) ||
-          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_defibrillateurs`) ||
-          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_defibrillateurs`)
-        : '') ||
-      '';
-    return String(raw).trim();
-  }, [companyInfo?.spreadsheetDefibrillateurs, companyInfo?.spreadsheetDefibrillateursUrl, activeTenantId]);
+  }, [clientsProp, fallbackSheetClients, resolvedClientsSpreadsheetUrl]);
 
   const handleOpenSpreadsheetEditor = () => {
     if (!resolvedSpreadsheetUrl) return;
@@ -1028,6 +1062,10 @@ export default function DefibTab({
 
   // Merge local loaded defibrillateurs with any on-demand rows returned from /api/sheets/query and planSheetDefibs
   const mergedDefibrillateurs = useMemo(() => {
+    if (!resolvedSpreadsheetUrl) {
+      stableDefibsRef.current = { tenant: activeTenantId, items: [] };
+      return [];
+    }
     let baseList = defibrillateurs.length > 0 ? defibrillateurs : fallbackSheetDefibs;
     if (baseList.length > 0) {
       stableDefibsRef.current = { tenant: activeTenantId, items: baseList };
@@ -1065,7 +1103,7 @@ export default function DefibTab({
       }
     }
     return out;
-  }, [defibrillateurs, fallbackSheetDefibs, planSheetDefibs, remoteQueriedDefibs, activeTenantId]);
+  }, [defibrillateurs, fallbackSheetDefibs, planSheetDefibs, remoteQueriedDefibs, activeTenantId, resolvedSpreadsheetUrl]);
 
   const mergedDefibByIdMap = useMemo(() => {
     const map = new Map<string, Defibrillateur>();
@@ -2080,6 +2118,10 @@ export default function DefibTab({
 
   // Ensure 100% of MAIN OUI defibrillators from the tenant's Spreadsheet are loaded when the Plan map is opened
   useEffect(() => {
+    if (!resolvedSpreadsheetUrl) {
+      setPlanSheetDefibs([]);
+      return;
+    }
     if (!isMapOpen && defibrillateurs.length > 0) {
       return;
     }
@@ -2487,13 +2529,17 @@ export default function DefibTab({
   }, [activeDefibrillateurs]);
 
   const effectiveTotalDefibsCount = useMemo(() => {
+    if (!resolvedSpreadsheetUrl) return 0;
     const localLen = activeDefibrillateurs.length;
     const remoteLen = sheetStats?.totalCount || 0;
     return Math.max(localLen, remoteLen);
-  }, [activeDefibrillateurs.length, sheetStats?.totalCount]);
+  }, [activeDefibrillateurs.length, sheetStats?.totalCount, resolvedSpreadsheetUrl]);
 
   // Sum-counts pour Maintenance autorisée (Oui / Non) sur les défibrillateurs actifs
   const { totalMainOui, totalMainNon } = useMemo(() => {
+    if (!resolvedSpreadsheetUrl) {
+      return { totalMainOui: 0, totalMainNon: 0 };
+    }
     if (sheetStats && (sheetStats.totalCount || 0) > activeDefibrillateurs.length) {
       return {
         totalMainOui: sheetStats.totalMainOui ?? 0,
@@ -2512,7 +2558,7 @@ export default function DefibTab({
       }
     }
     return { totalMainOui: oui, totalMainNon: non };
-  }, [activeDefibrillateurs, sheetStats]);
+  }, [activeDefibrillateurs, sheetStats, resolvedSpreadsheetUrl]);
 
   // List search & filters computation - highly optimized for datasets of 18,000+ items across all browsers
   const filteredDefibs = useMemo(() => {
@@ -2817,7 +2863,7 @@ export default function DefibTab({
 
   // Direct server-side Google Spreadsheet interrogation on Search & Filters
   useEffect(() => {
-    if (isInitialView && maintenanceFilter === 'all') {
+    if (!resolvedSpreadsheetUrl || (isInitialView && maintenanceFilter === 'all')) {
       setRemoteFilteredTotal(null);
       setIsSearchingSpreadsheet(false);
       return;
@@ -2893,6 +2939,7 @@ export default function DefibTab({
       clearTimeout(timer);
     };
   }, [
+    resolvedSpreadsheetUrl,
     isInitialView,
     search,
     activeFilters,
@@ -2926,6 +2973,9 @@ export default function DefibTab({
 
   // Indicateur "Conforme et à jour"
   const { conformeEtAJourCount, compliancePercent, projectedCompliancePercent, totalDefibsCount } = useMemo(() => {
+    if (!resolvedSpreadsheetUrl) {
+      return { conformeEtAJourCount: 0, compliancePercent: 0, projectedCompliancePercent: 0, totalDefibsCount: 0 };
+    }
     if (sheetStats && (sheetStats.totalCount || 0) > activeDefibrillateurs.length) {
       const total = sheetStats.eligibleMainOuiCount || sheetStats.totalMainOui || 0;
       const compliant = sheetStats.conformeEtAJourCount || 0;
@@ -4515,13 +4565,21 @@ export default function DefibTab({
                   {t('Plan')}
                 </button>
                 <button
-                  onClick={openAddForm}
+                  type="button"
+                  disabled={!resolvedSpreadsheetUrl}
+                  onClick={() => {
+                    if (!resolvedSpreadsheetUrl) return;
+                    openAddForm();
+                  }}
                   id="btn-add-defib"
                   style={{
                     ...customButtonStyle,
                     backgroundColor: 'rgb(53, 86, 236)',
-                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                    opacity: !resolvedSpreadsheetUrl ? 0.45 : 1,
+                    cursor: !resolvedSpreadsheetUrl ? 'not-allowed' : 'pointer',
                   }}
+                  title={!resolvedSpreadsheetUrl ? "Veuillez renseigner l'URL du Spreadsheet Défibrillateurs dans les paramètres du tenant." : undefined}
                 >
                   {t('Nouveau')}
                 </button>
@@ -4594,22 +4652,22 @@ export default function DefibTab({
                   <div className="relative">
                     <button
                       type="button"
-                      disabled={isAnySelectedInTour}
+                      disabled={isAnySelectedInTour || !hasFsmSpreadsheet}
                       onClick={() => {
-                        if (!isAnySelectedInTour) {
+                        if (!isAnySelectedInTour && hasFsmSpreadsheet) {
                            setIsTourDropdownOpen(!isTourDropdownOpen);
                         }
                       }}
-                      title={isAnySelectedInTour ? "Action impossible : l'un des défibrillateurs sélectionnés fait déjà partie d'une tournée." : "Associer à une tournée"}
+                      title={!hasFsmSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Tournées & Missions dans les paramètres du tenant." : isAnySelectedInTour ? "Action impossible : l'un des défibrillateurs sélectionnés fait déjà partie d'une tournée." : "Associer à une tournée"}
                       style={{
                         ...rowActionButton18Style,
-                        opacity: isAnySelectedInTour ? 0.6 : 1,
-                        cursor: isAnySelectedInTour ? 'not-allowed' : 'pointer'
+                        opacity: (isAnySelectedInTour || !hasFsmSpreadsheet) ? 0.45 : 1,
+                        cursor: (isAnySelectedInTour || !hasFsmSpreadsheet) ? 'not-allowed' : 'pointer'
                       }}
                     >
                       <span>Tournée</span>
                     </button>
-                    {isTourDropdownOpen && !isAnySelectedInTour && (
+                    {isTourDropdownOpen && !isAnySelectedInTour && hasFsmSpreadsheet && (
                       <div 
                         className="absolute right-0 mt-1 w-72 bg-white rounded-lg z-50 py-2.5 font-sans animate-fadeIn"
                         style={{ 
@@ -4621,12 +4679,16 @@ export default function DefibTab({
                         <div className="px-3 pb-2 bg-transparent flex flex-col gap-2">
                           <button
                             type="button"
+                            disabled={!hasFsmSpreadsheet}
                             onClick={() => {
+                              if (!hasFsmSpreadsheet) return;
                               executeNouvelleTournee();
                             }}
                             style={{
                               ...rowActionButton18Style,
                               width: '100%',
+                              opacity: !hasFsmSpreadsheet ? 0.45 : 1,
+                              cursor: !hasFsmSpreadsheet ? 'not-allowed' : 'pointer',
                             }}
                             className="w-full text-center transition-colors cursor-pointer"
                           >
@@ -4635,7 +4697,9 @@ export default function DefibTab({
 
                           <button
                             type="button"
+                            disabled={!hasFsmSpreadsheet}
                             onClick={() => {
+                              if (!hasFsmSpreadsheet) return;
                               executeAddToTrier();
                             }}
                             style={{
@@ -4643,7 +4707,9 @@ export default function DefibTab({
                               width: '100%',
                               backgroundColor: '#000000',
                               borderColor: '#000000',
-                              color: '#ffffff'
+                              color: '#ffffff',
+                              opacity: !hasFsmSpreadsheet ? 0.45 : 1,
+                              cursor: !hasFsmSpreadsheet ? 'not-allowed' : 'pointer',
                             }}
                             className="w-full text-center transition-colors cursor-pointer hover:opacity-90"
                           >

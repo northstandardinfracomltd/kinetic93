@@ -2382,13 +2382,21 @@ export default function ClientTab({
 
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={openAddModal}
+                type="button"
+                disabled={!resolvedSpreadsheetUrl}
+                onClick={() => {
+                  if (!resolvedSpreadsheetUrl) return;
+                  openAddModal();
+                }}
                 id="btn-add-client"
                 style={{
                   ...customButtonStyle,
                   backgroundColor: 'rgb(53, 86, 236)',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  opacity: !resolvedSpreadsheetUrl ? 0.45 : 1,
+                  cursor: !resolvedSpreadsheetUrl ? 'not-allowed' : 'pointer',
                 }}
+                title={!resolvedSpreadsheetUrl ? "Veuillez renseigner l'URL du Spreadsheet Clients dans les paramètres du tenant." : undefined}
               >
                 Nouveau
               </button>

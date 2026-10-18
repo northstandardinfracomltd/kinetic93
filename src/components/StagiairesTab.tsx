@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StagiaireRecord } from '../types';
+import { StagiaireRecord, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
 import { getRegionsForCountry } from '../utils/regions';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
@@ -7,12 +7,15 @@ import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 interface StagiairesTabProps {
   stagiaires: StagiaireRecord[];
   saveStagiaires: (updated: StagiaireRecord[]) => void;
+  companyInfo?: CompanyInfo;
 }
 
 export default function StagiairesTab({
   stagiaires,
   saveStagiaires,
+  companyInfo,
 }: StagiairesTabProps) {
+  const hasStagiairesSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetStagiaires', companyInfo));
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -240,7 +243,20 @@ export default function StagiairesTab({
                   />
                 </div>
 
-                <button onClick={startNewStagiaire} style={blueButtonStyle}>
+                <button
+                  type="button"
+                  disabled={!hasStagiairesSpreadsheet}
+                  onClick={() => {
+                    if (!hasStagiairesSpreadsheet) return;
+                    startNewStagiaire();
+                  }}
+                  style={{
+                    ...blueButtonStyle,
+                    opacity: !hasStagiairesSpreadsheet ? 0.45 : 1,
+                    cursor: !hasStagiairesSpreadsheet ? 'not-allowed' : 'pointer',
+                  }}
+                  title={!hasStagiairesSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Stagiaires dans les paramètres du tenant." : undefined}
+                >
                   Nouveau
                 </button>
               </div>
@@ -250,6 +266,7 @@ export default function StagiairesTab({
           <TableSubHeaderButtons
             spreadsheetKey="spreadsheetStagiaires"
             idSuffix="stagiaires"
+            companyInfo={companyInfo}
           />
 
           {/* Main Records Table Sheet - Full Width */}

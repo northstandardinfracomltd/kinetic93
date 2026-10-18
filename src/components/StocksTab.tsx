@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { t } from '../utils/translate';
-import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, StockTraceability, Member, LogisticsNotification, CompanyInfo } from '../types';
+import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, StockTraceability, Member, LogisticsNotification, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
 import { getLocationCustomName, generateRandomShortCode } from '../utils';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
@@ -1467,13 +1467,28 @@ export default function StocksTab({
                   />
                 </div>
 
-                <button
-                  onClick={handleOpenNewForm}
-                  style={customButtonStyle}
-                  className="font-sans"
-                >
-                  Nouveau
-                </button>
+                {(() => {
+                  const hasStocksSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetStocks', companyInfo));
+                  return (
+                    <button
+                      type="button"
+                      disabled={!hasStocksSpreadsheet}
+                      onClick={() => {
+                        if (!hasStocksSpreadsheet) return;
+                        handleOpenNewForm();
+                      }}
+                      style={{
+                        ...customButtonStyle,
+                        opacity: !hasStocksSpreadsheet ? 0.45 : 1,
+                        cursor: !hasStocksSpreadsheet ? 'not-allowed' : 'pointer',
+                      }}
+                      className="font-sans"
+                      title={!hasStocksSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Centrale des Stocks dans les paramètres du tenant." : undefined}
+                    >
+                      Nouveau
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Member } from '../types';
+import { Member, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { t } from '../utils/translate';
@@ -20,13 +20,16 @@ interface TicketsCaisseTabProps {
   expenses: Expense[];
   onUpdateExpenses: (updated: Expense[]) => void;
   members: Member[];
+  companyInfo?: CompanyInfo;
 }
 
 export default function TicketsCaisseTab({
   expenses,
   onUpdateExpenses,
   members,
+  companyInfo,
 }: TicketsCaisseTabProps) {
+  const hasTicketsCaisseSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetTicketsCaisse', companyInfo));
   const [isFormOpen, setIsFormOpen] = useState(false);
   
   // Form fields
@@ -312,9 +315,19 @@ export default function TicketsCaisseTab({
                 </div>
 
                 <button
-                  onClick={startNewTicket}
-                  style={customButtonStyle}
+                  type="button"
+                  disabled={!hasTicketsCaisseSpreadsheet}
+                  onClick={() => {
+                    if (!hasTicketsCaisseSpreadsheet) return;
+                    startNewTicket();
+                  }}
+                  style={{
+                    ...customButtonStyle,
+                    opacity: !hasTicketsCaisseSpreadsheet ? 0.45 : 1,
+                    cursor: !hasTicketsCaisseSpreadsheet ? 'not-allowed' : 'pointer',
+                  }}
                   className="font-sans"
+                  title={!hasTicketsCaisseSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Tickets de Caisse dans les paramètres du tenant." : undefined}
                 >
                   Nouveau
                 </button>
@@ -325,6 +338,7 @@ export default function TicketsCaisseTab({
           <TableSubHeaderButtons
             spreadsheetKey="spreadsheetTicketsCaisse"
             idSuffix="tickets-caisse"
+            companyInfo={companyInfo}
           />
 
           {/* Main Table Records Sheet */}

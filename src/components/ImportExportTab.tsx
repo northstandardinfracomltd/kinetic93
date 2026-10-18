@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle } from 'lucide-react';
-import { Client, Defibrillateur, StockRecord, PointageLog, Variable, CompanyInfo } from '../types';
+import { Client, Defibrillateur, StockRecord, PointageLog, Variable, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore, idbGet, isFirestoreQuotaExhausted, mergeCollectionItems } from '../firebase';
 import { generateRandomShortCode, computeProchaineMaintenance } from '../utils';
 import { t } from '../utils/translate';
@@ -1488,7 +1488,12 @@ export default function ImportExportTab({
     return Date.now() > d.getTime();
   };
 
+  const hasExportationsSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetExportations', companyInfo));
+
   const [records, setRecords] = useState<ImportExportRecord[]>(() => {
+    if (!getTenantSpreadsheetUrl('spreadsheetExportations', companyInfo)) {
+      return [];
+    }
     const key = `defib_import_export_records_${tenantId}`;
     const saved = localStorage.getItem(key);
     if (saved) {
@@ -1505,10 +1510,10 @@ export default function ImportExportTab({
           return Date.now() <= d.getTime();
         });
       } catch (e) {
-        return tenantId === 'demo' ? INITIAL_RECORDS : [];
+        return [];
       }
     }
-    return tenantId === 'demo' ? INITIAL_RECORDS : [];
+    return [];
   });
 
   const [search, setSearch] = useState('');
@@ -1559,9 +1564,31 @@ export default function ImportExportTab({
     setImportSuccessMessage(null);
   }, [formType, formCategorie]);
 
-  // Load records from LocalStorage / Firestore on tenantId or isFirebaseLoaded change
+  // Load records from Spreadsheet / LocalStorage / Firestore only if spreadsheetExportations URL is configured
   useEffect(() => {
+    if (!hasExportationsSpreadsheet) {
+      setRecords([]);
+      setShowForm(false);
+      return;
+    }
     const loadRecords = async () => {
+      try {
+        const sheetRes = await fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(tenantId)}&type=exportations`);
+        if (sheetRes.ok) {
+          const sheetData = await sheetRes.json();
+          if (sheetData?.fromSpreadsheet && Array.isArray(sheetData.items)) {
+            const cleanedSheet = sheetData.items
+              .map((r: any) => ({ ...r, format: 'CSV.' as const }))
+              .filter((r: any) => !isRecordExpired(r));
+            setRecords(cleanedSheet);
+            try {
+              localStorage.setItem(`defib_import_export_records_${tenantId}`, JSON.stringify(cleanedSheet));
+            } catch (_) {}
+            return;
+          }
+        }
+      } catch (_) {}
+
       const key = `defib_import_export_records_${tenantId}`;
       let localRecords: ImportExportRecord[] = [];
       const saved = localStorage.getItem(key);
@@ -1569,51 +1596,18 @@ export default function ImportExportTab({
         try {
           localRecords = JSON.parse(saved) as ImportExportRecord[];
         } catch (e) {
-          localRecords = tenantId === 'demo' ? INITIAL_RECORDS : [];
-        }
-      } else {
-        localRecords = tenantId === 'demo' ? INITIAL_RECORDS : [];
-      }
-
-      if (isFirebaseLoaded) {
-        const cloudRecords = await fetchCollectionFromFirestore<ImportExportRecord[]>('importExportRecords', tenantId);
-        if (cloudRecords && Array.isArray(cloudRecords)) {
-          // Expiration and cleanup check using isRecordExpired
-          const cleanedRecords = cloudRecords.filter(r => !isRecordExpired(r));
-          
-          setRecords(cleanedRecords);
-          try {
-            localStorage.setItem(key, JSON.stringify(cleanedRecords));
-          } catch (e) {
-            console.warn("Could not save importExportRecords to localStorage:", e);
-          }
-          
-          // Save back if some were cleaned up
-          if (cleanedRecords.length !== cloudRecords.length) {
-            await saveCollectionToFirestore('importExportRecords', cleanedRecords);
-          }
-          return;
+          localRecords = [];
         }
       }
 
-      // Fallback local expirations check using isRecordExpired
       const cleaned = localRecords.filter(r => !isRecordExpired(r));
-
       setRecords(cleaned);
-      try {
-        localStorage.setItem(key, JSON.stringify(cleaned));
-      } catch (e) {
-        console.warn("Could not save importExportRecords to localStorage:", e);
-      }
-      if (isFirebaseLoaded) {
-        await saveCollectionToFirestore('importExportRecords', cleaned);
-      }
     };
 
     loadRecords();
     setSearch('');
     setShowForm(false);
-  }, [tenantId, isFirebaseLoaded]);
+  }, [tenantId, isFirebaseLoaded, hasExportationsSpreadsheet]);
 
   // Periodic cleanup of expired records (every 60 seconds)
   useEffect(() => {
@@ -2249,7 +2243,10 @@ export default function ImportExportTab({
 
               {/* Nouveau Button */}
               <button
+                type="button"
+                disabled={!hasExportationsSpreadsheet}
                 onClick={() => {
+                  if (!hasExportationsSpreadsheet) return;
                   setFormType('Exportation.');
                   setShowForm(true);
                 }}
@@ -2257,9 +2254,12 @@ export default function ImportExportTab({
                   ...roundedButton18Style,
                   backgroundColor: 'rgb(53, 86, 236)',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  opacity: !hasExportationsSpreadsheet ? 0.45 : 1,
+                  cursor: !hasExportationsSpreadsheet ? 'not-allowed' : 'pointer',
                 }}
-                className="transition-all cursor-pointer"
+                className={!hasExportationsSpreadsheet ? 'transition-all cursor-not-allowed' : 'transition-all cursor-pointer'}
+                title={!hasExportationsSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Exportations dans les paramètres du tenant." : undefined}
               >
                 <span>Nouveau</span>
               </button>
@@ -2272,6 +2272,7 @@ export default function ImportExportTab({
             <TableSubHeaderButtons
               spreadsheetKey="spreadsheetExportations"
               idSuffix="exportations"
+              companyInfo={companyInfo}
             />
             <HelpBubble 
               cacheKey="help_dismissed_import_export" 

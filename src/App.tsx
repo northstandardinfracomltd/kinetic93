@@ -1767,33 +1767,7 @@ export default function App() {
   const [selectedGedFile, setSelectedGedFile] = useState<File | null>(null);
 
   // Canal Messages state & unread tracker
-  const [tenantMessages, setTenantMessages] = useState<TenantMessage[]>(() => {
-    try {
-      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
-      const raw = localStorage.getItem(`defib_${activeTenant}_tenant_messages`);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          if (activeTenant === 'demo') {
-            const now = Date.now();
-            return parsed.map((m: TenantMessage, idx: number) => {
-              if (m.id && m.id.startsWith('msg-demo-')) {
-                return {
-                  ...m,
-                  createdAt: now - (idx === 0 ? 2 * 3600 * 1000 : idx === 1 ? 1 * 3600 * 1000 : 25 * 60 * 1000),
-                };
-              }
-              return m;
-            });
-          }
-          return parsed;
-        }
-      }
-      return activeTenant === 'demo' ? INITIAL_TENANT_MESSAGES : [];
-    } catch {
-      return [];
-    }
-  });
+  const [tenantMessages, setTenantMessages] = useState<TenantMessage[]>([]);
   const [isCanalMessagesOpen, setIsCanalMessagesOpen] = useState(false);
   const [lastSeenMessageTime, setLastSeenMessageTime] = useState<number>(() => {
     try {
@@ -1834,13 +1808,17 @@ export default function App() {
     localStorage.setItem(`defib_${tenantId}_messages_last_seen`, String(now));
   }, [tenantId]);
 
-  // Real-time listener & periodic poll for tenant messages to update badge & chat across all devices
+  // Real-time listener & periodic poll for tenant messages ONLY when spreadsheetMessagesInternes is configured
   useEffect(() => {
     if (!tenantId) return;
+    const hasMessagesSheet = Boolean(getTenantSpreadsheetUrl('spreadsheetMessagesInternes', companyInfo));
+    if (!hasMessagesSheet) {
+      setTenantMessages([]);
+      return;
+    }
 
     let isMounted = true;
 
-    // 1. Cross-tab storage listener pour sync instantanée 0ms entre onglets du même navigateur
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === `defib_${tenantId}_tenant_messages` && e.newValue) {
         try {
@@ -1853,91 +1831,11 @@ export default function App() {
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // 2. Polling de secours périodique (toutes les 30s) avec timeout strict
-    const pollMessages = async () => {
-      const controller = new AbortController();
-      const timerId = setTimeout(() => controller.abort(), 6000);
-      try {
-        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(tenantId)}&_=${Date.now()}`, {
-          signal: controller.signal
-        });
-        clearTimeout(timerId);
-        if (resp.ok && isMounted) {
-          const data = await resp.json();
-          const remoteList: TenantMessage[] = Array.isArray(data?.value) ? data.value : (Array.isArray(data) ? data : []);
-          if (remoteList && remoteList.length >= 0) {
-            setTenantMessages((prev) => {
-              if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
-                try {
-                  localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
-                } catch (_) {}
-                return remoteList;
-              }
-              return prev;
-            });
-          }
-        }
-      } catch (_) {
-        clearTimeout(timerId);
-      }
-    };
-
-    const pollTimer = setInterval(pollMessages, 30000);
-
-    // 3. Listener Firestore only if quota is not exhausted
-    let unsubscribeFirestore: (() => void) | undefined;
-    if (!isFirestoreQuotaExhausted()) {
-      try {
-        const colKey = getCollectionKey('tenantMessages', tenantId);
-        const docRef = doc(db, 'appData', colKey);
-        unsubscribeFirestore = onSnapshot(
-          docRef,
-          (snapshot) => {
-            if (snapshot.exists() && isMounted) {
-              const data = snapshot.data();
-              let remoteList: TenantMessage[] = [];
-              if (Array.isArray(data?.value)) {
-                remoteList = data.value;
-              } else if (Array.isArray(data)) {
-                remoteList = data;
-              }
-              if (remoteList) {
-                setTenantMessages((prev) => {
-                  if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
-                    try {
-                      localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
-                    } catch (_) {}
-                    return remoteList;
-                  }
-                  return prev;
-                });
-              }
-            }
-          },
-          (error) => {
-            const msg = String(error?.message || error || '').toLowerCase();
-            if (msg.includes('quota') || msg.includes('resource-exhausted') || (error as any)?.code === 'resource-exhausted') {
-              recordFirestoreQuotaExhaustion(6);
-              try {
-                if (unsubscribeFirestore) unsubscribeFirestore();
-                unsubscribeFirestore = undefined;
-              } catch (_) {}
-            }
-            console.warn('Real-time listener on tenantMessages in App:', error);
-          }
-        );
-      } catch (e) {
-        console.warn('Error setting up onSnapshot for tenantMessages:', e);
-      }
-    }
-
     return () => {
       isMounted = false;
       window.removeEventListener('storage', handleStorageChange);
-      clearInterval(pollTimer);
-      if (unsubscribeFirestore) unsubscribeFirestore();
     };
-  }, [tenantId]);
+  }, [tenantId, companyInfo?.spreadsheetMessagesInternes]);
 
   // Helper to purge any legacy local recently imported memory so all devices strictly mirror server state
   const getRecentlyImportedDefibs = (tId: string = tenantId || 'demo'): Defibrillateur[] => {
@@ -2197,9 +2095,16 @@ export default function App() {
               );
             }
           }
+          if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+            setDefibrillateurs([]);
+            setDefibSheetStats(null);
+            idbSet(`defib_${activeTenant}_defibrillateurs`, []).catch(() => {});
+            setIsDefibLoading(false);
+            return;
+          }
           const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
+          setDefibrillateurs(filtered);
           if (filtered.length > 0) {
-            setDefibrillateurs(filtered);
             persistDefibCache(activeTenant, filtered, json.stats);
           } else if (json.stats) {
             setDefibSheetStats(json.stats);
@@ -2245,16 +2150,19 @@ export default function App() {
           clientSheetUrl,
           false,
           (_json, firstItems) => {
+            if (!_json.fromSpreadsheet || _json.status === 'no_spreadsheet') {
+              setClients([]);
+              idbSet(`defib_${activeTenant}_clients`, []).catch(() => {});
+              return;
+            }
             const validClients = firstItems.filter(
               (cl: any) =>
                 cl &&
                 !String(cl.id || '').startsWith('sheet_cli_') &&
                 !String(cl.clientIdField || '').startsWith('sheet_cli_')
             );
-            if (validClients.length > 0) {
-              setClients(validClients);
-              idbSet(`defib_${activeTenant}_clients`, validClients).catch(() => {});
-            }
+            setClients(validClients);
+            idbSet(`defib_${activeTenant}_clients`, validClients).catch(() => {});
           },
           (allItems) => {
             const validClients = allItems.filter(
@@ -2263,10 +2171,8 @@ export default function App() {
                 !String(cl.id || '').startsWith('sheet_cli_') &&
                 !String(cl.clientIdField || '').startsWith('sheet_cli_')
             );
-            if (validClients.length > 0) {
-              setClients(validClients);
-              idbSet(`defib_${activeTenant}_clients`, validClients).catch(() => {});
-            }
+            setClients(validClients);
+            idbSet(`defib_${activeTenant}_clients`, validClients).catch(() => {});
           }
         ).catch(() => {});
       }
@@ -2297,14 +2203,16 @@ export default function App() {
         localStorage.getItem(`defib_${activeTenant.toLowerCase()}_spreadsheet_autres_materiels`) ||
         '';
 
-      let loadedFromSheet = false;
       await fetchSheetCollectionInBatches(
         activeTenant,
         'autresMateriels',
         urlAutres,
         true,
         (json, firstItems) => {
-          loadedFromSheet = true;
+          if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+            setOtherEquipments([]);
+            return;
+          }
           if (json.spreadsheetUrl && json.spreadsheetUrl.trim()) {
             const clean = json.spreadsheetUrl.trim();
             try {
@@ -2338,20 +2246,6 @@ export default function App() {
           );
         }
       );
-
-      if (!loadedFromSheet) {
-        const remoteItems = await fetchCollectionFromFirestore('otherEquipments', activeTenant);
-        if (Array.isArray(remoteItems)) {
-          setOtherEquipments(
-            remoteItems.filter(
-              (eq: any) =>
-                eq &&
-                !String(eq.id || '').startsWith('sheet_am_') &&
-                !String(eq.identifiant || '').startsWith('sheet_am_')
-            )
-          );
-        }
-      }
     } catch (err) {
       console.warn('Manual refresh Autres Matériels error:', err);
     } finally {
@@ -2373,14 +2267,17 @@ export default function App() {
         localStorage.getItem(`defib_${activeTenant.toLowerCase()}_spreadsheet_clients`) ||
         '';
 
-      let loadedFromSheet = false;
       await fetchSheetCollectionInBatches(
         activeTenant,
         'clients',
         urlClients,
         true,
         (json, firstItems) => {
-          loadedFromSheet = true;
+          if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+            setClients([]);
+            idbSet(`defib_${activeTenant}_clients`, []).catch(() => {});
+            return;
+          }
           if (json.spreadsheetUrl && json.spreadsheetUrl.trim()) {
             const clean = json.spreadsheetUrl.trim();
             try {
@@ -2401,9 +2298,7 @@ export default function App() {
               !String(cl.clientIdField || '').startsWith('sheet_cli_')
           );
           setClients(validFirst);
-          if (validFirst.length > 0) {
-            idbSet(`defib_${activeTenant}_clients`, validFirst).catch(() => {});
-          }
+          idbSet(`defib_${activeTenant}_clients`, validFirst).catch(() => {});
         },
         (allItems) => {
           const validAll = allItems.filter(
@@ -2413,13 +2308,9 @@ export default function App() {
               !String(cl.clientIdField || '').startsWith('sheet_cli_')
           );
           setClients(validAll);
-          if (validAll.length > 0) {
-            idbSet(`defib_${activeTenant}_clients`, validAll).catch(() => {});
-          }
+          idbSet(`defib_${activeTenant}_clients`, validAll).catch(() => {});
         }
       );
-
-      void loadedFromSheet;
     } catch (err) {
       console.warn('Manual refresh Clients error:', err);
     } finally {
@@ -2480,9 +2371,10 @@ export default function App() {
         defibrillateurs.length > 0 &&
         isSameTenant &&
         Boolean(prevLoaded.defibs) &&
-        (!urlDefibs || prevLoaded.defibs === urlDefibs);
-      const skipAutres = !force && otherEquipments.length > 0 && isSameTenant && prevLoaded.autres && (!urlAutres || prevLoaded.autres === urlAutres);
-      const skipClients = !force && clients.length > 0 && isSameTenant && prevLoaded.clients && (!urlClients || prevLoaded.clients === urlClients);
+        Boolean(urlDefibs) &&
+        prevLoaded.defibs === urlDefibs;
+      const skipAutres = !force && otherEquipments.length > 0 && isSameTenant && Boolean(prevLoaded.autres) && Boolean(urlAutres) && prevLoaded.autres === urlAutres;
+      const skipClients = !force && clients.length > 0 && isSameTenant && Boolean(prevLoaded.clients) && Boolean(urlClients) && prevLoaded.clients === urlClients;
 
       if (skipDefibs && skipAutres && skipClients) {
         return;
@@ -2539,13 +2431,20 @@ export default function App() {
               urlDefibs,
               force,
               (json, firstItems) => {
+                if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+                  setDefibrillateurs([]);
+                  setDefibSheetStats(null);
+                  idbSet(`defib_${activeTid}_defibrillateurs`, []).catch(() => {});
+                  setIsDefibLoading(false);
+                  return;
+                }
                 if (json.spreadsheetUrl) {
                   resolvedDefibSheetUrl = json.spreadsheetUrl;
                   persistResolvedUrl('spreadsheetDefibrillateurs', 'spreadsheet_defibrillateurs', json.spreadsheetUrl, !json.hasMore);
                 }
                 const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
+                setDefibrillateurs(filtered);
                 if (filtered.length > 0) {
-                  setDefibrillateurs(filtered);
                   persistDefibCache(activeTid, filtered, json.stats);
                 } else if (json.stats) {
                   setDefibSheetStats(json.stats);
@@ -2577,6 +2476,10 @@ export default function App() {
               urlAutres,
               force,
               (json, firstItems) => {
+                if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+                  setOtherEquipments([]);
+                  return;
+                }
                 if (json.spreadsheetUrl) {
                   persistResolvedUrl('spreadsheetAutresMateriels', 'spreadsheet_autres_materiels', json.spreadsheetUrl);
                 }
@@ -2586,7 +2489,7 @@ export default function App() {
                     !String(eq.id || '').startsWith('sheet_am_') &&
                     !String(eq.identifiant || '').startsWith('sheet_am_')
                 );
-                setOtherEquipments(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
+                setOtherEquipments(filtered);
               },
               (allItems) => {
                 const filtered = allItems.filter(
@@ -2595,7 +2498,7 @@ export default function App() {
                     !String(eq.id || '').startsWith('sheet_am_') &&
                     !String(eq.identifiant || '').startsWith('sheet_am_')
                 );
-                setOtherEquipments(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
+                setOtherEquipments(filtered);
               },
               () => isCancelled
             );
@@ -2610,6 +2513,11 @@ export default function App() {
               urlClients,
               force,
               (json, firstItems) => {
+                if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+                  setClients([]);
+                  idbSet(`defib_${activeTid}_clients`, []).catch(() => {});
+                  return;
+                }
                 if (json.spreadsheetUrl) {
                   persistResolvedUrl('spreadsheetClients', 'spreadsheet_clients', json.spreadsheetUrl);
                 }
@@ -2619,11 +2527,9 @@ export default function App() {
                     !String(cl.id || '').startsWith('sheet_cli_') &&
                     !String(cl.clientIdField || '').startsWith('sheet_cli_')
                 );
-                if (filtered.length > 0) {
-                  lastLoadedSheetUrlsRef.current.clients = json.spreadsheetUrl || urlClients || 'loaded';
-                  idbSet(`defib_${activeTid}_clients`, filtered).catch(() => {});
-                }
-                setClients(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
+                lastLoadedSheetUrlsRef.current.clients = json.spreadsheetUrl || urlClients || 'loaded';
+                idbSet(`defib_${activeTid}_clients`, filtered).catch(() => {});
+                setClients(filtered);
               },
               (allItems) => {
                 const filtered = allItems.filter(
@@ -2632,10 +2538,8 @@ export default function App() {
                     !String(cl.id || '').startsWith('sheet_cli_') &&
                     !String(cl.clientIdField || '').startsWith('sheet_cli_')
                 );
-                if (filtered.length > 0) {
-                  idbSet(`defib_${activeTid}_clients`, filtered).catch(() => {});
-                }
-                setClients(prev => (filtered.length === 0 && prev.length > 0 && !force ? prev : filtered));
+                idbSet(`defib_${activeTid}_clients`, filtered).catch(() => {});
+                setClients(filtered);
               },
               () => isCancelled
             );
@@ -2797,6 +2701,10 @@ export default function App() {
           case 'messagesInternes':
             setTenantMessages([]);
             try { localStorage.removeItem(`defib_${activeTid}_tenant_messages`); } catch (_) {}
+            break;
+          case 'variables':
+            setVariables([]);
+            try { localStorage.removeItem(`defib_${activeTid}_variables`); } catch (_) {}
             break;
           case 'ged':
             setGedDocs([]);
@@ -3034,10 +2942,8 @@ export default function App() {
             break;
           }
           case 'variables':
-            if (items.length > 0) {
-              setVariables(items);
-              safeSetLocalStorage(`defib_${activeTid}_variables`, JSON.stringify(items));
-            }
+            setVariables(items);
+            safeSetLocalStorage(`defib_${activeTid}_variables`, JSON.stringify(items));
             break;
           case 'ged':
             setGedDocs(items);
@@ -3217,7 +3123,6 @@ export default function App() {
     if (!tenantId) return;
     setIsRefreshingCrm(true);
     try {
-      const activeTenant = tenantId || 'demo';
       // 1. Refresh CRM and Membres from Google Spreadsheets if configured
       await Promise.all([
         refreshGenericSheetCompartment('crm', true),
@@ -3226,29 +3131,6 @@ export default function App() {
 
       // 2. Refresh clients from Google Spreadsheet
       await handleManualRefreshClients();
-
-      // 3. Fallback / sync from Firestore if no spreadsheet overridden
-      const rawTickets = await fetchCollectionFromFirestore<SupportTicket[]>('tickets', activeTenant);
-      if (Array.isArray(rawTickets) && rawTickets.length > 0) {
-        let filteredTickets = rawTickets;
-        if (activeTenant === 'demo') {
-          filteredTickets = rawTickets.filter(t => {
-            const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
-            return !tEnv || tEnv === 'demo';
-          });
-        } else {
-          const cleanTenant = activeTenant.trim().toLowerCase();
-          const numTenant = cleanTenant.replace(/^d/i, '');
-          filteredTickets = rawTickets.filter(t => {
-            const tEnv = (t.envId || t.tenantId || '').trim().toLowerCase();
-            const numEnv = tEnv.replace(/^d/i, '');
-            if (tEnv === 'demo') return false;
-            if (tEnv && tEnv !== cleanTenant && numEnv !== numTenant) return false;
-            return true;
-          });
-        }
-        setTickets(prev => (prev.length > 0 ? prev : filteredTickets));
-      }
     } catch (err) {
       console.warn('Manual refresh error in CRM:', err);
     } finally {
@@ -4433,6 +4315,11 @@ export default function App() {
   };
 
   const addFsmTour = () => {
+    const hasFsmSpreadsheet = Boolean(
+      getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo) ||
+        getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo)
+    );
+    if (!hasFsmSpreadsheet) return;
     const newId = 'fsm-tour-' + Date.now();
     const defaultTech = '';
     const assignedVehicle = 'Aucun';
@@ -7082,44 +6969,10 @@ export default function App() {
         return fallback;
       };
 
-      // 1. Initialize Google Sheets-backed collections (preserve current tenant data or hydrate from IndexedDB cache)
+      // 1. Initialize Google Sheets-backed collections (preserve current tenant data or hydrate from IndexedDB cache ONLY if spreadsheet URL is configured)
       try {
         let sanitizedOffline: Client[] = [];
         setClients(prev => (loadedTenantIdState && loadedTenantIdState !== activeRunTenantId ? [] : prev));
-        idbGet<Client[]>(`defib_${activeRunTenantId}_clients`)
-          .then(cachedClients => {
-            if (Array.isArray(cachedClients) && cachedClients.length > 0) {
-              setClients(prev => (prev.length === 0 ? cachedClients : prev));
-            }
-          })
-          .catch(() => {});
-
-        const rawOfflineVariables = getLocalTenantValue<Variable[]>('variables', INITIAL_VARIABLES);
-        const existingCategorySet = new Set((rawOfflineVariables || []).map(v => v.category));
-        const missingInitialVars = INITIAL_VARIABLES.filter(iv => !existingCategorySet.has(iv.category));
-        const baseVariables = missingInitialVars.length > 0 ? [...rawOfflineVariables, ...missingInitialVars] : rawOfflineVariables;
-        setVariables(baseVariables);
-
-        let baseDefibrillateurs: Defibrillateur[] = [];
-        setDefibrillateurs(prev => (loadedTenantIdState && loadedTenantIdState !== activeRunTenantId ? [] : prev));
-        try {
-          const rawStats = localStorage.getItem(`defib_${activeRunTenantId}_defib_sheet_stats`);
-          if (rawStats) {
-            setDefibSheetStats(JSON.parse(rawStats));
-          }
-        } catch (_) {}
-        idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`)
-          .then(cachedDefibs => {
-            if (Array.isArray(cachedDefibs) && cachedDefibs.length > 0) {
-              const delSet = new Set(getDeletedDefibKeys(activeRunTenantId));
-              const validDefibs = cachedDefibs.filter((df: any) => !isDefibInDeletedList(df, delSet));
-              if (validDefibs.length > 0) {
-                setDefibrillateurs(prev => (prev.length === 0 ? validDefibs : prev));
-                setIsDefibLoading(false);
-              }
-            }
-          })
-          .catch(() => {});
 
         const matchedInitTenant = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], activeRunTenantId) as any;
         const defaultInfo: CompanyInfo = {
@@ -7143,6 +6996,50 @@ export default function App() {
         setCompanyInfo(baseCompanyInfo);
         setLocationNames(resolvedInitLocs);
         setMembers(baseMembers);
+
+        const hasClientsSheetConfigured = Boolean(getTenantSpreadsheetUrl('spreadsheetClients', baseCompanyInfo));
+        if (hasClientsSheetConfigured) {
+          idbGet<Client[]>(`defib_${activeRunTenantId}_clients`)
+            .then(cachedClients => {
+              if (Array.isArray(cachedClients) && cachedClients.length > 0) {
+                setClients(prev => (prev.length === 0 ? cachedClients : prev));
+              }
+            })
+            .catch(() => {});
+        } else {
+          setClients([]);
+        }
+
+        const baseVariables: Variable[] = [];
+        setVariables([]);
+
+        let baseDefibrillateurs: Defibrillateur[] = [];
+        setDefibrillateurs(prev => (loadedTenantIdState && loadedTenantIdState !== activeRunTenantId ? [] : prev));
+        const hasDefibsSheetConfigured = Boolean(getTenantSpreadsheetUrl('spreadsheetDefibrillateurs', baseCompanyInfo));
+        if (hasDefibsSheetConfigured) {
+          try {
+            const rawStats = localStorage.getItem(`defib_${activeRunTenantId}_defib_sheet_stats`);
+            if (rawStats) {
+              setDefibSheetStats(JSON.parse(rawStats));
+            }
+          } catch (_) {}
+          idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`)
+            .then(cachedDefibs => {
+              if (Array.isArray(cachedDefibs) && cachedDefibs.length > 0) {
+                const delSet = new Set(getDeletedDefibKeys(activeRunTenantId));
+                const validDefibs = cachedDefibs.filter((df: any) => !isDefibInDeletedList(df, delSet));
+                if (validDefibs.length > 0) {
+                  setDefibrillateurs(prev => (prev.length === 0 ? validDefibs : prev));
+                  setIsDefibLoading(false);
+                }
+              }
+            })
+            .catch(() => {});
+        } else {
+          setDefibrillateurs([]);
+          setDefibSheetStats(null);
+          setIsDefibLoading(false);
+        }
 
         // Spreadsheet-backed tabs start empty and are populated exclusively by refreshGenericSheetCompartment if a spreadsheet is configured
         setTickets([]);
@@ -7213,39 +7110,37 @@ export default function App() {
           }
         } catch (_) {}
 
-        // IndexedDB hydration for defibrillateurs and clients is disabled: data comes exclusively from Google Sheets API
-
         // Prime the loadedDataRef instantly with the loaded offline cached data
         // to prevent any race condition auto-saves from triggering on startup
         loadedDataRef.current = {
           clients: getCollectionFingerprint(sanitizedOffline),
           variables: JSON.stringify(baseVariables),
           defibrillateurs: getCollectionFingerprint(baseDefibrillateurs),
-          stocks: JSON.stringify(baseStocks),
-          distributed_stocks: JSON.stringify(baseDistrib),
-          distributedStocks: JSON.stringify(baseDistrib),
+          stocks: '[]',
+          distributed_stocks: '[]',
+          distributedStocks: '[]',
           companyInfo: JSON.stringify(baseCompanyInfo),
           members: JSON.stringify(baseMembers),
-          tickets: JSON.stringify(baseTickets),
-          pointages: JSON.stringify(basePointages),
+          tickets: '[]',
+          pointages: '[]',
           pointagesAutoVigilance: JSON.stringify(basePointagesAuto),
-          commercialDocs: JSON.stringify(baseDocs),
-          customerReviews: JSON.stringify(baseReviews),
+          commercialDocs: '[]',
+          customerReviews: '[]',
           notifications: JSON.stringify(cleanedNotifications),
-          gedDocs: JSON.stringify(baseGed),
-          expenses: JSON.stringify(baseExpenses),
-          veilles: JSON.stringify(baseVeilles),
-          generatedReports: JSON.stringify(baseReports),
-          fsmTours: JSON.stringify(baseTours),
+          gedDocs: '[]',
+          expenses: '[]',
+          veilles: '[]',
+          generatedReports: '[]',
+          fsmTours: '[]',
           fsmCo2History: JSON.stringify(baseCo2History),
           fsmMissionCounts: JSON.stringify(baseMissionCounts),
           memos: JSON.stringify(baseMemos),
-          otherEquipments: JSON.stringify(baseOtherEquip),
-          achats_fournisseurs: JSON.stringify(baseAchats),
-          formations: JSON.stringify(baseFormations),
-          stagiaires: JSON.stringify(baseStagiaires),
-          emargements: JSON.stringify(baseEmargements),
-          tenantMessages: JSON.stringify(baseTenantMessages)
+          otherEquipments: '[]',
+          achats_fournisseurs: '[]',
+          formations: '[]',
+          stagiaires: '[]',
+          emargements: '[]',
+          tenantMessages: '[]'
         };
 
         loadedTenantIdRef.current = activeRunTenantId;
@@ -7310,20 +7205,7 @@ export default function App() {
         };
 
         // Fire all sync tasks completely concurrently and collect promises
-        // Note: clients, defibrillateurs, and otherEquipments are loaded exclusively from Google Spreadsheets via loadSpreadsheetsForTenant
-        syncTasks.push(syncBackground<Variable[]>('variables', 'variables', setVariables, (remoteVariables) => {
-          if (!Array.isArray(remoteVariables) || remoteVariables.length === 0) return INITIAL_VARIABLES;
-          const remoteCatSet = new Set(remoteVariables.map(v => v.category));
-          const missingVars = INITIAL_VARIABLES.filter(iv => !remoteCatSet.has(iv.category));
-          if (missingVars.length > 0) {
-            const merged = [...remoteVariables, ...missingVars];
-            if (!isFirestoreQuotaExhausted()) {
-              saveCollectionToFirestore('variables', merged, activeRunTenantId).catch(() => {});
-            }
-            return merged;
-          }
-          return remoteVariables;
-        }));
+        // Note: clients, defibrillateurs, otherEquipments, and variables are loaded exclusively from Google Spreadsheets
         syncTasks.push(syncBackground<CompanyInfo>('companyInfo', 'company_info', setCompanyInfo, async (firestoreData) => {
           const remoteDbData = await fetchCollectionFromFirestore<any>('tenantDatabases', activeRunTenantId).catch(() => null);
           const validDb = (remoteDbData && typeof remoteDbData === 'object' && !Array.isArray(remoteDbData))
@@ -8510,6 +8392,7 @@ export default function App() {
   };
 
   const startNewDoc = () => {
+    if (!getTenantSpreadsheetUrl('spreadsheetCommandes', companyInfo)) return;
     setEditingDocId(null);
     setDocType('Devis');
     setDocClientId(clients[0]?.id || '');
@@ -10956,6 +10839,7 @@ export default function App() {
               fsmTours={fsmTours}
               isDeveloper={isDeveloper}
               isReadOnly={isDeveloper}
+              companyInfo={companyInfo}
             />
           )}
 
@@ -11530,13 +11414,34 @@ export default function App() {
                         >
                           Groupes et zones
                         </button>
-                        <button
-                          onClick={addFsmTour}
-                          id="btn-add-tour"
-                          style={blueButtonStyle}
-                        >
-                          Nouvelle tournée
-                        </button>
+                        {(() => {
+                          const hasFsmSpreadsheet = Boolean(
+                            getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo) ||
+                              getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo)
+                          );
+                          return (
+                            <button
+                              onClick={() => {
+                                if (!hasFsmSpreadsheet) return;
+                                addFsmTour();
+                              }}
+                              disabled={!hasFsmSpreadsheet}
+                              id="btn-add-tour"
+                              style={{
+                                ...blueButtonStyle,
+                                cursor: hasFsmSpreadsheet ? 'pointer' : 'not-allowed',
+                                opacity: hasFsmSpreadsheet ? 1 : 0.45,
+                              }}
+                              title={
+                                !hasFsmSpreadsheet
+                                  ? 'Veuillez renseigner un lien Google Spreadsheets Tournées / Missions dans les paramètres pour créer une tournée'
+                                  : undefined
+                              }
+                            >
+                              Nouvelle tournée
+                            </button>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -11634,23 +11539,36 @@ export default function App() {
                               }}
                             >
                               <div className="px-3 pb-2 bg-transparent flex flex-col gap-2">
-                                <button
-                                  type="button"
-                                  onClick={bulkCreateTourWithMissions}
-                                  style={{
-                                    backgroundColor: '#ffffff',
-                                    color: '#000000',
-                                    border: '1px solid #dedede',
-                                    borderRadius: '10px',
-                                    padding: '8px 12px',
-                                    fontSize: '15px',
-                                    fontWeight: '600',
-                                    cursor: 'pointer'
-                                  }}
-                                  className="w-full text-center transition-colors cursor-pointer hover:bg-neutral-50"
-                                >
-                                  Nouvelle Tournée
-                                </button>
+                                {(() => {
+                                  const hasFsmSpreadsheet = Boolean(
+                                    getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo) ||
+                                      getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo)
+                                  );
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!hasFsmSpreadsheet) return;
+                                        bulkCreateTourWithMissions();
+                                      }}
+                                      disabled={!hasFsmSpreadsheet}
+                                      style={{
+                                        backgroundColor: '#ffffff',
+                                        color: '#000000',
+                                        border: '1px solid #dedede',
+                                        borderRadius: '10px',
+                                        padding: '8px 12px',
+                                        fontSize: '15px',
+                                        fontWeight: '600',
+                                        cursor: hasFsmSpreadsheet ? 'pointer' : 'not-allowed',
+                                        opacity: hasFsmSpreadsheet ? 1 : 0.45,
+                                      }}
+                                      className="w-full text-center transition-colors hover:bg-neutral-50"
+                                    >
+                                      Nouvelle Tournée
+                                    </button>
+                                  );
+                                })()}
                               </div>
 
                               <div className="px-3 py-1 font-semibold text-xs text-neutral-500 uppercase tracking-wider">
@@ -19488,13 +19406,33 @@ export default function App() {
                             </button>
                           )}
 
-                          <button 
-                            onClick={startNewDoc}
-                            style={customButtonStyle}
-                            className="font-sans"
-                          >
-                            {t("Nouveau")}
-                          </button>
+                          {(() => {
+                            const hasCommandesSpreadsheet = Boolean(
+                              getTenantSpreadsheetUrl('spreadsheetCommandes', companyInfo)
+                            );
+                            return (
+                              <button 
+                                onClick={() => {
+                                  if (!hasCommandesSpreadsheet) return;
+                                  startNewDoc();
+                                }}
+                                disabled={!hasCommandesSpreadsheet}
+                                style={{
+                                  ...customButtonStyle,
+                                  cursor: hasCommandesSpreadsheet ? 'pointer' : 'not-allowed',
+                                  opacity: hasCommandesSpreadsheet ? 1 : 0.45,
+                                }}
+                                title={
+                                  !hasCommandesSpreadsheet
+                                    ? 'Veuillez renseigner un lien Google Spreadsheets Commandes dans les paramètres pour créer un document'
+                                    : undefined
+                                }
+                                className="font-sans"
+                              >
+                                {t("Nouveau")}
+                              </button>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -20396,6 +20334,7 @@ export default function App() {
               handleConsultGed={handleConsultGed}
               setActiveTab={setActiveTab}
               tenantId={tenantId}
+              companyInfo={companyInfo}
             />
           )}
 
@@ -20407,6 +20346,7 @@ export default function App() {
               expenses={expenses}
               members={members}
               onUpdateExpenses={saveExpenses}
+              companyInfo={companyInfo}
             />
           )}
 
@@ -20429,6 +20369,7 @@ export default function App() {
                 const updated = veilles.filter((v) => v.id !== id);
                 saveVeilles(updated);
               }}
+              companyInfo={companyInfo}
             />
           )}
 
@@ -20450,6 +20391,7 @@ export default function App() {
                 setActiveTab('gmao');
                 setGmaoSearchQuery(interventionRef);
               }}
+              companyInfo={companyInfo}
             />
           )}
 
@@ -20463,6 +20405,7 @@ export default function App() {
               setActiveTab={setActiveTab}
               fsmTours={fsmTours}
               onUpdateFsmTours={saveFsmTours}
+              companyInfo={companyInfo}
             />
           )}
 
@@ -20470,6 +20413,7 @@ export default function App() {
             <StagiairesTab
               stagiaires={stagiaires}
               saveStagiaires={saveStagiaires}
+              companyInfo={companyInfo}
             />
           )}
 
@@ -20642,6 +20586,7 @@ export default function App() {
         messages={tenantMessages}
         setMessages={setTenantMessages}
         onMessagesRead={handleMessagesRead}
+        companyInfo={companyInfo}
       />
 
       <FeedbackDrawer companyName={companyInfo?.name} />

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FormationRecord, Variable, Member, Client, AppTab } from '../types';
+import { FormationRecord, Variable, Member, Client, AppTab, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
 import { getRegionsForCountry } from '../utils/regions';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
@@ -13,6 +13,7 @@ interface FormationsTabProps {
   setActiveTab?: (tab: any) => void;
   fsmTours?: any[];
   onUpdateFsmTours?: (updated: any[]) => void;
+  companyInfo?: CompanyInfo;
 }
 
 const CRENEAU_OPTIONS = [
@@ -50,7 +51,13 @@ export default function FormationsTab({
   setActiveTab,
   fsmTours,
   onUpdateFsmTours,
+  companyInfo,
 }: FormationsTabProps) {
+  const hasFormationsSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetFormations', companyInfo));
+  const hasFsmSpreadsheet = Boolean(
+    getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo) ||
+      getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo)
+  );
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -493,22 +500,22 @@ export default function FormationsTab({
                   <div className="relative">
                     <button
                       type="button"
-                      disabled={isAnySelectedInTour}
+                      disabled={isAnySelectedInTour || !hasFsmSpreadsheet}
                       onClick={() => {
-                        if (!isAnySelectedInTour) {
+                        if (!isAnySelectedInTour && hasFsmSpreadsheet) {
                           setIsTourDropdownOpen(!isTourDropdownOpen);
                         }
                       }}
-                      title={isAnySelectedInTour ? "Action impossible : l'une des formations sélectionnées fait déjà partie d'une tournée." : "Associer à une tournée"}
+                      title={!hasFsmSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Tournées & Missions dans les paramètres du tenant." : isAnySelectedInTour ? "Action impossible : l'une des formations sélectionnées fait déjà partie d'une tournée." : "Associer à une tournée"}
                       style={{
                         ...rowActionButton18Style,
-                        opacity: isAnySelectedInTour ? 0.6 : 1,
-                        cursor: isAnySelectedInTour ? 'not-allowed' : 'pointer'
+                        opacity: (isAnySelectedInTour || !hasFsmSpreadsheet) ? 0.45 : 1,
+                        cursor: (isAnySelectedInTour || !hasFsmSpreadsheet) ? 'not-allowed' : 'pointer'
                       }}
                     >
                       <span>Tournée</span>
                     </button>
-                    {isTourDropdownOpen && !isAnySelectedInTour && (
+                    {isTourDropdownOpen && !isAnySelectedInTour && hasFsmSpreadsheet && (
                       <div 
                         className="absolute right-0 mt-1 w-72 bg-white rounded-lg z-50 py-2.5 font-sans animate-fadeIn"
                         style={{ 
@@ -520,10 +527,16 @@ export default function FormationsTab({
                         <div className="px-3 pb-2 bg-transparent flex flex-col gap-2">
                           <button
                             type="button"
-                            onClick={() => executeNouvelleTournee()}
+                            disabled={!hasFsmSpreadsheet}
+                            onClick={() => {
+                              if (!hasFsmSpreadsheet) return;
+                              executeNouvelleTournee();
+                            }}
                             style={{
                               ...rowActionButton18Style,
                               width: '100%',
+                              opacity: !hasFsmSpreadsheet ? 0.45 : 1,
+                              cursor: !hasFsmSpreadsheet ? 'not-allowed' : 'pointer',
                             }}
                             className="w-full text-center transition-colors cursor-pointer"
                           >
@@ -532,13 +545,19 @@ export default function FormationsTab({
 
                           <button
                             type="button"
-                            onClick={() => executeAddToTrier()}
+                            disabled={!hasFsmSpreadsheet}
+                            onClick={() => {
+                              if (!hasFsmSpreadsheet) return;
+                              executeAddToTrier();
+                            }}
                             style={{
                               ...rowActionButton18Style,
                               width: '100%',
                               backgroundColor: '#000000',
                               borderColor: '#000000',
-                              color: '#ffffff'
+                              color: '#ffffff',
+                              opacity: !hasFsmSpreadsheet ? 0.45 : 1,
+                              cursor: !hasFsmSpreadsheet ? 'not-allowed' : 'pointer',
                             }}
                             className="w-full text-center transition-colors cursor-pointer hover:opacity-90"
                           >
@@ -599,7 +618,20 @@ export default function FormationsTab({
                   </div>
                 )}
 
-                <button onClick={startNewFormation} style={blueButtonStyle}>
+                <button
+                  type="button"
+                  disabled={!hasFormationsSpreadsheet}
+                  onClick={() => {
+                    if (!hasFormationsSpreadsheet) return;
+                    startNewFormation();
+                  }}
+                  style={{
+                    ...blueButtonStyle,
+                    opacity: !hasFormationsSpreadsheet ? 0.45 : 1,
+                    cursor: !hasFormationsSpreadsheet ? 'not-allowed' : 'pointer',
+                  }}
+                  title={!hasFormationsSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Formations dans les paramètres du tenant." : undefined}
+                >
                   Nouveau
                 </button>
               </div>
@@ -609,6 +641,7 @@ export default function FormationsTab({
           <TableSubHeaderButtons
             spreadsheetKey="spreadsheetFormations"
             idSuffix="formations"
+            companyInfo={companyInfo}
           />
 
           {/* Main Records Table Sheet - Full Width */}

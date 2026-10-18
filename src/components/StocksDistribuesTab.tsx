@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { t } from '../utils/translate';
-import { Variable, StockRecord, DistributedStockLocation, Member, CompanyInfo } from '../types';
+import { Variable, StockRecord, DistributedStockLocation, Member, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
 import { getLocationCustomName } from '../utils';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
@@ -877,14 +877,28 @@ export default function StocksDistribuesTab({
                   {t("Export inv. traça.")}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleOpenNewForm}
-                  style={customButtonStyle}
-                  className="font-sans"
-                >
-                  Nouveau
-                </button>
+                {(() => {
+                  const hasDistStocksSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetStocksDistribues', companyInfo));
+                  return (
+                    <button
+                      type="button"
+                      disabled={!hasDistStocksSpreadsheet}
+                      onClick={() => {
+                        if (!hasDistStocksSpreadsheet) return;
+                        handleOpenNewForm();
+                      }}
+                      style={{
+                        ...customButtonStyle,
+                        opacity: !hasDistStocksSpreadsheet ? 0.45 : 1,
+                        cursor: !hasDistStocksSpreadsheet ? 'not-allowed' : 'pointer',
+                      }}
+                      className="font-sans"
+                      title={!hasDistStocksSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Stocks Distribués dans les paramètres du tenant." : undefined}
+                    >
+                      Nouveau
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>

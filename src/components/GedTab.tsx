@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GedDocument } from '../types';
+import { GedDocument, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { t } from '../utils/translate';
@@ -14,6 +14,7 @@ interface GedTabProps {
   handleConsultGed: (doc: GedDocument) => void;
   setActiveTab?: (tab: any) => void;
   tenantId?: string;
+  companyInfo?: CompanyInfo;
 }
 
 export default function GedTab({
@@ -24,7 +25,9 @@ export default function GedTab({
   handleConsultGed,
   setActiveTab,
   tenantId,
+  companyInfo,
 }: GedTabProps) {
+  const hasGedSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetGed', companyInfo));
   const [gedTitle, setGedTitle] = useState('');
   const [gedCategory, setGedCategory] = useState('');
   const [gedFileName, setGedFileName] = useState('');
@@ -388,10 +391,19 @@ export default function GedTab({
 
                 <button
                   type="button"
-                  onClick={startNewGed}
-                  style={customButtonStyle}
+                  disabled={!hasGedSpreadsheet}
+                  onClick={() => {
+                    if (!hasGedSpreadsheet) return;
+                    startNewGed();
+                  }}
+                  style={{
+                    ...customButtonStyle,
+                    opacity: !hasGedSpreadsheet ? 0.45 : 1,
+                    cursor: !hasGedSpreadsheet ? 'not-allowed' : 'pointer',
+                  }}
                   className="font-sans"
                   id="btn-new-ged-doc"
+                  title={!hasGedSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Documents d'entreprise (GED) dans les paramètres du tenant." : undefined}
                 >
                   {t('Nouveau')}
                 </button>
@@ -402,6 +414,7 @@ export default function GedTab({
           <TableSubHeaderButtons
             spreadsheetKey="spreadsheetGed"
             idSuffix="ged"
+            companyInfo={companyInfo}
           />
 
           {/* Main Table Records Sheet */}

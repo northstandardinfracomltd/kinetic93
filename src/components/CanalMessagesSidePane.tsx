@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db, saveCollectionToFirestore, getCollectionKey, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion } from '../firebase';
-import { TenantMessage } from '../types';
+import { TenantMessage, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
 import { t } from '../utils/translate';
 
 export const CANAL_TAGS = [
@@ -27,6 +27,7 @@ interface CanalMessagesSidePaneProps {
   setMessages: React.Dispatch<React.SetStateAction<TenantMessage[]>>;
   onMessagesRead?: () => void;
   embedded?: boolean;
+  companyInfo?: CompanyInfo;
 }
 
 export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
@@ -38,7 +39,9 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   setMessages,
   onMessagesRead,
   embedded = false,
+  companyInfo,
 }) => {
+  const hasMessagesSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetMessagesInternes', companyInfo));
   // Par défaut, le filtre est positionné sur 'Exploitation' (la gélule Tous ayant été supprimée)
   const [selectedFilterTag, setSelectedFilterTag] = useState<CanalTagName>('Exploitation');
   const [messageInput, setMessageInput] = useState('');
@@ -96,6 +99,10 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   // Real-time Firestore sync & auto-refresh dynamic polling every 1s
   useEffect(() => {
     if (!isOpen || !tenantId) return;
+    if (!hasMessagesSpreadsheet) {
+      setMessages([]);
+      return;
+    }
 
     let isMounted = true;
 
@@ -137,26 +144,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             return;
           }
         }
-
-        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(tenantId)}&_=${Date.now()}`, {
-          signal: controller.signal
-        });
         clearTimeout(timerId);
-        if (resp.ok && isMounted) {
-          const data = await resp.json();
-          const remoteList: TenantMessage[] = Array.isArray(data?.value) ? data.value : (Array.isArray(data) ? data : []);
-          if (remoteList && remoteList.length >= 0) {
-            setMessages((prev) => {
-              if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
-                try {
-                  localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
-                } catch (_) {}
-                return remoteList;
-              }
-              return prev;
-            });
-          }
-        }
       } catch (_) {
         clearTimeout(timerId);
       }
@@ -181,60 +169,12 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     // Timer auto-refresh fallback toutes les 30s
     const refreshTimer = setInterval(fetchLatestServerMessages, 30000);
 
-    // 3. Listener Firestore en complément uniquement si le quota n'est pas épuisé
-    let unsubscribeFirestore: (() => void) | undefined;
-    if (!isFirestoreQuotaExhausted()) {
-      try {
-        const colKey = getCollectionKey('tenantMessages', tenantId);
-        const docRef = doc(db, 'appData', colKey);
-        unsubscribeFirestore = onSnapshot(
-          docRef,
-          (snapshot) => {
-            if (snapshot.exists() && isMounted) {
-              const data = snapshot.data();
-              let remoteList: TenantMessage[] = [];
-              if (Array.isArray(data?.value)) {
-                remoteList = data.value;
-              } else if (Array.isArray(data)) {
-                remoteList = data;
-              }
-              if (remoteList && remoteList.length >= 0) {
-                setMessages((prev) => {
-                  if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
-                    try {
-                      localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(remoteList));
-                    } catch (_) {}
-                    return remoteList;
-                  }
-                  return prev;
-                });
-              }
-            }
-          },
-          (error) => {
-            const msg = String(error?.message || error || '').toLowerCase();
-            if (msg.includes('quota') || msg.includes('resource-exhausted') || (error as any)?.code === 'resource-exhausted') {
-              recordFirestoreQuotaExhaustion(6);
-              try {
-                if (unsubscribeFirestore) unsubscribeFirestore();
-                unsubscribeFirestore = undefined;
-              } catch (_) {}
-            }
-            console.warn('Real-time listener on tenantMessages notice:', error);
-          }
-        );
-      } catch (e) {
-        console.warn('Error setting up onSnapshot for tenantMessages:', e);
-      }
-    }
-
     return () => {
       isMounted = false;
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(refreshTimer);
-      if (unsubscribeFirestore) unsubscribeFirestore();
     };
-  }, [isOpen, tenantId, setMessages]);
+  }, [isOpen, tenantId, setMessages, hasMessagesSpreadsheet]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -601,7 +541,13 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           boxShadow: 'none',
         }}
       >
-        <form onSubmit={handleSendMessage}>
+        <form onSubmit={(e) => {
+          if (!hasMessagesSpreadsheet) {
+            e.preventDefault();
+            return;
+          }
+          handleSendMessage(e);
+        }}>
           <div
             className="flex items-center gap-2 bg-white rounded-2xl p-1.5 sm:p-2 pl-3 sm:pl-4 transition-all shadow-none"
             style={{ border: '1px solid #dadada', boxShadow: 'none' }}
@@ -610,6 +556,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             <textarea
               ref={textareaRef}
               rows={1}
+              disabled={!hasMessagesSpreadsheet}
               value={messageInput}
               maxLength={350}
               onChange={(e) => {
@@ -620,11 +567,11 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  handleSendMessage();
+                  if (hasMessagesSpreadsheet) handleSendMessage();
                 }
               }}
-              placeholder="Entrez votre message."
-              className="flex-1 bg-transparent border-0 outline-none text-black px-1 placeholder:text-slate-400 resize-none overflow-y-auto text-[16px] sm:text-[18px]"
+              placeholder={!hasMessagesSpreadsheet ? "Veuillez configurer le Spreadsheet Messages Internes dans les paramètres du tenant." : "Entrez votre message."}
+              className={`flex-1 bg-transparent border-0 outline-none text-black px-1 placeholder:text-slate-400 resize-none overflow-y-auto text-[16px] sm:text-[18px] ${!hasMessagesSpreadsheet ? 'cursor-not-allowed opacity-60' : ''}`}
               style={{
                 lineHeight: '24px',
                 minHeight: '28px',
@@ -640,7 +587,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             {/* Submit button: responsive font-size, centré verticalement */}
             <button
               type="submit"
-              disabled={!messageInput.trim()}
+              disabled={!messageInput.trim() || !hasMessagesSpreadsheet}
               id="btn-send-canal-message"
               className="inline-flex items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center text-[15px] sm:text-[18px]"
               style={{
@@ -648,9 +595,10 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 boxShadow:
                   'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                opacity: !messageInput.trim() ? 0.45 : 1,
-                cursor: !messageInput.trim() ? 'not-allowed' : 'pointer',
+                opacity: (!messageInput.trim() || !hasMessagesSpreadsheet) ? 0.45 : 1,
+                cursor: (!messageInput.trim() || !hasMessagesSpreadsheet) ? 'not-allowed' : 'pointer',
               }}
+              title={!hasMessagesSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Messages Internes dans les paramètres du tenant." : undefined}
             >
               <span>{t('Envoyer')}</span>
             </button>

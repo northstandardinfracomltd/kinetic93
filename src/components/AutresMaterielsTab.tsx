@@ -277,6 +277,32 @@ export default function AutresMaterielsTab({
     return String(raw).trim();
   }, [companyInfo?.spreadsheetAutresMateriels, companyInfo?.spreadsheetAutresMaterielsUrl, activeTenantId]);
 
+  const hasFsmSpreadsheet = useMemo(() => {
+    const raw =
+      companyInfo?.spreadsheetTournees ||
+      companyInfo?.spreadsheetTourneesUrl ||
+      companyInfo?.spreadsheetMissionsTournees ||
+      companyInfo?.spreadsheetMissionsTourneesUrl ||
+      companyInfo?.spreadsheetTourneesMissions ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_tournees`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_tournees`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_tournees`) ||
+          localStorage.getItem(`defib_${activeTenantId}_spreadsheet_missions_tournees`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_missions_tournees`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_missions_tournees`)
+        : '') ||
+      '';
+    return Boolean(String(raw).trim());
+  }, [
+    companyInfo?.spreadsheetTournees,
+    companyInfo?.spreadsheetTourneesUrl,
+    companyInfo?.spreadsheetMissionsTournees,
+    companyInfo?.spreadsheetMissionsTourneesUrl,
+    companyInfo?.spreadsheetTourneesMissions,
+    activeTenantId,
+  ]);
+
   const handleRefreshClick = async () => {
     if (effectiveRefreshing) return;
     setIsLocalRefreshing(true);
@@ -1138,13 +1164,21 @@ export default function AutresMaterielsTab({
                     Plan
                   </button>
                   <button
-                    onClick={handleOpenNewForm}
+                    type="button"
+                    disabled={!resolvedSpreadsheetUrl}
+                    onClick={() => {
+                      if (!resolvedSpreadsheetUrl) return;
+                      handleOpenNewForm();
+                    }}
                     id="btn-add-materiel"
                     style={{
                       ...customButtonStyle,
                       backgroundColor: 'rgb(53, 86, 236)',
-                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                      opacity: !resolvedSpreadsheetUrl ? 0.45 : 1,
+                      cursor: !resolvedSpreadsheetUrl ? 'not-allowed' : 'pointer',
                     }}
+                    title={!resolvedSpreadsheetUrl ? "Veuillez renseigner l'URL du Spreadsheet Autres Matériels dans les paramètres du tenant." : undefined}
                   >
                     Nouveau
                   </button>
@@ -1237,15 +1271,22 @@ export default function AutresMaterielsTab({
                 <div className="relative">
                   <button
                     type="button"
+                    disabled={!hasFsmSpreadsheet}
                     onClick={() => {
+                      if (!hasFsmSpreadsheet) return;
                       setIsTourDropdownOpen(!isTourDropdownOpen);
                     }}
-                    style={rowActionButton18Style}
-                    className="cursor-pointer"
+                    style={{
+                      ...rowActionButton18Style,
+                      opacity: !hasFsmSpreadsheet ? 0.45 : 1,
+                      cursor: !hasFsmSpreadsheet ? 'not-allowed' : 'pointer',
+                    }}
+                    className={!hasFsmSpreadsheet ? 'cursor-not-allowed' : 'cursor-pointer'}
+                    title={!hasFsmSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Tournées & Missions dans les paramètres du tenant." : undefined}
                   >
                     <span>Tournée</span>
                   </button>
-                  {isTourDropdownOpen && (
+                  {isTourDropdownOpen && hasFsmSpreadsheet && (
                     <div 
                       className="absolute right-0 mt-1 w-72 bg-white rounded-lg z-50 py-2.5 font-sans animate-fadeIn text-left"
                       style={{ 
@@ -1258,12 +1299,16 @@ export default function AutresMaterielsTab({
                       <div className="px-3 pb-2 bg-transparent text-center flex flex-col gap-2">
                         <button
                           type="button"
+                          disabled={!hasFsmSpreadsheet}
                           onClick={() => {
+                            if (!hasFsmSpreadsheet) return;
                             executeNouvelleTournee();
                           }}
                           style={{
                             ...rowActionButton18Style,
                             width: '100%',
+                            opacity: !hasFsmSpreadsheet ? 0.45 : 1,
+                            cursor: !hasFsmSpreadsheet ? 'not-allowed' : 'pointer',
                           }}
                           className="w-full text-center transition-colors cursor-pointer"
                         >
@@ -1272,7 +1317,9 @@ export default function AutresMaterielsTab({
 
                         <button
                           type="button"
+                          disabled={!hasFsmSpreadsheet}
                           onClick={() => {
+                            if (!hasFsmSpreadsheet) return;
                             executeAddToTrier();
                           }}
                           style={{
@@ -1280,7 +1327,9 @@ export default function AutresMaterielsTab({
                             width: '100%',
                             backgroundColor: '#000000',
                             borderColor: '#000000',
-                            color: '#ffffff'
+                            color: '#ffffff',
+                            opacity: !hasFsmSpreadsheet ? 0.45 : 1,
+                            cursor: !hasFsmSpreadsheet ? 'not-allowed' : 'pointer',
                           }}
                           className="w-full text-center transition-colors cursor-pointer hover:opacity-90"
                         >

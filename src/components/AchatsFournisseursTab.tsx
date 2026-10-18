@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AchatFournisseur, Variable, CompanyInfo } from '../types';
+import { AchatFournisseur, Variable, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
 import { ShoppingBag, Eye, Trash2, Edit, Plus, FileText, Upload, Search, X } from 'lucide-react';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
@@ -386,9 +386,28 @@ export default function AchatsFournisseursTab({
                   />
                 </div>
 
-                <button onClick={startNewAchat} style={customButtonStyle} className="font-sans">
-                  {t("Nouveau")}
-                </button>
+                {(() => {
+                  const hasAchatsSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetAchatsFournisseurs', companyInfo));
+                  return (
+                    <button
+                      type="button"
+                      disabled={!hasAchatsSpreadsheet}
+                      onClick={() => {
+                        if (!hasAchatsSpreadsheet) return;
+                        startNewAchat();
+                      }}
+                      style={{
+                        ...customButtonStyle,
+                        opacity: !hasAchatsSpreadsheet ? 0.45 : 1,
+                        cursor: !hasAchatsSpreadsheet ? 'not-allowed' : 'pointer',
+                      }}
+                      className="font-sans"
+                      title={!hasAchatsSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Achats Fournisseurs dans les paramètres du tenant." : undefined}
+                    >
+                      {t("Nouveau")}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>
