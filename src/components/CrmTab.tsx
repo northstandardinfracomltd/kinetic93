@@ -524,10 +524,15 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
   // Load Google Drive status for active tenant
   useEffect(() => {
-    fetchGoogleDriveStatus(activeTenant).then(status => {
-      setGoogleDriveActive(status.active);
-      setGoogleDriveAccessToken(status.accessToken);
-    });
+    const refreshDrive = () => {
+      fetchGoogleDriveStatus(activeTenant).then(status => {
+        setGoogleDriveActive(status.active);
+        setGoogleDriveAccessToken(status.accessToken);
+      });
+    };
+    refreshDrive();
+    window.addEventListener('google-drive-status-changed', refreshDrive);
+    return () => window.removeEventListener('google-drive-status-changed', refreshDrive);
   }, [activeTenant]);
 
   // Support messages (Technique / Réclamation / Sans Catégorie)
@@ -738,13 +743,22 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!googleDriveActive || !googleDriveAccessToken) {
+    let isActive = googleDriveActive;
+    let token = googleDriveAccessToken;
+    if (!isActive || !token) {
+      const fresh = await fetchGoogleDriveStatus(activeTenant);
+      isActive = fresh.active;
+      token = fresh.accessToken;
+      setGoogleDriveActive(isActive);
+      setGoogleDriveAccessToken(token);
+    }
+    if (!isActive) {
       alert("Le connecteur Google Drive n'est pas actif. Veuillez l'activer dans les réglages.");
       return;
     }
     setIsUploadingFile(true);
     try {
-      const driveUrl = await uploadFileToGoogleDrive(googleDriveAccessToken, file);
+      const driveUrl = await uploadFileToGoogleDrive(token, file, activeTenant);
       const newFile: CommercialFileAttachment = {
         name: file.name,
         url: driveUrl,

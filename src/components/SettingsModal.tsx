@@ -1249,25 +1249,20 @@ export default function SettingsModal({
 
   const persistApiDefibeoConnectorState = async (active: boolean, apiKey: string, secretKey: string) => {
     const tId = activeTenantId || 'demo';
-    const docId = `${tId}_connectors`;
-    const payload = {
-      id: docId,
-      tenantId: tId,
-      envId: envIdDisplay || tId,
-      apiDefibeoActive: active,
-      apiDefibeoApiKey: apiKey,
-      apiDefibeoSecretKey: secretKey,
-      updatedAt: new Date().toISOString()
-    };
     try {
-      await saveCollectionToFirestore('api_connectors', [payload], tId);
-    } catch (_) {}
-    try {
-      await fetch('/api/collection/api_connectors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId: tId, items: [payload] })
-      });
+      const existingRaw = await fetchCollectionFromFirestore<any>('api_connectors', tId);
+      const existing = (Array.isArray(existingRaw) ? existingRaw[0] : existingRaw) || {};
+      const payload = {
+        ...existing,
+        apiDefibeoActive: active,
+        apiDefibeoApiKey: apiKey,
+        apiDefibeoSecretKey: secretKey,
+        googleDriveActive,
+        googleDriveEmail,
+        googleDriveAccessToken,
+        updatedAt: new Date().toISOString()
+      };
+      await saveCollectionToFirestore('api_connectors', payload, tId);
     } catch (_) {}
   };
 
@@ -1468,6 +1463,28 @@ export default function SettingsModal({
     };
   };
 
+  const persistGoogleDriveForTenant = async (active: boolean, email: string, token: string) => {
+    const activeTid = propTenantId || myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+    try {
+      const existing = await fetchCollectionFromFirestore<any>('api_connectors', activeTid);
+      const baseObj = existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {};
+      const updatedConnectors = {
+        ...baseObj,
+        tenantId: activeTid,
+        googleDriveActive: active,
+        googleDriveEmail: email,
+        googleDriveAccessToken: token,
+        updatedAt: new Date().toISOString(),
+      };
+      await saveCollectionToFirestore('api_connectors', updatedConnectors, activeTid);
+      if (onConnectorsUpdated) {
+        onConnectorsUpdated();
+      }
+    } catch (e) {
+      console.error('Error persisting Google Drive connector for tenant:', e);
+    }
+  };
+
   const handleGoogleDriveToggle = async (checked: boolean) => {
     if (checked) {
       try {
@@ -1493,6 +1510,7 @@ export default function SettingsModal({
         localStorage.setItem('defib_google_drive_email', email);
         localStorage.setItem(`defib_${myTenantId}_google_drive_token`, token);
         localStorage.setItem('defib_google_drive_token', token);
+        await persistGoogleDriveForTenant(true, email, token);
         window.dispatchEvent(new Event('google-drive-status-changed'));
       } catch (err: any) {
         console.error("Google Drive connection failed with Firebase popup, falling back:", err);
@@ -1565,6 +1583,7 @@ export default function SettingsModal({
                   localStorage.setItem('defib_google_drive_email', email);
                   localStorage.setItem(`defib_${myTenantId}_google_drive_token`, token);
                   localStorage.setItem('defib_google_drive_token', token);
+                  await persistGoogleDriveForTenant(true, email, token);
                   window.dispatchEvent(new Event('google-drive-status-changed'));
                 }
               }
@@ -1595,6 +1614,7 @@ export default function SettingsModal({
       localStorage.removeItem('defib_google_drive_email');
       localStorage.removeItem(`defib_${myTenantId}_google_drive_token`);
       localStorage.removeItem('defib_google_drive_token');
+      await persistGoogleDriveForTenant(false, '', '');
       window.dispatchEvent(new Event('google-drive-status-changed'));
     }
   };
@@ -1641,8 +1661,9 @@ export default function SettingsModal({
       setGoogleDriveEmail(localStorage.getItem(`defib_${activeTenant}_google_drive_email`) || '');
       setGoogleDriveAccessToken(localStorage.getItem(`defib_${activeTenant}_google_drive_token`) || '');
 
-      fetchCollectionFromFirestore<any>('api_connectors', activeTenant).then(data => {
-        if (data && typeof data === 'object' && !Array.isArray(data)) {
+      fetchCollectionFromFirestore<any>('api_connectors', activeTenant).then(rawData => {
+        const data = Array.isArray(rawData) ? rawData[0] : rawData;
+        if (data && typeof data === 'object') {
           if (data.apiDefibeoActive !== undefined) setApiDefibeoActive(Boolean(data.apiDefibeoActive));
           if (data.apiDefibeoApiKey !== undefined) setApiDefibeoApiKey(data.apiDefibeoApiKey || '');
           if (data.apiDefibeoSecretKey !== undefined) setApiDefibeoSecretKey(data.apiDefibeoSecretKey || '');
@@ -1691,9 +1712,29 @@ export default function SettingsModal({
             setAtlasanteUrlAuth('https://catalogue.atlasante.fr/api/login');
           }
 
-          if (data.googleDriveActive !== undefined) setGoogleDriveActive(Boolean(data.googleDriveActive));
-          if (data.googleDriveEmail !== undefined) setGoogleDriveEmail(data.googleDriveEmail || '');
-          if (data.googleDriveAccessToken !== undefined) setGoogleDriveAccessToken(data.googleDriveAccessToken || '');
+          if (data.googleDriveActive !== undefined) {
+            const gdActive = Boolean(data.googleDriveActive);
+            setGoogleDriveActive(gdActive);
+            try {
+              localStorage.setItem(`defib_${activeTenant}_google_drive_active`, gdActive ? 'true' : 'false');
+            } catch (_) {}
+          }
+          if (data.googleDriveEmail !== undefined) {
+            setGoogleDriveEmail(data.googleDriveEmail || '');
+            if (data.googleDriveEmail) {
+              try {
+                localStorage.setItem(`defib_${activeTenant}_google_drive_email`, data.googleDriveEmail);
+              } catch (_) {}
+            }
+          }
+          if (data.googleDriveAccessToken !== undefined) {
+            setGoogleDriveAccessToken(data.googleDriveAccessToken || '');
+            if (data.googleDriveAccessToken) {
+              try {
+                localStorage.setItem(`defib_${activeTenant}_google_drive_token`, data.googleDriveAccessToken);
+              } catch (_) {}
+            }
+          }
         }
       }).catch(err => {
         console.error('Error loading API connectors from Firestore:', err);

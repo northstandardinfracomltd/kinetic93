@@ -89,6 +89,7 @@ interface CachedSheetResult {
   stats: SheetCollectionStats;
   fetchedAt: number;
   spreadsheetUrl: string;
+  hasRemoteHeaders?: boolean;
 }
 
 const sheetMemoryCache = new Map<string, CachedSheetResult>();
@@ -1194,30 +1195,44 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Identifiant formation', field: 'formationId', aliases: ['identifiantformation', 'formationid', 'idformation'] },
   ],
   crm: [
-    { header: 'ID', field: 'id', aliases: ['id', 'identifiantticket', 'numeroticket', 'reference', 'refticket', 'ticketid'] },
-    { header: 'Type CRM', field: 'crmCategory', aliases: ['typecrm', 'crmcategory', 'typedeticket', 'typeticket', 'compartiment'] },
-    { header: 'Client / Entreprise', field: 'entreprise', aliases: ['cliententreprise', 'entreprise', 'client', 'denomination', 'societe', 'nomclient', 'clientlie'] },
+    { header: 'Référence', field: 'reference', aliases: ['reference', 'id', 'identifiantticket', 'numeroticket', 'refticket', 'ticketid'] },
+    { header: 'Date Ouverture', field: 'dateOuverture', aliases: ['dateouverture', 'datecreation', 'datedecreation', 'date', 'horodatage', 'createdat'] },
+    { header: 'Dernière Actualisation', field: 'dateDerniereActualisation', aliases: ['derniereactualisation', 'datederniereactualisation', 'updatedat', 'maj'] },
+    { header: 'Statut', field: 'situation', aliases: ['statut', 'situation', 'status', 'etat', 'avancement'] },
+    { header: 'Catégorie', field: 'categorie', aliases: ['categorie', 'categorieduticket', 'typecrm', 'crmcategory', 'typedeticket', 'typeticket', 'compartiment', 'motif', 'raison'] },
+    { header: 'Criticité', field: 'criticite', aliases: ['criticite', 'priorite', 'urgence', 'niveau'] },
+    { header: 'Collaborateur', field: 'collaborateur', aliases: ['collaborateur', 'collaborateurassigne', 'assignea', 'responsable', 'agent', 'membre', 'technicien'] },
+    { header: 'Raison Sociale / Client', field: 'client', aliases: ['raisonsocialeclient', 'raisonsociale', 'cliententreprise', 'entreprise', 'client', 'denomination', 'societe', 'nomclient', 'clientlie'] },
     { header: 'Client ID', field: 'clientId', aliases: ['clientid', 'idclient', 'identifiantclient'] },
+    { header: 'Prénom et Nom', field: 'prenomNom', aliases: ['prenometnom', 'prenomnom', 'contactnometprenom', 'contactnomprenom', 'nometprenom', 'nomprenom', 'contact', 'demandeur', 'interlocuteur'] },
+    { header: 'Situation Interlocuteur', field: 'situationInterlocuteur', aliases: ['situationinterlocuteur', 'statutinterlocuteur', 'typeinterlocuteur'] },
+    { header: 'Type Structure', field: 'typeStructure', aliases: ['typestructure', 'typedestructure', 'structure'] },
+    { header: 'Fonction', field: 'fonction', aliases: ['fonction', 'poste', 'rolecontact'] },
+    { header: 'Téléphone', field: 'telephone', aliases: ['telephone', 'tel', 'phone', 'portable', 'telephonecontact'] },
+    { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'emailcontact', 'emailclient'] },
+    { header: 'Objet', field: 'objet', aliases: ['objet', 'sujet', 'titre', 'objetduticket', 'intitule'] },
+    { header: 'Description', field: 'description', aliases: ['description', 'messagedescription', 'message', 'contenu', 'demande', 'details'] },
+    { header: 'Marché Public', field: 'marchePublic', aliases: ['marchepublic', 'appeldoffre'] },
+    { header: 'Situation Devis', field: 'situationDevis', aliases: ['situationdevis', 'statutdevis', 'etatdevis'] },
+    { header: 'Score Conversion (1-5)', field: 'scorePotentielConversion', aliases: ['scoreconversion15', 'scoreconversion', 'scorepotentielconversion', 'probabilite', 'chances', 'tauxconversion'], type: 'number' },
+    { header: 'Référence Devis', field: 'referenceDevis', aliases: ['referencedevis', 'refdevis', 'numerodevis', 'devislie'] },
+    { header: 'Catégorie Devis', field: 'categorieDevis', aliases: ['categoriedevis', 'typedevis'] },
+    { header: 'Indicateur Temps Devis', field: 'indicateurTempsDevis', aliases: ['indicateurtempsdevis', 'delaidevis', 'horizon'] },
+    { header: 'Total Affaire HT (€)', field: 'totalAffaireHT', aliases: ['totalaffaireht', 'totalaffairehteuro', 'montantestimeht', 'montantestime', 'montant', 'budget', 'valeurht'], type: 'number' },
+    { header: 'Famille', field: 'famille', aliases: ['famille', 'gamme'] },
+    { header: 'Indicatif Postal', field: 'indicatifPostal', aliases: ['indicatifpostal', 'departement', 'cp', 'codepostal'] },
+    { header: 'Origine Lead', field: 'origineLead', aliases: ['originelead', 'sourceopportunite', 'source', 'origine', 'canal'] },
+    { header: 'Description Offre Devis', field: 'descriptionOffreDevis', aliases: ['descriptionoffredevis', 'offredevis', 'detaildevis'] },
+    { header: 'Date Devis', field: 'dateDevis', aliases: ['datedevis', 'dateemissiondevis'], type: 'date' },
+    { header: 'Date Prochaine Relance', field: 'dateProchaineRelance', aliases: ['dateprochainerelance', 'daterelanceecheance', 'daterelance', 'echeance', 'relance', 'prochainerelance'], type: 'date' },
+    { header: 'Date Commande', field: 'dateCommande', aliases: ['datecommande', 'datesignature'], type: 'date' },
+    { header: 'Lien Devis / Fichiers', field: 'lienStockagePartageDevis', aliases: ['liendevisfichiers', 'lienstockagepartagedevis', 'photographiepiecejointe', 'photodataurl', 'photo', 'piecejointe', 'image', 'fichier', 'telechargerunfichier', 'liengoogledrive', 'urlfichier'] },
     { header: 'Identifiant Matériel', field: 'identifiant', aliases: ['identifiantmateriel', 'identifiantequipement', 'identifiantdae', 'identifiantdefibrillateur', 'identifiant', 'materiellie', 'equipementlie'] },
     { header: 'Type de matériel', field: 'materialType', aliases: ['typedemateriel', 'typemateriel', 'typeequipement', 'materialtype'] },
-    { header: 'Objet', field: 'objet', aliases: ['objet', 'sujet', 'titre', 'objetduticket', 'intitule'] },
-    { header: 'Statut', field: 'status', aliases: ['statut', 'status', 'etat', 'avancement'] },
-    { header: 'Criticité', field: 'criticite', aliases: ['criticite', 'priorite', 'urgence', 'niveau'] },
-    { header: 'Catégorie', field: 'categorie', aliases: ['categorie', 'categorieduticket', 'motif', 'raison'] },
-    { header: 'Collaborateur assigné', field: 'collaborateur', aliases: ['collaborateurassigne', 'collaborateur', 'assignea', 'responsable', 'agent', 'membre', 'technicien'] },
-    { header: 'Date création', field: 'date', aliases: ['datecreation', 'datedecreation', 'date', 'horodatage', 'createdat'] },
-    { header: 'Contact Nom & Prénom', field: 'nomPrenom', aliases: ['contactnometprenom', 'contactnomprenom', 'nometprenom', 'nomprenom', 'contact', 'demandeur', 'interlocuteur'] },
-    { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'emailcontact', 'emailclient'] },
-    { header: 'Téléphone', field: 'telephone', aliases: ['telephone', 'tel', 'phone', 'portable', 'telephonecontact'] },
-    { header: 'Message / Description', field: 'message', aliases: ['messagedescription', 'message', 'description', 'contenu', 'demande', 'details'] },
     { header: 'Commentaire Interne', field: 'commentaireInterne', aliases: ['commentaireinterne', 'noteinterne', 'notesinternes', 'commentaire', 'observations'] },
     { header: 'Réponse envoyée', field: 'reponse', aliases: ['reponseenvoyee', 'reponse', 'reponseclient', 'solution'] },
-    { header: 'Montant Estimé HT (€)', field: 'montantEstime', aliases: ['montantestimeht', 'montantestime', 'montant', 'budget', 'valeurht'] },
-    { header: 'Probabilité (%)', field: 'probabilite', aliases: ['probabilite', 'chances', 'tauxconversion'] },
-    { header: 'Date relance / Échéance', field: 'dateRelance', aliases: ['daterelanceecheance', 'daterelance', 'echeance', 'relance', 'prochainerelance'], type: 'date' },
-    { header: 'Source Opportunité', field: 'sourceOpportunite', aliases: ['sourceopportunite', 'source', 'origine', 'canal'] },
-    { header: 'Référence Devis', field: 'referenceDevis', aliases: ['referencedevis', 'refdevis', 'numerodevis', 'devislie'] },
-    { header: 'Photographie / Pièce jointe', field: 'photoDataUrl', aliases: ['photographiepiecejointe', 'photodataurl', 'photo', 'piecejointe', 'image', 'fichier', 'telechargerunfichier', 'liengoogledrive', 'urlfichier', 'lienstockagepartagedevis'] },
+    { header: 'Événements Commercial', field: 'evenementsCommercial', aliases: ['evenementscommercial', 'historiquecommercial'], type: 'json' },
+    { header: 'Messages Support', field: 'messagesSupport', aliases: ['messagessupport', 'historiquesupport'], type: 'json' },
   ],
   satisfaction: [
     { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'reference', 'idavis'] },
@@ -2482,47 +2497,71 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
   let parsedJsonFallback: Record<string, any> = {};
   const colToDef = resolveGenericColumnFieldMap(headers, tabType);
 
-  headers.forEach((h, i) => {
-    const val = row[i] !== undefined ? String(row[i]).trim() : '';
-    rawRowArray[i] = val;
-    if (!h) return;
-    if (rawByHeader[h] === undefined) {
-      rawByHeader[h] = val;
-    }
-    if (h.toLowerCase() === '_json' && val.startsWith('{')) {
+  // Detect if row contains a full _json record payload at an earlier column index (e.g. headerless row from an older schema)
+  let embeddedJsonColIdx = -1;
+  for (let i = row.length - 1; i >= 0; i--) {
+    const cellVal = String(row[i] ?? '').trim();
+    if (
+      cellVal.startsWith('{"') &&
+      cellVal.endsWith('}') &&
+      (cellVal.includes('"id":') || cellVal.includes('"reference":') || cellVal.includes('"tenantId":'))
+    ) {
       try {
-        parsedJsonFallback = JSON.parse(val);
+        parsedJsonFallback = JSON.parse(cellVal);
+        embeddedJsonColIdx = i;
+        break;
       } catch (_) {}
-      return;
     }
+  }
 
-    const matchedDef = colToDef.get(i);
-    const targetField = matchedDef ? matchedDef.field : h;
+  const isLegacyShiftedRow =
+    embeddedJsonColIdx >= 0 &&
+    embeddedJsonColIdx < headers.length - 1 &&
+    headers[embeddedJsonColIdx]?.toLowerCase() !== '_json';
 
-    if (val === '') return;
-
-    if ((val.startsWith('[') && val.endsWith(']')) || (val.startsWith('{') && val.endsWith('}'))) {
-      try {
-        const parsed = JSON.parse(val);
-        obj[targetField] = parsed;
+  if (!isLegacyShiftedRow) {
+    headers.forEach((h, i) => {
+      const val = row[i] !== undefined ? String(row[i]).trim() : '';
+      rawRowArray[i] = val;
+      if (!h) return;
+      if (rawByHeader[h] === undefined) {
+        rawByHeader[h] = val;
+      }
+      if ((h.toLowerCase() === '_json' || i === embeddedJsonColIdx) && val.startsWith('{')) {
+        try {
+          parsedJsonFallback = JSON.parse(val);
+        } catch (_) {}
         return;
-      } catch (_) {}
-    }
+      }
 
-    let coercedVal: any = val;
-    if (matchedDef?.type === 'yesno') {
-      coercedVal = normalizeYesNo(val, 'Non');
-    } else if (matchedDef?.type === 'bool') {
-      coercedVal = normalizeBool(val, false);
-    } else if (matchedDef?.type === 'date') {
-      coercedVal = normalizeDateStr(val);
-    } else if (matchedDef?.type === 'number') {
-      const num = parseFloat(val.replace(',', '.').replace(/[^0-9.-]/g, ''));
-      if (!isNaN(num)) coercedVal = num;
-    }
+      const matchedDef = colToDef.get(i);
+      const targetField = matchedDef ? matchedDef.field : h;
 
-    obj[targetField] = coercedVal;
-  });
+      if (val === '') return;
+
+      if ((val.startsWith('[') && val.endsWith(']')) || (val.startsWith('{') && val.endsWith('}'))) {
+        try {
+          const parsed = JSON.parse(val);
+          obj[targetField] = parsed;
+          return;
+        } catch (_) {}
+      }
+
+      let coercedVal: any = val;
+      if (matchedDef?.type === 'yesno') {
+        coercedVal = normalizeYesNo(val, 'Non');
+      } else if (matchedDef?.type === 'bool') {
+        coercedVal = normalizeBool(val, false);
+      } else if (matchedDef?.type === 'date') {
+        coercedVal = normalizeDateStr(val);
+      } else if (matchedDef?.type === 'number') {
+        const num = parseFloat(val.replace(',', '.').replace(/[^0-9.-]/g, ''));
+        if (!isNaN(num)) coercedVal = num;
+      }
+
+      obj[targetField] = coercedVal;
+    });
+  }
 
   const merged: any = {
     ...parsedJsonFallback,
@@ -2955,15 +2994,55 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       autreReference: merged.autreReference || existingSnap.autreReference || '',
     };
   } else if (tabType === 'crm') {
-    merged.id = merged.id || `#${100000 + rowIndexZeroBased}`;
-    merged.crmCategory = merged.crmCategory || 'SAV / Maintenance';
-    merged.status = merged.status || 'Nouveau';
+    const resolvedRef = String(merged.reference || merged.id || `#${100000 + rowIndexZeroBased}`).trim();
+    merged.id = String(merged.id || resolvedRef).trim();
+    merged.reference = resolvedRef;
+    merged.categorie = merged.categorie || merged.crmCategory || 'Sans Catégorie';
+    merged.crmCategory = merged.crmCategory || merged.categorie;
+    merged.situation = merged.situation || (merged.status === 'Résolu' ? 'Terminé' : merged.status) || 'Nouveau';
+    merged.status = merged.status || (merged.situation === 'Terminé' ? 'Résolu' : merged.situation) || 'Nouveau';
+    merged.criticite = merged.criticite || 'Non renseigné';
     merged.objet = merged.objet || '';
-    merged.message = merged.message || '';
-    merged.date = merged.date || new Date().toLocaleDateString('fr-FR');
-    if (merged.photoDataUrl && !merged.lienStockagePartageDevis) {
-      merged.lienStockagePartageDevis = merged.photoDataUrl;
+    merged.description = merged.description || merged.message || '';
+    merged.message = merged.message || merged.description || '';
+    merged.dateOuverture = merged.dateOuverture || merged.date || new Date().toLocaleDateString('fr-FR');
+    merged.date = merged.date || merged.dateOuverture;
+    merged.dateDerniereActualisation = merged.dateDerniereActualisation || merged.dateOuverture || merged.date;
+    merged.client = merged.client || merged.entreprise || merged.customClientName || '';
+    merged.entreprise = merged.entreprise || merged.client || '';
+    merged.prenomNom = merged.prenomNom || merged.nomPrenom || '';
+    merged.nomPrenom = merged.nomPrenom || merged.prenomNom || '';
+    merged.telephone = merged.telephone || merged.phone || '';
+    merged.phone = merged.phone || merged.telephone || '';
+    merged.email = merged.email || '';
+    merged.collaborateur = merged.collaborateur || 'Non attribué';
+    merged.situationInterlocuteur = merged.situationInterlocuteur || 'Prospect';
+    merged.typeStructure = merged.typeStructure || 'Entreprise';
+    merged.fonction = merged.fonction || '';
+    if (merged.totalAffaireHT === undefined && merged.montantEstime !== undefined && merged.montantEstime !== '') {
+      const parsedHt = parseFloat(String(merged.montantEstime).replace(',', '.'));
+      if (!isNaN(parsedHt)) merged.totalAffaireHT = parsedHt;
+    } else if (typeof merged.totalAffaireHT === 'string' && merged.totalAffaireHT.trim() !== '') {
+      const parsedHt = parseFloat(merged.totalAffaireHT.replace(',', '.'));
+      if (!isNaN(parsedHt)) merged.totalAffaireHT = parsedHt;
     }
+    if (merged.montantEstime === undefined && merged.totalAffaireHT !== undefined) {
+      merged.montantEstime = merged.totalAffaireHT;
+    }
+    if (merged.scorePotentielConversion === undefined && merged.probabilite !== undefined && merged.probabilite !== '') {
+      const parsedScore = parseInt(String(merged.probabilite), 10);
+      if (!isNaN(parsedScore)) merged.scorePotentielConversion = parsedScore;
+    } else if (typeof merged.scorePotentielConversion === 'string' && merged.scorePotentielConversion.trim() !== '') {
+      const parsedScore = parseInt(merged.scorePotentielConversion, 10);
+      if (!isNaN(parsedScore)) merged.scorePotentielConversion = parsedScore;
+    }
+    merged.dateProchaineRelance = merged.dateProchaineRelance || merged.dateRelance || '';
+    merged.dateRelance = merged.dateRelance || merged.dateProchaineRelance || '';
+    merged.origineLead = merged.origineLead || merged.sourceOpportunite || 'Service Client';
+    merged.sourceOpportunite = merged.sourceOpportunite || merged.origineLead || '';
+    const sharedUrl = merged.lienStockagePartageDevis || merged.photoDataUrl || '';
+    merged.lienStockagePartageDevis = sharedUrl;
+    merged.photoDataUrl = merged.photoDataUrl || sharedUrl;
   } else if (tabType === 'satisfaction') {
     merged.id = merged.id || `rev_${rowIndexZeroBased + 2}`;
     merged.clientName = merged.clientName || '';
@@ -4177,14 +4256,47 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.date = enriched.date || enriched.dateStr || '';
     enriched.pdfFileName = enriched.pdfFileName || enriched.pdfName || '';
     enriched.pdfDataUrl = enriched.pdfDataUrl || enriched.pdfUrl || '';
+  } else if (tabType === 'crm') {
+    enriched.reference = enriched.reference || enriched.id || '';
+    enriched.id = enriched.id || enriched.reference || '';
+    enriched.dateOuverture = enriched.dateOuverture || enriched.date || '';
+    enriched.date = enriched.date || enriched.dateOuverture || '';
+    enriched.dateDerniereActualisation = enriched.dateDerniereActualisation || enriched.dateOuverture || '';
+    enriched.situation = enriched.situation || (enriched.status === 'Résolu' ? 'Terminé' : enriched.status) || 'Nouveau';
+    enriched.status = enriched.status || enriched.situation || 'Nouveau';
+    enriched.categorie = enriched.categorie || enriched.crmCategory || 'Sans Catégorie';
+    enriched.crmCategory = enriched.crmCategory || enriched.categorie || '';
+    enriched.client = enriched.client || enriched.entreprise || enriched.customClientName || '';
+    enriched.entreprise = enriched.entreprise || enriched.client || '';
+    enriched.prenomNom = enriched.prenomNom || enriched.nomPrenom || '';
+    enriched.nomPrenom = enriched.nomPrenom || enriched.prenomNom || '';
+    enriched.telephone = enriched.telephone || enriched.phone || '';
+    enriched.description = enriched.description || enriched.message || '';
+    enriched.message = enriched.message || enriched.description || '';
+    enriched.totalAffaireHT = enriched.totalAffaireHT ?? enriched.montantEstime ?? '';
+    enriched.montantEstime = enriched.montantEstime ?? enriched.totalAffaireHT ?? '';
+    enriched.scorePotentielConversion = enriched.scorePotentielConversion ?? enriched.probabilite ?? '';
+    enriched.probabilite = enriched.probabilite ?? enriched.scorePotentielConversion ?? '';
+    enriched.dateProchaineRelance = enriched.dateProchaineRelance || enriched.dateRelance || '';
+    enriched.dateRelance = enriched.dateRelance || enriched.dateProchaineRelance || '';
+    enriched.origineLead = enriched.origineLead || enriched.sourceOpportunite || '';
+    enriched.sourceOpportunite = enriched.sourceOpportunite || enriched.origineLead || '';
+    enriched.lienStockagePartageDevis = enriched.lienStockagePartageDevis || enriched.photoDataUrl || '';
+    enriched.photoDataUrl = enriched.photoDataUrl || enriched.lienStockagePartageDevis || '';
   } else if (tabType === 'ticketsCaisse') {
     enriched.user = enriched.user || enriched.techName || '';
+    enriched.techName = enriched.techName || enriched.user || '';
     enriched.merchant = enriched.merchant || enriched.title || '';
+    enriched.title = enriched.title || enriched.merchant || '';
     enriched.date = enriched.date || enriched.dateStr || '';
+    enriched.dateStr = enriched.dateStr || enriched.date || '';
     enriched.amountHT = enriched.amountHT ?? enriched.amountHt ?? 0;
     enriched.tva = enriched.tva ?? enriched.amountTva ?? 0;
     enriched.amount = enriched.amount ?? enriched.amountTtc ?? 0;
     enriched.receiptUrl = enriched.receiptUrl || enriched.photoUrl || '';
+    enriched.photoUrl = enriched.photoUrl || enriched.receiptUrl || '';
+    enriched.category = enriched.category || 'Frais';
+    enriched.status = enriched.status || 'Validé';
   } else if (tabType === 'ged') {
     enriched.date = enriched.date || enriched.dateStr || '';
   } else if (tabType === 'messagesInternes') {
@@ -4800,7 +4912,35 @@ export async function fetchTenantSheetCollection(
     try {
       const overlay = loadMirrorOverlay(tenantId, tabType, extracted.spreadsheetId);
       const rawMatrix = await fetchRawSheetMatrix(spreadsheetUrl);
-      const hasRemoteHeaders = Boolean(rawMatrix && rawMatrix.headers && rawMatrix.headers.length > 0);
+      const isValidHeaderRow = (row0: string[] | undefined): boolean => {
+        if (!row0 || row0.length === 0) return false;
+        const nonEmpty = row0.map(c => String(c ?? '').trim()).filter(Boolean);
+        if (nonEmpty.length === 0) return false;
+        // A data row with a serialized _json payload in its last column is never a header row
+        if (nonEmpty.some(c => c.startsWith('{"') && c.endsWith('}'))) return false;
+        if (nonEmpty.some(c => c.toLowerCase() === '_json')) return true;
+        if (tabType === 'defibrillateurs') {
+          return buildColumnMatches(row0, DEFIB_CANONICAL_HEADERS).length >= 2;
+        }
+        if (tabType === 'autresMateriels') {
+          return buildColumnMatches(row0, AUTRES_CANONICAL_HEADERS).length >= 2;
+        }
+        if (tabType === 'clients') {
+          return buildColumnMatches(row0, CLIENTS_CANONICAL_HEADERS).length >= 2;
+        }
+        if (GENERIC_CANONICAL_HEADERS[tabType]) {
+          const matched = resolveGenericColumnFieldMap(row0, tabType);
+          return matched.size >= Math.min(2, GENERIC_CANONICAL_HEADERS[tabType]!.length);
+        }
+        return true;
+      };
+
+      const rawRow0HasContent = Boolean(
+        rawMatrix &&
+          Array.isArray(rawMatrix.headers) &&
+          rawMatrix.headers.some(c => String(c ?? '').trim() !== '')
+      );
+      const hasRemoteHeaders = Boolean(rawMatrix && isValidHeaderRow(rawMatrix.headers));
 
       const defaultHeaders =
         tabType === 'defibrillateurs'
@@ -4813,7 +4953,7 @@ export async function fetchTenantSheetCollection(
 
       const headers = hasRemoteHeaders
         ? rawMatrix!.headers
-        : (overlay.headers.length > 0 ? overlay.headers : defaultHeaders);
+        : (overlay.headers.length > 0 && isValidHeaderRow(overlay.headers) ? overlay.headers : defaultHeaders);
 
       if (hasRemoteHeaders && JSON.stringify(overlay.headers) !== JSON.stringify(rawMatrix!.headers)) {
         overlay.headers = rawMatrix!.headers;
@@ -4833,9 +4973,17 @@ export async function fetchTenantSheetCollection(
           : [];
       const precomputedMatches = canonicalDefs.length > 0 ? buildColumnMatches(headers, canonicalDefs) : [];
 
-      if (rawMatrix && Array.isArray(rawMatrix.rows)) {
-        for (let i = 0; i < rawMatrix.rows.length; i++) {
-          const r = rawMatrix.rows[i];
+      // If Row 1 in the sheet was actually a data row written without headers, include it as the first data row!
+      const effectiveRows =
+        rawMatrix && Array.isArray(rawMatrix.rows)
+          ? !hasRemoteHeaders && rawRow0HasContent
+            ? [rawMatrix.headers, ...rawMatrix.rows]
+            : rawMatrix.rows
+          : [];
+
+      if (effectiveRows.length > 0) {
+        for (let i = 0; i < effectiveRows.length; i++) {
+          const r = effectiveRows[i];
           if (!r || r.every(c => !c || String(c).trim() === '')) continue;
 
           const mapped =
@@ -5016,6 +5164,7 @@ export async function fetchTenantSheetCollection(
         stats,
         fetchedAt: Date.now(),
         spreadsheetUrl,
+        hasRemoteHeaders,
       };
 
       if (rawMatrix !== null || baseItems.length > 0 || !prevCached) {
@@ -5023,6 +5172,55 @@ export async function fetchTenantSheetCollection(
       }
       if (rawMatrix !== null || baseItems.length > 0) {
         saveDiskSnapshotAsync(cacheKey, snapshotToStore);
+      }
+
+      // If remote sheet had data written into Row 1 without headers, auto-repair Row 1 with canonical headers and shift data to Row 2+
+      if (!hasRemoteHeaders && rawRow0HasContent && baseItems.length > 0) {
+        setImmediate(async () => {
+          try {
+            const accessToken = await getServiceAccountAccessToken();
+            if (!accessToken) return;
+            const sheetTitle = await resolveSheetTabTitle(extracted.spreadsheetId, extracted.gid);
+            const rangePrefix = buildSheetRangePrefix(sheetTitle);
+            const lastColLetter = columnIndexToLetter(headers.length - 1);
+            const repairedRows = baseItems.map((it, idx) => {
+              it._sheetRowNumber = idx + 2;
+              return tabType === 'defibrillateurs'
+                ? mapDefibToRow(headers, it)
+                : tabType === 'autresMateriels'
+                ? mapAutreMaterielToRow(headers, it)
+                : tabType === 'clients'
+                ? mapClientToRow(headers, it)
+                : mapGenericRecordToRow(headers, it, tabType);
+            });
+            const allValues = [headers, ...repairedRows];
+            const res = await fetchWithRetry(
+              `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchUpdate`,
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  valueInputOption: 'USER_ENTERED',
+                  data: [
+                    {
+                      range: `${rangePrefix}A1:${lastColLetter}${allValues.length}`,
+                      values: allValues,
+                    },
+                  ],
+                }),
+                signal: AbortSignal.timeout(12000),
+              },
+              2
+            );
+            if (res.ok) {
+              snapshotToStore.hasRemoteHeaders = true;
+              saveDiskSnapshotAsync(cacheKey, snapshotToStore);
+            }
+          } catch (_) {}
+        });
       }
 
       return {
@@ -5400,8 +5598,19 @@ async function fetchLightweightSheetContextForColdUpsert(
       const batchJson = await batchRes.json();
       const valueRanges: any[] = Array.isArray(batchJson?.valueRanges) ? batchJson.valueRanges : [];
       if (valueRanges[0]?.values?.[0]?.length > 0) {
-        headers = valueRanges[0].values[0].map((c: any) => String(c ?? '').trim());
-        hasRemoteHeaders = true;
+        const candidateHeaders = valueRanges[0].values[0].map((c: any) => String(c ?? '').trim());
+        const nonEmpty = candidateHeaders.filter(Boolean);
+        const looksLikeDataRow = nonEmpty.some((c: string) => c.startsWith('{"') && c.endsWith('}'));
+        const hasValidMatch =
+          !looksLikeDataRow &&
+          nonEmpty.length > 0 &&
+          (nonEmpty.some((c: string) => c.toLowerCase() === '_json') ||
+            !GENERIC_CANONICAL_HEADERS[tabType] ||
+            resolveGenericColumnFieldMap(candidateHeaders, tabType).size >= Math.min(2, GENERIC_CANONICAL_HEADERS[tabType]!.length));
+        if (hasValidMatch) {
+          headers = candidateHeaders;
+          hasRemoteHeaders = true;
+        }
       }
       uniqueCandidateRows.forEach((rn, i) => {
         const vr = valueRanges[i + 1];
@@ -5546,8 +5755,8 @@ export async function upsertRecordsToTenantSheet(
 
     if (warmCached && warmCached.headers.length > 0) {
       headers = warmCached.headers;
-      hasRemoteHeaders = true;
-      // Check if any record is missing from warmCached so we can verify against the remote sheet before appending a duplicate
+      hasRemoteHeaders = warmCached.hasRemoteHeaders === true;
+      // Check if any record is missing from warmCached or if remote sheet had no headers yet
       const isSingletonCheck =
         tabType === 'reglages' ||
         tabType === 'apparenceRapportsPdf' ||
@@ -5565,7 +5774,7 @@ export async function upsertRecordsToTenantSheet(
         if (warmCached.items.some(b => b && getRecordLookupKeys(b, tabType).some(bk => recKeys.includes(bk)))) return false;
         return true;
       });
-      if (hasUnmatchedInWarmCache && accessToken) {
+      if ((hasUnmatchedInWarmCache || !hasRemoteHeaders) && accessToken) {
         const lightCtx = await fetchLightweightSheetContextForColdUpsert(
           extracted.spreadsheetId,
           extracted.gid,
@@ -5574,6 +5783,7 @@ export async function upsertRecordsToTenantSheet(
           records,
           accessToken
         );
+        hasRemoteHeaders = lightCtx.hasRemoteHeaders;
         if (lightCtx.hasRemoteHeaders && lightCtx.headers.length > 0) {
           headers = lightCtx.headers;
         }
@@ -5734,9 +5944,9 @@ export async function upsertRecordsToTenantSheet(
         const rangePrefix = buildSheetRangePrefix(sheetTitle);
         const lastColLetter = columnIndexToLetter(headers.length - 1);
 
-        // If remote sheet was completely blank (no header row), write the canonical header row first
-        if (!hasRemoteHeaders && (!warmCached || warmCached.items.length === 0)) {
-          await fetchWithRetry(
+        // If remote sheet was blank or lacked a valid header row in Row 1, write the canonical header row to Row 1 first
+        if (!hasRemoteHeaders) {
+          const headerRes = await fetchWithRetry(
             `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchUpdate`,
             {
               method: 'POST',
@@ -5756,7 +5966,11 @@ export async function upsertRecordsToTenantSheet(
               signal: AbortSignal.timeout(10000),
             },
             2
-          ).catch(() => {});
+          ).catch(() => null);
+          if (headerRes && headerRes.ok) {
+            hasRemoteHeaders = true;
+            if (warmCached) warmCached.hasRemoteHeaders = true;
+          }
         }
 
         if (rowsToUpdateRemote.length > 0) {

@@ -1,4 +1,4 @@
-import { fetchCollectionFromFirestore } from '../firebase';
+import { fetchCollectionFromFirestore, uploadMediaToFirebase } from '../firebase';
 
 export interface GoogleDriveStatus {
   active: boolean;
@@ -6,14 +6,98 @@ export interface GoogleDriveStatus {
   accessToken: string;
 }
 
+export function resolveEffectiveTenantId(explicitTenantId?: string): string {
+  if (explicitTenantId && explicitTenantId.trim() && explicitTenantId.trim() !== 'demo') {
+    return explicitTenantId.trim();
+  }
+  if (typeof window !== 'undefined') {
+    const direct = localStorage.getItem('defib_tenant_id') || localStorage.getItem('tenant_id');
+    if (direct && direct.trim() && direct.trim() !== 'demo') {
+      return direct.trim();
+    }
+    try {
+      const techRaw = localStorage.getItem('defib_active_tech_session');
+      if (techRaw) {
+        const parsed = JSON.parse(techRaw);
+        const tid = parsed?.tenantId || parsed?.envId;
+        if (tid && String(tid).trim() && String(tid).trim() !== 'demo') {
+          return String(tid).trim();
+        }
+      }
+    } catch (_) {}
+    try {
+      const userRaw = localStorage.getItem('defib_logged_user');
+      if (userRaw) {
+        const parsed = JSON.parse(userRaw);
+        const tid = parsed?.tenantId || parsed?.envId;
+        if (tid && String(tid).trim() && String(tid).trim() !== 'demo') {
+          return String(tid).trim();
+        }
+      }
+    } catch (_) {}
+    if (direct && direct.trim()) return direct.trim();
+  }
+  return explicitTenantId?.trim() || 'demo';
+}
+
 export async function fetchGoogleDriveStatus(tenantId?: string): Promise<GoogleDriveStatus> {
-  const activeTenant = tenantId || (typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || localStorage.getItem('tenant_id')) : null) || 'demo';
+  const activeTenant = resolveEffectiveTenantId(tenantId);
+
+  const cacheLocally = (tid: string, active: boolean, email: string, accessToken: string) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const targets = Array.from(new Set([tid, tid.toUpperCase(), tid.toLowerCase()])).filter(Boolean);
+      for (const t of targets) {
+        localStorage.setItem(`defib_${t}_google_drive_active`, active ? 'true' : 'false');
+        if (email) localStorage.setItem(`defib_${t}_google_drive_email`, email);
+        if (accessToken) localStorage.setItem(`defib_${t}_google_drive_token`, accessToken);
+      }
+    } catch (_) {}
+  };
+
+  // 1. Query authoritative server endpoint first so all users of the tenant share the exact same connector state
+  if (typeof fetch !== 'undefined') {
+    try {
+      const res = await fetch(
+        `/api/sync-collection?collectionName=api_connectors&tenantId=${encodeURIComponent(activeTenant)}&t=${Date.now()}`,
+        { cache: 'no-store' }
+      );
+      if (res.ok) {
+        const json = await res.json();
+        const rawData = json?.value;
+        const data = Array.isArray(rawData) ? rawData[0] : rawData;
+        if (data && typeof data === 'object' && data.googleDriveActive !== undefined) {
+          const active = Boolean(data.googleDriveActive);
+          const email =
+            data.googleDriveEmail ||
+            (typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_google_drive_email`) : '') ||
+            '';
+          const accessToken =
+            data.googleDriveAccessToken ||
+            (typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_google_drive_token`) : '') ||
+            '';
+          cacheLocally(activeTenant, active, email, accessToken);
+          return { active, email, accessToken };
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 2. Fallback to Firestore helper
   try {
-    const data = await fetchCollectionFromFirestore<any>('api_connectors', activeTenant);
+    const rawData = await fetchCollectionFromFirestore<any>('api_connectors', activeTenant);
+    const data = Array.isArray(rawData) ? rawData[0] : rawData;
     if (data && typeof data === 'object' && data.googleDriveActive !== undefined) {
       const active = Boolean(data.googleDriveActive);
-      const email = data.googleDriveEmail || (typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_google_drive_email`) : '') || '';
-      const accessToken = data.googleDriveAccessToken || (typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_google_drive_token`) : '') || '';
+      const email =
+        data.googleDriveEmail ||
+        (typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_google_drive_email`) : '') ||
+        '';
+      const accessToken =
+        data.googleDriveAccessToken ||
+        (typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_google_drive_token`) : '') ||
+        '';
+      cacheLocally(activeTenant, active, email, accessToken);
       return { active, email, accessToken };
     }
   } catch (e) {
@@ -100,38 +184,32 @@ export const makeFilePubliclyReadable = async (accessToken: string, fileId: stri
 
 export const uploadFileToGoogleDrive = async (
   accessTokenOrFile: string | File,
-  fileOrFolder?: File | string
+  fileOrFolder?: File | string,
+  explicitTenantId?: string
 ): Promise<string> => {
   let accessToken = '';
   let file: File;
 
   if (typeof accessTokenOrFile !== 'string') {
     file = accessTokenOrFile;
-    const status = await fetchGoogleDriveStatus();
+    const status = await fetchGoogleDriveStatus(explicitTenantId);
     accessToken = status.accessToken;
   } else {
     accessToken = accessTokenOrFile;
     file = fileOrFolder as File;
     if (!accessToken) {
-      const status = await fetchGoogleDriveStatus();
+      const status = await fetchGoogleDriveStatus(explicitTenantId);
       accessToken = status.accessToken;
     }
   }
 
-  if (!accessToken) {
-    throw new Error("Le connecteur Google Drive n'est pas configuré ou est inactif. Veuillez l'activer dans les réglages.");
-  }
-
   // Support mock for testing/preview environments if necessary
-  if (accessToken.startsWith('mock_')) {
+  if (accessToken && accessToken.startsWith('mock_')) {
     return `https://drive.google.com/file/d/mock_${Date.now()}/view`;
   }
 
-  try {
-    // 1. Find or create the Defibeo folder
-    const folderId = await getOrCreateDefibeoFolder(accessToken);
-
-    // 2. Upload file directly inside Defibeo folder
+  const executeDriveUpload = async (token: string): Promise<string> => {
+    const folderId = await getOrCreateDefibeoFolder(token);
     const metadata = {
       name: file.name,
       mimeType: file.type || 'application/octet-stream',
@@ -150,7 +228,7 @@ export const uploadFileToGoogleDrive = async (
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${token}`,
         },
         body: formData,
       }
@@ -158,36 +236,36 @@ export const uploadFileToGoogleDrive = async (
 
     if (!response.ok) {
       const errorText = await response.text();
-      const isAuthError = response.status === 401 || 
-                          errorText.includes('UNAUTHENTICATED') || 
-                          errorText.includes('authError') || 
-                          errorText.includes('invalid credentials') || 
-                          errorText.includes('Invalid Credentials');
-      
-      if (isAuthError) {
-        throw new Error("Votre session Google Drive a expiré ou vos identifiants d'accès ne sont plus valides. Veuillez désactiver puis réactiver le connecteur Google Drive dans l'onglet des réglages de l'application pour renouveler vos autorisations d'accès.");
-      }
-
-      throw new Error(`Échec de l'upload sur Google Drive : ${response.statusText} - ${errorText}`);
+      throw new Error(`Échec de l'upload sur Google Drive (${response.status}) : ${errorText}`);
     }
 
     const result = await response.json();
-    
-    // 3. Make file accessible by link to avoid permission request dialogs for viewers
     if (result.id) {
-      await makeFilePubliclyReadable(accessToken, result.id);
+      await makeFilePubliclyReadable(token, result.id);
     }
-
     return result.webViewLink || `https://drive.google.com/file/d/${result.id}/view`;
-  } catch (err: any) {
-    console.error("Google Drive Upload Error:", err);
-    const isAuthError = err?.message?.includes('401') || 
-                        err?.message?.includes('UNAUTHENTICATED') || 
-                        err?.message?.includes('authError') ||
-                        err?.message?.includes('credentials');
-    if (isAuthError) {
-      throw new Error("Session Google Drive expirée ou invalide. Veuillez désactiver puis réactiver le connecteur Google Drive dans les réglages pour renouveler vos accès.");
+  };
+
+  if (accessToken) {
+    try {
+      return await executeDriveUpload(accessToken);
+    } catch (err: any) {
+      console.warn("Google Drive upload attempt failed, checking for refreshed tenant token or server media fallback:", err);
+      try {
+        const freshStatus = await fetchGoogleDriveStatus(explicitTenantId);
+        if (freshStatus.accessToken && freshStatus.accessToken !== accessToken) {
+          return await executeDriveUpload(freshStatus.accessToken);
+        }
+      } catch (_) {}
     }
-    throw err;
   }
+
+  // Seamless fallback to server-hosted media URL so tenant users never fail to upload or retrieve a source URL even if the OAuth token expired
+  const fallbackUrl = await uploadMediaToFirebase(file, 'documents', file?.name);
+  if (fallbackUrl) {
+    return fallbackUrl;
+  }
+
+  throw new Error("Impossible d'uploader le fichier et de récupérer l'URL source.");
 };
+

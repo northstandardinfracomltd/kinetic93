@@ -9,6 +9,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { fetchCollectionFromFirestore, uploadMediaToFirebase } from '../firebase';
+import { fetchGoogleDriveStatus } from '../utils/googleDrive';
 import { generateReportModerationComment } from '../utils/moderationComment';
 import { playTechSound3 } from '../utils/technicianAudio';
 
@@ -1398,34 +1399,19 @@ export default function GmaoCorrectionForm({
   }, [report, snapshot?.identifiant, interventionReference]);
 
   useEffect(() => {
-    // Load Google Drive credentials from Firestore
-    const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
-    fetchCollectionFromFirestore<any>('api_connectors', activeTenant)
-      .then(data => {
-        if (data) {
-          if (data.googleDriveActive !== undefined) setGoogleDriveActive(data.googleDriveActive);
-          if (data.googleDriveEmail !== undefined) setGoogleDriveEmail(data.googleDriveEmail);
-          if (data.googleDriveAccessToken !== undefined) setGoogleDriveAccessToken(data.googleDriveAccessToken);
-        } else {
-          // Fallback to localStorage
-          const driveActive = localStorage.getItem('defib_google_drive_active') === 'true';
-          const driveEmail = localStorage.getItem('defib_google_drive_email') || '';
-          const driveToken = localStorage.getItem('defib_google_drive_token') || '';
-          setGoogleDriveActive(driveActive);
-          setGoogleDriveEmail(driveEmail);
-          setGoogleDriveAccessToken(driveToken);
-        }
-      })
-      .catch(err => {
-        console.error('Error loading Google Drive credentials from Firestore:', err);
-        // Fallback to localStorage on error
-        const driveActive = localStorage.getItem('defib_google_drive_active') === 'true';
-        const driveEmail = localStorage.getItem('defib_google_drive_email') || '';
-        const driveToken = localStorage.getItem('defib_google_drive_token') || '';
-        setGoogleDriveActive(driveActive);
-        setGoogleDriveEmail(driveEmail);
-        setGoogleDriveAccessToken(driveToken);
-      });
+    const refreshDrive = () => {
+      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      fetchGoogleDriveStatus(activeTenant)
+        .then(status => {
+          setGoogleDriveActive(status.active);
+          setGoogleDriveEmail(status.email);
+          setGoogleDriveAccessToken(status.accessToken);
+        })
+        .catch(() => {});
+    };
+    refreshDrive();
+    window.addEventListener('google-drive-status-changed', refreshDrive);
+    return () => window.removeEventListener('google-drive-status-changed', refreshDrive);
   }, []);
 
   useEffect(() => {

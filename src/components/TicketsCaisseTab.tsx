@@ -4,6 +4,7 @@ import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { t } from '../utils/translate';
 import { uploadMediaToFirebase } from '../firebase';
+import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from '../utils/googleDrive';
 
 interface Expense {
   id: string;
@@ -97,17 +98,54 @@ export default function TicketsCaisseTab({
 
     let finalPhotoUrl = photoUrl;
     if (selectedPhotoFile) {
-      finalPhotoUrl = await uploadMediaToFirebase(
-        selectedPhotoFile,
-        'photos',
-        selectedPhotoFile.name || `ticket_caisse_${Date.now()}.jpg`
-      );
+      try {
+        const driveStatus = await fetchGoogleDriveStatus();
+        if (driveStatus.active) {
+          finalPhotoUrl = await uploadFileToGoogleDrive(driveStatus.accessToken, selectedPhotoFile);
+        } else {
+          finalPhotoUrl = await uploadMediaToFirebase(
+            selectedPhotoFile,
+            'photos',
+            selectedPhotoFile.name || `ticket_caisse_${Date.now()}.jpg`
+          );
+        }
+      } catch (err) {
+        console.warn('Fallback upload for receipt photo:', err);
+        finalPhotoUrl = await uploadMediaToFirebase(
+          selectedPhotoFile,
+          'photos',
+          selectedPhotoFile.name || `ticket_caisse_${Date.now()}.jpg`
+        );
+      }
     } else if (finalPhotoUrl && finalPhotoUrl.startsWith('data:')) {
-      finalPhotoUrl = await uploadMediaToFirebase(
-        finalPhotoUrl,
-        'photos',
-        `ticket_caisse_${Date.now()}.jpg`
-      );
+      try {
+        const driveStatus = await fetchGoogleDriveStatus();
+        if (driveStatus.active) {
+          const arr = finalPhotoUrl.split(',');
+          const mimeMatch = arr[0].match(/:(.*?);/);
+          const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+          const bstr = atob(arr[1] || '');
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) u8arr[n] = bstr.charCodeAt(n);
+          const ext = mime.includes('png') ? 'png' : mime.includes('pdf') ? 'pdf' : 'jpg';
+          const receiptFile = new File([u8arr], `ticket_caisse_${Date.now()}.${ext}`, { type: mime });
+          finalPhotoUrl = await uploadFileToGoogleDrive(driveStatus.accessToken, receiptFile);
+        } else {
+          finalPhotoUrl = await uploadMediaToFirebase(
+            finalPhotoUrl,
+            'photos',
+            `ticket_caisse_${Date.now()}.jpg`
+          );
+        }
+      } catch (err) {
+        console.warn('Fallback dataUrl upload for receipt photo:', err);
+        finalPhotoUrl = await uploadMediaToFirebase(
+          finalPhotoUrl,
+          'photos',
+          `ticket_caisse_${Date.now()}.jpg`
+        );
+      }
     }
 
     const finalDate = dateStr || new Date().toISOString().split('T')[0];

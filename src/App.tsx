@@ -1044,6 +1044,39 @@ export default function App() {
         (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) ||
         'demo';
 
+      const tabToFieldKey: Record<string, any> = {
+        defibs: 'spreadsheetDefibrillateurs',
+        autres: 'spreadsheetAutresMateriels',
+        clients: 'spreadsheetClients',
+        ged: 'spreadsheetGed',
+        pointages: 'spreadsheetPointages',
+        achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
+        releveConcurrentiel: 'spreadsheetReleveConcurrentiel',
+        ticketsCaisse: 'spreadsheetTicketsCaisse',
+        stocksCentrale: 'spreadsheetStocksCentrale',
+        stocksDistribues: 'spreadsheetStocksDistribues',
+        crm: 'spreadsheetCrm',
+        formations: 'spreadsheetFormations',
+        stagiaires: 'spreadsheetStagiaires',
+        emargements: 'spreadsheetEmargements',
+        variablesRapports: 'spreadsheetVariablesRapports',
+        interventionsAValider: 'spreadsheetInterventionsAValider',
+        rapportsArchive: 'spreadsheetRapportsArchive',
+        missionsTerrain: 'spreadsheetMissionsTerrain',
+        tourneesTech: 'spreadsheetTourneesTech',
+        canalMessages: 'spreadsheetCanalMessages',
+        identiteEntreprise: 'spreadsheetIdentiteEntreprise',
+        membresEquipe: 'spreadsheetMembresEquipe',
+        groupesTravail: 'spreadsheetGroupesTravail',
+        connecteurs: 'spreadsheetConnecteurs',
+        apparenceRapportsPdf: 'spreadsheetApparenceRapportsPdf',
+        communicationPortailClient: 'spreadsheetCommunicationPortailClient',
+        observateurActionsSuspectes: 'spreadsheetObservateurActionsSuspectes',
+        exportations: 'spreadsheetExportations',
+      };
+      const fieldKey = tabToFieldKey[tabType];
+      const resolvedSpreadsheetUrl = fieldKey ? getTenantSpreadsheetUrl(fieldKey) : '';
+
       const extractKeys = (item: any): string[] => {
         if (!item || typeof item !== 'object') return [];
         const out: string[] = [];
@@ -1084,6 +1117,7 @@ export default function App() {
           body: JSON.stringify({
             tenantId: effectiveTid,
             type: tabType,
+            spreadsheetUrl: resolvedSpreadsheetUrl || undefined,
             keys: Array.from(new Set(deletedKeys)),
           }),
         }).catch(() => {});
@@ -1111,6 +1145,7 @@ export default function App() {
           body: JSON.stringify({
             tenantId: effectiveTid,
             type: tabType,
+            spreadsheetUrl: resolvedSpreadsheetUrl || undefined,
             records: changedRecords,
           }),
         }).catch(() => {});

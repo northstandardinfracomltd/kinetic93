@@ -4899,23 +4899,49 @@ async function warmupDefibrillateursStore() {
 
   app.post("/api/firebase-media", (req, res) => {
     try {
-      const { mediaId, category, fileName, dataUrl, createdAt } = req.body || {};
+      const { mediaId, tenantId, category, fileName, ext, dataUrl, createdAt } = req.body || {};
       if (!mediaId || !dataUrl) {
         return res.status(400).json({ error: "mediaId et dataUrl sont requis." });
       }
-      const safeId = String(mediaId).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const rawIdStr = String(mediaId).trim();
+      const strippedId = rawIdStr.replace(/\.[a-zA-Z0-9]{2,5}$/, '');
+      const baseId = strippedId.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeRawId = rawIdStr.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const cleanExt = String(ext || (rawIdStr.match(/\.([a-zA-Z0-9]{2,5})$/)?.[1]) || 'png')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '') || 'png';
+
       const payload = {
-        mediaId: safeId,
+        id: baseId,
+        mediaId: baseId,
+        tenantId: tenantId || 'demo',
         category: category || 'photos',
-        fileName: fileName || safeId,
+        fileName: fileName || `${baseId}.${cleanExt}`,
+        ext: cleanExt,
         dataUrl,
         createdAt: createdAt || new Date().toISOString()
       };
       try {
-        fs.writeFileSync(path.join(MEDIA_ASSETS_DIR, `${safeId}.json`), JSON.stringify(payload), 'utf-8');
+        fs.writeFileSync(path.join(MEDIA_ASSETS_DIR, `${baseId}.json`), JSON.stringify(payload), 'utf-8');
+        if (safeRawId !== baseId) {
+          fs.writeFileSync(path.join(MEDIA_ASSETS_DIR, `${safeRawId}.json`), JSON.stringify(payload), 'utf-8');
+        }
       } catch (_) {}
-      serverMemoryStore.set(`media_asset_${safeId}`, payload);
-      return res.json({ status: "success", mediaId: safeId });
+      serverMemoryStore.set(`media_asset_${baseId}`, payload);
+      serverMemoryStore.set(`media_asset_${safeRawId}`, payload);
+      serverMemoryStore.set(`media_${baseId}`, payload);
+
+      try {
+        const docRef = doc(db, 'appData', `media_${baseId}`);
+        safeServerSetDoc(docRef, payload).catch(() => {});
+      } catch (_) {}
+
+      const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+      const proto = forwardedProto || (req.secure ? 'https' : 'https');
+      const host = req.get('host') || 'localhost:3000';
+      const fullUrl = `${proto}://${host}/api/firebase-media/${baseId}.${cleanExt}`;
+
+      return res.json({ status: "success", mediaId: baseId, url: fullUrl });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -4923,25 +4949,58 @@ async function warmupDefibrillateursStore() {
 
   app.get("/api/firebase-media/:mediaId", async (req, res) => {
     try {
-      const safeId = String(req.params.mediaId || '').replace(/[^a-zA-Z0-9_-]/g, '_');
-      if (!safeId) return res.status(400).send("Invalid mediaId");
+      const rawParam = String(req.params.mediaId || '').trim();
+      const strippedParam = rawParam.replace(/\.[a-zA-Z0-9]{2,5}$/, '');
+      const baseId = strippedParam.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeRawId = rawParam.replace(/[^a-zA-Z0-9_-]/g, '_');
+      if (!baseId) return res.status(400).send("Invalid mediaId");
 
-      let asset: any = serverMemoryStore.get(`media_asset_${safeId}`);
+      let asset: any =
+        serverMemoryStore.get(`media_asset_${baseId}`) ||
+        serverMemoryStore.get(`media_asset_${safeRawId}`) ||
+        serverMemoryStore.get(`media_${baseId}`);
+
       if (!asset) {
-        const diskPath = path.join(MEDIA_ASSETS_DIR, `${safeId}.json`);
-        if (fs.existsSync(diskPath)) {
-          try {
-            asset = JSON.parse(fs.readFileSync(diskPath, 'utf-8'));
-            serverMemoryStore.set(`media_asset_${safeId}`, asset);
-          } catch (_) {}
+        for (const candidate of [baseId, safeRawId]) {
+          const diskPath = path.join(MEDIA_ASSETS_DIR, `${candidate}.json`);
+          if (fs.existsSync(diskPath)) {
+            try {
+              asset = JSON.parse(fs.readFileSync(diskPath, 'utf-8'));
+              if (asset) {
+                serverMemoryStore.set(`media_asset_${baseId}`, asset);
+                break;
+              }
+            } catch (_) {}
+          }
         }
       }
-      if (!asset && firebaseDb) {
+
+      if (!asset) {
         try {
-          const snap = await withTimeout(getDoc(doc(firebaseDb, 'media_assets', safeId)), 3000, null);
+          for (const docKey of [`media_${baseId}`, `media_${safeRawId}`, `firebase_media_${baseId}`]) {
+            const restRes = await fetchFirestoreDocumentRest(docKey, 2500);
+            const found = restRes.data?.value || restRes.data;
+            if (found && found.dataUrl) {
+              asset = found;
+              serverMemoryStore.set(`media_asset_${baseId}`, asset);
+              try {
+                fs.writeFileSync(path.join(MEDIA_ASSETS_DIR, `${baseId}.json`), JSON.stringify(asset), 'utf-8');
+              } catch (_) {}
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!asset && db) {
+        try {
+          const snap = await withTimeout(getDoc(doc(db, 'appData', `media_${baseId}`)), 2500, null);
           if (snap && snap.exists()) {
-            asset = snap.data();
-            serverMemoryStore.set(`media_asset_${safeId}`, asset);
+            const d = snap.data();
+            asset = d?.value || d;
+            if (asset && asset.dataUrl) {
+              serverMemoryStore.set(`media_asset_${baseId}`, asset);
+            }
           }
         } catch (_) {}
       }
@@ -4949,6 +5008,9 @@ async function warmupDefibrillateursStore() {
       if (!asset || !asset.dataUrl) {
         return res.status(404).send("Media not found");
       }
+
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
       const dataUrlStr = String(asset.dataUrl);
       if (dataUrlStr.startsWith('http://') || dataUrlStr.startsWith('https://')) {
@@ -5429,13 +5491,29 @@ async function warmupDefibrillateursStore() {
               });
             }
           }
+        } else if (collectionName === 'api_connectors' && typeof value === 'object' && !Array.isArray(value)) {
+          const existingInMem = serverMemoryStore.get(collectionKey);
+          const safeExisting = (existingInMem && typeof existingInMem === 'object' && !Array.isArray(existingInMem)) ? existingInMem : {};
+          finalValueToStore = {
+            ...safeExisting,
+            ...value,
+            tenantId: rawTenant,
+            updatedAt: new Date().toISOString(),
+          };
         }
 
         serverMemoryStore.set(collectionKey, finalValueToStore);
         serverStoreTimestamps.set(collectionKey, Date.now());
+        if (rawTenant !== 'demo') {
+          serverMemoryStore.set(`defib_${rawTenant}_${collectionName}`, finalValueToStore);
+          serverStoreTimestamps.set(`defib_${rawTenant}_${collectionName}`, Date.now());
+        }
         
         try {
           persistSingleCollectionToDisk(collectionKey, finalValueToStore);
+          if (rawTenant !== 'demo') {
+            persistSingleCollectionToDisk(`defib_${rawTenant}_${collectionName}`, finalValueToStore);
+          }
         } catch (_) {}
 
         // Map collection aliases in memory and on disk
@@ -5455,8 +5533,15 @@ async function warmupDefibrillateursStore() {
             const aliasKey = tAlias === 'demo' ? cName : `${tAlias.toUpperCase()}_${cName}`;
             serverMemoryStore.set(aliasKey, finalValueToStore);
             serverStoreTimestamps.set(aliasKey, Date.now());
+            if (tAlias !== 'demo') {
+              serverMemoryStore.set(`defib_${tAlias.toUpperCase()}_${cName}`, finalValueToStore);
+              serverStoreTimestamps.set(`defib_${tAlias.toUpperCase()}_${cName}`, Date.now());
+            }
             try {
               persistSingleCollectionToDisk(aliasKey, finalValueToStore);
+              if (tAlias !== 'demo') {
+                persistSingleCollectionToDisk(`defib_${tAlias.toUpperCase()}_${cName}`, finalValueToStore);
+              }
             } catch (_) {}
           }
         }
@@ -5468,15 +5553,19 @@ async function warmupDefibrillateursStore() {
         }
       }
 
-      // Always write non-massive collections (including companyInfo and tenantDatabases for D27/D58) to Firestore
+      // Always write non-massive collections (including companyInfo, tenantDatabases, and api_connectors) to Firestore
       const isMassiveArray = Array.isArray(finalValueToStore) && finalValueToStore.length > 1000;
 
       if (!isMassiveArray && !isServerFirestoreQuotaExhausted()) {
         try {
           const firestoreKeys = new Set<string>([collectionKey]);
+          if (rawTenant !== 'demo') {
+            firestoreKeys.add(`defib_${rawTenant}_${collectionName}`);
+          }
           for (const tAlias of allTenantAliases) {
             if (/^d\d+$/i.test(tAlias)) {
               firestoreKeys.add(`${tAlias.toUpperCase()}_${collectionName}`);
+              firestoreKeys.add(`defib_${tAlias.toUpperCase()}_${collectionName}`);
             }
           }
           for (const fk of firestoreKeys) {

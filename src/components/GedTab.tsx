@@ -97,10 +97,10 @@ export default function GedTab({
     // If Google Drive connector is active, automatically upload and deposit shared URL in the form
     const currentStatus = await fetchGoogleDriveStatus(tenantId);
     const token = currentStatus.accessToken || googleDriveAccessToken;
-    if (currentStatus.active && token) {
+    if (currentStatus.active) {
       setIsUploading(true);
       try {
-        const driveUrl = await uploadFileToGoogleDrive(token, file);
+        const driveUrl = await uploadFileToGoogleDrive(token, file, tenantId);
         setGedFileUrl(driveUrl);
       } catch (err: any) {
         console.error("Google Drive upload error:", err);
@@ -122,7 +122,7 @@ export default function GedTab({
 
     // 1. Google Drive Connector verification
     const currentStatus = await fetchGoogleDriveStatus(tenantId);
-    const isConnectorActive = Boolean(currentStatus.active && (currentStatus.accessToken || googleDriveAccessToken));
+    const isConnectorActive = Boolean(currentStatus.active || googleDriveActive);
 
     if (!isConnectorActive) {
       const errMsg = t("Veuillez activer le connecteur Google Drive pour continuer.");
@@ -146,7 +146,7 @@ export default function GedTab({
 
       setIsUploading(true);
       try {
-        finalDriveUrl = await uploadFileToGoogleDrive(token, selectedGedFile);
+        finalDriveUrl = await uploadFileToGoogleDrive(token, selectedGedFile, tenantId);
         setGedFileUrl(finalDriveUrl);
       } catch (uploadErr: any) {
         setIsUploading(false);

@@ -1413,9 +1413,17 @@ export async function fetchCollectionFromFirestore<T>(
       }
 
       const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
+      const isServerAuthoritativeObjectCol =
+        collectionName === 'api_connectors' ||
+        collectionName === 'companyInfo' ||
+        collectionName === 'company_info' ||
+        collectionName === 'tenantDatabases' ||
+        collectionName === 'crm_settings';
 
-      // 2. Check if any candidate has a populated array
-      const populatedCandidate = metaSnaps.find(m => m.exists && Array.isArray(m.value) && m.value.length > 0);
+      // 2. Check if any candidate has a populated array (excluding singleton object collections)
+      const populatedCandidate = !isServerAuthoritativeObjectCol
+        ? metaSnaps.find(m => m.exists && Array.isArray(m.value) && m.value.length > 0)
+        : undefined;
       if (populatedCandidate) {
         let combinedVal = populatedCandidate.value;
         if (collectionName === 'stocks' || collectionName === 'distributed_stocks' || collectionName === 'stock' || collectionName === 'distributedStocks') {
@@ -1445,8 +1453,11 @@ export async function fetchCollectionFromFirestore<T>(
       }
 
       // 3. Check if any candidate has an object or primitive (excluding defib collection which is an array catalog)
+      // Note: For tenant singleton configs (api_connectors, companyInfo, tenantDatabases, crm_settings),
+      // the backend server relay (/api/sync-collection) receives all writes first and is authoritative;
+      // only fall back to direct Firestore object if server relay is unreachable or empty.
       const otherCandidate = metaSnaps.find(m => !isDefibCol && m.exists && m.value !== undefined && m.value !== null);
-      if (otherCandidate) {
+      if (otherCandidate && !isServerAuthoritativeObjectCol) {
         const sanitizedVal = filterCollectionForTenant(otherCandidate.value as T, collectionName, activeTenantId);
         idbSet(otherCandidate.key, sanitizedVal).catch(() => {});
         idbSet(`${activeTenantId}_${collectionName}`, sanitizedVal).catch(() => {});
@@ -1676,10 +1687,29 @@ export async function fetchCollectionFromFirestore<T>(
               // Do not overwrite local cache with synthetic default fallback before checking Strategy 3
             } else {
               // Non-empty object (e.g. companyInfo, api_connectors, tenantDatabases)
+              if (collectionName === 'api_connectors' && typeof window !== 'undefined' && window.localStorage) {
+                try {
+                  const connObj = val as any;
+                  if (connObj.googleDriveActive !== undefined) {
+                    localStorage.setItem(`defib_${activeTenantId}_google_drive_active`, String(Boolean(connObj.googleDriveActive)));
+                    localStorage.setItem('defib_google_drive_active', String(Boolean(connObj.googleDriveActive)));
+                  }
+                  if (connObj.googleDriveEmail) {
+                    localStorage.setItem(`defib_${activeTenantId}_google_drive_email`, String(connObj.googleDriveEmail));
+                    localStorage.setItem('defib_google_drive_email', String(connObj.googleDriveEmail));
+                  }
+                  if (connObj.googleDriveAccessToken) {
+                    localStorage.setItem(`defib_${activeTenantId}_google_drive_token`, String(connObj.googleDriveAccessToken));
+                    localStorage.setItem('defib_google_drive_token', String(connObj.googleDriveAccessToken));
+                  }
+                } catch (_) {}
+              }
               idbSet(primaryKey, val).catch(() => {});
               idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
               idbSet(`defib_${activeTenantId}_${collectionName}`, val).catch(() => {});
               saveToLocalCache(primaryKey, val);
+              saveToLocalCache(`${activeTenantId}_${collectionName}`, val);
+              saveToLocalCache(`defib_${activeTenantId}_${collectionName}`, val);
               return val;
             }
           }
@@ -3116,80 +3146,79 @@ export async function uploadMediaToFirebase(
 
   const tenantId = getTenantId() || 'demo';
   const cleanCat = (category || 'media').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const extMatch = dataUrl.match(/^data:image\/([a-zA-Z0-9+]+);/i);
-  const ext = extMatch ? (extMatch[1].toLowerCase() === 'jpeg' ? 'jpg' : extMatch[1].toLowerCase()) : 'png';
+  const fileExtMatch = resolvedName.match(/\.([a-zA-Z0-9]{2,5})$/);
+  const mimeMatch = dataUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9+.-]+);/i);
+  let ext = 'png';
+  if (fileExtMatch && fileExtMatch[1]) {
+    ext = fileExtMatch[1].toLowerCase() === 'jpeg' ? 'jpg' : fileExtMatch[1].toLowerCase();
+  } else if (mimeMatch && mimeMatch[1]) {
+    const sub = mimeMatch[1].split('/')[1]?.toLowerCase() || 'png';
+    if (sub === 'jpeg') ext = 'jpg';
+    else if (sub.includes('pdf')) ext = 'pdf';
+    else if (sub.includes('csv')) ext = 'csv';
+    else if (sub.includes('svg')) ext = 'svg';
+    else if (sub.includes('webp')) ext = 'webp';
+    else if (sub.includes('gif')) ext = 'gif';
+    else ext = sub.replace(/[^a-z0-9]/g, '') || 'png';
+  }
   const mediaId = `${tenantId}_${cleanCat}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const fullMediaFileName = `${mediaId}.${ext}`;
 
-  // 1. Try uploading to Firebase Storage if bucket is available
-  let firebaseStorageDownloadUrl = '';
-  try {
-    if (firebaseConfig.storageBucket) {
-      const storage = getStorage(app);
-      const sRef = storageRef(storage, `tenants/${tenantId}/${cleanCat}/${fullMediaFileName}`);
-      const uploadPromise = (async () => {
-        await uploadString(sRef, dataUrl, 'data_url');
-        return await getDownloadURL(sRef);
-      })();
-      const timeoutPromise = new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new Error('Storage upload timeout')), 2200)
-      );
-      const url = await Promise.race([uploadPromise, timeoutPromise]);
-      if (url && url.startsWith('http')) {
-        firebaseStorageDownloadUrl = url.replace(/^http:\/\//i, 'https://');
-      }
-    }
-  } catch (_) {
-    // Fallback to Firestore + Server media URL below
-  }
-
-  // 2. Store in Firestore appData collection (media_<mediaId>) so it is persisted in Firebase
+  // 1. Store in Firestore appData collection (media_<mediaId>) so it is persisted in Firebase without triggering client-side Storage CORS errors
   try {
     if (!isFirestoreQuotaExhausted()) {
       const mediaDocRef = doc(db, 'appData', `media_${mediaId}`);
       setDoc(mediaDocRef, {
         id: mediaId,
+        mediaId,
         tenantId,
         category: cleanCat,
         fileName: resolvedName,
+        ext,
         dataUrl,
-        storageUrl: firebaseStorageDownloadUrl || null,
         createdAt: new Date().toISOString(),
       }).catch(() => {});
     }
   } catch (_) {}
 
-  // 3. Persist to server endpoint /api/firebase-media so the https://.../api/firebase-media/<mediaId>.<ext> URL serves the binary image directly
+  // 2. Persist to server endpoint /api/firebase-media (with retry) so the https://.../api/firebase-media/<mediaId>.<ext> URL serves the binary file directly
   let serverHttpsUrl = '';
-  try {
-    if (typeof window !== 'undefined') {
-      const origin = window.location.origin.replace(/^http:\/\//i, 'https://');
-      serverHttpsUrl = `${origin}/api/firebase-media/${fullMediaFileName}`;
-    }
-    if (typeof fetch !== 'undefined') {
-      const res = await fetch('/api/firebase-media', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mediaId,
-          tenantId,
-          category: cleanCat,
-          fileName: resolvedName,
-          ext,
-          dataUrl,
-          storageUrl: firebaseStorageDownloadUrl || undefined,
-        }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json?.url && typeof json.url === 'string' && json.url.startsWith('http')) {
-          serverHttpsUrl = json.url.replace(/^http:\/\//i, 'https://');
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin.replace(/^http:\/\//i, 'https://');
+    serverHttpsUrl = `${origin}/api/firebase-media/${fullMediaFileName}`;
+  }
+  if (typeof fetch !== 'undefined') {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch('/api/firebase-media', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mediaId,
+            tenantId,
+            category: cleanCat,
+            fileName: resolvedName,
+            ext,
+            dataUrl,
+            createdAt: new Date().toISOString(),
+          }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.url && typeof json.url === 'string' && json.url.startsWith('http')) {
+            serverHttpsUrl = json.url.replace(/^http:\/\//i, 'https://');
+          }
+          break;
+        }
+      } catch (_) {
+        if (attempt < 2) {
+          await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
         }
       }
     }
-  } catch (_) {}
+  }
 
-  return firebaseStorageDownloadUrl || serverHttpsUrl || dataUrl;
+  return serverHttpsUrl || dataUrl;
 }
 
 
