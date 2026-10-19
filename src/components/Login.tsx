@@ -114,6 +114,7 @@ const translations = {
     resendAuthCode: "Réenvoyer",
     changeAccount: "Annuler",
     codeSentSuccess: "Code envoyé avec succès !",
+    keepLoggedIn: "Maintenir la connexion.",
   },
   'English': {
     reportAlertTitle: "Report a problem with a defibrillator, send a message as a client or bystander.",
@@ -189,6 +190,7 @@ const translations = {
     resendAuthCode: "Resend code",
     changeAccount: "Back to login",
     codeSentSuccess: "Code sent successfully!",
+    keepLoggedIn: "Keep me signed in.",
   },
   'Deutsch': {
     reportAlertTitle: "Melden Sie ein Problem mit einem Defibrillator, senden Sie eine Nachricht als Kunde oder Passant.",
@@ -264,6 +266,7 @@ const translations = {
     resendAuthCode: "Code erneut senden",
     changeAccount: "Zurück",
     codeSentSuccess: "Code erfolgreich gesendet!",
+    keepLoggedIn: "Angemeldet bleiben.",
   },
   'Português': {
     reportAlertTitle: "Reporte um problema com um desfibrilhador, envie uma mensagem como cliente ou transeunte.",
@@ -339,6 +342,7 @@ const translations = {
     resendAuthCode: "Reenviar código",
     changeAccount: "Voltar",
     codeSentSuccess: "Código enviado com sucesso!",
+    keepLoggedIn: "Manter a sessão iniciada.",
   },
   'Español': {
     reportAlertTitle: "Reportar un problema con un desfibrilador, envíe un mensaje como cliente o transeúnte.",
@@ -414,6 +418,7 @@ const translations = {
     resendAuthCode: "Reenviar código",
     changeAccount: "Volver",
     codeSentSuccess: "¡Código enviado con éxito!",
+    keepLoggedIn: "Mantener la sesión iniciada.",
   }
 };
 
@@ -462,6 +467,7 @@ export const isDoubleAuthRequiredToday = (testDate?: Date): boolean => {
 export default function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -577,6 +583,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     try {
       localStorage.removeItem(`login_attempts_${clientIp}`);
       purgeAllLocalEnvironmentCaches(tenantIdVal);
+      localStorage.setItem('defib_keep_logged_in', keepLoggedIn ? 'true' : 'false');
+      localStorage.setItem('defib_last_activity_ts', String(Date.now()));
       if (clientIp) {
         setCurrentIp(clientIp);
       }
@@ -1661,6 +1669,49 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       autoCorrect="off"
                       spellCheck={false}
                     />
+                  </div>
+
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={keepLoggedIn}
+                      id="radio-keep-logged-in"
+                      onClick={() => setKeepLoggedIn((prev) => !prev)}
+                      className="inline-flex items-center gap-2.5 cursor-pointer select-none bg-transparent border-0 p-0 text-left"
+                      style={{
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        fontSize: '18px',
+                        fontWeight: 100,
+                        color: '#000000',
+                        outline: 'none',
+                      }}
+                    >
+                      <span
+                        className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                        style={{
+                          border: keepLoggedIn ? '2px solid #3556ec' : '2px solid #dedede',
+                          backgroundColor: '#ffffff',
+                        }}
+                      >
+                        {keepLoggedIn && (
+                          <span
+                            className="w-2.5 h-2.5 rounded-full"
+                            style={{ backgroundColor: '#3556ec' }}
+                          />
+                        )}
+                      </span>
+                      <span
+                        className="font-sans"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          color: '#000000',
+                        }}
+                      >
+                        {(t as any).keepLoggedIn || 'Maintenir la connexion.'}
+                      </span>
+                    </button>
                   </div>
 
                   <div className="pt-2 text-center">

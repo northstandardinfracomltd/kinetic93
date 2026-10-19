@@ -368,6 +368,23 @@ export default function App() {
       if (loggedInFlag && savedUser) {
         const parsed = JSON.parse(savedUser);
         if (parsed && typeof parsed === 'object' && parsed.email) {
+          const keepConn = localStorage.getItem('defib_keep_logged_in') === 'true';
+          const maxInactivityMs = (keepConn ? 96 : 24) * 60 * 60 * 1000;
+          const lastActRaw = localStorage.getItem('defib_last_activity_ts');
+          if (lastActRaw) {
+            const lastActTs = Number(lastActRaw);
+            if (!isNaN(lastActTs) && lastActTs > 0 && Date.now() - lastActTs >= maxInactivityMs) {
+              localStorage.removeItem('defib_admin_logged_in');
+              localStorage.removeItem('defib_admin_logged_user');
+              localStorage.removeItem('defib_logged_user_role');
+              localStorage.removeItem('defib_active_tech_session');
+              localStorage.removeItem('defib_keep_logged_in');
+              localStorage.removeItem('defib_last_activity_ts');
+              return false;
+            }
+          } else {
+            localStorage.setItem('defib_last_activity_ts', String(Date.now()));
+          }
           return true;
         }
       }
@@ -469,6 +486,7 @@ export default function App() {
     setLoggedUser(user);
     localStorage.setItem('defib_admin_logged_in', 'true');
     localStorage.setItem('defib_admin_logged_user', JSON.stringify(user));
+    localStorage.setItem('defib_last_activity_ts', String(Date.now()));
 
     // Log suspicious activity Event A: user login
     logUserLogin(tenantToSet, name || email, clientIp).catch(() => {});
@@ -586,6 +604,8 @@ export default function App() {
     localStorage.removeItem('defib_admin_logged_user');
     localStorage.removeItem('defib_logged_user_role');
     localStorage.removeItem('defib_active_tech_session');
+    localStorage.removeItem('defib_keep_logged_in');
+    localStorage.removeItem('defib_last_activity_ts');
     setEnvReloadTrigger(prev => prev + 1);
     
     // Clear help_dismissed keys from sessionStorage and localStorage on logout
@@ -668,19 +688,53 @@ export default function App() {
     }
   }, [isLoggedIn, loggedUser, clients]);
 
-  // Automatic logout after 1 hour of inactivity for all session types (admin, client, technician)
+  // Automatic logout after inactivity for all session types (admin, client, technician):
+  // - 96 hours (345,600,000 ms) when "Maintenir la connexion." is ON
+  // - 24 hours (86,400,000 ms) by default when "Maintenir la connexion." is OFF
   useEffect(() => {
     if (!isLoggedIn) return;
 
-    let timeoutId: any;
+    const getInactivityLimitMs = (): number => {
+      const keepConn = localStorage.getItem('defib_keep_logged_in') === 'true';
+      return (keepConn ? 96 : 24) * 60 * 60 * 1000;
+    };
 
-    const resetTimer = () => {
+    let timeoutId: any;
+    let lastPersistedTs = 0;
+
+    const checkExpiredAndResetTimer = (recordActivity = true) => {
+      const now = Date.now();
+      const limitMs = getInactivityLimitMs();
+
+      if (!recordActivity) {
+        const storedTs = Number(localStorage.getItem('defib_last_activity_ts') || 0);
+        if (storedTs > 0 && now - storedTs >= limitMs) {
+          handleLogout();
+          return;
+        }
+      } else if (now - lastPersistedTs > 15000) {
+        lastPersistedTs = now;
+        try {
+          localStorage.setItem('defib_last_activity_ts', String(now));
+        } catch (_) {}
+      }
+
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
       timeoutId = setTimeout(() => {
         handleLogout();
-      }, 3600000); // 1 hour = 3600000 ms
+      }, limitMs);
+    };
+
+    const handleUserActivity = () => {
+      checkExpiredAndResetTimer(true);
+    };
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        checkExpiredAndResetTimer(false);
+      }
     };
 
     // Listen to user activity events
@@ -694,20 +748,29 @@ export default function App() {
     ];
 
     // Initialize the inactivity timer
-    resetTimer();
+    checkExpiredAndResetTimer(true);
+
+    const periodicCheckId = setInterval(() => {
+      checkExpiredAndResetTimer(false);
+    }, 60000);
 
     // Attach listeners to document and window
     activityEvents.forEach(event => {
-      window.addEventListener(event, resetTimer, { passive: true });
+      window.addEventListener(event, handleUserActivity, { passive: true });
     });
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
     return () => {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
+      clearInterval(periodicCheckId);
       activityEvents.forEach(event => {
-        window.removeEventListener(event, resetTimer);
+        window.removeEventListener(event, handleUserActivity);
       });
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
     };
   }, [isLoggedIn]);
 
@@ -2070,8 +2133,14 @@ export default function App() {
     const identifiant = df.identifiant ? String(df.identifiant).trim().toLowerCase() : '';
     if (id.startsWith('sheet_df_') || identifiant.startsWith('sheet_df_')) return true;
     if (!deletedKeys || deletedKeys.size === 0) return false;
+    // If the spreadsheet row has an explicit identifiant/id, only match by its unique id/identifiant
+    // (never by numeroSerie, which is often shared or 'Non renseigné' across thousands of rows)
+    if (identifiant || id) {
+      return Boolean((id && deletedKeys.has(id)) || (identifiant && deletedKeys.has(identifiant)));
+    }
     const numSerie = df.numeroSerie || df.num_serie ? String(df.numeroSerie || df.num_serie).trim().toLowerCase() : '';
-    return (id && deletedKeys.has(id)) || (identifiant && deletedKeys.has(identifiant)) || (numSerie && deletedKeys.has(numSerie));
+    if (!numSerie || numSerie === 'non renseigné' || numSerie === 'n/a' || numSerie === '-') return false;
+    return deletedKeys.has(numSerie);
   };
 
   const [defibSheetStats, setDefibSheetStats] = useState<any>(() => {
@@ -2110,8 +2179,8 @@ export default function App() {
     onBatchAppended: (allAccumulatedItems: any[], loadedCount: number, totalCount: number) => void,
     isCancelledFn?: () => boolean
   ) => {
-    const FIRST_CHUNK_SIZE = 2500;
-    const NEXT_CHUNK_SIZE = 10000;
+    const FIRST_CHUNK_SIZE = 5000;
+    const NEXT_CHUNK_SIZE = 20000;
     let offset = 0;
     let hasMore = true;
     const accumulated: any[] = [];
@@ -2287,6 +2356,9 @@ export default function App() {
               idbSet(`defib_${activeTenant}_clients`, []).catch(() => {});
               return;
             }
+            if (_json.stats?.clientVolumes) {
+              setDefibSheetStats(prev => (prev ? { ...prev, clientVolumes: _json.stats.clientVolumes } : _json.stats));
+            }
             const validClients = firstItems.filter(
               (cl: any) =>
                 cl &&
@@ -2294,7 +2366,7 @@ export default function App() {
                 !String(cl.clientIdField || '').startsWith('sheet_cli_')
             );
             setClients(validClients);
-            idbSet(`defib_${activeTenant}_clients`, validClients).catch(() => {});
+            idbSet(`defib_${activeTenant}_clients_v2`, validClients).catch(() => {});
           },
           (allItems) => {
             const validClients = allItems.filter(
@@ -2304,7 +2376,7 @@ export default function App() {
                 !String(cl.clientIdField || '').startsWith('sheet_cli_')
             );
             setClients(validClients);
-            idbSet(`defib_${activeTenant}_clients`, validClients).catch(() => {});
+            idbSet(`defib_${activeTenant}_clients_v2`, validClients).catch(() => {});
           }
         ).catch(() => {});
       }
@@ -2423,6 +2495,9 @@ export default function App() {
               spreadsheetClientsUrl: clean,
             }));
           }
+          if (json.stats?.clientVolumes) {
+            setDefibSheetStats(prev => (prev ? { ...prev, clientVolumes: json.stats.clientVolumes } : json.stats));
+          }
           const validFirst = firstItems.filter(
             (cl: any) =>
               cl &&
@@ -2430,7 +2505,7 @@ export default function App() {
               !String(cl.clientIdField || '').startsWith('sheet_cli_')
           );
           setClients(validFirst);
-          idbSet(`defib_${activeTenant}_clients`, validFirst).catch(() => {});
+          idbSet(`defib_${activeTenant}_clients_v2`, validFirst).catch(() => {});
         },
         (allItems) => {
           const validAll = allItems.filter(
@@ -2440,7 +2515,7 @@ export default function App() {
               !String(cl.clientIdField || '').startsWith('sheet_cli_')
           );
           setClients(validAll);
-          idbSet(`defib_${activeTenant}_clients`, validAll).catch(() => {});
+          idbSet(`defib_${activeTenant}_clients_v2`, validAll).catch(() => {});
         }
       );
     } catch (err) {
@@ -2458,11 +2533,27 @@ export default function App() {
     autres: '',
     clients: '',
   });
+  const activeSheetBatchRunRef = React.useRef<{
+    tenant: string;
+    defibsRunId: number;
+    defibsInFlightUrl: string;
+    autresRunId: number;
+    autresInFlightUrl: string;
+    clientsRunId: number;
+    clientsInFlightUrl: string;
+  }>({
+    tenant: '',
+    defibsRunId: 0,
+    defibsInFlightUrl: '',
+    autresRunId: 0,
+    autresInFlightUrl: '',
+    clientsRunId: 0,
+    clientsInFlightUrl: '',
+  });
 
   // Automatic Google Spreadsheets sync for Défibrillateurs, Autres Matériels, and Clients whenever URLs are configured or updated
   useEffect(() => {
     if (!tenantId) return;
-    let isCancelled = false;
 
     const sanitizeSheetUrl = (u?: string | null): string => {
       if (!u || typeof u !== 'string') return '';
@@ -2495,18 +2586,56 @@ export default function App() {
         sanitizeSheetUrl(localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_clients`)) ||
         '';
 
-      // Avoid redundant re-fetching when background companyInfo sync resolves the exact same spreadsheet URL
+      // Avoid redundant re-fetching or aborting an already-running multi-batch load when background companyInfo sync resolves the same URL
       const prevLoaded = lastLoadedSheetUrlsRef.current;
+      const batchState = activeSheetBatchRunRef.current;
       const isSameTenant = prevLoaded.tenant.toLowerCase() === activeTid.toLowerCase();
-      const skipDefibs =
+
+      if (batchState.tenant.toLowerCase() !== activeTid.toLowerCase()) {
+        batchState.tenant = activeTid;
+        batchState.defibsRunId++;
+        batchState.defibsInFlightUrl = '';
+        batchState.autresRunId++;
+        batchState.autresInFlightUrl = '';
+        batchState.clientsRunId++;
+        batchState.clientsInFlightUrl = '';
+      }
+
+      const defibsAlreadyInFlight =
         !force &&
-        defibrillateurs.length > 0 &&
-        isSameTenant &&
-        Boolean(prevLoaded.defibs) &&
-        Boolean(urlDefibs) &&
-        prevLoaded.defibs === urlDefibs;
-      const skipAutres = !force && otherEquipments.length > 0 && isSameTenant && Boolean(prevLoaded.autres) && Boolean(urlAutres) && prevLoaded.autres === urlAutres;
-      const skipClients = !force && clients.length > 0 && isSameTenant && Boolean(prevLoaded.clients) && Boolean(urlClients) && prevLoaded.clients === urlClients;
+        Boolean(batchState.defibsInFlightUrl) &&
+        (!urlDefibs || batchState.defibsInFlightUrl === urlDefibs || batchState.defibsInFlightUrl === '__auto__');
+      const autresAlreadyInFlight =
+        !force &&
+        Boolean(batchState.autresInFlightUrl) &&
+        (!urlAutres || batchState.autresInFlightUrl === urlAutres || batchState.autresInFlightUrl === '__auto__');
+      const clientsAlreadyInFlight =
+        !force &&
+        Boolean(batchState.clientsInFlightUrl) &&
+        (!urlClients || batchState.clientsInFlightUrl === urlClients || batchState.clientsInFlightUrl === '__auto__');
+
+      const expectedMinDefibs = Math.max(1, (defibSheetStats?.totalCount || 0) - 50);
+      const skipDefibs =
+        defibsAlreadyInFlight ||
+        (!force &&
+          defibrillateurs.length >= expectedMinDefibs &&
+          isSameTenant &&
+          Boolean(prevLoaded.defibs) &&
+          (!urlDefibs || prevLoaded.defibs === urlDefibs));
+      const skipAutres =
+        autresAlreadyInFlight ||
+        (!force &&
+          otherEquipments.length > 0 &&
+          isSameTenant &&
+          Boolean(prevLoaded.autres) &&
+          (!urlAutres || prevLoaded.autres === urlAutres));
+      const skipClients =
+        clientsAlreadyInFlight ||
+        (!force &&
+          clients.length > 0 &&
+          isSameTenant &&
+          Boolean(prevLoaded.clients) &&
+          (!urlClients || prevLoaded.clients === urlClients));
 
       if (skipDefibs && skipAutres && skipClients) {
         return;
@@ -2555,6 +2684,8 @@ export default function App() {
       await Promise.all([
         (async () => {
           if (skipDefibs) return;
+          const myRunId = ++batchState.defibsRunId;
+          batchState.defibsInFlightUrl = urlDefibs || '__auto__';
           try {
             let resolvedDefibSheetUrl = urlDefibs;
             await fetchSheetCollectionInBatches(
@@ -2564,6 +2695,7 @@ export default function App() {
               force,
               (json, firstItems) => {
                 if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+                  batchState.defibsInFlightUrl = '';
                   setDefibrillateurs([]);
                   setDefibSheetStats(null);
                   idbSet(`defib_${activeTid}_defibrillateurs_v110`, []).catch(() => {});
@@ -2572,6 +2704,7 @@ export default function App() {
                 }
                 if (json.spreadsheetUrl) {
                   resolvedDefibSheetUrl = json.spreadsheetUrl;
+                  batchState.defibsInFlightUrl = sanitizeSheetUrl(json.spreadsheetUrl) || urlDefibs || '__auto__';
                   persistResolvedUrl('spreadsheetDefibrillateurs', 'spreadsheet_defibrillateurs', json.spreadsheetUrl, !json.hasMore);
                 }
                 const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
@@ -2581,6 +2714,13 @@ export default function App() {
                 } else if (json.stats) {
                   setDefibSheetStats(json.stats);
                 }
+                const tot = json.totalCount || filtered.length;
+                setDefibLoadingProgress({
+                  current: filtered.length,
+                  total: tot,
+                  percent: tot > 0 ? Math.min(100, Math.round((filtered.length / tot) * 100)) : 100,
+                  message: `Chargement ${filtered.length.toLocaleString('en-US')}/${tot.toLocaleString('en-US')}...`,
+                });
                 setIsDefibLoading(false);
               },
               (allItems, loadedCount, totalCount) => {
@@ -2589,19 +2729,35 @@ export default function App() {
                   setDefibrillateurs(filtered);
                   persistDefibCache(activeTid, filtered);
                 }
+                const tot = totalCount || filtered.length;
+                setDefibLoadingProgress({
+                  current: filtered.length,
+                  total: tot,
+                  percent: tot > 0 ? Math.min(100, Math.round((filtered.length / tot) * 100)) : 100,
+                  message: loadedCount >= tot
+                    ? `Chargement ${filtered.length.toLocaleString('en-US')}/${tot.toLocaleString('en-US')}, Terminé.`
+                    : `Chargement ${filtered.length.toLocaleString('en-US')}/${tot.toLocaleString('en-US')}...`,
+                });
                 if (loadedCount >= totalCount && resolvedDefibSheetUrl) {
                   persistResolvedUrl('spreadsheetDefibrillateurs', 'spreadsheet_defibrillateurs', resolvedDefibSheetUrl, true);
                 }
               },
-              () => isCancelled
+              () => batchState.defibsRunId !== myRunId || batchState.tenant.toLowerCase() !== activeTid.toLowerCase()
             );
           } catch (_) {
-            if (!isCancelled) setIsDefibLoading(false);
+            if (batchState.defibsRunId === myRunId) setIsDefibLoading(false);
+          } finally {
+            if (batchState.defibsRunId === myRunId) {
+              batchState.defibsInFlightUrl = '';
+            }
           }
         })(),
         (async () => {
           if (skipAutres) return;
+          const myRunId = ++batchState.autresRunId;
+          batchState.autresInFlightUrl = urlAutres || '__auto__';
           try {
+            let resolvedAutresUrl = urlAutres;
             await fetchSheetCollectionInBatches(
               activeTid,
               'autresMateriels',
@@ -2609,11 +2765,14 @@ export default function App() {
               force,
               (json, firstItems) => {
                 if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+                  batchState.autresInFlightUrl = '';
                   setOtherEquipments([]);
                   return;
                 }
                 if (json.spreadsheetUrl) {
-                  persistResolvedUrl('spreadsheetAutresMateriels', 'spreadsheet_autres_materiels', json.spreadsheetUrl);
+                  resolvedAutresUrl = json.spreadsheetUrl;
+                  batchState.autresInFlightUrl = sanitizeSheetUrl(json.spreadsheetUrl) || urlAutres || '__auto__';
+                  persistResolvedUrl('spreadsheetAutresMateriels', 'spreadsheet_autres_materiels', json.spreadsheetUrl, !json.hasMore);
                 }
                 const filtered = firstItems.filter(
                   (eq: any) =>
@@ -2623,7 +2782,7 @@ export default function App() {
                 );
                 setOtherEquipments(filtered);
               },
-              (allItems) => {
+              (allItems, loadedCount, totalCount) => {
                 const filtered = allItems.filter(
                   (eq: any) =>
                     eq &&
@@ -2631,14 +2790,24 @@ export default function App() {
                     !String(eq.identifiant || '').startsWith('sheet_am_')
                 );
                 setOtherEquipments(filtered);
+                if (loadedCount >= totalCount && resolvedAutresUrl) {
+                  persistResolvedUrl('spreadsheetAutresMateriels', 'spreadsheet_autres_materiels', resolvedAutresUrl, true);
+                }
               },
-              () => isCancelled
+              () => batchState.autresRunId !== myRunId || batchState.tenant.toLowerCase() !== activeTid.toLowerCase()
             );
-          } catch (_) {}
+          } catch (_) {} finally {
+            if (batchState.autresRunId === myRunId) {
+              batchState.autresInFlightUrl = '';
+            }
+          }
         })(),
         (async () => {
           if (skipClients) return;
+          const myRunId = ++batchState.clientsRunId;
+          batchState.clientsInFlightUrl = urlClients || '__auto__';
           try {
+            let resolvedClientsUrl = urlClients;
             await fetchSheetCollectionInBatches(
               activeTid,
               'clients',
@@ -2646,12 +2815,18 @@ export default function App() {
               force,
               (json, firstItems) => {
                 if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+                  batchState.clientsInFlightUrl = '';
                   setClients([]);
                   idbSet(`defib_${activeTid}_clients`, []).catch(() => {});
                   return;
                 }
                 if (json.spreadsheetUrl) {
-                  persistResolvedUrl('spreadsheetClients', 'spreadsheet_clients', json.spreadsheetUrl);
+                  resolvedClientsUrl = json.spreadsheetUrl;
+                  batchState.clientsInFlightUrl = sanitizeSheetUrl(json.spreadsheetUrl) || urlClients || '__auto__';
+                  persistResolvedUrl('spreadsheetClients', 'spreadsheet_clients', json.spreadsheetUrl, !json.hasMore);
+                }
+                if (json.stats?.clientVolumes) {
+                  setDefibSheetStats(prev => (prev ? { ...prev, clientVolumes: json.stats.clientVolumes } : json.stats));
                 }
                 const filtered = firstItems.filter(
                   (cl: any) =>
@@ -2660,22 +2835,29 @@ export default function App() {
                     !String(cl.clientIdField || '').startsWith('sheet_cli_')
                 );
                 lastLoadedSheetUrlsRef.current.clients = json.spreadsheetUrl || urlClients || 'loaded';
-                idbSet(`defib_${activeTid}_clients`, filtered).catch(() => {});
+                idbSet(`defib_${activeTid}_clients_v2`, filtered).catch(() => {});
                 setClients(filtered);
               },
-              (allItems) => {
+              (allItems, loadedCount, totalCount) => {
                 const filtered = allItems.filter(
                   (cl: any) =>
                     cl &&
                     !String(cl.id || '').startsWith('sheet_cli_') &&
                     !String(cl.clientIdField || '').startsWith('sheet_cli_')
                 );
-                idbSet(`defib_${activeTid}_clients`, filtered).catch(() => {});
+                idbSet(`defib_${activeTid}_clients_v2`, filtered).catch(() => {});
                 setClients(filtered);
+                if (loadedCount >= totalCount && resolvedClientsUrl) {
+                  persistResolvedUrl('spreadsheetClients', 'spreadsheet_clients', resolvedClientsUrl, true);
+                }
               },
-              () => isCancelled
+              () => batchState.clientsRunId !== myRunId || batchState.tenant.toLowerCase() !== activeTid.toLowerCase()
             );
-          } catch (_) {}
+          } catch (_) {} finally {
+            if (batchState.clientsRunId === myRunId) {
+              batchState.clientsInFlightUrl = '';
+            }
+          }
         })(),
       ]);
     };
@@ -2688,7 +2870,6 @@ export default function App() {
     };
     window.addEventListener('defib-tenant-spreadsheets-updated', handleUpdatedEvent);
     return () => {
-      isCancelled = true;
       window.removeEventListener('defib-tenant-spreadsheets-updated', handleUpdatedEvent);
     };
   }, [
@@ -7163,7 +7344,7 @@ export default function App() {
 
         const hasClientsSheetConfigured = Boolean(getTenantSpreadsheetUrl('spreadsheetClients', baseCompanyInfo));
         if (hasClientsSheetConfigured) {
-          idbGet<Client[]>(`defib_${activeRunTenantId}_clients`)
+          idbGet<Client[]>(`defib_${activeRunTenantId}_clients_v2`)
             .then(cachedClients => {
               if (Array.isArray(cachedClients) && cachedClients.length > 0) {
                 setClients(prev => (prev.length === 0 ? cachedClients : prev));
@@ -7179,31 +7360,34 @@ export default function App() {
 
         let baseDefibrillateurs: Defibrillateur[] = [];
         setDefibrillateurs(prev => (loadedTenantIdState && loadedTenantIdState !== activeRunTenantId ? [] : prev));
-        const hasDefibsSheetConfigured = Boolean(getTenantSpreadsheetUrl('spreadsheetDefibrillateurs', baseCompanyInfo));
-        if (hasDefibsSheetConfigured) {
-          try {
-            const rawStats = localStorage.getItem(`defib_${activeRunTenantId}_defib_sheet_stats`);
-            if (rawStats) {
-              setDefibSheetStats(JSON.parse(rawStats));
-            }
-          } catch (_) {}
-          idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs`)
-            .then(cachedDefibs => {
-              if (Array.isArray(cachedDefibs) && cachedDefibs.length > 0) {
-                const delSet = new Set(getDeletedDefibKeys(activeRunTenantId));
-                const validDefibs = cachedDefibs.filter((df: any) => !isDefibInDeletedList(df, delSet));
-                if (validDefibs.length > 0) {
-                  setDefibrillateurs(prev => (prev.length === 0 ? validDefibs : prev));
-                  setIsDefibLoading(false);
-                }
+        try {
+          const rawStats =
+            localStorage.getItem(`defib_${activeRunTenantId}_defib_sheet_stats`) ||
+            localStorage.getItem(`defib_${activeRunTenantId.toUpperCase()}_defib_sheet_stats`) ||
+            localStorage.getItem(`defib_${activeRunTenantId.toLowerCase()}_defib_sheet_stats`);
+          if (rawStats) {
+            setDefibSheetStats(JSON.parse(rawStats));
+          }
+        } catch (_) {}
+        Promise.all([
+          idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs_v110`),
+          idbGet<Defibrillateur[]>(`defib_${activeRunTenantId.toUpperCase()}_defibrillateurs_v110`),
+          idbGet<Defibrillateur[]>(`defib_${activeRunTenantId.toLowerCase()}_defibrillateurs_v110`),
+        ])
+          .then(candidates => {
+            const best = candidates
+              .filter(Array.isArray)
+              .sort((a, b) => b.length - a.length)[0];
+            if (Array.isArray(best) && best.length > 0) {
+              const delSet = new Set(getDeletedDefibKeys(activeRunTenantId));
+              const validDefibs = best.filter((df: any) => !isDefibInDeletedList(df, delSet));
+              if (validDefibs.length > 0) {
+                setDefibrillateurs(prev => (prev.length < validDefibs.length ? validDefibs : prev));
+                setIsDefibLoading(false);
               }
-            })
-            .catch(() => {});
-        } else {
-          setDefibrillateurs([]);
-          setDefibSheetStats(null);
-          setIsDefibLoading(false);
-        }
+            }
+          })
+          .catch(() => {});
 
         // Spreadsheet-backed tabs start empty and are populated exclusively by refreshGenericSheetCompartment if a spreadsheet is configured
         setTickets([]);
@@ -7269,8 +7453,8 @@ export default function App() {
             const curDel = getDeletedDefibKeys(activeRunTenantId);
             const combined = Array.from(new Set([...curDel, ...remoteDelKeys]));
             localStorage.setItem(`defib_${activeRunTenantId}_deleted_defib_keys`, JSON.stringify(combined));
-            localStorage.setItem('defib_D27_deleted_defib_keys', JSON.stringify(combined));
-            localStorage.setItem('defib_D58_deleted_defib_keys', JSON.stringify(combined));
+            localStorage.setItem(`defib_${activeRunTenantId.toUpperCase()}_deleted_defib_keys`, JSON.stringify(combined));
+            localStorage.setItem(`defib_${activeRunTenantId.toLowerCase()}_deleted_defib_keys`, JSON.stringify(combined));
           }
         } catch (_) {}
 
@@ -9227,12 +9411,12 @@ export default function App() {
         safeSetLocalStorage(`fs_cache_${tenantId}_defibrillateurs`, str);
       }
       try {
-        await idbSet(`defib_${tenantId}_defibrillateurs`, newDefibs);
-        await idbSet(`${tenantId}_defibrillateurs`, newDefibs);
+        await idbSet(`defib_${tenantId}_defibrillateurs_v110`, newDefibs);
+        await idbSet(`${tenantId}_defibrillateurs_v110`, newDefibs);
         const tAliases = getTenantAliases(tenantId);
         if (tAliases.has('d27') || tAliases.has('d58')) {
-          await idbSet('defib_D27_defibrillateurs', newDefibs);
-          await idbSet('defib_D58_defibrillateurs', newDefibs);
+          await idbSet('defib_D27_defibrillateurs_v110', newDefibs);
+          await idbSet('defib_D58_defibrillateurs_v110', newDefibs);
         }
       } catch (_) {}
 
@@ -10096,7 +10280,7 @@ export default function App() {
       const identifiant = target.identifiant || id;
       const materialType = variables.find(v => v.id === target.modeleId)?.nom || target.modeleId || 'Défibrillateur';
       logDeleteDefib(tenantId, identifiant, materialType, loggedUser?.name).catch(() => {});
-      recordDeletedDefibKeys([target.id, target.identifiant, target.numeroSerie, (target as any).num_serie]);
+      recordDeletedDefibKeys([target.id, target.identifiant]);
     } else {
       recordDeletedDefibKeys([id]);
     }
@@ -10143,7 +10327,7 @@ export default function App() {
         const identifiant = target.identifiant || id;
         const materialType = variables.find(v => v.id === target.modeleId)?.nom || target.modeleId || 'Défibrillateur';
         logDeleteDefib(tenantId, identifiant, materialType, loggedUser?.name).catch(() => {});
-        keysToRecord.push(target.id, target.identifiant, target.numeroSerie, (target as any).num_serie);
+        keysToRecord.push(target.id, target.identifiant);
         targetsToDelete.push({ id: target.id, identifiant: target.identifiant, numeroSerie: target.numeroSerie });
       } else {
         keysToRecord.push(id);
@@ -11016,8 +11200,10 @@ export default function App() {
 
           {activeTab === 'clients' && (
             <ClientTab
+              tenantId={tenantId}
               clients={clients}
               defibrillateurs={defibrillateurs}
+              defibSheetStats={defibSheetStats}
               variables={variables}
               onAddClient={handleAddClient}
               onUpdateClient={handleUpdateClient}

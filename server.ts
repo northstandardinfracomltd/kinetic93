@@ -4710,7 +4710,7 @@ async function warmupDefibrillateursStore() {
       const mode = String(req.query.mode || '').trim();
       const hasLimit = req.query.limit !== undefined && req.query.limit !== '';
       const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
-      const limit = hasLimit ? Math.max(1, Math.min(25000, parseInt(String(req.query.limit), 10) || 2500)) : 0;
+      const limit = hasLimit ? Math.max(1, Math.min(50000, parseInt(String(req.query.limit), 10) || 5000)) : 0;
 
       const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, tabType, explicitUrl);
 
@@ -4742,6 +4742,46 @@ async function warmupDefibrillateursStore() {
       const data = await fetchTenantSheetCollection(sheetUrl, tenantId, tabType, forceRefresh);
       const hasRemoteHeaders = Boolean(data.headers && data.headers.length > 0 && data.fromSpreadsheet);
 
+      let effectiveStats = data.stats;
+      let itemsToSlice = data.items;
+
+      if (tabType === 'clients') {
+        try {
+          const defibSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'defibrillateurs');
+          if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
+            const defibData = await fetchTenantSheetCollection(defibSheetUrl, tenantId, 'defibrillateurs', false);
+            const volMap = defibData.stats?.clientVolumes || {};
+            effectiveStats = {
+              ...data.stats,
+              clientVolumes: volMap,
+            };
+            const normKey = (val: any): string =>
+              String(val || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/&#0*39;?/g, '')
+                .replace(/[^a-z0-9]+/gi, ' ')
+                .trim()
+                .toLowerCase();
+            itemsToSlice = data.items.map((cl: any) => {
+              if (!cl || typeof cl !== 'object') return cl;
+              const nameKey = normKey(cl.denomination || cl.nomSite || cl.nom || cl.entreprise || '');
+              const idKey = cl.id ? `id:${String(cl.id).trim().toLowerCase()}` : '';
+              const fieldRaw = String(cl.clientIdField || '').trim().toLowerCase();
+              const fieldKey = fieldRaw && !fieldRaw.includes('vierge') && !fieldRaw.startsWith('sheet_cli_') ? `id:${fieldRaw}` : '';
+              const payeurRaw = String(cl.payeurId || '').trim().toLowerCase();
+              const payeurKey = payeurRaw && !payeurRaw.includes('vierge') ? `payeur:${payeurRaw}` : '';
+              const vName = nameKey ? volMap[nameKey] || 0 : 0;
+              const vId = idKey ? volMap[idKey] || 0 : 0;
+              const vField = fieldKey ? volMap[fieldKey] || 0 : 0;
+              const vPayeur = payeurKey ? volMap[payeurKey] || 0 : 0;
+              const defibVolume = Math.max(vName, vId, vField, vPayeur);
+              return { ...cl, defibVolume };
+            });
+          }
+        } catch (_) {}
+      }
+
       if (mode === 'stats') {
         return res.json({
           status: 'success',
@@ -4751,13 +4791,13 @@ async function warmupDefibrillateursStore() {
           items: [],
           headers: data.headers,
           totalCount: data.totalCount,
-          stats: data.stats,
+          stats: effectiveStats,
           hasMore: data.totalCount > 0,
           nextOffset: 0,
         });
       }
 
-      const itemsOut = hasLimit ? data.items.slice(offset, offset + limit) : data.items;
+      const itemsOut = hasLimit ? itemsToSlice.slice(offset, offset + limit) : itemsToSlice;
       const nextOffset = offset + itemsOut.length;
       const hasMore = hasLimit ? nextOffset < data.totalCount : false;
 
@@ -4779,7 +4819,7 @@ async function warmupDefibrillateursStore() {
         items: itemsOut,
         headers: data.headers,
         totalCount: data.totalCount,
-        stats: data.stats,
+        stats: effectiveStats,
         offset,
         limit: hasLimit ? limit : data.totalCount,
         hasMore,

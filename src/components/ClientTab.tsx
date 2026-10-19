@@ -139,8 +139,10 @@ ANNEXE 1 : Liste du matériel couvert
 [1- Identifiant - N° de série (lister le/s défibrillateur/s ]`;
 
 interface ClientTabProps {
+  tenantId?: string;
   clients: Client[];
   defibrillateurs?: Defibrillateur[];
+  defibSheetStats?: { totalCount?: number; clientVolumes?: Record<string, number> } | null;
   variables?: Variable[];
   onAddClient: (client: Omit<Client, 'id'>) => void;
   onUpdateClient: (client: Client) => void;
@@ -155,8 +157,10 @@ interface ClientTabProps {
 }
 
 export default function ClientTab({
+  tenantId,
   clients,
   defibrillateurs = [],
+  defibSheetStats = null,
   variables = [],
   onAddClient,
   onUpdateClient,
@@ -169,7 +173,11 @@ export default function ClientTab({
   isRefreshing = false,
   onRefreshData,
 }: ClientTabProps) {
-  const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
+  const activeTenantId = (
+    tenantId ||
+    (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : '') ||
+    'demo'
+  ).trim();
   const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
   const effectiveRefreshing = isRefreshing || isLocalRefreshing;
 
@@ -186,13 +194,47 @@ export default function ClientTab({
     return String(raw).trim();
   }, [companyInfo?.spreadsheetClients, companyInfo?.spreadsheetClientsUrl, activeTenantId]);
 
+  const resolvedDefibsSpreadsheetUrl = useMemo(() => {
+    const raw =
+      companyInfo?.spreadsheetDefibrillateurs ||
+      companyInfo?.spreadsheetDefibrillateursUrl ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_defibrillateurs`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_defibrillateurs`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_defibrillateurs`)
+        : '') ||
+      '';
+    const trimmed = String(raw).trim();
+    return (trimmed.includes('1tB1e41') || trimmed.includes('2mX5O6r9hD0i3Z9m')) ? '' : trimmed;
+  }, [companyInfo?.spreadsheetDefibrillateurs, companyInfo?.spreadsheetDefibrillateursUrl, activeTenantId]);
+
+  const [remoteClientVolumes, setRemoteClientVolumes] = useState<Record<string, number>>({});
+
+  const fetchDefibVolumeStats = React.useCallback(async (force = false) => {
+    try {
+      const res = await fetch(
+        `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=defibrillateurs&mode=stats&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(resolvedDefibsSpreadsheetUrl)}`
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json?.stats?.clientVolumes && typeof json.stats.clientVolumes === 'object') {
+        setRemoteClientVolumes(json.stats.clientVolumes);
+      }
+    } catch (_) {}
+  }, [activeTenantId, resolvedDefibsSpreadsheetUrl]);
+
+  useEffect(() => {
+    fetchDefibVolumeStats(false);
+  }, [fetchDefibVolumeStats, isRefreshing]);
+
   const handleRefreshClick = async () => {
     if (effectiveRefreshing) return;
     setIsLocalRefreshing(true);
     try {
-      if (onRefreshData) {
-        await onRefreshData();
-      }
+      await Promise.all([
+        onRefreshData ? onRefreshData() : Promise.resolve(),
+        fetchDefibVolumeStats(true),
+      ]);
     } catch (err) {
       console.warn('Manual refresh error in ClientTab:', err);
     } finally {
@@ -333,11 +375,28 @@ export default function ClientTab({
     processedText = processedText.replace(/\[Nom Entreprise\]/g, prestName);
 
     // Filter defibrillators associated with this client
-    const clientDefibs = defibrillateurs.filter(d => d.clientId === (editingClient?.id || ''));
+    const normClientLookup = (val: any): string =>
+      String(val || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/&#0*39;/g, '')
+        .replace(/[^a-z0-9]+/gi, ' ')
+        .trim()
+        .toLowerCase();
+    const editDenomNorm = normClientLookup(editingClient?.denomination || (editingClient as any)?.nomSite || '');
+    const editIdLower = String(editingClient?.id || '').trim().toLowerCase();
+    const editFieldLower = String(editingClient?.clientIdField || '').trim().toLowerCase();
+    const clientDefibs = defibrillateurs.filter((d: any) => {
+      if (!d) return false;
+      if (editIdLower && String(d.clientId || '').trim().toLowerCase() === editIdLower) return true;
+      if (editFieldLower && !editFieldLower.includes('vierge') && String(d.clientIdField || '').trim().toLowerCase() === editFieldLower) return true;
+      const dNomNorm = normClientLookup(d.clientNom || d.nomSite || d.client || '');
+      return Boolean(editDenomNorm && dNomNorm === editDenomNorm);
+    });
     const defibListText = clientDefibs.length > 0
       ? clientDefibs.map((d, idx) => {
           const v = variables.find(varItem => varItem.id === d.modeleId);
-          const brandModel = v ? `${v.marque} ${v.nom}` : 'Défibrillateur';
+          const brandModel = v ? `${v.marque} ${v.nom}` : (d.modeleId || 'Défibrillateur');
           return `${idx + 1}- ${d.identifiant || 'DAE'} - N° de série : ${d.numeroSerie || 'Non renseigné'} - Marque/Modèle : ${brandModel}`;
         }).join('\n')
       : "1- [Identifiant DAE] - N° de série : [Numéro de série]";
@@ -814,16 +873,85 @@ export default function ClientTab({
     }).length;
   }, [clients]);
 
-  // Fast defib count lookup by client ID (O(1) instead of iterating 18,000 items)
-  const defibCountByClientId = useMemo(() => {
+  const normalizeClientVolumeKey = React.useCallback((val: any): string => {
+    return String(val || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/&#0*39;?/g, '')
+      .replace(/[^a-z0-9]+/gi, ' ')
+      .trim()
+      .toLowerCase();
+  }, []);
+
+  // Fast defib count lookup by client (matching Section 2 - Client., Nom du site, Client ID, Payeur ID, and internal clientId)
+  const localClientVolumeMap = useMemo(() => {
     const map = new Map<string, number>();
-    for (const d of (defibrillateurs || [])) {
-      if (d && d.clientId) {
-        map.set(d.clientId, (map.get(d.clientId) || 0) + 1);
+    for (const d of (defibrillateurs || []) as any[]) {
+      if (!d) continue;
+      const cNameKey = normalizeClientVolumeKey(d.clientNom || d.client || '');
+      const siteNameKey = normalizeClientVolumeKey(d.nomSite || '');
+      if (cNameKey) {
+        map.set(cNameKey, (map.get(cNameKey) || 0) + 1);
+      }
+      if (siteNameKey && siteNameKey !== cNameKey) {
+        map.set(siteNameKey, (map.get(siteNameKey) || 0) + 1);
+      }
+      const rawCid = String(d.clientId || '').trim().toLowerCase();
+      if (rawCid && !rawCid.includes('vierge') && !rawCid.startsWith('sheet_cli_')) {
+        const k = `id:${rawCid}`;
+        map.set(k, (map.get(k) || 0) + 1);
+      }
+      const rawCif = String(d.clientIdField || '').trim().toLowerCase();
+      if (rawCif && !rawCif.includes('vierge') && !rawCif.startsWith('sheet_cli_') && rawCif !== rawCid) {
+        const k = `id:${rawCif}`;
+        map.set(k, (map.get(k) || 0) + 1);
+      }
+      const rawPid = String(d.payeurId || '').trim().toLowerCase();
+      if (rawPid && !rawPid.includes('vierge')) {
+        const k = `payeur:${rawPid}`;
+        map.set(k, (map.get(k) || 0) + 1);
       }
     }
     return map;
-  }, [defibrillateurs]);
+  }, [defibrillateurs, normalizeClientVolumeKey]);
+
+  const getClientDefibVolume = React.useCallback(
+    (client: Client): number => {
+      if (!client) return 0;
+      const nameKey = normalizeClientVolumeKey(
+        client.denomination || (client as any).nomSite || (client as any).nom || (client as any).entreprise || ''
+      );
+      const idKey = client.id ? `id:${String(client.id).trim().toLowerCase()}` : '';
+      const fieldRaw = String(client.clientIdField || '').trim().toLowerCase();
+      const fieldKey = fieldRaw && !fieldRaw.includes('vierge') && !fieldRaw.startsWith('sheet_cli_') ? `id:${fieldRaw}` : '';
+      const payeurRaw = String(client.payeurId || '').trim().toLowerCase();
+      const payeurKey = payeurRaw && !payeurRaw.includes('vierge') ? `payeur:${payeurRaw}` : '';
+
+      const localByName = nameKey ? localClientVolumeMap.get(nameKey) || 0 : 0;
+      const localById = idKey ? localClientVolumeMap.get(idKey) || 0 : 0;
+      const localByField = fieldKey ? localClientVolumeMap.get(fieldKey) || 0 : 0;
+      const localByPayeur = payeurKey ? localClientVolumeMap.get(payeurKey) || 0 : 0;
+      const localVol = Math.max(localByName, localById, localByField, localByPayeur);
+
+      const propVolMap = defibSheetStats?.clientVolumes || {};
+      const propByName = nameKey ? propVolMap[nameKey] || 0 : 0;
+      const propById = idKey ? propVolMap[idKey] || 0 : 0;
+      const propByField = fieldKey ? propVolMap[fieldKey] || 0 : 0;
+      const propByPayeur = payeurKey ? propVolMap[payeurKey] || 0 : 0;
+      const propVol = Math.max(propByName, propById, propByField, propByPayeur);
+
+      const remoteByName = nameKey ? remoteClientVolumes[nameKey] || 0 : 0;
+      const remoteById = idKey ? remoteClientVolumes[idKey] || 0 : 0;
+      const remoteByField = fieldKey ? remoteClientVolumes[fieldKey] || 0 : 0;
+      const remoteByPayeur = payeurKey ? remoteClientVolumes[payeurKey] || 0 : 0;
+      const remoteVol = Math.max(remoteByName, remoteById, remoteByField, remoteByPayeur);
+
+      const embeddedVol = Number((client as any).defibVolume || (client as any).volume || 0) || 0;
+
+      return Math.max(localVol, propVol, remoteVol, embeddedVol);
+    },
+    [defibSheetStats?.clientVolumes, localClientVolumeMap, normalizeClientVolumeKey, remoteClientVolumes]
+  );
 
   // Clients added or modified in the last 5 minutes
   const recentClients = useMemo(() => {
@@ -2528,7 +2656,7 @@ export default function ClientTab({
                     {/* Defib count pill */}
                     <td className="px-4 py-5 text-center whitespace-nowrap">
                       {(() => {
-                        const count = defibCountByClientId.get(client.id) || 0;
+                        const count = getClientDefibVolume(client);
                         return (
                           <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1 text-[11px] font-black text-white bg-[#fe4eba] rounded-full font-sans">
                             {count}
@@ -2574,7 +2702,7 @@ export default function ClientTab({
                     {/* Actions */}
                     <td className="px-4 py-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       {(() => {
-                        const defibCount = defibrillateurs.filter(d => d.clientId === client.id).length;
+                        const defibCount = getClientDefibVolume(client);
                         const isDeleteDisabled = defibCount > 0;
                         const clientName = (client.denomination || (client as any).nomSite || (client as any).nom || (client as any).entreprise || '').trim();
                         return (

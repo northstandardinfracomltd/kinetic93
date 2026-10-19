@@ -646,23 +646,23 @@ export default function DefibTab({
     activeTenantId,
   ]);
 
-  // Instant IndexedDB hydration & fast first-chunk fallback for Défibrillateurs on browser reload
+  // Instant IndexedDB hydration & full multi-chunk fallback for Défibrillateurs on browser reload (up to 40,000+ rows)
   useEffect(() => {
-    if (!resolvedSpreadsheetUrl) {
-      setFallbackSheetDefibs([]);
-      setPlanSheetDefibs([]);
-      setRemoteQueriedDefibs([]);
-      return;
-    }
-    if (Array.isArray(defibrillateurs) && defibrillateurs.length > 0) {
+    const expectedTotal = sheetStats?.totalCount || 0;
+    if (Array.isArray(defibrillateurs) && defibrillateurs.length > 0 && (expectedTotal === 0 || defibrillateurs.length >= expectedTotal - 50)) {
       return;
     }
     let cancelled = false;
 
-    idbGet<Defibrillateur[]>(`defib_${activeTenantId}_defibrillateurs_v110`)
-      .then(cached => {
-        if (!cancelled && Array.isArray(cached) && cached.length > 0) {
-          setFallbackSheetDefibs(prev => (prev.length === 0 ? cached : prev));
+    Promise.all([
+      idbGet<Defibrillateur[]>(`defib_${activeTenantId}_defibrillateurs_v110`),
+      idbGet<Defibrillateur[]>(`defib_${activeTenantId.toUpperCase()}_defibrillateurs_v110`),
+      idbGet<Defibrillateur[]>(`defib_${activeTenantId.toLowerCase()}_defibrillateurs_v110`),
+    ])
+      .then(candidates => {
+        const best = candidates.filter(Array.isArray).sort((a, b) => b.length - a.length)[0];
+        if (!cancelled && Array.isArray(best) && best.length > 0) {
+          setFallbackSheetDefibs(prev => (prev.length >= best.length ? prev : best));
         }
       })
       .catch(() => {});
@@ -670,16 +670,39 @@ export default function DefibTab({
     (async () => {
       try {
         const sheetUrl = resolvedSpreadsheetUrl;
-        const res = await fetch(
-          `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=defibrillateurs&forceRefresh=false&offset=0&limit=2500&spreadsheetUrl=${encodeURIComponent(sheetUrl)}`
-        );
-        if (!res.ok || cancelled) return;
-        const json = await res.json();
-        if (cancelled) return;
-        const items = Array.isArray(json.items) ? json.items : [];
-        if (items.length > 0) {
-          setFallbackSheetDefibs(prev => (prev.length >= items.length ? prev : items));
-          idbSet(`defib_${activeTenantId}_defibrillateurs_v110`, items).catch(() => {});
+        let offset = 0;
+        let hasMore = true;
+        const acc: Defibrillateur[] = [];
+
+        while (hasMore && !cancelled) {
+          const isFirst = offset === 0;
+          const chunkSize = isFirst ? 5000 : 20000;
+          const res = await fetch(
+            `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=defibrillateurs&forceRefresh=false&offset=${offset}&limit=${chunkSize}&spreadsheetUrl=${encodeURIComponent(sheetUrl)}`
+          );
+          if (!res.ok || cancelled) break;
+          const json = await res.json();
+          if (cancelled) break;
+          if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+            break;
+          }
+          const items = Array.isArray(json.items) ? json.items : [];
+          acc.push(...items);
+          if (acc.length > 0) {
+            const snapshot = [...acc];
+            setFallbackSheetDefibs(prev => (prev.length > snapshot.length ? prev : snapshot));
+          }
+          if (json.hasMore && items.length > 0 && typeof json.nextOffset === 'number' && json.nextOffset > offset) {
+            offset = json.nextOffset;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        if (!cancelled && acc.length > 0) {
+          for (const k of [activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase()]) {
+            idbSet(`defib_${k}_defibrillateurs_v110`, acc).catch(() => {});
+          }
         }
       } catch (_) {}
     })();
@@ -687,7 +710,7 @@ export default function DefibTab({
     return () => {
       cancelled = true;
     };
-  }, [activeTenantId, defibrillateurs?.length, resolvedSpreadsheetUrl, refreshTrigger]);
+  }, [activeTenantId, defibrillateurs?.length, sheetStats?.totalCount, resolvedSpreadsheetUrl, refreshTrigger]);
 
   // Direct lookup & cache fallback for Clients Spreadsheet (Col 1: "Section 1 - Entreprise.")
   useEffect(() => {
@@ -1060,34 +1083,35 @@ export default function DefibTab({
 
   const stableDefibsRef = useRef<{ tenant: string; items: Defibrillateur[] }>({ tenant: '', items: [] });
 
-  // Merge local loaded defibrillateurs with any on-demand rows returned from /api/sheets/query and planSheetDefibs
+  // Merge local loaded defibrillateurs with fallbackSheetDefibs, planSheetDefibs, and on-demand rows returned from /api/sheets/query
   const mergedDefibrillateurs = useMemo(() => {
-    if (!resolvedSpreadsheetUrl) {
+    let baseList = defibrillateurs.length >= fallbackSheetDefibs.length ? defibrillateurs : fallbackSheetDefibs;
+    if (baseList.length === 0 && !resolvedSpreadsheetUrl && remoteQueriedDefibs.length === 0 && planSheetDefibs.length === 0) {
       stableDefibsRef.current = { tenant: activeTenantId, items: [] };
       return [];
     }
-    let baseList = defibrillateurs.length > 0 ? defibrillateurs : fallbackSheetDefibs;
     if (baseList.length > 0) {
       stableDefibsRef.current = { tenant: activeTenantId, items: baseList };
     } else if (stableDefibsRef.current.tenant === activeTenantId && stableDefibsRef.current.items.length > 0) {
       baseList = stableDefibsRef.current.items;
     }
 
-    if (remoteQueriedDefibs.length === 0 && planSheetDefibs.length === 0) return baseList;
+    const secondaryBase = defibrillateurs.length >= fallbackSheetDefibs.length ? fallbackSheetDefibs : defibrillateurs;
+    if (secondaryBase.length === 0 && remoteQueriedDefibs.length === 0 && planSheetDefibs.length === 0) return baseList;
     const byKey = new Map<string, number>();
     const out: Defibrillateur[] = [];
 
     for (const df of baseList) {
       if (!df) continue;
-      const k = String(df.id || df.identifiant || '').trim().toLowerCase();
+      const k = String(df.identifiant || df.id || '').trim().toLowerCase();
       const idx = out.length;
       out.push(df);
       if (k) byKey.set(k, idx);
     }
-    for (const sourceList of [planSheetDefibs, remoteQueriedDefibs]) {
+    for (const sourceList of [secondaryBase, planSheetDefibs, remoteQueriedDefibs]) {
       for (const df of sourceList) {
         if (!df) continue;
-        const k = String(df.id || df.identifiant || '').trim().toLowerCase();
+        const k = String(df.identifiant || df.id || '').trim().toLowerCase();
         if (k) {
           const existingIdx = byKey.get(k);
           if (existingIdx === undefined) {
@@ -2477,11 +2501,7 @@ export default function DefibTab({
     const tenantKeysToCheck = Array.from(new Set([
       activeTenantId,
       activeTenantId.toLowerCase(),
-      activeTenantId.toUpperCase(),
-      'D27',
-      'D58',
-      'd27',
-      'd58'
+      activeTenantId.toUpperCase()
     ].filter(Boolean)));
 
     for (const t of tenantKeysToCheck) {
@@ -2509,12 +2529,12 @@ export default function DefibTab({
     return mergedDefibrillateurs.filter(df => {
       const idLower = df.id ? df.id.trim().toLowerCase() : '';
       const idfLower = df.identifiant ? df.identifiant.trim().toLowerCase() : '';
+      if (idfLower || idLower) {
+        return !((idLower && deletedDefibSet.has(idLower)) || (idfLower && deletedDefibSet.has(idfLower)));
+      }
       const numLower = df.numeroSerie ? df.numeroSerie.trim().toLowerCase() : (df as any).num_serie ? String((df as any).num_serie).trim().toLowerCase() : '';
-      return !(
-        (idLower && deletedDefibSet.has(idLower)) ||
-        (idfLower && deletedDefibSet.has(idfLower)) ||
-        (numLower && deletedDefibSet.has(numLower))
-      );
+      if (!numLower || numLower === 'non renseigné' || numLower === 'n/a' || numLower === '-') return true;
+      return !deletedDefibSet.has(numLower);
     });
   }, [mergedDefibrillateurs, deletedDefibSet]);
 
@@ -2569,13 +2589,19 @@ export default function DefibTab({
     const todayTime = today.getTime();
 
     let result = mergedDefibrillateurs.filter(df => {
-      // 0. Exclude deleted defibs
+      // 0. Exclude deleted defibs (only match by unique id/identifiant when present)
       if (deletedDefibSet.size > 0) {
         const idLower = df.id ? df.id.trim().toLowerCase() : '';
         const idfLower = df.identifiant ? df.identifiant.trim().toLowerCase() : '';
-        const numLower = df.numeroSerie ? df.numeroSerie.trim().toLowerCase() : (df as any).num_serie ? String((df as any).num_serie).trim().toLowerCase() : '';
-        if ((idLower && deletedDefibSet.has(idLower)) || (idfLower && deletedDefibSet.has(idfLower)) || (numLower && deletedDefibSet.has(numLower))) {
-          return false;
+        if (idfLower || idLower) {
+          if ((idLower && deletedDefibSet.has(idLower)) || (idfLower && deletedDefibSet.has(idfLower))) {
+            return false;
+          }
+        } else {
+          const numLower = df.numeroSerie ? df.numeroSerie.trim().toLowerCase() : (df as any).num_serie ? String((df as any).num_serie).trim().toLowerCase() : '';
+          if (numLower && numLower !== 'non renseigné' && numLower !== 'n/a' && numLower !== '-' && deletedDefibSet.has(numLower)) {
+            return false;
+          }
         }
       }
       // 1. Fast equality checks first (inexpensive, supports both IDs and Spreadsheet names)
@@ -2622,87 +2648,40 @@ export default function DefibTab({
         if (activeContrat !== activeFilters.contrat) return false;
       }
 
-      // 6.5 Advanced Search Terms match (from side pane filter)
+      // 6. Search query & Advanced Search Terms match (searches across all fields of the spreadsheet row)
       const advTerms = (activeFilters.advancedSearchTerms || [])
         .map(t => t.trim().toLowerCase())
         .filter(t => t.length >= 2);
 
-      // 6. Search query match
-      if (searchLower && advTerms.length === 0) {
-        const clientName = getLinkedClientForDefib(df)?.denomination || (df as any).clientNom || df.nomSite || '';
-        const modelName = variableMap.get(df.modeleId)?.nom || '';
-        const isMatchSearch = (
-          (df.identifiant || '').toLowerCase().includes(searchLower) ||
-          (df.numeroSerie || '').toLowerCase().includes(searchLower) ||
-          (df.ville || '').toLowerCase().includes(searchLower) ||
-          (df.nomSite || '').toLowerCase().includes(searchLower) ||
-          (clientName || '').toLowerCase().includes(searchLower) ||
-          (modelName || '').toLowerCase().includes(searchLower) ||
-          (df.numeroAtlasante || '').toLowerCase().includes(searchLower) ||
-          (df.versionLogiciel || '').toLowerCase().includes(searchLower) ||
-          (df.nomPrenomSite || '').toLowerCase().includes(searchLower) ||
-          (df.categorieEtablissement || '').toLowerCase().includes(searchLower) ||
-          (df.commentaire || '').toLowerCase().includes(searchLower) ||
-          (df.commentaireInterne || '').toLowerCase().includes(searchLower) ||
-          (df.commentaireCoffret || '').toLowerCase().includes(searchLower) ||
-          (df.commentaireAdresse || '').toLowerCase().includes(searchLower) ||
-          (df.commentaireElectrodeA || '').toLowerCase().includes(searchLower) ||
-          (df.commentaireElectrodeP || '').toLowerCase().includes(searchLower) ||
-          (df.commentaireBatterie || '').toLowerCase().includes(searchLower) ||
-          (df.commentaireCampagneRappel || '').toLowerCase().includes(searchLower)
-        );
-        if (!isMatchSearch) return false;
-      }
-
-      if (advTerms.length > 0) {
+      if (searchLower || advTerms.length > 0) {
         const clientName = (getLinkedClientForDefib(df)?.denomination || (df as any).clientNom || df.nomSite || '').toLowerCase();
         const modelName = (variableMap.get(df.modeleId)?.nom || '').toLowerCase();
-
-        const defibValues: string[] = [
-          df.identifiant,
-          df.numeroSerie,
-          (df as any).num_serie,
-          (df as any).serial,
-          df.numeroAtlasante,
-          df.ville,
-          df.nomSite,
-          df.cp,
-          df.numVoie,
-          df.region,
-          df.pays,
-          clientName,
-          modelName,
-          df.lotBatterie,
-          df.lotElectrodeA,
-          df.lotElectrodeP,
-          df.numeroLotCoffret,
-          df.nomPrenomSite,
-          df.telephoneSite,
-          df.emailSite,
-          df.versionLogiciel,
-          df.categorieEtablissement,
-          df.commentaire,
-          df.commentaireInterne,
-          df.commentaireCoffret,
-          df.commentaireAdresse,
-          df.commentaireElectrodeA,
-          df.commentaireElectrodeP,
-          df.commentaireBatterie,
-          df.commentaireCampagneRappel,
-        ].filter(Boolean).map(val => String(val).toLowerCase());
-
-        const dfMatchesTerm = (term: string) => defibValues.some(val => val.includes(term));
-
-        const operator = activeFilters.advancedSearchOperator || 'OR';
-        if (operator === 'AND') {
-          // Strict AND mode: this defibrillator must match all terms
-          if (!advTerms.every(t => dfMatchesTerm(t))) {
-            return false;
+        const rowValues: string[] = [];
+        if (clientName) rowValues.push(clientName);
+        if (modelName) rowValues.push(modelName);
+        for (const [k, v] of Object.entries(df)) {
+          if (k === 'envId' || k === 'tenantId' || k === '_sheetRowNumber' || v === undefined || v === null || v === '') continue;
+          if (typeof v === 'string' || typeof v === 'number') {
+            rowValues.push(String(v).toLowerCase());
           }
-        } else {
-          // Multi-filter OR mode (default): matches any of the specified terms (e.g. multiple serial numbers)
-          if (!advTerms.some(t => dfMatchesTerm(t))) {
-            return false;
+        }
+
+        if (searchLower) {
+          const isMatchSearch = rowValues.some(val => val.includes(searchLower));
+          if (!isMatchSearch) return false;
+        }
+
+        if (advTerms.length > 0) {
+          const dfMatchesTerm = (term: string) => rowValues.some(val => val.includes(term));
+          const operator = activeFilters.advancedSearchOperator || 'OR';
+          if (operator === 'AND') {
+            if (!advTerms.every(t => dfMatchesTerm(t))) {
+              return false;
+            }
+          } else {
+            if (!advTerms.some(t => dfMatchesTerm(t))) {
+              return false;
+            }
           }
         }
       }
@@ -2863,7 +2842,7 @@ export default function DefibTab({
 
   // Direct server-side Google Spreadsheet interrogation on Search & Filters
   useEffect(() => {
-    if (!resolvedSpreadsheetUrl || (isInitialView && maintenanceFilter === 'all')) {
+    if (isInitialView && maintenanceFilter === 'all') {
       setRemoteFilteredTotal(null);
       setIsSearchingSpreadsheet(false);
       return;
@@ -2908,7 +2887,7 @@ export default function DefibTab({
             actionUnder3: activeFilters.actionUnder3,
             action3To6: activeFilters.action3To6,
             sortFilter,
-            limit: 25000,
+            limit: 50000,
             forceRefresh: refreshTrigger > 0,
           }),
         });
@@ -2925,14 +2904,14 @@ export default function DefibTab({
       } catch (_) {
       } finally {
         const elapsed = Date.now() - startedAt;
-        const minWait = Math.max(0, 350 - elapsed);
+        const minWait = Math.max(0, 250 - elapsed);
         setTimeout(() => {
           if (!cancelled) {
             setIsSearchingSpreadsheet(false);
           }
         }, minWait);
       }
-    }, 150);
+    }, 80);
 
     return () => {
       cancelled = true;

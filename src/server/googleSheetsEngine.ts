@@ -60,6 +60,7 @@ export interface SheetCollectionStats {
   distinctCoffrets: string[];
   distinctElectrodes: string[];
   distinctBatteries: string[];
+  clientVolumes?: Record<string, number>;
 }
 
 export interface SheetQueryFilterParams {
@@ -639,6 +640,113 @@ function normalizeSituationFromSheet(val: string): 'Vert' | 'Orange' | 'Rouge' {
   return 'Vert';
 }
 
+const TENANT_SHORT_ENV_MAP: Record<string, string> = {
+  demo: 'D10',
+  tenant_pvzvub57h_1781513640995: 'D71',
+  d1: 'D38',
+  d2: 'D90',
+  d3: 'D63',
+  d4: 'D64',
+  d5: 'D52',
+  d6: 'D53',
+  d7: 'D28',
+  d8: 'D21',
+  d9: 'D11',
+  d10: 'D88',
+  d11: 'D39',
+  d12: 'D22',
+  d13: 'D31',
+  d14: 'D30',
+  d15: 'D62',
+  d16: 'D85',
+  d17: 'D56',
+  d18: 'D83',
+  d19: 'D66',
+  d20: 'D74',
+  d21: 'D86',
+  d22: 'D13',
+  d23: 'D73',
+  d24: 'D20',
+  d25: 'D24',
+  d26: 'D67',
+  d27: 'D58',
+  d28: 'D19',
+};
+
+function resolveTenantShortEnvCode(tenantId: string, existingUpperIds?: Set<string>): string {
+  // 1. If existing rows in the spreadsheet already follow XXX-D58-XXX, infer the exact tenant code from the sheet
+  if (existingUpperIds && existingUpperIds.size > 0) {
+    const counts = new Map<string, number>();
+    let bestCode = '';
+    let bestCount = 0;
+    for (const id of existingUpperIds) {
+      const m = id.match(/^[A-Z0-9]{3}-(D\d+)-[A-Z0-9]{3}$/i);
+      if (m && m[1]) {
+        const code = m[1].toUpperCase();
+        const nextCount = (counts.get(code) || 0) + 1;
+        counts.set(code, nextCount);
+        if (nextCount > bestCount) {
+          bestCount = nextCount;
+          bestCode = code;
+        }
+      }
+    }
+    if (bestCode) return bestCode;
+  }
+
+  // 2. Lookup in static known tenants registry
+  const cleanTid = String(tenantId || 'demo').trim().toLowerCase();
+  if (TENANT_SHORT_ENV_MAP[cleanTid]) {
+    return TENANT_SHORT_ENV_MAP[cleanTid];
+  }
+
+  // 3. Check registered_tenants.json on disk for dynamically created tenants
+  try {
+    for (const relPath of ['data/collections/registered_tenants.json', '.data/collections/registered_tenants.json']) {
+      const fullPath = path.join(process.cwd(), relPath);
+      if (fs.existsSync(fullPath)) {
+        const raw = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
+        const list = Array.isArray(raw) ? raw : Array.isArray(raw?.items) ? raw.items : [];
+        const match = list.find(
+          (t: any) =>
+            t &&
+            (String(t.id || '').trim().toLowerCase() === cleanTid ||
+              String(t.shortEnvId || '').trim().toLowerCase() === cleanTid)
+        );
+        if (match?.shortEnvId) {
+          return String(match.shortEnvId).trim().toUpperCase();
+        }
+      }
+    }
+  } catch (_) {}
+
+  // 4. Fallback
+  if (/^d\d+$/i.test(cleanTid)) {
+    return cleanTid.toUpperCase();
+  }
+  return 'D26';
+}
+
+function generateUniqueTenantEquipmentCode(shortEnvCode: string, usedUpperSet: Set<string>): string {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (let attempts = 0; attempts < 5000; attempts++) {
+    const l1 = letters[Math.floor(Math.random() * 26)];
+    const l2 = letters[Math.floor(Math.random() * 26)];
+    const l3 = letters[Math.floor(Math.random() * 26)];
+    const l4 = letters[Math.floor(Math.random() * 26)];
+    const l5 = letters[Math.floor(Math.random() * 26)];
+    const l6 = letters[Math.floor(Math.random() * 26)];
+    const code = `${l1}${l2}${l3}-${shortEnvCode}-${l4}${l5}${l6}`;
+    if (!usedUpperSet.has(code)) {
+      usedUpperSet.add(code);
+      return code;
+    }
+  }
+  const fallback = `DAE-${shortEnvCode}-${Date.now().toString(36).slice(-3).toUpperCase()}`;
+  usedUpperSet.add(fallback);
+  return fallback;
+}
+
 export interface PrecomputedColumnMatch {
   colIdx: number;
   def: SheetColumnDef;
@@ -828,8 +936,13 @@ export function mapRowToDefib(
 
   const cleanIdent = String(obj.identifiant || '').trim();
   const cleanSn = String(obj.numeroSerie || '').trim();
+  if (!cleanIdent) {
+    obj._missingSheetIdentifiant = true;
+    obj.identifiant = '';
+  } else {
+    obj.identifiant = cleanIdent;
+  }
   obj.id = cleanIdent || cleanSn || `sheet_df_${tenantId}_${rowIndex + 2}`;
-  if (!obj.identifiant) obj.identifiant = obj.id;
   if (!obj.numeroSerie) obj.numeroSerie = '';
 
   return obj;
@@ -986,8 +1099,13 @@ export function mapRowToAutreMateriel(
 
   const cleanIdent = String(obj.identifiant || '').trim();
   const cleanSn = String(obj.numeroSerie || specifiques.numSerie || '').trim();
+  if (!cleanIdent) {
+    obj._missingSheetIdentifiant = true;
+    obj.identifiant = '';
+  } else {
+    obj.identifiant = cleanIdent;
+  }
   obj.id = cleanIdent || cleanSn || `sheet_am_${tenantId}_${rowIndex + 2}`;
-  if (!obj.identifiant) obj.identifiant = obj.id;
 
   return obj;
 }
@@ -4778,7 +4896,9 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
       .map(s => String(s).trim().toLowerCase());
   }
   if (tabType === 'autresMateriels') {
-    return [item.id, item.identifiant, item.numeroSerie, item.specifiques?.numSerie, item.denomination]
+    const primary = [item.id, item.identifiant].filter(Boolean).map(s => String(s).trim().toLowerCase());
+    if (primary.length > 0) return primary;
+    return [item.numeroSerie, item.specifiques?.numSerie, item.denomination]
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
@@ -4871,7 +4991,9 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
-  return [item.id, item.identifiant, item.numeroSerie]
+  const primaryDefibKeys = [item.id, item.identifiant].filter(Boolean).map(s => String(s).trim().toLowerCase());
+  if (primaryDefibKeys.length > 0) return primaryDefibKeys;
+  return [item.numeroSerie]
     .filter(Boolean)
     .map(s => String(s).trim().toLowerCase());
 }
@@ -5037,6 +5159,16 @@ function computeSheetCollectionStats(items: any[], tabType: SheetTabType): Sheet
   const coffretsSet = new Set<string>();
   const electrodesSet = new Set<string>();
   const batteriesSet = new Set<string>();
+  const clientVolumes: Record<string, number> = {};
+
+  const normClientName = (val: any): string =>
+    String(val || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/&#0*39;?/g, '')
+      .replace(/[^a-z0-9]+/gi, ' ')
+      .trim()
+      .toLowerCase();
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -5045,6 +5177,29 @@ function computeSheetCollectionStats(items: any[], tabType: SheetTabType): Sheet
   for (let i = 0; i < items.length; i++) {
     const df = items[i];
     if (!df) continue;
+
+    const cNameKey = normClientName(df.clientNom || df.client || '');
+    const siteNameKey = normClientName(df.nomSite || '');
+    if (cNameKey) {
+      clientVolumes[cNameKey] = (clientVolumes[cNameKey] || 0) + 1;
+    }
+    if (siteNameKey && siteNameKey !== cNameKey) {
+      clientVolumes[siteNameKey] = (clientVolumes[siteNameKey] || 0) + 1;
+    }
+    if (df.clientId && !isPlaceholderClientValue(df.clientId)) {
+      const cidKey = `id:${String(df.clientId).trim().toLowerCase()}`;
+      clientVolumes[cidKey] = (clientVolumes[cidKey] || 0) + 1;
+    }
+    if (df.clientIdField && !isPlaceholderClientValue(df.clientIdField)) {
+      const cifKey = `id:${String(df.clientIdField).trim().toLowerCase()}`;
+      if (cifKey !== `id:${String(df.clientId || '').trim().toLowerCase()}`) {
+        clientVolumes[cifKey] = (clientVolumes[cifKey] || 0) + 1;
+      }
+    }
+    if (df.payeurId && !isPlaceholderClientValue(df.payeurId)) {
+      const pidKey = `payeur:${String(df.payeurId).trim().toLowerCase()}`;
+      clientVolumes[pidKey] = (clientVolumes[pidKey] || 0) + 1;
+    }
 
     if (df.modeleId) modelsSet.add(String(df.modeleId).trim());
     if (df.modeleCoffretId) coffretsSet.add(String(df.modeleCoffretId).trim());
@@ -5108,6 +5263,7 @@ function computeSheetCollectionStats(items: any[], tabType: SheetTabType): Sheet
     distinctCoffrets: Array.from(coffretsSet).filter(Boolean),
     distinctElectrodes: Array.from(electrodesSet).filter(Boolean),
     distinctBatteries: Array.from(batteriesSet).filter(Boolean),
+    clientVolumes,
   };
 }
 
@@ -5282,12 +5438,6 @@ export async function fetchTenantSheetCollection(
     if (!Array.isArray(snap.headers) || snap.headers.length === 121 || snap.headers[0] === 'Section 1 - Identifiant') {
       return true;
     }
-    if (
-      Array.isArray(snap.items) &&
-      snap.items.some((it: any) => it && (it.miseEnService === 'Y' || it.nomContrat === 'Non' || it.nomContrat === 'Oui'))
-    ) {
-      return true;
-    }
     return false;
   };
   if (!sheetMemoryCache.has(cacheKey)) {
@@ -5297,6 +5447,13 @@ export async function fetchTenantSheetCollection(
         tabType === 'variables' &&
         diskSnap.items.some(hasUnmappedVariableKeys);
       if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap)) {
+        if (
+          tabType === 'defibrillateurs' &&
+          (!diskSnap.stats?.clientVolumes || Object.keys(diskSnap.stats.clientVolumes).length === 0)
+        ) {
+          diskSnap.stats = computeSheetCollectionStats(diskSnap.items, 'defibrillateurs');
+          saveDiskSnapshotAsync(cacheKey, diskSnap);
+        }
         sheetMemoryCache.set(cacheKey, diskSnap);
       }
     }
@@ -5308,6 +5465,13 @@ export async function fetchTenantSheetCollection(
       tabType === 'variables' &&
       cached.items.some(hasUnmappedVariableKeys);
     if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached)) {
+      if (
+        tabType === 'defibrillateurs' &&
+        (!cached.stats?.clientVolumes || Object.keys(cached.stats.clientVolumes).length === 0)
+      ) {
+        cached.stats = computeSheetCollectionStats(cached.items, 'defibrillateurs');
+        saveDiskSnapshotAsync(cacheKey, cached);
+      }
       if (Date.now() - cached.fetchedAt > 300000 && !inFlightSheetFetches.has(cacheKey)) {
         setImmediate(() => {
           fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true).catch(() => {});
@@ -5427,23 +5591,12 @@ export async function fetchTenantSheetCollection(
               : mapRowToGenericRecord(headers, r, i, tenantId, tabType);
 
           // Ignore phantom rows where primary identifying columns were cleared in Google Sheets
-          if (tabType === 'defibrillateurs') {
-            const hasRealDefibIdentity =
-              (mapped.identifiant && !String(mapped.identifiant).startsWith('sheet_df_')) ||
-              Boolean(mapped.numeroSerie);
-            if (!hasRealDefibIdentity) continue;
-          } else if (tabType === 'clients') {
+          if (tabType === 'clients') {
             const hasRealClientIdentity =
               (mapped.clientIdField && !String(mapped.clientIdField).startsWith('sheet_cli_')) ||
               Boolean(mapped.denomination) ||
               Boolean(mapped.siret);
             if (!hasRealClientIdentity) continue;
-          } else if (tabType === 'autresMateriels') {
-            const hasRealAutreIdentity =
-              (mapped.identifiant && !String(mapped.identifiant).startsWith('sheet_am_')) ||
-              Boolean(mapped.denomination) ||
-              Boolean(mapped.specifiques?.numSerie);
-            if (!hasRealAutreIdentity) continue;
           } else if (tabType === 'stocksGlobaux' || tabType === 'stocks') {
             const hasRealStockIdentity = Boolean(mapped.denominationPieceId) || Boolean(mapped.ugs);
             if (!hasRealStockIdentity) continue;
@@ -5461,6 +5614,112 @@ export async function fetchTenantSheetCollection(
           }
 
           baseItems.push(mapped);
+        }
+
+        // Auto-generate and persist missing "Section 1 - Identifiant." / "Identifiant" for Défibrillateurs and Autres Matériels
+        if ((tabType === 'defibrillateurs' || tabType === 'autresMateriels') && baseItems.length > 0) {
+          const usedUpperIds = new Set<string>();
+          for (const it of baseItems) {
+            const rawId = String(it?.identifiant || '').trim();
+            if (
+              rawId &&
+              !it._missingSheetIdentifiant &&
+              !rawId.startsWith('sheet_df_') &&
+              !rawId.startsWith('sheet_am_')
+            ) {
+              usedUpperIds.add(rawId.toUpperCase());
+            }
+          }
+
+          const itemsMissingIdent = baseItems.filter(it => {
+            const rawId = String(it?.identifiant || '').trim();
+            return (
+              Boolean(it?._missingSheetIdentifiant) ||
+              !rawId ||
+              rawId.startsWith('sheet_df_') ||
+              rawId.startsWith('sheet_am_')
+            );
+          });
+
+          if (itemsMissingIdent.length > 0) {
+            const shortEnvCode = resolveTenantShortEnvCode(tenantId, usedUpperIds);
+            const identMatch = precomputedMatches.find(m => m.def.field === 'identifiant');
+            const identColIdx = identMatch ? identMatch.colIdx : 0;
+            const identColLetter = columnIndexToLetter(identColIdx);
+            const missingIdentUpdates: Array<{ rowNumber: number; value: string; item: any }> = [];
+
+            for (const it of itemsMissingIdent) {
+              const generatedIdent = generateUniqueTenantEquipmentCode(shortEnvCode, usedUpperIds);
+              it.identifiant = generatedIdent;
+              it.id = generatedIdent;
+              delete it._missingSheetIdentifiant;
+              if (typeof it._sheetRowNumber === 'number' && it._sheetRowNumber >= 2) {
+                missingIdentUpdates.push({
+                  rowNumber: it._sheetRowNumber,
+                  value: generatedIdent,
+                  item: it,
+                });
+              }
+            }
+
+            if (missingIdentUpdates.length > 0 && rawMatrix !== null) {
+              try {
+                const accessToken = await getServiceAccountAccessToken();
+                let wroteToSheet = false;
+                if (accessToken) {
+                  const sheetTitle = await resolveSheetTabTitle(extracted.spreadsheetId, extracted.gid);
+                  const rangePrefix = buildSheetRangePrefix(sheetTitle);
+                  const batchData = missingIdentUpdates.map(u => ({
+                    range: `${rangePrefix}${identColLetter}${u.rowNumber}`,
+                    values: [[u.value]],
+                  }));
+                  const writeRes = await fetchWithRetry(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchUpdate`,
+                    {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        valueInputOption: 'USER_ENTERED',
+                        data: batchData,
+                      }),
+                      signal: AbortSignal.timeout(8000),
+                    },
+                    2
+                  );
+                  if (writeRes.ok) {
+                    wroteToSheet = true;
+                  }
+                }
+                const cfg = getGlobalGoogleConfig();
+                if (!wroteToSheet && cfg.appsScriptBridgeUrl) {
+                  for (const u of missingIdentUpdates) {
+                    const rowValues =
+                      tabType === 'defibrillateurs'
+                        ? mapDefibToRow(headers, u.item)
+                        : mapAutreMaterielToRow(headers, u.item);
+                    await fetch(cfg.appsScriptBridgeUrl, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        action: 'upsertRow',
+                        spreadsheetUrl,
+                        spreadsheetId: extracted.spreadsheetId,
+                        gid: extracted.gid,
+                        headers,
+                        rowNumber: u.rowNumber,
+                        rowValues,
+                      }),
+                    }).catch(() => {});
+                  }
+                }
+              } catch (err) {
+                console.warn(`[SheetsEngine] Auto-fill missing identifiant write warning for ${tabType}:`, err);
+              }
+            }
+          }
         }
       }
 
@@ -5716,8 +5975,7 @@ export async function queryTenantSheetCollection(
   stats: SheetCollectionStats;
   fromSpreadsheet: boolean;
 }> {
-  const data = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, false);
-  const allItems = data.items || [];
+  let data = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, Boolean(params.forceRefresh));
   const searchLower = String(params.search || '').trim().toLowerCase();
   const advTerms = Array.isArray(params.advancedSearchTerms)
     ? params.advancedSearchTerms.map(t => String(t || '').trim().toLowerCase()).filter(t => t.length >= 2)
@@ -5743,181 +6001,157 @@ export async function queryTenantSheetCollection(
   today.setHours(0, 0, 0, 0);
   const todayTime = today.getTime();
 
-  let filtered = allItems.filter(df => {
-    if (!df) return false;
+  const runFilterOnItems = (sourceItems: any[]): any[] => {
+    return sourceItems.filter(df => {
+      if (!df) return false;
 
-    if (region && df.region !== region) return false;
+      if (region && df.region !== region) return false;
 
-    if (modeleId) {
-      const dfMod = String(df.modeleId || df.modele || '').trim().toLowerCase();
-      const matched = dfMod === modeleId || modeleAliases.includes(dfMod);
-      if (!matched) return false;
-    }
-
-    if (clientId) {
-      const dfCliId = String(df.clientId || '').trim().toLowerCase();
-      const dfCliField = String(df.clientIdField || '').trim().toLowerCase();
-      const dfNomSite = String(df.nomSite || '').trim().toLowerCase();
-      const dfCliNom = String(df.clientNom || '').trim().toLowerCase();
-      const matched =
-        dfCliId === clientId ||
-        dfCliField === clientId ||
-        clientMatchTerms.includes(dfCliId) ||
-        clientMatchTerms.includes(dfCliField) ||
-        clientMatchTerms.includes(dfNomSite) ||
-        clientMatchTerms.includes(dfCliNom);
-      if (!matched) return false;
-    }
-
-    if (categorie) {
-      if (categorie === 'Loué' && df.loue !== 'Oui') return false;
-      if (categorie === 'Prêté' && df.prete !== 'Oui') return false;
-      if (categorie === 'Stocké' && df.stocke !== 'Oui') return false;
-      if (categorie === 'Archivé' && df.archive !== 'Oui') return false;
-      if (categorie === 'Sous-Traitance' && df.sousTraitance !== 'Oui') return false;
-    }
-
-    if (maintenanceFilter === 'oui' || maintenanceFilter === 'non') {
-      const rawFsm = String(df.fsmAutorise || 'Oui').trim().toLowerCase();
-      const fsmVal = rawFsm === 'non' ? 'non' : 'oui';
-      if (maintenanceFilter !== fsmVal) return false;
-    }
-
-    if (contrat) {
-      const activeContrat = df.contrat || 'Non';
-      if (activeContrat !== contrat) return false;
-    }
-
-    if (selectedDepartment) {
-      const rawCp = String(df.codePostal || df.cp || '').trim().replace(/\s+/g, '').toUpperCase();
-      if (!rawCp) return false;
-      if (selectedDepartment === '2A') {
-        if (!rawCp.startsWith('2A') && !rawCp.startsWith('200') && !rawCp.startsWith('201')) return false;
-      } else if (selectedDepartment === '2B') {
-        if (!rawCp.startsWith('2B') && !rawCp.startsWith('202') && !rawCp.startsWith('206')) return false;
-      } else {
-        const normalized = /^\d{4}$/.test(rawCp) ? '0' + rawCp : rawCp;
-        if (!normalized.startsWith(selectedDepartment)) return false;
-      }
-    }
-
-    if (searchLower && advTerms.length === 0) {
-      const haystacks = [
-        df.identifiant,
-        df.numeroSerie,
-        df.ville,
-        df.cp,
-        df.nomSite,
-        df.clientNom,
-        df.modeleId,
-        df.numeroAtlasante,
-        df.versionLogiciel,
-        df.nomPrenomSite,
-        df.categorieEtablissement,
-        df.commentaire,
-        df.commentaireCoffret,
-        df.commentaireAdresse,
-        df.commentaireElectrodeA,
-        df.commentaireElectrodeP,
-        df.commentaireBatterie,
-        df.commentaireCampagneRappel,
-      ];
-      const matches = haystacks.some(v => v && String(v).toLowerCase().includes(searchLower));
-      if (!matches) return false;
-    }
-
-    if (advTerms.length > 0) {
-      const defibValues = [
-        df.identifiant,
-        df.numeroSerie,
-        df.numeroAtlasante,
-        df.ville,
-        df.nomSite,
-        df.clientNom,
-        df.cp,
-        df.numVoie,
-        df.region,
-        df.pays,
-        df.modeleId,
-        df.lotBatterie,
-        df.lotElectrodeA,
-        df.lotElectrodeP,
-        df.numeroLotCoffret,
-        df.nomPrenomSite,
-        df.telephoneSite,
-        df.emailSite,
-        df.versionLogiciel,
-        df.categorieEtablissement,
-        df.commentaire,
-        df.commentaireCoffret,
-        df.commentaireAdresse,
-        df.commentaireElectrodeA,
-        df.commentaireElectrodeP,
-        df.commentaireBatterie,
-        df.commentaireCampagneRappel,
-      ]
-        .filter(Boolean)
-        .map(v => String(v).toLowerCase());
-
-      const matchesTerm = (term: string) => defibValues.some(val => val.includes(term));
-      if (advOp === 'AND') {
-        if (!advTerms.every(matchesTerm)) return false;
-      } else {
-        if (!advTerms.some(matchesTerm)) return false;
-      }
-    }
-
-    if (needDates) {
-      const timesToCheck: number[] = [];
-      const nextMaintStr = df.prochaineMaintenance || computeNextMaintFromLast(df.derniereMaintenance);
-      const mDate = parseSheetDateHelper(nextMaintStr);
-      if (mDate) {
-        mDate.setHours(0, 0, 0, 0);
-        timesToCheck.push(mDate.getTime());
-      }
-      const eADate = parseSheetDateHelper(df.peremptionElectrodeA);
-      if (eADate) {
-        eADate.setHours(0, 0, 0, 0);
-        timesToCheck.push(eADate.getTime());
-      }
-      const ePDate = parseSheetDateHelper(df.peremptionElectrodeP);
-      if (ePDate) {
-        ePDate.setHours(0, 0, 0, 0);
-        timesToCheck.push(ePDate.getTime());
-      }
-      const bDate = parseSheetDateHelper(df.peremptionBatterie);
-      if (bDate) {
-        bDate.setHours(0, 0, 0, 0);
-        timesToCheck.push(bDate.getTime());
+      if (modeleId) {
+        const dfMod = String(df.modeleId || df.modele || '').trim().toLowerCase();
+        const matched = dfMod === modeleId || modeleAliases.includes(dfMod);
+        if (!matched) return false;
       }
 
-      if (params.actionExpired) {
-        if (!timesToCheck.some(t => t < todayTime)) return false;
+      if (clientId) {
+        const dfCliId = String(df.clientId || '').trim().toLowerCase();
+        const dfCliField = String(df.clientIdField || '').trim().toLowerCase();
+        const dfNomSite = String(df.nomSite || '').trim().toLowerCase();
+        const dfCliNom = String(df.clientNom || '').trim().toLowerCase();
+        const matched =
+          dfCliId === clientId ||
+          dfCliField === clientId ||
+          clientMatchTerms.includes(dfCliId) ||
+          clientMatchTerms.includes(dfCliField) ||
+          clientMatchTerms.includes(dfNomSite) ||
+          clientMatchTerms.includes(dfCliNom);
+        if (!matched) return false;
       }
-      if (params.actionUnder3) {
-        if (
-          !timesToCheck.some(t => {
-            const diffDays = Math.ceil((t - todayTime) / (1000 * 60 * 60 * 24));
-            return diffDays >= 0 && diffDays < 90;
-          })
-        ) {
-          return false;
+
+      if (categorie) {
+        if (categorie === 'Loué' && df.loue !== 'Oui') return false;
+        if (categorie === 'Prêté' && df.prete !== 'Oui') return false;
+        if (categorie === 'Stocké' && df.stocke !== 'Oui') return false;
+        if (categorie === 'Archivé' && df.archive !== 'Oui') return false;
+        if (categorie === 'Sous-Traitance' && df.sousTraitance !== 'Oui') return false;
+      }
+
+      if (maintenanceFilter === 'oui' || maintenanceFilter === 'non') {
+        const rawFsm = String(df.fsmAutorise || 'Oui').trim().toLowerCase();
+        const fsmVal = rawFsm === 'non' ? 'non' : 'oui';
+        if (maintenanceFilter !== fsmVal) return false;
+      }
+
+      if (contrat) {
+        const activeContrat = df.contrat || 'Non';
+        if (activeContrat !== contrat) return false;
+      }
+
+      if (selectedDepartment) {
+        const rawCp = String(df.codePostal || df.cp || '').trim().replace(/\s+/g, '').toUpperCase();
+        if (!rawCp) return false;
+        if (selectedDepartment === '2A') {
+          if (!rawCp.startsWith('2A') && !rawCp.startsWith('200') && !rawCp.startsWith('201')) return false;
+        } else if (selectedDepartment === '2B') {
+          if (!rawCp.startsWith('2B') && !rawCp.startsWith('202') && !rawCp.startsWith('206')) return false;
+        } else {
+          const normalized = /^\d{4}$/.test(rawCp) ? '0' + rawCp : rawCp;
+          if (!normalized.startsWith(selectedDepartment)) return false;
         }
       }
-      if (params.action3To6) {
-        if (
-          !timesToCheck.some(t => {
-            const diffDays = Math.ceil((t - todayTime) / (1000 * 60 * 60 * 24));
-            return diffDays >= 90 && diffDays <= 180;
-          })
-        ) {
-          return false;
+
+      if (searchLower || advTerms.length > 0) {
+        const rowValues: string[] = [];
+        for (const [k, v] of Object.entries(df)) {
+          if (k === 'envId' || k === 'tenantId' || k === '_sheetRowNumber' || v === undefined || v === null || v === '') continue;
+          if (typeof v === 'string' || typeof v === 'number') {
+            rowValues.push(String(v).toLowerCase());
+          }
+        }
+
+        if (searchLower) {
+          const matchesSearch = rowValues.some(val => val.includes(searchLower));
+          if (!matchesSearch) return false;
+        }
+
+        if (advTerms.length > 0) {
+          const matchesTerm = (term: string) => rowValues.some(val => val.includes(term));
+          if (advOp === 'AND') {
+            if (!advTerms.every(matchesTerm)) return false;
+          } else {
+            if (!advTerms.some(matchesTerm)) return false;
+          }
         }
       }
-    }
 
-    return true;
-  });
+      if (needDates) {
+        const timesToCheck: number[] = [];
+        const nextMaintStr = df.prochaineMaintenance || computeNextMaintFromLast(df.derniereMaintenance);
+        const mDate = parseSheetDateHelper(nextMaintStr);
+        if (mDate) {
+          mDate.setHours(0, 0, 0, 0);
+          timesToCheck.push(mDate.getTime());
+        }
+        const eADate = parseSheetDateHelper(df.peremptionElectrodeA);
+        if (eADate) {
+          eADate.setHours(0, 0, 0, 0);
+          timesToCheck.push(eADate.getTime());
+        }
+        const ePDate = parseSheetDateHelper(df.peremptionElectrodeP);
+        if (ePDate) {
+          ePDate.setHours(0, 0, 0, 0);
+          timesToCheck.push(ePDate.getTime());
+        }
+        const bDate = parseSheetDateHelper(df.peremptionBatterie);
+        if (bDate) {
+          bDate.setHours(0, 0, 0, 0);
+          timesToCheck.push(bDate.getTime());
+        }
+
+        if (params.actionExpired) {
+          if (!timesToCheck.some(t => t < todayTime)) return false;
+        }
+        if (params.actionUnder3) {
+          if (
+            !timesToCheck.some(t => {
+              const diffDays = Math.ceil((t - todayTime) / (1000 * 60 * 60 * 24));
+              return diffDays >= 0 && diffDays < 90;
+            })
+          ) {
+            return false;
+          }
+        }
+        if (params.action3To6) {
+          if (
+            !timesToCheck.some(t => {
+              const diffDays = Math.ceil((t - todayTime) / (1000 * 60 * 60 * 24));
+              return diffDays >= 90 && diffDays <= 180;
+            })
+          ) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    });
+  };
+
+  let filtered = runFilterOnItems(data.items || []);
+
+  // If a specific search term or advanced term yielded 0 results in cached memory, and cache is > 15s old,
+  // automatically re-fetch live from the Google Spreadsheet in case the row was just added to the sheet!
+  if (filtered.length === 0 && (searchLower.length >= 2 || advTerms.length > 0) && !params.forceRefresh) {
+    const extracted = extractSpreadsheetIdAndGid(spreadsheetUrl);
+    if (extracted) {
+      const cacheKey = getSheetCacheKey(tabType, extracted.spreadsheetId, extracted.gid);
+      const cached = sheetMemoryCache.get(cacheKey);
+      if (!cached || Date.now() - cached.fetchedAt > 15000) {
+        data = await fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true);
+        filtered = runFilterOnItems(data.items || []);
+      }
+    }
+  }
 
   if (params.sortFilter === 'recent') {
     filtered = [...filtered].reverse();
@@ -5933,7 +6167,7 @@ export async function queryTenantSheetCollection(
 
   const totalFilteredCount = filtered.length;
   const offset = Math.max(0, Number(params.offset) || 0);
-  const limit = Math.max(1, Math.min(25000, Number(params.limit) || 25000));
+  const limit = Math.max(1, Math.min(100000, Number(params.limit) || 100000));
   const sliced = filtered.slice(offset, offset + limit);
 
   return {
