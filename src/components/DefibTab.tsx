@@ -659,7 +659,7 @@ export default function DefibTab({
     }
     let cancelled = false;
 
-    idbGet<Defibrillateur[]>(`defib_${activeTenantId}_defibrillateurs`)
+    idbGet<Defibrillateur[]>(`defib_${activeTenantId}_defibrillateurs_v110`)
       .then(cached => {
         if (!cancelled && Array.isArray(cached) && cached.length > 0) {
           setFallbackSheetDefibs(prev => (prev.length === 0 ? cached : prev));
@@ -679,7 +679,7 @@ export default function DefibTab({
         const items = Array.isArray(json.items) ? json.items : [];
         if (items.length > 0) {
           setFallbackSheetDefibs(prev => (prev.length >= items.length ? prev : items));
-          idbSet(`defib_${activeTenantId}_defibrillateurs`, items).catch(() => {});
+          idbSet(`defib_${activeTenantId}_defibrillateurs_v110`, items).catch(() => {});
         }
       } catch (_) {}
     })();
@@ -3683,13 +3683,13 @@ export default function DefibTab({
     const resolvedLinkedClient = getLinkedClientForDefib(df);
     const effClientId = resolvedLinkedClient?.id || (!isPlaceholderClientVal(df.clientId) && clientMap.has(df.clientId) ? df.clientId : '');
     setClientId(effClientId);
-    setClientSearchQuery(resolvedLinkedClient ? `${resolvedLinkedClient.denomination}${resolvedLinkedClient.siret && !isPlaceholderClientVal(resolvedLinkedClient.siret) ? ` (${resolvedLinkedClient.siret})` : ''}` : ((df as any).clientNom || df.nomSite || ''));
-    setNomSite(df.nomSite || anyDf.nom_site || (resolvedLinkedClient as any)?.nomSite || resolvedLinkedClient?.denomination || '');
+    setClientSearchQuery(resolvedLinkedClient ? `${resolvedLinkedClient.denomination}${resolvedLinkedClient.siret && !isPlaceholderClientVal(resolvedLinkedClient.siret) ? ` (${resolvedLinkedClient.siret})` : ''}` : ((df as any).clientNom || ''));
+    setNomSite(df.nomSite || anyDf.nom_site || (resolvedLinkedClient as any)?.nomSite || '');
     setCategorieEtablissement(df.categorieEtablissement || anyDf.categorie_etablissement || '');
     setNomPrenomSite(df.nomPrenomSite || anyDf.nom_prenom || anyDf.contact || anyDf.nom_prenom_site || anyDf.contact_site || resolvedLinkedClient?.nomPrenomSite || (resolvedLinkedClient as any)?.responsable || (resolvedLinkedClient as any)?.contact || '');
     setTelephoneSite(df.telephoneSite || anyDf.telephone_portable || anyDf.telephone_site || anyDf.phone || anyDf.telephone || anyDf.tel || resolvedLinkedClient?.telephoneSite || (resolvedLinkedClient as any)?.telephone || (resolvedLinkedClient as any)?.phone || '');
     setEmailSite(df.emailSite || anyDf.email || anyDf.email_site || resolvedLinkedClient?.emailSite || (resolvedLinkedClient as any)?.email || '');
-    setContrat(df.contrat || anyDf.nomContrat || anyDf.nom_contrat || resolvedLinkedClient?.contrat || 'Non');
+    setContrat(df.contrat || resolvedLinkedClient?.contrat || 'Non');
     setNomContrat(df.nomContrat || anyDf.nom_contrat || resolvedLinkedClient?.nomContrat || '');
     setReferenceContrat(df.referenceContrat || anyDf.reference_contrat || resolvedLinkedClient?.referenceContrat || '');
     setDebutContrat(toISODateOnly(df.debutContrat || anyDf.debut_contrat || resolvedLinkedClient?.debutContrat || ''));
@@ -3930,7 +3930,8 @@ export default function DefibTab({
       }
 
       const resolvedClient = clientMap.get(clientId) || clients.find(c => c && (c.id === clientId || c.clientIdField === clientId));
-      const resolvedClientNom = resolvedClient?.denomination || (editingDefib as any)?.clientNom || '';
+      const cleanSearchClient = clientSearchQuery.replace(/\s*\([^)]*\)\s*$/, '').trim();
+      const resolvedClientNom = resolvedClient?.denomination || cleanSearchClient || (editingDefib as any)?.clientNom || '';
 
       const resolveModelLabel = (valId: string, list: Variable[], fallback?: string) => {
         if (!valId) return '';
@@ -3970,7 +3971,7 @@ export default function DefibTab({
 
       clientId,
       clientNom: resolvedClientNom,
-      nomSite: nomSite.trim() || resolvedClientNom,
+      nomSite: nomSite.trim(),
       categorieEtablissement: categorieEtablissement.trim(),
       nomPrenomSite: nomPrenomSite.trim(),
       telephoneSite: telephoneSite.trim(),

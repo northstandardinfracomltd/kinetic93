@@ -761,10 +761,25 @@ export default function SettingsModal({
       const userSpecificKey = userEmail ? `defib_${tenantId}_user_${userEmail}_disable_helps_tutorials` : `defib_${tenantId}_disable_helps_tutorials`;
       setDisableHelpsAndTutorials((localStorage.getItem(userSpecificKey) as 'Oui' | 'Non') || 'Non');
 
-      if (companyInfo && companyInfo.communicationPortailClient !== undefined) {
-        setCommunicationPortailClient(companyInfo.communicationPortailClient);
-      } else {
-        setCommunicationPortailClient(localStorage.getItem(`defib_${tenantId}_communication_portail_client`) || '');
+      const getConfiguredSheetUrl = (key: string, urlKey: string, storageSuffix: string): string => {
+        return (
+          (companyInfo as any)?.[key] ||
+          (companyInfo as any)?.[urlKey] ||
+          localStorage.getItem(`defib_${tenantId}_${storageSuffix}`) ||
+          localStorage.getItem(`defib_${tenantId.toLowerCase()}_${storageSuffix}`) ||
+          localStorage.getItem(`defib_${tenantId.toUpperCase()}_${storageSuffix}`) ||
+          ''
+        ).trim();
+      };
+
+      const initComUrl = getConfiguredSheetUrl('spreadsheetCommunicationPortailClient', 'spreadsheetCommunicationPortailClientUrl', 'spreadsheet_communication_portail_client');
+
+      if (!initComUrl) {
+        if (companyInfo && companyInfo.communicationPortailClient !== undefined) {
+          setCommunicationPortailClient(companyInfo.communicationPortailClient);
+        } else {
+          setCommunicationPortailClient(localStorage.getItem(`defib_${tenantId}_communication_portail_client`) || '');
+        }
       }
     }
   }, [isOpen, isPage, propTenantId, companyInfo, members]);
@@ -804,6 +819,257 @@ export default function SettingsModal({
     }
   }, [isOpen, isPage]);
 
+  // Helper to merge Firebase/DB members and Spreadsheet members (2 sources)
+  const mergeFirebaseAndSpreadsheetMembers = React.useCallback((fbMembers: Member[], sheetMembers: Member[], activeTid: string): Member[] => {
+    const fbBase = ensureTenantMembersClient(Array.isArray(fbMembers) ? fbMembers : [], activeTid);
+    const validSheet = (Array.isArray(sheetMembers) ? sheetMembers : []).filter((m: any) => m && (m.name || m.email));
+    if (validSheet.length === 0) return fbBase;
+
+    const sheetEmails = new Set(validSheet.map((m: any) => String(m.email || '').trim().toLowerCase()).filter(Boolean));
+    const sheetNames = new Set(validSheet.map((m: any) => String(m.name || '').trim().toLowerCase()).filter(Boolean));
+
+    const mergedFromSheet = validSheet.map((sm: any) => {
+      const smEmail = String(sm.email || '').trim().toLowerCase();
+      const smName = String(sm.name || '').trim().toLowerCase();
+      const fbMatch = fbBase.find(
+        (fm: any) =>
+          (smEmail && String(fm.email || '').trim().toLowerCase() === smEmail) ||
+          (!smEmail && smName && String(fm.name || '').trim().toLowerCase() === smName)
+      );
+      if (fbMatch) {
+        return {
+          ...fbMatch,
+          ...sm,
+          role: sm.role || fbMatch.role,
+        };
+      }
+      return sm;
+    });
+
+    const fbOnly = fbBase.filter((fm: any) => {
+      const fmEmail = String(fm.email || '').trim().toLowerCase();
+      const fmName = String(fm.name || '').trim().toLowerCase();
+      if (fmEmail && sheetEmails.has(fmEmail)) return false;
+      if (!fmEmail && fmName && sheetNames.has(fmName)) return false;
+      return true;
+    });
+
+    return ensureTenantMembersClient([...fbOnly, ...mergedFromSheet], activeTid);
+  }, []);
+
+  // Helper to resolve the effective Google Spreadsheet URL for any settings compartment
+  const resolveSettingsSheetUrl = React.useCallback((key: string, urlKey: string, storageSuffix: string, activeTid: string, compObj?: any): string => {
+    return String(
+      compObj?.[key] ||
+      compObj?.[urlKey] ||
+      (localCompany as any)?.[key] ||
+      (localCompany as any)?.[urlKey] ||
+      (companyInfo as any)?.[key] ||
+      (companyInfo as any)?.[urlKey] ||
+      localStorage.getItem(`defib_${activeTid}_${storageSuffix}`) ||
+      localStorage.getItem(`defib_${activeTid.toLowerCase()}_${storageSuffix}`) ||
+      localStorage.getItem(`defib_${activeTid.toUpperCase()}_${storageSuffix}`) ||
+      ''
+    ).trim();
+  }, [localCompany, companyInfo]);
+
+  // Apply fresh data fetched from a dedicated Google Spreadsheet to local states
+  const applySpreadsheetDataToState = React.useCallback((tabType: string, items: any[], activeTid: string, baseFbMembers?: Member[]) => {
+    if (!Array.isArray(items)) return;
+
+    if (tabType === 'reglages') {
+      const firstRow = items[0];
+      if (!firstRow || typeof firstRow !== 'object') {
+        setLocalCompany(prev => ({
+          ...prev,
+          name: '',
+          nomCommercial: '',
+          logo: '',
+          website: '',
+          email: '',
+          phone: '',
+          nomLogiciel: '',
+          gmailPartageLocalisation: '',
+        }));
+        return;
+      }
+      const cleanPatch: Record<string, any> = {};
+      for (const [k, v] of Object.entries(firstRow)) {
+        if (!k.startsWith('_') && k !== 'id' && v !== undefined) {
+          cleanPatch[k] = v;
+        }
+      }
+      if (cleanPatch.language) {
+        setSelectedLang(String(cleanPatch.language));
+      }
+      if (cleanPatch.enableAutoEmails === 'Oui' || cleanPatch.enableAutoEmails === 'Non') {
+        setEnableAutoEmails(cleanPatch.enableAutoEmails);
+      }
+      if (cleanPatch.enableSatisfactionAvis === 'Oui' || cleanPatch.enableSatisfactionAvis === 'Non') {
+        setEnableSatisfactionAvis(cleanPatch.enableSatisfactionAvis);
+      }
+      if (cleanPatch.enableDevisFactures === 'Oui' || cleanPatch.enableDevisFactures === 'Non') {
+        setEnableDevisFactures(cleanPatch.enableDevisFactures);
+      }
+      if (cleanPatch.enableOtherEquipments === 'Oui' || cleanPatch.enableOtherEquipments === 'Non') {
+        setEnableOtherEquipments(cleanPatch.enableOtherEquipments);
+        if (onUpdateEnableOtherEquipments) onUpdateEnableOtherEquipments(cleanPatch.enableOtherEquipments);
+      }
+      if (cleanPatch.disableHelpsAndTutorials === 'Oui' || cleanPatch.disableHelpsAndTutorials === 'Non') {
+        setDisableHelpsAndTutorials(cleanPatch.disableHelpsAndTutorials);
+      }
+      setLocalCompany(prev => ({
+        ...prev,
+        ...cleanPatch,
+        name: cleanPatch.name !== undefined ? String(cleanPatch.name) : (cleanPatch.nomCommercial !== undefined ? String(cleanPatch.nomCommercial) : ''),
+        nomCommercial: cleanPatch.nomCommercial !== undefined ? String(cleanPatch.nomCommercial) : (cleanPatch.name !== undefined ? String(cleanPatch.name) : ''),
+        logo: cleanPatch.logo !== undefined ? String(cleanPatch.logo) : '',
+        website: cleanPatch.website !== undefined ? String(cleanPatch.website) : '',
+        email: cleanPatch.email !== undefined ? String(cleanPatch.email) : '',
+        phone: cleanPatch.phone !== undefined ? String(cleanPatch.phone) : '',
+        nomLogiciel: cleanPatch.nomLogiciel !== undefined ? String(cleanPatch.nomLogiciel) : '',
+        gmailPartageLocalisation: cleanPatch.gmailPartageLocalisation !== undefined ? String(cleanPatch.gmailPartageLocalisation) : '',
+      }));
+    } else if (tabType === 'apparenceRapportsPdf') {
+      const firstRow = items[0];
+      if (!firstRow || typeof firstRow !== 'object') {
+        setLocalCompany(prev => ({
+          ...prev,
+          pdfHeaderImg: '',
+          pdfPageHeaderText: '',
+          pdfPageFooterText: '',
+          pdfLastPageInfoText: '',
+          pdfHeaderBgColor: '',
+          pdfCardBorderColor: '',
+          pdfCardBgColor: '',
+          pdfLabelTextColor: '',
+          pdfHideElectrodeSecoursA: 'Non',
+          pdfHideElectrodeSecoursP: 'Non',
+          pdfHideKitSecours: 'Non',
+          pdfSimplifyCoffret: 'Non',
+          pdfHideVerificationsTechniques: 'Non',
+          pdfHideHorodatagesDiagnostic: 'Non',
+          pdfShowDemandeDevisDetails: 'Non',
+        }));
+        return;
+      }
+      const cleanPatch: Record<string, any> = {};
+      for (const [k, v] of Object.entries(firstRow)) {
+        if (!k.startsWith('_') && k !== 'id' && v !== undefined) {
+          cleanPatch[k] = v;
+        }
+      }
+      setLocalCompany(prev => ({
+        ...prev,
+        ...cleanPatch,
+        pdfHeaderImg: cleanPatch.pdfHeaderImg !== undefined ? String(cleanPatch.pdfHeaderImg) : '',
+        pdfPageHeaderText: cleanPatch.pdfPageHeaderText !== undefined ? String(cleanPatch.pdfPageHeaderText) : '',
+        pdfPageFooterText: cleanPatch.pdfPageFooterText !== undefined ? String(cleanPatch.pdfPageFooterText) : '',
+        pdfLastPageInfoText: cleanPatch.pdfLastPageInfoText !== undefined ? String(cleanPatch.pdfLastPageInfoText) : '',
+        pdfHeaderBgColor: cleanPatch.pdfHeaderBgColor !== undefined ? String(cleanPatch.pdfHeaderBgColor) : '',
+        pdfCardBorderColor: cleanPatch.pdfCardBorderColor !== undefined ? String(cleanPatch.pdfCardBorderColor) : '',
+        pdfCardBgColor: cleanPatch.pdfCardBgColor !== undefined ? String(cleanPatch.pdfCardBgColor) : '',
+        pdfLabelTextColor: cleanPatch.pdfLabelTextColor !== undefined ? String(cleanPatch.pdfLabelTextColor) : '',
+        pdfHideElectrodeSecoursA: (cleanPatch.pdfHideElectrodeSecoursA as 'Oui' | 'Non') || 'Non',
+        pdfHideElectrodeSecoursP: (cleanPatch.pdfHideElectrodeSecoursP as 'Oui' | 'Non') || 'Non',
+        pdfHideKitSecours: (cleanPatch.pdfHideKitSecours as 'Oui' | 'Non') || 'Non',
+        pdfSimplifyCoffret: (cleanPatch.pdfSimplifyCoffret as 'Oui' | 'Non') || 'Non',
+        pdfHideVerificationsTechniques: (cleanPatch.pdfHideVerificationsTechniques as 'Oui' | 'Non') || 'Non',
+        pdfHideHorodatagesDiagnostic: (cleanPatch.pdfHideHorodatagesDiagnostic as 'Oui' | 'Non') || 'Non',
+        pdfShowDemandeDevisDetails: (cleanPatch.pdfShowDemandeDevisDetails as 'Oui' | 'Non') || 'Non',
+      }));
+    } else if (tabType === 'intituleEmplacements') {
+      const nextLocs: Record<string, string> = {};
+      const ALL_LOCS = [
+        'Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E',
+        'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J',
+        'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E',
+        'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J',
+      ];
+      ALL_LOCS.forEach(l => { nextLocs[l] = ''; });
+      for (const row of items) {
+        if (!row || typeof row !== 'object') continue;
+        if (row.emplacement && row.intitule !== undefined) {
+          nextLocs[String(row.emplacement).trim()] = String(row.intitule).trim();
+        }
+        for (const [k, v] of Object.entries(row)) {
+          if (/^(?:Entrepôt|Véhicule)\s+[A-J]$/i.test(k) && v !== undefined && v !== null) {
+            nextLocs[k] = String(v).trim();
+          }
+        }
+      }
+      setLocalLocationNames(nextLocs);
+      if (onUpdateLocationNames) onUpdateLocationNames(nextLocs);
+      localStorage.setItem(`defib_${activeTid}_custom_location_names`, JSON.stringify(nextLocs));
+    } else if (tabType === 'communicationPortailClient') {
+      const firstRow = items[0];
+      const msg = firstRow ? String(firstRow.communicationPortailClient ?? firstRow.message ?? '').trim() : '';
+      setCommunicationPortailClient(msg);
+      setLocalCompany(prev => ({ ...prev, communicationPortailClient: msg }));
+      localStorage.setItem(`defib_${activeTid}_communication_portail_client`, msg);
+    } else if (tabType === 'membresEnvironnement') {
+      const fbSource = baseFbMembers || members || [];
+      const mixed = mergeFirebaseAndSpreadsheetMembers(fbSource, items, activeTid);
+      setLocalMembers(mixed);
+      onUpdateMembers(mixed);
+      localStorage.setItem(`defib_${activeTid}_members`, JSON.stringify(mixed));
+    }
+  }, [members, mergeFirebaseAndSpreadsheetMembers, onUpdateEnableOtherEquipments, onUpdateLocationNames, onUpdateMembers]);
+
+  // Force GET from dedicated Google Spreadsheets for the 5 settings compartments
+  const fetchSettingsCompartmentsFromSheets = React.useCallback(async (compOverride?: any, onlySection?: SettingsSectionKey | null) => {
+    const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+    const targetTabs: Array<{ section: SettingsSectionKey; tabType: string; key: string; urlKey: string; storageSuffix: string }> = [
+      { section: 'reglages', tabType: 'reglages', key: 'spreadsheetReglages', urlKey: 'spreadsheetReglagesUrl', storageSuffix: 'spreadsheet_reglages' },
+      { section: 'pdf', tabType: 'apparenceRapportsPdf', key: 'spreadsheetApparenceRapportsPdf', urlKey: 'spreadsheetApparenceRapportsPdfUrl', storageSuffix: 'spreadsheet_apparence_rapports_pdf' },
+      { section: 'emplacements', tabType: 'intituleEmplacements', key: 'spreadsheetIntituleEmplacements', urlKey: 'spreadsheetIntituleEmplacementsUrl', storageSuffix: 'spreadsheet_intitule_emplacements' },
+      { section: 'communication', tabType: 'communicationPortailClient', key: 'spreadsheetCommunicationPortailClient', urlKey: 'spreadsheetCommunicationPortailClientUrl', storageSuffix: 'spreadsheet_communication_portail_client' },
+      { section: 'membres', tabType: 'membresEnvironnement', key: 'spreadsheetMembresEnvironnement', urlKey: 'spreadsheetMembresEnvironnementUrl', storageSuffix: 'spreadsheet_membres_environnement' },
+    ];
+
+    const filtered = onlySection ? targetTabs.filter(t => t.section === onlySection) : targetTabs;
+
+    await Promise.all(
+      filtered.map(async (t) => {
+        const sUrl = resolveSettingsSheetUrl(t.key, t.urlKey, t.storageSuffix, activeTid, compOverride);
+        if (!sUrl) {
+          if (t.section === 'membres' && activeTid && activeTid !== 'demo') {
+            try {
+              const remoteMembers = await fetchCollectionFromFirestore<Member[]>('members', activeTid);
+              const ensuredRemote = ensureTenantMembersClient(Array.isArray(remoteMembers) ? remoteMembers : members, activeTid);
+              if (ensuredRemote.length > 0) {
+                setLocalMembers(ensuredRemote);
+                onUpdateMembers(ensuredRemote);
+              }
+            } catch (_) {}
+          }
+          return;
+        }
+
+        try {
+          let fbMems: Member[] = members || [];
+          if (t.section === 'membres' && activeTid && activeTid !== 'demo') {
+            try {
+              const remoteMems = await fetchCollectionFromFirestore<Member[]>('members', activeTid);
+              if (Array.isArray(remoteMems) && remoteMems.length > 0) {
+                fbMems = remoteMems;
+              }
+            } catch (_) {}
+          }
+
+          const qUrl = `&spreadsheetUrl=${encodeURIComponent(sUrl)}`;
+          const res = await fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=${encodeURIComponent(t.tabType)}&refresh=true${qUrl}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.fromSpreadsheet && Array.isArray(data.items)) {
+              applySpreadsheetDataToState(t.tabType, data.items, activeTid, fbMems);
+            }
+          }
+        } catch (_) {}
+      })
+    );
+  }, [propTenantId, resolveSettingsSheetUrl, applySpreadsheetDataToState, members, onUpdateMembers]);
+
   // Synchronise if parent prop changes upon load or reset, keeping refs to trace incoming changes
   const lastPropsMembersRef = React.useRef<Member[]>(members);
   const lastPropsCompanyRef = React.useRef<CompanyInfo>(companyInfo);
@@ -813,10 +1079,10 @@ export default function SettingsModal({
     const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
     const ensured = ensureTenantMembersClient(members, activeTid);
     if (JSON.stringify(ensured) !== JSON.stringify(lastPropsMembersRef.current)) {
-      setLocalMembers(ensured);
+      setLocalMembers(prev => mergeFirebaseAndSpreadsheetMembers(ensured, prev, activeTid));
       lastPropsMembersRef.current = ensured;
     }
-  }, [members, propTenantId]);
+  }, [members, propTenantId, mergeFirebaseAndSpreadsheetMembers]);
 
   React.useEffect(() => {
     const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
@@ -824,14 +1090,14 @@ export default function SettingsModal({
     if (tenantChanged || JSON.stringify(companyInfo) !== JSON.stringify(lastPropsCompanyRef.current)) {
       lastPropTenantIdRef.current = propTenantId;
       const cleanDefault = getCleanTenantDefaultCompany(activeTid);
+      const hasReglagesSheet = Boolean(resolveSettingsSheetUrl('spreadsheetReglages', 'spreadsheetReglagesUrl', 'spreadsheet_reglages', activeTid, companyInfo));
+      const hasPdfSheet = Boolean(resolveSettingsSheetUrl('spreadsheetApparenceRapportsPdf', 'spreadsheetApparenceRapportsPdfUrl', 'spreadsheet_apparence_rapports_pdf', activeTid, companyInfo));
+      const hasEmplacementsSheet = Boolean(resolveSettingsSheetUrl('spreadsheetIntituleEmplacements', 'spreadsheetIntituleEmplacementsUrl', 'spreadsheet_intitule_emplacements', activeTid, companyInfo));
+      const hasComSheet = Boolean(resolveSettingsSheetUrl('spreadsheetCommunicationPortailClient', 'spreadsheetCommunicationPortailClientUrl', 'spreadsheet_communication_portail_client', activeTid, companyInfo));
+
       setLocalCompany(prev => {
         const basePrev = tenantChanged ? cleanDefault : prev;
         if (!companyInfo) return basePrev;
-        // Do not overwrite non-empty tenant details or spreadsheet URLs with empty/placeholder values on the SAME tenant
-        const isNewPlaceholder = (!companyInfo.name || companyInfo.name === 'Mon Cabinet') && (!companyInfo.email || companyInfo.email === '');
-        const merged = !tenantChanged && isNewPlaceholder && basePrev.name && basePrev.name !== 'Mon Cabinet'
-          ? { ...cleanDefault, ...companyInfo, ...basePrev }
-          : { ...cleanDefault, ...basePrev, ...companyInfo };
         const effDefibs = companyInfo.spreadsheetDefibrillateurs || companyInfo.spreadsheetDefibrillateursUrl || (!tenantChanged ? basePrev.spreadsheetDefibrillateurs : '') || '';
         const effAutres = companyInfo.spreadsheetAutresMateriels || companyInfo.spreadsheetAutresMaterielsUrl || (!tenantChanged ? basePrev.spreadsheetAutresMateriels : '') || '';
         const effClients = companyInfo.spreadsheetClients || companyInfo.spreadsheetClientsUrl || (!tenantChanged ? basePrev.spreadsheetClients : '') || '';
@@ -841,8 +1107,37 @@ export default function SettingsModal({
           extraEff[f.key] = val;
           extraEff[f.urlKey as string] = val;
         }
-        return {
-          ...merged,
+        const nextComp: CompanyInfo = {
+          ...cleanDefault,
+          ...basePrev,
+          ...(hasReglagesSheet ? {} : {
+            name: companyInfo.name || basePrev.name,
+            nomCommercial: companyInfo.nomCommercial || companyInfo.name || basePrev.nomCommercial,
+            logo: companyInfo.logo !== undefined ? companyInfo.logo : basePrev.logo,
+            website: companyInfo.website !== undefined ? companyInfo.website : basePrev.website,
+            email: companyInfo.email || basePrev.email,
+            phone: companyInfo.phone !== undefined ? companyInfo.phone : basePrev.phone,
+            nomLogiciel: companyInfo.nomLogiciel !== undefined ? companyInfo.nomLogiciel : basePrev.nomLogiciel,
+            gmailPartageLocalisation: companyInfo.gmailPartageLocalisation !== undefined ? companyInfo.gmailPartageLocalisation : basePrev.gmailPartageLocalisation,
+            hiddenTabs: companyInfo.hiddenTabs !== undefined ? companyInfo.hiddenTabs : basePrev.hiddenTabs,
+          }),
+          ...(hasPdfSheet ? {} : {
+            pdfHeaderImg: companyInfo.pdfHeaderImg !== undefined ? companyInfo.pdfHeaderImg : basePrev.pdfHeaderImg,
+            pdfPageHeaderText: companyInfo.pdfPageHeaderText !== undefined ? companyInfo.pdfPageHeaderText : basePrev.pdfPageHeaderText,
+            pdfPageFooterText: companyInfo.pdfPageFooterText !== undefined ? companyInfo.pdfPageFooterText : basePrev.pdfPageFooterText,
+            pdfLastPageInfoText: companyInfo.pdfLastPageInfoText !== undefined ? companyInfo.pdfLastPageInfoText : basePrev.pdfLastPageInfoText,
+            pdfHeaderBgColor: companyInfo.pdfHeaderBgColor !== undefined ? companyInfo.pdfHeaderBgColor : basePrev.pdfHeaderBgColor,
+            pdfCardBorderColor: companyInfo.pdfCardBorderColor !== undefined ? companyInfo.pdfCardBorderColor : basePrev.pdfCardBorderColor,
+            pdfCardBgColor: companyInfo.pdfCardBgColor !== undefined ? companyInfo.pdfCardBgColor : basePrev.pdfCardBgColor,
+            pdfLabelTextColor: companyInfo.pdfLabelTextColor !== undefined ? companyInfo.pdfLabelTextColor : basePrev.pdfLabelTextColor,
+            pdfHideElectrodeSecoursA: companyInfo.pdfHideElectrodeSecoursA !== undefined ? companyInfo.pdfHideElectrodeSecoursA : basePrev.pdfHideElectrodeSecoursA,
+            pdfHideElectrodeSecoursP: companyInfo.pdfHideElectrodeSecoursP !== undefined ? companyInfo.pdfHideElectrodeSecoursP : basePrev.pdfHideElectrodeSecoursP,
+            pdfHideKitSecours: companyInfo.pdfHideKitSecours !== undefined ? companyInfo.pdfHideKitSecours : basePrev.pdfHideKitSecours,
+            pdfSimplifyCoffret: companyInfo.pdfSimplifyCoffret !== undefined ? companyInfo.pdfSimplifyCoffret : basePrev.pdfSimplifyCoffret,
+            pdfHideVerificationsTechniques: companyInfo.pdfHideVerificationsTechniques !== undefined ? companyInfo.pdfHideVerificationsTechniques : basePrev.pdfHideVerificationsTechniques,
+            pdfHideHorodatagesDiagnostic: companyInfo.pdfHideHorodatagesDiagnostic !== undefined ? companyInfo.pdfHideHorodatagesDiagnostic : basePrev.pdfHideHorodatagesDiagnostic,
+            pdfShowDemandeDevisDetails: companyInfo.pdfShowDemandeDevisDetails !== undefined ? companyInfo.pdfShowDemandeDevisDetails : basePrev.pdfShowDemandeDevisDetails,
+          }),
           spreadsheetDefibrillateurs: effDefibs,
           spreadsheetAutresMateriels: effAutres,
           spreadsheetClients: effClients,
@@ -851,149 +1146,38 @@ export default function SettingsModal({
           spreadsheetClientsUrl: effClients,
           ...extraEff,
         };
+        return nextComp;
       });
-      setLocalLocationNames(ensureTenantCustomLocationNames(companyInfo?.customLocationNames, activeTid, members));
-      setEnableAutoEmails(companyInfo?.enableAutoEmails || 'Oui');
-      setEnableSatisfactionAvis(companyInfo?.enableSatisfactionAvis || 'Oui');
-      setEnableDevisFactures(companyInfo?.enableDevisFactures || 'Oui');
-      setCommunicationPortailClient(companyInfo?.communicationPortailClient ?? '');
-      setDisableHelpsAndTutorials(companyInfo?.disableHelpsAndTutorials || 'Non');
-      setEnableOtherEquipments(companyInfo?.enableOtherEquipments || 'Non');
+      if (!hasEmplacementsSheet && companyInfo?.customLocationNames) {
+        setLocalLocationNames(ensureTenantCustomLocationNames(companyInfo.customLocationNames, activeTid, members));
+      }
+      if (!hasReglagesSheet) {
+        setEnableAutoEmails(companyInfo?.enableAutoEmails || 'Oui');
+        setEnableSatisfactionAvis(companyInfo?.enableSatisfactionAvis || 'Oui');
+        setEnableDevisFactures(companyInfo?.enableDevisFactures || 'Oui');
+        setDisableHelpsAndTutorials(companyInfo?.disableHelpsAndTutorials || 'Non');
+        setEnableOtherEquipments(companyInfo?.enableOtherEquipments || 'Non');
+      }
+      if (!hasComSheet && companyInfo?.communicationPortailClient !== undefined) {
+        setCommunicationPortailClient(companyInfo.communicationPortailClient);
+      }
       lastPropsCompanyRef.current = companyInfo;
     }
-  }, [companyInfo, propTenantId, members, getCleanTenantDefaultCompany]);
+  }, [companyInfo, propTenantId, members, getCleanTenantDefaultCompany, resolveSettingsSheetUrl]);
+
+  // Whenever activeSection changes to one of the 5 spreadsheet-backed tabs, force a fresh GET from the dedicated Spreadsheet
+  React.useEffect(() => {
+    if ((isOpen || isPage) && activeSection && ['reglages', 'pdf', 'emplacements', 'communication', 'membres'].includes(activeSection)) {
+      fetchSettingsCompartmentsFromSheets(undefined, activeSection);
+    }
+  }, [activeSection, isOpen, isPage, fetchSettingsCompartmentsFromSheets]);
 
   React.useEffect(() => {
     if (isOpen || isPage) {
       const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
       const cleanDefault = getCleanTenantDefaultCompany(activeTid);
 
-      // 1. Sync companyInfo from props or tenant-scoped localStorage cache (NEVER unprefixed defib_company_info!)
       let comp: CompanyInfo = { ...cleanDefault, ...(companyInfo || {}) };
-      const isCompEmpty = !comp.name || comp.name === 'Mon Cabinet' || (!comp.email && activeTid !== 'demo');
-      if (isCompEmpty) {
-        const candidateKeys = [
-          `defib_${activeTid}_company_info`,
-          `defib_${activeTid.toUpperCase()}_company_info`,
-          `defib_${activeTid.toLowerCase()}_company_info`,
-          `fs_cache_${activeTid}_company_info`,
-          `fs_cache_${activeTid}_companyInfo`,
-        ];
-        for (const k of candidateKeys) {
-          const raw = localStorage.getItem(k);
-          if (raw) {
-            try {
-              const parsed = JSON.parse(raw);
-              if (parsed && typeof parsed === 'object' && parsed.name) {
-                comp = { ...cleanDefault, ...parsed, ...(companyInfo?.name && companyInfo.name !== 'Mon Cabinet' ? companyInfo : {}) };
-                break;
-              }
-            } catch (e) {}
-          }
-        }
-      }
-
-      setLocalCompany({
-        ...cleanDefault,
-        ...comp,
-        name: comp.name || cleanDefault.name,
-        email: comp.email || cleanDefault.email,
-        phone: comp.phone || cleanDefault.phone,
-      });
-
-      // 2. Members sync (strictly tenant-scoped, guaranteed non-empty via ensureTenantMembersClient)
-      let initialMems: Member[] = Array.isArray(members) && members.length > 0 ? members : [];
-      if (initialMems.length === 0) {
-        const memRaw = localStorage.getItem(`defib_${activeTid}_members`) || (activeTid === 'demo' ? localStorage.getItem('defib_members') : null);
-        if (memRaw) {
-          try {
-            const parsed = JSON.parse(memRaw);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              initialMems = parsed;
-            }
-          } catch (e) {}
-        }
-      }
-      const configuredMembersSheetUrl = (
-        comp?.spreadsheetMembresEnvironnement ||
-        comp?.spreadsheetMembresEnvironnementUrl ||
-        localStorage.getItem(`defib_${activeTid}_spreadsheet_membres_environnement`) ||
-        ''
-      ).trim();
-
-      const ensuredMems = configuredMembersSheetUrl
-        ? initialMems
-        : ensureTenantMembersClient(initialMems, activeTid);
-      setLocalMembers(ensuredMems);
-
-      if (configuredMembersSheetUrl) {
-        const qUrl = `&spreadsheetUrl=${encodeURIComponent(configuredMembersSheetUrl)}`;
-        fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=membresEnvironnement&refresh=true${qUrl}`)
-          .then(res => (res.ok ? res.json() : null))
-          .then(data => {
-            if (data?.fromSpreadsheet && Array.isArray(data.items)) {
-              const validMembers = data.items.filter((m: any) => m && (m.name || m.email));
-              setLocalMembers(validMembers);
-              onUpdateMembers(validMembers);
-              localStorage.setItem(`defib_${activeTid}_members`, JSON.stringify(validMembers));
-            }
-          })
-          .catch(() => {});
-      } else if (activeTid && activeTid !== 'demo') {
-        fetchCollectionFromFirestore<Member[]>('members', activeTid).then(remoteMembers => {
-          const currentSheetUrl = (
-            localStorage.getItem(`defib_${activeTid}_spreadsheet_membres_environnement`) || ''
-          ).trim();
-          if (currentSheetUrl) return;
-          const ensuredRemote = ensureTenantMembersClient(Array.isArray(remoteMembers) ? remoteMembers : ensuredMems, activeTid);
-          if (ensuredRemote.length > 0) {
-            setLocalMembers(ensuredRemote);
-            onUpdateMembers(ensuredRemote);
-          }
-        }).catch(() => {});
-      }
-
-      setLocalLocationNames(ensureTenantCustomLocationNames(comp?.customLocationNames, activeTid, ensuredMems));
-      setEnableAutoEmails(comp?.enableAutoEmails || 'Oui');
-      setEnableSatisfactionAvis(comp?.enableSatisfactionAvis || 'Oui');
-      setEnableDevisFactures(comp?.enableDevisFactures || 'Oui');
-      setCommunicationPortailClient(comp?.communicationPortailClient ?? '');
-      setDisableHelpsAndTutorials(comp?.disableHelpsAndTutorials || 'Non');
-      setEnableOtherEquipments(comp?.enableOtherEquipments || 'Non');
-
-      // 3. Fallback to registered tenants registry if company info fields still missing (local state only, never overwrite remote Firestore on mount)
-      getRegisteredTenants().then(tenants => {
-        const found: any = findTenantInList(tenants, activeTid);
-        if (found) {
-          setLocalCompany(prev => {
-            const isPlaceholderName = !prev.name || prev.name === 'Mon Cabinet' || (activeTid !== 'demo' && prev.name === 'Défibeo Solutions');
-            const isPlaceholderEmail = !prev.email || (activeTid !== 'demo' && prev.email === 'contact@defibeo-solutions.com');
-            const isPlaceholderPhone = !prev.phone || (activeTid !== 'demo' && prev.phone === '+33 1 47 20 00 01');
-            const extraFromFound: Record<string, string> = {};
-            for (const f of EXTRA_SPREADSHEET_FIELDS) {
-              const val = (prev as any)[f.key] || (prev as any)[f.urlKey] || found[f.key] || found[f.urlKey] || '';
-              if (val) {
-                extraFromFound[f.key] = val;
-                extraFromFound[f.urlKey as string] = val;
-              }
-            }
-            return {
-              ...prev,
-              name: isPlaceholderName && found.companyName ? found.companyName : prev.name,
-              nomCommercial: isPlaceholderName && found.companyName ? found.companyName : (prev.nomCommercial || prev.name),
-              email: isPlaceholderEmail && (found.companyEmail || found.adminEmail) ? (found.companyEmail || found.adminEmail) : prev.email,
-              phone: isPlaceholderPhone && found.companyPhone ? found.companyPhone : prev.phone,
-              nomLogiciel: prev.nomLogiciel || found.nomLogiciel || '',
-              spreadsheetDefibrillateurs: prev.spreadsheetDefibrillateurs || found.spreadsheetDefibrillateurs || '',
-              spreadsheetAutresMateriels: prev.spreadsheetAutresMateriels || found.spreadsheetAutresMateriels || '',
-              spreadsheetClients: prev.spreadsheetClients || found.spreadsheetClients || '',
-              ...extraFromFound,
-            };
-          });
-        }
-      }).catch(() => {});
-
-      // 4. Spreadsheets URLs & Database settings fallback from tenant cache
       const cachedDefib = localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) || 
                           localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_defibrillateurs`) || 
                           localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_defibrillateurs`) || '';
@@ -1006,30 +1190,107 @@ export default function SettingsModal({
       const cachedExtraMap: Record<string, string> = {};
       for (const f of EXTRA_SPREADSHEET_FIELDS) {
         cachedExtraMap[f.key] =
+          (comp as any)[f.key] ||
+          (comp as any)[f.urlKey] ||
           localStorage.getItem(`defib_${activeTid}_${f.storageSuffix}`) ||
           localStorage.getItem(`defib_${activeTid.toLowerCase()}_${f.storageSuffix}`) ||
           localStorage.getItem(`defib_${activeTid.toUpperCase()}_${f.storageSuffix}`) ||
           '';
       }
-      if (cachedDefib || cachedAutres || cachedClients || Object.values(cachedExtraMap).some(Boolean)) {
-        setLocalCompany(prev => {
-          const extraMerged: Record<string, string> = {};
-          for (const f of EXTRA_SPREADSHEET_FIELDS) {
-            const val = (prev as any)[f.key] || (prev as any)[f.urlKey] || cachedExtraMap[f.key] || '';
-            extraMerged[f.key] = val;
-            extraMerged[f.urlKey as string] = val;
-          }
-          return {
-            ...prev,
-            spreadsheetDefibrillateurs: prev.spreadsheetDefibrillateurs || cachedDefib,
-            spreadsheetAutresMateriels: prev.spreadsheetAutresMateriels || cachedAutres,
-            spreadsheetClients: prev.spreadsheetClients || cachedClients,
-            ...extraMerged,
-          };
-        });
+
+      const hasReglagesSheet = Boolean(cachedExtraMap.spreadsheetReglages);
+      const hasPdfSheet = Boolean(cachedExtraMap.spreadsheetApparenceRapportsPdf);
+      const hasEmplacementsSheet = Boolean(cachedExtraMap.spreadsheetIntituleEmplacements);
+      const hasComSheet = Boolean(cachedExtraMap.spreadsheetCommunicationPortailClient);
+
+      // Initialize fields: if a dedicated spreadsheet is linked for a tab, start with blank fields until the spreadsheet GET resolves
+      const extraInitMerged: Record<string, string> = {};
+      for (const f of EXTRA_SPREADSHEET_FIELDS) {
+        extraInitMerged[f.key] = cachedExtraMap[f.key] || '';
+        extraInitMerged[f.urlKey as string] = cachedExtraMap[f.key] || '';
       }
 
-      // 5. Remote fetch from Firestore / Server for both companyInfo and tenantDatabases
+      setLocalCompany({
+        ...cleanDefault,
+        ...comp,
+        ...(hasReglagesSheet ? {
+          name: '',
+          nomCommercial: '',
+          logo: '',
+          website: '',
+          email: '',
+          phone: '',
+          nomLogiciel: '',
+          gmailPartageLocalisation: '',
+        } : {
+          name: comp.name || cleanDefault.name,
+          email: comp.email || cleanDefault.email,
+          phone: comp.phone || cleanDefault.phone,
+        }),
+        ...(hasPdfSheet ? {
+          pdfHeaderImg: '',
+          pdfPageHeaderText: '',
+          pdfPageFooterText: '',
+          pdfLastPageInfoText: '',
+          pdfHeaderBgColor: '',
+          pdfCardBorderColor: '',
+          pdfCardBgColor: '',
+          pdfLabelTextColor: '',
+        } : {}),
+        spreadsheetDefibrillateurs: comp.spreadsheetDefibrillateurs || cachedDefib,
+        spreadsheetAutresMateriels: comp.spreadsheetAutresMateriels || cachedAutres,
+        spreadsheetClients: comp.spreadsheetClients || cachedClients,
+        spreadsheetDefibrillateursUrl: comp.spreadsheetDefibrillateurs || cachedDefib,
+        spreadsheetAutresMaterielsUrl: comp.spreadsheetAutresMateriels || cachedAutres,
+        spreadsheetClientsUrl: comp.spreadsheetClients || cachedClients,
+        ...extraInitMerged,
+      });
+
+      // Members sync: mix Firebase/DB + Spreadsheet (2 sources)
+      let initialMems: Member[] = Array.isArray(members) && members.length > 0 ? members : [];
+      if (initialMems.length === 0) {
+        const memRaw = localStorage.getItem(`defib_${activeTid}_members`) || (activeTid === 'demo' ? localStorage.getItem('defib_members') : null);
+        if (memRaw) {
+          try {
+            const parsed = JSON.parse(memRaw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              initialMems = parsed;
+            }
+          } catch (e) {}
+        }
+      }
+      const ensuredMems = ensureTenantMembersClient(initialMems, activeTid);
+      setLocalMembers(ensuredMems);
+
+      if (hasEmplacementsSheet) {
+        const blankLocs: Record<string, string> = {};
+        ['Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'].forEach(l => { blankLocs[l] = ''; });
+        setLocalLocationNames(blankLocs);
+      } else {
+        setLocalLocationNames(ensureTenantCustomLocationNames(comp?.customLocationNames, activeTid, ensuredMems));
+      }
+
+      if (!hasReglagesSheet) {
+        setEnableAutoEmails(comp?.enableAutoEmails || 'Oui');
+        setEnableSatisfactionAvis(comp?.enableSatisfactionAvis || 'Oui');
+        setEnableDevisFactures(comp?.enableDevisFactures || 'Oui');
+        setDisableHelpsAndTutorials(comp?.disableHelpsAndTutorials || 'Non');
+        setEnableOtherEquipments(comp?.enableOtherEquipments || 'Non');
+      }
+
+      if (hasComSheet) {
+        setCommunicationPortailClient('');
+      } else {
+        setCommunicationPortailClient(comp?.communicationPortailClient ?? '');
+      }
+
+      // Immediately trigger GET from dedicated spreadsheets for all configured compartments
+      fetchSettingsCompartmentsFromSheets({
+        ...comp,
+        ...extraInitMerged,
+      });
+
+      // Discover spreadsheet URLs from Firestore tenantDatabases & companyInfo in case localStorage was empty, and trigger spreadsheet GET
       if (activeTid) {
         Promise.all([
           fetchCollectionFromFirestore<CompanyInfo>('companyInfo', activeTid).catch(() => null),
@@ -1039,88 +1300,64 @@ export default function SettingsModal({
           const validDb = dbData && typeof dbData === 'object' && !Array.isArray(dbData) ? dbData : null;
           if (!validCompany && !validDb) return;
 
-          if (validCompany) {
-            setLocalLocationNames(prev => ensureTenantCustomLocationNames(validCompany.customLocationNames || prev, activeTid, ensuredMems));
-            if (validCompany.communicationPortailClient !== undefined) {
-              setCommunicationPortailClient(validCompany.communicationPortailClient);
+          const effDefibs =
+            validDb?.spreadsheetDefibrillateurs ||
+            validDb?.spreadsheetDefibrillateursUrl ||
+            validCompany?.spreadsheetDefibrillateurs ||
+            validCompany?.spreadsheetDefibrillateursUrl ||
+            cachedDefib ||
+            '';
+          const effAutres =
+            validDb?.spreadsheetAutresMateriels ||
+            validDb?.spreadsheetAutresMaterielsUrl ||
+            validCompany?.spreadsheetAutresMateriels ||
+            validCompany?.spreadsheetAutresMaterielsUrl ||
+            cachedAutres ||
+            '';
+          const effClients =
+            validDb?.spreadsheetClients ||
+            validDb?.spreadsheetClientsUrl ||
+            validCompany?.spreadsheetClients ||
+            validCompany?.spreadsheetClientsUrl ||
+            cachedClients ||
+            '';
+
+          const extraEffFields: Record<string, string> = {};
+          const tKeys = [activeTid, activeTid.toLowerCase(), activeTid.toUpperCase()];
+          for (const f of EXTRA_SPREADSHEET_FIELDS) {
+            const effVal =
+              validDb?.[f.key] ||
+              validDb?.[f.urlKey] ||
+              (validCompany as any)?.[f.key] ||
+              (validCompany as any)?.[f.urlKey] ||
+              cachedExtraMap[f.key] ||
+              '';
+            extraEffFields[f.key] = effVal;
+            extraEffFields[f.urlKey as string] = effVal;
+            if (effVal) {
+              try {
+                for (const tid of tKeys) {
+                  localStorage.setItem(`defib_${tid}_${f.storageSuffix}`, effVal);
+                }
+              } catch (_) {}
             }
           }
 
-          setLocalCompany(prev => {
-            const effDefibs =
-              validDb?.spreadsheetDefibrillateurs ||
-              validDb?.spreadsheetDefibrillateursUrl ||
-              validCompany?.spreadsheetDefibrillateurs ||
-              validCompany?.spreadsheetDefibrillateursUrl ||
-              prev.spreadsheetDefibrillateurs ||
-              cachedDefib ||
-              '';
-            const effAutres =
-              validDb?.spreadsheetAutresMateriels ||
-              validDb?.spreadsheetAutresMaterielsUrl ||
-              validCompany?.spreadsheetAutresMateriels ||
-              validCompany?.spreadsheetAutresMaterielsUrl ||
-              prev.spreadsheetAutresMateriels ||
-              cachedAutres ||
-              '';
-            const effClients =
-              validDb?.spreadsheetClients ||
-              validDb?.spreadsheetClientsUrl ||
-              validCompany?.spreadsheetClients ||
-              validCompany?.spreadsheetClientsUrl ||
-              prev.spreadsheetClients ||
-              cachedClients ||
-              '';
+          setLocalCompany(prev => ({
+            ...prev,
+            spreadsheetDefibrillateurs: effDefibs || prev.spreadsheetDefibrillateurs,
+            spreadsheetAutresMateriels: effAutres || prev.spreadsheetAutresMateriels,
+            spreadsheetClients: effClients || prev.spreadsheetClients,
+            spreadsheetDefibrillateursUrl: effDefibs || prev.spreadsheetDefibrillateursUrl,
+            spreadsheetAutresMaterielsUrl: effAutres || prev.spreadsheetAutresMaterielsUrl,
+            spreadsheetClientsUrl: effClients || prev.spreadsheetClientsUrl,
+            ...extraEffFields,
+          }));
 
-            const extraEffFields: Record<string, string> = {};
-            const tKeys = [activeTid, activeTid.toLowerCase(), activeTid.toUpperCase()];
-            for (const f of EXTRA_SPREADSHEET_FIELDS) {
-              const effVal =
-                validDb?.[f.key] ||
-                validDb?.[f.urlKey] ||
-                (validCompany as any)?.[f.key] ||
-                (validCompany as any)?.[f.urlKey] ||
-                (prev as any)[f.key] ||
-                cachedExtraMap[f.key] ||
-                '';
-              extraEffFields[f.key] = effVal;
-              extraEffFields[f.urlKey as string] = effVal;
-              if (effVal) {
-                try {
-                  for (const tid of tKeys) {
-                    localStorage.setItem(`defib_${tid}_${f.storageSuffix}`, effVal);
-                  }
-                } catch (_) {}
-              }
-            }
-
-            try {
-              for (const tid of tKeys) {
-                if (effDefibs) localStorage.setItem(`defib_${tid}_spreadsheet_defibrillateurs`, effDefibs);
-                if (effAutres) localStorage.setItem(`defib_${tid}_spreadsheet_autres_materiels`, effAutres);
-                if (effClients) localStorage.setItem(`defib_${tid}_spreadsheet_clients`, effClients);
-              }
-            } catch (_) {}
-
-            const resolvedCustomLocs = ensureTenantCustomLocationNames(
-              validCompany?.customLocationNames || prev.customLocationNames,
-              activeTid,
-              ensuredMems
-            );
-
-            return {
-              ...cleanDefault,
-              ...prev,
-              ...(validCompany || {}),
-              customLocationNames: resolvedCustomLocs,
-              spreadsheetDefibrillateurs: effDefibs,
-              spreadsheetAutresMateriels: effAutres,
-              spreadsheetClients: effClients,
-              spreadsheetDefibrillateursUrl: effDefibs,
-              spreadsheetAutresMaterielsUrl: effAutres,
-              spreadsheetClientsUrl: effClients,
-              ...extraEffFields,
-            };
+          // Always fetch from dedicated spreadsheets using discovered URLs
+          fetchSettingsCompartmentsFromSheets({
+            ...(validCompany || {}),
+            ...extraEffFields,
           });
         }).catch(() => {});
       }
@@ -1280,7 +1517,7 @@ export default function SettingsModal({
       const existing = (Array.isArray(existingRaw) ? existingRaw[0] : existingRaw) || {};
       const payload = {
         ...existing,
-        apiDefibeoActive: active,
+        apiDefibeoActive: false,
         apiDefibeoApiKey: apiKey,
         apiDefibeoSecretKey: secretKey,
         googleDriveActive,
@@ -1690,7 +1927,7 @@ export default function SettingsModal({
       fetchCollectionFromFirestore<any>('api_connectors', activeTenant).then(rawData => {
         const data = Array.isArray(rawData) ? rawData[0] : rawData;
         if (data && typeof data === 'object') {
-          if (data.apiDefibeoActive !== undefined) setApiDefibeoActive(Boolean(data.apiDefibeoActive));
+          setApiDefibeoActive(false);
           if (data.apiDefibeoApiKey !== undefined) setApiDefibeoApiKey(data.apiDefibeoApiKey || '');
           if (data.apiDefibeoSecretKey !== undefined) setApiDefibeoSecretKey(data.apiDefibeoSecretKey || '');
 
@@ -1793,7 +2030,7 @@ export default function SettingsModal({
     try {
       const activeTenant = propTenantId || myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
       const payload = {
-        apiDefibeoActive,
+        apiDefibeoActive: false,
         apiDefibeoApiKey,
         apiDefibeoSecretKey,
         sageActive,
@@ -2330,12 +2567,14 @@ export default function SettingsModal({
       logDeleteMember(activeTenant, m.name || m.email).catch(() => {});
       const delKeys = [m.email, m.name, (m as any).id].filter(Boolean);
       if (delKeys.length > 0) {
+        const sheetMemsUrl = resolveSettingsSheetUrl('spreadsheetMembresEnvironnement', 'spreadsheetMembresEnvironnementUrl', 'spreadsheet_membres_environnement', activeTenant);
         await fetch('/api/sheets/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tenantId: activeTenant,
             type: 'membresEnvironnement',
+            spreadsheetUrl: sheetMemsUrl || undefined,
             keys: delKeys,
           }),
         }).catch(() => {});
@@ -2838,85 +3077,97 @@ export default function SettingsModal({
 
     // Synchronize all Settings compartments to their configured Google Spreadsheets
     const targetSheetTenant = effectiveTenantId || myTenantId || 'demo';
+    const sheetReglagesUrl = resolveSettingsSheetUrl('spreadsheetReglages', 'spreadsheetReglagesUrl', 'spreadsheet_reglages', targetSheetTenant, companyToSave);
+    const sheetPdfUrl = resolveSettingsSheetUrl('spreadsheetApparenceRapportsPdf', 'spreadsheetApparenceRapportsPdfUrl', 'spreadsheet_apparence_rapports_pdf', targetSheetTenant, companyToSave);
+    const sheetComUrl = resolveSettingsSheetUrl('spreadsheetCommunicationPortailClient', 'spreadsheetCommunicationPortailClientUrl', 'spreadsheet_communication_portail_client', targetSheetTenant, companyToSave);
+    const sheetEmplacementsUrl = resolveSettingsSheetUrl('spreadsheetIntituleEmplacements', 'spreadsheetIntituleEmplacementsUrl', 'spreadsheet_intitule_emplacements', targetSheetTenant, companyToSave);
+    const linkedMembersUrl = resolveSettingsSheetUrl('spreadsheetMembresEnvironnement', 'spreadsheetMembresEnvironnementUrl', 'spreadsheet_membres_environnement', targetSheetTenant, companyToSave);
+
     try {
       // 1. Réglages (spreadsheetReglages)
-      promises.push(
-        fetch('/api/sheets/upsert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenantId: targetSheetTenant,
-            type: 'reglages',
-            record: {
-              ...companyToSave,
-              id: 'tenant_reglages',
-              language: selectedLang,
-              enableAutoEmails,
-              enableSatisfactionAvis,
-              enableDevisFactures,
-              enableOtherEquipments: localEnableOtherEquipments,
-              disableHelpsAndTutorials,
-            },
-          }),
-        }).catch(() => {})
-      );
+      if (!activeSection || activeSection === 'reglages' || activeSection === 'bases') {
+        promises.push(
+          fetch('/api/sheets/upsert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: targetSheetTenant,
+              type: 'reglages',
+              spreadsheetUrl: sheetReglagesUrl || undefined,
+              record: {
+                ...companyToSave,
+                id: 'tenant_reglages',
+                language: selectedLang,
+                enableAutoEmails,
+                enableSatisfactionAvis,
+                enableDevisFactures,
+                enableOtherEquipments: localEnableOtherEquipments,
+                disableHelpsAndTutorials,
+              },
+            }),
+          }).catch(() => {})
+        );
+      }
 
       // 2. Apparence des rapports PDF (spreadsheetApparenceRapportsPdf)
-      promises.push(
-        fetch('/api/sheets/upsert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenantId: targetSheetTenant,
-            type: 'apparenceRapportsPdf',
-            record: {
-              ...companyToSave,
-              id: 'tenant_pdf_template',
-            },
-          }),
-        }).catch(() => {})
-      );
+      if (!activeSection || activeSection === 'pdf' || activeSection === 'bases') {
+        promises.push(
+          fetch('/api/sheets/upsert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: targetSheetTenant,
+              type: 'apparenceRapportsPdf',
+              spreadsheetUrl: sheetPdfUrl || undefined,
+              record: {
+                ...companyToSave,
+                id: 'tenant_pdf_template',
+              },
+            }),
+          }).catch(() => {})
+        );
+      }
 
       // 3. Communication portail client (spreadsheetCommunicationPortailClient)
-      promises.push(
-        fetch('/api/sheets/upsert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenantId: targetSheetTenant,
-            type: 'communicationPortailClient',
-            record: {
-              id: 'tenant_portal_com',
-              communicationPortailClient: communicationPortailClient || '',
-              message: communicationPortailClient || '',
-            },
-          }),
-        }).catch(() => {})
-      );
+      if (!activeSection || activeSection === 'communication' || activeSection === 'bases') {
+        promises.push(
+          fetch('/api/sheets/upsert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: targetSheetTenant,
+              type: 'communicationPortailClient',
+              spreadsheetUrl: sheetComUrl || undefined,
+              record: {
+                id: 'tenant_portal_com',
+                communicationPortailClient: communicationPortailClient || '',
+                message: communicationPortailClient || '',
+              },
+            }),
+          }).catch(() => {})
+        );
+      }
 
       // 4. Intitulé des emplacements (spreadsheetIntituleEmplacements)
-      promises.push(
-        fetch('/api/sheets/upsert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenantId: targetSheetTenant,
-            type: 'intituleEmplacements',
-            record: {
-              id: 'emplacements_config',
-              ...(localLocationNames || {}),
-            },
-          }),
-        }).catch(() => {})
-      );
+      if (!activeSection || activeSection === 'emplacements' || activeSection === 'bases') {
+        promises.push(
+          fetch('/api/sheets/upsert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: targetSheetTenant,
+              type: 'intituleEmplacements',
+              spreadsheetUrl: sheetEmplacementsUrl || undefined,
+              record: {
+                id: 'emplacements_config',
+                ...(localLocationNames || {}),
+              },
+            }),
+          }).catch(() => {})
+        );
+      }
 
       // 5. Membres de l'environnement (spreadsheetMembresEnvironnement)
-      const linkedMembersUrl = String(
-        companyToSave.spreadsheetMembresEnvironnement ||
-        companyToSave.spreadsheetMembresEnvironnementUrl ||
-        ''
-      ).trim();
-
       if (activeSection === 'membres') {
         const currentEmailsLower = new Set(
           membersToSave.map(m => (m.email || '').trim().toLowerCase()).filter(Boolean)
@@ -2938,6 +3189,7 @@ export default function SettingsModal({
               body: JSON.stringify({
                 tenantId: targetSheetTenant,
                 type: 'membresEnvironnement',
+                spreadsheetUrl: linkedMembersUrl || undefined,
                 keys: removedKeys,
               }),
             }).catch(() => {})
@@ -2951,23 +3203,22 @@ export default function SettingsModal({
               body: JSON.stringify({
                 tenantId: targetSheetTenant,
                 type: 'membresEnvironnement',
+                spreadsheetUrl: linkedMembersUrl || undefined,
                 records: membersToSave,
               }),
             }).catch(() => {})
           );
         }
       } else if (linkedMembersUrl) {
-        // When saving from Bases de données (or another section) with a linked members spreadsheet,
-        // pull the members from the spreadsheet so the UI displays ONLY the spreadsheet data
         promises.push(
           fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(targetSheetTenant)}&type=membresEnvironnement&refresh=true&spreadsheetUrl=${encodeURIComponent(linkedMembersUrl)}`)
             .then(r => (r.ok ? r.json() : null))
             .then(data => {
               if (data?.fromSpreadsheet && Array.isArray(data.items)) {
-                const validMembers = data.items.filter((m: any) => m && (m.name || m.email));
-                setLocalMembers(validMembers);
-                onUpdateMembers(validMembers);
-                const mJson = JSON.stringify(validMembers);
+                const mixed = mergeFirebaseAndSpreadsheetMembers(membersToSave, data.items, effectiveTenantId);
+                setLocalMembers(mixed);
+                onUpdateMembers(mixed);
+                const mJson = JSON.stringify(mixed);
                 localStorage.setItem(`defib_${effectiveTenantId}_members`, mJson);
                 localStorage.setItem(`fs_cache_${effectiveTenantId}_members`, mJson);
               }
@@ -3018,24 +3269,80 @@ export default function SettingsModal({
         }
       }
     }
-    
-    // Set reload flags to automatically reopen settings and scroll to members
-    localStorage.setItem('open_settings_after_reload', 'true');
-    if (activeSection === 'membres') {
-      localStorage.setItem('scroll_to_members', 'true');
-    } else if (activeSection) {
-      localStorage.setItem('settings_active_section', activeSection);
+
+    await Promise.allSettled(promises);
+
+    // Re-fetch from dedicated spreadsheet to confirm UI displays live spreadsheet values
+    if (activeSection && ['reglages', 'pdf', 'emplacements', 'communication', 'membres'].includes(activeSection)) {
+      await fetchSettingsCompartmentsFromSheets(companyToSave, activeSection);
     }
 
-    // Wait up to 2200ms for all writes to hit Google Sheets & Firestore layer, then reload the page
-    const timeoutPromise = new Promise<void>(resolve => setTimeout(resolve, 2200));
-    await Promise.race([
-      Promise.allSettled(promises),
-      timeoutPromise
-    ]);
+    setIsSaving(false);
+    setIsVerifyingEmail(false);
+    setSectionSavedKey(activeSection || 'all');
+    setTimeout(() => {
+      setSectionSavedKey(prev => (prev === (activeSection || 'all') ? null : prev));
+    }, 3000);
+  };
 
-    // Perform reload immediately to prevent frozen screen states
-    window.location.reload();
+  const [sectionSavedKey, setSectionSavedKey] = React.useState<string | null>(null);
+
+  const renderSectionSaveHeader = (title: string, sectionKey: SettingsSectionKey, requireSuperAdmin = false) => {
+    const isSaved = sectionSavedKey === sectionKey;
+    const isDisabled = isSaving || isDeveloper || isReadOnly || (requireSuperAdmin && !isCurrentUserSuperAdmin);
+    return (
+      <div className="flex items-center justify-between w-full mb-3 select-none bg-transparent">
+        <span
+          className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+          style={{
+            backgroundColor: 'oklch(0.44 0.16 324.65)',
+            borderRadius: '1000px',
+            cursor: 'default',
+            fontWeight: 100,
+            textTransform: 'none',
+          }}
+        >
+          {title}
+        </span>
+        <button
+          type="button"
+          disabled={isDisabled}
+          onClick={() => handleSaveAll()}
+          style={{
+            backgroundColor: isSaved ? '#16a34a' : '#2466ea',
+            color: '#fff',
+            boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #2466ea, inset 0 6px 12px #ffffff1f',
+            borderRadius: '0.75rem',
+            fontSize: '18px',
+            padding: '11px 22px',
+            fontWeight: 100,
+            transition: 'all 0.2s ease-in-out',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            cursor: isDisabled ? 'not-allowed' : 'pointer',
+            border: 'none',
+            opacity: isDisabled ? 0.6 : 1,
+          }}
+          className="hover:brightness-110 active:scale-[0.99]"
+        >
+          {isSaving ? (
+            <>
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              <span>{t("Enregistrement...")}</span>
+            </>
+          ) : isSaved ? (
+            <>
+              <Check className="w-4 h-4" />
+              <span>{t("Enregistré")}</span>
+            </>
+          ) : (
+            <span>{t("Enregistrer")}</span>
+          )}
+        </button>
+      </div>
+    );
   };
 
   // Harmonized styling constants
@@ -3270,6 +3577,7 @@ export default function SettingsModal({
           {/* SECTION 1: RÉGLAGES */}
           {activeSection === 'reglages' && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left animate-fadeIn" id="settings-section-company">
+            {renderSectionSaveHeader(t("Réglages"), 'reglages', true)}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="block text-[16px] font-bold text-black font-sans">{t("Langue et région du logiciel")}.</label>
@@ -3863,6 +4171,7 @@ export default function SettingsModal({
       {/* SECTION 2: APPARENCE DES RAPPORTS PDF (DIV DÉDIÉE INDÉPENDANTE) */}
       {activeSection === 'pdf' && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left animate-fadeIn" id="settings-section-pdf">
+          {renderSectionSaveHeader(t("Apparence des rapports PDF"), 'pdf', true)}
           <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1">
                 <label className="block text-[16px] font-bold text-black font-sans">
@@ -4224,6 +4533,7 @@ export default function SettingsModal({
       {/* SECTION 4: INTITULÉS DES EMPLACEMENTS */}
       {activeSection === 'emplacements' && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 mt-4 text-left animate-fadeIn" id="settings-section-location-names">
+          {renderSectionSaveHeader(t("Intitulés des emplacements"), 'emplacements')}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
               {(['Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'] as const).map(loc => (
                 <div key={loc} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
@@ -4254,6 +4564,7 @@ export default function SettingsModal({
         {/* SECTION 6: MEMBRES DE L'ENVIRONNEMENT */}
         {activeSection === 'membres' && (
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-members" style={{ order: 98 }}>
+            {renderSectionSaveHeader(t("Membres de l’environnement"), 'membres')}
             {/* Formulaire d'ajout rapide de collaborateur */}
             <form onSubmit={handleAddMemberSubmit} className="space-y-4">
 
@@ -5214,6 +5525,7 @@ export default function SettingsModal({
         {/* SECTION: COMMUNICATION PORTAIL CLIENT */}
         {activeSection === 'communication' && (
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-communication-portail" style={{ order: 99 }}>
+            {renderSectionSaveHeader(t("Communication portail client"), 'communication')}
             <div className="space-y-2">
               <label htmlFor="settings-communication-portail" className="block text-[14px] font-bold text-black font-sans">
                 {t("Message à afficher.")}
@@ -5326,7 +5638,7 @@ export default function SettingsModal({
                         <div className="select-none font-sans flex items-center mt-1">
                           <span
                             style={{
-                              backgroundColor: apiDefibeoActive ? '#fe4eba' : 'rgb(57, 169, 143)',
+                              backgroundColor: 'rgb(185, 28, 28)',
                               boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
                               color: '#ffffff',
                               fontSize: '16px',
@@ -5336,37 +5648,25 @@ export default function SettingsModal({
                             }}
                             className="font-bold select-none"
                           >
-                            {apiDefibeoActive ? t("Activé") : t("Disponible")}
+                            {t("Indisponible")}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
+                      <label className="relative inline-flex items-center select-none cursor-not-allowed opacity-50" style={{ cursor: 'not-allowed' }}>
                         <input
                           type="checkbox"
-                          checked={apiDefibeoActive}
-                          onChange={(e) => {
-                            const isChecked = e.target.checked;
-                            setApiDefibeoActive(isChecked);
-                            if (isChecked && (!apiDefibeoApiKey || !apiDefibeoSecretKey)) {
-                              const newApiKey = 'dfb_live_' + Array.from({ length: 24 }, () => Math.random().toString(36)[2] || '0').join('');
-                              const newSecretKey = 'dfb_sec_' + Array.from({ length: 32 }, () => Math.random().toString(36)[2] || '0').join('');
-                              setApiDefibeoApiKey(newApiKey);
-                              setApiDefibeoSecretKey(newSecretKey);
-                              persistApiDefibeoConnectorState(isChecked, newApiKey, newSecretKey);
-                            } else {
-                              persistApiDefibeoConnectorState(isChecked, apiDefibeoApiKey, apiDefibeoSecretKey);
-                            }
-                          }}
+                          checked={false}
+                          disabled
                           className="sr-only peer"
                         />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'pointer' }}></div>
+                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-not-allowed peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'not-allowed' }}></div>
                       </label>
                     </div>
                   </div>
 
-                  {apiDefibeoActive && (
+                  {false && apiDefibeoActive && (
                     <div className="mt-4 space-y-4 animate-slideUp">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {/* Environment ID */}

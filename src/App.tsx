@@ -2041,10 +2041,10 @@ export default function App() {
             if (!Array.isArray(prev) || prev.length === 0) return prev;
             const filtered = prev.filter(df => !isDefibInDeletedList(df, delSet));
             if (filtered.length !== prev.length) {
-              idbSet(`defib_${tId}_defibrillateurs`, filtered).catch(() => {});
+              idbSet(`defib_${tId}_defibrillateurs_v110`, filtered).catch(() => {});
               if (/^\d+$/.test(numOnly)) {
-                idbSet(`defib_D${numOnly}_defibrillateurs`, filtered).catch(() => {});
-                idbSet(`defib_d${numOnly}_defibrillateurs`, filtered).catch(() => {});
+                idbSet(`defib_D${numOnly}_defibrillateurs_v110`, filtered).catch(() => {});
+                idbSet(`defib_d${numOnly}_defibrillateurs_v110`, filtered).catch(() => {});
               }
             }
             return filtered;
@@ -2096,7 +2096,7 @@ export default function App() {
     }
     if (Array.isArray(items) && items.length > 0) {
       for (const k of [tid, tid.toUpperCase(), tid.toLowerCase()]) {
-        idbSet(`defib_${k}_defibrillateurs`, items).catch(() => {});
+        idbSet(`defib_${k}_defibrillateurs_v110`, items).catch(() => {});
       }
     }
   };
@@ -2230,7 +2230,7 @@ export default function App() {
           if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
             setDefibrillateurs([]);
             setDefibSheetStats(null);
-            idbSet(`defib_${activeTenant}_defibrillateurs`, []).catch(() => {});
+            idbSet(`defib_${activeTenant}_defibrillateurs_v110`, []).catch(() => {});
             setIsDefibLoading(false);
             return;
           }
@@ -2566,7 +2566,7 @@ export default function App() {
                 if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
                   setDefibrillateurs([]);
                   setDefibSheetStats(null);
-                  idbSet(`defib_${activeTid}_defibrillateurs`, []).catch(() => {});
+                  idbSet(`defib_${activeTid}_defibrillateurs_v110`, []).catch(() => {});
                   setIsDefibLoading(false);
                   return;
                 }
@@ -3082,32 +3082,59 @@ export default function App() {
             safeSetLocalStorage(`defib_${activeTid}_ged_docs`, JSON.stringify(items));
             break;
           case 'intituleEmplacements': {
-            if (items.length > 0) {
-              setCustomLocationNames((prevLocs) => {
-                const nextLocs = { ...(prevLocs || {}) };
-                for (const row of items) {
-                  if (!row || typeof row !== 'object') continue;
-                  if (row.emplacement && row.intitule !== undefined) {
-                    nextLocs[String(row.emplacement).trim()] = String(row.intitule);
-                  }
-                  for (const [k, v] of Object.entries(row)) {
-                    if (/^(?:Entrepôt|Véhicule)\s+[A-J]$/i.test(k) && v !== undefined && v !== null && String(v).trim() !== '') {
-                      nextLocs[k] = String(v).trim();
-                    }
-                  }
+            const nextLocs: Record<string, string> = {};
+            for (const row of items) {
+              if (!row || typeof row !== 'object') continue;
+              if (row.emplacement && row.intitule !== undefined) {
+                nextLocs[String(row.emplacement).trim()] = String(row.intitule);
+              }
+              for (const [k, v] of Object.entries(row)) {
+                if (/^(?:Entrepôt|Véhicule)\s+[A-J]$/i.test(k) && v !== undefined && v !== null && String(v).trim() !== '') {
+                  nextLocs[k] = String(v).trim();
                 }
-                safeSetLocalStorage(`defib_${activeTid}_custom_location_names`, JSON.stringify(nextLocs));
-                return nextLocs;
-              });
+              }
             }
+            setCustomLocationNames(nextLocs);
+            safeSetLocalStorage(`defib_${activeTid}_custom_location_names`, JSON.stringify(nextLocs));
             break;
           }
           case 'membresEnvironnement': {
-            const validMembers = items.filter((m: any) => m && (m.name || m.email));
-            // When a spreadsheet is linked for Membres de l'environnement, display ONLY the spreadsheet data in the frontend
-            setMembers(validMembers);
-            loadedDataRef.current.members = JSON.stringify(validMembers);
-            safeSetLocalStorage(`defib_${activeTid}_members`, JSON.stringify(validMembers));
+            const validSheetMembers = items.filter((m: any) => m && (m.name || m.email));
+            // Mix Firebase/DB + Spreadsheet (2 sources), giving spreadsheet fields precedence when an email is in both
+            setMembers((prevMembers) => {
+              const fbBase = ensureTenantMembersClient(Array.isArray(prevMembers) ? prevMembers : [], activeTid, loggedUser?.email, loggedUser?.name);
+              const sheetEmails = new Set(validSheetMembers.map((m: any) => String(m.email || '').trim().toLowerCase()).filter(Boolean));
+              const sheetNames = new Set(validSheetMembers.map((m: any) => String(m.name || '').trim().toLowerCase()).filter(Boolean));
+              const mergedFromSheet = validSheetMembers.map((sm: any) => {
+                const smEmail = String(sm.email || '').trim().toLowerCase();
+                const smName = String(sm.name || '').trim().toLowerCase();
+                const fbMatch = fbBase.find(
+                  (fm: any) =>
+                    (smEmail && String(fm.email || '').trim().toLowerCase() === smEmail) ||
+                    (!smEmail && smName && String(fm.name || '').trim().toLowerCase() === smName)
+                );
+                if (fbMatch) {
+                  return {
+                    ...fbMatch,
+                    ...sm,
+                    role: sm.role || fbMatch.role,
+                  };
+                }
+                return sm;
+              });
+              const fbOnly = fbBase.filter((fm: any) => {
+                const fmEmail = String(fm.email || '').trim().toLowerCase();
+                const fmName = String(fm.name || '').trim().toLowerCase();
+                if (fmEmail && sheetEmails.has(fmEmail)) return false;
+                if (!fmEmail && fmName && sheetNames.has(fmName)) return false;
+                return true;
+              });
+              const combined = [...fbOnly, ...mergedFromSheet];
+              const ensuredCombined = ensureTenantMembersClient(combined, activeTid, loggedUser?.email, loggedUser?.name);
+              loadedDataRef.current.members = JSON.stringify(ensuredCombined);
+              safeSetLocalStorage(`defib_${activeTid}_members`, JSON.stringify(ensuredCombined));
+              return ensuredCombined;
+            });
             break;
           }
           case 'reglages':
@@ -3116,11 +3143,15 @@ export default function App() {
             if (firstRow && typeof firstRow === 'object') {
               const cleanPatch: Record<string, any> = {};
               for (const [k, v] of Object.entries(firstRow)) {
-                if (!k.startsWith('_') && k !== 'id' && v !== undefined && v !== '') {
+                if (!k.startsWith('_') && k !== 'id' && v !== undefined) {
                   cleanPatch[k] = v;
                 }
               }
               if (Object.keys(cleanPatch).length > 0) {
+                if (cleanPatch.enableOtherEquipments) {
+                  setEnableOtherEquipments(cleanPatch.enableOtherEquipments);
+                  safeSetLocalStorage(`defib_${activeTid}_enable_other_equipments`, cleanPatch.enableOtherEquipments);
+                }
                 setCompanyInfo((prev) => {
                   const next = { ...prev, ...cleanPatch };
                   safeSetLocalStorage(`defib_${activeTid}_company_info`, JSON.stringify(next));
@@ -3132,12 +3163,14 @@ export default function App() {
           }
           case 'communicationPortailClient': {
             const firstRow = items[0];
-            if (firstRow && typeof firstRow === 'object') {
-              const nextMsg = String(firstRow.communicationPortailClient ?? firstRow.message ?? '');
-              if (nextMsg) {
-                safeSetLocalStorage(`defib_${activeTid}_communication_portail_client`, nextMsg);
-              }
-            }
+            const nextMsg = firstRow && typeof firstRow === 'object'
+              ? String(firstRow.communicationPortailClient ?? firstRow.message ?? '')
+              : '';
+            safeSetLocalStorage(`defib_${activeTid}_communication_portail_client`, nextMsg);
+            setCompanyInfo((prev) => ({
+              ...prev,
+              communicationPortailClient: nextMsg,
+            }));
             break;
           }
           case 'observateurActionsSuspectes': {
@@ -7460,21 +7493,35 @@ export default function App() {
           if (merged.spreadsheetClients) {
             safeSetLocalStorage(`defib_${tenantId}_spreadsheet_clients`, merged.spreadsheetClients);
           }
-          if ((merged as any).spreadsheetMembresEnvironnement) {
-            const sheetMemsUrl = String((merged as any).spreadsheetMembresEnvironnement).trim();
-            safeSetLocalStorage(`defib_${tenantId}_spreadsheet_membres_environnement`, sheetMemsUrl);
-            refreshGenericSheetCompartment('membresEnvironnement', true, activeRunTenantId, sheetMemsUrl).catch(() => {});
+          const settingsSheetsToRefresh: Array<{ key: string; storageSuffix: string; tabType: string }> = [
+            { key: 'spreadsheetReglages', storageSuffix: 'spreadsheet_reglages', tabType: 'reglages' },
+            { key: 'spreadsheetApparenceRapportsPdf', storageSuffix: 'spreadsheet_apparence_rapports_pdf', tabType: 'apparenceRapportsPdf' },
+            { key: 'spreadsheetIntituleEmplacements', storageSuffix: 'spreadsheet_intitule_emplacements', tabType: 'intituleEmplacements' },
+            { key: 'spreadsheetCommunicationPortailClient', storageSuffix: 'spreadsheet_communication_portail_client', tabType: 'communicationPortailClient' },
+            { key: 'spreadsheetMembresEnvironnement', storageSuffix: 'spreadsheet_membres_environnement', tabType: 'membresEnvironnement' },
+          ];
+          for (const st of settingsSheetsToRefresh) {
+            const sUrl = String((merged as any)[st.key] || '').trim();
+            if (sUrl) {
+              safeSetLocalStorage(`defib_${tenantId}_${st.storageSuffix}`, sUrl);
+              refreshGenericSheetCompartment(st.tabType, true, activeRunTenantId, sUrl).catch(() => {});
+            }
           }
           return merged;
         }));
 
         syncTasks.push(syncBackground<Member[]>('members', 'members', (nextMems) => {
-          const hasMembersSheet = Boolean(
-            (localStorage.getItem(`defib_${tenantId}_spreadsheet_membres_environnement`) || '').trim()
-          );
-          if (!hasMembersSheet) {
-            setMembers(nextMems);
-          }
+          setMembers((prevMembers) => {
+            const fbList = Array.isArray(nextMems) ? nextMems : [];
+            const curList = Array.isArray(prevMembers) ? prevMembers : [];
+            const curEmails = new Set(curList.map((m: any) => String(m.email || '').trim().toLowerCase()).filter(Boolean));
+            const fbOnly = fbList.filter((fm: any) => {
+              const fmEmail = String(fm.email || '').trim().toLowerCase();
+              return fmEmail && !curEmails.has(fmEmail);
+            });
+            const combined = ensureTenantMembersClient([...curList, ...fbOnly], activeRunTenantId, loggedUser?.email, loggedUser?.name);
+            return combined;
+          });
         }, (rawMems) => {
           const mems = ensureTenantMembersClient(Array.isArray(rawMems) ? rawMems : [], activeRunTenantId);
           const uEmail = loggedUser?.email?.trim().toLowerCase();

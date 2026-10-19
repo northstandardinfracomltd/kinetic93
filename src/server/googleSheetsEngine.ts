@@ -392,46 +392,50 @@ function normalizeDateStr(val: any): string {
 // 1. DEFIBRILLATEURS MAPPING (GET & POST)
 // ==========================================
 export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; aliases: string[]; type?: 'yesno' | 'bool' | 'date' }> = [
-  { header: 'Identifiant', field: 'identifiant', aliases: ['identifiant', 'id', 'identifiantdae', 'code', 'identifiantunique', 'identificationidentifiant'] },
-  { header: 'Numéro Atlasanté', field: 'numeroAtlasante', aliases: ['numeroatlasante', 'atlasante', 'idatlasante', 'geodae', 'identificationnumeroatlasante'] },
-  { header: 'Version logiciel', field: 'versionLogiciel', aliases: ['versionlogiciel', 'versiondulogiciel', 'firmware', 'version', 'identificationversionlogiciel', 'identificationversiondulogiciel'] },
-  { header: 'Numéro de série', field: 'numeroSerie', aliases: ['numerodeserie', 'numeroserie', 'numserie', 'serie', 'sn', 'serial', 'identificationserie', 'identificationnumerodeserie'] },
-  { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentairegeneral', 'commentairedae', 'notes', 'note', 'observation', 'identificationcommentaire', 'identificationcommentairegeneral'] },
-  { header: 'Modèle', field: 'modeleId', aliases: ['modele', 'modeledae', 'modeledefibrillateur', 'modeleid', 'model', 'identificationmodele', 'identificationmodeleidentifiantunique', 'modeleidentifiantunique'] },
+  // Section 1
+  { header: 'Section 1 - Identifiant.', field: 'identifiant', aliases: ['identifiant', 'id', 'identifiantdae', 'code', 'identifiantunique', 'identificationidentifiant'] },
+  { header: 'Section 1 - Série.', field: 'numeroSerie', aliases: ['serie', 'numerodeserie', 'numeroserie', 'numserie', 'sn', 'serial', 'identificationserie', 'identificationnumerodeserie'] },
+  { header: 'Section 1 - Modèle.', field: 'modeleId', aliases: ['modele', 'modeledae', 'modeledefibrillateur', 'modeleid', 'model', 'identificationmodele', 'identificationmodeleidentifiantunique', 'modeleidentifiantunique'] },
+  { header: 'Section 1 - Numéro Atlasanté.', field: 'numeroAtlasante', aliases: ['numeroatlasante', 'atlasante', 'idatlasante', 'geodae', 'identificationnumeroatlasante'] },
+  { header: 'Section 1 - Version du logiciel.', field: 'versionLogiciel', aliases: ['versiondulogiciel', 'versionlogiciel', 'firmware', 'version', 'identificationversionlogiciel', 'identificationversiondulogiciel'] },
+  { header: 'Section 1 - Commentaire Général.', field: 'commentaire', aliases: ['commentairegeneral', 'commentaire', 'commentairedae', 'notes', 'note', 'observation', 'identificationcommentaire', 'identificationcommentairegeneral'] },
 
-  { header: 'Client lié', field: 'clientNom', aliases: ['clientlie', 'client', 'clientnom', 'entreprise', 'denominationclient', 'clientclient', 'clientclientidentifiantunique', 'clientidentifiantunique'] },
-  { header: 'Nom du site', field: 'nomSite', aliases: ['nomdusite', 'nomsite', 'site', 'etablissement', 'clientsite', 'clientnomdusite'] },
-  { header: "Catégorie d'établissement", field: 'categorieEtablissement', aliases: ['categoriedetablissement', 'categorieetablissement', 'typeetablissement', 'clientcategorieetablissement', 'clientcategoriedetablissement'] },
-  { header: 'Nom et prénom sur site', field: 'nomPrenomSite', aliases: ['nometprenomsursite', 'nomprenomsite', 'contactsursite', 'contactsite', 'responsablesite', 'nometprenom', 'nomprenom', 'clientnometprenom', 'contact'] },
-  { header: 'Téléphone portable sur site', field: 'telephoneSite', aliases: ['telephoneportablesursite', 'telephonesursite', 'telephonesite', 'telsite', 'portablesite', 'telephoneportable', 'clienttelephoneportable', 'telephone', 'tel'] },
-  { header: 'Email sur site', field: 'emailSite', aliases: ['emailsursite', 'emailsite', 'mailsite', 'courrielsite', 'email', 'clientemail', 'mail', 'courriel'] },
-  { header: 'Contrat', field: 'contrat', aliases: ['contrat', 'aveccontrat', 'souscontrat', 'contratencours', 'clientcontratencours', 'clientcontrat'], type: 'yesno' },
-  { header: 'Nom du contrat', field: 'nomContrat', aliases: ['nomducontrat', 'nomcontrat', 'typecontrat', 'titreducontrat', 'titrecontrat', 'clienttitreducontrat', 'clientnomducontrat'] },
-  { header: 'Référence contrat', field: 'referenceContrat', aliases: ['referencecontrat', 'refcontrat', 'numerocontrat', 'referenceducontrat', 'clientreferenceducontrat'] },
-  { header: 'Début du contrat', field: 'debutContrat', aliases: ['debutducontrat', 'debutcontrat', 'datedebutcontrat', 'clientdebutducontrat'], type: 'date' },
-  { header: 'Fin du contrat', field: 'finContrat', aliases: ['finducontrat', 'fincontrat', 'datefincontrat', 'echeancecontrat', 'expirationducontrat', 'clientexpirationducontrat', 'clientfinducontrat'], type: 'date' },
-  { header: 'Payeur ID', field: 'payeurId', aliases: ['payeurid', 'idpayeur', 'codepayeur', 'clientpayeurid'] },
-  { header: 'Client ID', field: 'clientIdField', aliases: ['clientid', 'idclient', 'codeclient', 'clientidfield', 'clientclientid'] },
+  // Section 2
+  { header: 'Section 2 - Client.', field: 'clientNom', aliases: ['client', 'clientlie', 'clientnom', 'entreprise', 'denominationclient', 'clientclient', 'clientclientidentifiantunique', 'clientidentifiantunique'] },
+  { header: 'Section 2 - Nom du site.', field: 'nomSite', aliases: ['nomdusite', 'nomsite', 'site', 'etablissement', 'clientsite', 'clientnomdusite'] },
+  { header: 'Section 2 - Téléphone portable.', field: 'telephoneSite', aliases: ['telephoneportable', 'telephoneportablesursite', 'telephonesursite', 'telephonesite', 'telsite', 'portablesite', 'clienttelephoneportable', 'telephone', 'tel'] },
+  { header: 'Section 2 - Email.', field: 'emailSite', aliases: ['email', 'emailsursite', 'emailsite', 'mailsite', 'courrielsite', 'clientemail', 'mail', 'courriel'] },
+  { header: 'Section 2 - Nom et prénom.', field: 'nomPrenomSite', aliases: ['nometprenom', 'nometprenomsursite', 'nomprenomsite', 'contactsursite', 'contactsite', 'responsablesite', 'nomprenom', 'clientnometprenom', 'contact'] },
+  { header: "Section 2 - Catégorie d'établissement.", field: 'categorieEtablissement', aliases: ['categoriedetablissement', 'categorieetablissement', 'typeetablissement', 'clientcategorieetablissement', 'clientcategoriedetablissement'] },
+  { header: 'Section 2 - Titre du contrat.', field: 'nomContrat', aliases: ['titreducontrat', 'nomducontrat', 'nomcontrat', 'typecontrat', 'titrecontrat', 'clienttitreducontrat', 'clientnomducontrat'] },
+  { header: 'Section 2 - Contrat en cours.', field: 'contrat', aliases: ['contratencours', 'contrat', 'aveccontrat', 'souscontrat', 'clientcontratencours', 'clientcontrat'], type: 'yesno' },
+  { header: 'Section 2 - Payeur ID.', field: 'payeurId', aliases: ['payeurid', 'idpayeur', 'codepayeur', 'clientpayeurid'] },
+  { header: 'Section 2 - Client ID.', field: 'clientIdField', aliases: ['clientid', 'idclient', 'codeclient', 'clientidfield', 'clientclientid'] },
+  { header: 'Section 2 - Référence du contrat.', field: 'referenceContrat', aliases: ['referenceducontrat', 'referencecontrat', 'refcontrat', 'numerocontrat', 'clientreferenceducontrat'] },
+  { header: 'Section 2 - Début du contrat.', field: 'debutContrat', aliases: ['debutducontrat', 'debutcontrat', 'datedebutcontrat', 'clientdebutducontrat'], type: 'date' },
+  { header: 'Section 2 - Expiration du contrat.', field: 'finContrat', aliases: ['expirationducontrat', 'finducontrat', 'fincontrat', 'datefincontrat', 'echeancecontrat', 'clientexpirationducontrat', 'clientfinducontrat'], type: 'date' },
 
-  { header: 'Modèle coffret', field: 'modeleCoffretId', aliases: ['modelecoffret', 'coffret', 'modeleboitier', 'boitiermodele', 'modelecoffretid', 'boitier', 'boitiermodeleidentifiantunique'] },
-  { header: 'Numéro de lot coffret', field: 'numeroLotCoffret', aliases: ['numerodelotcoffret', 'numerolotcoffret', 'lotcoffret', 'lotboitier', 'boitierlot'] },
-  { header: 'Commentaire coffret', field: 'commentaireCoffret', aliases: ['commentairecoffret', 'commentaireboitier', 'notecoffret', 'boitiercommentaire', 'section3commentaireboitier'] },
-  { header: 'Date péremption trousse', field: 'peremptionTrousse', aliases: ['dateperemptiontrousse', 'peremptiontrousse', 'peremptiondelatrousse', 'peremptionkit', 'dateperemptionkit', 'boitierperemptiontrousse', 'boitierperemptiondelatrousse'], type: 'date' },
-  { header: 'Ciseaux présents', field: 'kitCiseauxPresents', aliases: ['ciseauxpresents', 'kitciseauxpresents', 'ciseaux', 'boitierciseauxpresents'], type: 'yesno' },
-  { header: 'Masque présent', field: 'kitMasquePresent', aliases: ['masquepresent', 'kitmasquepresent', 'masque', 'boitiermasquepresent'], type: 'yesno' },
-  { header: 'Péremption masque', field: 'kitPeremptionMasque', aliases: ['peremptionmasque', 'peremptiondumasque', 'kitperemptionmasque', 'dateperemptionmasque', 'boitierperemptiondumasque'], type: 'date' },
-  { header: 'Serviettes présentes', field: 'kitServiettesPresentes', aliases: ['serviettespresentes', 'kitserviettespresentes', 'serviettes', 'boitierserviettespresentes'], type: 'yesno' },
-  { header: 'Péremption serviettes', field: 'kitPeremptionServiettes', aliases: ['peremptionserviettes', 'peremptiondesserviettes', 'kitperemptionserviettes', 'dateperemptionserviettes', 'boitierperemptiondesserviettes'], type: 'date' },
-  { header: 'Gants présents', field: 'kitGantsPresents', aliases: ['gantspresents', 'pairedegantspresents', 'pairedegantspresente', 'kitgantspresents', 'gants', 'boitierpairedegantspresents'], type: 'yesno' },
-  { header: 'Rasoir présent', field: 'kitRasoirPresent', aliases: ['rasoirpresent', 'kitrasoirpresent', 'rasoir', 'boitierrasoir'], type: 'yesno' },
+  // Section 3
+  { header: 'Section 3 - Modèle Boîtier.', field: 'modeleCoffretId', aliases: ['modeleboitier', 'modelecoffret', 'coffret', 'boitiermodele', 'modelecoffretid', 'boitier', 'boitiermodeleidentifiantunique'] },
+  { header: 'Section 3 - Lot Boîtier.', field: 'numeroLotCoffret', aliases: ['lotboitier', 'numerodelotcoffret', 'numerolotcoffret', 'lotcoffret', 'boitierlot'] },
+  { header: 'Section 3  Commentaire Boîtier.', field: 'commentaireCoffret', aliases: ['commentaireboitier', 'commentairecoffret', 'notecoffret', 'boitiercommentaire', 'section3commentaireboitier'] },
+  { header: 'Section 3 - Péremption de la trousse.', field: 'peremptionTrousse', aliases: ['peremptiondelatrousse', 'dateperemptiontrousse', 'peremptiontrousse', 'peremptionkit', 'dateperemptionkit', 'boitierperemptiontrousse', 'boitierperemptiondelatrousse'], type: 'date' },
+  { header: 'Section 3 - Ciseaux présents.', field: 'kitCiseauxPresents', aliases: ['ciseauxpresents', 'kitciseauxpresents', 'ciseaux', 'boitierciseauxpresents'], type: 'yesno' },
+  { header: 'Section 3 - Masque présent.', field: 'kitMasquePresent', aliases: ['masquepresent', 'kitmasquepresent', 'masque', 'boitiermasquepresent'], type: 'yesno' },
+  { header: 'Section 3 - Péremption du masque.', field: 'kitPeremptionMasque', aliases: ['peremptiondumasque', 'peremptionmasque', 'kitperemptionmasque', 'dateperemptionmasque', 'boitierperemptiondumasque'], type: 'date' },
+  { header: 'Section 3 - Serviettes présentes.', field: 'kitServiettesPresentes', aliases: ['serviettespresentes', 'kitserviettespresentes', 'serviettes', 'boitierserviettespresentes'], type: 'yesno' },
+  { header: 'Section 3 - Péremption des serviettes.', field: 'kitPeremptionServiettes', aliases: ['peremptiondesserviettes', 'peremptionserviettes', 'kitperemptionserviettes', 'dateperemptionserviettes', 'boitierperemptiondesserviettes'], type: 'date' },
+  { header: 'Section 3 - Paire de gants présents.', field: 'kitGantsPresents', aliases: ['pairedegantspresents', 'gantspresents', 'pairedegantspresente', 'kitgantspresents', 'gants', 'boitierpairedegantspresents'], type: 'yesno' },
+  { header: 'Section 3 - Rasoir.', field: 'kitRasoirPresent', aliases: ['rasoir', 'rasoirpresent', 'kitrasoirpresent', 'boitierrasoir'], type: 'yesno' },
 
-  { header: 'Numéro et voie', field: 'numVoie', aliases: ['numeroetvoie', 'numvoie', 'adresse', 'rue', 'voie', 'localisationnumeroetvoie', 'localisationrue'] },
-  { header: 'Ville', field: 'ville', aliases: ['ville', 'commune', 'localite', 'city', 'localisationville'] },
-  { header: 'Code postal', field: 'cp', aliases: ['codepostal', 'cp', 'zip', 'postalcode', 'localisationcodepostal'] },
-  { header: 'Région', field: 'region', aliases: ['region', 'departementregion', 'localisationregion'] },
-  { header: 'Pays', field: 'pays', aliases: ['pays', 'country', 'localisationpays'] },
-  { header: 'Latitude', field: 'latitude', aliases: ['latitude', 'lat', 'coordlat', 'localisationlatitude'] },
-  { header: 'Longitude', field: 'longitude', aliases: ['longitude', 'lng', 'lon', 'long', 'coordlng', 'localisationlongitude'] },
+  // Section 4
+  { header: 'Section 4 - Numéro et voie.', field: 'numVoie', aliases: ['numeroetvoie', 'numvoie', 'adresse', 'rue', 'voie', 'localisationnumeroetvoie', 'localisationrue'] },
+  { header: 'Section 4 - Ville.', field: 'ville', aliases: ['ville', 'commune', 'localite', 'city', 'localisationville'] },
+  { header: 'Section 4 - Code postal.', field: 'cp', aliases: ['codepostal', 'cp', 'zip', 'postalcode', 'localisationcodepostal'] },
+  { header: 'Section 4 - Région.', field: 'region', aliases: ['region', 'departementregion', 'localisationregion'] },
+  { header: 'Section 4 - Pays.', field: 'pays', aliases: ['pays', 'country', 'localisationpays'] },
+  { header: 'Section 4 - Latitude.', field: 'latitude', aliases: ['latitude', 'lat', 'coordlat', 'localisationlatitude'] },
+  { header: 'Section 4 - Longitude.', field: 'longitude', aliases: ['longitude', 'lng', 'lon', 'long', 'coordlng', 'localisationlongitude'] },
   {
     header: 'Section 4 — Localisation : Aide d’accès.',
     field: 'commentaireAdresse',
@@ -451,13 +455,6 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
       'localisation',
     ],
   },
-  { header: 'Accès 24/7', field: 'acces247', aliases: ['acces247', 'acces24h24', '247', 'localisationacces247'], type: 'bool' },
-  { header: 'Accès semaine', field: 'accesSemaine', aliases: ['accessemaine', 'semaine', 'localisationaccessemaine'], type: 'bool' },
-  { header: 'Accès week-end', field: 'accesWeekend', aliases: ['accesweekend', 'weekend', 'localisationaccesweekend'], type: 'bool' },
-  { header: 'Extérieur', field: 'exterieur', aliases: ['exterieur', 'ext', 'localisationexterieur'], type: 'bool' },
-  { header: "Horaires d'ouverture", field: 'horaires', aliases: ['horairesdouverture', 'horaires', 'heuresouverture', 'localisationhoraires'] },
-
-  // Plage 1 & Plage 2 schedule columns (Section 4)
   { header: 'Section 4 - Plage 1 - Fermeture le midi', field: '_plage1_fermetureMidi', aliases: ['plage1fermeturelemidi', 'localisationplage1fermeturelemidi'], type: 'bool' },
   { header: 'Section 4 - Plage 1 - Ouv. Matin', field: '_plage1_openMorning', aliases: ['plage1ouvmatin', 'localisationplage1ouvmatin'] },
   { header: 'Section 4 - Plage 1 - Ferm. Midi', field: '_plage1_closeMorning', aliases: ['plage1fermmidi', 'localisationplage1fermmidi'] },
@@ -475,72 +472,71 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
   { header: 'Section 4 - Plage 2 - Ouv. Général', field: '_plage2_openContinuous', aliases: ['plage2ouvgeneral', 'localisationplage2ouvgeneral'] },
   { header: 'Section 4 - Plage 2 - Ferm. Général', field: '_plage2_closeContinuous', aliases: ['plage2fermgeneral', 'localisationplage2fermgeneral'] },
 
-  { header: 'Expiration garantie', field: 'finGarantie', aliases: ['expirationgarantie', 'expirationdegarantie', 'expirgarantie', 'fingarantie', 'garantie', 'datefingarantie', 'datesexpirationdegarantie'], type: 'date' },
-  { header: 'Date de fabrication', field: 'fabrication', aliases: ['datedefabrication', 'fabrication', 'datefabrication', 'datesfabrication'], type: 'date' },
-  { header: 'Mise en service', field: 'miseEnService', aliases: ['miseenservice', 'datemiseenservice', 'installation', 'datesmiseenservice'], type: 'date' },
-  { header: 'Dernière maintenance', field: 'derniereMaintenance', aliases: ['dernieremaintenance', 'datedernieremaintenance', 'dernierevisite', 'dermnt', 'datesdernieremaintenance'], type: 'date' },
-  { header: 'Prochaine maintenance', field: 'prochaineMaintenance', aliases: ['prochainemaintenance', 'prochainevisite', 'dateprochainemaintenance', 'prochainev', 'provisite', 'datesprochainemaintenance'], type: 'date' },
-  { header: 'Sortie fabricant', field: 'sortieFabricant', aliases: ['sortiefabricant', 'datesortiefabricant', 'sortiedusine', 'datessortiedusine'], type: 'date' },
+  // Section 5
+  { header: 'Section 5 - Expiration de garantie.', field: 'finGarantie', aliases: ['expirationdegarantie', 'expirationgarantie', 'expirgarantie', 'fingarantie', 'garantie', 'datefingarantie', 'datesexpirationdegarantie'], type: 'date' },
+  { header: 'Section 5 - Fabrication.', field: 'fabrication', aliases: ['fabrication', 'datedefabrication', 'datefabrication', 'datesfabrication'], type: 'date' },
+  { header: 'Section 5 - Mise en service.', field: 'miseEnService', aliases: ['miseenservice', 'datemiseenservice', 'installation', 'datesmiseenservice'], type: 'date' },
+  { header: 'Section 5 - Dernière maintenance.', field: 'derniereMaintenance', aliases: ['dernieremaintenance', 'datedernieremaintenance', 'dernierevisite', 'dermnt', 'datesdernieremaintenance'], type: 'date' },
+  { header: "Section 5 - Sortie d'usine.", field: 'sortieFabricant', aliases: ['sortiedusine', 'sortiefabricant', 'datesortiefabricant', 'datessortiedusine'], type: 'date' },
+  { header: 'Section 5 - Prochaine maintenance.', field: 'prochaineMaintenance', aliases: ['prochainemaintenance', 'prochainevisite', 'dateprochainemaintenance', 'prochainev', 'provisite', 'datesprochainemaintenance'], type: 'date' },
 
-  { header: 'Modèle électrode A', field: 'modeleElectrodeAId', aliases: ['modeleelectrodea', 'modelea', 'electrodeamodele', 'modeleelectrodeaid', 'electrodeadulteoumixtemodele'] },
-  { header: 'Lot électrode A', field: 'lotElectrodeA', aliases: ['lotelectrodea', 'lota', 'electrodealot', 'electrodeadulteoumixtelot'] },
-  { header: 'Insertion électrode A', field: 'insertionElectrodeA', aliases: ['insertionelectrodea', 'insertiona', 'dateinsertionelectrodea', 'electrodeadulteoumixteinsertion'], type: 'date' },
-  { header: 'Péremption électrode A', field: 'peremptionElectrodeA', aliases: ['peremptionelectrodea', 'peremptiona', 'dateperemptionelectrodea', 'dateperemptiona', 'electrodeadulteoumixteperemption'], type: 'date' },
-  { header: 'Livraison électrode A', field: 'livraisonElectrodeA', aliases: ['livraisonelectrodea', 'livraisona', 'datelivraisonelectrodea', 'electrodeadulteoumixtelivraison'], type: 'date' },
-  { header: 'Situation électrode A', field: 'situationElectrodeA', aliases: ['situationelectrodea', 'situationa', 'statuta', 'etatelectrodea', 'electrodeadulteoumixtestatut', 'statutelectrodea'] },
-  { header: 'Commentaire électrode A', field: 'commentaireElectrodeA', aliases: ['commentaireelectrodea', 'commentairea', 'noteelectrodea', 'electrodeadulteoumixtecommentaire'] },
-  { header: 'Électrode secours A', field: 'hasElectrodeASecours', aliases: ['electrodesecoursa', 'electrodedesecoursa', 'haselectrodeasecours', 'secoursa'], type: 'yesno' },
-  { header: 'Modèle secours A', field: 'modeleElectrodeASecoursId', aliases: ['modelesecoursa', 'modeleelectrodeasecours', 'modeleelectrodeasecoursid', 'modeledelectrodedesecoursa', 'modeldelectrodedesecoursa', 'electrodeadulteoumixtemodeledelectrodedesecours', 'modeledelectrodedesecours'] },
-  { header: 'Lot secours A', field: 'lotElectrodeASecours', aliases: ['lotsecoursa', 'lotelectrodeasecours', 'lotdelelectrodedesecoursa', 'electrodeadulteoumixtelotdelelectrodedesecours', 'lotdelelectrodedesecours'] },
-  { header: 'Péremption secours A', field: 'peremptionSecoursElectrodeA', aliases: ['peremptionsecoursa', 'peremptionsecourselectrodea', 'peremptiondelelectrodedesecoursa', 'dateperemptionsecoursa', 'electrodeadulteoumixteperemptiondelelectrodedesecours', 'peremptiondelelectrodedesecours'], type: 'date' },
-  { header: 'Pad-Pak Adulte', field: 'hasPadpakA', aliases: ['padpakadulte', 'haspadpaka', 'padpaka'], type: 'yesno' },
-  { header: 'Lot Pad-Pak A', field: 'lotPadpakA', aliases: ['lotpadpaka', 'lotpadpakadulte', 'electrodeadulteoumixtelotpadpaka'] },
-  { header: 'Péremption Pad-Pak A', field: 'peremptionPadpakA', aliases: ['peremptionpadpaka', 'peremptionpadpakadulte', 'dateperemptionpadpaka', 'electrodeadulteoumixteperemptionpadpaka'], type: 'date' },
+  // Section 6
+  { header: 'Section 6 - Modèle A', field: 'modeleElectrodeAId', aliases: ['modelea', 'modeleelectrodea', 'electrodeamodele', 'modeleelectrodeaid', 'electrodeadulteoumixtemodele'] },
+  { header: 'Section 6 - Lot A', field: 'lotElectrodeA', aliases: ['lota', 'lotelectrodea', 'electrodealot', 'electrodeadulteoumixtelot'] },
+  { header: 'Section 6 - Insertion A', field: 'insertionElectrodeA', aliases: ['insertiona', 'insertionelectrodea', 'dateinsertionelectrodea', 'electrodeadulteoumixteinsertion'], type: 'date' },
+  { header: 'Section 6 - Péremption A', field: 'peremptionElectrodeA', aliases: ['peremptiona', 'peremptionelectrodea', 'dateperemptionelectrodea', 'dateperemptiona', 'electrodeadulteoumixteperemption'], type: 'date' },
+  { header: 'Section 6 - Livraison A', field: 'livraisonElectrodeA', aliases: ['livraisona', 'livraisonelectrodea', 'datelivraisonelectrodea', 'electrodeadulteoumixtelivraison'], type: 'date' },
+  { header: 'Section 6 - Électrode de secours A', field: 'hasElectrodeASecours', aliases: ['electrodedesecoursa', 'electrodesecoursa', 'haselectrodeasecours', 'secoursa'], type: 'yesno' },
+  { header: "Section 6 - Modèlé d'électrode de secours A", field: 'modeleElectrodeASecoursId', aliases: ['modeledelectrodedesecoursa', 'modeldelectrodedesecoursa', 'modelesecoursa', 'modeleelectrodeasecours', 'modeleelectrodeasecoursid', 'electrodeadulteoumixtemodeledelectrodedesecours', 'modeledelectrodedesecours'] },
+  { header: "Section 6 - Lot de l'électrode de secours A", field: 'lotElectrodeASecours', aliases: ['lotdelelectrodedesecoursa', 'lotsecoursa', 'lotelectrodeasecours', 'electrodeadulteoumixtelotdelelectrodedesecours', 'lotdelelectrodedesecours'] },
+  { header: "Section 6 - Péremption de l'électrode de secours A", field: 'peremptionSecoursElectrodeA', aliases: ['peremptiondelelectrodedesecoursa', 'peremptionsecoursa', 'peremptionsecourselectrodea', 'dateperemptionsecoursa', 'electrodeadulteoumixteperemptiondelelectrodedesecours', 'peremptiondelelectrodedesecours'], type: 'date' },
+  { header: 'Section 6 - Statut A', field: 'situationElectrodeA', aliases: ['statuta', 'situationelectrodea', 'situationa', 'etatelectrodea', 'electrodeadulteoumixtestatut', 'statutelectrodea'] },
+  { header: 'Section 6 - Commentaire A', field: 'commentaireElectrodeA', aliases: ['commentairea', 'commentaireelectrodea', 'noteelectrodea', 'electrodeadulteoumixtecommentaire'] },
+  { header: 'Section 6 - Padpak A', field: 'hasPadpakA', aliases: ['padpaka', 'padpakadulte', 'haspadpaka'], type: 'yesno' },
 
-  { header: 'Modèle électrode P', field: 'modeleElectrodePId', aliases: ['modeleelectrodep', 'modelep', 'electrodepModele', 'modeleelectrodepid', 'electrodepediatriquemodele'] },
-  { header: 'Lot électrode P', field: 'lotElectrodeP', aliases: ['lotelectrodep', 'lotp', 'electrodeplot', 'electrodepediatriquelot'] },
-  { header: 'Insertion électrode P', field: 'insertionElectrodeP', aliases: ['insertionelectrodep', 'insertionp', 'dateinsertionelectrodep', 'electrodepediatriqueinsertion'], type: 'date' },
-  { header: 'Péremption électrode P', field: 'peremptionElectrodeP', aliases: ['peremptionelectrodep', 'peremptionp', 'dateperemptionelectrodep', 'dateperemptionp', 'electrodepediatriqueperemption'], type: 'date' },
-  { header: 'Livraison électrode P', field: 'livraisonElectrodeP', aliases: ['livraisonelectrodep', 'livraisonp', 'datelivraisonelectrodep', 'electrodepediatriquelivraison'], type: 'date' },
-  { header: 'Situation électrode P', field: 'situationElectrodeP', aliases: ['situationelectrodep', 'situationp', 'statutp', 'etatelectrodep', 'electrodepediatriquestatut', 'statutelectrodep'] },
-  { header: 'Commentaire électrode P', field: 'commentaireElectrodeP', aliases: ['commentaireelectrodep', 'commentairep', 'noteelectrodep', 'electrodepediatriquecommentaire'] },
-  { header: 'Électrode secours P', field: 'hasElectrodePSecours', aliases: ['electrodesecoursp', 'electrodedesecoursp', 'haselectrodepsecours', 'secoursp'], type: 'yesno' },
-  { header: 'Modèle secours P', field: 'modeleElectrodePSecoursId', aliases: ['modelesecoursp', 'modeleelectrodepsecours', 'modeleelectrodepsecoursid', 'modeledelectrodedesecoursp', 'modeldelectrodedesecoursp', 'electrodepediatriquemodeledelectrodedesecours'] },
-  { header: 'Lot secours P', field: 'lotElectrodePSecours', aliases: ['lotsecoursp', 'lotelectrodepsecours', 'lotdelelectrodedesecoursp', 'electrodepediatriquelotdelelectrodedesecours'] },
-  { header: 'Péremption secours P', field: 'peremptionSecoursElectrodeP', aliases: ['peremptionsecoursp', 'peremptionsecourselectrodep', 'peremptiondelelectrodedesecoursp', 'dateperemptionsecoursp', 'electrodepediatriqueperemptiondelelectrodedesecours'], type: 'date' },
-  { header: 'Pad-Pak Pédiatrique', field: 'hasPadpakP', aliases: ['padpakpediatrique', 'haspadpakp', 'padpakp'], type: 'yesno' },
-  { header: 'Lot Pad-Pak P', field: 'lotPadpakP', aliases: ['lotpadpakp', 'lotpadpakpediatrique', 'electrodepediatriquelotpadpakp'] },
-  { header: 'Péremption Pad-Pak P', field: 'peremptionPadpakP', aliases: ['peremptionpadpakp', 'peremptionpadpakpediatrique', 'dateperemptionpadpakp', 'electrodepediatriqueperemptionpadpakp'], type: 'date' },
+  // Section 7
+  { header: 'Section 7 - Modèle P', field: 'modeleElectrodePId', aliases: ['modelep', 'modeleelectrodep', 'electrodepModele', 'modeleelectrodepid', 'electrodepediatriquemodele'] },
+  { header: 'Section 7 - Insertion P', field: 'insertionElectrodeP', aliases: ['insertionp', 'insertionelectrodep', 'dateinsertionelectrodep', 'electrodepediatriqueinsertion'], type: 'date' },
+  { header: 'Section 7 - Livraison P', field: 'livraisonElectrodeP', aliases: ['livraisonp', 'livraisonelectrodep', 'datelivraisonelectrodep', 'electrodepediatriquelivraison'], type: 'date' },
+  { header: 'Section 7 - Électrode de secours P', field: 'hasElectrodePSecours', aliases: ['electrodedesecoursp', 'electrodesecoursp', 'haselectrodepsecours', 'secoursp'], type: 'yesno' },
+  { header: "Section 7 - Modèlé d'électrode de secours P", field: 'modeleElectrodePSecoursId', aliases: ['modeledelectrodedesecoursp', 'modeldelectrodedesecoursp', 'modelesecoursp', 'modeleelectrodepsecours', 'modeleelectrodepsecoursid', 'electrodepediatriquemodeledelectrodedesecours'] },
+  { header: "Section 7 - Lot de l'électrode de secours P", field: 'lotElectrodePSecours', aliases: ['lotdelelectrodedesecoursp', 'lotsecoursp', 'lotelectrodepsecours', 'electrodepediatriquelotdelelectrodedesecours'] },
+  { header: "Section 7 - Péremption de l'électrode de secours P", field: 'peremptionSecoursElectrodeP', aliases: ['peremptiondelelectrodedesecoursp', 'peremptionsecoursp', 'peremptionsecourselectrodep', 'dateperemptionsecoursp', 'electrodepediatriqueperemptiondelelectrodedesecours'], type: 'date' },
+  { header: 'Section 7 - Statut P', field: 'situationElectrodeP', aliases: ['statutp', 'situationelectrodep', 'situationp', 'etatelectrodep', 'electrodepediatriquestatut', 'statutelectrodep'] },
+  { header: 'Section 7 - Commentaire P', field: 'commentaireElectrodeP', aliases: ['commentairep', 'commentaireelectrodep', 'noteelectrodep', 'electrodepediatriquecommentaire'] },
+  { header: 'Section 7 - Padpak P', field: 'hasPadpakP', aliases: ['padpakp', 'padpakpediatrique', 'haspadpakp'], type: 'yesno' },
+  { header: 'Section 7 - Péremption P', field: 'peremptionElectrodeP', aliases: ['peremptionp', 'peremptionelectrodep', 'dateperemptionelectrodep', 'dateperemptionp', 'electrodepediatriqueperemption'], type: 'date' },
+  { header: 'Section 7 - Lot P', field: 'lotElectrodeP', aliases: ['lotp', 'lotelectrodep', 'electrodeplot', 'electrodepediatriquelot'] },
 
-  { header: 'Modèle batterie B', field: 'modeleBatterieId', aliases: ['modelebatterieb', 'modelebatterie', 'modeleb', 'batteriemodele', 'modelebatterieid'] },
-  { header: 'Lot batterie B', field: 'lotBatterie', aliases: ['lotbatterieb', 'lotbatterie', 'lotb', 'batterielot'] },
-  { header: 'Insertion batterie B', field: 'insertionBatterie', aliases: ['insertionbatterieb', 'insertionbatterie', 'insertionb', 'dateinsertionbatterie', 'batterieinsertion'], type: 'date' },
-  { header: 'Fabrication batterie B', field: 'fabricationBatterie', aliases: ['fabricationbatterieb', 'fabricationbatterie', 'fabricationb', 'datefabricationbatterie', 'batteriefabrication'], type: 'date' },
-  { header: 'Péremption batterie B', field: 'peremptionBatterie', aliases: ['peremptionbatterieb', 'peremptionbatterie', 'peremptionb', 'dateperemptionbatterie', 'dateperemptionb', 'batterieperemption'], type: 'date' },
-  { header: 'Livraison batterie B', field: 'livraisonBatterie', aliases: ['livraisonbatterieb', 'livraisonbatterie', 'livraisonb', 'datelivraisonbatterie', 'batterielivraison'], type: 'date' },
-  { header: 'Situation batterie B', field: 'situationBatterie', aliases: ['situationbatterieb', 'situationbatterie', 'situationb', 'statutb', 'etatbatterie', 'batteriestatut', 'statutbatterie'] },
-  { header: 'Pourcentage batterie B', field: 'pourcentageBatterie', aliases: ['pourcentagebatterieb', 'pourcentagebatterie', 'pourcentageb', 'pourcentageconstateb', 'batteriepourcentage', 'batteriepourcentageconstate', 'pourcentageconstate'] },
-  { header: 'Commentaire batterie B', field: 'commentaireBatterie', aliases: ['commentairebatterieb', 'commentairebatterie', 'commentaireb', 'notebatterie', 'batteriecommentaire'] },
-  { header: 'Batterie secours B', field: 'hasBatterieSecours', aliases: ['batteriesecoursb', 'batteriedesecoursb', 'hasbatteriesecours', 'secoursb', 'batteriesecours'], type: 'yesno' },
-  { header: 'Modèle secours B', field: 'modeleBatterieSecoursId', aliases: ['modelesecoursb', 'modelebatteriesecours', 'modelebatteriesecoursid', 'modeledebatteriedesecoursb', 'batteriemodelesecours'] },
-  { header: 'Lot secours B', field: 'lotBatterieSecours', aliases: ['lotsecoursb', 'lotbatteriesecours', 'lotdelabatteriedesecoursb', 'batterielotsecours'] },
-  { header: 'Péremption secours B', field: 'peremptionBatterieSecours', aliases: ['peremptionsecoursb', 'peremptionbatteriesecours', 'peremptiondelabatteriedesecoursb', 'dateperemptionsecoursb', 'batterieperemptionsecours'], type: 'date' },
+  // Section 8
+  { header: 'Section 8 - Modèle B', field: 'modeleBatterieId', aliases: ['modeleb', 'modelebatterieb', 'modelebatterie', 'batteriemodele', 'modelebatterieid'] },
+  { header: 'Section 8 - Fabrication B', field: 'fabricationBatterie', aliases: ['fabricationb', 'fabricationbatterieb', 'fabricationbatterie', 'datefabricationbatterie', 'batteriefabrication'], type: 'date' },
+  { header: 'Section 8 - Insertion B', field: 'insertionBatterie', aliases: ['insertionb', 'insertionbatterieb', 'insertionbatterie', 'dateinsertionbatterie', 'batterieinsertion'], type: 'date' },
+  { header: 'Section 8 - Livraison B', field: 'livraisonBatterie', aliases: ['livraisonb', 'livraisonbatterieb', 'livraisonbatterie', 'datelivraisonbatterie', 'batterielivraison'], type: 'date' },
+  { header: 'Section 8 - Batterie de secours B', field: 'hasBatterieSecours', aliases: ['batteriedesecoursb', 'batteriesecoursb', 'hasbatteriesecours', 'secoursb', 'batteriesecours'], type: 'yesno' },
+  { header: 'Section 8 - Modèle de batterie de secours B', field: 'modeleBatterieSecoursId', aliases: ['modeledebatteriedesecoursb', 'modelesecoursb', 'modelebatteriesecours', 'modelebatteriesecoursid', 'batteriemodelesecours'] },
+  { header: 'Section 8 - Lot de la batterie de secours B', field: 'lotBatterieSecours', aliases: ['lotdelabatteriedesecoursb', 'lotsecoursb', 'lotbatteriesecours', 'batterielotsecours'] },
+  { header: 'Section 8 - Péremption de la batterie de secours B', field: 'peremptionBatterieSecours', aliases: ['peremptiondelabatteriedesecoursb', 'peremptionsecoursb', 'peremptionbatteriesecours', 'dateperemptionsecoursb', 'batterieperemptionsecours'], type: 'date' },
+  { header: 'Section 8 - Statut B', field: 'situationBatterie', aliases: ['statutb', 'situationbatterieb', 'situationbatterie', 'situationb', 'etatbatterie', 'batteriestatut', 'statutbatterie'] },
+  { header: 'Section 8 - Pourcentage constaté B', field: 'pourcentageBatterie', aliases: ['pourcentageconstateb', 'pourcentagebatterieb', 'pourcentagebatterie', 'pourcentageb', 'batteriepourcentage', 'batteriepourcentageconstate', 'pourcentageconstate'] },
+  { header: 'Section 8 - Pourcentage constaté B', field: 'pourcentageBatterie', aliases: ['pourcentageconstateb', 'pourcentagebatterieb', 'pourcentagebatterie', 'pourcentageb', 'batteriepourcentage', 'batteriepourcentageconstate', 'pourcentageconstate'] },
+  { header: 'Section 8 - Commentaire B', field: 'commentaireBatterie', aliases: ['commentaireb', 'commentairebatterieb', 'commentairebatterie', 'notebatterie', 'batteriecommentaire'] },
+  { header: 'Section 8 - Péremption B', field: 'peremptionBatterie', aliases: ['peremptionb', 'peremptionbatterieb', 'peremptionbatterie', 'dateperemptionbatterie', 'dateperemptionb', 'batterieperemption'], type: 'date' },
+  { header: 'Section 8 - Lot batterie B', field: 'lotBatterie', aliases: ['lotbatterieb', 'lotbatterie', 'lotb', 'batterielot'] },
 
-  { header: 'Tournée', field: 'tournee', aliases: ['tournee', 'secteur', 'categoriestournee'] },
-  { header: 'Loué', field: 'loue', aliases: ['loue', 'location', 'enlocation', 'categoriesloue'], type: 'yesno' },
-  { header: 'Prêté', field: 'prete', aliases: ['prete', 'pret', 'enpret', 'categoriesprete'], type: 'yesno' },
-  { header: 'Stocké', field: 'stocke', aliases: ['stocke', 'enstock', 'categoriesstocke'], type: 'yesno' },
-  { header: 'Archivé', field: 'archive', aliases: ['archive', 'inactif', 'categoriesarchive'], type: 'yesno' },
-  { header: 'Conforme', field: 'conforme', aliases: ['conforme', 'conformite', 'categoriesconforme'], type: 'yesno' },
-  { header: 'Sous-traitance', field: 'sousTraitance', aliases: ['soustraitance', 'soustraitant', 'opereensoustraitance', 'categoriesopereensoustraitance', 'categoriessoustraitance'], type: 'yesno' },
-  { header: 'Maintenance autorisée', field: 'fsmAutorise', aliases: ['maintenanceautorisee', 'fsmautorise', 'maintenance', 'autorisationmaintenance', 'categoriesmaintenanceautorisee'], type: 'yesno' },
-  { header: 'Victime avec survie', field: 'victimeSurvie', aliases: ['victimeavecsurvie', 'victimesurvie', 'utiliseparunevictime', 'categoriesvictimeavecsurvie', 'categoriesutiliseparunevictime'], type: 'yesno' },
-  { header: 'Victime sans survie', field: 'victimeSansSurvie', aliases: ['victimesanssurvie', 'categoriesvictimesanssurvie'], type: 'yesno' },
-  { header: 'Âge victime', field: 'ageVictime', aliases: ['agevictime', 'agedelavictime', 'age', 'categoriesagevictime', 'categoriesagedelavictime'] },
-  { header: 'Commentaire campagne rappel', field: 'commentaireCampagneRappel', aliases: ['commentairecampagnerappel', 'campagnerappel'] },
-  { header: 'Rappel mensuel auto', field: 'rappelMensuelAuto', aliases: ['rappelmensuelauto', 'rappelmensuel', 'emailmensueldautovigilance', 'categoriesemailmensueldautovigilance'], type: 'yesno' },
-  { header: 'Rappel hebdo auto', field: 'rappelHebdoAuto', aliases: ['rappelhebdoauto', 'rappelhebdo', 'rappelhebdomadaire', 'emailhebdomadairedautovigilance', 'categoriesemailhebdomadairedautovigilance'], type: 'yesno' },
-  { header: 'Rappel journalier auto', field: 'rappelJournalierAuto', aliases: ['rappeljournalierauto', 'rappeljournalier', 'emailjournalierdautovigilance', 'categoriesemailjournalierdautovigilance'], type: 'yesno' },
+  // Section 9
+  { header: 'Section 9 - Loué', field: 'loue', aliases: ['loue', 'location', 'enlocation', 'categoriesloue'], type: 'yesno' },
+  { header: 'Section 9 - Prêté', field: 'prete', aliases: ['prete', 'pret', 'enpret', 'categoriesprete'], type: 'yesno' },
+  { header: 'Section 9 - Stocké', field: 'stocke', aliases: ['stocke', 'enstock', 'categoriesstocke'], type: 'yesno' },
+  { header: 'Section 9 - Archivé.', field: 'archive', aliases: ['archive', 'inactif', 'categoriesarchive'], type: 'yesno' },
+  { header: 'Section 9 - Conforme.', field: 'conforme', aliases: ['conforme', 'conformite', 'categoriesconforme'], type: 'yesno' },
+  { header: 'Section 9 - Opéré en sous-traitance.', field: 'sousTraitance', aliases: ['opereensoustraitance', 'soustraitance', 'soustraitant', 'categoriesopereensoustraitance', 'categoriessoustraitance'], type: 'yesno' },
+  { header: 'Section 9 - Maintenance autorisée.', field: 'fsmAutorise', aliases: ['maintenanceautorisee', 'fsmautorise', 'maintenance', 'autorisationmaintenance', 'categoriesmaintenanceautorisee'], type: 'yesno' },
+  { header: "Section 9 - Email mensuel d'auto-vigilance.", field: 'rappelMensuelAuto', aliases: ['emailmensueldautovigilance', 'rappelmensuelauto', 'rappelmensuel', 'categoriesemailmensueldautovigilance'], type: 'yesno' },
+  { header: "Section 9 - Email hebdomadaire d'auto-vigilance.", field: 'rappelHebdoAuto', aliases: ['emailhebdomadairedautovigilance', 'rappelhebdoauto', 'rappelhebdo', 'rappelhebdomadaire', 'categoriesemailhebdomadairedautovigilance'], type: 'yesno' },
+  { header: "Section 9 - Email journalier d'auto-vigilance.", field: 'rappelJournalierAuto', aliases: ['emailjournalierdautovigilance', 'rappeljournalierauto', 'rappeljournalier', 'categoriesemailjournalierdautovigilance'], type: 'yesno' },
+  { header: 'Section 9 - Utilisé par une victime. ', field: 'victimeSurvie', aliases: ['utiliseparunevictime', 'victimeavecsurvie', 'victimesurvie', 'categoriesvictimeavecsurvie', 'categoriesutiliseparunevictime'], type: 'yesno' },
+  { header: 'Section 9 - Âge de la victime.', field: 'ageVictime', aliases: ['agedelavictime', 'agevictime', 'age', 'categoriesagevictime', 'categoriesagedelavictime'] },
 ];
 
 // ==========================================
@@ -651,16 +647,15 @@ export interface PrecomputedColumnMatch {
 export function buildColumnMatches(headers: string[], canonicalDefs: SheetColumnDef[]): PrecomputedColumnMatch[] {
   const normHeaders = headers.map(normalizeHeaderKey);
   const matches: PrecomputedColumnMatch[] = [];
+  const matchedColIndices = new Set<number>();
   for (const def of canonicalDefs) {
-    let matchedIdx = -1;
     for (let i = 0; i < normHeaders.length; i++) {
+      if (matchedColIndices.has(i)) continue;
       if (def.aliases.includes(normHeaders[i])) {
-        matchedIdx = i;
+        matchedColIndices.add(i);
+        matches.push({ colIdx: i, def });
         break;
       }
-    }
-    if (matchedIdx >= 0) {
-      matches.push({ colIdx: matchedIdx, def });
     }
   }
   return matches;
@@ -715,23 +710,42 @@ export function mapRowToDefib(
     const rawCell = row[colIdx];
     const rawVal = rawCell !== undefined && rawCell !== null ? String(rawCell).trim() : '';
     if (def.type === 'yesno') {
-      const defVal = ['conforme', 'fsmAutorise', 'kitCiseauxPresents', 'kitMasquePresent', 'kitServiettesPresentes', 'kitGantsPresents', 'kitRasoirPresent'].includes(def.field) ? 'Oui' : 'Non';
-      obj[def.field] = normalizeYesNo(rawVal, defVal);
+      if (rawVal !== '') {
+        const defVal = ['conforme', 'fsmAutorise', 'kitCiseauxPresents', 'kitMasquePresent', 'kitServiettesPresentes', 'kitGantsPresents', 'kitRasoirPresent'].includes(def.field) ? 'Oui' : 'Non';
+        obj[def.field] = normalizeYesNo(rawVal, defVal);
+      }
     } else if (def.type === 'bool') {
-      obj[def.field] = normalizeBool(rawVal, false);
+      if (rawVal !== '') {
+        obj[def.field] = normalizeBool(rawVal, false);
+      }
     } else if (def.type === 'date') {
       const dStr = normalizeDateStr(rawVal);
       if (dStr) obj[def.field] = dStr;
     } else if (def.field === 'situationElectrodeA' || def.field === 'situationElectrodeP' || def.field === 'situationBatterie') {
-      obj[def.field] = normalizeSituationFromSheet(rawVal);
+      if (rawVal !== '') {
+        obj[def.field] = normalizeSituationFromSheet(rawVal);
+      }
     } else if (rawVal !== '') {
       obj[def.field] = rawVal;
     }
   }
 
   // Reconstruct horaires JSON if Plage 1 or Plage 2 columns were populated in the sheet
+  const normalizeDayToken = (rawDay: string): string => {
+    const s = rawDay.trim().toLowerCase();
+    if (s.startsWith('lun')) return 'Lundi';
+    if (s.startsWith('mar')) return 'Mardi';
+    if (s.startsWith('mer')) return 'Mercredi';
+    if (s.startsWith('jeu')) return 'Jeudi';
+    if (s.startsWith('ven')) return 'Vendredi';
+    if (s.startsWith('sam')) return 'Samedi';
+    if (s.startsWith('dim')) return 'Dimanche';
+    return rawDay.trim();
+  };
+
   const hasPlage1 = Boolean(
-    obj._plage1_days ||
+    obj._plage1_fermetureMidi !== undefined ||
+      obj._plage1_days ||
       obj._plage1_openMorning ||
       obj._plage1_closeMorning ||
       obj._plage1_openAfternoon ||
@@ -740,7 +754,8 @@ export function mapRowToDefib(
       obj._plage1_closeContinuous
   );
   const hasPlage2 = Boolean(
-    obj._plage2_days ||
+    obj._plage2_fermetureMidi !== undefined ||
+      obj._plage2_days ||
       obj._plage2_openMorning ||
       obj._plage2_closeMorning ||
       obj._plage2_openAfternoon ||
@@ -754,7 +769,7 @@ export function mapRowToDefib(
       schedules.push({
         days: String(obj._plage1_days || '')
           .split(/[,;/]+/)
-          .map(s => s.trim())
+          .map(normalizeDayToken)
           .filter(Boolean),
         fermetureMidi: Boolean(obj._plage1_fermetureMidi),
         openMorning: obj._plage1_openMorning || '09:00',
@@ -769,7 +784,7 @@ export function mapRowToDefib(
       schedules.push({
         days: String(obj._plage2_days || '')
           .split(/[,;/]+/)
-          .map(s => s.trim())
+          .map(normalizeDayToken)
           .filter(Boolean),
         fermetureMidi: Boolean(obj._plage2_fermetureMidi),
         openMorning: obj._plage2_openMorning || '09:00',
@@ -790,39 +805,26 @@ export function mapRowToDefib(
     }
   }
 
-  // If main battery expiry column is empty and backup battery expiry column holds the primary expiry date
-  if (!obj.peremptionBatterie && obj.peremptionBatterieSecours && !obj.modeleBatterieSecoursId && !obj.lotBatterieSecours) {
-    obj.peremptionBatterie = obj.peremptionBatterieSecours;
-  }
-
-  // Auto-detect secours / PadPak presence if model, lot, or expiry is populated in the sheet
+  // Auto-detect secours presence if model, lot, or expiry is populated in the sheet
   if (obj.modeleElectrodeASecoursId || obj.lotElectrodeASecours || obj.peremptionSecoursElectrodeA) {
     obj.hasElectrodeASecours = 'Oui';
-  }
-  if (obj.lotPadpakA || obj.peremptionPadpakA) {
-    obj.hasPadpakA = 'Oui';
   }
   if (obj.modeleElectrodePSecoursId || obj.lotElectrodePSecours || obj.peremptionSecoursElectrodeP) {
     obj.hasElectrodePSecours = 'Oui';
   }
-  if (obj.lotPadpakP || obj.peremptionPadpakP) {
-    obj.hasPadpakP = 'Oui';
-  }
-  if (obj.modeleBatterieSecoursId || obj.lotBatterieSecours) {
+  if (obj.modeleBatterieSecoursId || obj.lotBatterieSecours || obj.peremptionBatterieSecours) {
     obj.hasBatterieSecours = 'Oui';
   }
 
-  // Keep convenient aliases so both table, form, and API work seamlessly
+  // Keep convenient aliases so both table, form, and API work seamlessly without cross-overwriting distinct columns
   if (obj.commentaireAdresse) {
     obj.aideAcces = obj.commentaireAdresse;
     obj.aide_acces = obj.commentaireAdresse;
   }
   if (obj.modeleId && !obj.modele) obj.modele = obj.modeleId;
-  if (obj.clientNom && !obj.nomSite) obj.nomSite = obj.clientNom;
-  if (obj.nomSite && !obj.clientNom) obj.clientNom = obj.nomSite;
-  if (isPlaceholderClientValue(obj.clientIdField)) obj.clientIdField = '';
-  if (isPlaceholderClientValue(obj.clientId)) obj.clientId = '';
-  if (obj.clientIdField && !obj.clientId) obj.clientId = obj.clientIdField;
+  if (obj.clientIdField && !isPlaceholderClientValue(obj.clientIdField) && !obj.clientId) {
+    obj.clientId = obj.clientIdField;
+  }
 
   const cleanIdent = String(obj.identifiant || '').trim();
   const cleanSn = String(obj.numeroSerie || '').trim();
@@ -865,8 +867,10 @@ export function mapDefibToRow(headers: string[], defib: any, existingRow?: strin
           if (prop === 'days') {
             val = Array.isArray(sched.days) ? sched.days.join(', ') : String(sched.days || '');
           } else {
-            val = sched[prop];
+            val = sched[prop] ?? '';
           }
+        } else {
+          val = '';
         }
       } else if (def.field === 'modeleId' && defib.modele && !String(defib.modele).startsWith('v_')) {
         val = defib.modele;
@@ -885,12 +889,16 @@ export function mapDefibToRow(headers: string[], defib: any, existingRow?: strin
       } else if (def.field === 'modeleBatterieSecoursId' && defib.modeleBatterieSecours && !String(defib.modeleBatterieSecours).startsWith('v_')) {
         val = defib.modeleBatterieSecours;
       } else if (def.field === 'clientNom') {
-        val = defib.clientNom || defib.nomSite || '';
+        val = defib.clientNom ?? '';
       }
 
       if (val !== undefined && val !== null) {
         if (def.type === 'bool') {
-          outRow[i] = val ? 'Oui' : 'Non';
+          if (val === '') {
+            outRow[i] = '';
+          } else {
+            outRow[i] = val ? 'Oui' : 'Non';
+          }
         } else if (
           (def.field === 'situationElectrodeA' || def.field === 'situationElectrodeP' || def.field === 'situationBatterie') &&
           normHeaders[i].includes('statut')
@@ -1404,7 +1412,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Activer les emails automatiques destinés aux clients', field: 'enableAutoEmails', aliases: ['activerlesemailsautomatiquesdestinesauxclients', 'activeremailsautomatiques', 'emailsautomatiques', 'enableautoemails'], type: 'yesno' },
     { header: 'Utiliser Commandes sur Defibeo', field: 'enableDevisFactures', aliases: ['utilisercommandessurdefibeo', 'utilisercommandes', 'enabledevisfactures', 'commandesdefibeo', 'devisetfactures'], type: 'yesno' },
     { header: 'Désactiver les aides et tutoriels', field: 'disableHelpsAndTutorials', aliases: ['desactiverlesaidesettutoriels', 'desactiveraidestutoriels', 'disablehelpsandtutorials', 'aidestutoriels'], type: 'yesno' },
-    { header: 'Personnaliser la visibilité des onglets', field: 'hiddenTabs', aliases: ['personnaliserlavisibilitedesonglets', 'visibilitedesonglets', 'visibiliteonglets', 'ongletsmasques', 'hiddentabs', 'onglets'] },
+    { header: 'Personnaliser la visibilité des onglets', field: 'hiddenTabs', aliases: ['personnaliserlavisibilitedesonglets', 'visibilitedesonglets', 'visibiliteonglets', 'ongletsmasques', 'hiddentabs', 'onglets'], type: 'array' },
   ],
   apparenceRapportsPdf: [
     { header: 'Image source d’entête pour illustration', field: 'pdfHeaderImg', aliases: ['imagesourcedentetepourillustration', 'imagesourceentete', 'imageentete', 'pdfheaderimg', 'illustrationentete'] },
@@ -5269,13 +5277,26 @@ export async function fetchTenantSheetCollection(
     }
     return false;
   };
+  const isStaleDefibSnap = (snap: CachedSheetResult | null | undefined): boolean => {
+    if (!snap || tabType !== 'defibrillateurs') return false;
+    if (!Array.isArray(snap.headers) || snap.headers.length === 121 || snap.headers[0] === 'Section 1 - Identifiant') {
+      return true;
+    }
+    if (
+      Array.isArray(snap.items) &&
+      snap.items.some((it: any) => it && (it.miseEnService === 'Y' || it.nomContrat === 'Non' || it.nomContrat === 'Oui'))
+    ) {
+      return true;
+    }
+    return false;
+  };
   if (!sheetMemoryCache.has(cacheKey)) {
     const diskSnap = loadDiskSnapshot(cacheKey);
     if (diskSnap && Array.isArray(diskSnap.items) && diskSnap.items.length > 0) {
       const isStaleVariablesSnap =
         tabType === 'variables' &&
         diskSnap.items.some(hasUnmappedVariableKeys);
-      if (!isStaleVariablesSnap) {
+      if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap)) {
         sheetMemoryCache.set(cacheKey, diskSnap);
       }
     }
@@ -5286,7 +5307,7 @@ export async function fetchTenantSheetCollection(
     const isStaleVariablesCache =
       tabType === 'variables' &&
       cached.items.some(hasUnmappedVariableKeys);
-    if (cached.items.length > 0 && !isStaleVariablesCache) {
+    if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached)) {
       if (Date.now() - cached.fetchedAt > 300000 && !inFlightSheetFetches.has(cacheKey)) {
         setImmediate(() => {
           fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true).catch(() => {});
@@ -5350,6 +5371,16 @@ export async function fetchTenantSheetCollection(
           : tabType === 'clients'
           ? CLIENTS_CANONICAL_HEADERS.map(d => d.header)
           : getDefaultGenericHeaders(tabType);
+
+      if (
+        tabType === 'defibrillateurs' &&
+        Array.isArray(overlay.headers) &&
+        (overlay.headers.length === 121 || overlay.headers[0] === 'Section 1 - Identifiant')
+      ) {
+        overlay.headers = [];
+        overlay.upsertedById = {};
+        saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
+      }
 
       const headers = hasRemoteHeaders
         ? rawMatrix!.headers
@@ -5433,9 +5464,17 @@ export async function fetchTenantSheetCollection(
         }
       }
 
+      const isSettingsTab =
+        tabType === 'reglages' ||
+        tabType === 'apparenceRapportsPdf' ||
+        tabType === 'intituleEmplacements' ||
+        tabType === 'communicationPortailClient' ||
+        tabType === 'membresEnvironnement';
+
       // Merge upserted records from overlay only if rawMatrix failed (offline fallback) or overlay was written very recently (< 2 min ago)
       const upsertedEntries = Object.values(overlay.upsertedById || {});
-      const isOverlayFreshOrOffline = !rawMatrix || (overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - 120000);
+      const isOverlayFreshOrOffline =
+        !rawMatrix || (!isSettingsTab && !forceRefresh && overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - 120000);
       if (upsertedEntries.length > 0 && isOverlayFreshOrOffline) {
         for (const upItem of upsertedEntries) {
           if (!upItem || typeof upItem !== 'object') continue;
@@ -5495,6 +5534,13 @@ export async function fetchTenantSheetCollection(
       // Also merge any in-memory recent upserts that occurred during or shortly before this fetch
       const recentMap = recentSheetUpserts.get(cacheKey);
       if (recentMap && recentMap.size > 0) {
+        if (rawMatrix && (isSettingsTab || forceRefresh)) {
+          for (const [rk, entry] of recentMap.entries()) {
+            if (entry?.syncedToRemoteSheet) {
+              recentMap.delete(rk);
+            }
+          }
+        }
         for (const [rk, entry] of recentMap.entries()) {
           if (!entry || !entry.item) continue;
           if (entry.syncedToRemoteSheet && fetchStartedAt > entry.updatedAtMs + 30000) {
@@ -6023,8 +6069,14 @@ async function fetchLightweightSheetContextForColdUpsert(
           !looksLikeDataRow &&
           nonEmpty.length > 0 &&
           (nonEmpty.some((c: string) => c.toLowerCase() === '_json') ||
-            !GENERIC_CANONICAL_HEADERS[tabType] ||
-            resolveGenericColumnFieldMap(candidateHeaders, tabType).size >= Math.min(2, GENERIC_CANONICAL_HEADERS[tabType]!.length));
+            (tabType === 'defibrillateurs'
+              ? buildColumnMatches(candidateHeaders, DEFIB_CANONICAL_HEADERS).length >= 2
+              : tabType === 'autresMateriels'
+              ? buildColumnMatches(candidateHeaders, AUTRES_CANONICAL_HEADERS).length >= 2
+              : tabType === 'clients'
+              ? buildColumnMatches(candidateHeaders, CLIENTS_CANONICAL_HEADERS).length >= 2
+              : !GENERIC_CANONICAL_HEADERS[tabType] ||
+                resolveGenericColumnFieldMap(candidateHeaders, tabType).size >= Math.min(2, GENERIC_CANONICAL_HEADERS[tabType]!.length)));
         if (hasValidMatch) {
           headers = candidateHeaders;
           hasRemoteHeaders = true;
@@ -6232,14 +6284,38 @@ export async function upsertRecordsToTenantSheet(
     const upsertedList: any[] = [];
     const processedPrimaryKeys = new Set<string>();
     const updatedItemsList = warmCached ? warmCached.items : [];
+    // If intituleEmplacements is passed as a single config object but the target sheet uses the 2-column vertical format (Emplacement | Intitulé), expand into 20 rows
+    let effectiveRecords = records;
+    if (
+      tabType === 'intituleEmplacements' &&
+      records.length === 1 &&
+      !records[0]?.emplacement &&
+      headers.some(h => normalizeHeaderKey(h).includes('emplacement')) &&
+      !headers.some(h => normalizeHeaderKey(h).includes('entrepota'))
+    ) {
+      const ALL_LOCS = [
+        'Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E',
+        'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J',
+        'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E',
+        'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J',
+      ];
+      const srcObj = records[0] || {};
+      effectiveRecords = ALL_LOCS.map((loc, idx) => ({
+        id: loc,
+        emplacement: loc,
+        intitule: String(srcObj[loc] ?? ''),
+        _sheetRowNumber: idx + 2,
+      }));
+    }
+
     const isSingletonTab =
       tabType === 'reglages' ||
       tabType === 'apparenceRapportsPdf' ||
       tabType === 'communicationPortailClient' ||
-      (tabType === 'intituleEmplacements' && records.length === 1 && !records[0]?.emplacement);
+      (tabType === 'intituleEmplacements' && effectiveRecords.length === 1 && !effectiveRecords[0]?.emplacement);
 
-    for (let rIdx = 0; rIdx < records.length; rIdx++) {
-      const rec = records[rIdx];
+    for (let rIdx = 0; rIdx < effectiveRecords.length; rIdx++) {
+      const rec = effectiveRecords[rIdx];
       if (!rec || typeof rec !== 'object') continue;
       const recKeys = getRecordLookupKeys(rec, tabType);
       const primaryKey = recKeys[0] || `item_${Date.now()}_${Math.random()}`;
@@ -6287,7 +6363,8 @@ export async function upsertRecordsToTenantSheet(
         (typeof rec._sheetRowNumber === 'number' && rec._sheetRowNumber >= 2 ? rec._sheetRowNumber : undefined) ||
         existingItem?._sheetRowNumber ||
         extractRowNumFromSyntheticId(rec.id) ||
-        extractRowNumFromSyntheticId(rec.identifiant);
+        extractRowNumFromSyntheticId(rec.identifiant) ||
+        (isSingletonTab && rIdx === 0 ? 2 : undefined);
 
       const mergedItem = existingItem
         ? {
@@ -6539,9 +6616,9 @@ export async function upsertRecordsToTenantSheet(
         } catch (_) {}
       });
     } else {
-      // Warm full sheet cache in background without blocking the response
+      // Warm full sheet cache in background from live sheet without blocking the response
       setImmediate(() => {
-        fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, false).catch(() => {});
+        fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true).catch(() => {});
       });
     }
 

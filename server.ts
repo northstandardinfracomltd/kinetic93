@@ -2289,7 +2289,7 @@ function formatDefibrillateurOutput(d: any): any {
   const commentaireCampagneRappel = d.commentaireCampagneRappel !== undefined ? d.commentaireCampagneRappel : (d.commentaire_campagne_rappel || '');
 
   // Contrat & Facturation
-  const contrat = d.contrat || d.nomContrat || d.nom_contrat || 'Non';
+  const contrat = d.contrat || 'Non';
   const nomContrat = d.nomContrat !== undefined ? d.nomContrat : (d.nom_contrat || '');
   const referenceContrat = d.referenceContrat !== undefined ? d.referenceContrat : (d.reference_contrat || '');
   const debutContrat = d.debutContrat !== undefined ? d.debutContrat : (d.debut_contrat || '');
@@ -6524,8 +6524,13 @@ async function warmupDefibrillateursStore() {
     return { isBlocked: false, reason: "" };
   }
 
-  // Defibeo Operational REST API v1
+  // Defibeo Operational REST API v1 (Currently Disabled / Indisponible)
   app.all(["/v1/*", "/api/v1/*"], async (req, res) => {
+    return res.status(503).json({
+      status: "error",
+      error: "L'API Defibeo est actuellement indisponible (connecteur désactivé).",
+      code: "API_DEFIBEO_UNAVAILABLE"
+    });
     const startTime = Date.now();
     let hasLogged = false;
 
