@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 
 /**
- * Utility function to check if network is offline or restricted to 3G / 2G / slow connection.
+ * Utility function to check if network is offline.
+ * Note: We do NOT block based on `conn.effectiveType` ('3g'/'2g') because 4G/5G mobile hotspots
+ * (Wi-Fi/USB tethering) frequently report higher initial RTT or metered heuristics in browsers,
+ * which falsely classifies fast 4G/5G hotspot connections as '3g' or '2g'.
  */
 export function checkIsNetworkUnavailable(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -11,17 +14,11 @@ export function checkIsNetworkUnavailable(): boolean {
     return true;
   }
 
-  // 2. Network Information API (detects 3G, 2G, slow-2g or disconnected connection)
+  // 2. Network Information API: only treat explicitly disconnected ('none') as unavailable
   const nav = navigator as any;
   const conn = nav.connection || nav.mozConnection || nav.webkitConnection;
-  if (conn) {
-    const effectiveType = conn.effectiveType;
-    if (effectiveType === '3g' || effectiveType === '2g' || effectiveType === 'slow-2g') {
-      return true;
-    }
-    if (conn.type === 'none') {
-      return true;
-    }
+  if (conn && conn.type === 'none') {
+    return true;
   }
 
   return false;
